@@ -1,0 +1,5 @@
+{
+  "core/wren-core-py": "0.4.0",
+  "core/wren": "0.3.0",
+  "core/wren-core-wasm": "0.1.0"
+}

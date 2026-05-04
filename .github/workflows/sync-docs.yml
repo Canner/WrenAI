@@ -1,0 +1,61 @@
+name: Sync Docs to Website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/core/get_started/**'
+      - 'docs/core/concept/**'
+      - 'docs/core/guide/**'
+      - 'docs/core/reference/**'
+
+permissions:
+  contents: read
+
+jobs:
+  sync-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout wren-engine
+        uses: actions/checkout@v4
+
+      - name: Checkout doc website
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.DOCS_REPO }}
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+          path: _docs-site
+          ref: ${{ vars.DOCS_REPO_BRANCH }}
+
+      - name: Sync doc directories
+        run: |
+          TARGET="_docs-site/docs/oss/engine"
+
+          for dir in get_started concept guide reference; do
+            rm -rf "${TARGET}/${dir}"
+            cp -r "docs/core/${dir}" "${TARGET}/${dir}"
+          done
+
+      - name: Check for changes
+        id: diff
+        working-directory: _docs-site
+        run: |
+          git diff --quiet && echo "changed=false" >> "$GITHUB_OUTPUT" || echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create PR
+        if: steps.diff.outputs.changed == 'true'
+        working-directory: _docs-site
+        env:
+          GH_TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
+        run: |
+          BRANCH="sync/engine-docs-${GITHUB_SHA::8}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "${BRANCH}"
+          git add -A
+          git commit -m "docs: sync from wren-engine@${GITHUB_SHA::8}"
+          git push origin "${BRANCH}"
+          gh pr create \
+            --title "docs: sync Wren Engine docs from wren-engine" \
+            --body "Auto-synced from [wren-engine@\`${GITHUB_SHA::8}\`](https://github.com/Canner/wren-engine/commit/${GITHUB_SHA})." \
+            --base "${{ vars.DOCS_REPO_BRANCH }}"

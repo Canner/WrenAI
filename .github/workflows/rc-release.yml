@@ -1,0 +1,144 @@
+name: RC Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      component:
+        description: "Component to release"
+        required: true
+        type: choice
+        options:
+          - wren-core-py
+          - wren
+          - wren-core-wasm
+      rc_version:
+        description: "RC version override (e.g. 0.25.0-rc.2). Leave empty to auto-increment."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rc-release-${{ inputs.component }}
+
+jobs:
+  create-rc:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.rc.outputs.version }}
+      tag_name: ${{ steps.rc.outputs.tag_name }}
+      pypi_version: ${{ steps.rc.outputs.pypi_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Ensure running on main
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::RC releases must be dispatched from the main branch"
+            exit 1
+          fi
+      - name: Determine RC version
+        id: rc
+        env:
+          RC_VERSION_INPUT: ${{ inputs.rc_version }}
+          COMPONENT: ${{ inputs.component }}
+        run: |
+          # Read current version from manifest
+          BASE_VERSION=$(python3 -c "
+          import json
+          with open('.release-please-manifest.json') as f:
+              manifest = json.load(f)
+          print(manifest['${COMPONENT}'])
+          ")
+
+          if [ -n "$RC_VERSION_INPUT" ]; then
+            # Validate: must start with BASE_VERSION-rc. and end with a positive integer
+            EXPECTED_PREFIX="${BASE_VERSION}-rc."
+            SUFFIX="${RC_VERSION_INPUT#"$EXPECTED_PREFIX"}"
+            if [ "$SUFFIX" = "$RC_VERSION_INPUT" ] || ! [[ "$SUFFIX" =~ ^[1-9][0-9]*$ ]]; then
+              echo "::error::Invalid rc_version: $RC_VERSION_INPUT (expected: ${BASE_VERSION}-rc.N)"
+              exit 1
+            fi
+            VERSION="$RC_VERSION_INPUT"
+          else
+            # Find the latest RC tag for this component and bump
+            LATEST_RC=$(git tag -l "${COMPONENT}-v${BASE_VERSION}-rc.*" --sort=-v:refname | head -n1)
+            if [ -z "$LATEST_RC" ]; then
+              RC_NUM=1
+            else
+              # Extract RC number from tag like "wren-core-py-v0.5.0-rc.3"
+              RC_NUM=$(echo "$LATEST_RC" | grep -oP 'rc\.\K[0-9]+')
+              RC_NUM=$((RC_NUM + 1))
+            fi
+            VERSION="${BASE_VERSION}-rc.${RC_NUM}"
+          fi
+
+          TAG_NAME="${COMPONENT}-v${VERSION}"
+
+          # PEP 440 format for PyPI: 0.25.0-rc.1 → 0.25.0rc1
+          PYPI_VERSION=$(echo "$VERSION" | sed 's/-rc\.\([0-9]*\)/rc\1/')
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "pypi_version=$PYPI_VERSION" >> "$GITHUB_OUTPUT"
+          echo "::notice::Creating RC release: $TAG_NAME (PyPI: $PYPI_VERSION)"
+
+      - name: Create tag
+        env:
+          TAG_NAME: ${{ steps.rc.outputs.tag_name }}
+        run: |
+          git tag "$TAG_NAME"
+          git push origin "$TAG_NAME"
+
+  publish-wren-core-py:
+    needs: create-rc
+    if: inputs.component == 'wren-core-py'
+    uses: ./.github/workflows/publish-wren-core-py.yml
+    with:
+      version: ${{ needs.create-rc.outputs.pypi_version }}
+      tag_name: ${{ needs.create-rc.outputs.tag_name }}
+    permissions:
+      contents: read
+      id-token: write
+
+  publish-wren:
+    needs: create-rc
+    if: inputs.component == 'wren'
+    uses: ./.github/workflows/publish-wren.yml
+    with:
+      version: ${{ needs.create-rc.outputs.pypi_version }}
+      tag_name: ${{ needs.create-rc.outputs.tag_name }}
+    permissions:
+      contents: read
+      id-token: write
+
+  publish-wren-core-wasm:
+    needs: create-rc
+    if: inputs.component == 'wren-core-wasm'
+    uses: ./.github/workflows/publish-wren-core-wasm.yml
+    with:
+      version: ${{ needs.create-rc.outputs.version }}
+      tag_name: ${{ needs.create-rc.outputs.tag_name }}
+      npm_tag: rc
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  create-release:
+    needs: [create-rc, publish-wren-core-py, publish-wren, publish-wren-core-wasm]
+    if: always() && needs.create-rc.result == 'success' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create GitHub pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.create-rc.outputs.tag_name }}
+          name: "${{ inputs.component }} ${{ needs.create-rc.outputs.version }}"
+          prerelease: true
+          generate_release_notes: true

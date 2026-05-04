@@ -1,0 +1,90 @@
+name: Publish wren-core-wasm to npm
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version number (e.g. 0.2.0)"
+        required: true
+        type: string
+      tag_name:
+        description: "Git tag to checkout (e.g. wren-core-wasm-v0.2.0)"
+        required: true
+        type: string
+      npm_tag:
+        description: "npm dist-tag (latest or rc)"
+        required: false
+        type: string
+        default: "latest"
+    secrets:
+      NPM_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    name: Build WASM + publish to npm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag_name }}
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            core/wren-core-wasm/target/
+          key: wasm-cargo-${{ hashFiles('core/wren-core-wasm/Cargo.toml', 'core/wren-core-wasm/Cargo.lock') }}
+          restore-keys: wasm-cargo-
+
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack@0.14.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Install npm dependencies
+        working-directory: core/wren-core-wasm
+        run: npm install
+
+      - name: Set version in package.json
+        working-directory: core/wren-core-wasm
+        env:
+          VERSION: ${{ inputs.version }}
+        run: npm version "$VERSION" --no-git-tag-version
+
+      - name: Build WASM (wasm-pack)
+        working-directory: core/wren-core-wasm
+        run: wasm-pack build --target web --release
+
+      - name: Build dist (TypeScript + copy)
+        working-directory: core/wren-core-wasm
+        run: npm run build:dist
+
+      - name: Run integration tests
+        working-directory: core/wren-core-wasm
+        run: npm test
+
+      - name: Publish to npm
+        working-directory: core/wren-core-wasm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TAG: ${{ inputs.npm_tag }}
+        run: npm publish --tag "$NPM_TAG" --access public

@@ -1,0 +1,81 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/core/wren-core-py"
+    schedule:
+      interval: "weekly"
+    groups:
+      all:
+        patterns: ["*"]
+    commit-message:
+      prefix: "deps(core-py)"
+    labels:
+      - "dependencies"
+      - "python"
+      - "core"
+
+  - package-ecosystem: "pip"
+    directory: "/core/wren"
+    schedule:
+      interval: "weekly"
+    groups:
+      all:
+        patterns: ["*"]
+    commit-message:
+      prefix: "deps(wren)"
+    labels:
+      - "dependencies"
+      - "python"
+      - "core"
+
+  - package-ecosystem: "cargo"
+    directory: "/core/wren-core"
+    schedule:
+      interval: "weekly"
+    groups:
+      all:
+        patterns: ["*"]
+    commit-message:
+      prefix: "deps(core)"
+    labels:
+      - "dependencies"
+      - "rust"
+      - "core"
+
+  - package-ecosystem: "cargo"
+    directory: "/core/wren-core-base"
+    schedule:
+      interval: "weekly"
+    groups:
+      all:
+        patterns: ["*"]
+    commit-message:
+      prefix: "deps(core)"
+    labels:
+      - "dependencies"
+      - "rust"
+      - "core"
+
+  - package-ecosystem: "cargo"
+    directory: "/core/wren-core-wasm"
+    schedule:
+      interval: "weekly"
+    groups:
+      all:
+        patterns: ["*"]
+    commit-message:
+      prefix: "deps(wasm)"
+    labels:
+      - "dependencies"
+      - "rust"
+      - "core"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "deps(ci)"
+    labels:
+      - "dependencies"
+      - "ci"

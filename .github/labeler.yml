@@ -1,0 +1,93 @@
+# PR auto-labels driven by changed files.
+# Used by .github/workflows/labeler.yaml (actions/labeler).
+
+core:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "core/**"
+
+rust:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "core/wren-core/**"
+          - "core/wren-core-base/**"
+          - "core/wren-core-wasm/**"
+
+python:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "core/wren-core-py/**"
+          - "core/wren/**"
+
+wasm:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "core/wren-core-wasm/**"
+
+skills:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "skills/**"
+
+sdk:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "sdks/**"
+
+"sdk:langchain":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "sdks/integrations/langchain/**"
+
+"sdk:crewai":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "sdks/integrations/crewai/**"
+
+"sdk:pydantic":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "sdks/integrations/pydantic/**"
+
+"sdk:goose":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "sdks/integrations/goose/**"
+
+"sdk:llamaindex":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "sdks/integrations/llamaindex/**"
+
+"sdk:mastra":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "sdks/integrations/mastra/**"
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "**/*.md"
+
+examples:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "examples/**"
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/Cargo.toml"
+          - "**/Cargo.lock"
+          - "**/pyproject.toml"
+          - "**/poetry.lock"
+          - "**/uv.lock"
+          - "**/package.json"
+          - "**/yarn.lock"
+          - "**/pnpm-lock.yaml"

@@ -1,0 +1,131 @@
+name: Rust
+permissions:
+  contents: read
+  pull-requests: write
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'core/wren-core/**'
+  pull_request:
+    paths:
+      - 'core/wren-core/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: core/wren-core
+
+jobs:
+  # Check crate compiles
+  linux-build-lib:
+    name: cargo check
+    runs-on: ubuntu-latest
+    container:
+      image: amd64/rust
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/rust/setup-builder
+        with:
+          rust-version: stable
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ./core/wren-core/target/
+          # this key equals the ones on `linux-build-lib` for re-use
+          key: cargo-cache-benchmark-${{ hashFiles('core/wren-core/Cargo.toml') }}
+
+      - name: Check datafusion-common without default features
+        run: cargo check --all-targets
+
+  # Run tests
+  linux-test:
+    name: cargo test (amd64)
+    needs: [ linux-build-lib ]
+    runs-on: ubuntu-latest
+    container:
+      image: amd64/rust
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/rust/setup-builder
+        with:
+          rust-version: stable
+      - name: Run tests (excluding doctests)
+        run: RUST_MIN_STACK=8388608 cargo test --lib --tests --bins
+      - name: Verify Working Directory Clean
+        run: git diff --exit-code
+
+  # Run tests
+  linux-test-arm64:
+    name: cargo test (arm64)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [ linux-build-lib ]
+    runs-on: ubuntu-24.04-arm
+    container:
+      image: arm64v8/rust
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/rust/setup-builder
+        with:
+          rust-version: stable
+      - name: Run tests (excluding doctests)
+        run: RUST_MIN_STACK=8388608 cargo test --lib --tests --bins
+      - name: Verify Working Directory Clean
+        run: git diff --exit-code
+
+  clippy:
+    name: clippy
+    needs: [ linux-build-lib ]
+    runs-on: ubuntu-latest
+    container:
+      image: amd64/rust
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/rust/setup-builder
+        with:
+          rust-version: stable
+      - name: Install Clippy
+        run: rustup component add clippy
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+  cargo-toml-formatting-checks:
+    name: check Cargo.toml formatting
+    needs: [ linux-build-lib ]
+    runs-on: ubuntu-latest
+    container:
+      image: amd64/rust
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/rust/setup-builder
+        with:
+          rust-version: stable
+      - name: Install taplo
+        run: cargo +stable install taplo-cli --version ^0.9 --locked
+      # if you encounter an error, try running 'taplo format' to fix the formatting automatically.
+      - name: Check Cargo.toml formatting
+        run: taplo format --check

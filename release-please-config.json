@@ -1,0 +1,31 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "separate-pull-requests": true,
+  "include-component-in-tag": true,
+  "packages": {
+    "core/wren-core-py": {
+      "component": "wren-core-py",
+      "release-type": "python",
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        "Cargo.toml"
+      ]
+    },
+    "core/wren": {
+      "component": "wren",
+      "release-type": "python",
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        "src/wren/__init__.py"
+      ]
+    },
+    "core/wren-core-wasm": {
+      "component": "wren-core-wasm",
+      "release-type": "node",
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        "Cargo.toml"
+      ]
+    }
+  }
+}

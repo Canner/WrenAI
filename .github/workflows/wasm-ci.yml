@@ -1,0 +1,99 @@
+name: WASM SDK
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'core/wren-core-wasm/**'
+      - 'core/wren-core/core/**'
+      - 'core/wren-core-base/**'
+  pull_request:
+    paths:
+      - 'core/wren-core-wasm/**'
+      - 'core/wren-core/core/**'
+      - 'core/wren-core-base/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build WASM + TypeScript SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            core/wren-core-wasm/target/
+          key: wasm-cargo-${{ hashFiles('core/wren-core-wasm/Cargo.toml', 'core/wren-core-wasm/Cargo.lock') }}
+          restore-keys: wasm-cargo-
+
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack@0.14.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install npm dependencies
+        working-directory: core/wren-core-wasm
+        run: npm install
+
+      - name: Build WASM (wasm-pack)
+        working-directory: core/wren-core-wasm
+        run: wasm-pack build --target web --release
+
+      - name: Build dist (TypeScript + copy)
+        working-directory: core/wren-core-wasm
+        run: npm run build:dist
+
+      - name: TypeScript typecheck
+        working-directory: core/wren-core-wasm
+        run: npm run typecheck
+
+      - name: WASM binary size check
+        working-directory: core/wren-core-wasm
+        run: |
+          raw_size=$(stat -c%s dist/wren_core_wasm_bg.wasm)
+          gzip_size=$(gzip -c dist/wren_core_wasm_bg.wasm | wc -c)
+          raw_mb=$(echo "scale=1; $raw_size / 1048576" | bc)
+          gzip_mb=$(echo "scale=1; $gzip_size / 1048576" | bc)
+          echo "WASM binary: ${raw_mb} MB raw, ${gzip_mb} MB gzip"
+
+          # Fail if gzip > 15 MB
+          max_gzip=$((15 * 1048576))
+          if [ "$gzip_size" -gt "$max_gzip" ]; then
+            echo "::error::WASM binary gzip size (${gzip_mb} MB) exceeds 15 MB limit"
+            exit 1
+          fi
+
+      - name: Run integration tests
+        working-directory: core/wren-core-wasm
+        run: npm test
+
+      - name: Upload dist artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-sdk-dist
+          path: core/wren-core-wasm/dist/
+          retention-days: 30

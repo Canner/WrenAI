@@ -1,0 +1,80 @@
+name: Publish wren-engine to PyPI
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version number (e.g. 0.3.0)"
+        required: true
+        type: string
+      tag_name:
+        description: "Git tag to checkout (e.g. wren-v0.3.0)"
+        required: true
+        type: string
+      pypi_target:
+        description: "Publish target (pypi or testpypi)"
+        required: false
+        type: string
+        default: "pypi"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    name: Build distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Set version
+        env:
+          VERSION: ${{ inputs.version }}
+        shell: python
+        run: |
+          import re, os
+          version = os.environ["VERSION"]
+          for path, pattern in [
+              ("core/wren/pyproject.toml", r'^(version\s*=\s*)".*?"'),
+              ("core/wren/src/wren/__init__.py", r'^(__version__\s*=\s*)".*?"'),
+          ]:
+              text = open(path).read()
+              text = re.sub(pattern, rf'\1"{version}"', text, count=1, flags=re.MULTILINE)
+              open(path, "w").write(text)
+      - name: Install build tool
+        run: pip install build
+      - name: Build sdist and wheel
+        run: python -m build
+        working-directory: core/wren
+      - name: Upload distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: core/wren/dist/
+
+  publish:
+    name: Publish to ${{ inputs.pypi_target }}
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.pypi_target }}
+      url: ${{ inputs.pypi_target == 'pypi' && 'https://pypi.org/project/wren-engine/' || 'https://test.pypi.org/project/wren-engine/' }}
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: List artifacts
+        run: ls -lhR dist/
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: ${{ inputs.pypi_target == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
+          packages-dir: dist/
+          attestations: false

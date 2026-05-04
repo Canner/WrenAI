@@ -1,0 +1,19 @@
+name: Skills Version Check
+
+on:
+  pull_request:
+    paths:
+      - "skills/**"
+
+permissions:
+  contents: read
+
+jobs:
+  version-parity:
+    name: Check skills/versions.json parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify versions.json matches SKILL.md frontmatter
+        run: bash skills/check-versions.sh
