@@ -16,9 +16,6 @@ on:
         required: false
         type: string
         default: "latest"
-    secrets:
-      NPM_TOKEN:
-        required: true
 
 permissions:
   contents: read
@@ -27,6 +24,9 @@ jobs:
   build-and-publish:
     name: Build WASM + publish to npm
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -60,6 +60,9 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org
 
+      - name: Upgrade npm (Trusted Publishing requires >= 11.5.1)
+        run: npm install -g npm@latest
+
       - name: Install npm dependencies
         working-directory: core/wren-core-wasm
         run: npm install
@@ -85,6 +88,5 @@ jobs:
       - name: Publish to npm
         working-directory: core/wren-core-wasm
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_TAG: ${{ inputs.npm_tag }}
         run: npm publish --tag "$NPM_TAG" --access public

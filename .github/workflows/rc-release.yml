@@ -149,8 +149,9 @@ jobs:
       version: ${{ needs.create-rc.outputs.version }}
       tag_name: ${{ needs.create-rc.outputs.tag_name }}
       npm_tag: rc
-    secrets:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    permissions:
+      contents: read
+      id-token: write
 
   create-release:
     needs: [create-rc, publish-wren-core-py, publish-wren, publish-wren-core-wasm]

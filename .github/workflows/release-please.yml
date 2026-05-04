@@ -58,5 +58,6 @@ jobs:
     with:
       version: ${{ needs.release-please.outputs['wren-core-wasm--version'] }}
       tag_name: ${{ needs.release-please.outputs['wren-core-wasm--tag_name'] }}
-    secrets:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    permissions:
+      contents: read
+      id-token: write
