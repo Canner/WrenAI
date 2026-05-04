@@ -13,15 +13,15 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     outputs:
-      wren-core-py--release_created: ${{ steps.release.outputs['wren-core-py--release_created'] }}
-      wren-core-py--tag_name: ${{ steps.release.outputs['wren-core-py--tag_name'] }}
-      wren-core-py--version: ${{ steps.release.outputs['wren-core-py--version'] }}
-      wren--release_created: ${{ steps.release.outputs['wren--release_created'] }}
-      wren--tag_name: ${{ steps.release.outputs['wren--tag_name'] }}
-      wren--version: ${{ steps.release.outputs['wren--version'] }}
-      wren-core-wasm--release_created: ${{ steps.release.outputs['wren-core-wasm--release_created'] }}
-      wren-core-wasm--tag_name: ${{ steps.release.outputs['wren-core-wasm--tag_name'] }}
-      wren-core-wasm--version: ${{ steps.release.outputs['wren-core-wasm--version'] }}
+      wren-core-py--release_created: ${{ steps.release.outputs['core/wren-core-py--release_created'] }}
+      wren-core-py--tag_name: ${{ steps.release.outputs['core/wren-core-py--tag_name'] }}
+      wren-core-py--version: ${{ steps.release.outputs['core/wren-core-py--version'] }}
+      wren--release_created: ${{ steps.release.outputs['core/wren--release_created'] }}
+      wren--tag_name: ${{ steps.release.outputs['core/wren--tag_name'] }}
+      wren--version: ${{ steps.release.outputs['core/wren--version'] }}
+      wren-core-wasm--release_created: ${{ steps.release.outputs['core/wren-core-wasm--release_created'] }}
+      wren-core-wasm--tag_name: ${{ steps.release.outputs['core/wren-core-wasm--tag_name'] }}
+      wren-core-wasm--version: ${{ steps.release.outputs['core/wren-core-wasm--version'] }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
