@@ -2,6 +2,7 @@
 name = "wren-core-base"
 version = "0.1.0"
 edition = "2021"
+license = "Apache-2.0"
 
 [features]
 python-binding = ["dep:pyo3"]
