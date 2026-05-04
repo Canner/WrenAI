@@ -31,13 +31,13 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install Poetry
         uses: abatilo/actions-poetry@v3
         with:
           poetry-version: "1.8.3"
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version-file: ./wren-ai-service/pyproject.toml
           cache: "poetry"

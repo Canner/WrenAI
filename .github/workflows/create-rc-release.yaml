@@ -15,12 +15,12 @@ jobs:
     if: ${{ github.event_name == 'issue_comment' && contains(github.event.comment.body, '/release-rc') && startsWith(github.event.issue.title, 'Release') }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: main
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v6
         with:
           go-version: "1.25"
 
