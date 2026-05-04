@@ -1,5 +1,5 @@
 {
-  "name": "wren-core-wasm",
+  "name": "@wrenai/wren-core-wasm",
   "version": "0.1.0",
   "description": "Browser-native semantic SQL engine powered by DataFusion WASM",
   "type": "module",
@@ -37,6 +37,13 @@
     "type": "git",
     "url": "https://github.com/Canner/WrenAI.git",
     "directory": "core/wren-core-wasm"
+  },
+  "homepage": "https://github.com/Canner/WrenAI/tree/main/core/wren-core-wasm#readme",
+  "bugs": {
+    "url": "https://github.com/Canner/WrenAI/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "sideEffects": false,
   "engines": {

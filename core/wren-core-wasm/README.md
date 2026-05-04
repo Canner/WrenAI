@@ -7,14 +7,14 @@ Query Parquet files directly in the browser through a semantic layer (MDL), with
 ## Installation
 
 ```bash
-npm install wren-core-wasm
+npm install @wrenai/wren-core-wasm
 ```
 
 Or use directly via CDN:
 
 ```html
 <script type="module">
-  import { WrenEngine } from 'https://unpkg.com/wren-core-wasm@0.1.0/dist/index.js';
+  import { WrenEngine } from 'https://unpkg.com/@wrenai/wren-core-wasm@0.1.0/dist/index.js';
 </script>
 ```
 
@@ -28,7 +28,7 @@ Or use directly via CDN:
 Load Parquet files from a URL-accessible location. DataFusion reads them via HTTP range requests.
 
 ```javascript
-import { WrenEngine } from 'wren-core-wasm';
+import { WrenEngine } from '@wrenai/wren-core-wasm';
 
 const engine = await WrenEngine.init();
 
