@@ -24,6 +24,9 @@ jobs:
   build-and-publish:
     name: Build WASM + publish to npm
     runs-on: ubuntu-latest
+    # Required by the npm Trusted Publisher config (Environment name: npm).
+    # The 'npm' environment must exist under repo Settings → Environments.
+    environment: npm
     permissions:
       contents: read
       id-token: write
@@ -58,13 +61,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           # Trusted Publishing requires Node.js >= 22.14.0; pin to 24 (latest LTS line).
-          # Intentionally do NOT pass registry-url here: setup-node would auto-write
-          # an .npmrc containing
-          #   //registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}
-          #   always-auth=true
-          # which prevents npm from falling back to OIDC, so Trusted Publishing
-          # fails with a confusing 404 even when correctly configured on npm.
           node-version: 24
+          registry-url: https://registry.npmjs.org
 
       - name: Ensure npm meets Trusted Publishing requirement (>= 11.5.1)
         run: npm install -g npm@latest
