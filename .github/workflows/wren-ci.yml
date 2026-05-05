@@ -45,7 +45,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
       - name: Cache Cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/bin/
@@ -99,7 +99,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y default-libmysqlclient-dev pkg-config
       - name: Cache Cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/bin/
@@ -137,7 +137,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
       - name: Cache Cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/bin/
@@ -175,7 +175,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
       - name: Cache Cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/bin/
@@ -197,7 +197,7 @@ jobs:
           uv lock --find-links ../wren-core-py/target/wheels/ --upgrade-package wren-core-py
           uv sync --extra dev --extra memory --find-links ../wren-core-py/target/wheels/
       - name: Cache sentence-transformers model
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/huggingface
           key: hf-paraphrase-MiniLM-L3-v2
