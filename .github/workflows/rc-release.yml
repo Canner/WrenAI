@@ -146,14 +146,16 @@ jobs:
   publish-wren-core-wasm:
     needs: create-rc
     if: inputs.component == 'wren-core-wasm'
-    uses: ./.github/workflows/publish-wren-core-wasm.yml
+    # RC publishes use the token-based variant. The OIDC variant is reserved
+    # for stable releases driven by release-please.yml — npm only allows one
+    # Trusted Publisher per package.
+    uses: ./.github/workflows/publish-wren-core-wasm-rc.yml
     with:
       version: ${{ needs.create-rc.outputs.version }}
       tag_name: ${{ needs.create-rc.outputs.tag_name }}
       npm_tag: rc
-    permissions:
-      contents: read
-      id-token: write
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   create-release:
     needs: [create-rc, publish-wren-core-py, publish-wren, publish-wren-core-wasm]
