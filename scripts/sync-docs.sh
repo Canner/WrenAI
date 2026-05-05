@@ -91,8 +91,8 @@ git commit -m "docs: sync from WrenAI@${SHORT_SHA}"
 git push origin "$BRANCH"
 
 PR_URL=$(gh pr create \
-  --title "docs: sync Wren AI Core docs from WrenAI" \
-  --body "Manual sync from [WrenAI@\`${SHORT_SHA}\`](https://github.com/Canner/WrenAI/commit/${SHORT_SHA})." \
+  --title "docs: sync Wren AI Core docs from ${SOURCE_REPO}" \
+  --body "Manual sync from [\`${SOURCE_REPO}@${SHORT_SHA}\`](https://github.com/${SOURCE_REPO}/commit/${SHORT_SHA})." \
   --base "$TARGET_BRANCH")
 
 echo ""
