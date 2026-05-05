@@ -43,7 +43,7 @@ The entry-point skill. It walks the agent through the full setup flow — enviro
 
 ### Workflow
 
-```
+```text
 User says "install wren" / "set up wren"
   │
   ├── Preflight (read-only)
@@ -107,7 +107,7 @@ The primary skill for day-to-day querying. It guides the agent through a complet
 
 ### Query workflow
 
-```
+```text
 User asks a question
   │
   ├── 1. Gather context
@@ -244,7 +244,7 @@ The skill ships a reference list of common dlt-verified sources with auth patter
 
 Skills are installed to `~/.claude/skills/` with this layout:
 
-```
+```text
 ~/.claude/skills/
 ├── wren-onboarding/
 │   └── SKILL.md              # Setup workflow (routes to docs and other skills)

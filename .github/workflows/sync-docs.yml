@@ -31,6 +31,7 @@ jobs:
       - name: Sync doc directories
         run: |
           TARGET="_docs-site/docs/oss"
+          mkdir -p "${TARGET}"
 
           # Sync top-level files
           cp "docs/core/introduction.mdx" "${TARGET}/introduction.mdx"
