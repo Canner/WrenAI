@@ -1,6 +1,6 @@
 [project]
 name = "wren-core-py"
-version = "0.4.0"
+version = "0.5.0"
 description = "Python bindings for Wren Engine semantic layer (wren-core)"
 readme = "README.md"
 requires-python = ">=3.11"

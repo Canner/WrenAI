@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.5.0](https://github.com/Canner/WrenAI/compare/wren-core-py-v0.4.0...wren-core-py-v0.5.0) (2026-05-05)
+
+
+### Features
+
+* add wren-core-wasm module with browser WASM support ([#1568](https://github.com/Canner/WrenAI/issues/1568)) ([5165a20](https://github.com/Canner/WrenAI/commit/5165a2099aeb7c9d7fef4ec78771e9efcb58db1c))
+* **core:** import wren-engine into core/ ([cc9b67f](https://github.com/Canner/WrenAI/commit/cc9b67f593bf94c7418e0abb0ed46aa4a21613c3))
+* **core:** import wren-engine into core/ ([#2209](https://github.com/Canner/WrenAI/issues/2209)) ([8b8a1a3](https://github.com/Canner/WrenAI/commit/8b8a1a3c5bf2a43d56ea1587782a0d5d853803b2))
+* **wren-core-base:** replace Metric with Cube types and remove deprecated security types ([#1574](https://github.com/Canner/WrenAI/issues/1574)) ([72d18a8](https://github.com/Canner/WrenAI/commit/72d18a81bbc28a9833a07e19486de16cf59836d0))
+
 ## [0.4.0](https://github.com/Canner/wren-engine/compare/wren-core-py-v0.3.0...wren-core-py-v0.4.0) (2026-04-16)
 
 
