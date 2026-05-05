@@ -12,8 +12,6 @@ npx skills add Canner/WrenAI --skill '*'
 curl -fsSL https://raw.githubusercontent.com/Canner/WrenAI/main/skills/install.sh | bash
 ```
 
-> During the migration period, use `Canner/wren-engine` instead of `Canner/WrenAI` until the merger lands.
-
 The installer auto-detects your AI agent. To target a specific one:
 
 ```bash
@@ -105,16 +103,16 @@ Skills are structured workflow guides that teach AI coding agents how to use the
 
 ```bash
 # Via npx
-npx skills add Canner/wren-engine --skill '*'
+npx skills add Canner/WrenAI --skill '*'
 
 # Or via install script
-curl -fsSL https://raw.githubusercontent.com/Canner/wren-engine/main/skills/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Canner/WrenAI/main/skills/install.sh | bash
 ```
 
 The installer auto-detects your AI agent. To target a specific one:
 
 ```bash
-npx skills add Canner/wren-engine --skill '*' --agent claude-code
+npx skills add Canner/WrenAI --skill '*' --agent claude-code
 ```
 
 The installer drops these skills into your agent's skill directory:
@@ -155,7 +153,7 @@ pip install --upgrade "wren-engine[main]"
 To update skills:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Canner/wren-engine/main/skills/install.sh | bash -s -- --force
+curl -fsSL https://raw.githubusercontent.com/Canner/WrenAI/main/skills/install.sh | bash -s -- --force
 ```
 
 ## What's next
