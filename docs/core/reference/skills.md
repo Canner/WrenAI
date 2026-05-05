@@ -6,8 +6,10 @@ Wren Engine provides **skills** — reusable AI agent workflow guides that teach
 
 | Skill | Purpose |
 |-------|---------|
-| **wren-usage** | Day-to-day workflow: gather schema context, recall past queries, write SQL, execute, store results |
+| **wren-onboarding** | Entry point: environment checks, project scaffolding, profile setup, first query |
 | **wren-generate-mdl** | One-time setup: explore database schema, normalize types, scaffold MDL YAML project |
+| **wren-usage** | Day-to-day workflow: gather schema context, recall past queries, write SQL, execute, store results |
+| **wren-dlt-connector** | Connect SaaS APIs (HubSpot, Stripe, Salesforce, GitHub, Slack, …) into DuckDB via dlt, then auto-generate a Wren project |
 
 ## Installation
 
@@ -32,6 +34,70 @@ curl -fsSL https://raw.githubusercontent.com/Canner/wren-engine/main/skills/inst
 # Single skill
 curl -fsSL https://raw.githubusercontent.com/Canner/wren-engine/main/skills/install.sh | bash -s -- --force wren-generate-mdl
 ```
+
+---
+
+## wren-onboarding
+
+The entry-point skill. It walks the agent through the full setup flow — environment checks, project scaffolding, connection configuration, MDL generation, and a first query — by routing to docs and other skills at each step. The skill itself stays focused on agent-side rules (one step per turn, never ask for credentials in chat).
+
+### Workflow
+
+```
+User says "install wren" / "set up wren"
+  │
+  ├── Preflight (read-only)
+  │     Python 3.11+, virtualenv, wren CLI, working dir
+  │
+  ├── Branch: bundled demo or own database?
+  │     demo → quickstart.md, stop
+  │     own DB → continue
+  │
+  ├── Step 1. Project name + database type
+  │     (asked together, no credentials yet)
+  │
+  ├── Step 2. Project setup (batch)
+  │     mkdir, pip install, wren context init,
+  │     generate .env template via connector introspection
+  │
+  ├── Step 3. User fills .env in editor
+  │     (agent never sees credential values)
+  │
+  ├── Step 4. Validate connection
+  │     wren profile debug
+  │
+  ├── Step 5. Generate MDL
+  │     dispatch → wren-generate-mdl skill
+  │
+  └── Step 6. First query
+        wren --sql "SELECT 1" (sanity)
+        then real query against generated MDL
+```
+
+### Agent-side rules enforced
+
+| Rule | Why |
+|------|-----|
+| **One step per round-trip** | Avoids overwhelming the user; keeps each turn focused |
+| **Never ask for credentials in chat** | Host, port, user, password, tokens all go through `.env` only |
+| **Never invent connection field names** | Always run `wren docs connection-info <ds>` to introspect real fields |
+| **Never query the database before MDL is built** | Forces the agent to scaffold a semantic layer first |
+
+### When to trigger
+
+The skill activates on phrases like:
+
+- "install wren"
+- "set up wren engine"
+- "connect a new database"
+- "I want to start a Wren project"
+- `/wren-onboarding`
+
+### Reference docs (skill points to these, never duplicates)
+
+- [Installation](../get_started/installation.md)
+- [Connect Your Database](../get_started/connect.md)
+- [Quickstart with sample data](../get_started/quickstart.md)
 
 ---
 
@@ -138,19 +204,63 @@ normalized = parse_type("character varying(255)", "postgres")  # → "VARCHAR(25
 
 ---
 
+## wren-dlt-connector
+
+A specialized skill for users who want to query SaaS data (HubSpot, Stripe, Salesforce, GitHub, Slack, …) with SQL. It chains a [dlt](https://dlthub.com) extraction pipeline into DuckDB with auto-generation of a Wren project on top.
+
+### Four-phase workflow
+
+| Phase | Goal | Key actions |
+|-------|------|-------------|
+| **1. Extract** | Pull SaaS data into local DuckDB | `pip install "dlt[duckdb]"`, write a small `pipeline.py`, set source credentials, run `pipeline.run(source)` |
+| **2. Model** | Auto-generate a Wren project | Run `introspect_dlt.py` to scan DuckDB, normalize types via `wren.type_mapping.parse_type()`, write models, relationships, profile |
+| **3. Build & Verify** | Confirm queries work end-to-end | `wren context build`, `wren memory index`, run sample SQL through the engine — not just file generation |
+| **4. Handoff** | Show first results | Run a couple of representative queries and surface them to the user |
+
+The user can enter at any phase. If they already have a `.duckdb` file from a prior dlt run, the skill can start from Phase 2.
+
+### Two non-negotiable invariants
+
+1. **DuckDB catalog naming** — when wren engine `ATTACH`es a `.duckdb` file, it uses the filename stem as the catalog alias. So every model's `table_reference.catalog` **must equal the filename stem**. `stripe_data.duckdb` → catalog `stripe_data`. The `introspect_dlt.py` script handles this automatically — never override.
+2. **Type normalization through wren SDK** — column types must go through `wren.type_mapping.parse_type()` (sqlglot-based). Don't hardcode mappings; DuckDB-specific types like `HUGEINT` or `TIMESTAMP WITH TIME ZONE` need canonical conversion.
+
+### When to trigger
+
+The skill activates on phrases like:
+
+- "connect HubSpot / Stripe / Salesforce / GitHub / Slack data"
+- "load data from a SaaS API"
+- "import data from a REST API"
+- "set up a dlt pipeline"
+- "I have a `.duckdb` file from dlt — make a Wren project from it"
+
+### Source coverage
+
+The skill ships a reference list of common dlt-verified sources with auth patterns. For sources not on the list, the agent checks [dlthub.com/docs/dlt-ecosystem/verified-sources](https://dlthub.com/docs/dlt-ecosystem/verified-sources) before improvising.
+
+---
+
 ## Skill structure
 
 Skills are installed to `~/.claude/skills/` with this layout:
 
 ```
 ~/.claude/skills/
+├── wren-onboarding/
+│   └── SKILL.md              # Setup workflow (routes to docs and other skills)
+├── wren-generate-mdl/
+│   └── SKILL.md              # MDL generation workflow
 ├── wren-usage/
-│   ├── SKILL.md              # Main workflow instructions
+│   ├── SKILL.md              # Day-to-day query workflow
 │   └── references/
 │       ├── memory.md          # Memory command decision logic
 │       └── wren-sql.md        # CTE rewrite pipeline reference
-└── wren-generate-mdl/
-    └── SKILL.md              # MDL generation workflow
+└── wren-dlt-connector/
+    ├── SKILL.md              # SaaS-via-dlt → DuckDB → Wren project
+    ├── references/
+    │   └── dlt_sources.md     # Per-source dlt templates and auth patterns
+    └── scripts/
+        └── introspect_dlt.py  # Auto-generates a Wren project from a .duckdb file
 ```
 
-Each `SKILL.md` has YAML frontmatter with name, description, version, and license. The agent loads the main SKILL.md when triggered, and loads reference files on demand when deeper context is needed.
+Each `SKILL.md` has YAML frontmatter with name, description, version, and license. The agent loads the main SKILL.md when triggered, and loads reference files or scripts on demand when deeper context is needed.

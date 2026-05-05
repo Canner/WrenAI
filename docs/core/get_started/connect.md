@@ -74,7 +74,7 @@ POSTGRES_USER=alice
 POSTGRES_PASSWORD=...
 ```
 
-See [Profiles](../guide/profiles.md) for all options.
+See [Profiles](../guides/profiles.md) for all options.
 
 ### Per-datasource setup notes
 

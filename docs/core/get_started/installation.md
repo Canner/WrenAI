@@ -1,5 +1,46 @@
 # Installation
 
+## Quick install with an LLM agent
+
+If you are setting up Wren AI Core with an AI coding agent (Claude Code, Cursor, Aider, etc.), the fastest path is to install the full Wren AI skills package and let the agent drive the rest. Skills are structured workflow guides that teach AI coding agents how to use the Wren CLI — they are optional but **strongly recommended**.
+
+```bash
+# Via npx
+npx skills add Canner/WrenAI --skill '*'
+
+# Or via install script
+curl -fsSL https://raw.githubusercontent.com/Canner/WrenAI/main/skills/install.sh | bash
+```
+
+> During the migration period, use `Canner/wren-engine` instead of `Canner/WrenAI` until the merger lands.
+
+The installer auto-detects your AI agent. To target a specific one:
+
+```bash
+npx skills add Canner/WrenAI --skill '*' --agent claude-code
+```
+
+This installs all four skills into your agent's skill directory:
+
+| Skill | Purpose |
+|-------|---------|
+| **wren-onboarding** | Entry point — handles install, project scaffolding, profile setup, first query |
+| **wren-generate-mdl** | Schema discovery and MDL project generation from a connected database |
+| **wren-usage** | Day-to-day query workflow — context, recall, SQL, store results |
+| **wren-dlt-connector** | Connect SaaS APIs (HubSpot, Stripe, Salesforce, GitHub, Slack, …) into DuckDB via dlt |
+
+Then **start a new agent session** (skills are loaded at session start) and ask:
+
+> Use the `wren-onboarding` skill to install and set up Wren AI Core.
+
+The `wren-onboarding` skill drives the rest of the setup — environment checks, project scaffolding, data source connection via `.env`, and a first query — and dispatches to the other skills as needed. Skill source: [github.com/Canner/WrenAI/tree/main/skills](https://github.com/Canner/WrenAI/tree/main/skills)
+
+See the [Skills reference](../reference/skills.md) for what each skill does in detail.
+
+If you'd prefer to install manually, follow the steps below.
+
+---
+
 ## Requirements
 
 - **Python 3.11+**

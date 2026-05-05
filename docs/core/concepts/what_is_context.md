@@ -16,7 +16,7 @@ Context helps agents:
 - apply business rules consistently
 - generate more reliable answers across multi-step workflows
 
-This is why Wren Engine is positioned as an open context engine for AI agents: it helps turn raw data systems into usable context that agents can reason over.
+This is why Wren Engine is positioned as an open context layer for AI agents: it helps turn raw data systems into usable context that agents can reason over.
 
 ## Context vs. semantics
 
@@ -58,7 +58,7 @@ Wren Engine builds context from structured modeling and execution primitives, in
 - reusable analytical logic
 - governed access patterns between agents and data sources
 - MCP-friendly interfaces for connecting that context to AI agents
-- a [memory layer](../guide/memory.md) that indexes schema context and stores confirmed NL-SQL pairs, enabling agents to retrieve relevant context per question and learn from past interactions
+- a [memory layer](../guides/memory.md) that indexes schema context and stores confirmed NL-SQL pairs, enabling agents to retrieve relevant context per question and learn from past interactions
 
 Together, these give agents a clearer and more durable understanding of how to reason over data. Notably, the memory layer makes context **adaptive** — it grows with usage. As more queries are confirmed and stored, the agent's ability to answer domain-specific questions improves without changes to the MDL or the underlying model.
 

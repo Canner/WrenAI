@@ -38,7 +38,7 @@ That improves agent behavior in several ways:
 - more consistent metric definitions across queries
 - clearer grounding for text-to-SQL and RAG workflows
 
-In this sense, MDL is one of the core building blocks that lets Wren Engine act as an open context engine for AI agents.
+In this sense, MDL is one of the core building blocks that lets Wren Engine act as an open context layer for AI agents.
 
 ## Benefits of MDL
 

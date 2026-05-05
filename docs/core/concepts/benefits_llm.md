@@ -2,7 +2,7 @@
 
 Wren Engine gives AI agents a reliable way to understand business data before they generate SQL or answer questions. Instead of asking an LLM to infer meaning directly from raw tables and column names, Wren Engine provides structured business context through MDL, relationships, metrics, and governed access patterns.
 
-This matters because most failures in text-to-SQL systems do not come from SQL syntax alone. They come from missing context: unclear business definitions, ambiguous joins, inconsistent metric logic, and access to the wrong data. Wren Engine reduces those failures by acting as an open context engine between AI agents and your data sources.
+This matters because most failures in text-to-SQL systems do not come from SQL syntax alone. They come from missing context: unclear business definitions, ambiguous joins, inconsistent metric logic, and access to the wrong data. Wren Engine reduces those failures by acting as an open context layer between AI agents and your data sources.
 
 ## What Wren Engine provides to LLM workflows
 
@@ -58,7 +58,7 @@ That improves safety and governance by:
 
 ### 6. Memory and self-learning
 
-Most text-to-SQL systems treat every question as if it were the first. Wren Engine breaks that pattern with a built-in [memory layer](../guide/memory.md) that learns from successful queries and gets better over time.
+Most text-to-SQL systems treat every question as if it were the first. Wren Engine breaks that pattern with a built-in [memory layer](../guides/memory.md) that learns from successful queries and gets better over time.
 
 The memory system works at two levels:
 

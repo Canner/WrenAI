@@ -132,7 +132,7 @@ Each connector:
 
 Stores named database connections in `~/.wren/profiles.yml`. One profile is active at a time. All `wren` commands use the active profile unless overridden with explicit flags.
 
-See [Profiles](../guide/profiles.md) for details.
+See [Profiles](../guides/profiles.md) for details.
 
 ### Context management
 
@@ -144,7 +144,7 @@ Key operations:
 - `wren context build` — compile snake_case YAML to camelCase JSON
 - `wren context show` — display the current project summary
 
-See [Wren Project](../guide/modeling/wren_project.md) for the project format.
+See [Wren Project](../guides/modeling/wren_project.md) for the project format.
 
 ### Memory layer
 
@@ -157,7 +157,7 @@ A LanceDB-backed semantic index with two collections:
 
 The memory layer enables the self-learning loop: each confirmed query improves future recall accuracy.
 
-See [Memory](../guide/memory.md) for details.
+See [Memory](../guides/memory.md) for details.
 
 ### wren-core (Rust engine)
 
