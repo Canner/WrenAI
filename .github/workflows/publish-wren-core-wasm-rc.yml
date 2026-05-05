@@ -76,7 +76,9 @@ jobs:
         working-directory: core/wren-core-wasm
         env:
           VERSION: ${{ inputs.version }}
-        run: npm version "$VERSION" --no-git-tag-version
+        # Mirrors the OIDC variant — harmless for RC (versions always differ
+        # from main's package.json) and keeps the two pipelines consistent.
+        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
 
       - name: Build WASM (wasm-pack)
         working-directory: core/wren-core-wasm

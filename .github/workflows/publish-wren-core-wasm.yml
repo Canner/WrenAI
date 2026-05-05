@@ -75,7 +75,9 @@ jobs:
         working-directory: core/wren-core-wasm
         env:
           VERSION: ${{ inputs.version }}
-        run: npm version "$VERSION" --no-git-tag-version
+        # release-please bumps package.json on the release PR merge, so by the
+        # time this workflow runs the version may already match — allow that.
+        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
 
       - name: Build WASM (wasm-pack)
         working-directory: core/wren-core-wasm
