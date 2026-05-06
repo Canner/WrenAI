@@ -1,10 +1,10 @@
-# Why Wren Engine helps AI agents
+# Why Wren AI Core helps AI agents
 
-Wren Engine gives AI agents a reliable way to understand business data before they generate SQL or answer questions. Instead of asking an LLM to infer meaning directly from raw tables and column names, Wren Engine provides structured business context through MDL, relationships, metrics, and governed access patterns.
+Wren AI Core gives AI agents a reliable way to understand business data before they generate SQL or answer questions. Instead of asking an LLM to infer meaning directly from raw tables and column names, Wren AI Core provides structured business context through MDL, relationships, metrics, and governed access patterns.
 
-This matters because most failures in text-to-SQL systems do not come from SQL syntax alone. They come from missing context: unclear business definitions, ambiguous joins, inconsistent metric logic, and access to the wrong data. Wren Engine reduces those failures by acting as an open context layer between AI agents and your data sources.
+This matters because most failures in text-to-SQL systems do not come from SQL syntax alone. They come from missing context: unclear business definitions, ambiguous joins, inconsistent metric logic, and access to the wrong data. Wren AI Core reduces those failures by acting as an open context layer between AI agents and your data sources.
 
-## What Wren Engine provides to LLM workflows
+## What Wren AI Core provides to LLM workflows
 
 ### 1. Shared business context
 
@@ -19,7 +19,7 @@ With that context in place, an agent has a better chance of mapping a question l
 
 ### 2. More reliable planning for text-to-SQL
 
-LLMs are good at pattern matching, but they are weaker when a query depends on domain-specific modeling rules. Wren Engine improves planning by giving the agent explicit structure instead of forcing it to reconstruct business logic from raw schema alone.
+LLMs are good at pattern matching, but they are weaker when a query depends on domain-specific modeling rules. Wren AI Core improves planning by giving the agent explicit structure instead of forcing it to reconstruct business logic from raw schema alone.
 
 This helps reduce:
 
@@ -30,7 +30,7 @@ This helps reduce:
 
 ### 3. Better context for RAG and agent memory
 
-RAG systems work best when the retrieved context is structured, relevant, and grounded in how the business actually defines data. Wren Engine gives retrieval systems higher-quality context by exposing modeled entities, documented relationships, and reusable logic instead of only raw database metadata.
+RAG systems work best when the retrieved context is structured, relevant, and grounded in how the business actually defines data. Wren AI Core gives retrieval systems higher-quality context by exposing modeled entities, documented relationships, and reusable logic instead of only raw database metadata.
 
 This makes it easier for an agent to retrieve the right context for:
 
@@ -43,11 +43,11 @@ This makes it easier for an agent to retrieve the right context for:
 
 When multiple AI agents, MCP clients, or applications access the same modeled context, they can reason from the same definitions. That consistency is important for teams that want a single place to define how metrics, dimensions, and relationships should behave.
 
-Instead of each agent inventing its own interpretation, Wren Engine helps standardize the context they operate on.
+Instead of each agent inventing its own interpretation, Wren AI Core helps standardize the context they operate on.
 
 ### 5. Governed access to data
 
-AI systems should not have unlimited freedom to reference every object in a warehouse. Wren Engine helps narrow and structure what an agent can work with by operating against modeled data definitions rather than arbitrary warehouse exploration alone.
+AI systems should not have unlimited freedom to reference every object in a warehouse. Wren AI Core helps narrow and structure what an agent can work with by operating against modeled data definitions rather than arbitrary warehouse exploration alone.
 
 That improves safety and governance by:
 
@@ -58,7 +58,7 @@ That improves safety and governance by:
 
 ### 6. Memory and self-learning
 
-Most text-to-SQL systems treat every question as if it were the first. Wren Engine breaks that pattern with a built-in [memory layer](../guides/memory.md) that learns from successful queries and gets better over time.
+Most text-to-SQL systems treat every question as if it were the first. Wren AI Core breaks that pattern with a built-in [memory layer](../guides/memory.md) that learns from successful queries and gets better over time.
 
 The memory system works at two levels:
 
@@ -74,6 +74,6 @@ The practical effect is fewer wrong answers over time — without retraining a m
 
 AI agents need more than schema access. They need context they can plan with.
 
-Wren Engine is designed for that layer of the stack: it turns raw warehouse structure into usable business context, exposes that context through MCP-friendly workflows, and helps agents generate more accurate, explainable, and governable data interactions.
+Wren AI Core is designed for that layer of the stack: it turns raw warehouse structure into usable business context, exposes that context through MCP-friendly workflows, and helps agents generate more accurate, explainable, and governable data interactions.
 
-If you are building AI-native analytics, text-to-SQL experiences, or agent workflows over enterprise data, Wren Engine helps bridge the gap between raw data systems and trustworthy agent behavior.
+If you are building AI-native analytics, text-to-SQL experiences, or agent workflows over enterprise data, Wren AI Core helps bridge the gap between raw data systems and trustworthy agent behavior.

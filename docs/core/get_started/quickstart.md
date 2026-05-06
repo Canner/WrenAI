@@ -1,6 +1,6 @@
 # Quick Start: Wren CLI with jaffle_shop
 
-Use natural-language questions against the **jaffle\_shop** dataset using **Wren Engine CLI** and **Claude Code** — no cloud database, no Docker, no MCP server.
+Use natural-language questions against the **jaffle\_shop** dataset using **Wren AI Core CLI** and **Claude Code** — no cloud database, no Docker, no MCP server.
 
 > **Time:** ~15 minutes
 >
@@ -176,7 +176,7 @@ This creates:
 
 The generated `wren_project.yml` contains default values for `catalog` and `schema`:
 
-> **Note:** `catalog` and `schema` in `wren_project.yml` define the **Wren Engine namespace** — they have nothing to do with your database's catalog or schema. Keep the defaults (`wren` / `public`). The actual database location of each table is specified per-model in the `table_reference` section.
+> **Note:** `catalog` and `schema` in `wren_project.yml` define the **Wren AI Core namespace** — they have nothing to do with your database's catalog or schema. Keep the defaults (`wren` / `public`). The actual database location of each table is specified per-model in the `table_reference` section.
 
 ---
 

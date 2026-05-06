@@ -1,6 +1,6 @@
 # Memory
 
-Wren Engine includes a **memory layer** — a LanceDB-backed semantic index that gives AI agents the context they need to write accurate SQL. Instead of sending the entire schema to an LLM on every question, the memory layer provides targeted context: relevant tables, columns, and past query examples.
+Wren AI Core includes a **memory layer** — a LanceDB-backed semantic index that gives AI agents the context they need to write accurate SQL. Instead of sending the entire schema to an LLM on every question, the memory layer provides targeted context: relevant tables, columns, and past query examples.
 
 ## Why memory matters
 

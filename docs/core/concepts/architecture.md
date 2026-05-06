@@ -1,6 +1,6 @@
 # Architecture
 
-Wren Engine CLI is a modular Python application that transforms semantic SQL through an MDL layer before executing it against your database. This page explains how the components fit together.
+Wren AI Core CLI is a modular Python application that transforms semantic SQL through an MDL layer before executing it against your database. This page explains how the components fit together.
 
 ## Overview
 

@@ -1,6 +1,6 @@
 # Connect Your Database
 
-This guide walks you through connecting Wren Engine to your own database — from creating a profile to running your first query. If you haven't installed the CLI yet, see [Installation](./installation.md) first.
+This guide walks you through connecting Wren AI Core to your own database — from creating a profile to running your first query. If you haven't installed the CLI yet, see [Installation](./installation.md) first.
 
 ---
 

@@ -1,6 +1,6 @@
 # What is context?
 
-In Wren Engine, context is the structured business understanding an AI agent needs in order to work with data correctly. It goes beyond raw schemas and table access. Context helps an agent understand what your data means, which sources to trust, how entities relate to each other, how metrics should be calculated, and what rules or guidance should shape its behavior.
+In Wren AI Core, context is the structured business understanding an AI agent needs in order to work with data correctly. It goes beyond raw schemas and table access. Context helps an agent understand what your data means, which sources to trust, how entities relate to each other, how metrics should be calculated, and what rules or guidance should shape its behavior.
 
 For AI agents, this matters because answering a question is rarely just a SQL generation problem. The harder problem is knowing what the question means inside a business. Questions like "What is revenue growth last quarter?" depend on business definitions, trusted sources, time conventions, relationships, and sometimes team-specific instructions. Context is what makes those answers reliable.
 
@@ -16,7 +16,7 @@ Context helps agents:
 - apply business rules consistently
 - generate more reliable answers across multi-step workflows
 
-This is why Wren Engine is positioned as an open context layer for AI agents: it helps turn raw data systems into usable context that agents can reason over.
+This is why Wren AI Core is positioned as an open context layer for AI agents: it helps turn raw data systems into usable context that agents can reason over.
 
 ## Context vs. semantics
 
@@ -49,9 +49,9 @@ But for AI agents, a semantic layer alone is often not enough. Agents also need 
 
 This idea aligns with the argument in a16z's article [Your Data Agents Need Context](https://a16z.com/your-data-agents-need-context/): a modern context layer should be a superset of the traditional semantic layer, adding the business and operational grounding that autonomous agents need.
 
-## What context includes in Wren Engine
+## What context includes in Wren AI Core
 
-Wren Engine builds context from structured modeling and execution primitives, including:
+Wren AI Core builds context from structured modeling and execution primitives, including:
 
 - MDL definitions for models, relationships, calculations, and views
 - business-facing dataset structure
