@@ -105,7 +105,7 @@ See the connector API docs in the project documentation for the latest connectio
 | &nbsp;&nbsp;[`core/wren/`](./core/wren) | Python SDK + `wren` CLI (PyPI: `wren-engine`). |
 | &nbsp;&nbsp;[`core/wren-mdl/`](./core/wren-mdl) | MDL JSON schema. |
 | [`skills/`](./skills) | CLI-based agent skills (`wren-generate-mdl`, `wren-usage`, `wren-dlt-connector`, `wren-onboarding`). |
-| [`sdks/integrations/`](./sdks) | Framework integrations (LangChain, CrewAI, Pydantic-AI, Goose, LlamaIndex, Mastra) — _coming soon_. |
+| [`sdk/`](./sdk) | Framework integrations. [`sdk/wren-langchain/`](./sdk/wren-langchain) (PyPI: `wren-langchain`) is shipped; CrewAI / Pydantic-AI / Goose / LlamaIndex / Mastra are _coming soon_. |
 | [`examples/`](./examples) | End-to-end example projects — _coming soon_. |
 | [`docs/core/`](./docs/core) | Module documentation. |
 
@@ -120,7 +120,7 @@ See the connector API docs in the project documentation for the latest connectio
 
 WrenAI is multi-licensed:
 
-- **`core/**`, `skills/**`, `sdks/integrations/**`, `examples/**`, root-level files** — [Apache License 2.0](LICENSE-APACHE-2.0)
+- **`core/**`, `sdk/**`, `skills/**`, `examples/**`, root-level files** — [Apache License 2.0](LICENSE-APACHE-2.0)
 - **`docs/**`** — [Creative Commons Attribution 4.0 International (CC BY 4.0)](LICENSE-CC-BY-4.0)
 
 Future modules may be introduced under [GNU Affero General Public License v3.0](LICENSE-AGPL-3.0); the full text is committed here pre-emptively. See [LICENSE](LICENSE) for the authoritative path-to-license map.

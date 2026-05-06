@@ -1,0 +1,125 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "wren-langchain"
+version = "0.1.0"
+description = "LangChain and LangGraph integration for Wren AI Core — attach a CLI-prepared Wren project to your agent in three lines."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Wren AI", email = "contact@getwren.ai" }]
+keywords = [
+  "wrenai", "wren", "langchain", "langgraph", "agent", "ai-agent",
+  "sql", "context-layer", "semantic", "mdl", "data-modeling", "analytics",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Database",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Typing :: Typed",
+]
+dependencies = [
+  # Core: provides WrenEngine, MemoryStore, profile resolution, MDL handling.
+  "wren-engine>=0.5.0",
+  # langchain >=1.0 ships the recommended `langchain.agents.create_agent`
+  # entrypoint. Older `langgraph.prebuilt.create_react_agent` still works
+  # but emits deprecation warnings and is scheduled for removal in
+  # langgraph 2.0.
+  "langchain>=1.0",
+  "langchain-core>=0.3",
+  "langgraph>=1.0",
+  "pydantic>=2",
+]
+
+[project.optional-dependencies]
+# ── Datasource pass-through extras ────────────────────────────────────────
+# Pick the one matching your project's `data_source` (in wren_project.yml).
+# These chain through to the matching `wren-engine[<datasource>]` extra so
+# you don't have to install the connector dependency twice.
+#
+#   pip install "wren-langchain[mysql]"
+#   pip install "wren-langchain[mysql,memory]"
+#
+# DuckDB is built into wren-engine — no extra needed.
+postgres   = ["wren-engine[postgres]>=0.5.0"]
+mysql      = ["wren-engine[mysql]>=0.5.0"]
+bigquery   = ["wren-engine[bigquery]>=0.5.0"]
+snowflake  = ["wren-engine[snowflake]>=0.5.0"]
+clickhouse = ["wren-engine[clickhouse]>=0.5.0"]
+trino      = ["wren-engine[trino]>=0.5.0"]
+mssql      = ["wren-engine[mssql]>=0.5.0"]
+databricks = ["wren-engine[databricks]>=0.5.0"]
+redshift   = ["wren-engine[redshift]>=0.5.0"]
+spark      = ["wren-engine[spark]>=0.5.0"]
+athena     = ["wren-engine[athena]>=0.5.0"]
+oracle     = ["wren-engine[oracle]>=0.5.0"]
+
+# ── Memory extra ──────────────────────────────────────────────────────────
+# Required to use the three memory tools (wren_fetch_context,
+# wren_recall_queries, wren_store_query). Pulls in LanceDB and the
+# sentence-transformer model deps via wren-engine.
+#
+# Without this, the toolkit auto-detects no memory and exposes only the
+# three runtime tools.
+memory = ["wren-engine[memory]>=0.5.0"]
+
+# ── Convenience aggregate ─────────────────────────────────────────────────
+# Installs every datasource + memory at once. Useful for CI / examples,
+# heavyweight for production where you usually want only one datasource.
+all = ["wren-engine[all]>=0.5.0"]
+
+# ── Dev / test deps ───────────────────────────────────────────────────────
+dev = [
+  "pytest>=8",
+  "pytest-mock>=3",
+  "ruff>=0.4",
+  # Tests run real DuckDB + LanceDB integrations, so memory deps are required.
+  "wren-engine[memory]>=0.5.0",
+]
+
+[project.urls]
+Homepage      = "https://getwren.ai"
+Documentation = "https://github.com/Canner/WrenAI/tree/main/sdk/wren-langchain#readme"
+Repository    = "https://github.com/Canner/WrenAI"
+Issues        = "https://github.com/Canner/WrenAI/issues"
+Changelog     = "https://github.com/Canner/WrenAI/blob/main/sdk/wren-langchain/CHANGELOG.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wren_langchain"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "PLC"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+# Default run skips tests marked `slow` (currently the LanceDB integration
+# tests which load a sentence-transformer model, ~30-40s). Run them explicitly
+# with `pytest -m slow` or `pytest -m "slow or not slow"` for everything.
+addopts = "-ra -m \"not slow\""
+markers = [
+  "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+# Suppress deprecation warnings emitted by langgraph's own internal imports.
+# These are not from our code — they fire when `from langgraph.prebuilt import
+# ToolNode` triggers langgraph's package init. We cannot fix them upstream-side
+# and do not use the deprecated APIs ourselves. Review quarterly per
+# sdk/MAINTENANCE.md §3.
+filterwarnings = [
+  "ignore::langchain_core._api.deprecation.LangChainPendingDeprecationWarning",
+  "ignore:AgentStatePydantic has been moved",
+]

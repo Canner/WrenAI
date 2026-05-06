@@ -12,8 +12,8 @@ Path → License map
   | Path                          | License                                       |
   | ----------------------------- | --------------------------------------------- |
   | `core/**`                     | Apache License 2.0 (see LICENSE-APACHE-2.0)   |
+  | `sdk/**`                      | Apache License 2.0                            |
   | `skills/**`                   | Apache License 2.0                            |
-  | `sdks/integrations/**`        | Apache License 2.0                            |
   | `examples/**`                 | Apache License 2.0                            |
   | `docs/**`                     | CC BY 4.0 International (see LICENSE-CC-BY-4.0) |
   | Everything else (root files)  | Apache License 2.0                            |

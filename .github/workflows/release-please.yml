@@ -22,6 +22,9 @@ jobs:
       wren-core-wasm--release_created: ${{ steps.release.outputs['core/wren-core-wasm--release_created'] }}
       wren-core-wasm--tag_name: ${{ steps.release.outputs['core/wren-core-wasm--tag_name'] }}
       wren-core-wasm--version: ${{ steps.release.outputs['core/wren-core-wasm--version'] }}
+      wren-langchain--release_created: ${{ steps.release.outputs['sdk/wren-langchain--release_created'] }}
+      wren-langchain--tag_name: ${{ steps.release.outputs['sdk/wren-langchain--tag_name'] }}
+      wren-langchain--version: ${{ steps.release.outputs['sdk/wren-langchain--version'] }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -58,6 +61,20 @@ jobs:
     with:
       version: ${{ needs.release-please.outputs['wren-core-wasm--version'] }}
       tag_name: ${{ needs.release-please.outputs['wren-core-wasm--tag_name'] }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # release-please outputs come from conventional-commit aggregation, not from
+  # untrusted issue/PR event payloads, so direct ${{ ... }} interpolation is
+  # safe here. Same pattern as the publish jobs above.
+  publish-wren-langchain:
+    needs: release-please
+    if: needs.release-please.outputs['wren-langchain--release_created'] == 'true'
+    uses: ./.github/workflows/publish-wren-langchain.yml
+    with:
+      version: ${{ needs.release-please.outputs['wren-langchain--version'] }}
+      tag_name: ${{ needs.release-please.outputs['wren-langchain--tag_name'] }}
     permissions:
       contents: read
       id-token: write

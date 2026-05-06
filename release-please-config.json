@@ -26,6 +26,14 @@
       "extra-files": [
         "Cargo.toml"
       ]
+    },
+    "sdk/wren-langchain": {
+      "component": "wren-langchain",
+      "release-type": "python",
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        "src/wren_langchain/__init__.py"
+      ]
     }
   }
 }
