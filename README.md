@@ -40,25 +40,30 @@
 > 📣 **2026-05-07** — Wren Engine has merged into this repo under [`core/`](./core). The previous `Canner/wren-engine` repo is archived. The previous WrenAI GenBI app is preserved on the [`legacy/v1`](https://github.com/Canner/WrenAI/tree/legacy/v1) branch (tag `v1-final`). [Read the announcement →](https://github.com/Canner/WrenAI/discussions/2205)
 ---
 
-WrenAI is an open-source context layer for MCP clients and AI agents. It translates SQL queries through a semantic layer ([MDL](./core/wren-mdl/) — Modeling Definition Language) and executes them against 20+ data sources (PostgreSQL, BigQuery, Snowflake, Spark, etc.). The Rust engine is powered by [Apache DataFusion](https://datafusion.apache.org/). Use it as a Python SDK, a CLI, a WASM module in the browser, or as building blocks for AI-agent skills.
+## Why WrenAI?
+
+AI agents fail on business data not because they can't write SQL — they fail because they don't know what your warehouse means. Overlapping tables, inconsistent naming, metric definitions scattered across dashboards and SQL files: an LLM with raw database access guesses just as badly as a new hire on day one.
+
+WrenAI is the open context layer that fills that gap. You model your business in **[MDL](./core/wren-mdl/)** (Modeling Definition Language) — entities, relationships, calculations, governed access patterns — and any agent (Claude, Cursor, ChatGPT, internal copilots, customer-facing apps) queries through the same layer your analysts already use.
+
+A Rust engine powered by [Apache DataFusion](https://datafusion.apache.org/) translates the modeled SQL and runs it against 20+ data sources (PostgreSQL, BigQuery, Snowflake, Spark, etc.). Use it as a Python SDK, a CLI, a WASM module in the browser, or as building blocks for agent skills.
 
 ## Quick start
 
+The fastest path is to let an AI coding agent (Claude Code, Cursor, Aider, etc.) drive the install:
+
 ```bash
-pip install wren-engine
-
-mkdir my-project && cd my-project
-wren context init
-
-# add a connection profile (interactive)
-wren profile add my-db --interactive
-
-# prepare your MDL project (edit wren_project.yml and add models)
-
-wren --sql 'SELECT order_id FROM "orders" LIMIT 10'
+# Install WrenAI skills into your AI agent
+npx skills add Canner/WrenAI --skill '*'
 ```
 
-Full CLI guide: [`core/wren/README.md`](./core/wren/README.md). Installable extras for each connector are listed there.
+Start a new agent session and ask:
+
+> Use the `wren-onboarding` skill to install and set up Wren AI Core.
+
+The `wren-onboarding` skill walks the agent through environment checks, package install, project scaffolding, the first data source connection, and a first query.
+
+Full CLI guide and manual install steps: [`core/wren/README.md`](./core/wren/README.md). Installable extras for each connector are listed there.
 
 
 ## Supported Data Sources
