@@ -22,7 +22,7 @@ This installs all four skills into your agent's skill directory:
 
 | Skill | Purpose |
 |-------|---------|
-| **wren-onboarding** | Entry point — handles install, project scaffolding, profile setup, first query |
+| **wren-onboarding** | Entry point — handles install, `.env` setup, profile creation, project scaffolding, profile binding, first query |
 | **wren-generate-mdl** | Schema discovery and MDL project generation from a connected database |
 | **wren-usage** | Day-to-day query workflow — context, recall, SQL, store results |
 | **wren-dlt-connector** | Connect SaaS APIs (HubSpot, Stripe, Salesforce, GitHub, Slack, …) into DuckDB via dlt |
@@ -31,7 +31,7 @@ Then **start a new agent session** (skills are loaded at session start) and ask:
 
 > Use the `wren-onboarding` skill to install and set up Wren AI Core.
 
-The `wren-onboarding` skill drives the rest of the setup — environment checks, project scaffolding, data source connection via `.env`, and a first query — and dispatches to the other skills as needed. Skill source: [github.com/Canner/WrenAI/tree/main/skills](https://github.com/Canner/WrenAI/tree/main/skills)
+The `wren-onboarding` skill drives the rest of the setup — environment checks, `.env` configuration, connection profile creation, project scaffolding, binding the profile to the project, and a first query — and dispatches to the other skills as needed. Skill source: [github.com/Canner/WrenAI/tree/main/skills](https://github.com/Canner/WrenAI/tree/main/skills)
 
 See the [Skills reference](../reference/skills.md) for what each skill does in detail.
 

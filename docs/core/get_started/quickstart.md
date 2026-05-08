@@ -180,6 +180,14 @@ The generated `wren_project.yml` contains default values for `catalog` and `sche
 
 > **Note:** `catalog` and `schema` in `wren_project.yml` define the **Wren AI Core namespace** — they have nothing to do with your database's catalog or schema. Keep the defaults (`wren` / `public`). The actual database location of each table is specified per-model in the `table_reference` section.
 
+Bind the profile you just created to this project:
+
+```bash
+wren context set-profile jaffle-shop
+```
+
+This writes `profile: jaffle-shop` and `data_source: duckdb` into `wren_project.yml`, locking this project to its connection. Future commands (and the SDK) use the bound profile regardless of which profile is globally active — so `wren profile switch` elsewhere can't accidentally redirect this project's queries.
+
 ---
 
 ## Step 6 — Generate MDL with Claude Code
