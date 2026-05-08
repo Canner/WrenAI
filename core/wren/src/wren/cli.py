@@ -127,6 +127,44 @@ def _load_conn(
     return {}
 
 
+def _resolve_engine_profile(mdl: str | None) -> tuple[str | None, dict]:
+    """Resolve the connection profile for project-context CLI commands.
+
+    Tries to find the project root from ``--mdl`` (when it points to a real
+    file) or the current working directory; if a project is found, defers
+    to :func:`wren.profile.resolve_profile_for_project` (which honors any
+    ``profile:`` pin in ``wren_project.yml``). Otherwise falls back to the
+    global active profile.
+
+    The fall-through preserves backward compatibility: callers that pass
+    ``--mdl <base64-string>`` or run outside a project see the same
+    ``get_active_profile()`` behavior as before.
+    """
+    from wren.profile import (  # noqa: PLC0415
+        get_active_profile,
+        resolve_profile_for_project,
+    )
+
+    project_path: Path | None = None
+    if mdl is not None:
+        mdl_path = Path(mdl).expanduser()
+        if mdl_path.exists() and mdl_path.is_file():
+            candidate = mdl_path.resolve().parent.parent
+            if (candidate / "wren_project.yml").exists():
+                project_path = candidate
+    else:
+        try:
+            from wren.context import discover_project_path  # noqa: PLC0415
+
+            project_path = discover_project_path()
+        except SystemExit:
+            project_path = None
+
+    if project_path is None:
+        return get_active_profile()
+    return resolve_profile_for_project(project_path)
+
+
 def _resolve_datasource(conn_dict: dict, explicit: str | None = None) -> str:
     """Return datasource from explicit arg or connection dict.
 
@@ -160,15 +198,15 @@ def _build_engine(
 
     manifest_str = _load_manifest(_require_mdl(mdl))
 
-    # Try active profile when no explicit connection flags given
+    # Try project-pinned profile (or fall back to active) when no explicit
+    # connection flags given.
     if not connection_info and not connection_file:
         from wren.profile import (  # noqa: PLC0415
             MissingSecretError,
             expand_profile_secrets,
-            get_active_profile,
         )
 
-        prof_name, prof_dict = get_active_profile()
+        prof_name, prof_dict = _resolve_engine_profile(mdl)
         if prof_dict:
             prof_ds = prof_dict.pop("datasource", None)
             ds_str = datasource or prof_ds
@@ -419,11 +457,10 @@ def dry_plan(
 
     manifest_str = _load_manifest(_require_mdl(mdl))
 
-    # Try active profile when no explicit flags given
+    # Try project-pinned profile (or fall back to active) when no explicit
+    # connection flags given.
     if datasource is None and connection_file is None:
-        from wren.profile import get_active_profile  # noqa: PLC0415
-
-        _prof_name, prof_dict = get_active_profile()
+        _prof_name, prof_dict = _resolve_engine_profile(mdl)
         if prof_dict:
             prof_ds = prof_dict.pop("datasource", None)
             if prof_ds is None:
