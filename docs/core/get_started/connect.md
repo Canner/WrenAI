@@ -153,7 +153,51 @@ rm -rf models/example_model views/example_view
 
 ---
 
-## Step 5 — Generate MDL from your database
+## Step 5 — Bind the profile to your project
+
+```bash
+wren context set-profile <profile-name>
+```
+
+Writes both `profile: <name>` and `data_source: <ds>` (taken from the profile)
+into `wren_project.yml`. Once bound, every CLI command and the SDK use this
+profile for the project — independent of which profile is **globally active**
+(`wren profile switch` elsewhere on the same machine never affects this
+project's queries).
+
+### Why bind explicitly
+
+Without a binding, the CLI falls back to the globally active profile from
+`~/.wren/profiles.yml`. That works for a single-project setup, but breaks the
+moment you have two projects pointing at different databases — the active
+profile inevitably becomes wrong for one of them. Binding closes that gap.
+
+### When the binding mismatches
+
+`set-profile` always overwrites the project's `data_source` from the profile,
+so first-bind and rebind both work the same way:
+
+```bash
+$ wren context set-profile loans_local
+✓ Bound profile 'loans_local' to project loans_proj
+  profile:     loans_local
+  data_source: postgres -> duckdb   # overwritten from profile
+```
+
+Re-binding to a profile with a different datasource than the project's
+current MDL was built against will succeed, but the next `wren context build`
+or query will fail with a dialect mismatch — that's the right time to
+regenerate models with `wren-generate-mdl`.
+
+### Inspecting and validating
+
+`wren context validate` prints a friendly hint when no profile is bound, and
+warns when the bound profile no longer exists in `~/.wren/profiles.yml`. The
+hint disappears once a valid binding is in place.
+
+---
+
+## Step 6 — Generate MDL from your database
 
 ### With an AI agent (recommended)
 
@@ -231,7 +275,7 @@ wren context build
 
 ---
 
-## Step 6 — Index memory and start querying
+## Step 7 — Index memory and start querying
 
 ```bash
 wren memory index
