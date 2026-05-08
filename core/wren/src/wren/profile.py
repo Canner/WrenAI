@@ -233,8 +233,15 @@ def resolve_profile_for_project(project_path: Path) -> tuple[str | None, dict]:
     if project_yml.exists():
         try:
             config = yaml.safe_load(project_yml.read_text()) or {}
-        except yaml.YAMLError:
-            config = {}
+        except yaml.YAMLError as exc:
+            # Fail loudly: a malformed project file shouldn't silently fall
+            # back to the global active profile — that risks running against
+            # the wrong database.
+            raise SystemExit(
+                f"Error: invalid YAML in {project_yml}: {exc}\n"
+                "  Fix the file or run `wren context init --force` to "
+                "rescaffold."
+            ) from exc
         if isinstance(config, dict):
             value = config.get("profile")
             if isinstance(value, str) and value.strip():

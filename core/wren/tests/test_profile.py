@@ -208,6 +208,19 @@ def test_resolve_profile_for_project_returns_empty_when_no_pin_no_active(
     assert prof == {}
 
 
+def test_resolve_profile_for_project_raises_on_malformed_yaml(tmp_path: Path):
+    """A broken wren_project.yml should fail loudly, not silently fall back to
+    the global active profile — the latter risks targeting the wrong DB."""
+    proj = tmp_path / "myproj"
+    proj.mkdir()
+    (proj / "wren_project.yml").write_text("schema_version: 3\nname: [unclosed\n")
+
+    with pytest.raises(SystemExit) as exc:
+        profile_mod.resolve_profile_for_project(proj)
+    msg = str(exc.value).lower()
+    assert "wren_project.yml" in msg or "yaml" in msg
+
+
 def test_resolve_profile_for_project_treats_empty_profile_field_as_unset(
     tmp_path: Path,
 ):
