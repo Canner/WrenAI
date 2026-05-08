@@ -4,7 +4,7 @@ description: "Onboard a user to Wren Engine end-to-end. Walks through environmen
 license: Apache-2.0
 metadata:
   author: wren-engine
-  version: "2.0"
+  version: "2.1"
 ---
 
 # Wren Onboarding — Agent Workflow
@@ -67,16 +67,15 @@ These two are the only thing Step 2 needs; ask both together so the user has a c
 
 Wait for both. Don't ask for credentials.
 
-## Step 2 — Project setup (batch)
+## Step 2 — Workspace + .env setup (batch)
 
-Side effects: creates `~/<project>/`, installs `wren-engine[<ds>,main]`, scaffolds project files, writes an empty `.env` template.
+Side effects: creates `~/<project>/`, installs `wren-engine[<ds>,main]`, generates an empty `.env` template. The project files (`wren_project.yml` etc.) come later in Step 3.5 — at this point we only have a directory with credentials waiting to be filled.
 
 Run as a batch — report each command briefly, then end with one "please fill `.env`" ask:
 
-1. `mkdir -p ~/<project> && cd ~/<project>`. Refuse to overwrite an existing `wren_project.yml`.
+1. `mkdir -p ~/<project> && cd ~/<project>`.
 2. `pip install "wren-engine[<ds>,main]"`. For datasource-specific install gotchas (macOS mysql, etc.), see [`connect.md#per-datasource-setup-notes`](https://github.com/Canner/wren-engine/blob/main/docs/get_started/connect.md).
-3. `wren context init --empty` to scaffold without placeholder examples. Edit `wren_project.yml` to set `data_source: <ds>`.
-4. **Generate the `.env` template by introspecting the connector**:
+3. **Generate the `.env` template by introspecting the connector**:
 
    ```bash
    wren docs connection-info <ds> --format md
@@ -94,8 +93,8 @@ Run as a batch — report each command briefly, then end with one "please fill `
 
    Special encodings (BigQuery base64, Snowflake account format, Athena AWS creds, etc.) are documented in [`connect.md#per-datasource-setup-notes`](https://github.com/Canner/wren-engine/blob/main/docs/get_started/connect.md). Surface the relevant section to the user verbatim — don't paraphrase.
 
-5. Add `.env` to `.gitignore` if the project is a git repo. Suggest `chmod 600 .env`.
-6. Tell the user: project is ready, `.env` is at `<path>`, please fill every value and reply **"done"**.
+4. Add `.env` to `.gitignore` if the project is a git repo. Suggest `chmod 600 .env`.
+5. Tell the user: `.env` is at `<path>`, please fill every value and reply **"done"**.
 
 ## Step 3 — Create the connection profile
 
@@ -118,8 +117,26 @@ wren profile add <project> --from-file /tmp/conn.yml
 
 Validation runs automatically. The CLI overwrites profiles silently — there is no `--force` flag.
 
-- ✓ **Success** → continue to Step 4.
+- ✓ **Success** → continue to Step 3.5.
 - ⚠ **Any warning** → consult [`connect.md#troubleshooting`](https://github.com/Canner/wren-engine/blob/main/docs/get_started/connect.md) for the exact symptom (missing secret, driver auth failure, ValidationError, unreachable host, …) and tell the user what to fix.
+
+## Step 3.5 — Scaffold the project
+
+```bash
+wren context init --empty
+```
+
+Refuses to overwrite an existing `wren_project.yml`. Creates the project directory layout (`models/`, `views/`, `relationships.yml`, `instructions.md`, `AGENTS.md`, `queries.yml`).
+
+## Step 3.6 — Bind the profile to the project
+
+```bash
+wren context set-profile <project>
+```
+
+Writes both `profile: <project>` and `data_source: <ds>` into `wren_project.yml` (data_source is taken from the profile we just validated, so it's guaranteed correct). Future CLI commands and the SDK resolve the connection deterministically — independent of which profile is globally active.
+
+This step also future-proofs the project for multi-project setups: once the binding is recorded, switching `wren profile switch` elsewhere never breaks this project's queries.
 
 ## Step 4 — Generate MDL (hand off)
 
