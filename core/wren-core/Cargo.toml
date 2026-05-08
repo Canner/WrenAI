@@ -31,7 +31,7 @@ insta = { version = "1.41.1" }
 log = { version = "0.4.14" }
 serde = { version = "1.0.201", features = ["derive", "rc"] }
 serde_json = { version = "1.0.149" }
-serde_with = { version = "3.18.0" }
-tokio = { version = "1.46", features = ["rt", "macros"] }
+serde_with = { version = "3.19.0" }
+tokio = { version = "1.52", features = ["rt", "macros"] }
 wren-core = { path = "core" }
 wren-core-base = { path = "../wren-core-base" }
