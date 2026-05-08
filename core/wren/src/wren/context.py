@@ -13,7 +13,7 @@ import yaml
 
 _WREN_HOME = Path(os.environ.get("WREN_HOME", Path.home() / ".wren"))
 _DEFAULT_PROJECT = _WREN_HOME / "project"
-_PROJECT_FILE = "wren_project.yml"
+PROJECT_FILE = "wren_project.yml"
 _TARGET_DIR = "target"
 _TARGET_FILE = "mdl.json"
 
@@ -355,7 +355,7 @@ def discover_project_path(explicit: str | None = None) -> Path:
     # 3. Walk up from cwd looking for wren_project.yml
     current = Path.cwd()
     for parent in [current, *current.parents]:
-        if (parent / _PROJECT_FILE).exists():
+        if (parent / PROJECT_FILE).exists():
             return parent
         # Stop at home or root
         if parent == Path.home() or parent == parent.parent:
@@ -375,7 +375,7 @@ def discover_project_path(explicit: str | None = None) -> Path:
 
 def load_project_config(project_path: Path) -> dict:
     """Load wren_project.yml and return as dict."""
-    config_file = project_path / _PROJECT_FILE
+    config_file = project_path / PROJECT_FILE
     if not config_file.exists():
         return {}
     return yaml.safe_load(config_file.read_text()) or {}
@@ -410,7 +410,7 @@ def save_project_config(project_path: Path, config: dict) -> None:
         if key not in ordered:
             ordered[key] = value
 
-    (project_path / _PROJECT_FILE).write_text(
+    (project_path / PROJECT_FILE).write_text(
         yaml.safe_dump(ordered, default_flow_style=False, sort_keys=False)
     )
 
@@ -453,7 +453,7 @@ def get_schema_version(project_path: Path) -> int:
         return int(raw)
     except (TypeError, ValueError):
         raise SystemExit(
-            f"Error: invalid schema_version {raw!r} in {_PROJECT_FILE}. Expected an integer."
+            f"Error: invalid schema_version {raw!r} in {PROJECT_FILE}. Expected an integer."
         )
 
 
@@ -462,7 +462,7 @@ def require_schema_version(project_path: Path) -> int:
     sv = get_schema_version(project_path)
     if sv not in _SUPPORTED_SCHEMA_VERSIONS:
         raise SystemExit(
-            f"Error: unsupported schema_version {sv} in {_PROJECT_FILE}. "
+            f"Error: unsupported schema_version {sv} in {PROJECT_FILE}. "
             "Please upgrade wren CLI."
         )
     return sv
@@ -692,7 +692,7 @@ def validate_project(project_path: Path) -> list[ValidationError]:
     if not config:
         errors.append(
             ValidationError(
-                "error", _PROJECT_FILE, f"'{_PROJECT_FILE}' not found or empty"
+                "error", PROJECT_FILE, f"'{PROJECT_FILE}' not found or empty"
             )
         )
     else:
@@ -700,7 +700,7 @@ def validate_project(project_path: Path) -> list[ValidationError]:
             if not config.get(required):
                 errors.append(
                     ValidationError(
-                        "error", _PROJECT_FILE, f"missing required field '{required}'"
+                        "error", PROJECT_FILE, f"missing required field '{required}'"
                     )
                 )
         raw_sv = config.get("schema_version", 1)
@@ -710,7 +710,7 @@ def validate_project(project_path: Path) -> list[ValidationError]:
             errors.append(
                 ValidationError(
                     "error",
-                    _PROJECT_FILE,
+                    PROJECT_FILE,
                     f"schema_version must be an integer, got {raw_sv!r}",
                 )
             )
@@ -719,12 +719,12 @@ def validate_project(project_path: Path) -> list[ValidationError]:
             errors.append(
                 ValidationError(
                     "error",
-                    _PROJECT_FILE,
+                    PROJECT_FILE,
                     f"unsupported schema_version {sv} — please upgrade wren CLI",
                 )
             )
 
-    if any(e.path == _PROJECT_FILE and "schema_version" in e.message for e in errors):
+    if any(e.path == PROJECT_FILE and "schema_version" in e.message for e in errors):
         return errors
 
     # Load data (snake_case)
@@ -1013,7 +1013,7 @@ def plan_upgrade(
         to_version=target,
         files_created=files_created,
         files_deleted=files_deleted,
-        files_modified=[_PROJECT_FILE],
+        files_modified=[PROJECT_FILE],
     )
 
 
@@ -1070,7 +1070,7 @@ def apply_upgrade(project_path: Path, result: UpgradeResult) -> None:
     # Update wren_project.yml
     config = load_project_config(project_path)
     config["schema_version"] = result.to_version
-    config_file = project_path / _PROJECT_FILE
+    config_file = project_path / PROJECT_FILE
     config_file.write_text(yaml.dump(config, default_flow_style=False, sort_keys=False))
 
 

@@ -90,7 +90,9 @@ def init(
         return
 
     # ── Scaffold empty project (existing behavior) ────────────
-    project_file = project_path / "wren_project.yml"
+    from wren.context import PROJECT_FILE  # noqa: PLC0415
+
+    project_file = project_path / PROJECT_FILE
     agents_file = project_path / "AGENTS.md"
     queries_file = project_path / "queries.yml"
     conflicts = [f for f in (project_file, agents_file, queries_file) if f.exists()]
@@ -582,9 +584,11 @@ def set_profile(
 
     # discover_project_path() with explicit --path returns it un-checked, so
     # confirm the project actually exists before binding a profile to nothing.
-    if not (project_path / "wren_project.yml").exists():
+    from wren.context import PROJECT_FILE  # noqa: PLC0415
+
+    if not (project_path / PROJECT_FILE).exists():
         typer.echo(
-            f"Error: no wren_project.yml found at {project_path}.\n"
+            f"Error: no {PROJECT_FILE} found at {project_path}.\n"
             "  Run `wren context init` to scaffold a project first.",
             err=True,
         )
@@ -626,7 +630,7 @@ def set_profile(
         save_project_config(project_path, config)
     except OSError as exc:
         typer.echo(
-            f"Error: could not write {project_path / 'wren_project.yml'}: {exc}",
+            f"Error: could not write {project_path / PROJECT_FILE}: {exc}",
             err=True,
         )
         raise typer.Exit(1)
