@@ -381,6 +381,40 @@ def load_project_config(project_path: Path) -> dict:
     return yaml.safe_load(config_file.read_text()) or {}
 
 
+# Field order preferred when writing wren_project.yml back from a dict —
+# keeps the file readable for humans even after CLI commands rewrite it.
+# Anything not in this list is appended in dict-iteration order at the end.
+_PROJECT_FIELD_ORDER = (
+    "schema_version",
+    "name",
+    "version",
+    "catalog",
+    "schema",
+    "data_source",
+    "profile",
+)
+
+
+def save_project_config(project_path: Path, config: dict) -> None:
+    """Write ``wren_project.yml`` with a stable field ordering.
+
+    Drops YAML comments — round-tripping with comments would require
+    ``ruamel.yaml`` which isn't a dependency. The file is rewritten by
+    set-profile / upgrade-style commands; comments are init-template only.
+    """
+    ordered: dict = {}
+    for key in _PROJECT_FIELD_ORDER:
+        if key in config:
+            ordered[key] = config[key]
+    for key, value in config.items():
+        if key not in ordered:
+            ordered[key] = value
+
+    (project_path / _PROJECT_FILE).write_text(
+        yaml.safe_dump(ordered, default_flow_style=False, sort_keys=False)
+    )
+
+
 _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3}
 
 # schema_version → layoutVersion mapping for the engine

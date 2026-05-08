@@ -347,3 +347,160 @@ def test_upgrade_cli_explicit_to_version(tmp_path):
 
     config = yaml.safe_load((tmp_path / "wren_project.yml").read_text())
     assert config["schema_version"] == 2
+
+
+# ── wren context set-profile ──────────────────────────────────────────────
+
+
+def _isolate_profiles(home_dir: Path, monkeypatch) -> None:
+    """Redirect ~/.wren profile I/O to ``home_dir`` for the duration of a test."""
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    home_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(profile_mod, "_WREN_HOME", home_dir)
+    monkeypatch.setattr(profile_mod, "_PROFILES_FILE", home_dir / "profiles.yml")
+
+
+def test_set_profile_writes_profile_field(tmp_path, monkeypatch):
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+    profile_mod.add_profile("loans_local", {"datasource": "duckdb"})
+
+    proj = tmp_path / "myproj"
+    runner.invoke(app, ["context", "init", "--empty", "--path", str(proj)])
+
+    result = runner.invoke(
+        app, ["context", "set-profile", "loans_local", "--path", str(proj)]
+    )
+    assert result.exit_code == 0, result.output
+
+    import yaml  # noqa: PLC0415
+
+    config = yaml.safe_load((proj / "wren_project.yml").read_text())
+    assert config["profile"] == "loans_local"
+    assert config["data_source"] == "duckdb"
+
+
+def test_set_profile_overwrites_placeholder_data_source(tmp_path, monkeypatch):
+    """init writes `data_source: postgres` placeholder; set-profile overwrites it
+    with the bound profile's datasource (no --force needed for first bind)."""
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+    profile_mod.add_profile("duck_one", {"datasource": "duckdb"})
+
+    proj = tmp_path / "myproj"
+    runner.invoke(app, ["context", "init", "--empty", "--path", str(proj)])
+
+    result = runner.invoke(
+        app, ["context", "set-profile", "duck_one", "--path", str(proj)]
+    )
+    assert result.exit_code == 0, result.output
+
+    import yaml  # noqa: PLC0415
+
+    config = yaml.safe_load((proj / "wren_project.yml").read_text())
+    assert config["data_source"] == "duckdb"
+
+
+def test_set_profile_rebind_overwrites(tmp_path, monkeypatch):
+    """Re-binding from X to Y: both profile and data_source update."""
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+    profile_mod.add_profile("X", {"datasource": "postgres"})
+    profile_mod.add_profile("Y", {"datasource": "duckdb"})
+
+    proj = tmp_path / "myproj"
+    runner.invoke(app, ["context", "init", "--empty", "--path", str(proj)])
+    runner.invoke(app, ["context", "set-profile", "X", "--path", str(proj)])
+
+    result = runner.invoke(
+        app, ["context", "set-profile", "Y", "--path", str(proj)]
+    )
+    assert result.exit_code == 0, result.output
+
+    import yaml  # noqa: PLC0415
+
+    config = yaml.safe_load((proj / "wren_project.yml").read_text())
+    assert config["profile"] == "Y"
+    assert config["data_source"] == "duckdb"
+
+
+def test_set_profile_errors_when_profile_not_found(tmp_path, monkeypatch):
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+    profile_mod.add_profile("real", {"datasource": "duckdb"})
+
+    proj = tmp_path / "myproj"
+    runner.invoke(app, ["context", "init", "--empty", "--path", str(proj)])
+
+    result = runner.invoke(
+        app, ["context", "set-profile", "ghost", "--path", str(proj)]
+    )
+    assert result.exit_code != 0
+    assert "ghost" in result.output
+    assert "real" in result.output  # available profiles listed in error
+
+
+def test_set_profile_errors_when_no_project(tmp_path, monkeypatch):
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+    profile_mod.add_profile("real", {"datasource": "duckdb"})
+
+    empty_dir = tmp_path / "no-project"
+    empty_dir.mkdir()
+
+    result = runner.invoke(
+        app, ["context", "set-profile", "real", "--path", str(empty_dir)]
+    )
+    assert result.exit_code != 0
+    assert "wren_project.yml" in result.output
+
+
+def test_set_profile_preserves_other_fields(tmp_path, monkeypatch):
+    """Binding doesn't touch unrelated fields (name, catalog, schema, schema_version)."""
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+    profile_mod.add_profile("duck", {"datasource": "duckdb"})
+
+    proj = tmp_path / "myproj"
+    runner.invoke(app, ["context", "init", "--empty", "--path", str(proj)])
+
+    result = runner.invoke(
+        app, ["context", "set-profile", "duck", "--path", str(proj)]
+    )
+    assert result.exit_code == 0, result.output
+
+    import yaml  # noqa: PLC0415
+
+    config = yaml.safe_load((proj / "wren_project.yml").read_text())
+    assert config["name"] == "my_project"
+    assert config["catalog"] == "wren"
+    assert config["schema"] == "public"
+    assert config["schema_version"] == 3
+
+
+def test_set_profile_prints_summary_with_arrow_when_data_source_changes(
+    tmp_path, monkeypatch
+):
+    """When binding overwrites data_source, summary shows the transition."""
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+    profile_mod.add_profile("duck", {"datasource": "duckdb"})
+
+    proj = tmp_path / "myproj"
+    runner.invoke(app, ["context", "init", "--empty", "--path", str(proj)])
+
+    result = runner.invoke(
+        app, ["context", "set-profile", "duck", "--path", str(proj)]
+    )
+    assert result.exit_code == 0, result.output
+    # init wrote postgres placeholder; we're binding duck (duckdb)
+    assert "postgres" in result.output
+    assert "duckdb" in result.output

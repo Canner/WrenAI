@@ -521,6 +521,75 @@ def instructions(
         typer.echo(content)
 
 
+@context_app.command(name="set-profile")
+def set_profile(
+    name: Annotated[str, typer.Argument(help="Profile name to bind to this project.")],
+    path: ProjectPathOpt = None,
+) -> None:
+    """Bind a connection profile to this project.
+
+    Writes ``profile: <name>`` and ``data_source: <profile.datasource>`` into
+    ``wren_project.yml``. Future CLI commands and the SDK use the bound
+    profile regardless of which profile is globally active.
+    """
+    from wren.context import (  # noqa: PLC0415
+        discover_project_path,
+        load_project_config,
+        save_project_config,
+    )
+    from wren.profile import list_profiles  # noqa: PLC0415
+
+    try:
+        project_path = discover_project_path(path)
+    except SystemExit as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1)
+
+    # discover_project_path() with explicit --path returns it un-checked, so
+    # confirm the project actually exists before binding a profile to nothing.
+    if not (project_path / "wren_project.yml").exists():
+        typer.echo(
+            f"Error: no wren_project.yml found at {project_path}.\n"
+            "  Run `wren context init` to scaffold a project first.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    profiles = list_profiles()
+    if name not in profiles:
+        avail = ", ".join(sorted(profiles)) or "(none)"
+        typer.echo(
+            f"Error: profile '{name}' not found in ~/.wren/profiles.yml.\n"
+            f"  Available profiles: {avail}\n"
+            f"  Run `wren profile add {name} --datasource <ds>` to create it.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    new_ds = profiles[name].get("datasource")
+    if not new_ds:
+        typer.echo(
+            f"Error: profile '{name}' has no datasource field. "
+            "Edit ~/.wren/profiles.yml or recreate it via `wren profile add`.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    config = load_project_config(project_path)
+    old_ds = config.get("data_source")
+    config["profile"] = name
+    config["data_source"] = new_ds
+    save_project_config(project_path, config)
+
+    project_name = config.get("name") or "<unnamed>"
+    typer.echo(f"✓ Bound profile '{name}' to project {project_name}")
+    typer.echo(f"  profile:     {name}")
+    if old_ds and old_ds != new_ds:
+        typer.echo(f"  data_source: {old_ds} -> {new_ds}")
+    else:
+        typer.echo(f"  data_source: {new_ds}")
+
+
 @context_app.command()
 def upgrade(
     path: ProjectPathOpt = None,
