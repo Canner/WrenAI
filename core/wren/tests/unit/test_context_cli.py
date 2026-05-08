@@ -361,6 +361,15 @@ def _isolate_profiles(home_dir: Path, monkeypatch) -> None:
     monkeypatch.setattr(profile_mod, "_PROFILES_FILE", home_dir / "profiles.yml")
 
 
+def _invoke_ok(args):
+    """Run the CLI and assert exit_code 0. Use for setup invocations so a
+    failed scaffold/init is surfaced immediately instead of masking the
+    real assertion failure later in the test."""
+    result = runner.invoke(app, args)
+    assert result.exit_code == 0, result.output
+    return result
+
+
 def test_set_profile_writes_profile_field(tmp_path, monkeypatch):
     import wren.profile as profile_mod  # noqa: PLC0415
 
@@ -368,7 +377,7 @@ def test_set_profile_writes_profile_field(tmp_path, monkeypatch):
     profile_mod.add_profile("loans_local", {"datasource": "duckdb"})
 
     proj = tmp_path / "myproj"
-    runner.invoke(app, ["context", "init", "--empty", "--path", str(proj)])
+    _invoke_ok(["context", "init", "--empty", "--path", str(proj)])
 
     result = runner.invoke(
         app, ["context", "set-profile", "loans_local", "--path", str(proj)]
@@ -391,7 +400,7 @@ def test_set_profile_overwrites_placeholder_data_source(tmp_path, monkeypatch):
     profile_mod.add_profile("duck_one", {"datasource": "duckdb"})
 
     proj = tmp_path / "myproj"
-    runner.invoke(app, ["context", "init", "--empty", "--path", str(proj)])
+    _invoke_ok(["context", "init", "--empty", "--path", str(proj)])
 
     result = runner.invoke(
         app, ["context", "set-profile", "duck_one", "--path", str(proj)]
@@ -413,8 +422,8 @@ def test_set_profile_rebind_overwrites(tmp_path, monkeypatch):
     profile_mod.add_profile("Y", {"datasource": "duckdb"})
 
     proj = tmp_path / "myproj"
-    runner.invoke(app, ["context", "init", "--empty", "--path", str(proj)])
-    runner.invoke(app, ["context", "set-profile", "X", "--path", str(proj)])
+    _invoke_ok(["context", "init", "--empty", "--path", str(proj)])
+    _invoke_ok(["context", "set-profile", "X", "--path", str(proj)])
 
     result = runner.invoke(
         app, ["context", "set-profile", "Y", "--path", str(proj)]
@@ -435,7 +444,7 @@ def test_set_profile_errors_when_profile_not_found(tmp_path, monkeypatch):
     profile_mod.add_profile("real", {"datasource": "duckdb"})
 
     proj = tmp_path / "myproj"
-    runner.invoke(app, ["context", "init", "--empty", "--path", str(proj)])
+    _invoke_ok(["context", "init", "--empty", "--path", str(proj)])
 
     result = runner.invoke(
         app, ["context", "set-profile", "ghost", "--path", str(proj)]
@@ -451,7 +460,7 @@ def test_set_profile_errors_cleanly_when_list_profiles_fails(
     """If list_profiles() raises (e.g. malformed profiles.yml), set-profile
     should exit cleanly with an error message — not crash with a traceback."""
     proj = tmp_path / "myproj"
-    runner.invoke(app, ["context", "init", "--empty", "--path", str(proj)])
+    _invoke_ok(["context", "init", "--empty", "--path", str(proj)])
 
     import wren.profile as profile_mod  # noqa: PLC0415
 
@@ -478,7 +487,7 @@ def test_set_profile_errors_cleanly_when_save_fails(tmp_path, monkeypatch):
     profile_mod.add_profile("real", {"datasource": "duckdb"})
 
     proj = tmp_path / "myproj"
-    runner.invoke(app, ["context", "init", "--empty", "--path", str(proj)])
+    _invoke_ok(["context", "init", "--empty", "--path", str(proj)])
 
     import wren.context as context_mod  # noqa: PLC0415
 
@@ -505,7 +514,7 @@ def test_set_profile_errors_when_profile_has_no_datasource(tmp_path, monkeypatch
     profile_mod.add_profile("incomplete", {})  # no datasource key
 
     proj = tmp_path / "myproj"
-    runner.invoke(app, ["context", "init", "--empty", "--path", str(proj)])
+    _invoke_ok(["context", "init", "--empty", "--path", str(proj)])
 
     result = runner.invoke(
         app, ["context", "set-profile", "incomplete", "--path", str(proj)]
@@ -538,7 +547,7 @@ def test_set_profile_preserves_other_fields(tmp_path, monkeypatch):
     profile_mod.add_profile("duck", {"datasource": "duckdb"})
 
     proj = tmp_path / "myproj"
-    runner.invoke(app, ["context", "init", "--empty", "--path", str(proj)])
+    _invoke_ok(["context", "init", "--empty", "--path", str(proj)])
 
     result = runner.invoke(
         app, ["context", "set-profile", "duck", "--path", str(proj)]
@@ -564,7 +573,7 @@ def test_set_profile_prints_summary_with_arrow_when_data_source_changes(
     profile_mod.add_profile("duck", {"datasource": "duckdb"})
 
     proj = tmp_path / "myproj"
-    runner.invoke(app, ["context", "init", "--empty", "--path", str(proj)])
+    _invoke_ok(["context", "init", "--empty", "--path", str(proj)])
 
     result = runner.invoke(
         app, ["context", "set-profile", "duck", "--path", str(proj)]
@@ -653,8 +662,18 @@ def test_validate_handles_list_profiles_exception(tmp_path, monkeypatch):
         f"OSError leaked from list_profiles(): {result.exception!r}\n"
         "Wrap the binding check in try/except so validate degrades gracefully."
     )
+    # Lock the contract: warning-only path exits 0 so users can pipe / script
+    # validate without a probe-failure becoming a hard failure.
+    assert result.exit_code == 0, result.output
     # Validate should still surface the failure to the user somewhere visible.
     assert "permission denied" in result.output.lower() or "anything" in result.output
+
+    # And under --strict the same warning becomes a hard error (exit 1) — keep
+    # both ends of the contract pinned so neither direction silently flips.
+    strict_result = runner.invoke(
+        app, ["context", "validate", "--path", str(tmp_path), "--strict"]
+    )
+    assert strict_result.exit_code == 1, strict_result.output
 
 
 def test_validate_strict_fails_on_missing_pinned_profile(tmp_path, monkeypatch):
