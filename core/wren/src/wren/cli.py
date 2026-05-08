@@ -464,7 +464,11 @@ def dry_plan(
         if prof_dict:
             prof_ds = prof_dict.pop("datasource", None)
             if prof_ds is None:
-                typer.echo("Error: no datasource in active profile.", err=True)
+                typer.echo(
+                    "Error: no datasource in resolved profile "
+                    "(project-pinned or active).",
+                    err=True,
+                )
                 raise typer.Exit(1)
             try:
                 ds = DataSource(prof_ds.lower())
