@@ -8,7 +8,7 @@
     {
       "name": "wren-onboarding",
       "version": "2.1",
-      "description": "Onboard a user to Wren Engine end-to-end. Walks the user through environment checks, .env configuration, connection profile creation, project scaffolding, binding the profile to the project, and first query. Defers procedural details, per-datasource notes, and the troubleshooting playbook to docs/get_started/connect.md so the skill stays focused on agent-side rules and routing. Use when the user wants to install Wren Engine, set up a new data source connection, or bootstrap a new project from scratch.",
+      "description": "Onboard a user to Wren Engine end-to-end. Walks the user through environment checks, .env configuration, connection profile creation, project scaffolding, binding the profile to the project, and first query. Defers procedural details, per-datasource notes, and the troubleshooting playbook to docs/core/get_started/connect.md so the skill stays focused on agent-side rules and routing. Use when the user wants to install Wren Engine, set up a new data source connection, or bootstrap a new project from scratch.",
       "tags": [
         "wren",
         "onboarding",
