@@ -288,6 +288,7 @@ def validate(
     # ── Semantic validation (dry-plan + description checks) ──────────────
     sem_errors: list[str] = []
     sem_warnings: list[str] = []
+    config: dict = {}
     try:
         config = load_project_config(project_path)
         ds_str = config.get("data_source", "")
@@ -300,6 +301,20 @@ def validate(
         sem_warnings = sem_result["warnings"]
     except Exception as e:
         sem_errors = [f"Semantic validation failed: {e}"]
+
+    # ── Profile binding check ─────────────────────────────────────────────
+    # Pinned profile that no longer exists → warning (or error in --strict).
+    # No pin at all → friendly info hint pointing to `set-profile`.
+    profile_pin = config.get("profile") if isinstance(config, dict) else None
+    if isinstance(profile_pin, str) and profile_pin.strip():
+        from wren.profile import list_profiles  # noqa: PLC0415
+
+        if profile_pin.strip() not in list_profiles():
+            sem_warnings.append(
+                f"project pins profile '{profile_pin}' but it doesn't exist "
+                "in ~/.wren/profiles.yml. "
+                "Run `wren context set-profile <name>` to rebind."
+            )
 
     if sem_errors:
         typer.echo("\nSemantic errors:")
@@ -323,6 +338,16 @@ def validate(
         typer.echo(
             f"Valid — {len(models)} models, {len(views)} views, {len(rels)} relationships."
         )
+
+        # No-pin info hint — only when validation is otherwise clean, to keep
+        # error output uncluttered.
+        if not (isinstance(profile_pin, str) and profile_pin.strip()):
+            typer.echo(
+                "\nNote: no profile bound to this project. Connection will fall "
+                "back to the\n"
+                "  globally active profile in ~/.wren/profiles.yml.\n"
+                "  Run `wren context set-profile <name>` to pin one explicitly."
+            )
 
 
 def _print_warnings(warnings: list[str], *, verbose: bool) -> None:

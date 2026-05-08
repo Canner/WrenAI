@@ -504,3 +504,75 @@ def test_set_profile_prints_summary_with_arrow_when_data_source_changes(
     # init wrote postgres placeholder; we're binding duck (duckdb)
     assert "postgres" in result.output
     assert "duckdb" in result.output
+
+
+# ── wren context validate — profile binding hint ──────────────────────────
+
+
+def test_validate_hints_when_no_profile_bound(tmp_path, monkeypatch):
+    """No `profile:` field → friendly info pointing to set-profile."""
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+    _make_valid_project(tmp_path)  # no profile field
+
+    result = runner.invoke(app, ["context", "validate", "--path", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "set-profile" in result.output
+    # Wording should make it clear it's a hint, not an error.
+    assert "fall back" in result.output.lower() or "fallback" in result.output.lower()
+
+
+def test_validate_warns_when_pinned_profile_missing(tmp_path, monkeypatch):
+    """`profile: ghost` but ghost doesn't exist → warning, exit 0 without --strict."""
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+    profile_mod.add_profile("real", {"datasource": "postgres"})
+    _make_valid_project(tmp_path)
+    import yaml  # noqa: PLC0415
+
+    config = yaml.safe_load((tmp_path / "wren_project.yml").read_text())
+    config["profile"] = "ghost"
+    (tmp_path / "wren_project.yml").write_text(yaml.safe_dump(config))
+
+    result = runner.invoke(app, ["context", "validate", "--path", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "ghost" in result.output
+
+
+def test_validate_no_profile_hint_when_correctly_bound(tmp_path, monkeypatch):
+    """`profile: real` + real exists → no profile hint noise in output."""
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+    profile_mod.add_profile("real", {"datasource": "postgres"})
+    _make_valid_project(tmp_path)
+    import yaml  # noqa: PLC0415
+
+    config = yaml.safe_load((tmp_path / "wren_project.yml").read_text())
+    config["profile"] = "real"
+    (tmp_path / "wren_project.yml").write_text(yaml.safe_dump(config))
+
+    result = runner.invoke(app, ["context", "validate", "--path", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    # No hint text triggered when binding is correct.
+    assert "set-profile" not in result.output
+
+
+def test_validate_strict_fails_on_missing_pinned_profile(tmp_path, monkeypatch):
+    """--strict treats the missing-pin warning as an error."""
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+    profile_mod.add_profile("real", {"datasource": "postgres"})
+    _make_valid_project(tmp_path)
+    import yaml  # noqa: PLC0415
+
+    config = yaml.safe_load((tmp_path / "wren_project.yml").read_text())
+    config["profile"] = "ghost"
+    (tmp_path / "wren_project.yml").write_text(yaml.safe_dump(config))
+
+    result = runner.invoke(
+        app, ["context", "validate", "--path", str(tmp_path), "--strict"]
+    )
+    assert result.exit_code == 1
+    assert "ghost" in result.output
