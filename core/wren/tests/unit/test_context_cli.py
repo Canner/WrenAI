@@ -563,6 +563,41 @@ def test_set_profile_preserves_other_fields(tmp_path, monkeypatch):
     assert config["schema_version"] == 3
 
 
+def test_set_profile_preserves_custom_fields(tmp_path, monkeypatch):
+    """Unknown / custom fields in wren_project.yml must survive set-profile.
+    save_project_config appends out-of-order keys at the end; this test
+    locks that contract so a future shuffle of _PROJECT_FIELD_ORDER can't
+    silently drop user-added metadata."""
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+    profile_mod.add_profile("duck", {"datasource": "duckdb"})
+
+    proj = tmp_path / "myproj"
+    _invoke_ok(["context", "init", "--empty", "--path", str(proj)])
+
+    # Inject a custom field the CLI doesn't know about
+    import yaml  # noqa: PLC0415
+
+    config = yaml.safe_load((proj / "wren_project.yml").read_text())
+    config["tags"] = ["analytics", "experimental"]
+    config["owner"] = "data-platform"
+    (proj / "wren_project.yml").write_text(yaml.safe_dump(config))
+
+    result = runner.invoke(
+        app, ["context", "set-profile", "duck", "--path", str(proj)]
+    )
+    assert result.exit_code == 0, result.output
+
+    # Round-trip: custom keys survive the rewrite
+    config_after = yaml.safe_load((proj / "wren_project.yml").read_text())
+    assert config_after["tags"] == ["analytics", "experimental"]
+    assert config_after["owner"] == "data-platform"
+    # And the binding fields landed correctly
+    assert config_after["profile"] == "duck"
+    assert config_after["data_source"] == "duckdb"
+
+
 def test_set_profile_warns_about_stale_mdl_when_datasource_changes(
     tmp_path, monkeypatch
 ):
