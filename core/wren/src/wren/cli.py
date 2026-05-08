@@ -130,39 +130,50 @@ def _load_conn(
 def _resolve_engine_profile(mdl: str | None) -> tuple[str | None, dict]:
     """Resolve the connection profile for project-context CLI commands.
 
-    Tries to find the project root from ``--mdl`` (when it points to a real
-    file) or the current working directory; if a project is found, defers
-    to :func:`wren.profile.resolve_profile_for_project` (which honors any
-    ``profile:`` pin in ``wren_project.yml``). Otherwise falls back to the
-    global active profile.
-
-    The fall-through preserves backward compatibility: callers that pass
-    ``--mdl <base64-string>`` or run outside a project see the same
-    ``get_active_profile()`` behavior as before.
+    Project detection is decoupled from ``--mdl`` shape: ``--mdl`` is a pure
+    "which MDL artifact to load" override, project context is determined
+    independently by walking up from the MDL path (when it's a real file)
+    AND from cwd. Active profile is reserved for the case where neither
+    discovery finds a project — preventing ``--mdl <base64>`` or
+    ``--mdl /external.json`` from silently bypassing cwd's pin.
     """
     from wren.profile import (  # noqa: PLC0415
         get_active_profile,
         resolve_profile_for_project,
     )
 
-    project_path: Path | None = None
-    if mdl is not None:
-        mdl_path = Path(mdl).expanduser()
-        if mdl_path.exists() and mdl_path.is_file():
-            candidate = mdl_path.resolve().parent.parent
-            if (candidate / "wren_project.yml").exists():
-                project_path = candidate
-    else:
-        try:
-            from wren.context import discover_project_path  # noqa: PLC0415
-
-            project_path = discover_project_path()
-        except SystemExit:
-            project_path = None
-
+    project_path = _discover_project_for_engine(mdl)
     if project_path is None:
         return get_active_profile()
     return resolve_profile_for_project(project_path)
+
+
+def _discover_project_for_engine(mdl: str | None) -> Path | None:
+    """Find the project root for engine commands. Returns ``None`` if no
+    project context exists anywhere (caller should fall back to active).
+
+    Resolution order:
+      1. If ``--mdl`` is a real file, walk up its directory tree looking
+         for ``wren_project.yml``. ``<project>/target/mdl.json`` is a build
+         default, not a contract — users may keep MDL elsewhere.
+      2. Otherwise (``--mdl`` is base64, points outside a project, or is
+         absent), discover from cwd.
+    """
+    if mdl is not None:
+        mdl_path = Path(mdl).expanduser()
+        if mdl_path.exists() and mdl_path.is_file():
+            for parent in mdl_path.resolve().parents:
+                if (parent / "wren_project.yml").exists():
+                    return parent
+                if parent == Path.home() or parent == parent.parent:
+                    break
+
+    try:
+        from wren.context import discover_project_path  # noqa: PLC0415
+
+        return discover_project_path()
+    except SystemExit:
+        return None
 
 
 def _resolve_datasource(conn_dict: dict, explicit: str | None = None) -> str:

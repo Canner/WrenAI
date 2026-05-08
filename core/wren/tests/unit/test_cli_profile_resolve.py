@@ -113,3 +113,84 @@ def test_resolve_engine_profile_raises_when_pinned_profile_missing(
 
     with pytest.raises(SystemExit):
         _resolve_engine_profile(str(mdl))
+
+
+def test_resolve_engine_profile_uses_cwd_pin_when_mdl_is_base64(
+    tmp_path, monkeypatch
+):
+    """--mdl as a base64 string must NOT silently bypass cwd's project pin —
+    that would re-introduce the silent-mismatch problem this PR is closing."""
+    profile_mod.add_profile("active_one", {"datasource": "postgres"})
+    profile_mod.add_profile("cwd_pin", {"datasource": "duckdb"})
+    profile_mod.switch_profile("active_one")
+
+    proj = tmp_path / "myproj"
+    _write_project(proj, profile="cwd_pin")
+    monkeypatch.chdir(proj)
+
+    name, prof = _resolve_engine_profile("base64stringthatisnotapath==")
+    assert name == "cwd_pin"
+    assert prof["datasource"] == "duckdb"
+
+
+def test_resolve_engine_profile_uses_cwd_pin_when_mdl_outside_project(
+    tmp_path, monkeypatch
+):
+    """--mdl pointing to a file outside any project must still let cwd's
+    pin win, so users can test external MDL artifacts against the bound DB."""
+    profile_mod.add_profile("active_one", {"datasource": "postgres"})
+    profile_mod.add_profile("cwd_pin", {"datasource": "duckdb"})
+    profile_mod.switch_profile("active_one")
+
+    proj = tmp_path / "myproj"
+    _write_project(proj, profile="cwd_pin")
+    monkeypatch.chdir(proj)
+
+    external = tmp_path / "external.json"
+    external.write_text("{}")
+
+    name, prof = _resolve_engine_profile(str(external))
+    assert name == "cwd_pin"
+
+
+def test_resolve_engine_profile_walks_up_from_nonstandard_mdl_layout(
+    tmp_path, monkeypatch
+):
+    """--mdl doesn't have to sit at <project>/target/mdl.json. Anywhere
+    inside the project tree should resolve via walk-up — the current
+    parent.parent shortcut hard-codes a layout that's just a build default."""
+    # Use distinct active vs pinned profiles so the test actually exercises
+    # walk-up rather than vacuously matching whatever active happens to be.
+    profile_mod.add_profile("not_this_one", {"datasource": "postgres"})
+    profile_mod.add_profile("via_walk_up", {"datasource": "duckdb"})
+    profile_mod.switch_profile("not_this_one")
+
+    proj = tmp_path / "myproj"
+    proj.mkdir()
+    import yaml as _yaml  # noqa: PLC0415
+
+    (proj / "wren_project.yml").write_text(
+        _yaml.safe_dump(
+            {
+                "schema_version": 3,
+                "name": "test_proj",
+                "version": "1.0",
+                "catalog": "wren",
+                "schema": "public",
+                "data_source": "duckdb",
+                "profile": "via_walk_up",
+            }
+        )
+    )
+
+    # MDL several levels deep, not at <proj>/target/mdl.json
+    deep = proj / "build" / "dist" / "artifacts"
+    deep.mkdir(parents=True)
+    mdl = deep / "manifest.json"
+    mdl.write_text("{}")
+
+    name, prof = _resolve_engine_profile(str(mdl))
+    assert name == "via_walk_up", (
+        "Walk-up didn't find wren_project.yml; resolver still relies on the "
+        "parent.parent shortcut."
+    )
