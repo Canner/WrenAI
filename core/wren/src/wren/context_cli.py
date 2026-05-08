@@ -590,7 +590,15 @@ def set_profile(
         )
         raise typer.Exit(1)
 
-    profiles = list_profiles()
+    try:
+        profiles = list_profiles()
+    except Exception as exc:
+        typer.echo(
+            f"Error: could not read ~/.wren/profiles.yml: {exc}",
+            err=True,
+        )
+        raise typer.Exit(1)
+
     if name not in profiles:
         avail = ", ".join(sorted(profiles)) or "(none)"
         typer.echo(
@@ -614,7 +622,14 @@ def set_profile(
     old_ds = config.get("data_source")
     config["profile"] = name
     config["data_source"] = new_ds
-    save_project_config(project_path, config)
+    try:
+        save_project_config(project_path, config)
+    except OSError as exc:
+        typer.echo(
+            f"Error: could not write {project_path / 'wren_project.yml'}: {exc}",
+            err=True,
+        )
+        raise typer.Exit(1)
 
     project_name = config.get("name") or "<unnamed>"
     typer.echo(f"✓ Bound profile '{name}' to project {project_name}")

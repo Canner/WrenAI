@@ -445,6 +445,57 @@ def test_set_profile_errors_when_profile_not_found(tmp_path, monkeypatch):
     assert "real" in result.output  # available profiles listed in error
 
 
+def test_set_profile_errors_cleanly_when_list_profiles_fails(
+    tmp_path, monkeypatch
+):
+    """If list_profiles() raises (e.g. malformed profiles.yml), set-profile
+    should exit cleanly with an error message — not crash with a traceback."""
+    proj = tmp_path / "myproj"
+    runner.invoke(app, ["context", "init", "--empty", "--path", str(proj)])
+
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    def _broken(*_args, **_kwargs):
+        raise OSError("simulated permission denied")
+
+    monkeypatch.setattr(profile_mod, "list_profiles", _broken)
+
+    result = runner.invoke(
+        app, ["context", "set-profile", "anything", "--path", str(proj)]
+    )
+    assert result.exit_code != 0
+    assert not isinstance(result.exception, OSError), (
+        f"OSError leaked from list_profiles(): {result.exception!r}"
+    )
+
+
+def test_set_profile_errors_cleanly_when_save_fails(tmp_path, monkeypatch):
+    """If save_project_config() fails (disk full / permission denied),
+    set-profile should exit with a clean error rather than a traceback."""
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+    profile_mod.add_profile("real", {"datasource": "duckdb"})
+
+    proj = tmp_path / "myproj"
+    runner.invoke(app, ["context", "init", "--empty", "--path", str(proj)])
+
+    import wren.context as context_mod  # noqa: PLC0415
+
+    def _broken_save(*_args, **_kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(context_mod, "save_project_config", _broken_save)
+
+    result = runner.invoke(
+        app, ["context", "set-profile", "real", "--path", str(proj)]
+    )
+    assert result.exit_code != 0
+    assert not isinstance(result.exception, OSError), (
+        f"OSError leaked from save_project_config(): {result.exception!r}"
+    )
+
+
 def test_set_profile_errors_when_profile_has_no_datasource(tmp_path, monkeypatch):
     """The third validation gate in set_profile — profile exists but has
     no datasource field — exits non-zero with a helpful message."""
