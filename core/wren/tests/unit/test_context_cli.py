@@ -445,6 +445,24 @@ def test_set_profile_errors_when_profile_not_found(tmp_path, monkeypatch):
     assert "real" in result.output  # available profiles listed in error
 
 
+def test_set_profile_errors_when_profile_has_no_datasource(tmp_path, monkeypatch):
+    """The third validation gate in set_profile — profile exists but has
+    no datasource field — exits non-zero with a helpful message."""
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+    profile_mod.add_profile("incomplete", {})  # no datasource key
+
+    proj = tmp_path / "myproj"
+    runner.invoke(app, ["context", "init", "--empty", "--path", str(proj)])
+
+    result = runner.invoke(
+        app, ["context", "set-profile", "incomplete", "--path", str(proj)]
+    )
+    assert result.exit_code != 0
+    assert "datasource" in result.output.lower()
+
+
 def test_set_profile_errors_when_no_project(tmp_path, monkeypatch):
     import wren.profile as profile_mod  # noqa: PLC0415
 
