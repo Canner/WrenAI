@@ -316,8 +316,7 @@ def validate(
             registered = list_profiles()
         except Exception as profile_exc:
             sem_warnings.append(
-                f"could not check pinned profile '{profile_pin}': "
-                f"{profile_exc}"
+                f"could not check pinned profile '{profile_pin}': {profile_exc}"
             )
         else:
             if profile_pin.strip() not in registered:
