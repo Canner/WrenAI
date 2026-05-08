@@ -563,6 +563,64 @@ def test_set_profile_preserves_other_fields(tmp_path, monkeypatch):
     assert config["schema_version"] == 3
 
 
+def test_set_profile_warns_about_stale_mdl_when_datasource_changes(
+    tmp_path, monkeypatch
+):
+    """Re-binding to a profile with a different datasource leaves
+    target/mdl.json built for the old dialect. Surface that risk so the
+    user knows to rebuild before querying."""
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+    profile_mod.add_profile("ds_pg", {"datasource": "postgres"})
+    profile_mod.add_profile("ds_duck", {"datasource": "duckdb"})
+
+    proj = tmp_path / "myproj"
+    _invoke_ok(["context", "init", "--empty", "--path", str(proj)])
+    _invoke_ok(["context", "set-profile", "ds_pg", "--path", str(proj)])
+
+    # Simulate that the user has built MDL against the previous dialect.
+    target = proj / "target"
+    target.mkdir(exist_ok=True)
+    (target / "mdl.json").write_text("{}")
+
+    result = runner.invoke(
+        app, ["context", "set-profile", "ds_duck", "--path", str(proj)]
+    )
+    assert result.exit_code == 0, result.output
+    assert "wren context build" in result.output
+    # Mention either the old dialect or the word 'rebuild'/'regenerate' so
+    # the warning context is clear.
+    msg = result.output.lower()
+    assert "postgres" in msg or "rebuild" in msg or "regenerate" in msg
+
+
+def test_set_profile_no_stale_mdl_warning_when_datasource_unchanged(
+    tmp_path, monkeypatch
+):
+    """If datasource doesn't change on rebind, the stale-MDL warning
+    shouldn't appear — there's no actual stale state."""
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+    profile_mod.add_profile("a", {"datasource": "duckdb"})
+    profile_mod.add_profile("b", {"datasource": "duckdb"})
+
+    proj = tmp_path / "myproj"
+    _invoke_ok(["context", "init", "--empty", "--path", str(proj)])
+    _invoke_ok(["context", "set-profile", "a", "--path", str(proj)])
+
+    target = proj / "target"
+    target.mkdir(exist_ok=True)
+    (target / "mdl.json").write_text("{}")
+
+    result = runner.invoke(
+        app, ["context", "set-profile", "b", "--path", str(proj)]
+    )
+    assert result.exit_code == 0, result.output
+    assert "wren context build" not in result.output
+
+
 def test_set_profile_prints_summary_with_arrow_when_data_source_changes(
     tmp_path, monkeypatch
 ):

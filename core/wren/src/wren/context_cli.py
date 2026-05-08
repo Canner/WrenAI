@@ -639,6 +639,15 @@ def set_profile(
     else:
         typer.echo(f"  data_source: {new_ds}")
 
+    # Stale-MDL warning: if datasource changed AND a built manifest already
+    # exists, it was emitted for the previous dialect and queries will break
+    # against the new connection until the user rebuilds.
+    if old_ds and old_ds != new_ds and (project_path / "target" / "mdl.json").exists():
+        typer.echo(
+            f"\n⚠ MDL was built for {old_ds}. Run `wren context build` "
+            "to regenerate before querying."
+        )
+
 
 @context_app.command()
 def upgrade(
