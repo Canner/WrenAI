@@ -307,14 +307,25 @@ def validate(
     # No pin at all → friendly info hint pointing to `set-profile`.
     profile_pin = config.get("profile") if isinstance(config, dict) else None
     if isinstance(profile_pin, str) and profile_pin.strip():
-        from wren.profile import list_profiles  # noqa: PLC0415
+        # Guard the lookup: if profiles.yml itself is unreadable / malformed,
+        # the user shouldn't see a raw traceback — surface it as a warning so
+        # validate can still report the rest.
+        try:
+            from wren.profile import list_profiles  # noqa: PLC0415
 
-        if profile_pin.strip() not in list_profiles():
+            registered = list_profiles()
+        except Exception as profile_exc:
             sem_warnings.append(
-                f"project pins profile '{profile_pin}' but it doesn't exist "
-                "in ~/.wren/profiles.yml. "
-                "Run `wren context set-profile <name>` to rebind."
+                f"could not check pinned profile '{profile_pin}': "
+                f"{profile_exc}"
             )
+        else:
+            if profile_pin.strip() not in registered:
+                sem_warnings.append(
+                    f"project pins profile '{profile_pin}' but it doesn't "
+                    "exist in ~/.wren/profiles.yml. "
+                    "Run `wren context set-profile <name>` to rebind."
+                )
 
     if sem_errors:
         typer.echo("\nSemantic errors:")

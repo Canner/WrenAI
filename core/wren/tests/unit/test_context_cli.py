@@ -558,6 +558,36 @@ def test_validate_no_profile_hint_when_correctly_bound(tmp_path, monkeypatch):
     assert "set-profile" not in result.output
 
 
+def test_validate_handles_list_profiles_exception(tmp_path, monkeypatch):
+    """If list_profiles() raises (e.g. permission denied on profiles.yml),
+    validate must surface it as a warning, not crash with a raw traceback."""
+    _make_valid_project(tmp_path)
+    import yaml  # noqa: PLC0415
+
+    config = yaml.safe_load((tmp_path / "wren_project.yml").read_text())
+    config["profile"] = "anything"  # triggers the binding check
+    (tmp_path / "wren_project.yml").write_text(yaml.safe_dump(config))
+
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    def _broken(*_args, **_kwargs):
+        raise OSError("simulated permission denied")
+
+    monkeypatch.setattr(profile_mod, "list_profiles", _broken)
+
+    result = runner.invoke(app, ["context", "validate", "--path", str(tmp_path)])
+    # The binding check must catch the exception internally — letting the
+    # OSError propagate would crash the CLI with a Python traceback in real
+    # use (CliRunner swallows it into result.exception, but real users see
+    # the traceback on stderr).
+    assert not isinstance(result.exception, OSError), (
+        f"OSError leaked from list_profiles(): {result.exception!r}\n"
+        "Wrap the binding check in try/except so validate degrades gracefully."
+    )
+    # Validate should still surface the failure to the user somewhere visible.
+    assert "permission denied" in result.output.lower() or "anything" in result.output
+
+
 def test_validate_strict_fails_on_missing_pinned_profile(tmp_path, monkeypatch):
     """--strict treats the missing-pin warning as an error."""
     import wren.profile as profile_mod  # noqa: PLC0415
