@@ -145,6 +145,81 @@ def test_resolve_no_profile():
     assert conn == {}
 
 
+# ── resolve_profile_for_project ───────────────────────────────────────────────
+
+
+def _write_project(project_path: Path, **fields) -> None:
+    """Write a minimal wren_project.yml with the given fields."""
+    project_path.mkdir(parents=True, exist_ok=True)
+    config = {
+        "schema_version": 3,
+        "name": "test_proj",
+        "version": "1.0",
+        "catalog": "wren",
+        "schema": "public",
+        "data_source": "duckdb",
+    }
+    config.update(fields)
+    (project_path / "wren_project.yml").write_text(yaml.safe_dump(config))
+
+
+def test_resolve_profile_for_project_uses_pinned_profile(tmp_path: Path):
+    profile_mod.add_profile("project_a", {"datasource": "duckdb", "path": "/a"})
+    profile_mod.add_profile("project_b", {"datasource": "postgres", "host": "x"})
+    profile_mod.switch_profile("project_a")  # active != pinned
+
+    proj = tmp_path / "myproj"
+    _write_project(proj, profile="project_b")
+
+    name, prof = profile_mod.resolve_profile_for_project(proj)
+    assert name == "project_b"
+    assert prof["datasource"] == "postgres"
+    assert prof["host"] == "x"
+
+
+def test_resolve_profile_for_project_falls_back_to_active(tmp_path: Path):
+    profile_mod.add_profile("active_one", {"datasource": "duckdb", "path": "/x"})
+    proj = tmp_path / "myproj"
+    _write_project(proj)  # no `profile:` field
+
+    name, prof = profile_mod.resolve_profile_for_project(proj)
+    assert name == "active_one"
+    assert prof["datasource"] == "duckdb"
+
+
+def test_resolve_profile_for_project_raises_when_pinned_missing(tmp_path: Path):
+    profile_mod.add_profile("real", {"datasource": "duckdb"})
+    proj = tmp_path / "myproj"
+    _write_project(proj, profile="ghost")  # ghost doesn't exist
+
+    with pytest.raises(SystemExit) as exc:
+        profile_mod.resolve_profile_for_project(proj)
+    assert "ghost" in str(exc.value)
+    assert "real" in str(exc.value)  # available profiles listed
+
+
+def test_resolve_profile_for_project_returns_empty_when_no_pin_no_active(
+    tmp_path: Path,
+):
+    proj = tmp_path / "myproj"
+    _write_project(proj)  # no profile field, no profiles.yml setup
+    name, prof = profile_mod.resolve_profile_for_project(proj)
+    assert name is None
+    assert prof == {}
+
+
+def test_resolve_profile_for_project_treats_empty_profile_field_as_unset(
+    tmp_path: Path,
+):
+    profile_mod.add_profile("active_one", {"datasource": "duckdb"})
+    proj = tmp_path / "myproj"
+    _write_project(proj, profile="")  # explicitly empty
+
+    name, prof = profile_mod.resolve_profile_for_project(proj)
+    # Should fall back to active, not error on empty pin
+    assert name == "active_one"
+
+
 # ── Round-trip persistence ────────────────────────────────────────────────────
 
 

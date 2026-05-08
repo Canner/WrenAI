@@ -214,6 +214,49 @@ def get_active_profile() -> tuple[str | None, dict]:
     return name, dict(profiles.get(name, {}))
 
 
+def resolve_profile_for_project(project_path: Path) -> tuple[str | None, dict]:
+    """Resolve the connection profile for a given project.
+
+    Resolution order:
+      1. ``profile:`` field in ``<project>/wren_project.yml`` (if non-empty)
+      2. Global active profile in ``~/.wren/profiles.yml``
+
+    Returns ``(name, profile_dict)``. Returns ``(None, {})`` if neither a
+    project pin nor a global active profile is set.
+
+    Raises ``SystemExit`` when the project pins a profile name that does not
+    exist in profiles.yml — fail loudly because the user explicitly bound
+    a profile that's no longer there.
+    """
+    project_yml = project_path / "wren_project.yml"
+    pinned_name: str | None = None
+    if project_yml.exists():
+        try:
+            config = yaml.safe_load(project_yml.read_text()) or {}
+        except yaml.YAMLError:
+            config = {}
+        if isinstance(config, dict):
+            value = config.get("profile")
+            if isinstance(value, str) and value.strip():
+                pinned_name = value.strip()
+
+    if pinned_name is None:
+        return get_active_profile()
+
+    data = _load_raw()
+    profiles = data.get("profiles", {})
+    if pinned_name not in profiles:
+        available = ", ".join(sorted(profiles)) or "(none)"
+        raise SystemExit(
+            f"Error: project pins profile '{pinned_name}' but it doesn't exist "
+            f"in {_PROFILES_FILE}.\n"
+            f"Available profiles: {available}.\n"
+            "Run `wren context set-profile <name>` to rebind, or "
+            f"`wren profile add {pinned_name}` to recreate the missing profile."
+        )
+    return pinned_name, dict(profiles[pinned_name])
+
+
 def add_profile(name: str, profile: dict, *, activate: bool = False) -> None:
     """Add or overwrite a named profile."""
     data = _load_raw()
