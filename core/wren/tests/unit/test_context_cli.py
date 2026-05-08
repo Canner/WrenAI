@@ -769,6 +769,54 @@ def test_validate_handles_list_profiles_exception(tmp_path, monkeypatch):
     assert strict_result.exit_code == 1, strict_result.output
 
 
+def test_validate_hint_shown_even_when_warnings_present(tmp_path, monkeypatch):
+    """The no-pin hint should fire whenever the project lacks a binding,
+    not only on perfectly clean projects. A project with warnings still
+    benefits from the nudge — arguably more, since it's actively being
+    worked on."""
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+    _make_valid_project(tmp_path)
+
+    # Inject a synthetic semantic warning without breaking the manifest.
+    # Using a real warning trigger (e.g. broken relationship) inevitably
+    # also surfaces a hard error, which would mask what we're testing.
+    from wren import context as context_mod  # noqa: PLC0415
+
+    original = context_mod.validate_manifest
+
+    def _with_warning(*args, **kwargs):
+        result = original(*args, **kwargs)
+        result["warnings"] = list(result.get("warnings", [])) + [
+            "synthetic warning for hint test"
+        ]
+        return result
+
+    monkeypatch.setattr(context_mod, "validate_manifest", _with_warning)
+
+    result = runner.invoke(app, ["context", "validate", "--path", str(tmp_path)])
+    # The hint must appear regardless of warning count — gating it on a
+    # pristine project hides it from the people who most need to see it.
+    assert "set-profile" in result.output
+    # And the warning we injected should still be visible (sanity check
+    # that we actually got into the warning-bearing code path).
+    assert "synthetic warning" in result.output
+
+
+def test_validate_hint_suppressed_when_hard_errors(tmp_path, monkeypatch):
+    """When validation has hard errors, the no-pin hint must not pile on
+    extra noise — the user should fix the real problem first."""
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+    # Project missing data_source → hard error
+    (tmp_path / "wren_project.yml").write_text(
+        "schema_version: 2\nname: broken\n"
+    )
+
+    result = runner.invoke(app, ["context", "validate", "--path", str(tmp_path)])
+    assert result.exit_code == 1
+    # hint must not appear when there are hard errors
+    assert "set-profile" not in result.output
+
+
 def test_validate_strict_fails_on_missing_pinned_profile(tmp_path, monkeypatch):
     """--strict treats the missing-pin warning as an error."""
     import wren.profile as profile_mod  # noqa: PLC0415

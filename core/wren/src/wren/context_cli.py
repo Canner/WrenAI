@@ -340,6 +340,21 @@ def validate(
     has_hard_error = bool(struct_hard or sem_errors)
     has_warning = bool(all_warnings)
 
+    # No-pin info hint — surface whenever validation has no hard errors,
+    # regardless of warning count. Gating it on a pristine project (the old
+    # behavior) hid the nudge from the users most likely to need it: anyone
+    # actively working through warnings. Placed BEFORE the exit raise so the
+    # hint is still visible under --strict (where warnings become exit 1).
+    # Hard errors still suppress so error output stays focused on the blocker.
+    no_pin = not (isinstance(profile_pin, str) and profile_pin.strip())
+    if no_pin and not has_hard_error:
+        typer.echo(
+            "\nNote: no profile bound to this project. Connection will fall "
+            "back to the\n"
+            "  globally active profile in ~/.wren/profiles.yml.\n"
+            "  Run `wren context set-profile <name>` to pin one explicitly."
+        )
+
     if has_hard_error or (strict and has_warning):
         raise typer.Exit(1)
 
@@ -350,16 +365,6 @@ def validate(
         typer.echo(
             f"Valid — {len(models)} models, {len(views)} views, {len(rels)} relationships."
         )
-
-        # No-pin info hint — only when validation is otherwise clean, to keep
-        # error output uncluttered.
-        if not (isinstance(profile_pin, str) and profile_pin.strip()):
-            typer.echo(
-                "\nNote: no profile bound to this project. Connection will fall "
-                "back to the\n"
-                "  globally active profile in ~/.wren/profiles.yml.\n"
-                "  Run `wren context set-profile <name>` to pin one explicitly."
-            )
 
 
 def _print_warnings(warnings: list[str], *, verbose: bool) -> None:
