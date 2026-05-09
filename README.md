@@ -66,6 +66,11 @@ The `wren-onboarding` skill walks the agent through environment checks, package 
 Full CLI guide and manual install steps: [`core/wren/README.md`](./core/wren/README.md). Installable extras for each connector are listed there.
 
 
+## Documentation
+
+[Wren AI OSS Documentation](https://docs.getwren.ai/oss/introduction)
+
+
 ## Supported Data Sources
 
 Wren Engine is built to work across modern data stacks, including warehouses, databases, and file-based sources.
@@ -111,10 +116,9 @@ See the connector API docs in the project documentation for the latest connectio
 
 ## Community
 
+- **Discord**: [discord.gg/canner](https://discord.gg/canner)
 - **Discussions**: [github.com/Canner/WrenAI/discussions](https://github.com/Canner/WrenAI/discussions)
 - **Issues**: [github.com/Canner/WrenAI/issues](https://github.com/Canner/WrenAI/issues)
-- **Discord**: [discord.gg/canner](https://discord.gg/canner)
-- **Docs site**: [docs.getwren.ai/oss/introduction](https://docs.getwren.ai/oss/introduction)
 
 ## License
 
