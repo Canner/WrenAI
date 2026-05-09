@@ -114,7 +114,7 @@ See the connector API docs in the project documentation for the latest connectio
 - **Discussions**: [github.com/Canner/WrenAI/discussions](https://github.com/Canner/WrenAI/discussions)
 - **Issues**: [github.com/Canner/WrenAI/issues](https://github.com/Canner/WrenAI/issues)
 - **Discord**: [discord.gg/canner](https://discord.gg/canner)
-- **Docs site**: [docs.getwren.ai](https://docs.getwren.ai)
+- **Docs site**: [docs.getwren.ai/oss/introduction](https://docs.getwren.ai/oss/introduction)
 
 ## License
 
