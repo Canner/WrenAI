@@ -102,6 +102,23 @@ class WrenToolkit:
             )
         return ts
 
+    def instructions(self, *, toolset: object | None = None) -> str:
+        """Return a Wren-aware instructions string suitable for Pydantic AI.
+
+        Composition mirrors the wren-langchain SDK:
+          1. Workflow rules — derived from the supplied toolset's tools.
+          2. Available tools — bullet list rendered from the same toolset.
+          3. Project-specific instructions (from ``instructions.md`` if present).
+
+        Pass the same ``toolset`` you give to ``Agent(toolsets=...)`` so the
+        workflow stays in sync — e.g. ``toolset(include_memory_write=False)``
+        drops the persistence step instead of telling the LLM to call a
+        tool that no longer exists.
+        """
+        from wren_pydantic._instructions import build_instructions  # noqa: PLC0415
+
+        return build_instructions(self, toolset=toolset)
+
     # ── Direct Python API (sync only — see module docstring) ──────────────
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
