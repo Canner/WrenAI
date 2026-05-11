@@ -2,6 +2,14 @@
 
 from __future__ import annotations
 
+from wren_pydantic._toolkit import WrenToolkit
+from wren_pydantic.exceptions import MemoryNotEnabledError, WrenToolkitInitError
+
 __version__ = "0.1.0"
 
-__all__ = ["__version__"]
+__all__ = [
+    "MemoryNotEnabledError",
+    "WrenToolkit",
+    "WrenToolkitInitError",
+    "__version__",
+]
