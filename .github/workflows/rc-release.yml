@@ -12,6 +12,7 @@ on:
           - wren
           - wren-core-wasm
           - wren-langchain
+          - wren-pydantic
       rc_version:
         description: "RC version override (e.g. 0.25.0-rc.2). Leave empty to auto-increment."
         required: false
@@ -169,8 +170,19 @@ jobs:
       contents: read
       id-token: write
 
+  publish-wren-pydantic:
+    needs: create-rc
+    if: inputs.component == 'wren-pydantic'
+    uses: ./.github/workflows/publish-wren-pydantic.yml
+    with:
+      version: ${{ needs.create-rc.outputs.pypi_version }}
+      tag_name: ${{ needs.create-rc.outputs.tag_name }}
+    permissions:
+      contents: read
+      id-token: write
+
   create-release:
-    needs: [create-rc, publish-wren-core-py, publish-wren, publish-wren-core-wasm, publish-wren-langchain]
+    needs: [create-rc, publish-wren-core-py, publish-wren, publish-wren-core-wasm, publish-wren-langchain, publish-wren-pydantic]
     if: always() && needs.create-rc.result == 'success' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     permissions:

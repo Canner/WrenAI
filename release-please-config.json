@@ -34,6 +34,14 @@
       "extra-files": [
         "src/wren_langchain/__init__.py"
       ]
+    },
+    "sdk/wren-pydantic": {
+      "component": "wren-pydantic",
+      "release-type": "python",
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        "src/wren_pydantic/__init__.py"
+      ]
     }
   }
 }
