@@ -53,6 +53,21 @@ class WrenToolkit:
         # the instance and let LanceDB handle data versioning internally.
         self._memory_store_cache: Any = None
 
+    # ── Pydantic AI adapter ───────────────────────────────────────────────
+
+    def toolset(self, *, takes_ctx: bool = False):
+        """Return a Pydantic AI ``FunctionToolset`` bound to this toolkit.
+
+        ``takes_ctx=True`` registers each tool with ``ctx: RunContext`` as
+        its first parameter. Use this when mixing wren tools with other
+        ``deps_type=...`` tools in the same agent; the context object is
+        ignored internally (toolkit captures its own state). Memory tool
+        wiring lands in Phase 3.
+        """
+        from wren_pydantic._tools import build_runtime_toolset  # noqa: PLC0415
+
+        return build_runtime_toolset(self, takes_ctx=takes_ctx)
+
     # ── Direct Python API (sync only — see module docstring) ──────────────
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
