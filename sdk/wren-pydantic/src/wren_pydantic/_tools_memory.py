@@ -115,9 +115,7 @@ def _register_recall_queries(
     else:
 
         @toolset.tool_plain(retries=2)
-        def wren_recall_queries(
-            question: str, limit: int = 3
-        ) -> list[RecalledPair]:
+        def wren_recall_queries(question: str, limit: int = 3) -> list[RecalledPair]:
             """Recall up to *limit* past NL→SQL pairs similar to *question*.
 
             Useful as few-shot examples before writing new SQL. Pairs

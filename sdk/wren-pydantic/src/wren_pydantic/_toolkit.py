@@ -65,18 +65,42 @@ class WrenToolkit:
 
     # ── Pydantic AI adapter ───────────────────────────────────────────────
 
-    def toolset(self, *, takes_ctx: bool = False):
+    def toolset(
+        self,
+        *,
+        include_memory_write: bool = True,
+        takes_ctx: bool = False,
+    ):
         """Return a Pydantic AI ``FunctionToolset`` bound to this toolkit.
+
+        Memory tools are auto-filtered when memory is disabled (no
+        ``.wren/memory/`` directory in the project).
+        ``include_memory_write=False`` removes ``wren_store_query`` while
+        keeping the read-only memory tools (``wren_fetch_context``,
+        ``wren_recall_queries``). When memory is disabled,
+        ``include_memory_write`` has no effect — no memory tools are
+        registered regardless of its value.
 
         ``takes_ctx=True`` registers each tool with ``ctx: RunContext`` as
         its first parameter. Use this when mixing wren tools with other
         ``deps_type=...`` tools in the same agent; the context object is
-        ignored internally (toolkit captures its own state). Memory tool
-        wiring lands in Phase 3.
+        ignored internally (toolkit captures its own state).
         """
         from wren_pydantic._tools import build_runtime_toolset  # noqa: PLC0415
 
-        return build_runtime_toolset(self, takes_ctx=takes_ctx)
+        ts = build_runtime_toolset(self, takes_ctx=takes_ctx)
+        if self._memory.enabled:
+            from wren_pydantic._tools_memory import (  # noqa: PLC0415
+                build_memory_toolset,
+            )
+
+            build_memory_toolset(
+                self,
+                include_write=include_memory_write,
+                takes_ctx=takes_ctx,
+                toolset=ts,
+            )
+        return ts
 
     # ── Direct Python API (sync only — see module docstring) ──────────────
 

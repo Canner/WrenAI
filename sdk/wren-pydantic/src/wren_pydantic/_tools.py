@@ -55,9 +55,7 @@ def _register_query(toolset: FunctionToolset, toolkit: WrenToolkit, *, takes_ctx
     if takes_ctx:
 
         @toolset.tool(retries=2)
-        def wren_query(
-            ctx: RunContext, sql: str, limit: int = 100
-        ) -> WrenQueryResult:
+        def wren_query(ctx: RunContext, sql: str, limit: int = 100) -> WrenQueryResult:
             """Execute SQL through the Wren semantic layer and return rows.
 
             Use after wren_dry_plan looks correct. Default limit is 100;
