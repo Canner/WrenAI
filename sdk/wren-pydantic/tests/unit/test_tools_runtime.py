@@ -234,9 +234,9 @@ def test_wren_list_models_wraps_error_as_model_retry():
 
 def test_takes_ctx_true_registers_tools_with_ctx_param():
     """With takes_ctx=True, tool signatures expose ctx: RunContext as first arg."""
-    import inspect
+    import inspect  # noqa: PLC0415
 
-    from pydantic_ai import RunContext  # noqa: F401  (type ref for clarity)
+    from pydantic_ai import RunContext  # noqa: F401, PLC0415  (type ref for clarity)
 
     toolkit = _mock_toolkit()
     ts = build_runtime_toolset(toolkit, takes_ctx=True)

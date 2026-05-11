@@ -18,7 +18,6 @@ from wren_pydantic._models import (
     WrenQueryResult,
 )
 
-
 # ── WrenQueryResult ───────────────────────────────────────────────────────
 
 
@@ -48,7 +47,9 @@ def test_wren_query_result_row_count_must_equal_len_rows():
 
 
 def test_wren_query_result_truncated_flag_marks_limit_overflow():
-    payload = WrenQueryResult(columns=["c"], rows=[{"c": 1}], row_count=1, truncated=True)
+    payload = WrenQueryResult(
+        columns=["c"], rows=[{"c": 1}], row_count=1, truncated=True
+    )
     assert payload.truncated is True
 
 

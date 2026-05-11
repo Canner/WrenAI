@@ -18,7 +18,6 @@ from wren_pydantic._errors import (
     to_model_retry,
 )
 
-
 # ── Propagate vs retry classification ─────────────────────────────────────
 
 

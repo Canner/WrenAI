@@ -18,7 +18,6 @@ from wren.model.error import ErrorCode, ErrorPhase, WrenError
 from wren_pydantic._models import FetchContextResult, RecalledPair
 from wren_pydantic._tools_memory import build_memory_toolset
 
-
 _UNSET = object()
 
 
@@ -200,7 +199,7 @@ def test_store_query_retries_zero():
 
 
 def test_takes_ctx_true_injects_ctx_into_fetch_signature():
-    import inspect
+    import inspect  # noqa: PLC0415
 
     toolkit = _mock_toolkit()
     ts = build_memory_toolset(toolkit, include_write=True, takes_ctx=True)

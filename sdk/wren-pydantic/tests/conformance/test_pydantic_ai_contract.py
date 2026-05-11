@@ -26,7 +26,6 @@ from pydantic_ai.models.test import TestModel
 
 from wren_pydantic import WrenToolkit
 
-
 # ── Tool registration shape ───────────────────────────────────────────────
 
 
@@ -109,9 +108,7 @@ def test_test_model_drives_wren_list_models_call(
     assert result is not None
 
 
-def test_agent_run_sync_with_no_tools_called(
-    tmp_project, fake_active_profile
-):
+def test_agent_run_sync_with_no_tools_called(tmp_project, fake_active_profile):
     """TestModel(call_tools=[]) skips all tools — verifies the toolset can
     coexist with an agent that decides not to invoke anything."""
     toolkit = WrenToolkit.from_project(tmp_project)
@@ -131,7 +128,7 @@ def test_model_retry_flow_surfaces_through_agent(tmp_project, fake_active_profil
     forwards back to the model. With TestModel, the retry causes the call
     to fail (TestModel doesn't self-correct), but the error path should
     exercise without crashing the runner."""
-    from wren.model.error import ErrorCode, ErrorPhase, WrenError
+    from wren.model.error import ErrorCode, ErrorPhase, WrenError  # noqa: PLC0415
 
     toolkit = WrenToolkit.from_project(tmp_project)
     with patch.object(
