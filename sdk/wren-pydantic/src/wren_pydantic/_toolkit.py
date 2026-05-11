@@ -53,6 +53,16 @@ class WrenToolkit:
         # the instance and let LanceDB handle data versioning internally.
         self._memory_store_cache: Any = None
 
+    # ── Memory subscope (exposed as toolkit.memory) ────────────────────────
+
+    @property
+    def memory(self):
+        if not hasattr(self, "_memory_api"):
+            from wren_pydantic._memory_api import _MemoryAPI  # noqa: PLC0415
+
+            self._memory_api = _MemoryAPI(self)
+        return self._memory_api
+
     # ── Pydantic AI adapter ───────────────────────────────────────────────
 
     def toolset(self, *, takes_ctx: bool = False):
