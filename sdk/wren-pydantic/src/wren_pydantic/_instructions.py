@@ -1,4 +1,4 @@
-"""Build a Wren-aware system prompt for LangChain/LangGraph agents.
+"""Build a Wren-aware system prompt for Pydantic AI agents.
 
 The workflow distilled here mirrors the Wren CLI's `wren-usage` skill —
 recall → fetch context → write SQL → dry_plan if complex → execute → store —
@@ -24,7 +24,7 @@ Three markdown sections (any may be empty):
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from wren_pydantic._toolkit import WrenToolkit
@@ -171,9 +171,7 @@ def _things_to_avoid_section(tool_names: set[str]) -> str:
     return "# Things to avoid\n\n" + "\n".join(bullets)
 
 
-def build_instructions(
-    toolkit: WrenToolkit, *, toolset: object | None = None
-) -> str:
+def build_instructions(toolkit: WrenToolkit, *, toolset: object | None = None) -> str:
     """Render the instructions prompt.
 
     ``toolset`` is the Pydantic AI ``FunctionToolset`` actually given to
