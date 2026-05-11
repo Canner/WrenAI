@@ -4,9 +4,6 @@ Sync-only direct API (query / dry_plan / dry_run). Pydantic AI accepts
 sync tool functions and auto-bridges them to the async run loop, so we
 don't repackage the engine's sync I/O as fake-async wrappers — see
 plan §3 Commit 2.1 for the rationale.
-
-The toolset() and instructions() methods aren't on this class yet; they
-land in Phase 2.3 and Phase 4.1 respectively.
 """
 
 from __future__ import annotations

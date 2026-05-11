@@ -14,13 +14,13 @@ on:
   pull_request:
     paths:
       - 'sdk/wren-pydantic/**'
-      - '.github/workflows/sdk-langchain-ci.yml'
+      - '.github/workflows/sdk-pydantic-ci.yml'
   push:
     branches:
       - main
     paths:
       - 'sdk/wren-pydantic/**'
-      - '.github/workflows/sdk-langchain-ci.yml'
+      - '.github/workflows/sdk-pydantic-ci.yml'
   workflow_dispatch:
 
 concurrency:
