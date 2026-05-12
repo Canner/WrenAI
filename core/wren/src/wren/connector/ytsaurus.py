@@ -52,6 +52,13 @@ class YTsaurusConnector(IbisConnector):
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         wrapped = sql
         if limit is not None:
+            # ``limit`` is interpolated into the SQL string, so refuse anything
+            # that isn't a non-negative integer to make the f-string safe even
+            # if a caller bypasses the type hint.
+            if isinstance(limit, bool) or not isinstance(limit, int) or limit < 0:
+                raise ValueError(
+                    f"limit must be a non-negative int, got {limit!r}"
+                )
             wrapped = f"SELECT * FROM (\n{sql}\n) LIMIT {limit}"
         try:
             # CHYT speaks the ClickHouse Native protocol but rejects
@@ -60,6 +67,14 @@ class YTsaurusConnector(IbisConnector):
             result = self._ch_client.query(wrapped)
             columns = list(result.column_names)
             data = list(result.result_columns)
+            if len(columns) != len(data):
+                raise WrenError(
+                    ErrorCode.INVALID_SQL,
+                    f"CHYT returned mismatched column metadata: "
+                    f"{len(columns)} names vs {len(data)} column arrays",
+                    phase=ErrorPhase.SQL_EXECUTION,
+                    metadata={DIALECT_SQL: sql},
+                )
             return pa.table({name: col for name, col in zip(columns, data)})
         except _ClickHouseDbError as e:
             if "TIMEOUT_EXCEEDED" not in str(e):

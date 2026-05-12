@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import os
 import ssl
+import threading
 import urllib
 from enum import Enum, StrEnum, auto
 from json import loads
@@ -45,6 +46,13 @@ from wren.model import (
 from wren.model.error import ErrorCode, WrenError
 
 X_WREN_DB_STATEMENT_TIMEOUT = "x-wren-db-statement_timeout"
+
+# Serializes the class-level monkey-patching of clickhouse_connect's
+# HttpClient inside ``DataSourceExtension.get_ytsaurus_connection``.
+# Concurrent callers would otherwise race on ``HttpClient.params`` and the
+# per-class ``_wren_yt_token`` (potentially leaking one caller's token into
+# another caller's connection).
+_YTSAURUS_PATCH_LOCK = threading.Lock()
 
 
 class DataSource(StrEnum):
@@ -392,34 +400,35 @@ class DataSourceExtension(Enum):
                     self.headers["Authorization"] = f"OAuth {token_val}"
                 return super()._init_common_settings(tz_source)
 
-        _CHYTHttpClient._wren_yt_token = token
-
         # `clickhouse_connect.driver.create_client` does
         # `from clickhouse_connect.driver.httpclient import HttpClient`, so it
         # binds the class into its own namespace. We have to patch BOTH the
         # source module and the importer's binding for the override to take
-        # effect.
-        original_class_params = _BaseHttpClient.params
-        _BaseHttpClient.params = dict(original_class_params)
-        _BaseHttpClient.params["chyt.clique_alias"] = info.clique
-        _ch_http.HttpClient = _CHYTHttpClient
-        _ch_driver.HttpClient = _CHYTHttpClient
-        try:
-            backend = ibis.clickhouse.connect(
-                host=proxy,
-                port=port,
-                database="",
-                user="",  # empty → no Basic auth header (we set OAuth above)
-                password="",
-                secure=info.secure,
-                settings=info.settings if info.settings else {},
-                **kwargs,
-            )
-        finally:
-            _BaseHttpClient.params = original_class_params
-            _ch_http.HttpClient = _BaseHttpClient
-            _ch_driver.HttpClient = _BaseHttpClient
-            _CHYTHttpClient._wren_yt_token = None
+        # effect. Hold the module-level lock so concurrent callers don't
+        # observe each other's patches or token.
+        with _YTSAURUS_PATCH_LOCK:
+            _CHYTHttpClient._wren_yt_token = token
+            original_class_params = _BaseHttpClient.params
+            _BaseHttpClient.params = dict(original_class_params)
+            _BaseHttpClient.params["chyt.clique_alias"] = info.clique
+            _ch_http.HttpClient = _CHYTHttpClient
+            _ch_driver.HttpClient = _CHYTHttpClient
+            try:
+                backend = ibis.clickhouse.connect(
+                    host=proxy,
+                    port=port,
+                    database="",
+                    user="",  # empty → no Basic auth header (we set OAuth above)
+                    password="",
+                    secure=info.secure,
+                    settings=info.settings if info.settings else {},
+                    **kwargs,
+                )
+            finally:
+                _BaseHttpClient.params = original_class_params
+                _ch_http.HttpClient = _BaseHttpClient
+                _ch_driver.HttpClient = _BaseHttpClient
+                _CHYTHttpClient._wren_yt_token = None
 
         # Belt-and-braces: ensure the live instance also carries the alias
         # and OAuth header (defends against clickhouse_connect ever

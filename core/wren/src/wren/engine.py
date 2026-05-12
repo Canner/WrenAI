@@ -176,6 +176,8 @@ class WrenEngine:
             name = node.args.get("this")
             db_name = db.name if db is not None else ""
             tbl_name = name.name if name is not None else ""
+            if not tbl_name:
+                return node
             yt_path = path_map.get(f"{db_name}.{tbl_name}") or path_map.get(tbl_name)
             if not yt_path:
                 return node
@@ -214,10 +216,11 @@ class WrenEngine:
             tr = m.get("tableReference") or m.get("table_reference") or {}
             schema = (tr.get("schema") or "").strip()
             table = (tr.get("table") or m.get("name") or "").strip()
-            if schema and table:
+            if not table:
+                continue
+            if schema:
                 out[f"{schema}.{table}"] = yt_path
-            if table:
-                out.setdefault(table, yt_path)
+            out.setdefault(table, yt_path)
         self._yt_path_map_cache = out
         return out
 
