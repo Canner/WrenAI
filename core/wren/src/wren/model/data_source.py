@@ -336,15 +336,21 @@ class DataSourceExtension(Enum):
 
     @staticmethod
     def get_clickhouse_connection(info: ClickHouseConnectionInfo) -> BaseBackend:
-        return ibis.clickhouse.connect(
-            host=info.host,
-            port=int(info.port),
-            database=info.database,
-            user=info.user,
-            password=(info.password and info.password.get_secret_value()),
-            settings=info.settings if info.settings else {},
-            **info.kwargs if info.kwargs else {},
-        )
+        # Serialize with get_ytsaurus_connection(): that path temporarily mutates
+        # clickhouse_connect's module-level HttpClient class and its `params`
+        # dict to inject CHYT auth. Without this lock, a concurrent plain
+        # ClickHouse connect can snapshot the patched state and leak the YT
+        # OAuth token + `chyt.clique_alias` into a regular ClickHouse client.
+        with _YTSAURUS_PATCH_LOCK:
+            return ibis.clickhouse.connect(
+                host=info.host,
+                port=int(info.port),
+                database=info.database,
+                user=info.user,
+                password=(info.password and info.password.get_secret_value()),
+                settings=info.settings if info.settings else {},
+                **info.kwargs if info.kwargs else {},
+            )
 
     @staticmethod
     def get_ytsaurus_connection(info: YTsaurusConnectionInfo) -> BaseBackend:
