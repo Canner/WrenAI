@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 from typing import Any
 
 import pyarrow as pa
@@ -34,6 +35,8 @@ from wren.mdl.cte_rewriter import CTERewriter, get_sqlglot_dialect
 from wren.model.data_source import DataSource
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 from wren.policy import validate_sql_policy
+
+logger = logging.getLogger(__name__)
 
 
 class WrenEngine:
@@ -209,6 +212,10 @@ class WrenEngine:
             self._yt_path_map_cache = {}
             return self._yt_path_map_cache
         out: dict[str, str] = {}
+        # Unqualified `table` keys we've already chosen to remove because two
+        # models in different schemas share that bare name — the rewrite must
+        # not silently pick one yt_path over the other.
+        ambiguous: set[str] = set()
         for m in manifest.get("models", []):
             props = m.get("properties", {}) or {}
             yt_path = props.get("ytPath") or props.get("yt_path")
@@ -221,7 +228,25 @@ class WrenEngine:
                 continue
             if schema:
                 out[f"{schema}.{table}"] = yt_path
-            out.setdefault(table, yt_path)
+            if table in ambiguous:
+                continue
+            existing = out.get(table)
+            if existing is None:
+                out[table] = yt_path
+            elif existing != yt_path:
+                # Conflict: drop the bare-name mapping so a query referencing
+                # just `<table>` falls through to whatever CHYT resolves
+                # natively rather than rewriting to the wrong YT path.
+                logger.warning(
+                    "YT path map collision on unqualified table %r "
+                    "(paths %r vs %r) — dropping bare-name rewrite; "
+                    "qualify with a schema to disambiguate.",
+                    table,
+                    existing,
+                    yt_path,
+                )
+                del out[table]
+                ambiguous.add(table)
         self._yt_path_map_cache = out
         return out
 
