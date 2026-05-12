@@ -130,6 +130,12 @@ class DataSource(StrEnum):
 
     def _build_connection_info(self, data: dict) -> ConnectionInfo:
         if "connectionUrl" in data or "connection_url" in data:
+            if self == DataSource.ytsaurus:
+                raise WrenError(
+                    ErrorCode.INVALID_CONNECTION_INFO,
+                    "YTsaurus does not support connectionUrl; "
+                    "use proxy/clique/token fields.",
+                )
             if self == DataSource.clickhouse:
                 return self._handle_clickhouse_url(
                     urllib.parse.urlparse(
