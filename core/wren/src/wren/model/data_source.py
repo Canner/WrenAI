@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import os
 import ssl
 import urllib
 from enum import Enum, StrEnum, auto
@@ -39,6 +40,7 @@ from wren.model import (
     SparkConnectionInfo,
     SSLMode,
     TrinoConnectionInfo,
+    YTsaurusConnectionInfo,
 )
 from wren.model.error import ErrorCode, WrenError
 
@@ -66,6 +68,7 @@ class DataSource(StrEnum):
     duckdb = auto()
     spark = auto()
     databricks = auto()
+    ytsaurus = auto()
 
     def get_connection(self, info: ConnectionInfo) -> BaseBackend:
         try:
@@ -95,7 +98,7 @@ class DataSource(StrEnum):
                     options += f"-c statement_timeout={headers.get(X_WREN_DB_STATEMENT_TIMEOUT, 180)}s"
                     kwargs["options"] = options
                 info.kwargs = kwargs
-            case DataSource.clickhouse:
+            case DataSource.clickhouse | DataSource.ytsaurus:
                 session_timeout = headers.get(X_WREN_DB_STATEMENT_TIMEOUT, 180)
                 if info.settings is None:
                     info.settings = {}
@@ -175,6 +178,8 @@ class DataSource(StrEnum):
                 ):
                     return DatabricksServicePrincipalConnectionInfo.model_validate(data)
                 return DatabricksTokenConnectionInfo.model_validate(data)
+            case DataSource.ytsaurus:
+                return YTsaurusConnectionInfo.model_validate(data)
             case _:
                 raise NotImplementedError(f"Unsupported data source: {self}")
 
@@ -229,6 +234,7 @@ class DataSourceExtension(Enum):
     gcs_file = "gcs_file"
     databricks = "databricks"
     spark = "spark"
+    ytsaurus = "ytsaurus"
 
     def get_connection(self, info: ConnectionInfo) -> BaseBackend:
         try:
@@ -325,6 +331,108 @@ class DataSourceExtension(Enum):
             settings=info.settings if info.settings else {},
             **info.kwargs if info.kwargs else {},
         )
+
+    @staticmethod
+    def get_ytsaurus_connection(info: YTsaurusConnectionInfo) -> BaseBackend:
+        token = (info.token and info.token.get_secret_value()) or os.environ.get(
+            "YT_TOKEN"
+        )
+        if not token:
+            raise WrenError(
+                ErrorCode.INVALID_CONNECTION_INFO,
+                "YTsaurus requires a YT OAuth token via connection_info.token "
+                "or the YT_TOKEN environment variable.",
+            )
+
+        proxy = info.proxy.removeprefix("https://").removeprefix("http://").rstrip("/")
+        port = int(info.port) if info.port else (443 if info.secure else 80)
+        kwargs: dict[str, Any] = dict(info.kwargs) if info.kwargs else {}
+
+        # YT exposes CHYT at a non-root URL path (default `/query`). The
+        # clickhouse_connect HttpClient calls this `proxy_path`. Allow
+        # override via YTsaurusConnectionInfo but default to the YT
+        # convention.
+        kwargs.setdefault("proxy_path", info.query_path)
+
+        # YT's HTTP proxy has two requirements that vanilla clickhouse_connect
+        # doesn't meet:
+        #   (1) the CHYT clique alias must be sent as URL parameter
+        #       `chyt.clique_alias=<alias>` on every request, including the
+        #       `SELECT version()` and `SELECT FROM system.settings` queries
+        #       run during HttpClient construction;
+        #   (2) the Authorization header must use the `OAuth` scheme, not
+        #       `Basic` or `Bearer`.
+        #
+        # clickhouse_connect's HttpClient snapshots class-level `params` into
+        # the instance during __init__ (before any query runs), and creates
+        # an empty `self.headers` dict. We patch `HttpClient.params` for the
+        # duration of construction, and swap in an HttpClient subclass that
+        # injects the OAuth header into `self.headers` right before the
+        # parent `Client.__init__` runs the startup queries.
+        try:
+            import clickhouse_connect.driver as _ch_driver
+            import clickhouse_connect.driver.httpclient as _ch_http
+        except ImportError as e:
+            raise WrenError(
+                ErrorCode.INVALID_CONNECTION_INFO,
+                "clickhouse_connect is required for YTsaurus. Install the "
+                "extra: pip install 'wren-engine[ytsaurus]'.",
+            ) from e
+
+        _BaseHttpClient = _ch_http.HttpClient
+
+        class _CHYTHttpClient(_BaseHttpClient):
+            """HttpClient with YT OAuth auth pre-injected."""
+
+            _wren_yt_token: str | None = None
+
+            def _init_common_settings(self, tz_source):
+                token_val = type(self)._wren_yt_token
+                if token_val:
+                    self.headers["Authorization"] = f"OAuth {token_val}"
+                return super()._init_common_settings(tz_source)
+
+        _CHYTHttpClient._wren_yt_token = token
+
+        # `clickhouse_connect.driver.create_client` does
+        # `from clickhouse_connect.driver.httpclient import HttpClient`, so it
+        # binds the class into its own namespace. We have to patch BOTH the
+        # source module and the importer's binding for the override to take
+        # effect.
+        original_class_params = _BaseHttpClient.params
+        _BaseHttpClient.params = dict(original_class_params)
+        _BaseHttpClient.params["chyt.clique_alias"] = info.clique
+        _ch_http.HttpClient = _CHYTHttpClient
+        _ch_driver.HttpClient = _CHYTHttpClient
+        try:
+            backend = ibis.clickhouse.connect(
+                host=proxy,
+                port=port,
+                database="",
+                user="",  # empty → no Basic auth header (we set OAuth above)
+                password="",
+                secure=info.secure,
+                settings=info.settings if info.settings else {},
+                **kwargs,
+            )
+        finally:
+            _BaseHttpClient.params = original_class_params
+            _ch_http.HttpClient = _BaseHttpClient
+            _ch_driver.HttpClient = _BaseHttpClient
+            _CHYTHttpClient._wren_yt_token = None
+
+        # Belt-and-braces: ensure the live instance also carries the alias
+        # and OAuth header (defends against clickhouse_connect ever
+        # re-snapshotting class state).
+        ch_client = getattr(backend, "con", backend)
+        params = getattr(ch_client, "params", None)
+        if params is not None:
+            params["chyt.clique_alias"] = info.clique
+        headers = getattr(ch_client, "headers", None)
+        if headers is not None:
+            headers["Authorization"] = f"OAuth {token}"
+
+        return backend
 
     @classmethod
     def get_mssql_connection(cls, info: MSSqlConnectionInfo) -> BaseBackend:

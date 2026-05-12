@@ -112,6 +112,38 @@ class ClickHouseConnectionInfo(BaseConnectionInfo):
     kwargs: dict[str, str] | None = Field(default=None)
 
 
+class YTsaurusConnectionInfo(BaseConnectionInfo):
+    """Connection info for a YTsaurus cluster via its CHYT clique.
+
+    ``proxy`` is the YT HTTP proxy host (e.g. ``yt-proxy.example.com``).
+    ``clique`` is the CHYT clique alias including the leading ``*``
+    (e.g. ``*ch_public``). ``token`` is the YT OAuth token; if omitted the
+    connector reads ``YT_TOKEN`` from the environment.
+    """
+
+    proxy: str = Field(examples=["yt-proxy.example.com"])
+    clique: str = Field(examples=["*ch_public"])
+    token: SecretStr | None = Field(
+        default=None,
+        description="YT OAuth token. Falls back to YT_TOKEN env var if unset.",
+    )
+    secure: bool = Field(default=True)
+    port: StrPort | None = Field(
+        default=None,
+        description="Override the proxy port. Defaults to 443 (secure) or 80.",
+    )
+    query_path: str = Field(
+        default="/query",
+        description=(
+            "URL path on the YT HTTP proxy that exposes the CHYT endpoint. "
+            "The Nebius and open-source YT default is '/query'. Override only "
+            "if your proxy mounts CHYT elsewhere."
+        ),
+    )
+    settings: dict[str, str] | None = Field(default=None)
+    kwargs: dict[str, str] | None = Field(default=None)
+
+
 class MSSqlConnectionInfo(BaseConnectionInfo):
     host: str = Field(examples=["localhost"])
     port: StrPort = Field(examples=["1433"])
@@ -309,6 +341,7 @@ ConnectionInfo = (
     | S3FileConnectionInfo
     | MinioFileConnectionInfo
     | GcsFileConnectionInfo
+    | YTsaurusConnectionInfo
 )
 
 

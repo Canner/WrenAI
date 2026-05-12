@@ -17,6 +17,7 @@ pip install wren-engine[mysql]       # MySQL
 pip install wren-engine[bigquery]    # BigQuery
 pip install wren-engine[snowflake]   # Snowflake
 pip install wren-engine[clickhouse]  # ClickHouse
+pip install wren-engine[ytsaurus]    # YTsaurus (via CHYT)
 pip install wren-engine[trino]       # Trino
 pip install wren-engine[mssql]       # SQL Server
 pip install wren-engine[databricks]  # Databricks

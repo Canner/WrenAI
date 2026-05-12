@@ -112,6 +112,7 @@ class WrenEngine:
     ) -> pa.Table:
         """Transpile and execute SQL, return results as an Arrow table."""
         dialect_sql = self.dry_plan(sql, properties)
+        dialect_sql = self._apply_physical_overrides(dialect_sql)
         connector = self._get_connector()
         try:
             return connector.query(dialect_sql, limit)
@@ -128,6 +129,7 @@ class WrenEngine:
     def dry_run(self, sql: str, properties: dict | None = None) -> None:
         """Transpile and dry-run SQL without returning results."""
         dialect_sql = self.dry_plan(sql, properties)
+        dialect_sql = self._apply_physical_overrides(dialect_sql)
         connector = self._get_connector()
         try:
             connector.dry_run(dialect_sql)
@@ -140,6 +142,84 @@ class WrenEngine:
                 phase=ErrorPhase.SQL_DRY_RUN,
                 metadata={DIALECT_SQL: dialect_sql},
             ) from e
+
+    # ------------------------------------------------------------------
+    # Physical SQL rewriting (currently: YT path substitution)
+    # ------------------------------------------------------------------
+
+    def _apply_physical_overrides(self, sql: str) -> str:
+        """Apply data-source-specific rewrites to dialect SQL.
+
+        For YTsaurus, the MDL's ``table_reference`` carries a synthetic
+        ``schema.table`` name (e.g. ``cdm_clients.tenant_index``) that wren
+        emits as an unquoted identifier. CHYT can't resolve those — it needs
+        the full YT path in backticks. If a model declares
+        ``properties.ytPath``, this rewrites every reference to that model
+        into the backticked path form CHYT understands.
+        """
+        if self.data_source != DataSource.ytsaurus:
+            return sql
+        path_map = self._yt_path_map()
+        if not path_map:
+            return sql
+
+        try:
+            dialect = get_sqlglot_dialect(self.data_source)
+            tree = parse_one(sql, read=dialect)
+        except Exception:
+            return sql
+
+        def _rewrite(node):
+            if not isinstance(node, exp.Table):
+                return node
+            db = node.args.get("db")
+            name = node.args.get("this")
+            db_name = db.name if db is not None else ""
+            tbl_name = name.name if name is not None else ""
+            yt_path = path_map.get(f"{db_name}.{tbl_name}") or path_map.get(tbl_name)
+            if not yt_path:
+                return node
+            # Replace with a single backtick-quoted identifier carrying the
+            # YT path. Set quoted=True so sqlglot preserves the backticks
+            # when serializing to the ClickHouse dialect.
+            replacement = exp.Table(
+                this=exp.Identifier(this=yt_path, quoted=True),
+                alias=node.args.get("alias"),
+            )
+            return replacement
+
+        tree = tree.transform(_rewrite)
+        return tree.sql(dialect=dialect)
+
+    def _yt_path_map(self) -> dict[str, str]:
+        """Build a `schema.table` / `table` → yt_path map from the manifest."""
+        cached = getattr(self, "_yt_path_map_cache", None)
+        if cached is not None:
+            return cached
+        try:
+            manifest = (
+                json.loads(self.manifest_str)
+                if self.manifest_str.lstrip().startswith("{")
+                else json.loads(base64.b64decode(self.manifest_str))
+            )
+        except Exception:
+            self._yt_path_map_cache = {}
+            return self._yt_path_map_cache
+        out: dict[str, str] = {}
+        for m in manifest.get("models", []):
+            props = m.get("properties", {}) or {}
+            yt_path = props.get("ytPath") or props.get("yt_path")
+            if not yt_path:
+                continue
+            tr = m.get("tableReference") or m.get("table_reference") or {}
+            schema = (tr.get("schema") or "").strip()
+            table = (tr.get("table") or m.get("name") or "").strip()
+            if schema and table:
+                out[f"{schema}.{table}"] = yt_path
+            if table:
+                out.setdefault(table, yt_path)
+        self._yt_path_map_cache = out
+        return out
 
     # ------------------------------------------------------------------
     # Lifecycle
