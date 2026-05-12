@@ -56,6 +56,8 @@ _YTSAURUS_PATCH_LOCK = threading.Lock()
 
 
 class DataSource(StrEnum):
+    """Enumeration of supported data-source backends."""
+
     athena = auto()
     bigquery = auto()
     canner = auto()
@@ -79,6 +81,7 @@ class DataSource(StrEnum):
     ytsaurus = auto()
 
     def get_connection(self, info: ConnectionInfo) -> BaseBackend:
+        """Dispatch to the corresponding :class:`DataSourceExtension` connection factory."""
         try:
             return DataSourceExtension[self].get_connection(info)
         except KeyError:
@@ -89,6 +92,7 @@ class DataSource(StrEnum):
         data: dict[str, Any] | ConnectionInfo,
         headers: dict[str, str] | None = None,
     ) -> ConnectionInfo:
+        """Validate raw payload into a typed ``ConnectionInfo`` and apply header overrides."""
         headers = headers or {}
         if isinstance(data, BaseConnectionInfo):
             info = data
@@ -129,6 +133,7 @@ class DataSource(StrEnum):
         return info
 
     def _build_connection_info(self, data: dict) -> ConnectionInfo:
+        """Build a ``ConnectionInfo`` instance for this data source from a raw dict."""
         if "connectionUrl" in data or "connection_url" in data:
             if self == DataSource.ytsaurus:
                 raise WrenError(
@@ -228,6 +233,8 @@ class DataSource(StrEnum):
 
 
 class DataSourceExtension(Enum):
+    """Mirror of :class:`DataSource` that owns the per-source connection factories."""
+
     athena = "athena"
     bigquery = "bigquery"
     canner = "canner"
@@ -251,6 +258,7 @@ class DataSourceExtension(Enum):
     ytsaurus = "ytsaurus"
 
     def get_connection(self, info: ConnectionInfo) -> BaseBackend:
+        """Dispatch to the connection factory matching this data source."""
         try:
             if hasattr(info, "connection_url"):
                 kwargs = info.kwargs if info.kwargs else {}
