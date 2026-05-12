@@ -170,6 +170,7 @@ class WrenEngine:
             return sql
 
         def _rewrite(node):
+            """Replace a sqlglot ``Table`` node with the model's YT path when one is mapped."""
             if not isinstance(node, exp.Table):
                 return node
             db = node.args.get("db")

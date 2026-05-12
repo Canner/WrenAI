@@ -37,11 +37,14 @@ try:
 except ImportError:
 
     class _ClickHouseDbError(Exception):
-        pass
+        """Fallback stand-in when ``clickhouse_connect`` is not installed."""
 
 
 class YTsaurusConnector(IbisConnector):
+    """Connector for YTsaurus clusters via their CHYT (ClickHouse-over-YT) clique."""
+
     def __init__(self, connection_info):
+        """Build the connector with a :class:`YTsaurusConnectionInfo`-shaped payload."""
         super().__init__(DataSource.ytsaurus, connection_info)
 
     @property
@@ -50,6 +53,11 @@ class YTsaurusConnector(IbisConnector):
         return self.connection.con
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
+        """Execute ``sql`` against CHYT and return the result as a ``pyarrow.Table``.
+
+        ``limit``, if given, is appended as a ``LIMIT`` on a wrapping ``SELECT``.
+        Non-timeout backend errors are remapped to ``WrenError(INVALID_SQL)``.
+        """
         wrapped = sql
         if limit is not None:
             # ``limit`` is interpolated into the SQL string, so refuse anything
@@ -89,6 +97,7 @@ class YTsaurusConnector(IbisConnector):
             raise
 
     def dry_run(self, sql: str) -> None:
+        """Validate ``sql`` against CHYT via ``EXPLAIN AST`` without materializing rows."""
         # CHYT supports `EXPLAIN AST` for syntax/planning validation without
         # materializing rows. Wrap the user SQL and let CHYT parse it.
         try:
@@ -107,4 +116,5 @@ class YTsaurusConnector(IbisConnector):
 
 
 def create_connector(connection_info) -> YTsaurusConnector:
+    """Factory hook used by :mod:`wren.connector.factory`."""
     return YTsaurusConnector(connection_info)

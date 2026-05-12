@@ -336,6 +336,7 @@ class DataSourceExtension(Enum):
 
     @staticmethod
     def get_clickhouse_connection(info: ClickHouseConnectionInfo) -> BaseBackend:
+        """Build a plain ClickHouse ibis backend from a connection-info payload."""
         # Serialize with get_ytsaurus_connection(): that path temporarily mutates
         # clickhouse_connect's module-level HttpClient class and its `params`
         # dict to inject CHYT auth. Without this lock, a concurrent plain
@@ -354,6 +355,16 @@ class DataSourceExtension(Enum):
 
     @staticmethod
     def get_ytsaurus_connection(info: YTsaurusConnectionInfo) -> BaseBackend:
+        """Build an ibis ClickHouse backend wired to a YT CHYT clique.
+
+        Resolves the YT OAuth token from ``info.token`` or ``YT_TOKEN``, then
+        temporarily monkey-patches ``clickhouse_connect``'s ``HttpClient`` so
+        every request carries the ``Authorization: OAuth <token>`` header and
+        the ``chyt.clique_alias`` URL parameter. The patch window is guarded
+        by :data:`_YTSAURUS_PATCH_LOCK` so concurrent callers can't observe
+        each other's token or clique. Returns a live ibis backend; the
+        original ``HttpClient`` class is restored before returning.
+        """
         token = (info.token and info.token.get_secret_value()) or os.environ.get(
             "YT_TOKEN"
         )
@@ -407,6 +418,7 @@ class DataSourceExtension(Enum):
             _wren_yt_token: str | None = None
 
             def _init_common_settings(self, tz_source):
+                """Inject the YT OAuth header before clickhouse_connect's startup queries run."""
                 token_val = type(self)._wren_yt_token
                 if token_val:
                     self.headers["Authorization"] = f"OAuth {token_val}"
