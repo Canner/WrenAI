@@ -100,8 +100,12 @@ class WrenEngine:
               → per-model: sqlglot parse (Wren dialect) → inject as CTE
               → sqlglot generate (target dialect)
               → output SQL with model CTEs in target dialect
+
+        Data-source-specific physical rewrites (e.g. YTsaurus path
+        substitution) are applied to the result so callers see the same SQL
+        that ``query()`` and ``dry_run()`` send to the backend.
         """
-        return self._plan(sql, properties)
+        return self._apply_physical_overrides(self._plan(sql, properties))
 
     # ------------------------------------------------------------------
     # SQL execution
@@ -115,7 +119,6 @@ class WrenEngine:
     ) -> pa.Table:
         """Transpile and execute SQL, return results as an Arrow table."""
         dialect_sql = self.dry_plan(sql, properties)
-        dialect_sql = self._apply_physical_overrides(dialect_sql)
         connector = self._get_connector()
         try:
             return connector.query(dialect_sql, limit)
@@ -132,7 +135,6 @@ class WrenEngine:
     def dry_run(self, sql: str, properties: dict | None = None) -> None:
         """Transpile and dry-run SQL without returning results."""
         dialect_sql = self.dry_plan(sql, properties)
-        dialect_sql = self._apply_physical_overrides(dialect_sql)
         connector = self._get_connector()
         try:
             connector.dry_run(dialect_sql)
