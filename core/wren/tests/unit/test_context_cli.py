@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import yaml
 from typer.testing import CliRunner
 
 from wren.cli import app
@@ -41,6 +42,158 @@ def _make_valid_project(tmp_path: Path) -> Path:
     )
     (tmp_path / "relationships.yml").write_text("relationships: []\n")
     return tmp_path
+
+
+def _make_dbt_project(tmp_path: Path) -> tuple[Path, Path]:
+    dbt_project = tmp_path / "jaffle_shop"
+    target_dir = dbt_project / "target"
+    target_dir.mkdir(parents=True)
+
+    (dbt_project / "dbt_project.yml").write_text(
+        "name: jaffle_shop\nprofile: jaffle_shop\n"
+    )
+    (target_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "metadata": {"project_name": "jaffle_shop"},
+                "nodes": {
+                    "model.jaffle_shop.stg_orders": {
+                        "resource_type": "model",
+                        "name": "stg_orders",
+                        "alias": "stg_orders",
+                        "database": "jaffle",
+                        "schema": "main",
+                        "description": "Cleaned orders",
+                        "fqn": ["jaffle_shop", "staging", "stg_orders"],
+                        "columns": {
+                            "order_id": {
+                                "name": "order_id",
+                                "description": "Order identifier",
+                            },
+                            "amount": {"name": "amount"},
+                        },
+                        "config": {"materialized": "view"},
+                    },
+                    "model.jaffle_shop.fct_orders": {
+                        "resource_type": "model",
+                        "name": "fct_orders",
+                        "alias": "fct_orders",
+                        "database": "jaffle",
+                        "schema": "main",
+                        "description": "Orders fact table",
+                        "fqn": ["jaffle_shop", "marts", "fct_orders"],
+                        "columns": {
+                            "order_id": {"name": "order_id"},
+                            "customer_id": {"name": "customer_id"},
+                            "status": {"name": "status"},
+                            "net_amount": {"name": "net_amount"},
+                        },
+                        "config": {"materialized": "table"},
+                    },
+                    "model.jaffle_shop.ephemeral": {
+                        "resource_type": "model",
+                        "name": "ephemeral",
+                        "alias": "ephemeral",
+                        "database": "jaffle",
+                        "schema": "main",
+                        "columns": {"id": {"name": "id"}},
+                        "config": {"materialized": "ephemeral"},
+                    },
+                    "test.jaffle_shop.not_null_fct_orders_order_id": {
+                        "resource_type": "test",
+                        "attached_node": "model.jaffle_shop.fct_orders",
+                        "column_name": "order_id",
+                        "test_metadata": {
+                            "name": "not_null",
+                            "kwargs": {"column_name": "order_id"},
+                        },
+                    },
+                    "test.jaffle_shop.unique_fct_orders_order_id": {
+                        "resource_type": "test",
+                        "attached_node": "model.jaffle_shop.fct_orders",
+                        "column_name": "order_id",
+                        "test_metadata": {
+                            "name": "unique",
+                            "kwargs": {"column_name": "order_id"},
+                        },
+                    },
+                    "test.jaffle_shop.relationships_fct_orders_order_id": {
+                        "resource_type": "test",
+                        "attached_node": "model.jaffle_shop.fct_orders",
+                        "column_name": "order_id",
+                        "depends_on": {
+                            "nodes": [
+                                "model.jaffle_shop.fct_orders",
+                                "model.jaffle_shop.stg_orders",
+                            ]
+                        },
+                        "test_metadata": {
+                            "name": "relationships",
+                            "kwargs": {
+                                "column_name": "order_id",
+                                "field": "order_id",
+                            },
+                        },
+                    },
+                },
+                "sources": {},
+            }
+        )
+    )
+    (target_dir / "catalog.json").write_text(
+        json.dumps(
+            {
+                "nodes": {
+                    "model.jaffle_shop.stg_orders": {
+                        "columns": {
+                            "order_id": {"type": "integer", "index": 1},
+                            "amount": {"type": "decimal", "index": 2},
+                        }
+                    },
+                    "model.jaffle_shop.fct_orders": {
+                        "columns": {
+                            "order_id": {"type": "integer", "index": 1},
+                            "customer_id": {"type": "integer", "index": 2},
+                            "status": {"type": "varchar", "index": 3},
+                            "net_amount": {"type": "decimal", "index": 4},
+                        }
+                    },
+                },
+                "sources": {},
+            }
+        )
+    )
+    (target_dir / "run_results.json").write_text(
+        json.dumps(
+            {
+                "results": [
+                    {
+                        "unique_id": "test.jaffle_shop.not_null_fct_orders_order_id",
+                        "status": "pass",
+                    },
+                    {
+                        "unique_id": "test.jaffle_shop.unique_fct_orders_order_id",
+                        "status": "pass",
+                    },
+                    {
+                        "unique_id": "test.jaffle_shop.relationships_fct_orders_order_id",
+                        "status": "pass",
+                    },
+                ]
+            }
+        )
+    )
+
+    profiles_path = tmp_path / "profiles.yml"
+    profiles_path.write_text(
+        "jaffle_shop:\n"
+        "  target: dev\n"
+        "  outputs:\n"
+        "    dev:\n"
+        "      type: duckdb\n"
+        "      path: warehouse/jaffle.duckdb\n"
+    )
+    return dbt_project, profiles_path
 
 
 # ── wren context init ─────────────────────────────────────────────────────
@@ -82,9 +235,9 @@ def test_print_warnings_collapses_beyond_threshold(capsys):
 
     # 15 "missing description" + 3 "missing primary_key" — total 18,
     # comfortably above the summary threshold of 10.
-    warnings = [
-        f"model 'orders_{i}': missing description" for i in range(15)
-    ] + [f"model 'log_{i}': missing primary_key" for i in range(3)]
+    warnings = [f"model 'orders_{i}': missing description" for i in range(15)] + [
+        f"model 'log_{i}': missing primary_key" for i in range(3)
+    ]
 
     context_cli._print_warnings(warnings, verbose=False)
     out = capsys.readouterr().out
@@ -124,9 +277,7 @@ def test_print_warnings_below_threshold_prints_each(capsys):
 
 
 def test_init_empty_skips_example_model_and_view(tmp_path):
-    result = runner.invoke(
-        app, ["context", "init", "--path", str(tmp_path), "--empty"]
-    )
+    result = runner.invoke(app, ["context", "init", "--path", str(tmp_path), "--empty"])
     assert result.exit_code == 0, result.output
     # Directories exist but are empty
     assert (tmp_path / "models").is_dir()
@@ -162,10 +313,9 @@ def test_validate_fail(tmp_path):
 
 def test_validate_strict_warns(tmp_path):
     _make_valid_project(tmp_path)
-    # Add a relationship with missing join_type (warning)
-    (tmp_path / "relationships.yml").write_text(
-        "relationships:\n  - name: r\n    models: [orders]\n    condition: a = b\n"
-    )
+    # Add a schema-version warning that still produces a valid manifest.
+    model_meta = tmp_path / "models" / "orders" / "metadata.yml"
+    model_meta.write_text(model_meta.read_text() + "dialect: postgres\n")
     # Without --strict: exit 0
     result = runner.invoke(app, ["context", "validate", "--path", str(tmp_path)])
     assert result.exit_code == 0
@@ -305,8 +455,6 @@ def test_upgrade_cli_v2_to_v3(tmp_path):
     result = runner.invoke(app, ["context", "upgrade", "--path", str(tmp_path)])
     assert result.exit_code == 0, result.output
     assert "Upgrade complete" in result.output
-    import yaml
-
     config = yaml.safe_load((tmp_path / "wren_project.yml").read_text())
     assert config["schema_version"] == 3
 
@@ -321,8 +469,6 @@ def test_upgrade_cli_dry_run(tmp_path):
     assert "Would create" in result.output
     # Verify no files were actually changed
     assert not (tmp_path / "models" / "orders" / "metadata.yml").exists()
-    import yaml
-
     config = yaml.safe_load((tmp_path / "wren_project.yml").read_text())
     assert config["schema_version"] == 1
 
@@ -343,10 +489,125 @@ def test_upgrade_cli_explicit_to_version(tmp_path):
     )
     assert result.exit_code == 0, result.output
     assert "Upgrade complete" in result.output
-    import yaml
-
     config = yaml.safe_load((tmp_path / "wren_project.yml").read_text())
     assert config["schema_version"] == 2
+
+
+# ── wren context import dbt ───────────────────────────────────────────────
+
+
+def test_import_dbt_dry_run(tmp_path):
+    dbt_project, profiles_path = _make_dbt_project(tmp_path)
+    output_dir = tmp_path / "wren_project"
+
+    result = runner.invoke(
+        app,
+        [
+            "context",
+            "import",
+            "dbt",
+            "--project-dir",
+            str(dbt_project),
+            "--profiles-path",
+            str(profiles_path),
+            "--path",
+            str(output_dir),
+            "--dry-run",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Dry run" in result.output
+    assert "wren_project.yml" in result.output
+    assert "models/fct_orders/metadata.yml" in result.output
+    assert not output_dir.exists()
+
+
+def test_import_dbt_writes_project_and_builds(tmp_path):
+    dbt_project, profiles_path = _make_dbt_project(tmp_path)
+    output_dir = tmp_path / "wren_project"
+
+    result = runner.invoke(
+        app,
+        [
+            "context",
+            "import",
+            "dbt",
+            "--project-dir",
+            str(dbt_project),
+            "--profiles-path",
+            str(profiles_path),
+            "--path",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert (output_dir / "wren_project.yml").exists()
+    assert (output_dir / "models" / "fct_orders" / "metadata.yml").exists()
+    assert (output_dir / "relationships.yml").exists()
+    assert (output_dir / "queries.yml").exists()
+    assert "skipped 1 ephemeral" in result.output
+
+    config = yaml.safe_load((output_dir / "wren_project.yml").read_text())
+    assert config["data_source"] == "duckdb"
+    assert config["dbt"]["profile"] == "jaffle_shop"
+    relationships = yaml.safe_load((output_dir / "relationships.yml").read_text())
+    assert relationships["relationships"][0]["models"] == [
+        "fct_orders",
+        "stg_orders",
+    ]
+
+    build = runner.invoke(
+        app, ["context", "build", "--path", str(output_dir), "--no-validate"]
+    )
+    assert build.exit_code == 0, build.output
+    mdl = json.loads((output_dir / "target" / "mdl.json").read_text())
+    assert {model["name"] for model in mdl["models"]} == {"fct_orders", "stg_orders"}
+
+
+def test_import_dbt_force_overwrites_managed_files(tmp_path):
+    dbt_project, profiles_path = _make_dbt_project(tmp_path)
+    output_dir = tmp_path / "wren_project"
+    output_dir.mkdir()
+    (output_dir / "wren_project.yml").write_text("name: old\n")
+    (output_dir / "queries.yml").write_text("version: 1\npairs: []\n")
+
+    result = runner.invoke(
+        app,
+        [
+            "context",
+            "import",
+            "dbt",
+            "--project-dir",
+            str(dbt_project),
+            "--profiles-path",
+            str(profiles_path),
+            "--path",
+            str(output_dir),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "already exists" in result.output
+
+    forced = runner.invoke(
+        app,
+        [
+            "context",
+            "import",
+            "dbt",
+            "--project-dir",
+            str(dbt_project),
+            "--profiles-path",
+            str(profiles_path),
+            "--path",
+            str(output_dir),
+            "--force",
+        ],
+    )
+    assert forced.exit_code == 0, forced.output
+    assert "jaffle_shop" in (output_dir / "wren_project.yml").read_text()
+    assert "source: dbt" in (output_dir / "queries.yml").read_text()
 
 
 # ── wren context set-profile ──────────────────────────────────────────────
@@ -425,9 +686,7 @@ def test_set_profile_rebind_overwrites(tmp_path, monkeypatch):
     _invoke_ok(["context", "init", "--empty", "--path", str(proj)])
     _invoke_ok(["context", "set-profile", "X", "--path", str(proj)])
 
-    result = runner.invoke(
-        app, ["context", "set-profile", "Y", "--path", str(proj)]
-    )
+    result = runner.invoke(app, ["context", "set-profile", "Y", "--path", str(proj)])
     assert result.exit_code == 0, result.output
 
     import yaml  # noqa: PLC0415
@@ -454,9 +713,7 @@ def test_set_profile_errors_when_profile_not_found(tmp_path, monkeypatch):
     assert "real" in result.output  # available profiles listed in error
 
 
-def test_set_profile_errors_cleanly_when_list_profiles_fails(
-    tmp_path, monkeypatch
-):
+def test_set_profile_errors_cleanly_when_list_profiles_fails(tmp_path, monkeypatch):
     """If list_profiles() raises (e.g. malformed profiles.yml), set-profile
     should exit cleanly with an error message — not crash with a traceback."""
     proj = tmp_path / "myproj"
@@ -496,9 +753,7 @@ def test_set_profile_errors_cleanly_when_save_fails(tmp_path, monkeypatch):
 
     monkeypatch.setattr(context_mod, "save_project_config", _broken_save)
 
-    result = runner.invoke(
-        app, ["context", "set-profile", "real", "--path", str(proj)]
-    )
+    result = runner.invoke(app, ["context", "set-profile", "real", "--path", str(proj)])
     assert result.exit_code != 0
     assert not isinstance(result.exception, OSError), (
         f"OSError leaked from save_project_config(): {result.exception!r}"
@@ -549,9 +804,7 @@ def test_set_profile_preserves_other_fields(tmp_path, monkeypatch):
     proj = tmp_path / "myproj"
     _invoke_ok(["context", "init", "--empty", "--path", str(proj)])
 
-    result = runner.invoke(
-        app, ["context", "set-profile", "duck", "--path", str(proj)]
-    )
+    result = runner.invoke(app, ["context", "set-profile", "duck", "--path", str(proj)])
     assert result.exit_code == 0, result.output
 
     import yaml  # noqa: PLC0415
@@ -584,9 +837,7 @@ def test_set_profile_preserves_custom_fields(tmp_path, monkeypatch):
     config["owner"] = "data-platform"
     (proj / "wren_project.yml").write_text(yaml.safe_dump(config))
 
-    result = runner.invoke(
-        app, ["context", "set-profile", "duck", "--path", str(proj)]
-    )
+    result = runner.invoke(app, ["context", "set-profile", "duck", "--path", str(proj)])
     assert result.exit_code == 0, result.output
 
     # Round-trip: custom keys survive the rewrite
@@ -649,9 +900,7 @@ def test_set_profile_no_stale_mdl_warning_when_datasource_unchanged(
     target.mkdir(exist_ok=True)
     (target / "mdl.json").write_text("{}")
 
-    result = runner.invoke(
-        app, ["context", "set-profile", "b", "--path", str(proj)]
-    )
+    result = runner.invoke(app, ["context", "set-profile", "b", "--path", str(proj)])
     assert result.exit_code == 0, result.output
     assert "wren context build" not in result.output
 
@@ -668,9 +917,7 @@ def test_set_profile_prints_summary_with_arrow_when_data_source_changes(
     proj = tmp_path / "myproj"
     _invoke_ok(["context", "init", "--empty", "--path", str(proj)])
 
-    result = runner.invoke(
-        app, ["context", "set-profile", "duck", "--path", str(proj)]
-    )
+    result = runner.invoke(app, ["context", "set-profile", "duck", "--path", str(proj)])
     assert result.exit_code == 0, result.output
     # init wrote postgres placeholder; we're binding duck (duckdb)
     assert "postgres" in result.output
@@ -807,9 +1054,7 @@ def test_validate_hint_suppressed_when_hard_errors(tmp_path, monkeypatch):
     extra noise — the user should fix the real problem first."""
     _isolate_profiles(tmp_path / "wren-home", monkeypatch)
     # Project missing data_source → hard error
-    (tmp_path / "wren_project.yml").write_text(
-        "schema_version: 2\nname: broken\n"
-    )
+    (tmp_path / "wren_project.yml").write_text("schema_version: 2\nname: broken\n")
 
     result = runner.invoke(app, ["context", "validate", "--path", str(tmp_path)])
     assert result.exit_code == 1

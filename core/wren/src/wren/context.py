@@ -295,6 +295,7 @@ def write_project_files(
             "instructions.md",
             "wren_project.yml",
             "AGENTS.md",
+            "queries.yml",
         ):
             target = output_dir / managed
             if target.is_dir():
