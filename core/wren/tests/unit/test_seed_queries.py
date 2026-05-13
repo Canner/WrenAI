@@ -6,7 +6,6 @@ import pytest
 
 from wren.memory.seed_queries import SEED_TAG, generate_seed_queries
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────
 
 
@@ -14,8 +13,17 @@ def _model(name: str, pk: str, columns: list[dict]) -> dict:
     return {"name": name, "primaryKey": pk, "columns": columns}
 
 
-def _col(name: str, col_type: str, *, is_calc: bool = False) -> dict:
-    return {"name": name, "type": col_type, "isCalculated": is_calc}
+def _col(
+    name: str,
+    col_type: str,
+    *,
+    is_calc: bool = False,
+    properties: dict | None = None,
+) -> dict:
+    payload = {"name": name, "type": col_type, "isCalculated": is_calc}
+    if properties is not None:
+        payload["properties"] = properties
+    return payload
 
 
 # ── generate_seed_queries tests ───────────────────────────────────────────
@@ -51,7 +59,9 @@ class TestGenerateSeedQueries:
     def test_single_model_only_pk_column(self):
         # PK is varchar — no numeric col, no group col → listing only
         manifest = {
-            "models": [_model("products", "product_id", [_col("product_id", "varchar")])]
+            "models": [
+                _model("products", "product_id", [_col("product_id", "varchar")])
+            ]
         }
         pairs = generate_seed_queries(manifest)
         assert len(pairs) == 1
@@ -253,9 +263,7 @@ class TestGenerateSeedQueries:
                 _model("a", "aid", [_col("aid", "varchar")]),
                 _model("b", "bid", [_col("bid", "varchar")]),
             ],
-            "relationships": [
-                {"name": "a_b", "models": ["a", "b"], "condition": ""}
-            ],
+            "relationships": [{"name": "a_b", "models": ["a", "b"], "condition": ""}],
         }
         pairs = generate_seed_queries(manifest)
         assert not any("with" in p["nl"] for p in pairs)
@@ -282,6 +290,65 @@ class TestGenerateSeedQueries:
         }
         pairs = generate_seed_queries(manifest)
         assert not any("with" in p["nl"] for p in pairs)
+
+    def test_accepted_values_seed(self):
+        manifest = {
+            "models": [
+                _model(
+                    "orders",
+                    "order_id",
+                    [
+                        _col("order_id", "varchar"),
+                        _col(
+                            "status",
+                            "varchar",
+                            properties={"acceptedValues": "placed,shipped,completed"},
+                        ),
+                    ],
+                )
+            ]
+        }
+        pairs = generate_seed_queries(manifest)
+        status_pair = next(p for p in pairs if "where status is placed" in p["nl"])
+        assert (
+            status_pair["sql"]
+            == "SELECT * FROM orders WHERE status = 'placed' LIMIT 100"
+        )
+
+    def test_raw_models_are_not_seeded(self):
+        manifest = {
+            "models": [
+                {
+                    **_model(
+                        "raw_orders",
+                        "id",
+                        [_col("id", "varchar"), _col("status", "varchar")],
+                    ),
+                    "properties": {"dbtLayer": "raw"},
+                }
+            ]
+        }
+        assert generate_seed_queries(manifest) == []
+
+    def test_relationship_seed_skips_raw_models(self):
+        manifest = {
+            "models": [
+                {
+                    **_model("raw_orders", "id", [_col("id", "varchar")]),
+                    "properties": {"dbtLayer": "raw"},
+                },
+                _model("customers", "customer_id", [_col("customer_id", "varchar")]),
+            ],
+            "relationships": [
+                {
+                    "name": "raw_orders_customers",
+                    "models": ["raw_orders", "customers"],
+                    "condition": "raw_orders.customer_id = customers.customer_id",
+                }
+            ],
+        }
+        pairs = generate_seed_queries(manifest)
+        assert not any("with customers details" in p["nl"] for p in pairs)
 
     def test_seed_tag_constant(self):
         assert SEED_TAG == "source:seed"

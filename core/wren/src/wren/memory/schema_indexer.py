@@ -65,6 +65,9 @@ def _describe_model(model: dict, lines: list[str]) -> None:
     name = model["name"]
     desc = _prop_description(model)
     header = f"### Model: {name}"
+    layer = _prop_value(model, "dbtLayer", "dbt_layer")
+    if layer:
+        header += f" [{layer} layer]"
     if desc:
         header += f" — {desc}"
     lines.append(header)
@@ -72,6 +75,10 @@ def _describe_model(model: dict, lines: list[str]) -> None:
     pk = model.get("primaryKey")
     if pk:
         lines.append(f"  Primary key: {pk}")
+
+    data_scope = _prop_value(model, "dataScope", "data_scope")
+    if data_scope:
+        lines.append(f"  Data scope: {data_scope}")
 
     cols = model.get("columns", [])
     if cols:
@@ -99,8 +106,28 @@ def _describe_column(col: dict, lines: list[str]) -> None:
     if rel:
         parts.append(f" [relationship: {rel}]")
 
+    derived_from = _prop_value(col, "derivedFrom", "derived_from")
+    if derived_from:
+        parts.append(f" [derived from: {derived_from}]")
+
+    accepted_values = _format_csv_values(
+        _prop_value(col, "acceptedValues", "accepted_values")
+    )
+    if accepted_values:
+        parts.append(f" [accepted values: {accepted_values}]")
+
     if col.get("notNull"):
         parts.append(" NOT NULL")
+    if col.get("isPrimaryKey"):
+        parts.append(" PRIMARY KEY")
+
+    dbt_tests = _prop_value(col, "dbtTests", "dbt_tests")
+    if dbt_tests:
+        parts.append(f" [dbt tests: {dbt_tests}]")
+
+    dbt_test_status = _prop_value(col, "dbtTestStatus", "dbt_test_status")
+    if dbt_test_status:
+        parts.append(f" [test status: {dbt_test_status}]")
 
     lines.append("".join(parts))
 
@@ -164,11 +191,17 @@ def _model_record(model: dict, mdl_h: str, now: datetime) -> dict:
 
     description = _prop_description(model)
     parts = [f"Model '{name}'"]
+    layer = _prop_value(model, "dbtLayer", "dbt_layer")
+    if layer:
+        parts.append(f" [{layer} layer]")
     if description:
         parts.append(f": {description}")
     parts.append(f". Columns: {col_summaries}")
     if pk:
         parts.append(f". Primary key: {pk}")
+    data_scope = _prop_value(model, "dataScope", "data_scope")
+    if data_scope:
+        parts.append(f". Data scope: {data_scope}")
     text = "".join(parts) + "."
 
     return {
@@ -197,8 +230,25 @@ def _column_record(col: dict, model_name: str, mdl_h: str, now: datetime) -> dic
         parts.append(f": {description}")
     if is_calc and expr:
         parts.append(f". Calculated: {expr}")
+    derived_from = _prop_value(col, "derivedFrom", "derived_from")
+    if derived_from:
+        parts.append(f". Derived from: {derived_from}")
     if rel:
         parts.append(f". Relationship: {rel}")
+    accepted_values = _format_csv_values(
+        _prop_value(col, "acceptedValues", "accepted_values")
+    )
+    if accepted_values:
+        parts.append(f". Accepted values: {accepted_values}")
+    constraints = _column_constraints(col)
+    if constraints:
+        parts.append(f". Constraints: {', '.join(constraints)}")
+    dbt_tests = _prop_value(col, "dbtTests", "dbt_tests")
+    if dbt_tests:
+        parts.append(f". dbt tests: {dbt_tests}")
+    dbt_test_status = _prop_value(col, "dbtTestStatus", "dbt_test_status")
+    if dbt_test_status:
+        parts.append(f". Test status: {dbt_test_status}")
     text = "".join(parts) + "."
 
     return {
@@ -262,7 +312,30 @@ def _view_record(view: dict, mdl_h: str, now: datetime) -> dict:
 
 def _prop_description(obj: dict) -> str:
     """Extract description from the ``properties`` dict, if present."""
+    return _prop_value(obj, "description")
+
+
+def _prop_value(obj: dict, *keys: str) -> str:
     props = obj.get("properties") or {}
-    if isinstance(props, dict):
-        return props.get("description", "")
+    if not isinstance(props, dict):
+        return ""
+    for key in keys:
+        value = props.get(key)
+        if value not in (None, ""):
+            return str(value)
     return ""
+
+
+def _format_csv_values(value: str) -> str:
+    if not value:
+        return ""
+    return ", ".join(part.strip() for part in value.split(",") if part.strip())
+
+
+def _column_constraints(col: dict) -> list[str]:
+    constraints: list[str] = []
+    if col.get("notNull"):
+        constraints.append("NOT NULL")
+    if col.get("isPrimaryKey"):
+        constraints.append("PRIMARY KEY")
+    return constraints

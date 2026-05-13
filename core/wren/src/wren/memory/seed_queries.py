@@ -25,12 +25,18 @@ SEED_TAG = "source:seed"
 def generate_seed_queries(manifest: dict) -> list[dict]:
     """Return a list of {"nl": ..., "sql": ...} seed pairs."""
     pairs: list[dict] = []
+    model_layers = {
+        model["name"]: _prop_value(model, "dbtLayer", "dbt_layer")
+        for model in manifest.get("models", [])
+    }
 
     for model in manifest.get("models", []):
+        if model_layers.get(model["name"]) == "raw":
+            continue
         pairs.extend(_model_seeds(model))
 
     for rel in manifest.get("relationships", []):
-        pair = _relationship_seed(rel)
+        pair = _relationship_seed(rel, model_layers)
         if pair:
             pairs.append(pair)
 
@@ -91,10 +97,28 @@ def _model_seeds(model: dict) -> list[dict]:
             }
         )
 
+    for col in columns:
+        accepted_values = _prop_value(col, "acceptedValues", "accepted_values")
+        if not accepted_values:
+            continue
+        first_value = next(
+            (value.strip() for value in accepted_values.split(",") if value.strip()),
+            None,
+        )
+        if not first_value:
+            continue
+        quoted = first_value.replace("'", "''")
+        pairs.append(
+            {
+                "nl": f"Show {name} where {col['name']} is {first_value}",
+                "sql": f"SELECT * FROM {name} WHERE {col['name']} = '{quoted}' LIMIT 100",
+            }
+        )
+
     return pairs
 
 
-def _relationship_seed(rel: dict) -> dict | None:
+def _relationship_seed(rel: dict, model_layers: dict[str, str]) -> dict | None:
     models = rel.get("models", [])
     condition = rel.get("condition", "").strip()
 
@@ -102,8 +126,21 @@ def _relationship_seed(rel: dict) -> dict | None:
         return None
 
     left, right = models[0], models[1]
+    if model_layers.get(left) == "raw" or model_layers.get(right) == "raw":
+        return None
 
     return {
         "nl": f"{left} with {right} details",
         "sql": f"SELECT * FROM {left} JOIN {right} ON {condition} LIMIT 100",
     }
+
+
+def _prop_value(obj: dict, *keys: str) -> str:
+    props = obj.get("properties") or {}
+    if not isinstance(props, dict):
+        return ""
+    for key in keys:
+        value = props.get(key)
+        if value not in (None, ""):
+            return str(value)
+    return ""

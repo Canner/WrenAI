@@ -20,9 +20,34 @@ _MANIFEST = {
             "name": "orders",
             "tableReference": "test.public.orders",
             "primaryKey": "o_orderkey",
+            "properties": {
+                "description": "Order facts ready for analysis",
+                "dbtLayer": "mart",
+                "dataScope": "status != 'cancelled'",
+            },
             "columns": [
-                {"name": "o_orderkey", "type": "varchar", "isCalculated": False},
+                {
+                    "name": "o_orderkey",
+                    "type": "varchar",
+                    "isCalculated": False,
+                    "isPrimaryKey": True,
+                    "notNull": True,
+                    "properties": {
+                        "dbtTests": "not_null,unique",
+                        "dbtTestStatus": "verified",
+                    },
+                },
                 {"name": "o_custkey", "type": "varchar", "isCalculated": False},
+                {
+                    "name": "o_status",
+                    "type": "varchar",
+                    "isCalculated": False,
+                    "properties": {
+                        "acceptedValues": "placed,shipped,completed",
+                        "dbtTests": "accepted_values",
+                        "dbtTestStatus": "verified",
+                    },
+                },
                 {
                     "name": "o_totalprice",
                     "type": "double",
@@ -45,7 +70,10 @@ _MANIFEST = {
                 {"name": "c_custkey", "type": "varchar", "isCalculated": False},
                 {"name": "c_name", "type": "varchar", "isCalculated": False},
             ],
-            "properties": {"description": "Customer master data"},
+            "properties": {
+                "description": "Customer master data",
+                "dbtLayer": "mart",
+            },
         },
     ],
     "relationships": [
@@ -88,8 +116,8 @@ class TestManifestHash:
 class TestExtractSchemaItems:
     def test_total_count(self):
         items = extract_schema_items(_MANIFEST)
-        # 2 models + 6 columns + 1 relationship + 1 view = 10
-        assert len(items) == 10
+        # 2 models + 7 columns + 1 relationship + 1 view = 11
+        assert len(items) == 11
 
     def test_item_types(self):
         items = extract_schema_items(_MANIFEST)
@@ -103,6 +131,8 @@ class TestExtractSchemaItems:
         orders = next(m for m in models if m["item_name"] == "orders")
         assert "o_orderkey" in orders["text"]
         assert orders["model_name"] == "orders"
+        assert "mart layer" in orders["text"]
+        assert "status != 'cancelled'" in orders["text"]
 
     def test_model_with_description(self):
         items = extract_schema_items(_MANIFEST)
@@ -123,6 +153,14 @@ class TestExtractSchemaItems:
         cols = [i for i in items if i["item_type"] == "column"]
         rel_col = next(c for c in cols if c["item_name"] == "customer")
         assert "orders_customer" in rel_col["text"]
+
+    def test_column_includes_dbt_metadata(self):
+        items = extract_schema_items(_MANIFEST)
+        cols = [i for i in items if i["item_type"] == "column"]
+        status_col = next(c for c in cols if c["item_name"] == "o_status")
+        assert "Accepted values: placed, shipped, completed" in status_col["text"]
+        assert "accepted_values" in status_col["text"]
+        assert "Test status: verified" in status_col["text"]
 
     def test_relationship_record(self):
         items = extract_schema_items(_MANIFEST)
@@ -169,13 +207,14 @@ class TestExtractSchemaItems:
 class TestDescribeSchema:
     def test_contains_model_names(self):
         text = describe_schema(_MANIFEST)
-        assert "### Model: orders" in text
-        assert "### Model: customer" in text
+        assert "### Model: orders [mart layer]" in text
+        assert "### Model: customer [mart layer]" in text
 
     def test_contains_columns(self):
         text = describe_schema(_MANIFEST)
         assert "o_orderkey (varchar)" in text
         assert "o_totalprice (double)" in text
+        assert "o_status (varchar)" in text
 
     def test_contains_calculated_expression(self):
         text = describe_schema(_MANIFEST)
@@ -201,6 +240,13 @@ class TestDescribeSchema:
     def test_contains_primary_key(self):
         text = describe_schema(_MANIFEST)
         assert "Primary key: o_orderkey" in text
+        assert "PRIMARY KEY" in text
+
+    def test_contains_data_scope_and_accepted_values(self):
+        text = describe_schema(_MANIFEST)
+        assert "Data scope: status != 'cancelled'" in text
+        assert "[accepted values: placed, shipped, completed]" in text
+        assert "[test status: verified]" in text
 
     def test_excludes_table_reference(self):
         text = describe_schema(_MANIFEST)
@@ -239,7 +285,7 @@ def memory_store(tmp_path):
 class TestMemoryStore:
     def test_index_and_context(self, memory_store):
         result = memory_store.index_schema(_MANIFEST)
-        assert result["schema_items"] == 10
+        assert result["schema_items"] == 11
 
         # Small schema → full strategy
         ctx = memory_store.get_context(_MANIFEST, "customer order price")
@@ -304,7 +350,7 @@ class TestMemoryStore:
 
         memory_store.index_schema(_MANIFEST)
         info = memory_store.status()
-        assert info["tables"]["schema_items"] == 10
+        assert info["tables"]["schema_items"] == 11
 
     def test_reset(self, memory_store):
         memory_store.index_schema(_MANIFEST)
@@ -319,9 +365,9 @@ class TestMemoryStore:
     def test_index_replace(self, memory_store):
         memory_store.index_schema(_MANIFEST)
         result = memory_store.index_schema(_MANIFEST, replace=True)
-        assert result["schema_items"] == 10
+        assert result["schema_items"] == 11
         info = memory_store.status()
-        assert info["tables"]["schema_items"] == 10
+        assert info["tables"]["schema_items"] == 11
 
 
 # ── WrenMemory public API tests ───────────────────────────────────────────
@@ -344,7 +390,7 @@ def wren_memory(tmp_path):
 class TestWrenMemory:
     def test_full_lifecycle(self, wren_memory):
         result = wren_memory.index_manifest(_MANIFEST)
-        assert result["schema_items"] == 10
+        assert result["schema_items"] == 11
 
         ctx = wren_memory.get_context(_MANIFEST, "customer")
         assert ctx["strategy"] == "full"
@@ -361,7 +407,7 @@ class TestWrenMemory:
         assert wren_memory.schema_is_current(_MANIFEST)
 
         status = wren_memory.status()
-        assert status["tables"]["schema_items"] == 10
+        assert status["tables"]["schema_items"] == 11
         # query_history has 1 user query + seed queries
         assert status["tables"]["query_history"] >= 1
 
@@ -379,8 +425,6 @@ class TestMemoryStoreSeedLifecycle:
 
         result = memory_store.index_schema(_MANIFEST, seed_queries=True)
         assert result["seed_queries"] > 0
-
-        import pandas as pd  # noqa: PLC0415
 
         table = memory_store._db.open_table("query_history")
         df = table.to_pandas()
@@ -407,8 +451,6 @@ class TestMemoryStoreSeedLifecycle:
             nl_query="show me the most expensive orders",
             sql_query="SELECT * FROM orders ORDER BY o_totalprice DESC LIMIT 10",
         )
-
-        import pandas as pd  # noqa: PLC0415
 
         table = memory_store._db.open_table("query_history")
         total_before = table.count_rows()
@@ -441,7 +483,7 @@ class TestMemoryStoreSeedLifecycle:
         assert isinstance(result, dict)
         assert "schema_items" in result
         assert "seed_queries" in result
-        assert result["schema_items"] == 10
+        assert result["schema_items"] == 11
 
 
 # ── list_queries / forget / dump / load tests ────────────────────────────
@@ -453,9 +495,7 @@ def _seed_pairs(memory_store, n=3):
     for i in range(n):
         nl = f"query number {i}"
         sql = f"SELECT {i} FROM t"
-        memory_store.store_query(
-            nl_query=nl, sql_query=sql, tags=f"source:user"
-        )
+        memory_store.store_query(nl_query=nl, sql_query=sql, tags="source:user")
         pairs.append({"nl": nl, "sql": sql, "source": "user"})
     return pairs
 
@@ -537,15 +577,9 @@ class TestMemoryStoreForget:
         assert total == 1
 
     def test_count_by_source(self, memory_store):
-        memory_store.store_query(
-            nl_query="a", sql_query="SELECT 1", tags="source:seed"
-        )
-        memory_store.store_query(
-            nl_query="b", sql_query="SELECT 2", tags="source:seed"
-        )
-        memory_store.store_query(
-            nl_query="c", sql_query="SELECT 3", tags="source:user"
-        )
+        memory_store.store_query(nl_query="a", sql_query="SELECT 1", tags="source:seed")
+        memory_store.store_query(nl_query="b", sql_query="SELECT 2", tags="source:seed")
+        memory_store.store_query(nl_query="c", sql_query="SELECT 3", tags="source:user")
         assert memory_store.count_queries_by_source("seed") == 2
         assert memory_store.count_queries_by_source("user") == 1
         assert memory_store.count_queries_by_source("view") == 0
@@ -569,12 +603,8 @@ class TestMemoryStoreDump:
         assert "vector" not in rows[0]
 
     def test_dump_source_filter(self, memory_store):
-        memory_store.store_query(
-            nl_query="a", sql_query="SELECT 1", tags="source:seed"
-        )
-        memory_store.store_query(
-            nl_query="b", sql_query="SELECT 2", tags="source:user"
-        )
+        memory_store.store_query(nl_query="a", sql_query="SELECT 1", tags="source:seed")
+        memory_store.store_query(nl_query="b", sql_query="SELECT 2", tags="source:user")
         rows = memory_store.dump_queries(source="user")
         assert len(rows) == 1
         assert rows[0]["nl_query"] == "b"
@@ -643,7 +673,7 @@ class TestMemoryStoreLoad:
 @pytest.mark.unit
 class TestYamlRoundTrip:
     def test_pairs_to_yaml_and_back(self, memory_store):
-        from wren.memory.cli import _pairs_to_yaml, _parse_source  # noqa: PLC0415
+        from wren.memory.cli import _pairs_to_yaml  # noqa: PLC0415
 
         memory_store.store_query(
             nl_query="revenue by month",
