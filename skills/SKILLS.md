@@ -57,6 +57,41 @@ Generates a Wren MDL project by exploring a live database using whatever tools a
 
 ---
 
+## wren-enrich-context
+
+**File:** [wren-enrich-context/SKILL.md](wren-enrich-context/SKILL.md)
+
+Augments a Wren project with the business context that DB schema cannot carry. The session starts by asking the user to pick one of two modes:
+
+- **Grill mode** — one question at a time, agent proposes a draft, user accepts / edits / skips.
+- **Auto-pilot mode** — agent reads `raw/` + current context, applies best inferences directly, escalates to grill only on raw-vs-MDL conflicts and high-blast-radius additions (new metrics / views / relationships), and hands the user a confidence-tagged audit at the end.
+
+Both modes read everything under `<project>/raw/` (PDFs, glossaries, handbooks, code, data dictionaries), compare against the current MDL / `instructions.md` / `queries.yml` / memory pairs, then fill missing relationships, metrics, views, default filters, business rules, and NL→SQL patterns. Confirmed findings are written back to the right sink — **only adds, never modifies existing fields**.
+
+### When to use
+
+- After scaffolding an MDL when the agent still doesn't grasp business semantics
+- When the user has handbooks / glossaries / financial reports / data dictionaries the agent should know
+- When schema-derived MDL is too thin to drive accurate SQL generation
+- When the user wants to commit project-wide rules (e.g., "user means type=default by default") into a place the agent will see them
+
+### Sinks
+
+| Sink | Type of finding |
+|------|-----------------|
+| MDL YAML | Schema structure, relationships, metrics, views, descriptions |
+| `instructions.md` | Default filters, implicit rules, business conventions |
+| `queries.yml` | Canonical NL→SQL pairs (git-trackable, team-shared) |
+| `wren memory store` (only when memory extra installed) | Ad-hoc user-local NL→SQL pairs |
+
+### Dependent skills
+
+| Skill | Purpose |
+|-------|---------|
+| `wren-generate-mdl` | Generate the initial MDL before context augmentation |
+
+---
+
 ## wren-dlt-connector
 
 **File:** [wren-dlt-connector/SKILL.md](wren-dlt-connector/SKILL.md)
@@ -93,4 +128,5 @@ Then invoke in your AI client:
 ```
 /wren-usage
 /wren-generate-mdl
+/wren-enrich-context
 ```

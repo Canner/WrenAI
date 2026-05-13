@@ -83,6 +83,28 @@
         "wren-generate-mdl"
       ],
       "repository": "https://github.com/Canner/WrenAI/tree/main/skills/wren-usage"
+    },
+    {
+      "name": "wren-enrich-context",
+      "version": "1.0",
+      "description": "Augment a Wren project with business context that DB schema cannot carry. Runs in one of two modes selected at session start: `grill` (one question at a time, user-driven) or `auto-pilot` (agent infers and applies, escalates only on raw-vs-MDL conflicts and high-blast-radius additions like new metrics / views / relationships). Reads raw/ (PDFs, glossaries, handbooks, code, data dictionaries), compares against MDL / instructions.md / queries.yml / memory pairs, then fills missing relationships, metrics, views, default filters, business rules, and NL→SQL patterns. Confirmed findings are written back to the right sink — only adds, never modifies existing fields.",
+      "tags": [
+        "wren",
+        "context",
+        "mdl",
+        "enrich",
+        "grill",
+        "auto-pilot",
+        "business-rules",
+        "instructions",
+        "queries",
+        "memory",
+        "semantic-layer"
+      ],
+      "dependencies": [
+        "wren-generate-mdl"
+      ],
+      "repository": "https://github.com/Canner/WrenAI/tree/main/skills/wren-enrich-context"
     }
   ]
 }
