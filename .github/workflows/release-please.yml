@@ -29,7 +29,7 @@ jobs:
       wren-pydantic--tag_name: ${{ steps.release.outputs['sdk/wren-pydantic--tag_name'] }}
       wren-pydantic--version: ${{ steps.release.outputs['sdk/wren-pydantic--version'] }}
     steps:
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         id: release
         with:
           config-file: release-please-config.json
