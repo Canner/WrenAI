@@ -132,7 +132,7 @@ WrenAI 采用多重许可：
 
 ## 我们的贡献者
 <a href="https://github.com/canner/wrenAI/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=Canner/WrenAI" />
+  <img alt="image" src="https://contrib.rocks/image?repo=Canner/WrenAI" />
 </a>
 
 <p align="right">
