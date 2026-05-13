@@ -4,7 +4,7 @@ description: "Wren Engine CLI workflow guide for AI agents. Answer data question
 license: Apache-2.0
 metadata:
   author: wren-engine
-  version: "2.2"
+  version: "2.3"
 ---
 
 # Wren Engine CLI — Agent Workflow Guide
@@ -67,16 +67,51 @@ Run `wren --version`. If the command is not found or errors:
    # Other datasources
    pip install "wren-engine[<datasource>]"
    ```
-   To also enable semantic memory, interactive prompts, and web UI (recommended):
+   To also enable interactive prompts and the browser-based profile UI:
    ```bash
-   pip install "wren-engine[<datasource>,main]"
-   # or for DuckDB:
-   pip install "wren-engine[main]"
+   pip install "wren-engine[<datasource>,main]"   # main = interactive + ui
+   ```
+   Semantic memory (NL→SQL recall + schema embedding search) is a **separate** optional extra — decide on it in Step 3a:
+   ```bash
+   pip install "wren-engine[memory]"             # add later if user opts in
+   # or combine:
+   pip install "wren-engine[<datasource>,main,memory]"
    ```
 
 5. Verify: `wren --version`
 
-If `wren --version` succeeds, proceed to the relevant workflow below.
+### Step 3 — Detect optional capabilities (one-time per session)
+
+Run these checks **once** at the start of the conversation and remember the answers. Do not re-check on every query.
+
+**3a. Memory availability** — the `memory` extra is optional and ships separately:
+
+```bash
+wren memory --help >/dev/null 2>&1
+```
+
+- Exit 0 → the `memory` subcommand group is registered. Set `MEMORY_AVAILABLE = true`.
+- Exit non-zero → `memory` extra is missing. Set `MEMORY_AVAILABLE = false`.
+
+If `MEMORY_AVAILABLE = false`, **offer to install ONCE** (then never ask again in this session):
+
+> The `memory` extra adds semantic schema search and NL→SQL recall, which improves accuracy on data questions. Install it now?
+> ```bash
+> pip install "wren-engine[memory]"
+> ```
+
+Respect whatever the user answers for the rest of the session. If they decline, follow the no-memory paths below — do not silently re-attempt the install or keep nudging.
+
+**3b. Project context:**
+
+```bash
+wren context show >/dev/null 2>&1
+```
+
+- Exit 0 → inside a wren project. Set `IN_PROJECT = true`.
+- Exit non-zero → not inside a project. Set `IN_PROJECT = false`.
+
+If `IN_PROJECT = true`, also run `wren context instructions` **once now** and cache the output mentally. Treat its content as rules that override defaults for every subsequent query in this session. Do not re-run `instructions` later in the conversation.
 
 ---
 
@@ -94,31 +129,66 @@ For project structure, MDL field definitions, and CLI workflow details, see the 
 
 ---
 
+## Exploring commands — use `--help` before guessing
+
+This skill maps **when** to use each command, not the full **how**. The CLI is the source of truth for signatures and flags. Before invoking a command or flag combination you haven't used recently in the conversation, run `--help` first:
+
+```bash
+wren --help                     # top-level commands
+wren context --help             # a sub-app's commands
+wren context validate --help    # one command's flags
+wren memory fetch --help        # only meaningful when MEMORY_AVAILABLE
+```
+
+Don't memorize the tables below as exhaustive — they cover the common cases, but flags get added. If a behavior you want isn't listed, check `--help` before fabricating a flag.
+
+## Common flags worth knowing
+
+| Command | Flag | Why it matters |
+|---------|------|----------------|
+| `wren --sql` | `--output json\|csv\|table` / `-o` | `json` is machine-readable for downstream parsing |
+| `wren --sql` | `--limit N` / `-l` | Caps rows at planner level — cleaner than inlining `LIMIT N` |
+| `wren --sql` | `--quiet` / `-q` | Suppresses the stderr "store this query" hint when you don't want noise |
+| `wren dry-plan` | `--datasource <ds>` / `-d` | Plans without an active profile (e.g. `-d duckdb`) — useful for one-off transpile checks |
+| `wren context show` | `--output json\|yaml\|summary` | `json` returns the full MDL; the go-to fallback when `MEMORY_AVAILABLE = false` |
+| `wren context validate` | `--level error\|warning\|strict` | `strict` adds column-level description checks |
+| `wren context set-profile <name>` | (positional) | Binds a profile to the project so the active-profile global setting can't drift |
+| `wren memory fetch` | `--type` / `--model` / `--threshold` | Filter by item type or model; `--threshold 0` forces embedding search |
+| `wren memory index` | `--no-seed` / `--no-queries` | Skip seed pairs / auto-loaded `queries.yml` when re-indexing for a sanity test |
+
+---
+
 ## Workflow 1: Answering a data question
 
-### Step 1 — Gather context
+### Step 1 — Gather schema context
+
+Branch on `MEMORY_AVAILABLE` (set during Preflight Step 3a):
+
+**If `MEMORY_AVAILABLE = true`:**
 
 | Situation | Command |
 |-----------|---------|
 | Default | `wren memory fetch -q "<question>"` |
 | Need specific model's columns | `wren memory fetch -q "..." --model <name> --threshold 0` |
-| Memory not installed | Read `target/mdl.json` in the project directory, or run `wren context show` |
 
-If this is the first query in the conversation, also run:
+**If `MEMORY_AVAILABLE = false`:**
 
-```text
-wren context instructions
-```
+| Situation | Command |
+|-----------|---------|
+| Inside a project (`IN_PROJECT = true`) | `wren context show --output summary` for an overview, or `wren context show --output json` for the full MDL |
+| Outside a project | Ask the user to point to the MDL file, then read it directly |
 
-If it returns content, treat it as **rules that override defaults** — apply them to all subsequent queries in this session.
+Project instructions were already loaded once during Preflight Step 3b. Do not run `wren context instructions` again.
 
-### Step 2 — Recall past queries
+### Step 2 — Recall past queries (memory only)
 
+**If `MEMORY_AVAILABLE = true`:**
 ```bash
 wren memory recall -q "<question>" --limit 3
 ```
-
 Use results as few-shot examples. Skip if empty.
+
+**If `MEMORY_AVAILABLE = false`:** skip this step entirely — there is no recall path without memory.
 
 ### Step 2.5 — Assess complexity (before writing SQL)
 
@@ -131,7 +201,7 @@ If the question involves **any** of the following, consider decomposing:
 **Decomposition strategy:**
 1. Identify the sub-questions (e.g., "total subscribers at start" + "subscribers who cancelled" → churn rate)
 2. For each sub-question:
-   - `wren memory recall -q "<sub-question>"` — check if a similar pattern exists
+   - If `MEMORY_AVAILABLE = true`: `wren memory recall -q "<sub-question>"` — check if a similar pattern exists
    - Write and execute a simple SQL
    - Note the result
 3. Combine sub-results to answer the original question
@@ -175,9 +245,11 @@ wren --sql 'SELECT ...'
 - Target MDL model names, not database tables
 - Write dialect-neutral SQL — the engine translates
 
-### Step 4 — Store and continue
+### Step 4 — Store the result (memory only)
 
-After successful execution, **store the query by default**:
+**If `MEMORY_AVAILABLE = false`:** skip this step. **Important:** the CLI **still prints** a `# To save this query: wren memory store ...` hint to stderr — it does not check whether memory is installed. **Ignore the hint.** Running the suggested command will fail with "No such command 'memory'".
+
+**If `MEMORY_AVAILABLE = true`:** after successful execution, **store the query by default**:
 
 ```bash
 wren memory store --nl "<user's original question>" --sql "<the SQL>"
@@ -201,15 +273,30 @@ after execution, the query was classified as exploratory.
 | User says wrong | Do NOT store — fix the SQL |
 | Query error | See Error recovery below |
 
+**About the stderr store hint:** after a non-exploratory `wren --sql ...` run, the CLI prints a line like `# To save this query: wren memory store --nl '...' --sql '...'` to **stderr**. That is documentation for the human reader, not an instruction to execute. Decide on storing using the table above, then construct the `store` call yourself with the user's actual question as `--nl` — don't echo the hint back verbatim, because it uses a placeholder NL.
+
 ---
 
 ## Workflow 2: Error recovery
 
+### "No such command 'memory'"
+
+The `memory` extra is not installed in this Python environment. This is **not** a bug — memory is optional. Switch to the no-memory paths:
+- Schema lookup → `wren context show --output json` (in-project) or read `target/mdl.json` directly
+- Skip `recall` and `store` for the rest of this session
+
+Only suggest `pip install "wren-engine[memory]"` if you have not already offered during Preflight Step 3a. Never install it without the user's explicit consent.
+
 ### "table not found"
 
+When `MEMORY_AVAILABLE = true`:
 1. Verify model name: `wren memory fetch -q "<name>" --type model --threshold 0`
 2. Check MDL exists: `ls target/mdl.json` (or `wren context show`)
 3. Verify column: `wren memory fetch -q "<column>" --model <name> --threshold 0`
+
+When `MEMORY_AVAILABLE = false`:
+1. Inspect MDL: `wren context show --output json | jq '.models[].name'` (or read `target/mdl.json` directly)
+2. Find the column: search the same JSON for the model's `columns[].name` list
 
 ### Connection error
 
@@ -217,7 +304,7 @@ after execution, the query was classified as exploratory.
 2. Verify datasource and connection fields are correct
 3. Test: `wren --sql "SELECT 1"`
 4. Valid datasource values: `postgres`, `mysql`, `bigquery`, `snowflake`, `clickhouse`, `trino`, `mssql`, `databricks`, `redshift`, `spark`, `athena`, `oracle`, `duckdb`
-5. If no profile exists, create one: `wren profile add --ui` (or `--interactive` / `--from-file`)
+5. If no profile exists, delegate to the `wren-onboarding` skill (it handles `.env`-based credential capture safely). Avoid `wren profile add --ui` in headless agent contexts — it needs a browser. `--from-file` or `--interactive` are the headless-safe modes.
 
 ### SQL syntax / planning error (enhanced)
 
@@ -236,12 +323,12 @@ wren dry-plan --sql "<failed SQL>"
 
 The dry-plan error message tells you exactly what's wrong:
 
-| Error pattern | Diagnosis | Fix |
-|---------------|-----------|-----|
-| `column 'X' not found in model 'Y'` | Wrong column name | `wren memory fetch -q "X" --model Y --threshold 0` to find correct name |
-| `model 'X' not found` | Wrong model name | `wren memory fetch -q "X" --type model --threshold 0` |
-| `ambiguous column 'X'` | Column exists in multiple models | Qualify with model name: `ModelName.column` |
-| Planning error with JOIN | Relationship not defined in MDL | Check available relationships in context |
+| Error pattern | Diagnosis | Fix (memory) | Fix (no memory) |
+|---------------|-----------|--------------|-----------------|
+| `column 'X' not found in model 'Y'` | Wrong column name | `wren memory fetch -q "X" --model Y --threshold 0` | Inspect `wren context show --output json` for model Y's `columns[].name` |
+| `model 'X' not found` | Wrong model name | `wren memory fetch -q "X" --type model --threshold 0` | List models: `wren context show --output summary` |
+| `ambiguous column 'X'` | Column exists in multiple models | Qualify with model name: `ModelName.column` | Same |
+| Planning error with JOIN | Relationship not defined in MDL | Check `relationships` in context | Same |
 
 **Key principle**: Fix ONE issue at a time. Re-run dry-plan after each fix
 to see if new errors surface.
@@ -270,19 +357,19 @@ For the CTE rewrite pipeline and additional error patterns, see [references/wren
 
 ## Workflow 3: Connecting a new data source
 
-1. Add a profile: `wren profile add --ui` (or `--interactive` / `--from-file`)
-2. Test connection: `wren profile debug`
-3. Test query: `wren --sql "SELECT 1"`
-4. Initialize project: `wren context init`
-5. Build manifest: `wren context build`
-6. Index: `wren memory index`
-7. Verify: `wren --sql "SELECT * FROM <model> LIMIT 5"`
+Delegate to the **`wren-onboarding`** skill. It handles environment checks, project scaffolding, `.env`-based profile creation, MDL generation, and a first verification query — and enforces agent-side rules like "never ask for credentials in chat" and "one step per round-trip".
+
+Do not try to drive `wren profile add` / `wren context init` / `wren context build` step-by-step from this skill — that overlaps with `wren-onboarding` and tends to skip its safety guardrails.
+
+If the `wren-onboarding` skill is not available in this environment, point the user at:
+- [`docs/core/get_started/installation.md`](https://github.com/Canner/wren-engine/blob/main/docs/core/get_started/installation.md)
+- [`docs/core/get_started/connect.md`](https://github.com/Canner/wren-engine/blob/main/docs/core/get_started/connect.md)
 
 ---
 
 ## Workflow 4: After MDL changes
 
-When model YAML files are updated, rebuild and re-index:
+When model YAML files are updated, rebuild and verify. These steps are universal:
 
 ```bash
 # 1. Validate changes
@@ -291,31 +378,48 @@ wren context validate
 # 2. Rebuild manifest
 wren context build
 
-# 3. Re-index schema memory
-wren memory index
-
-# 4. Verify
+# 3. Verify
 wren --sql "SELECT * FROM <changed_model> LIMIT 1"
 ```
+
+Then, **only if `MEMORY_AVAILABLE = true`**, re-index schema embeddings so memory search picks up the changes:
+
+```bash
+wren memory index
+```
+
+If `MEMORY_AVAILABLE = false`, skip the re-index. Do not install the memory extra just to run `index` — `wren context show` already reflects the new MDL.
 
 ---
 
 ## Command decision tree
 
+Items tagged **(memory)** require `MEMORY_AVAILABLE = true`. Run `<command> --help` for the full flag list of any entry.
+
 ```text
-Get data back           → wren --sql "..."
-See translated SQL only → wren dry-plan --sql "..." (accepts -d <datasource> if no active profile)
-Validate against DB     → wren dry-run --sql "..."
-Schema context          → wren memory fetch -q "..."
-Filter by type/model    → wren memory fetch -q "..." --type T --model M --threshold 0
-Store confirmed query   → wren memory store --nl "..." --sql "..."
-Few-shot examples       → wren memory recall -q "..."
-Index stats             → wren memory status
-Re-index after MDL change → wren memory index
-Show project context    → wren context show
-Rebuild manifest        → wren context build
-Check profile           → wren profile debug
-Switch profile          → wren profile switch <name>
+── Universal ────────────────────────────────────────────────────────
+Get data back              → wren --sql "..." [--output json|csv|table] [--limit N] [--quiet]
+See translated SQL only    → wren dry-plan --sql "..." [-d <datasource>]
+Validate SQL against DB    → wren dry-run --sql "..."
+Show project context       → wren context show [--output summary|json|yaml]
+Show user instructions     → wren context instructions   (once per session)
+Validate project           → wren context validate [--level error|warning|strict]
+Rebuild manifest           → wren context build
+Bind profile to project    → wren context set-profile <name>
+Active profile / list      → wren profile list
+Check profile              → wren profile debug
+Switch profile             → wren profile switch <name>
+Onboarding / first setup   → delegate to the wren-onboarding skill
+
+── Memory-only (requires wren-engine[memory]) ───────────────────────
+Schema context             → wren memory fetch -q "..."
+Filter by type/model       → wren memory fetch -q "..." --type T --model M --threshold 0
+Full schema text           → wren memory describe
+Store confirmed query      → wren memory store --nl "..." --sql "..."
+Few-shot examples          → wren memory recall -q "..."
+Index stats                → wren memory status
+Re-index after MDL change  → wren memory index
+Manage stored pairs        → see references/memory.md (list, forget, dump, load)
 ```
 
 ---
@@ -325,5 +429,12 @@ Switch profile          → wren profile switch <name>
 - Do not guess model or column names — check context first
 - Do not store failed queries or queries the user said are wrong
 - Do not skip storing successful queries with a clear NL question — default is to store
-- Do not re-index before every query — once per MDL change
+- Do not re-index before every query — once per MDL change, and only when `MEMORY_AVAILABLE = true`
 - Do not pass passwords via `--connection-info` if shell history is shared — use profiles (`wren profile add`) or `--connection-file`
+- Do not call any `wren memory <subcommand>` when `MEMORY_AVAILABLE = false` — every such call fails with "No such command 'memory'". Use `wren context show` / `target/mdl.json` instead.
+- Do not auto-install the `memory` extra. Offer once during Preflight Step 3a, then respect the user's decision for the session.
+- Do not echo the stderr `# To save this query: …` hint back as a tool call — it has a placeholder NL. Construct the `store` call yourself using the user's actual question.
+- Do not re-run `wren context instructions` after the first session-start invocation — cache the content mentally.
+- Do not invoke `wren profile add --ui` in headless agent contexts (no browser). Use `--from-file` / `--interactive`, or delegate to the `wren-onboarding` skill.
+- Do not drive a full new-datasource setup from this skill — that's `wren-onboarding`'s job.
+- Do not fabricate flags. If a flag you want isn't listed here, run `<command> --help` first.
