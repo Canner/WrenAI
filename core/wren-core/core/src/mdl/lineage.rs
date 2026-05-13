@@ -352,9 +352,7 @@ fn validate_measure_cycles(cube: &Cube) -> Result<()> {
     for measure in cube.measures.iter() {
         let identifiers = collect_identifiers(&measure.expression)?;
         for ident in &identifiers {
-            if ident.name.as_str() != measure.name
-                && measure_names.contains(ident.name.as_str())
-            {
+            if measure_names.contains(ident.name.as_str()) {
                 let from = node_map[measure.name.as_str()];
                 let to = node_map[ident.name.as_str()];
                 graph.add_edge(from, to, ());
@@ -903,6 +901,37 @@ mod test {
         );
         let Err(err) = result else {
             panic!("expected error for measure cycle");
+        };
+        assert!(
+            err.to_string().contains("circular dependency"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_validate_cube_measure_self_reference() {
+        let manifest = ManifestBuilder::new()
+            .model(
+                ModelBuilder::new("orders")
+                    .table_reference("orders")
+                    .column(ColumnBuilder::new("amount", "double").build())
+                    .build(),
+            )
+            .cube(
+                CubeBuilder::new("self_ref_cube", "orders")
+                    .measure(
+                        MeasureBuilder::new("revenue", "revenue * 1.1", "DOUBLE").build(),
+                    )
+                    .build(),
+            )
+            .build();
+        let result = AnalyzedWrenMDL::analyze(
+            manifest,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        );
+        let Err(err) = result else {
+            panic!("expected error for self-referential measure");
         };
         assert!(
             err.to_string().contains("circular dependency"),
