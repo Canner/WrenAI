@@ -409,8 +409,10 @@ class DataSourceExtension(Enum):
         # injects the OAuth header into `self.headers` right before the
         # parent `Client.__init__` runs the startup queries.
         try:
-            import clickhouse_connect.driver as _ch_driver
-            import clickhouse_connect.driver.httpclient as _ch_http
+            # Deferred: clickhouse_connect is an optional dependency installed
+            # only with the [ytsaurus] / [clickhouse] extras.
+            import clickhouse_connect.driver as _ch_driver  # noqa: PLC0415
+            import clickhouse_connect.driver.httpclient as _ch_http  # noqa: PLC0415
         except ImportError as e:
             raise WrenError(
                 ErrorCode.INVALID_CONNECTION_INFO,

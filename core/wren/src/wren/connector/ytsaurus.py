@@ -64,9 +64,7 @@ class YTsaurusConnector(IbisConnector):
             # that isn't a non-negative integer to make the f-string safe even
             # if a caller bypasses the type hint.
             if isinstance(limit, bool) or not isinstance(limit, int) or limit < 0:
-                raise ValueError(
-                    f"limit must be a non-negative int, got {limit!r}"
-                )
+                raise ValueError(f"limit must be a non-negative int, got {limit!r}")
             wrapped = f"SELECT * FROM (\n{sql}\n) LIMIT {limit}"
         try:
             # CHYT speaks the ClickHouse Native protocol but rejects

@@ -38,6 +38,7 @@ from wren.model import (
     SnowflakeConnectionInfo,
     SparkConnectionInfo,
     TrinoConnectionInfo,
+    YTsaurusConnectionInfo,
 )
 
 # Canonical datasource → ConnectionInfo model(s) mapping.
@@ -66,6 +67,7 @@ DATASOURCE_MODELS: dict[str, list[type[BaseConnectionInfo]]] = {
     "snowflake": [SnowflakeConnectionInfo],
     "spark": [SparkConnectionInfo],
     "trino": [TrinoConnectionInfo],
+    "ytsaurus": [YTsaurusConnectionInfo],
     "connection_url": [ConnectionUrl],
 }
 
@@ -173,6 +175,12 @@ _MODEL_UI_OVERRIDES: dict[str, dict[str, dict]] = {
     },
     "OracleConnectionInfo": {
         "dsn": {"label": "DSN (optional — overrides host/port/database)"},
+    },
+    "YTsaurusConnectionInfo": {
+        "proxy": {"label": "YT Proxy", "placeholder": "yt-proxy.example.com"},
+        "clique": {"label": "CHYT Clique", "placeholder": "*ch_public"},
+        "token": {"label": "YT OAuth Token"},
+        "query_path": {"label": "Query Path"},
     },
 }
 
