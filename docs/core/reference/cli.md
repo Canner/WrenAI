@@ -141,7 +141,7 @@ When using the search strategy, optional `--type` and `--model` filters narrow t
 ```bash
 wren memory fetch -q "customer order price"
 wren memory fetch -q "revenue" --type column --model orders
-wren memory fetch -q "日期" --threshold 50000 --output json
+wren memory fetch -q "order date" --threshold 50000 --output json
 ```
 
 | Flag | Description |
@@ -171,7 +171,7 @@ Search stored NL-SQL pairs by semantic similarity to a query.
 
 ```bash
 wren memory recall -q "best customers"
-wren memory recall -q "月度營收" --datasource mysql --limit 5 --output json
+wren memory recall -q "monthly revenue" --datasource mysql --limit 5 --output json
 ```
 
 | Flag | Description |

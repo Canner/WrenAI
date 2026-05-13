@@ -67,7 +67,7 @@ wren memory status
 ```bash
 wren memory fetch -q "customer order price"
 wren memory fetch -q "revenue" --type column --model orders
-wren memory fetch -q "日期" --threshold 50000 --output json
+wren memory fetch -q "order date" --threshold 50000 --output json
 ```
 
 ### Why hybrid?
@@ -118,7 +118,7 @@ Before writing new SQL, search for similar past queries:
 
 ```bash
 wren memory recall -q "best customers"
-wren memory recall -q "月度營收" --datasource mysql --limit 5 --output json
+wren memory recall -q "monthly revenue" --datasource mysql --limit 5 --output json
 ```
 
 Results are returned ranked by semantic similarity. Use them as few-shot examples — adapt the SQL pattern to the current question.
