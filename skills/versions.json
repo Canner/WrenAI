@@ -1,6 +1,7 @@
 {
   "wren-dlt-connector": "1.0",
   "wren-generate-mdl": "2.2",
+  "wren-enrich-context": "1.0",
   "wren-onboarding": "2.1",
   "wren-usage": "2.3"
 }

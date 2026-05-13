@@ -13,7 +13,7 @@ set -euo pipefail
 REPO="Canner/wren-engine"
 BRANCH="${WREN_SKILLS_BRANCH:-main}"
 DEST="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
-ALL_SKILLS=(wren-dlt-connector wren-generate-mdl wren-onboarding wren-usage)
+ALL_SKILLS=(wren-dlt-connector wren-enrich-context wren-generate-mdl wren-onboarding wren-usage)
 
 # Parse --force flag and skill list from arguments
 FORCE=false
