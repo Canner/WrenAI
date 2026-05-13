@@ -2,7 +2,7 @@
   <a href="https://getwren.ai/?utm_source=github&utm_medium=title&utm_campaign=readme">
     <picture>
       <source media="(prefers-color-scheme: light)" srcset="./misc/wrenai_logo.png">
-      <img src="./misc/wrenai_logo_white.png" width="300px">
+      <img src="./misc/wrenai_logo_white.png" width="300px" alt="WrenAI logo">
     </picture>
     <h1 align="center">WrenAI — AI 智能体的开放上下文层</h1>
   </a>
@@ -24,11 +24,11 @@
   <a href="https://docs.getwren.ai">
     <img src="https://img.shields.io/badge/docs-online-brightgreen?style=for-the-badge" alt="Docs">
   </a>
-  <a aria-label="Join the community on GitHub" href="https://discord.gg/5DvshJqG8Z">
+  <a aria-label="Join the community on Discord" href="https://discord.gg/5DvshJqG8Z">
     <img alt="" src="https://img.shields.io/badge/-JOIN%20THE%20COMMUNITY-blue?style=for-the-badge&logo=discord&logoColor=white&labelColor=grey&logoWidth=20">
   </a>
   <a aria-label="Canner" href="https://cannerdata.com/?utm_source=github&utm_medium=badge&utm_campaign=readme">
-    <img src="https://img.shields.io/badge/%F0%9F%A7%A1-Made%20by%20Canner-blue?style=for-the-badge">
+    <img src="https://img.shields.io/badge/%F0%9F%A7%A1-Made%20by%20Canner-blue?style=for-the-badge" alt="Made by Canner">
   </a>
 </p>
 
