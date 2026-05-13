@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wren-engine"
-version = "0.5.0"
+version = "0.6.0"
 description = "Wren Engine CLI and Python SDK — semantic SQL layer for 20+ data sources"
 readme = "README.md"
 requires-python = ">=3.11"

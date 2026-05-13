@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/Canner/WrenAI/compare/wren-v0.5.0...wren-v0.6.0) (2026-05-13)
+
+
+### Features
+
+* **context:** bind a connection profile to a project ([#2251](https://github.com/Canner/WrenAI/issues/2251)) ([41fbe41](https://github.com/Canner/WrenAI/commit/41fbe411fd1f1bb7a4080fbcedc7c886678276d1))
+
 ## [0.5.0](https://github.com/Canner/WrenAI/compare/wren-v0.4.0...wren-v0.5.0) (2026-05-05)
 
 
