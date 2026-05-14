@@ -305,13 +305,16 @@ class DataSourceExtension(Enum):
         return ibis.bigquery.connect(client=bq_client, credentials=credentials)
 
     @staticmethod
-    def get_canner_connection(info: CannerConnectionInfo) -> BaseBackend:
-        return ibis.postgres.connect(
+    def get_canner_connection(info: CannerConnectionInfo):
+        import psycopg  # noqa: PLC0415
+
+        return psycopg.connect(
             host=info.host,
             port=int(info.port),
-            database=info.workspace,
+            dbname=info.workspace,
             user=info.user,
             password=info.pat.get_secret_value(),
+            autocommit=True,
         )
 
     @staticmethod
