@@ -400,7 +400,9 @@ class DataSourceExtension(Enum):
         )
 
     @staticmethod
-    def get_snowflake_connection(info: SnowflakeConnectionInfo) -> BaseBackend:
+    def get_snowflake_connection(info: SnowflakeConnectionInfo):
+        import snowflake.connector  # noqa: PLC0415
+
         if hasattr(info, "private_key") and info.private_key:
             params = {
                 "user": info.user,
@@ -421,7 +423,7 @@ class DataSourceExtension(Enum):
             params["warehouse"] = info.warehouse
         if info.kwargs:
             params.update(info.kwargs)
-        return ibis.snowflake.connect(**params)
+        return snowflake.connector.connect(**params)
 
     @staticmethod
     def get_trino_connection(info: TrinoConnectionInfo) -> BaseBackend:

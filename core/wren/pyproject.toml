@@ -46,7 +46,7 @@ dependencies = [
 postgres = ["psycopg>=3", "ibis-framework[postgres]"]
 mysql = ["mysqlclient>=2.2", "ibis-framework[mysql]"]
 bigquery = ["ibis-framework[bigquery]", "google-auth"]
-snowflake = ["ibis-framework[snowflake]"]
+snowflake = ["snowflake-connector-python[pandas]>=3.10"]
 clickhouse = ["ibis-framework[clickhouse]"]
 trino = ["ibis-framework[trino]", "trino>=0.321"]
 mssql = ["ibis-framework[mssql]"]
