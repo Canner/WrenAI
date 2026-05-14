@@ -282,6 +282,9 @@ class CannerConnector(ConnectorABC):
                 phase=ErrorPhase.SQL_DRY_RUN,
                 metadata={DIALECT_SQL: sql},
             ) from e
+        # Explicit return to honour the ConnectorABC.dry_run() contract — the
+        # cursor result must not leak out of this method.
+        return None
 
     def close(self) -> None:
         if self._closed or not hasattr(self, "connection") or self.connection is None:

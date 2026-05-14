@@ -176,6 +176,30 @@ def test_strip_trailing_semicolon(raw: str, expected: str) -> None:
     assert _strip_trailing_semicolon(raw) == expected
 
 
+def test_dry_run_returns_none_contract() -> None:
+    # Regression: ConnectorABC.dry_run() must return None. The cursor result
+    # must not leak out of the method, even on the success path.
+    class _FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+        def execute(self, _sql: str) -> "_FakeCursor":
+            return self
+
+    class _FakeConnection:
+        def cursor(self) -> _FakeCursor:
+            return _FakeCursor()
+
+    connector = CannerConnector.__new__(CannerConnector)
+    connector.connection = _FakeConnection()
+    connector._closed = False
+
+    assert connector.dry_run("SELECT 1") is None
+
+
 # ── end-to-end testcontainer test ─────────────────────────────────────────
 
 
