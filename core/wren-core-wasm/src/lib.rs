@@ -32,11 +32,14 @@ use wasm_bindgen::prelude::*;
 
 /// Wren Engine WASM instance.
 ///
-/// Holds a DataFusion SessionContext and (in M3+) an AnalyzedWrenMDL.
-/// All query execution happens in-browser via DataFusion.
+/// Holds a DataFusion SessionContext and (after `loadMDL`) the analyzed
+/// MDL. `analyzed_mdl` is kept so the cube API (`cubeQuery`, `listCubes`)
+/// can read the manifest after `loadMDL` returns. All query execution
+/// happens in-browser via DataFusion.
 #[wasm_bindgen]
 pub struct WrenEngine {
     ctx: datafusion::execution::context::SessionContext,
+    analyzed_mdl: Option<std::sync::Arc<wren_core::mdl::AnalyzedWrenMDL>>,
 }
 
 #[wasm_bindgen]
@@ -59,7 +62,10 @@ impl WrenEngine {
 
         let ctx = datafusion::execution::context::SessionContext::new_with_config(config);
 
-        Ok(WrenEngine { ctx })
+        Ok(WrenEngine {
+            ctx,
+            analyzed_mdl: None,
+        })
     }
 
     /// Register an in-memory table from a JSON array of objects.
@@ -198,11 +204,19 @@ impl WrenEngine {
 
         let properties: Arc<HashMap<String, Option<String>>> = Arc::new(HashMap::new());
 
-        let new_ctx = apply_wren_on_ctx(&self.ctx, analyzed_mdl, properties, Mode::LocalRuntime)
-            .await
-            .map_err(|e| JsError::new(&format!("Failed to apply MDL rules: {e}")))?;
+        // Clone the Arc so `apply_wren_on_ctx` can take ownership while
+        // we keep a handle on `self` for cubeQuery/listCubes access.
+        let new_ctx = apply_wren_on_ctx(
+            &self.ctx,
+            Arc::clone(&analyzed_mdl),
+            properties,
+            Mode::LocalRuntime,
+        )
+        .await
+        .map_err(|e| JsError::new(&format!("Failed to apply MDL rules: {e}")))?;
 
         self.ctx = new_ctx;
+        self.analyzed_mdl = Some(analyzed_mdl);
         Ok(())
     }
 
@@ -483,6 +497,77 @@ impl WrenEngine {
             .map_err(|e| JsError::new(&format!("JSON writer finish error: {e}")))?;
 
         String::from_utf8(buf).map_err(|e| JsError::new(&format!("UTF-8 encoding error: {e}")))
+    }
+
+    /// Execute a structured CubeQuery against the loaded MDL.
+    ///
+    /// Takes a JSON-encoded `CubeQuery` (matching the camelCase shape used
+    /// by the Python binding), translates it to SQL via wren-core, and
+    /// runs the SQL through the existing `query()` path. Returns a JSON
+    /// array of result rows.
+    ///
+    /// Requires `loadMDL` to have been called first.
+    #[wasm_bindgen(js_name = cubeQuery)]
+    pub async fn cube_query(&self, cube_query_json: &str) -> Result<String, JsError> {
+        let analyzed = self
+            .analyzed_mdl
+            .as_ref()
+            .ok_or_else(|| JsError::new("No MDL loaded. Call loadMDL() first."))?;
+        let wren_mdl = analyzed.wren_mdl();
+        let manifest = &wren_mdl.manifest;
+
+        let query: wren_core::mdl::CubeQuery = serde_json::from_str(cube_query_json)
+            .map_err(|e| JsError::new(&format!("Invalid CubeQuery JSON: {e}")))?;
+
+        let sql = wren_core::mdl::cube_query_to_sql(&query, manifest)
+            .map_err(|e| JsError::new(&format!("CubeQuery error: {e}")))?;
+
+        self.query(&sql).await
+    }
+
+    /// List the cubes defined in the loaded MDL.
+    ///
+    /// Returns a JSON array of `{ name, baseObject, measures, dimensions,
+    /// timeDimensions, hierarchies }` records. Requires `loadMDL` to have
+    /// been called first.
+    #[wasm_bindgen(js_name = listCubes)]
+    pub fn list_cubes(&self) -> Result<String, JsError> {
+        let analyzed = self
+            .analyzed_mdl
+            .as_ref()
+            .ok_or_else(|| JsError::new("No MDL loaded. Call loadMDL() first."))?;
+        let wren_mdl = analyzed.wren_mdl();
+        let manifest = &wren_mdl.manifest;
+
+        let cubes: Vec<serde_json::Value> = manifest
+            .cubes
+            .iter()
+            .map(|c| {
+                serde_json::json!({
+                    "name": c.name,
+                    "baseObject": c.base_object,
+                    "measures": c.measures.iter().map(|m| serde_json::json!({
+                        "name": m.name,
+                        "expression": m.expression,
+                        "type": m.r#type,
+                    })).collect::<Vec<_>>(),
+                    "dimensions": c.dimensions.iter().map(|d| serde_json::json!({
+                        "name": d.name,
+                        "expression": d.expression,
+                        "type": d.r#type,
+                    })).collect::<Vec<_>>(),
+                    "timeDimensions": c.time_dimensions.iter().map(|td| serde_json::json!({
+                        "name": td.name,
+                        "expression": td.expression,
+                        "type": td.r#type,
+                    })).collect::<Vec<_>>(),
+                    "hierarchies": c.hierarchies,
+                })
+            })
+            .collect();
+
+        serde_json::to_string(&cubes)
+            .map_err(|e| JsError::new(&format!("Serialization error: {e}")))
     }
 }
 

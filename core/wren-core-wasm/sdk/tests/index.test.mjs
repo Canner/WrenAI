@@ -333,3 +333,113 @@ describe("free", () => {
     // No assertion needed — just verify it doesn't throw
   });
 });
+
+// =========================================================================
+// cubeQuery + listCubes
+// =========================================================================
+
+function cubeMDL() {
+  return {
+    catalog: "wren",
+    schema: "public",
+    models: [
+      {
+        name: "orders",
+        tableReference: { table: "orders" },
+        columns: [
+          { name: "amount", type: "DOUBLE" },
+          { name: "status", type: "VARCHAR" },
+        ],
+      },
+    ],
+    relationships: [],
+    metrics: [],
+    views: [],
+    cubes: [
+      {
+        name: "order_metrics",
+        baseObject: "orders",
+        measures: [
+          { name: "total", expression: "SUM(amount)", type: "DOUBLE" },
+          { name: "order_count", expression: "COUNT(*)", type: "BIGINT" },
+        ],
+        dimensions: [
+          { name: "status", expression: "status", type: "VARCHAR" },
+        ],
+        timeDimensions: [],
+        hierarchies: {},
+      },
+    ],
+  };
+}
+
+describe("cubeQuery + listCubes", () => {
+  it("listCubes returns cubes from the loaded MDL", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    await engine.registerJson("orders", [{ amount: 10, status: "open" }]);
+    await engine.loadMDL(cubeMDL(), { source: "" });
+
+    const cubes = engine.listCubes();
+    assert.equal(cubes.length, 1);
+    assert.equal(cubes[0].name, "order_metrics");
+    assert.equal(cubes[0].baseObject, "orders");
+    assert.equal(cubes[0].measures.length, 2);
+    assert.equal(cubes[0].measures[0].name, "total");
+    assert.equal(cubes[0].dimensions[0].name, "status");
+    engine.free();
+  });
+
+  it("cubeQuery aggregates by dimension", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    await engine.registerJson("orders", [
+      { amount: 10, status: "open" },
+      { amount: 25, status: "open" },
+      { amount: 7, status: "closed" },
+    ]);
+    await engine.loadMDL(cubeMDL(), { source: "" });
+
+    const rows = await engine.cubeQuery({
+      cube: "order_metrics",
+      measures: ["total", "order_count"],
+      dimensions: ["status"],
+    });
+
+    assert.equal(rows.length, 2);
+    const byStatus = Object.fromEntries(rows.map((r) => [r.status, r]));
+    assert.equal(byStatus.open.total, 35);
+    assert.equal(byStatus.open.order_count, 2);
+    assert.equal(byStatus.closed.total, 7);
+    assert.equal(byStatus.closed.order_count, 1);
+    engine.free();
+  });
+
+  it("cubeQuery rejects an unknown cube", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    await engine.registerJson("orders", [{ amount: 10, status: "open" }]);
+    await engine.loadMDL(cubeMDL(), { source: "" });
+
+    await assert.rejects(
+      () => engine.cubeQuery({ cube: "nonexistent", measures: ["total"] }),
+      /not found/i,
+    );
+    engine.free();
+  });
+
+  it("cubeQuery without loadMDL fails clearly", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    await assert.rejects(
+      () => engine.cubeQuery({ cube: "order_metrics", measures: ["total"] }),
+      /No MDL loaded/i,
+    );
+    engine.free();
+  });
+
+  it("listCubes without loadMDL fails clearly", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    assert.throws(
+      () => engine.listCubes(),
+      /No MDL loaded/i,
+    );
+    engine.free();
+  });
+});
