@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import ssl
 import urllib
 from enum import Enum, StrEnum, auto
 from json import loads
@@ -37,7 +36,6 @@ from wren.model import (
     S3FileConnectionInfo,
     SnowflakeConnectionInfo,
     SparkConnectionInfo,
-    SSLMode,
     TrinoConnectionInfo,
 )
 from wren.model.error import ErrorCode, WrenError
@@ -233,6 +231,9 @@ class DataSourceExtension(Enum):
     def get_connection(self, info: ConnectionInfo) -> BaseBackend:
         try:
             if hasattr(info, "connection_url"):
+                # MySQL / Doris use the native MySQLdb driver, not ibis.
+                if self.name in {"mysql", "doris"}:
+                    return getattr(self, f"get_{self.name}_connection")(info)
                 kwargs = info.kwargs if info.kwargs else {}
                 return ibis.connect(info.connection_url.get_secret_value(), **kwargs)
             if self.name in {"local_file", "redshift", "spark", "duckdb", "datafusion"}:
@@ -340,37 +341,20 @@ class DataSourceExtension(Enum):
         )
 
     @classmethod
-    def get_mysql_connection(cls, info: MySqlConnectionInfo) -> BaseBackend:
-        ssl_context = cls._create_ssl_context(info)
-        kwargs = {"ssl": ssl_context} if ssl_context else {}
-        kwargs.setdefault("charset", "utf8mb4")
-        if info.kwargs:
-            kwargs.update(info.kwargs)
-        return ibis.mysql.connect(
-            host=info.host,
-            port=int(info.port),
-            database=info.database,
-            user=info.user,
-            password=info.password.get_secret_value() if info.password else "",
-            **kwargs,
-        )
+    def get_mysql_connection(cls, info: MySqlConnectionInfo):
+        import MySQLdb  # noqa: PLC0415
+
+        from wren.connector.mysql import _build_mysql_connect_kwargs  # noqa: PLC0415
+
+        return MySQLdb.connect(**_build_mysql_connect_kwargs(info))
 
     @classmethod
-    def get_doris_connection(cls, info: DorisConnectionInfo) -> BaseBackend:
-        kwargs: dict = {}
-        kwargs.setdefault("charset", "utf8mb4")
-        if info.kwargs:
-            kwargs.update(info.kwargs)
-        connection = ibis.mysql.connect(
-            host=info.host,
-            port=int(info.port),
-            database=info.database,
-            user=info.user,
-            password=info.password.get_secret_value() if info.password else "",
-            **kwargs,
-        )
-        connection.con.get_autocommit = lambda: True
-        return connection
+    def get_doris_connection(cls, info: DorisConnectionInfo):
+        import MySQLdb  # noqa: PLC0415
+
+        from wren.connector.mysql import _build_doris_connect_kwargs  # noqa: PLC0415
+
+        return MySQLdb.connect(**_build_doris_connect_kwargs(info))
 
     @staticmethod
     def get_postgres_connection(info: PostgresConnectionInfo) -> BaseBackend:
@@ -442,33 +426,3 @@ class DataSourceExtension(Enum):
             http_path=info.http_path,
             access_token=info.access_token.get_secret_value(),
         )
-
-    @staticmethod
-    def _create_ssl_context(info: ConnectionInfo) -> ssl.SSLContext | None:
-        ssl_mode = (
-            info.ssl_mode if hasattr(info, "ssl_mode") and info.ssl_mode else None
-        )
-
-        if ssl_mode == SSLMode.VERIFY_CA and not info.ssl_ca:
-            raise WrenError(
-                ErrorCode.INVALID_CONNECTION_INFO,
-                "SSL CA must be provided when SSL mode is VERIFY CA",
-            )
-
-        if not ssl_mode or ssl_mode == SSLMode.DISABLED:
-            return None
-
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-
-        if ssl_mode == SSLMode.ENABLED:
-            ctx.verify_mode = ssl.CERT_NONE
-        elif ssl_mode == SSLMode.VERIFY_CA:
-            ctx.verify_mode = ssl.CERT_REQUIRED
-            ctx.load_verify_locations(
-                cadata=base64.b64decode(info.ssl_ca.get_secret_value()).decode("utf-8")
-                if info.ssl_ca
-                else None
-            )
-
-        return ctx
