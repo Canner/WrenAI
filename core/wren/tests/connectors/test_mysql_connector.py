@@ -91,8 +91,31 @@ def test_decimal(connector: MySqlConnector) -> None:
     _exec(connector, "CREATE TABLE t_dec (a DECIMAL(12, 4))")
     _exec(connector, "INSERT INTO t_dec VALUES (1234.5678)")
     tbl = connector.query("SELECT a FROM t_dec")
-    assert pa.types.is_decimal(tbl.schema.field("a").type)
-    assert tbl.column("a").to_pylist()[0] == Decimal("1234.567800000")
+    arrow_type = tbl.schema.field("a").type
+    assert pa.types.is_decimal(arrow_type)
+    # Precision/scale now reflect the column definition instead of the previous
+    # hard-coded ``decimal128(38, 9)``.
+    assert arrow_type.precision == 12
+    assert arrow_type.scale == 4
+    assert tbl.column("a").to_pylist()[0] == Decimal("1234.5678")
+
+
+def test_decimal_large_scale(connector: MySqlConnector) -> None:
+    """DECIMAL with scale > 9 must round-trip without truncating digits.
+
+    The previous hard-coded ``pa.decimal128(38, 9)`` silently dropped digits
+    beyond the 9th decimal place. We now derive precision/scale from
+    ``cursor.description``.
+    """
+    _exec(connector, "DROP TABLE IF EXISTS t_dec_big")
+    _exec(connector, "CREATE TABLE t_dec_big (a DECIMAL(30, 15))")
+    _exec(connector, "INSERT INTO t_dec_big VALUES (12345.123456789012345)")
+    tbl = connector.query("SELECT a FROM t_dec_big")
+    arrow_type = tbl.schema.field("a").type
+    assert pa.types.is_decimal(arrow_type)
+    assert arrow_type.precision == 30
+    assert arrow_type.scale == 15
+    assert tbl.column("a").to_pylist()[0] == Decimal("12345.123456789012345")
 
 
 def test_float_and_double(connector: MySqlConnector) -> None:
@@ -206,6 +229,49 @@ def test_query_with_limit(connector: MySqlConnector) -> None:
     _exec(connector, "CREATE TABLE t_limit (a INT)")
     _exec(connector, "INSERT INTO t_limit VALUES (1), (2), (3), (4), (5)")
     tbl = connector.query("SELECT a FROM t_limit", limit=2)
+    assert tbl.num_rows == 2
+
+
+def test_query_limit_rejects_sql_injection(connector: MySqlConnector) -> None:
+    """``limit`` must be coerced via ``int()`` so it can be safely interpolated.
+
+    Passing a crafted string would previously land directly in the rendered
+    SQL via an f-string. ``int()`` rejects it with ``ValueError``.
+    """
+    _exec(connector, "DROP TABLE IF EXISTS t_inj")
+    _exec(connector, "CREATE TABLE t_inj (a INT)")
+    _exec(connector, "INSERT INTO t_inj VALUES (1), (2)")
+    with pytest.raises((ValueError, TypeError)):
+        connector.query("SELECT a FROM t_inj", limit="1; DROP TABLE t_inj")
+    # Table must still exist — the malicious payload never reached the server.
+    tbl = connector.query("SELECT a FROM t_inj")
+    assert tbl.num_rows == 2
+
+
+def test_query_with_duplicate_column_names(connector: MySqlConnector) -> None:
+    """``SELECT * FROM (...) AS _sub`` would fail with ER_DUP_FIELDNAME on a
+    join that exposes the same column name twice. Appending ``LIMIT`` to the
+    user SQL avoids the subquery and so avoids the duplicate-column error.
+    """
+    _exec(connector, "DROP TABLE IF EXISTS t_dup_a")
+    _exec(connector, "DROP TABLE IF EXISTS t_dup_b")
+    _exec(connector, "CREATE TABLE t_dup_a (id INT, val INT)")
+    _exec(connector, "CREATE TABLE t_dup_b (id INT, val INT)")
+    _exec(connector, "INSERT INTO t_dup_a VALUES (1, 10), (2, 20)")
+    _exec(connector, "INSERT INTO t_dup_b VALUES (1, 100), (2, 200)")
+    sql = "SELECT a.id, b.id FROM t_dup_a a JOIN t_dup_b b ON a.id = b.id"
+    tbl = connector.query(sql, limit=10)
+    assert tbl.num_rows == 2
+    # dry_run should also work on duplicate-column queries.
+    connector.dry_run(sql)
+
+
+def test_query_trailing_semicolon(connector: MySqlConnector) -> None:
+    """Trailing semicolons must be stripped before appending ``LIMIT``."""
+    _exec(connector, "DROP TABLE IF EXISTS t_semi")
+    _exec(connector, "CREATE TABLE t_semi (a INT)")
+    _exec(connector, "INSERT INTO t_semi VALUES (1), (2), (3)")
+    tbl = connector.query("SELECT a FROM t_semi;", limit=2)
     assert tbl.num_rows == 2
 
 
