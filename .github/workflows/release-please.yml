@@ -25,6 +25,9 @@ jobs:
       wren-langchain--release_created: ${{ steps.release.outputs['sdk/wren-langchain--release_created'] }}
       wren-langchain--tag_name: ${{ steps.release.outputs['sdk/wren-langchain--tag_name'] }}
       wren-langchain--version: ${{ steps.release.outputs['sdk/wren-langchain--version'] }}
+      wren-pydantic--release_created: ${{ steps.release.outputs['sdk/wren-pydantic--release_created'] }}
+      wren-pydantic--tag_name: ${{ steps.release.outputs['sdk/wren-pydantic--tag_name'] }}
+      wren-pydantic--version: ${{ steps.release.outputs['sdk/wren-pydantic--version'] }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -75,6 +78,17 @@ jobs:
     with:
       version: ${{ needs.release-please.outputs['wren-langchain--version'] }}
       tag_name: ${{ needs.release-please.outputs['wren-langchain--tag_name'] }}
+    permissions:
+      contents: read
+      id-token: write
+
+  publish-wren-pydantic:
+    needs: release-please
+    if: needs.release-please.outputs['wren-pydantic--release_created'] == 'true'
+    uses: ./.github/workflows/publish-wren-pydantic.yml
+    with:
+      version: ${{ needs.release-please.outputs['wren-pydantic--version'] }}
+      tag_name: ${{ needs.release-please.outputs['wren-pydantic--tag_name'] }}
     permissions:
       contents: read
       id-token: write

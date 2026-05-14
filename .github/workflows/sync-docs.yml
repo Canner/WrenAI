@@ -9,6 +9,7 @@ on:
       - 'docs/core/concepts/**'
       - 'docs/core/guides/**'
       - 'docs/core/reference/**'
+      - 'docs/core/sdk/**'
 
 permissions:
   contents: read
@@ -44,7 +45,7 @@ jobs:
           # different from GenBI legacy's singular names (concept, guide,
           # under docs/oss/genbi/ on the docs site) to keep them in
           # separate trees under docs/oss/.
-          for dir in get_started concepts guides reference; do
+          for dir in get_started concepts guides reference sdk; do
             mkdir -p "${TARGET}/${dir}"
             cp -r "docs/core/${dir}/." "${TARGET}/${dir}/"
           done
