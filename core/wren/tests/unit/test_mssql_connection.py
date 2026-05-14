@@ -1,21 +1,25 @@
 """Unit tests for the MSSQL pyodbc connection plumbing.
 
 These tests mock out ``pyodbc`` so they run without ODBC Driver 18
-installed; they cover three behaviours called out in PR #2274 review:
+installed; they cover behaviours called out in PR #2274 review:
 
 1. ``mssql://`` URL components are URL-decoded round-trip.
 2. Asymmetric ``user`` / ``password`` combinations raise instead of
    leaking a half-built ODBC connection string.
 3. A non-numeric ``statement_timeout`` raises BEFORE ``pyodbc.connect``
    is called, so the connection can't be leaked.
+4. SQL Server ``TINYINT`` (``internal_size == 1``) maps unconditionally
+   to ``pa.uint8()``.
 """
 
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pyarrow as pa
 import pytest
 
+from wren.connector.mssql import MSSqlConnector
 from wren.model.data_source import DataSourceExtension
 from wren.model.error import ErrorCode, WrenError
 
@@ -191,3 +195,28 @@ def test_mssql_valid_statement_timeout_is_applied() -> None:
     parts = _parse_conn_str(fake.connect.call_args)
     # statement_timeout is popped, never sent to the ODBC string
     assert "statement_timeout" not in parts
+
+
+# ---------------------------------------------------------------------------
+# 4. TINYINT maps unconditionally to uint8
+# ---------------------------------------------------------------------------
+
+
+def test_mssql_tinyint_maps_to_uint8_regardless_of_sample_sign() -> None:
+    """SQL Server TINYINT is unsigned (0..255); the Arrow type must be
+    ``uint8`` regardless of the sampled values (which can never legitimately
+    be negative, but the helper must not branch on sign)."""
+    # internal_size == 1 is what pyodbc reports for TINYINT columns.
+    column_desc = ("c_tinyint", int, None, 1, 3, 0, True)
+
+    # Non-negative sample → uint8.
+    assert MSSqlConnector._mssql_arrow_type(column_desc, [0, 255]) == pa.uint8()
+    # All-None sample → still uint8 (driver-declared internal_size wins).
+    assert MSSqlConnector._mssql_arrow_type(column_desc, [None, None]) == pa.uint8()
+
+
+def test_mssql_tinyint_round_trips_through_build_column() -> None:
+    """A TINYINT column with 0 and 255 must survive the column build path."""
+    arr = MSSqlConnector._build_mssql_column([0, 255, None], pa.uint8())
+    assert arr.type == pa.uint8()
+    assert arr.to_pylist() == [0, 255, None]

@@ -226,8 +226,10 @@ class MSSqlConnector(ConnectorABC):
     ) -> pa.DataType:
         non_negative = all(value is None or int(value) >= 0 for value in values)
 
+        # SQL Server TINYINT is unconditionally unsigned (0..255), so map by
+        # the declared internal_size rather than sampling for sign.
         if internal_size == 1:
-            return pa.uint8() if non_negative else pa.int8()
+            return pa.uint8()
         if internal_size == 2:
             return pa.int16()
         if internal_size == 4:
