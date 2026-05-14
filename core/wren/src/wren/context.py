@@ -994,7 +994,7 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                 ValidationError(
                     "error",
                     f"{src_path} > {name}",
-                    "cube missing 'baseObject'",
+                    "cube missing 'base_object'",
                 )
             )
         elif base not in all_entity_names:
@@ -1002,7 +1002,7 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                 ValidationError(
                     "error",
                     f"{src_path} > {name}",
-                    f"baseObject '{base}' is not a defined model or view",
+                    f"base_object '{base}' is not a defined model or view",
                 )
             )
 
@@ -1019,13 +1019,17 @@ def validate_project(project_path: Path) -> list[ValidationError]:
         # Sanity-check hierarchy levels reference declared dimensions /
         # time_dimensions. Rust-side validation does the same check, but
         # surfacing it at YAML time gives faster feedback before build.
+        # Only keep string names so a malformed YAML entry doesn't leak a
+        # non-hashable value into the set lookup below.
         dim_names = {
-            d.get("name") for d in (cube.get("dimensions") or []) if isinstance(d, dict)
+            d.get("name")
+            for d in (cube.get("dimensions") or [])
+            if isinstance(d, dict) and isinstance(d.get("name"), str)
         }
         td_names = {
             td.get("name")
             for td in (cube.get("time_dimensions") or [])
-            if isinstance(td, dict)
+            if isinstance(td, dict) and isinstance(td.get("name"), str)
         }
         known_dims = dim_names | td_names
         hierarchies = cube.get("hierarchies") or {}
@@ -1034,6 +1038,15 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                 if not isinstance(levels, list):
                     continue
                 for level in levels:
+                    if not isinstance(level, str):
+                        errors.append(
+                            ValidationError(
+                                "error",
+                                f"{src_path} > {name} > hierarchies.{hname}",
+                                "hierarchy levels must be strings",
+                            )
+                        )
+                        continue
                     if level not in known_dims:
                         errors.append(
                             ValidationError(

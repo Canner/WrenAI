@@ -58,8 +58,11 @@ def describe_schema(manifest: dict) -> str:
     for view in manifest.get("views", []):
         _describe_view(view, lines)
 
-    for cube in manifest.get("cubes", []) or []:
-        _describe_cube(cube, lines)
+    cubes = manifest.get("cubes", []) or []
+    if isinstance(cubes, list):
+        for cube in cubes:
+            if isinstance(cube, dict):
+                _describe_cube(cube, lines)
 
     return "\n".join(lines)
 
@@ -126,7 +129,7 @@ def _describe_cube(cube: dict, lines: list[str]) -> None:
     name = cube.get("name", "")
     base = cube.get("baseObject", "?")
     lines.append(f"### Cube: {name} (base: {base})")
-    measures = cube.get("measures", []) or []
+    measures = [m for m in (cube.get("measures") or []) if isinstance(m, dict)]
     if measures:
         lines.append("  Measures:")
         for m in measures:
@@ -139,7 +142,7 @@ def _describe_cube(cube: dict, lines: list[str]) -> None:
             if expr:
                 line += f": {expr}"
             lines.append(line)
-    dims = cube.get("dimensions", []) or []
+    dims = [d for d in (cube.get("dimensions") or []) if isinstance(d, dict)]
     if dims:
         lines.append("  Dimensions:")
         for d in dims:
@@ -152,7 +155,7 @@ def _describe_cube(cube: dict, lines: list[str]) -> None:
             if expr and expr != dname:
                 line += f": {expr}"
             lines.append(line)
-    tdims = cube.get("timeDimensions", []) or []
+    tdims = [td for td in (cube.get("timeDimensions") or []) if isinstance(td, dict)]
     if tdims:
         lines.append("  Time dimensions:")
         for td in tdims:
@@ -169,8 +172,11 @@ def _describe_cube(cube: dict, lines: list[str]) -> None:
     if isinstance(hierarchies, dict) and hierarchies:
         lines.append("  Hierarchies:")
         for hname, levels in hierarchies.items():
-            if isinstance(levels, list):
-                lines.append(f"    - {hname}: {' → '.join(levels)}")
+            if not isinstance(levels, list):
+                continue
+            safe = [lv for lv in levels if isinstance(lv, str)]
+            if safe:
+                lines.append(f"    - {hname}: {' → '.join(safe)}")
     lines.append("")
 
 
@@ -205,15 +211,22 @@ def extract_schema_items(manifest: dict) -> list[dict]:
     for view in manifest.get("views", []):
         items.append(_view_record(view, mdl_h, now))
 
-    for cube in manifest.get("cubes", []) or []:
-        items.append(_cube_record(cube, mdl_h, now))
-        cube_name = cube.get("name", "")
-        for measure in cube.get("measures", []) or []:
-            items.append(_measure_record(measure, cube_name, mdl_h, now))
-        for dim in cube.get("dimensions", []) or []:
-            items.append(_cube_dimension_record(dim, cube_name, mdl_h, now))
-        for tdim in cube.get("timeDimensions", []) or []:
-            items.append(_time_dimension_record(tdim, cube_name, mdl_h, now))
+    cubes = manifest.get("cubes", []) or []
+    if isinstance(cubes, list):
+        for cube in cubes:
+            if not isinstance(cube, dict):
+                continue
+            items.append(_cube_record(cube, mdl_h, now))
+            cube_name = cube.get("name", "")
+            for measure in cube.get("measures", []) or []:
+                if isinstance(measure, dict):
+                    items.append(_measure_record(measure, cube_name, mdl_h, now))
+            for dim in cube.get("dimensions", []) or []:
+                if isinstance(dim, dict):
+                    items.append(_cube_dimension_record(dim, cube_name, mdl_h, now))
+            for tdim in cube.get("timeDimensions", []) or []:
+                if isinstance(tdim, dict):
+                    items.append(_time_dimension_record(tdim, cube_name, mdl_h, now))
 
     return items
 
@@ -328,10 +341,16 @@ def _view_record(view: dict, mdl_h: str, now: datetime) -> dict:
 def _cube_record(cube: dict, mdl_h: str, now: datetime) -> dict:
     name = cube.get("name", "")
     base = cube.get("baseObject", "?")
-    measures = ", ".join(m.get("name", "") for m in cube.get("measures", []) or [])
-    dims = ", ".join(d.get("name", "") for d in cube.get("dimensions", []) or [])
+    measures = ", ".join(
+        m.get("name", "") for m in (cube.get("measures") or []) if isinstance(m, dict)
+    )
+    dims = ", ".join(
+        d.get("name", "") for d in (cube.get("dimensions") or []) if isinstance(d, dict)
+    )
     time_dims = ", ".join(
-        td.get("name", "") for td in cube.get("timeDimensions", []) or []
+        td.get("name", "")
+        for td in (cube.get("timeDimensions") or [])
+        if isinstance(td, dict)
     )
 
     parts = [f"Cube '{name}' over '{base}'"]

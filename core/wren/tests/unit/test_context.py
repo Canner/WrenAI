@@ -856,7 +856,7 @@ def test_validate_cube_unknown_base_object(tmp_path):
         "name: bad\nbase_object: nosuch\nmeasures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
     )
     errors = validate_project(tmp_path)
-    assert any("baseObject 'nosuch'" in e.message for e in errors)
+    assert any("base_object 'nosuch'" in e.message for e in errors)
 
 
 def test_validate_cube_duplicate_name(tmp_path):
@@ -871,6 +871,39 @@ def test_validate_cube_duplicate_name(tmp_path):
     (cubes_dir / "b.yml").write_text(body)
     errors = validate_project(tmp_path)
     assert any("duplicate cube name" in e.message for e in errors)
+
+
+def test_validate_cube_missing_base_object_uses_snake_case(tmp_path):
+    """Validation error should reference the YAML field name (snake_case)."""
+    _make_v3_cube_project(tmp_path)
+    cubes_dir = tmp_path / "cubes"
+    cubes_dir.mkdir()
+    (cubes_dir / "om.yml").write_text(
+        "name: order_metrics\n"
+        "measures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
+    )
+    errors = validate_project(tmp_path)
+    assert any("'base_object'" in e.message for e in errors)
+    assert not any("baseObject" in e.message for e in errors)
+
+
+def test_validate_cube_non_string_hierarchy_level(tmp_path):
+    """Non-string hierarchy levels must be reported, not crash."""
+    _make_v3_cube_project(tmp_path)
+    cubes_dir = tmp_path / "cubes"
+    cubes_dir.mkdir()
+    (cubes_dir / "om.yml").write_text(
+        "name: order_metrics\n"
+        "base_object: orders\n"
+        "measures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
+        "dimensions: [{name: status, expression: o_orderstatus, type: VARCHAR}]\n"
+        "hierarchies:\n"
+        "  drill:\n"
+        "    - status\n"
+        "    - [nested, list]\n"
+    )
+    errors = validate_project(tmp_path)
+    assert any("hierarchy levels must be strings" in e.message for e in errors)
 
 
 def test_validate_cube_bad_hierarchy(tmp_path):

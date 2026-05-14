@@ -230,6 +230,103 @@ def test_cube_query_unknown_cube(tmp_path):
     assert "not found" in result.output
 
 
+def test_cube_query_in_filter_requires_values(tmp_path):
+    """`status:in:` (empty) should be a clean CLI error, not silent empty IN()."""
+    mdl = _make_mdl(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "cube",
+            "query",
+            "--cube",
+            "order_metrics",
+            "--measures",
+            "revenue",
+            "--filter",
+            "status:in:",
+            "--sql-only",
+            "--mdl",
+            str(mdl),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "in" in result.output.lower() and "value" in result.output.lower()
+
+
+def test_cube_query_in_filter_missing_value(tmp_path):
+    """`status:in` (no value segment) should also be rejected."""
+    mdl = _make_mdl(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "cube",
+            "query",
+            "--cube",
+            "order_metrics",
+            "--measures",
+            "revenue",
+            "--filter",
+            "status:in",
+            "--sql-only",
+            "--mdl",
+            str(mdl),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "in" in result.output.lower() and "value" in result.output.lower()
+
+
+def test_cube_query_invalid_from_json(tmp_path):
+    """Malformed JSON file should produce a clean CLI error, not a traceback."""
+    mdl = _make_mdl(tmp_path)
+    bad = tmp_path / "bad.json"
+    bad.write_text("{not valid json")
+    result = runner.invoke(
+        app,
+        [
+            "cube",
+            "query",
+            "--from",
+            str(bad),
+            "--sql-only",
+            "--mdl",
+            str(mdl),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "invalid JSON" in result.output
+
+
+def test_cube_query_from_json_not_object(tmp_path):
+    mdl = _make_mdl(tmp_path)
+    bad = tmp_path / "list.json"
+    bad.write_text('["not", "an", "object"]')
+    result = runner.invoke(
+        app,
+        [
+            "cube",
+            "query",
+            "--from",
+            str(bad),
+            "--sql-only",
+            "--mdl",
+            str(mdl),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "must be a JSON object" in result.output
+
+
+def test_cube_list_bad_mdl_json(tmp_path):
+    target = tmp_path / "target"
+    target.mkdir(parents=True)
+    bad_mdl = target / "mdl.json"
+    bad_mdl.write_text("not json at all")
+    result = runner.invoke(app, ["cube", "list", "--mdl", str(bad_mdl)])
+    assert result.exit_code == 1
+    assert "invalid MDL JSON" in result.output
+
+
 def test_cube_query_missing_required(tmp_path):
     mdl = _make_mdl(tmp_path)
     result = runner.invoke(

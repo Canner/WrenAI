@@ -57,9 +57,18 @@ def _parse_filter(spec: str) -> dict:
     if len(parts) == 3:
         raw = parts[2]
         if op in {"in", "not_in"}:
-            f["value"] = [v.strip() for v in raw.split(",") if v.strip()]
+            values = [v.strip() for v in raw.split(",") if v.strip()]
+            if not values:
+                raise typer.BadParameter(
+                    f"--filter with {op} requires at least one value, got '{spec}'"
+                )
+            f["value"] = values
         else:
             f["value"] = raw
+    elif op in {"in", "not_in"}:
+        raise typer.BadParameter(
+            f"--filter with {op} expects 'dim:{op}:value1,value2,…', got '{spec}'"
+        )
     return f
 
 
@@ -110,12 +119,38 @@ def _build_cube_query(
 def _load_cube_query_from(source: str) -> dict:
     """Load a CubeQuery dict from ``-`` (stdin) or a JSON file path."""
     if source == "-":
-        return json.loads(sys.stdin.read())
-    p = Path(source).expanduser()
-    if not p.exists():
-        typer.echo(f"Error: CubeQuery file not found: {p}", err=True)
+        raw = sys.stdin.read()
+        label = "stdin"
+    else:
+        p = Path(source).expanduser()
+        if not p.exists():
+            typer.echo(f"Error: CubeQuery file not found: {p}", err=True)
+            raise typer.Exit(1)
+        raw = p.read_text()
+        label = str(p)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        typer.echo(f"Error: invalid JSON in {label}: {e}", err=True)
+        raise typer.Exit(1) from e
+    if not isinstance(data, dict):
+        typer.echo(f"Error: CubeQuery in {label} must be a JSON object.", err=True)
         raise typer.Exit(1)
-    return json.loads(p.read_text())
+    return data
+
+
+def _load_manifest_dict(mdl: str | None) -> dict:
+    """Read mdl.json, parse, surface clean errors on bad JSON / non-object."""
+    mdl_json = _load_mdl_json(mdl)
+    try:
+        manifest = json.loads(mdl_json)
+    except json.JSONDecodeError as e:
+        typer.echo(f"Error: invalid MDL JSON: {e}", err=True)
+        raise typer.Exit(1) from e
+    if not isinstance(manifest, dict):
+        typer.echo("Error: MDL JSON must be an object.", err=True)
+        raise typer.Exit(1)
+    return manifest
 
 
 # ── wren cube list ─────────────────────────────────────────────────────────
@@ -124,8 +159,7 @@ def _load_cube_query_from(source: str) -> dict:
 @cube_app.command(name="list")
 def list_cubes(mdl: _MdlOpt = None) -> None:
     """List all cubes defined in the project."""
-    mdl_json = _load_mdl_json(mdl)
-    manifest = json.loads(mdl_json)
+    manifest = _load_manifest_dict(mdl)
     cubes = manifest.get("cubes", []) or []
     if not cubes:
         typer.echo("No cubes defined.")
@@ -156,8 +190,7 @@ def describe(
     mdl: _MdlOpt = None,
 ) -> None:
     """Print the full schema for a cube (JSON)."""
-    mdl_json = _load_mdl_json(mdl)
-    manifest = json.loads(mdl_json)
+    manifest = _load_manifest_dict(mdl)
     cubes = manifest.get("cubes", []) or []
     cube = next((c for c in cubes if c.get("name") == name), None)
     if cube is None:

@@ -257,6 +257,43 @@ class TestCubeSchemaItems:
         cube_types = {"cube", "measure", "cube_dimension", "time_dimension"}
         assert not any(i["item_type"] in cube_types for i in items)
 
+    def test_malformed_cube_entries_are_skipped(self):
+        """Non-dict cubes / measures / dimensions / non-string hierarchy levels
+        must not raise — the indexer should drop the bad entries and keep
+        going so semantic memory rebuilds never fail on dirty manifests."""
+        manifest = {
+            "cubes": [
+                "not a dict",
+                {
+                    "name": "ok_cube",
+                    "baseObject": "orders",
+                    "measures": [
+                        "not a dict",
+                        {"name": "revenue", "expression": "SUM(x)", "type": "DOUBLE"},
+                    ],
+                    "dimensions": [None, {"name": "status", "expression": "s"}],
+                    "timeDimensions": [{"name": "ts", "expression": "ts"}, 42],
+                    "hierarchies": {"drill": ["status", ["nested"], None]},
+                },
+            ]
+        }
+        items = extract_schema_items(manifest)
+        names = {(i["item_type"], i["item_name"]) for i in items}
+        assert ("cube", "ok_cube") in names
+        assert ("measure", "revenue") in names
+        assert ("cube_dimension", "status") in names
+        assert ("time_dimension", "ts") in names
+        # Bad entries are silently dropped, not promoted to records.
+        assert sum(1 for i in items if i["item_type"] == "measure") == 1
+        assert sum(1 for i in items if i["item_type"] == "cube_dimension") == 1
+        assert sum(1 for i in items if i["item_type"] == "time_dimension") == 1
+
+        # describe_schema also tolerates the same shape.
+        text = describe_schema(manifest)
+        assert "### Cube: ok_cube" in text
+        # Non-string hierarchy levels are filtered out of the printed line.
+        assert "drill: status" in text
+
 
 # ── describe_schema tests ─────────────────────────────────────────────────
 
