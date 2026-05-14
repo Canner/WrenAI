@@ -88,10 +88,16 @@ _PG_OID_TO_ARROW: dict[int, pa.DataType] = {
 }
 
 
-def _decimal_type(column) -> pa.DataType:
-    """Pick the narrowest decimal128 that fits a NUMERIC column."""
-    scale = column.scale if column.scale is not None else 9
-    scale = max(0, min(scale, 38))
+def _decimal_type(column) -> pa.DataType | None:
+    """Pick the narrowest decimal128 that fits a NUMERIC column.
+
+    Returns ``None`` when the column has no explicit typmod (``scale is
+    None``) — the caller falls back to ``pa.string()`` so that high-precision
+    values round-trip without silent rounding via ``Decimal.quantize``.
+    """
+    if column.scale is None:
+        return None
+    scale = max(0, min(column.scale, 38))
     precision = column.precision if column.precision is not None else 38
     if precision <= 0 or precision > 38:
         precision = 38
@@ -102,9 +108,13 @@ def _decimal_type(column) -> pa.DataType:
 
 def _arrow_type(column) -> pa.DataType:
     if column.type_code == 1700:
-        return _decimal_type(column)
+        # Unconstrained NUMERIC (no typmod) falls back to string to preserve
+        # the exact textual representation — quantising to an arbitrary scale
+        # would silently round high-precision values.
+        return _decimal_type(column) or pa.string()
     if column.type_code == 1231:
-        return pa.list_(_decimal_type(column))
+        inner = _decimal_type(column)
+        return pa.list_(inner) if inner is not None else pa.list_(pa.string())
     return _PG_OID_TO_ARROW.get(column.type_code, pa.string())
 
 

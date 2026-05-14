@@ -137,6 +137,22 @@ def test_build_column_quantises_decimal_values() -> None:
     assert array.to_pylist() == [Decimal("12.3457"), None]
 
 
+def test_arrow_type_for_unconstrained_numeric_falls_back_to_string() -> None:
+    # NUMERIC without typmod (scale is None) must not silently quantise — we
+    # surface it as a string so high-precision values round-trip intact.
+    assert _arrow_type(_column(1700)) == pa.string()
+    # NUMERIC[] inherits the same behaviour for its element type.
+    assert _arrow_type(_column(1231)) == pa.list_(pa.string())
+
+
+def test_build_column_preserves_unconstrained_numeric_precision() -> None:
+    # Regression: previously NUMERIC without typmod defaulted to scale=9, so
+    # values past the 9th decimal were silently rounded by Decimal.quantize.
+    high_precision = Decimal("12345678901234567890.123456789012345")
+    array = _build_column([high_precision, None], pa.string(), 1700)
+    assert array.to_pylist() == [str(high_precision), None]
+
+
 # ── end-to-end testcontainer test ─────────────────────────────────────────
 
 
@@ -236,3 +252,15 @@ def test_canner_connector_dry_run_raises_for_invalid_sql(canner_connector) -> No
 
     with pytest.raises(WrenError):
         canner_connector.dry_run("SELECT * FROM no_such_table")
+
+
+def test_canner_connector_preserves_unconstrained_numeric_precision(
+    canner_connector,
+) -> None:
+    # Regression: unconstrained NUMERIC must round-trip without silent rounding.
+    # The cursor description reports scale=None for an unconstrained cast, so
+    # the connector falls back to pa.string() to keep the exact textual value.
+    literal = "12345678901234567890.123456789012345"
+    table = canner_connector.query(f"SELECT '{literal}'::numeric AS n")
+    assert table.schema.field("n").type == pa.string()
+    assert table.to_pylist() == [{"n": literal}]
