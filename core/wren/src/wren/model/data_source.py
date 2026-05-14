@@ -463,6 +463,11 @@ class DataSourceExtension(Enum):
     def _decode_mssql_datetimeoffset(value: bytes | None) -> dtlib.datetime | None:
         if value is None:
             return None
+        if len(value) != 20:
+            raise ValueError(
+                "unexpected mssql datetimeoffset payload length: "
+                f"expected 20, got {len(value)}"
+            )
 
         year = int.from_bytes(value[0:2], "little")
         month = int.from_bytes(value[2:4], "little")

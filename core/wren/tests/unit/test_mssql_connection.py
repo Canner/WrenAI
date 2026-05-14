@@ -10,6 +10,7 @@ installed; they cover behaviours called out in PR #2274 review:
    is called, so the connection can't be leaked.
 4. SQL Server ``TINYINT`` (``internal_size == 1``) maps unconditionally
    to ``pa.uint8()``.
+5. ``_decode_mssql_datetimeoffset`` validates payload length explicitly.
 """
 
 from __future__ import annotations
@@ -220,3 +221,25 @@ def test_mssql_tinyint_round_trips_through_build_column() -> None:
     arr = MSSqlConnector._build_mssql_column([0, 255, None], pa.uint8())
     assert arr.type == pa.uint8()
     assert arr.to_pylist() == [0, 255, None]
+
+
+# ---------------------------------------------------------------------------
+# 5. datetimeoffset payload length validation
+# ---------------------------------------------------------------------------
+
+
+def test_mssql_decode_datetimeoffset_rejects_truncated_payload() -> None:
+    """A short DATETIMEOFFSET payload must raise a clear error, not the
+    cryptic ``month must be in 1..12`` that bubbles up from datetime()."""
+    truncated = b"\x00" * 10
+    with pytest.raises(ValueError) as exc:
+        DataSourceExtension._decode_mssql_datetimeoffset(truncated)
+    msg = str(exc.value)
+    assert "datetimeoffset" in msg.lower()
+    assert "20" in msg
+    assert "10" in msg
+
+
+def test_mssql_decode_datetimeoffset_accepts_none() -> None:
+    """``None`` continues to pass through (NULL values from pyodbc)."""
+    assert DataSourceExtension._decode_mssql_datetimeoffset(None) is None
