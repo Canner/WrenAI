@@ -4,7 +4,7 @@ import base64
 import urllib
 from enum import Enum, StrEnum, auto
 from json import loads
-from typing import Any
+from typing import TYPE_CHECKING, Any, Union
 from urllib.parse import unquote_plus
 
 import boto3
@@ -40,6 +40,14 @@ from wren.model import (
 )
 from wren.model.error import ErrorCode, WrenError
 
+if TYPE_CHECKING:
+    import MySQLdb
+
+# ``get_connection`` returns an ``ibis.BaseBackend`` for most data sources, but
+# the native MySQL / Doris path returns a raw ``MySQLdb.Connection`` since the
+# native connector bypasses ibis entirely.
+ConnectionHandle = Union[BaseBackend, "MySQLdb.Connection"]
+
 X_WREN_DB_STATEMENT_TIMEOUT = "x-wren-db-statement_timeout"
 
 
@@ -65,7 +73,7 @@ class DataSource(StrEnum):
     spark = auto()
     databricks = auto()
 
-    def get_connection(self, info: ConnectionInfo) -> BaseBackend:
+    def get_connection(self, info: ConnectionInfo) -> ConnectionHandle:
         try:
             return DataSourceExtension[self].get_connection(info)
         except KeyError:
@@ -228,7 +236,7 @@ class DataSourceExtension(Enum):
     databricks = "databricks"
     spark = "spark"
 
-    def get_connection(self, info: ConnectionInfo) -> BaseBackend:
+    def get_connection(self, info: ConnectionInfo) -> ConnectionHandle:
         try:
             if hasattr(info, "connection_url"):
                 # MySQL / Doris use the native MySQLdb driver, not ibis.
@@ -341,7 +349,7 @@ class DataSourceExtension(Enum):
         )
 
     @classmethod
-    def get_mysql_connection(cls, info: MySqlConnectionInfo):
+    def get_mysql_connection(cls, info: MySqlConnectionInfo) -> "MySQLdb.Connection":
         import MySQLdb  # noqa: PLC0415
 
         from wren.connector.mysql import _build_mysql_connect_kwargs  # noqa: PLC0415
@@ -349,7 +357,7 @@ class DataSourceExtension(Enum):
         return MySQLdb.connect(**_build_mysql_connect_kwargs(info))
 
     @classmethod
-    def get_doris_connection(cls, info: DorisConnectionInfo):
+    def get_doris_connection(cls, info: DorisConnectionInfo) -> "MySQLdb.Connection":
         import MySQLdb  # noqa: PLC0415
 
         from wren.connector.mysql import _build_doris_connect_kwargs  # noqa: PLC0415
