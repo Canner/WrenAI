@@ -107,6 +107,7 @@ def init(
     # Create directory structure
     (project_path / "models").mkdir(parents=True, exist_ok=True)
     (project_path / "views").mkdir(parents=True, exist_ok=True)
+    (project_path / "cubes").mkdir(parents=True, exist_ok=True)
 
     # wren_project.yml
     project_yml = (
