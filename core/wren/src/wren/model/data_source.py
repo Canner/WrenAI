@@ -401,29 +401,9 @@ class DataSourceExtension(Enum):
 
     @staticmethod
     def get_snowflake_connection(info: SnowflakeConnectionInfo):
-        import snowflake.connector  # noqa: PLC0415
+        from wren.connector.snowflake import _make_snowflake_connection  # noqa: PLC0415
 
-        if hasattr(info, "private_key") and info.private_key:
-            params = {
-                "user": info.user,
-                "private_key": info.private_key.get_secret_value(),
-                "account": info.account,
-                "database": info.database,
-                "schema": info.sf_schema,
-            }
-        else:
-            params = {
-                "user": info.user,
-                "password": info.password.get_secret_value(),
-                "account": info.account,
-                "database": info.database,
-                "schema": info.sf_schema,
-            }
-        if hasattr(info, "warehouse") and info.warehouse:
-            params["warehouse"] = info.warehouse
-        if info.kwargs:
-            params.update(info.kwargs)
-        return snowflake.connector.connect(**params)
+        return _make_snowflake_connection(info)
 
     @staticmethod
     def get_trino_connection(info: TrinoConnectionInfo) -> BaseBackend:
