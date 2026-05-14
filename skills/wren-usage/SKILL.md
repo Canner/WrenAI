@@ -4,7 +4,7 @@ description: "Wren Engine CLI workflow guide for AI agents. Answer data question
 license: Apache-2.0
 metadata:
   author: wren-engine
-  version: "2.2"
+  version: "2.3"
 ---
 
 # Wren Engine CLI — Agent Workflow Guide
@@ -304,6 +304,7 @@ wren --sql "SELECT * FROM <changed_model> LIMIT 1"
 
 ```text
 Get data back           → wren --sql "..."
+Aggregation across dims → wren cube query --cube <name> --measures <m> (if cube defined)
 See translated SQL only → wren dry-plan --sql "..." (accepts -d <datasource> if no active profile)
 Validate against DB     → wren dry-run --sql "..."
 Schema context          → wren memory fetch -q "..."
@@ -316,6 +317,97 @@ Show project context    → wren context show
 Rebuild manifest        → wren context build
 Check profile           → wren profile debug
 Switch profile          → wren profile switch <name>
+```
+
+---
+
+## Cube Query Workflow
+
+When the user asks an aggregation question (e.g., "total revenue by month",
+"top customers"), check if the MDL defines cubes before writing raw SQL.
+
+### Step 1: Discover cubes
+
+```bash
+wren cube list
+```
+
+If cubes exist and cover the user's question, prefer cube query over raw SQL.
+Lower error rate, especially for small / local models — agents don't have to
+hand-write GROUP BY / DATE_TRUNC.
+
+### Step 2: Inspect cube structure
+
+```bash
+wren cube describe <cube_name>
+```
+
+Shows the cube's baseObject, measures (with expressions), dimensions,
+time dimensions, and hierarchies.
+
+### Step 3: Match user's question to cube measures + dimensions
+
+| User phrase | Maps to |
+|---|---|
+| "total revenue" | `--measures revenue` |
+| "by month" | `--time-dimension "created_at:month"` |
+| "in 2024" | `--time-dimension "created_at:month:2024-01-01,2025-01-01"` |
+| "for completed orders" | `--filter "status:eq:completed"` |
+| "top N customers" | `--dimensions customer --limit N` |
+
+### Step 4: Execute via CLI flags OR JSON input
+
+CLI flags:
+
+```bash
+wren cube query \
+  --cube order_metrics \
+  --measures revenue,order_count \
+  --time-dimension "created_at:month:2024-01-01,2025-01-01" \
+  --filter "status:eq:completed" \
+  --limit 100
+```
+
+JSON input (good for agent-generated structured queries):
+
+```bash
+echo '{"cube":"order_metrics","measures":["revenue"]}' | wren cube query --from -
+```
+
+Add `--sql-only` to print the generated SQL without executing — useful for
+verification before paying for execution on a remote warehouse.
+
+### Step 5: Error recovery
+
+| Error | Action |
+|---|---|
+| `Unknown measure 'X'` | `wren cube describe <cube>` for available measures |
+| `Unknown dimension 'X'` | `wren cube describe <cube>` for available dimensions |
+| `Cube 'X' not found` | `wren cube list` |
+| `Circular dependency detected` | Derived measure references itself — inspect the cube YAML |
+
+### When NOT to use cube query
+
+Fall back to `wren --sql` when:
+
+- Custom JOINs across multiple models
+- Window functions, CTEs, or subqueries
+- Queries with no aggregation
+- No cubes defined in the MDL
+
+---
+
+## Aggregation decision tree
+
+```text
+User question → Is it an aggregation question?
+                (SUM, COUNT, AVG, GROUP BY, "by month", "per customer", ...)
+  ├── Yes → Are cubes defined? (`wren cube list` once at start of session)
+  │         ├── Yes → Does a cube cover the question? (`wren cube describe`)
+  │         │         ├── Yes → Use `wren cube query` (preferred — lower error rate)
+  │         │         └── No  → Write raw SQL with `wren --sql`
+  │         └── No  → Write raw SQL with `wren --sql`
+  └── No  → Write raw SQL with `wren --sql` (look for memory recall first)
 ```
 
 ---

@@ -106,3 +106,51 @@ If the rewriter detects no model references in your SQL (e.g. `SELECT 1` or quer
 - Queries that don't reference any MDL model still work
 - The fallback path does NOT use CTE injection — it transforms the whole query at once
 - If you expect model expansion but get none, check that your FROM clause uses model names from the MDL
+
+---
+
+## Cube query SQL generation
+
+`wren cube query` doesn't execute SQL directly — it produces SQL from a
+structured CubeQuery input and hands it to the engine. Inspecting
+`--sql-only` output is how an agent reverse-engineers cube expansion logic.
+
+### Generated SQL pattern
+
+```sql
+SELECT DATE_TRUNC('month', o_orderdate) AS created_at__month,
+       o_orderstatus AS status,
+       SUM(o_totalprice) AS revenue,
+       COUNT(*) AS order_count
+FROM orders                                    -- ← cube.baseObject
+WHERE o_orderdate >= '2024-01-01'
+  AND o_orderdate <  '2025-01-01'              -- ← dateRange (end exclusive)
+  AND o_orderstatus = 'completed'              -- ← filter
+GROUP BY 1, 2                                  -- ← GROUP BY ordinals for all dims
+ORDER BY 1
+LIMIT 100
+```
+
+### Key points
+
+- **`FROM` is the cube's `baseObject`** — wren-core then resolves it to the
+  underlying model/view, so all existing model rewrite rules still apply.
+- **Time dimensions use `DATE_TRUNC(granularity, expr)`**; the column alias
+  is `<name>__<granularity>` (e.g., `created_at__month`).
+- **Date range is `[start, end)` half-open** — the `end` day is excluded.
+- **Derived measures inline-expand**: `avg_order_value = revenue / order_count`
+  becomes `(SUM(o_totalprice)) / (COUNT(*))`. Longest dependency name
+  substitutes first to avoid partial-token bugs (e.g., `revenue_2` before
+  `revenue`).
+- **Expressions containing `$` are safe**: Postgres `$1` parameter placeholders
+  and `$$tag$$` dollar-quoted literals are kept literal, not misread as
+  regex capture-group templates.
+
+### Diagnosing cube SQL errors
+
+1. `wren cube query --sql-only ...` to inspect the generated SQL.
+2. If the SQL looks reasonable, run `wren cube query ...` (drop `--sql-only`).
+3. If the execution error is "unknown column / table", the cube YAML's
+   `expression` is likely wrong — not the translator.
+4. If translation itself fails (e.g., cyclic measure), the error is raised
+   before execution and names the offending measure.

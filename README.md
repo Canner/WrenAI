@@ -48,6 +48,8 @@ WrenAI is the open context layer that fills that gap. You model your business in
 
 A Rust engine powered by [Apache DataFusion](https://datafusion.apache.org/) translates the modeled SQL and runs it against 20+ data sources (PostgreSQL, BigQuery, Snowflake, Spark, etc.). Use it as a Python SDK, a CLI, a WASM module in the browser, or as building blocks for agent skills.
 
+**Pre-aggregation cubes** — model business metrics once (revenue, order count, retention) with measures, dimensions, and time grains. AI agents query cubes with a structured input instead of hand-writing `GROUP BY` / `DATE_TRUNC` SQL, cutting error rates substantially on small / local models. See the [Cube guide](./docs/core/guides/modeling/cube.md).
+
 ## Quick start
 
 The fastest path is to let an AI coding agent (Claude Code, Cursor, Aider, etc.) drive the install:

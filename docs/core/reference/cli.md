@@ -200,3 +200,72 @@ Drop all memory tables and start fresh.
 wren memory reset          # prompts for confirmation
 wren memory reset --force  # skip confirmation
 ```
+
+---
+
+## `wren cube` — Pre-aggregation Queries
+
+For aggregation queries where the MDL defines cubes, use `wren cube` instead
+of writing raw SQL. The translator produces correct `GROUP BY`, `DATE_TRUNC`,
+and `WHERE` clauses from a structured input.
+
+### `wren cube list`
+
+List all cubes in the loaded MDL with their measures and dimensions.
+
+```bash
+wren cube list
+```
+
+### `wren cube describe <name>`
+
+Pretty-print the full cube schema as JSON: `baseObject`, measures (with
+expressions), dimensions, time dimensions, hierarchies.
+
+```bash
+wren cube describe order_metrics
+```
+
+### `wren cube query`
+
+Build a CubeQuery and translate it to SQL via wren-core, then execute through
+the same path as `wren --sql`. Two input modes:
+
+**CLI flags:**
+
+```bash
+wren cube query \
+  --cube order_metrics \
+  --measures revenue,order_count \
+  --dimensions status \
+  --time-dimension "created_at:month:2024-01-01,2025-01-01" \
+  --filter "status:eq:completed" \
+  --limit 100
+```
+
+**JSON input** (`--from <file|->`):
+
+```bash
+cat query.json | wren cube query --from -
+```
+
+| Flag | Description |
+|------|-------------|
+| `--cube` | Cube name (required unless using `--from`) |
+| `--measures` | Comma-separated measure names (required unless using `--from`) |
+| `--dimensions` | Comma-separated dimension names |
+| `--time-dimension` | `<name>:<granularity>[:start,end]` — one time dimension with optional date range |
+| `--filter` | Repeatable. `<dimension>:<operator>[:value]`. For `in` / `not_in`, value is comma-separated. |
+| `--limit` / `--offset` | Pagination |
+| `--from <file\|->` | Load CubeQuery as JSON from a file or stdin |
+| `--sql-only` | Print the generated SQL and exit without executing |
+| `--mdl` | Path to MDL JSON (defaults to `<project>/target/mdl.json`) |
+| `--output` | `table` (default), `json`, `csv` |
+
+**Supported granularities:** `year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`.
+
+**Supported filter operators:** `eq`, `neq`, `in`, `not_in`, `gt`, `gte`, `lt`,
+`lte`, `contains`, `starts_with`, `is_null`, `is_not_null`.
+
+See the [Cube guide](../guides/modeling/cube.md) for YAML structure and
+validation rules.

@@ -186,11 +186,18 @@ This creates:
 ```text
 project/
 ├── wren_project.yml
-├── models/
-├── views/
+├── models/              # business-facing tables/models
+├── views/               # named SQL statements
+├── cubes/               # pre-aggregation cubes (measures + dimensions)
 ├── relationships.yml
 └── instructions.md
 ```
+
+> **When to define cubes:** If the user asks aggregation questions like
+> "revenue by month" or "top customers", define cubes alongside models —
+> they give agents a structured query API instead of forcing them to
+> hand-write `GROUP BY` / `DATE_TRUNC` SQL. See the
+> [Cube guide](https://github.com/Canner/WrenAI/blob/main/docs/core/guides/modeling/cube.md).
 
 > **IMPORTANT: `catalog` and `schema` in `wren_project.yml`**
 >
