@@ -5,6 +5,80 @@ export interface WrenProfile {
   source: string;
 }
 
+export type Granularity =
+  | "year"
+  | "quarter"
+  | "month"
+  | "week"
+  | "day"
+  | "hour"
+  | "minute";
+
+export type FilterOperator =
+  | "eq"
+  | "neq"
+  | "in"
+  | "not_in"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte"
+  | "contains"
+  | "starts_with"
+  | "is_null"
+  | "is_not_null";
+
+export type FilterValue =
+  | string
+  | number
+  | boolean
+  | (string | number | boolean)[];
+
+export interface TimeDimensionInput {
+  dimension: string;
+  granularity: Granularity;
+  /** Inclusive start, exclusive end. */
+  dateRange?: [string, string];
+}
+
+export interface CubeFilterInput {
+  dimension: string;
+  operator: FilterOperator;
+  /** Omit for `is_null`/`is_not_null`. Use an array for `in`/`not_in`. */
+  value?: FilterValue;
+}
+
+export interface CubeQueryInput {
+  cube: string;
+  measures: string[];
+  dimensions?: string[];
+  timeDimensions?: TimeDimensionInput[];
+  filters?: CubeFilterInput[];
+  limit?: number;
+  offset?: number;
+}
+
+export interface CubeMeasureInfo {
+  name: string;
+  expression: string;
+  type: string;
+}
+
+export interface CubeDimensionInfo {
+  name: string;
+  expression: string;
+  type: string;
+}
+
+export interface CubeInfo {
+  name: string;
+  baseObject: string;
+  measures: CubeMeasureInfo[];
+  dimensions: CubeDimensionInfo[];
+  timeDimensions: CubeDimensionInfo[];
+  hierarchies: Record<string, string[]>;
+}
+
 export interface WrenEngineOptions {
   /**
    * WASM binary source. Accepts:
@@ -83,6 +157,33 @@ export class WrenEngine {
    */
   async query(sql: string): Promise<Record<string, unknown>[]> {
     const jsonStr = await this.engine.query(sql);
+    if (!jsonStr) return [];
+    return JSON.parse(jsonStr);
+  }
+
+  /**
+   * Execute a structured cube query against the loaded MDL.
+   *
+   * Translates the CubeQuery to SQL via wren-core, then executes the SQL
+   * through the same path as `query()`. Requires `loadMDL` first.
+   *
+   * Prefer this over hand-written SQL for aggregation queries — the cube
+   * layer assembles `GROUP BY`, `DATE_TRUNC`, and `WHERE` clauses for you.
+   */
+  async cubeQuery(query: CubeQueryInput): Promise<Record<string, unknown>[]> {
+    const jsonStr = await this.engine.cubeQuery(JSON.stringify(query));
+    if (!jsonStr) return [];
+    return JSON.parse(jsonStr);
+  }
+
+  /**
+   * List the cubes defined in the loaded MDL.
+   *
+   * Useful for an agent to discover what's queryable before calling
+   * `cubeQuery`. Requires `loadMDL` first.
+   */
+  listCubes(): CubeInfo[] {
+    const jsonStr = this.engine.listCubes();
     if (!jsonStr) return [];
     return JSON.parse(jsonStr);
   }

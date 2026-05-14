@@ -12,6 +12,8 @@ export class WrenEngine {
   registerParquet(table_name: string, data: Uint8Array): Promise<void>;
   loadMDL(mdl_json: string, source: string): Promise<void>;
   query(sql: string): Promise<string>;
+  cubeQuery(cube_query_json: string): Promise<string>;
+  listCubes(): string;
 }
 
 export type InitInput =

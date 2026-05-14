@@ -6,7 +6,7 @@ Reference for AI agents generating browser-based HTML dashboard artifacts using 
 
 ```html
 <script type="module">
-  import { WrenEngine } from 'https://unpkg.com/@wrenai/wren-core-wasm@0.1.0/dist/index.js';
+  import { WrenEngine } from 'https://unpkg.com/@wrenai/wren-core-wasm@0.3.0/dist/index.js';
 </script>
 ```
 
@@ -86,6 +86,63 @@ const mdl = {
 - **console.table**: `console.table(rows)`
 - **HTML table**: iterate `rows` to build `<tr>/<td>` elements
 
+## Cube Query API
+
+For aggregation queries, prefer `cubeQuery()` over raw SQL. The cube layer
+generates correct `GROUP BY`, `DATE_TRUNC`, and `WHERE` clauses from a
+structured input — fewer hand-written errors for the agent.
+
+> ⚠️ Both `listCubes()` and `cubeQuery()` require `await engine.loadMDL(...)`
+> to have completed first — they throw an error otherwise.
+
+### List available cubes
+
+```javascript
+const cubes = engine.listCubes();
+// → [{ name: "order_metrics", baseObject: "orders", measures: [...],
+//      dimensions: [...], timeDimensions: [...], hierarchies: {...} }]
+```
+
+### Execute a cube query
+
+```javascript
+const rows = await engine.cubeQuery({
+  cube: "order_metrics",
+  measures: ["revenue", "order_count"],
+  dimensions: ["status"],
+  timeDimensions: [{
+    dimension: "created_at",
+    granularity: "month",
+    dateRange: ["2024-01-01", "2025-01-01"],
+  }],
+  filters: [
+    { dimension: "status", operator: "eq", value: "completed" },
+  ],
+  limit: 100,
+});
+```
+
+`rows` has the same `Record<string, unknown>[]` shape as `query()`.
+
+### `cubeQuery` vs `query`
+
+| Situation | Use |
+|---|---|
+| Aggregating measures over dimensions (with optional time bucket) | `cubeQuery` |
+| Free-form SQL — joins across models, window functions, custom CTEs | `query` |
+| MDL has no cubes defined | `query` |
+
+### Filter operators
+
+`eq`, `neq`, `in`, `not_in`, `gt`, `gte`, `lt`, `lte`, `contains`,
+`starts_with`, `is_null`, `is_not_null`. Pass `value` as an array for
+`in`/`not_in`; omit `value` for `is_null`/`is_not_null`.
+
+### Time granularity
+
+`year` | `quarter` | `month` | `week` | `day` | `hour` | `minute`.
+`dateRange` is `[startInclusive, endExclusive]`.
+
 ## Complete HTML Template (Inline Mode)
 
 ```html
@@ -103,7 +160,7 @@ const mdl = {
   <div id="status">Loading engine...</div>
 
   <script type="module">
-    import { WrenEngine } from 'https://unpkg.com/@wrenai/wren-core-wasm@0.1.0/dist/index.js';
+    import { WrenEngine } from 'https://unpkg.com/@wrenai/wren-core-wasm@0.3.0/dist/index.js';
 
     const status = document.getElementById('status');
 

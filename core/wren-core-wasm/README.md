@@ -83,6 +83,44 @@ await engine.loadMDL(mdl, { source: '' });
 const rows = await engine.query('SELECT * FROM "Orders" LIMIT 10');
 ```
 
+## Examples
+
+The `examples/` directory ships runnable browser demos. They import the
+local WASM build from `pkg/`, so they always reflect the current source
+— useful while iterating on the Rust or TypeScript side.
+
+```bash
+# Build the WASM binary (debug build is fine for examples)
+just build-wasm-dev
+
+# Start the static dev server with CORS + Range support
+just serve
+```
+
+The server prints every demo URL on startup. Open any of them in a browser:
+
+| Demo | URL | What it shows |
+|---|---|---|
+| Inline data | http://localhost:8787/examples/inline.html | `registerJson` + raw SQL `query()` |
+| URL mode | http://localhost:8787/examples/url-mode.html | Remote Parquet via HTTP range requests |
+| CDN smoke test | http://localhost:8787/examples/test-cdn.html | Loading the published wheel from unpkg |
+| **Cube quickstart** | http://localhost:8787/examples/cube-quickstart.html | Minimal `cubeQuery()` — three preset queries (group-by, filter, time bucket) |
+| **Cube explorer** | http://localhost:8787/examples/cube-explorer.html | Form-driven builder for `CubeQuery` — pick measures/dimensions, add filters, choose granularity + date range |
+
+### Cube quickstart vs explorer
+
+- **Quickstart** loads a single `order_metrics` cube and fires hardcoded
+  `cubeQuery()` calls when you click a button. Read the source to see
+  the smallest end-to-end cube example.
+- **Explorer** is interactive: a checkbox/select form generates the
+  `CubeQuery` JSON live (shown next to the result), and you can add as
+  many filters as you like with all 12 `FilterOperator` values. The
+  demo data is spread across regions / customers / months so groupings
+  produce non-trivial numbers.
+
+After Rust changes, re-run `just build-wasm-dev` and refresh the page —
+the examples import directly from `pkg/wren_core_wasm.js`.
+
 ## API Reference
 
 ### `WrenEngine.init(options?)`
