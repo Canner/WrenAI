@@ -11,7 +11,13 @@ from urllib.parse import unquote_plus
 import boto3
 
 if TYPE_CHECKING:
+    import psycopg
     from ibis import BaseBackend
+
+    # The postgres branch returns a raw ``psycopg.Connection`` instead of an
+    # ibis ``BaseBackend``. Widen the return type so static checkers and
+    # readers see both shapes.
+    ConnectionLike = BaseBackend | psycopg.Connection
 
 from wren.model import (
     AthenaConnectionInfo,
@@ -68,7 +74,7 @@ class DataSource(StrEnum):
     spark = auto()
     databricks = auto()
 
-    def get_connection(self, info: ConnectionInfo) -> BaseBackend:
+    def get_connection(self, info: ConnectionInfo) -> ConnectionLike:
         try:
             return DataSourceExtension[self].get_connection(info)
         except KeyError:
@@ -231,7 +237,7 @@ class DataSourceExtension(Enum):
     databricks = "databricks"
     spark = "spark"
 
-    def get_connection(self, info: ConnectionInfo) -> BaseBackend:
+    def get_connection(self, info: ConnectionInfo) -> ConnectionLike:
         try:
             if hasattr(info, "connection_url"):
                 import ibis  # noqa: PLC0415
@@ -389,7 +395,9 @@ class DataSourceExtension(Enum):
         return connection
 
     @staticmethod
-    def get_postgres_connection(info: PostgresConnectionInfo):
+    def get_postgres_connection(
+        info: PostgresConnectionInfo,
+    ) -> psycopg.Connection:
         """Open a native psycopg3 connection to PostgreSQL.
 
         Returned object is a ``psycopg.Connection`` — the postgres connector
