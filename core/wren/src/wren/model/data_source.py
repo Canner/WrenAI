@@ -5,12 +5,13 @@ import ssl
 import urllib
 from enum import Enum, StrEnum, auto
 from json import loads
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote_plus
 
 import boto3
-import ibis
-from ibis import BaseBackend
+
+if TYPE_CHECKING:
+    from ibis import BaseBackend
 
 from wren.model import (
     AthenaConnectionInfo,
@@ -233,6 +234,8 @@ class DataSourceExtension(Enum):
     def get_connection(self, info: ConnectionInfo) -> BaseBackend:
         try:
             if hasattr(info, "connection_url"):
+                import ibis  # noqa: PLC0415
+
                 kwargs = info.kwargs if info.kwargs else {}
                 return ibis.connect(info.connection_url.get_secret_value(), **kwargs)
             if self.name in {"local_file", "redshift", "spark", "duckdb", "datafusion"}:
@@ -249,6 +252,8 @@ class DataSourceExtension(Enum):
 
     @staticmethod
     def get_athena_connection(info: AthenaConnectionInfo) -> BaseBackend:
+        import ibis  # noqa: PLC0415
+
         kwargs: dict[str, Any] = {
             "s3_staging_dir": info.s3_staging_dir.get_secret_value(),
             "schema_name": info.schema_name,
@@ -283,6 +288,7 @@ class DataSourceExtension(Enum):
 
     @staticmethod
     def get_bigquery_connection(info: BigQueryDatasetConnectionInfo) -> BaseBackend:
+        import ibis  # noqa: PLC0415
         from google.cloud import bigquery  # noqa: PLC0415
         from google.oauth2 import service_account  # noqa: PLC0415
 
@@ -306,6 +312,8 @@ class DataSourceExtension(Enum):
 
     @staticmethod
     def get_canner_connection(info: CannerConnectionInfo) -> BaseBackend:
+        import ibis  # noqa: PLC0415
+
         return ibis.postgres.connect(
             host=info.host,
             port=int(info.port),
@@ -316,6 +324,8 @@ class DataSourceExtension(Enum):
 
     @staticmethod
     def get_clickhouse_connection(info: ClickHouseConnectionInfo) -> BaseBackend:
+        import ibis  # noqa: PLC0415
+
         return ibis.clickhouse.connect(
             host=info.host,
             port=int(info.port),
@@ -328,6 +338,8 @@ class DataSourceExtension(Enum):
 
     @classmethod
     def get_mssql_connection(cls, info: MSSqlConnectionInfo) -> BaseBackend:
+        import ibis  # noqa: PLC0415
+
         return ibis.mssql.connect(
             host=info.host,
             port=info.port,
@@ -341,6 +353,8 @@ class DataSourceExtension(Enum):
 
     @classmethod
     def get_mysql_connection(cls, info: MySqlConnectionInfo) -> BaseBackend:
+        import ibis  # noqa: PLC0415
+
         ssl_context = cls._create_ssl_context(info)
         kwargs = {"ssl": ssl_context} if ssl_context else {}
         kwargs.setdefault("charset", "utf8mb4")
@@ -357,6 +371,8 @@ class DataSourceExtension(Enum):
 
     @classmethod
     def get_doris_connection(cls, info: DorisConnectionInfo) -> BaseBackend:
+        import ibis  # noqa: PLC0415
+
         kwargs: dict = {}
         kwargs.setdefault("charset", "utf8mb4")
         if info.kwargs:
@@ -373,18 +389,28 @@ class DataSourceExtension(Enum):
         return connection
 
     @staticmethod
-    def get_postgres_connection(info: PostgresConnectionInfo) -> BaseBackend:
-        return ibis.postgres.connect(
+    def get_postgres_connection(info: PostgresConnectionInfo):
+        """Open a native psycopg3 connection to PostgreSQL.
+
+        Returned object is a ``psycopg.Connection`` — the postgres connector
+        uses raw cursors and an OID-to-Arrow mapping to convert results.
+        """
+        import psycopg  # noqa: PLC0415
+
+        kwargs: dict[str, Any] = dict(info.kwargs) if info.kwargs else {}
+        return psycopg.connect(
             host=info.host,
             port=int(info.port),
-            database=info.database,
+            dbname=info.database,
             user=info.user,
             password=(info.password and info.password.get_secret_value()),
-            **info.kwargs if info.kwargs else {},
+            **kwargs,
         )
 
     @staticmethod
     def get_oracle_connection(info: OracleConnectionInfo) -> BaseBackend:
+        import ibis  # noqa: PLC0415
+
         if hasattr(info, "dsn") and info.dsn:
             return ibis.oracle.connect(
                 dsn=info.dsn.get_secret_value(),
@@ -401,6 +427,8 @@ class DataSourceExtension(Enum):
 
     @staticmethod
     def get_snowflake_connection(info: SnowflakeConnectionInfo) -> BaseBackend:
+        import ibis  # noqa: PLC0415
+
         if hasattr(info, "private_key") and info.private_key:
             params = {
                 "user": info.user,
@@ -425,6 +453,8 @@ class DataSourceExtension(Enum):
 
     @staticmethod
     def get_trino_connection(info: TrinoConnectionInfo) -> BaseBackend:
+        import ibis  # noqa: PLC0415
+
         return ibis.trino.connect(
             host=info.host,
             port=int(info.port),
@@ -437,6 +467,8 @@ class DataSourceExtension(Enum):
 
     @staticmethod
     def get_databricks_connection(info: DatabricksTokenConnectionInfo) -> BaseBackend:
+        import ibis  # noqa: PLC0415
+
         return ibis.databricks.connect(
             server_hostname=info.server_hostname,
             http_path=info.http_path,
