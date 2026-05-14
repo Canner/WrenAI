@@ -104,6 +104,21 @@ wren --sql 'SELECT order_id FROM "orders" LIMIT 10'
 
 For the full CLI reference and per-datasource connection field reference, see [`docs/cli.md`](docs/cli.md) and [`docs/connections.md`](docs/connections.md).
 
+**4a. (Optional) Aggregation queries with cubes** — define cubes under `cubes/`,
+then query them with a structured input instead of writing `GROUP BY` SQL by hand:
+
+```bash
+wren cube list
+wren cube describe order_metrics
+wren cube query --cube order_metrics --measures revenue --time-dimension "created_at:month"
+```
+
+The translator produces `DATE_TRUNC` / `GROUP BY` / `WHERE` clauses for you and
+runs them through the same engine path as `wren --sql`. See the
+[Cube guide](../../docs/core/guides/modeling/cube.md) for full YAML structure
+and the [CLI reference](../../docs/core/reference/cli.md#wren-cube--pre-aggregation-queries) for all
+flags.
+
 **5. (Optional) Configure security policy** — create `~/.wren/config.json`:
 
 ```json

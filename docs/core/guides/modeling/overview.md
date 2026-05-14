@@ -76,6 +76,24 @@ Views are useful when the object you want to expose is query-shaped rather than 
 
 See [View](./view.md).
 
+### Cube
+
+A **Cube** is a pre-aggregated semantic object: a `baseObject` (a Model or
+View), plus declared measures, dimensions, time dimensions, and optional
+hierarchies.
+
+Use a cube when you need to:
+
+- expose pre-defined aggregations (e.g., total revenue by month)
+- give AI agents a structured aggregation API (no hand-written `GROUP BY`)
+- define drill-down hierarchies (year → quarter → month) for BI dashboards
+- share business metrics across CLI, browser (WASM), and downstream consumers
+
+Cubes complement models: a model exposes the rows; a cube exposes the metrics
+defined on top of those rows.
+
+See [Cube](./cube.md).
+
 ### Memory
 
 The **Memory** layer is a LanceDB-backed semantic index that gives AI agents targeted schema context and few-shot query examples — without sending the entire schema in every prompt.
@@ -98,6 +116,7 @@ Use this rule of thumb:
 - Use a **Relationship** to define how models join to each other.
 - Use a **Calculated Field** to define reusable expression logic inside a model.
 - Use a **View** to publish a reusable query result.
+- Use a **Cube** to publish a structured aggregation API (measures × dimensions).
 - Use **Memory** to give AI agents targeted context and learning from past queries.
 
 ## Why this matters

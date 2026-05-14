@@ -260,6 +260,27 @@ The more you ask, the smarter the system gets — each stored query improves fut
 
 ---
 
+## Step 8 — Query a cube (optional)
+
+If your MDL defines cubes, use the cube CLI for aggregation queries — agents
+don't have to hand-write `GROUP BY` / `DATE_TRUNC` SQL:
+
+```bash
+wren cube list
+
+wren cube query \
+  --cube order_metrics \
+  --measures revenue \
+  --time-dimension "created_at:month"
+```
+
+Cube queries are the recommended path for aggregation when a cube covers the
+question. Lower error rate, especially on small / local models. See the
+[Cube guide](../guides/modeling/cube.md) for the YAML structure and the
+[CLI reference](../reference/cli.md#wren-cube--pre-aggregation-queries) for all flags.
+
+---
+
 ## What's in the project
 
 After setup, your project directory looks like this:
