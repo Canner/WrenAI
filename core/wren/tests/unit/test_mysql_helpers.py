@@ -13,6 +13,7 @@ import pytest
 from wren.connector.mysql import (
     _apply_limit,
     _arrow_decimal_from_mysql_field,
+    _build_mysql_column,
     _coerce_limit,
 )
 
@@ -121,3 +122,32 @@ def test_decimal_type_scale_not_greater_than_precision() -> None:
     # Result must keep scale <= precision so PyArrow accepts the type.
     t = _arrow_decimal_from_mysql_field(7, 30, is_unsigned=False)
     assert t.scale <= t.precision
+
+
+# ── TIME → duration round-trip ────────────────────────────────────────────
+
+
+def test_time_column_preserves_negative_and_over_24h() -> None:
+    """MySQL ``TIME`` ranges ``-838:59:59`` to ``838:59:59`` and can be
+    negative. The Arrow type must be ``duration("us")``, not ``time64("us")``
+    (which only accepts 0-24h positive values), and the conversion must
+    preserve the sign and magnitude of MySQLdb's ``datetime.timedelta``
+    values.
+    """
+    import datetime  # noqa: PLC0415
+
+    values = [
+        datetime.timedelta(hours=-100),
+        datetime.timedelta(0),
+        datetime.timedelta(hours=838, minutes=59, seconds=59),
+        -datetime.timedelta(hours=838, minutes=59, seconds=59),
+        None,
+    ]
+    arr = _build_mysql_column(values, pa.duration("us"))
+    assert pa.types.is_duration(arr.type)
+    out = arr.to_pylist()
+    assert out[0] == datetime.timedelta(hours=-100)
+    assert out[1] == datetime.timedelta(0)
+    assert out[2] == datetime.timedelta(hours=838, minutes=59, seconds=59)
+    assert out[3] == -datetime.timedelta(hours=838, minutes=59, seconds=59)
+    assert out[4] is None

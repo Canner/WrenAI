@@ -183,7 +183,11 @@ def _init_mysql_field_type_map() -> None:
         "JSON": pa.string(),
         "DATE": pa.date32(),
         "NEWDATE": pa.date32(),
-        "TIME": pa.time64("us"),
+        # MySQL ``TIME`` ranges ``-838:59:59`` to ``838:59:59`` and can be
+        # negative — semantics PyArrow ``time64("us")`` cannot represent
+        # (it only accepts 0–24h positive values). ``duration("us")`` is the
+        # smallest Arrow type that captures the full MySQL range without loss.
+        "TIME": pa.duration("us"),
         "DATETIME": pa.timestamp("us"),
         "TIMESTAMP": pa.timestamp("us"),
         "YEAR": pa.int16(),
@@ -379,10 +383,14 @@ def _build_mysql_column(values: list, arrow_type: pa.DataType) -> pa.Array:
     if pa.types.is_timestamp(arrow_type):
         return pa.array(values, type=arrow_type, from_pandas=True)
 
-    if pa.types.is_time(arrow_type):
-        # MySQLdb returns TIME columns as ``datetime.timedelta``; PyArrow needs
-        # an integer microsecond offset for time64. Convert here, preserving
-        # None.
+    if pa.types.is_duration(arrow_type):
+        # MySQLdb returns TIME columns as ``datetime.timedelta``. PyArrow's
+        # ``duration("us")`` accepts ``timedelta`` directly, but we convert to
+        # signed microseconds explicitly so negative values (MySQL TIME may go
+        # down to ``-838:59:59``) and values beyond 24h survive without loss.
+        # ``timedelta.total_seconds() * 1e6`` would lose precision; we instead
+        # combine ``days``, ``seconds`` and ``microseconds`` — all of which are
+        # signed on negative ``timedelta`` values.
         import datetime  # noqa: PLC0415
 
         processed = [

@@ -182,7 +182,42 @@ def test_time(connector: MySqlConnector) -> None:
     _exec(connector, "CREATE TABLE t_time (a TIME)")
     _exec(connector, "INSERT INTO t_time VALUES ('12:34:56')")
     tbl = connector.query("SELECT a FROM t_time")
-    assert pa.types.is_time(tbl.schema.field("a").type)
+    # MySQL TIME maps to Arrow ``duration("us")``: ``time64`` cannot represent
+    # negative or >24h values that MySQL ``TIME`` permits.
+    assert pa.types.is_duration(tbl.schema.field("a").type)
+
+
+def test_time_full_range(connector: MySqlConnector) -> None:
+    """MySQL ``TIME`` ranges ``-838:59:59`` to ``838:59:59``.
+
+    The previous mapping to ``pa.time64("us")`` silently corrupted negative
+    values and values past 24h (``time64`` only accepts 0–24h positive). Map
+    to ``duration("us")`` instead so the full MySQL range round-trips.
+    """
+    import datetime  # noqa: PLC0415
+
+    _exec(connector, "DROP TABLE IF EXISTS t_time_range")
+    _exec(connector, "CREATE TABLE t_time_range (label VARCHAR(16), a TIME)")
+    _exec(
+        connector,
+        "INSERT INTO t_time_range VALUES "
+        "('neg_100', '-100:00:00'), "
+        "('zero',    '0:00:00'), "
+        "('max',     '838:59:59'), "
+        "('min',     '-838:59:59')",
+    )
+    tbl = connector.query("SELECT label, a FROM t_time_range ORDER BY label")
+    arrow_type = tbl.schema.field("a").type
+    assert pa.types.is_duration(arrow_type)
+
+    by_label = dict(
+        zip(tbl.column("label").to_pylist(), tbl.column("a").to_pylist(), strict=True)
+    )
+    # ``duration("us")`` round-trips to ``datetime.timedelta`` in PyArrow.
+    assert by_label["neg_100"] == datetime.timedelta(hours=-100)
+    assert by_label["zero"] == datetime.timedelta(0)
+    assert by_label["max"] == datetime.timedelta(hours=838, minutes=59, seconds=59)
+    assert by_label["min"] == -datetime.timedelta(hours=838, minutes=59, seconds=59)
 
 
 def test_year(connector: MySqlConnector) -> None:
