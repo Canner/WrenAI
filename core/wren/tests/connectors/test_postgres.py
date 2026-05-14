@@ -230,3 +230,23 @@ class TestPostgresConnectorTypes:
 
         with pytest.raises(WrenError):
             connector.dry_run("SELECT * FROM nope_does_not_exist")
+
+    def test_duplicate_column_names_preserved(
+        self, connector: PostgresConnector
+    ) -> None:
+        # ``pa.table({...})`` silently drops duplicate keys, which trashes
+        # join results like ``SELECT a.id, b.id FROM t a, t b``. The
+        # connector must preserve both fields positionally.
+        # The previous ``test_dry_run_invalid_sql_raises`` aborts the shared
+        # class-scoped connection's transaction; reset it before running.
+        connector.connection.rollback()
+        result = connector.query(
+            "SELECT a.c_int4 AS id, b.c_int4 AS id "
+            "FROM type_zoo a, type_zoo b "
+            "WHERE a.c_int4 = 42 AND b.c_int4 = 42"
+        )
+        assert result.num_rows == 1
+        assert result.num_columns == 2
+        assert [field.name for field in result.schema] == ["id", "id"]
+        assert result.column(0).to_pylist() == [42]
+        assert result.column(1).to_pylist() == [42]

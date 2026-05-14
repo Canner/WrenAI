@@ -139,7 +139,9 @@ def _build_pg_arrow_table(cursor) -> pa.Table:
             for index, field in enumerate(schema)
         ]
 
-    return pa.table(dict(zip([field.name for field in schema], arrays)), schema=schema)
+    # Build positionally — ``pa.table({...})`` silently drops duplicate column
+    # names (very common in joins like ``SELECT a.id, b.id FROM t a, t b``).
+    return pa.Table.from_arrays(arrays, schema=schema)
 
 
 def _build_pg_column(
