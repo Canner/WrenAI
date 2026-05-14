@@ -1,52 +1,109 @@
+from __future__ import annotations
+
+import datetime as dtlib
+import json
+import uuid
 from contextlib import closing
 from decimal import Decimal as PyDecimal
 
 import pyarrow as pa
 import sqlglot.expressions as sge
-from ibis.expr.datatypes import Decimal
-from ibis.expr.types import Table
+from loguru import logger
 from sqlglot import exp, parse_one
 
-from wren.connector.base import IbisConnector
+from wren.connector.base import ConnectorABC
 from wren.model.data_source import DataSource
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 
 
-class MSSqlConnector(IbisConnector):
+class MSSqlConnector(ConnectorABC):
+    """Native pyodbc-backed MSSQL connector.
+
+    Uses a raw pyodbc cursor for execution, builds Arrow schema from
+    ``cursor.description`` plus value sampling, and rewrites pagination via
+    sqlglot (tsql dialect) so that ``LIMIT n`` becomes
+    ``OFFSET 0 ROWS FETCH NEXT n ROWS ONLY``.
+    """
+
     def __init__(self, connection_info):
-        super().__init__(DataSource.mssql, connection_info)
+        self.data_source = DataSource.mssql
+        self.connection = self.data_source.get_connection(connection_info)
+        self._closed = False
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         sql = self._flatten_pagination_limit(sql)
-        ibis_table = self.connection.sql(sql)
-        if limit is not None:
-            ibis_table = ibis_table.limit(limit)
-        ibis_table = self._handle_pyarrow_unsupported_type(ibis_table)
-        return self._round_decimal_columns(ibis_table)
+        with closing(self.connection.cursor()) as cursor:
+            cursor.execute(self._raw_cursor_sql(sql, limit))
+            if cursor.description is None:
+                return pa.table({})
 
-    def _round_decimal_columns(self, ibis_table: Table, scale: int = 9) -> pa.Table:
-        def round_decimal(val):
-            if val is None:
-                return None
-            d = PyDecimal(str(val))
-            return d.quantize(PyDecimal("1." + "0" * scale))
+            rows = cursor.fetchmany(limit) if limit is not None else cursor.fetchall()
+            names = [desc[0] for desc in cursor.description]
+            arrow_schema = self._build_mssql_arrow_schema(cursor.description, rows)
+            arrays = [
+                self._build_mssql_column(
+                    [row[index] for row in rows], arrow_schema.field(index).type
+                )
+                for index in range(len(names))
+            ]
+            return pa.table(dict(zip(names, arrays)), schema=arrow_schema)
 
-        decimal_columns = [
-            name
-            for name, dtype in ibis_table.schema().items()
-            if isinstance(dtype, Decimal)
-        ]
-        if not decimal_columns:
-            return ibis_table.to_pyarrow()
+    def dry_run(self, sql: str) -> None:
+        sql = self._flatten_pagination_limit(sql)
+        try:
+            with closing(self.connection.cursor()) as cursor:
+                cursor.execute(self._raw_cursor_sql(sql, 0))
+        except Exception as e:
+            error_message = self._describe_sql_for_error_message(sql)
+            if error_message != "Unknown reason":
+                raise WrenError(
+                    error_code=ErrorCode.INVALID_SQL,
+                    message=f"The sql dry run failed. {error_message}.",
+                    phase=ErrorPhase.SQL_DRY_RUN,
+                    metadata={DIALECT_SQL: sql},
+                ) from e
+            raise
 
-        pandas_df = ibis_table.to_pandas()
-        for col_name in decimal_columns:
-            pandas_df[col_name] = pandas_df[col_name].apply(round_decimal)
-        return pa.Table.from_pandas(pandas_df)
+    def close(self) -> None:
+        if self._closed or not hasattr(self, "connection") or self.connection is None:
+            return
+        try:
+            self.connection.close()
+        except Exception as e:
+            logger.warning(f"Error closing MSSQL connection: {e}")
+        finally:
+            self._closed = True
+            self.connection = None
+
+    # ------------------------------------------------------------------
+    # SQL rewriting
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _raw_cursor_sql(
+        sql: str, limit: int | None, input_dialect: str = "tsql"
+    ) -> str:
+        """Inject a ``LIMIT n`` into a Select so sqlglot emits the tsql
+        ``OFFSET 0 ROWS FETCH NEXT n ROWS ONLY`` clause."""
+        if limit is None:
+            return sql
+
+        try:
+            parsed = parse_one(sql, dialect=input_dialect)
+        except Exception:
+            return sql
+
+        if isinstance(parsed, exp.Select) and not parsed.args.get("limit"):
+            parsed.set("limit", exp.Limit(expression=exp.Literal.number(limit)))
+            return parsed.sql(dialect="tsql")
+
+        return sql
 
     def _flatten_pagination_limit(
         self, sql_query: str, input_dialect: str = "tsql"
     ) -> str:
+        """Collapse an outer ``LIMIT`` wrapped around a single subquery into
+        the inner Select's ``LIMIT`` — undoes the v4 paginate-wrap pattern."""
         try:
             parsed = parse_one(sql_query, dialect=input_dialect)
             if not isinstance(parsed, exp.Select) or not parsed.args.get("limit"):
@@ -78,35 +135,154 @@ class MSSqlConnector(IbisConnector):
         except Exception:
             return sql_query
 
-    def dry_run(self, sql: str) -> None:
-        try:
-            super().dry_run(sql)
-        except AttributeError as e:
-            if "NoneType" in str(e) and "lower" in str(e):
-                error_message = self._describe_sql_for_error_message(sql)
-                raise WrenError(
-                    error_code=ErrorCode.INVALID_SQL,
-                    message=f"The sql dry run failed. {error_message}.",
-                    phase=ErrorPhase.SQL_DRY_RUN,
-                    metadata={DIALECT_SQL: sql},
-                ) from e
-            raise WrenError(
-                error_code=ErrorCode.IBIS_PROJECT_ERROR,
-                message=str(e),
-                phase=ErrorPhase.SQL_DRY_RUN,
-            ) from e
-
     def _describe_sql_for_error_message(self, sql: str) -> str:
+        """Surface a precise error string by asking SQL Server to describe
+        the first result set of the failing query."""
         try:
             tsql = sge.convert(sql).sql("mssql")
-            describe_sql = f"SELECT error_message FROM sys.dm_exec_describe_first_result_set({tsql}, NULL, 0)"
-            with closing(self.connection.raw_sql(describe_sql)) as cur:
+            describe_sql = (
+                "SELECT error_message FROM "
+                f"sys.dm_exec_describe_first_result_set({tsql}, NULL, 0)"
+            )
+            with closing(self.connection.cursor()) as cur:
+                cur.execute(describe_sql)
                 rows = cur.fetchall()
                 if not rows:
                     return "Unknown reason"
                 return rows[0][0]
         except Exception:
             return "Unknown reason"
+
+    # ------------------------------------------------------------------
+    # Arrow schema inference + column build
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _build_mssql_arrow_schema(description, rows: list[tuple]) -> pa.Schema:
+        fields = []
+        for index, column in enumerate(description):
+            values = [row[index] for row in rows]
+            fields.append(
+                pa.field(
+                    column[0],
+                    MSSqlConnector._mssql_arrow_type(column, values),
+                    nullable=True,
+                )
+            )
+        return pa.schema(fields)
+
+    @staticmethod
+    def _mssql_arrow_type(column, values: list) -> pa.DataType:
+        type_code = column[1] if len(column) > 1 else None
+        internal_size = column[3] if len(column) > 3 else None
+        precision = column[4] if len(column) > 4 else None
+        sample = next((value for value in values if value is not None), None)
+
+        if isinstance(sample, bool) or type_code is bool:
+            return pa.bool_()
+        if isinstance(sample, bytes | bytearray | memoryview) or type_code in {
+            bytes,
+            bytearray,
+            memoryview,
+        }:
+            return pa.binary()
+        if isinstance(sample, dtlib.datetime) or type_code is dtlib.datetime:
+            tz = MSSqlConnector._mssql_timezone_name(sample)
+            return pa.timestamp("ns", tz=tz)
+        if isinstance(sample, dtlib.date) or type_code is dtlib.date:
+            return pa.date32()
+        if isinstance(sample, dtlib.time) or type_code is dtlib.time:
+            return pa.time64("ns")
+        if isinstance(sample, float) or type_code is float:
+            return pa.float32() if internal_size == 4 else pa.float64()
+        if isinstance(sample, int) or type_code is int:
+            return MSSqlConnector._mssql_integer_arrow_type(
+                internal_size, precision, values
+            )
+        if isinstance(sample, PyDecimal) or type_code is PyDecimal:
+            return pa.string()
+        if isinstance(sample, uuid.UUID) or type_code is uuid.UUID:
+            return pa.string()
+
+        return pa.string()
+
+    @staticmethod
+    def _mssql_timezone_name(value: dtlib.datetime | None) -> str | None:
+        if value is None or value.tzinfo is None:
+            return None
+        offset = value.utcoffset()
+        if offset is None:
+            return None
+        if offset.total_seconds() == 0:
+            return "UTC"
+        total_minutes = int(offset.total_seconds() // 60)
+        sign = "+" if total_minutes >= 0 else "-"
+        hours, minutes = divmod(abs(total_minutes), 60)
+        return f"{sign}{hours:02d}:{minutes:02d}"
+
+    @staticmethod
+    def _mssql_integer_arrow_type(
+        internal_size: int | None, precision: int | None, values: list
+    ) -> pa.DataType:
+        non_negative = all(value is None or int(value) >= 0 for value in values)
+
+        if internal_size == 1:
+            return pa.uint8() if non_negative else pa.int8()
+        if internal_size == 2:
+            return pa.int16()
+        if internal_size == 4:
+            return pa.int32()
+        if internal_size == 8:
+            return pa.int64()
+
+        if precision is not None:
+            if precision <= 3 and non_negative:
+                return pa.uint8()
+            if precision <= 5:
+                return pa.int16()
+            if precision <= 10:
+                return pa.int32()
+        return pa.int64()
+
+    @staticmethod
+    def _build_mssql_column(values: list, arrow_type: pa.DataType) -> pa.Array:
+        if pa.types.is_integer(arrow_type):
+            processed = [None if value is None else int(value) for value in values]
+            return pa.array(processed, type=arrow_type, from_pandas=True)
+
+        if pa.types.is_floating(arrow_type):
+            processed = [None if value is None else float(value) for value in values]
+            return pa.array(processed, type=arrow_type, from_pandas=True)
+
+        if pa.types.is_boolean(arrow_type):
+            processed = [None if value is None else bool(value) for value in values]
+            return pa.array(processed, type=arrow_type, from_pandas=True)
+
+        if pa.types.is_decimal(arrow_type):
+            processed = [
+                None
+                if value is None
+                else value
+                if isinstance(value, PyDecimal)
+                else PyDecimal(str(value))
+                for value in values
+            ]
+            return pa.array(processed, type=arrow_type, from_pandas=True)
+
+        if pa.types.is_string(arrow_type):
+            processed = []
+            for value in values:
+                if value is None:
+                    processed.append(None)
+                elif isinstance(value, dict | list):
+                    processed.append(json.dumps(value, default=str))
+                elif isinstance(value, str):
+                    processed.append(value)
+                else:
+                    processed.append(str(value))
+            return pa.array(processed, type=arrow_type, from_pandas=True)
+
+        return pa.array(values, type=arrow_type, from_pandas=True)
 
 
 def create_connector(connection_info) -> MSSqlConnector:
