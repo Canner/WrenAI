@@ -92,6 +92,9 @@ For aggregation queries, prefer `cubeQuery()` over raw SQL. The cube layer
 generates correct `GROUP BY`, `DATE_TRUNC`, and `WHERE` clauses from a
 structured input — fewer hand-written errors for the agent.
 
+> ⚠️ Both `listCubes()` and `cubeQuery()` require `await engine.loadMDL(...)`
+> to have completed first — they throw an error otherwise.
+
 ### List available cubes
 
 ```javascript
