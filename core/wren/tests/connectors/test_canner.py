@@ -117,9 +117,16 @@ def test_arrow_type_maps_canner_scalars() -> None:
 
 def test_build_column_serialises_complex_values_to_json() -> None:
     array = _build_column([{"k": "v"}, [1, 2], "raw", None], pa.string(), 114)
-    # SQL-NULL for json/jsonb is preserved as the literal "null" string to
-    # match the JSON serialisation contract.
-    assert array.to_pylist() == ['{"k": "v"}', "[1, 2]", "raw", "null"]
+    # SQL NULL must stay Python None — only actual JSON literals are stringified.
+    assert array.to_pylist() == ['{"k": "v"}', "[1, 2]", "raw", None]
+
+
+def test_build_column_preserves_sql_null_for_jsonb() -> None:
+    # Regression: a SQL NULL in a json (114) / jsonb (3802) column must stay
+    # Python None rather than being coerced to the string "null".
+    for oid in (114, 3802):
+        array = _build_column([None], pa.string(), oid)
+        assert array.to_pylist() == [None]
 
 
 def test_build_column_quantises_decimal_values() -> None:
@@ -184,7 +191,8 @@ def test_canner_connector_query_returns_arrow_table(canner_connector) -> None:
     assert table.schema.field("struct_col").type == pa.string()
     assert table.schema.field("map_col").type == pa.string()
 
-    row = table.to_pylist()[0]
+    rows = table.to_pylist()
+    row = rows[0]
     assert row["id"] == 1
     assert row["name"] == "alpha"
     assert row["flag"] is True
@@ -194,10 +202,28 @@ def test_canner_connector_query_returns_arrow_table(canner_connector) -> None:
     assert row["struct_col"] == '{"k": "v"}'
     assert row["map_col"] == '{"m": 1}'
 
+    # SQL NULL in a JSON/JSONB column stays Python None — it must not be
+    # silently coerced into the string "null".
+    null_row = rows[1]
+    assert null_row["struct_col"] is None
+    assert null_row["map_col"] is None
+
 
 def test_canner_connector_query_applies_limit(canner_connector) -> None:
     table = canner_connector.query("SELECT * FROM canner_demo ORDER BY id", limit=1)
     assert table.num_rows == 1
+
+
+def test_canner_connector_query_preserves_duplicate_column_names(
+    canner_connector,
+) -> None:
+    # Regression: dict-based pa.Table construction silently drops duplicate
+    # column names — a self-join projecting both ``id`` columns must keep both.
+    table = canner_connector.query(
+        "SELECT a.id, b.id FROM canner_demo a, canner_demo b ORDER BY a.id, b.id LIMIT 1"
+    )
+    assert table.num_columns == 2
+    assert [field.name for field in table.schema] == ["id", "id"]
 
 
 def test_canner_connector_dry_run_succeeds(canner_connector) -> None:

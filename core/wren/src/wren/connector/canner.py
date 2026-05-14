@@ -125,13 +125,10 @@ def _build_column(
         processed: list[Any] = []
         for value in values:
             if value is None:
-                # json/jsonb come back as None when SQL NULL but canner often
-                # emits a literal "null" — preserve that to match the JSON
-                # serialisation expectation downstream.
-                if pg_type_oid in {114, 3802}:
-                    processed.append("null")
-                else:
-                    processed.append(None)
+                # SQL NULL stays as Python None regardless of source oid; the
+                # caller is responsible for distinguishing a JSON ``null``
+                # literal from a SQL NULL.
+                processed.append(None)
             elif isinstance(value, dict | list):
                 processed.append(json.dumps(value, default=str))
             elif not isinstance(value, str):
@@ -207,7 +204,9 @@ def _build_arrow_table(cursor) -> pa.Table:
             for index, field in enumerate(schema)
         ]
 
-    return pa.table(dict(zip([field.name for field in schema], arrays)), schema=schema)
+    # Use positional construction so duplicate column names (e.g. self-joins)
+    # survive — dict-based construction silently drops duplicates.
+    return pa.Table.from_arrays(arrays, schema=schema)
 
 
 class CannerConnector(ConnectorABC):
