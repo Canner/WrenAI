@@ -82,6 +82,7 @@ impl AnalyzedWrenMDL {
         let wren_mdl = Arc::new(WrenMDL::infer_and_register_remote_table(
             manifest, properties, mode,
         )?);
+        lineage::validate_cubes(&wren_mdl)?;
         let lineage = Arc::new(lineage::Lineage::new(&wren_mdl)?);
         Ok(AnalyzedWrenMDL { wren_mdl, lineage })
     }
@@ -94,6 +95,7 @@ impl AnalyzedWrenMDL {
         for (name, table) in register_tables {
             wren_mdl.register_table(name, table);
         }
+        lineage::validate_cubes(&wren_mdl)?;
         let lineage = lineage::Lineage::new(&wren_mdl)?;
         Ok(AnalyzedWrenMDL {
             wren_mdl: Arc::new(wren_mdl),
@@ -159,6 +161,7 @@ impl AnalyzedWrenMDL {
             wren_mdl.register_table(table_reference.to_string(), Arc::new(table));
         }
 
+        lineage::validate_cubes(&wren_mdl)?;
         let lineage = lineage::Lineage::new(&wren_mdl)?;
         Ok(AnalyzedWrenMDL {
             wren_mdl: Arc::new(wren_mdl),
