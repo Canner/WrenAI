@@ -72,6 +72,30 @@ Both flat and MCP/web envelope formats are accepted:
 
 ---
 
+## `wren profile import dbt`
+
+Import the active dbt target from `profiles.yml` into `~/.wren/profiles.yml`.
+
+```bash
+wren profile import dbt --project-dir ./jaffle_shop
+wren profile import dbt --project-dir ./jaffle_shop --target prod --name jaffle-prod
+```
+
+Common flags: `--profiles-path`, `--profile`, `--target`, `--name`, `--no-activate`.
+
+## `wren context import dbt`
+
+Generate a Wren project from dbt artifacts.
+
+```bash
+wren context import dbt --project-dir ./jaffle_shop --path ./wren-jaffle
+wren context import dbt --project-dir ./jaffle_shop --path ./wren-jaffle --dry-run
+```
+
+Requires `target/manifest.json` and `target/catalog.json`; run `dbt build` and `dbt docs generate` first. See [dbt Integration](../guides/dbt-integration.md).
+
+---
+
 ## `wren docs` — Connection Info Reference
 
 Print the required and optional connection fields for a data source.
