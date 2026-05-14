@@ -12,6 +12,7 @@ use crate::mdl::manifest::{Column, Manifest, Model, View};
 use crate::mdl::utils::{dequote_identifier, quoted, to_field};
 use crate::DataFusionError;
 use context::SessionPropertiesRef;
+pub use cube::{cube_query_to_sql, CubeQuery};
 use datafusion::arrow::datatypes::Field;
 use datafusion::common::{internal_datafusion_err, plan_err};
 use datafusion::datasource::TableProvider;
@@ -38,6 +39,7 @@ pub mod builder {
     pub use wren_core_base::mdl::builder::*;
 }
 pub mod context;
+pub mod cube;
 pub(crate) mod dataset;
 mod dialect;
 pub mod function;
