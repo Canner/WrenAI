@@ -424,16 +424,34 @@ class DataSourceExtension(Enum):
         return ibis.snowflake.connect(**params)
 
     @staticmethod
-    def get_trino_connection(info: TrinoConnectionInfo) -> BaseBackend:
-        return ibis.trino.connect(
-            host=info.host,
-            port=int(info.port),
-            database=info.catalog,
-            schema=info.trino_schema,
-            user=info.user,
-            password=(info.password and info.password.get_secret_value()),
-            **info.kwargs if info.kwargs else {},
-        )
+    def get_trino_connection(info: TrinoConnectionInfo):
+        """Return a ``trino.dbapi.Connection`` (not an ibis backend).
+
+        The wren SDK calls into ``wren.connector.trino`` for trino, which
+        operates directly on the DB-API cursor. ``get_connection`` only ever
+        re-routes here when something outside the v4 connector code path
+        explicitly requests a trino connection.
+        """
+        from trino.auth import BasicAuthentication  # noqa: PLC0415
+        from trino.dbapi import connect as trino_connect  # noqa: PLC0415
+
+        kwargs = dict(info.kwargs) if info.kwargs else {}
+        password = info.password.get_secret_value() if info.password else None
+
+        connect_kwargs: dict = {
+            "host": info.host,
+            "port": int(info.port),
+            "user": info.user,
+            "catalog": info.catalog,
+            "schema": info.trino_schema,
+            # Pin to UTC so timestamp-with-tz casts are deterministic.
+            "timezone": "UTC",
+        }
+        if info.user and password:
+            connect_kwargs["auth"] = BasicAuthentication(info.user, password)
+            connect_kwargs["http_scheme"] = "https"
+        connect_kwargs.update(kwargs)
+        return trino_connect(**connect_kwargs)
 
     @staticmethod
     def get_databricks_connection(info: DatabricksTokenConnectionInfo) -> BaseBackend:
