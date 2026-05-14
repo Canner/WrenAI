@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 
 use datafusion::common::{plan_err, Result};
-use regex::Regex;
+use regex::{NoExpand, Regex};
 use serde::{Deserialize, Serialize};
 
 use crate::mdl::manifest::{Cube, CubeDimension, Manifest, Measure, TimeDimension};
@@ -230,8 +230,11 @@ fn resolve_measures(
                         ))
                     })?;
                     let replacement = format!("({})", &resolved[dep]);
+                    // NoExpand keeps `$1`, `$$tag$$` etc. literal — without it
+                    // Regex::replace_all would treat them as capture-group templates
+                    // and corrupt SQL expressions that contain `$`.
                     resolved_expr = re
-                        .replace_all(&resolved_expr, replacement.as_str())
+                        .replace_all(&resolved_expr, NoExpand(replacement.as_str()))
                         .into_owned();
                 }
                 resolved.insert(name.to_string(), resolved_expr);
@@ -639,6 +642,33 @@ mod tests {
         assert!(sql.contains("(SUM(amount))"), "sql={sql}");
         assert!(sql.contains("(COUNT(*))"), "sql={sql}");
         assert!(sql.contains("AS avg_order_value"), "sql={sql}");
+    }
+
+    #[test]
+    fn test_derived_measure_preserves_dollar_sign() {
+        // Regression: regex replacement must not expand `$1`-style sequences
+        // in the resolved expression — Postgres parameter placeholders and
+        // dollar-quoted strings would otherwise be silently corrupted.
+        let manifest = ManifestBuilder::new()
+            .model(
+                ModelBuilder::new("orders")
+                    .table_reference("orders")
+                    .column(ColumnBuilder::new("amount", "double").build())
+                    .build(),
+            )
+            .cube(
+                CubeBuilder::new("DollarCube", "orders")
+                    .measure(
+                        MeasureBuilder::new("base", "fn($1, $$tag$$)", "number").build(),
+                    )
+                    .measure(MeasureBuilder::new("derived", "base + 1", "number").build())
+                    .build(),
+            )
+            .build();
+        let mut q = query("DollarCube");
+        q.measures = vec!["derived".to_string()];
+        let sql = cube_query_to_sql(&q, &manifest).unwrap();
+        assert!(sql.contains("(fn($1, $$tag$$))"), "sql={sql}");
     }
 
     #[test]
