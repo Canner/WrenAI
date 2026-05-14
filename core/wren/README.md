@@ -116,7 +116,7 @@ wren cube query --cube order_metrics --measures revenue --time-dimension "create
 The translator produces `DATE_TRUNC` / `GROUP BY` / `WHERE` clauses for you and
 runs them through the same engine path as `wren --sql`. See the
 [Cube guide](../../docs/core/guides/modeling/cube.md) for full YAML structure
-and the [CLI reference](../../docs/core/reference/cli.md#cube-commands) for all
+and the [CLI reference](../../docs/core/reference/cli.md#wren-cube--pre-aggregation-queries) for all
 flags.
 
 **5. (Optional) Configure security policy** — create `~/.wren/config.json`:
