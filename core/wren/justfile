@@ -59,6 +59,9 @@ test-postgres:
 test-mysql:
     uv run pytest tests/connectors/test_mysql.py -v -m mysql
 
+test-clickhouse:
+    uv run pytest tests/connectors/test_clickhouse.py -v -m clickhouse
+
 test-connector marker:
     uv run pytest tests/connectors/ -v -m {{ marker }}
 
