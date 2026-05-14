@@ -411,14 +411,19 @@ class DataSourceExtension(Enum):
         ]
         if user is None and password is None:
             connection_parts.append("Trusted_Connection=yes")
+        elif user is None or password is None:
+            raise WrenError(
+                ErrorCode.INVALID_CONNECTION_INFO,
+                "MSSQL connection requires both user and password, "
+                "or neither (for Trusted_Connection)",
+            )
         else:
             connection_parts.append(
                 f"UID={DataSourceExtension._escape_odbc_value(user)}"
             )
-            if password is not None:
-                connection_parts.append(
-                    f"PWD={DataSourceExtension._escape_odbc_value(password)}"
-                )
+            connection_parts.append(
+                f"PWD={DataSourceExtension._escape_odbc_value(password)}"
+            )
 
         for key, value in connect_kwargs.items():
             connection_parts.append(
