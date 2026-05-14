@@ -24,8 +24,11 @@ from wren import WrenEngine
 from wren.connector.trino import (
     _build_trino_column,
     _parse_trino_data_type,
+    _parse_trino_url,
+    _strip_trailing_semicolon,
 )
 from wren.model.data_source import DataSource
+from wren.model.error import ErrorCode, WrenError
 
 pytestmark = pytest.mark.trino
 
@@ -144,6 +147,71 @@ def test_build_trino_column_struct_tuple_to_dict() -> None:
     arrow_type = pa.struct([pa.field("a", pa.int32()), pa.field("b", pa.string())])
     arr = _build_trino_column([(1, "x"), None, (2, "y")], arrow_type)
     assert arr.to_pylist() == [{"a": 1, "b": "x"}, None, {"a": 2, "b": "y"}]
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("SELECT 1", "SELECT 1"),
+        ("SELECT 1;", "SELECT 1"),
+        ("SELECT 1  ;  ", "SELECT 1"),
+        ("SELECT 1\n;\n", "SELECT 1"),
+        ("SELECT 1; -- trailing", "SELECT 1; -- trailing"),
+        # Only the final semicolon is stripped — internal ones stay.
+        ("SELECT 1; SELECT 2;", "SELECT 1; SELECT 2"),
+    ],
+)
+def test_strip_trailing_semicolon(raw: str, expected: str) -> None:
+    assert _strip_trailing_semicolon(raw) == expected
+
+
+def test_parse_trino_url_rejects_missing_username() -> None:
+    with pytest.raises(WrenError) as exc:
+        _parse_trino_url("trino://host:8080/catalog/schema", None)
+    assert exc.value.error_code == ErrorCode.INVALID_CONNECTION_INFO
+    assert "username" in str(exc.value).lower()
+
+
+def test_parse_trino_url_accepts_explicit_username() -> None:
+    out = _parse_trino_url("trino://alice@host:8080/catalog/schema", None)
+    assert out["user"] == "alice"
+    assert out["host"] == "host"
+    assert out["catalog"] == "catalog"
+    assert out["schema"] == "schema"
+
+
+def test_parse_trino_url_rejects_bad_scheme() -> None:
+    with pytest.raises(WrenError) as exc:
+        _parse_trino_url("http://alice@host:8080/c/s", None)
+    assert exc.value.error_code == ErrorCode.INVALID_CONNECTION_INFO
+
+
+def test_trino_connector_import_error_has_install_hint(monkeypatch) -> None:
+    """If ``import trino`` fails, the connector should raise a WrenError with
+    a clear ``pip install wren-engine[trino]`` hint rather than a raw
+    ImportError.
+    """
+    import builtins  # noqa: PLC0415
+    import sys  # noqa: PLC0415
+
+    from wren.connector import trino as trino_module  # noqa: PLC0415
+
+    # Remove cached trino module so the lazy import re-runs.
+    monkeypatch.setitem(sys.modules, "trino", None)
+    real_import = builtins.__import__
+
+    def _fake_import(name, *args, **kwargs):
+        if name == "trino" or name.startswith("trino."):
+            raise ImportError("No module named 'trino'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+
+    with pytest.raises(WrenError) as exc:
+        trino_module._import_trino()
+    assert exc.value.error_code == ErrorCode.INVALID_CONNECTION_INFO
+    msg = str(exc.value)
+    assert "wren-engine[trino]" in msg
 
 
 def test_native_connector_does_not_import_ibis() -> None:

@@ -233,6 +233,23 @@ class DataSourceExtension(Enum):
     def get_connection(self, info: ConnectionInfo) -> BaseBackend:
         try:
             if hasattr(info, "connection_url"):
+                if self.name == "trino":
+                    # Trino uses the native DB-API client; the generic
+                    # ``ibis.connect()`` path was removed when the native
+                    # connector landed. Route the URL through the dedicated
+                    # parser so callers still get a working connection.
+                    from wren.connector.trino import (  # noqa: PLC0415
+                        _build_trino_connect_kwargs,
+                    )
+
+                    trino_kwargs = _build_trino_connect_kwargs(info)
+                    trino_kwargs.pop("_password", None)
+                    trino_kwargs.pop("access_token", None)
+                    from trino.dbapi import (  # noqa: PLC0415
+                        connect as trino_connect,
+                    )
+
+                    return trino_connect(**trino_kwargs)
                 kwargs = info.kwargs if info.kwargs else {}
                 return ibis.connect(info.connection_url.get_secret_value(), **kwargs)
             if self.name in {"local_file", "redshift", "spark", "duckdb", "datafusion"}:

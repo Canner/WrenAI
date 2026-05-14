@@ -303,6 +303,12 @@ def _parse_trino_url(url: str, extra_kwargs: dict | None) -> dict:
             "Trino connection URL must use trino:// scheme",
         )
 
+    if not parsed.username:
+        raise WrenError(
+            ErrorCode.INVALID_CONNECTION_INFO,
+            "Trino connection URL must include a username",
+        )
+
     path_parts = parsed.path.lstrip("/").split("/")
     catalog = path_parts[0] if path_parts and path_parts[0] else None
     schema = path_parts[1] if len(path_parts) > 1 else None
@@ -314,7 +320,7 @@ def _parse_trino_url(url: str, extra_kwargs: dict | None) -> dict:
     out: dict = {
         "host": parsed.hostname,
         "port": int(parsed.port or 8080),
-        "user": parsed.username or "test",
+        "user": parsed.username,
         "catalog": catalog,
         "schema": schema,
         "timezone": "UTC",
@@ -326,12 +332,42 @@ def _parse_trino_url(url: str, extra_kwargs: dict | None) -> dict:
     return out
 
 
+_TRINO_IMPORT_HINT = (
+    "The 'trino' package is required for the Trino connector. "
+    "Install it with: pip install wren-engine[trino]"
+)
+
+
+def _import_trino():
+    """Lazy import of the ``trino`` package with a clear install hint."""
+    try:
+        import trino  # noqa: PLC0415
+
+        return trino
+    except ImportError as e:
+        raise WrenError(
+            ErrorCode.INVALID_CONNECTION_INFO,
+            f"{_TRINO_IMPORT_HINT} (original error: {e})",
+        ) from e
+
+
+def _strip_trailing_semicolon(sql: str) -> str:
+    """Strip trailing whitespace and an optional final semicolon.
+
+    Wrapping ``SELECT * FROM ({sql}) AS _sub LIMIT N`` breaks if ``sql`` ends
+    with ``;`` because the parser sees ``...; ) AS _sub...``.
+    """
+    return sql.rstrip().removesuffix(";").rstrip()
+
+
 class TrinoConnector(ConnectorABC):
     """Native trino DB-API connector that bypasses ibis-project."""
 
     def __init__(self, connection_info):
-        from trino.auth import BasicAuthentication, JWTAuthentication  # noqa: PLC0415
-        from trino.dbapi import connect as trino_connect  # noqa: PLC0415
+        trino = _import_trino()
+        BasicAuthentication = trino.auth.BasicAuthentication
+        JWTAuthentication = trino.auth.JWTAuthentication
+        trino_connect = trino.dbapi.connect
 
         connect_kwargs = _build_trino_connect_kwargs(connection_info)
         password = connect_kwargs.pop("_password", None)
@@ -350,10 +386,10 @@ class TrinoConnector(ConnectorABC):
         self._closed = False
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
-        import trino  # noqa: PLC0415
+        trino = _import_trino()
 
         if limit is not None:
-            sql = f"SELECT * FROM ({sql}) AS _sub LIMIT {limit}"
+            sql = f"SELECT * FROM ({_strip_trailing_semicolon(sql)}) AS _sub LIMIT {limit}"
         try:
             with contextlib.closing(self.connection.cursor()) as cursor:
                 cursor.execute(sql)
@@ -371,9 +407,9 @@ class TrinoConnector(ConnectorABC):
             raise
 
     def dry_run(self, sql: str) -> None:
-        import trino  # noqa: PLC0415
+        trino = _import_trino()
 
-        wrapped = f"SELECT * FROM ({sql}) AS _sub LIMIT 0"
+        wrapped = f"SELECT * FROM ({_strip_trailing_semicolon(sql)}) AS _sub LIMIT 0"
         try:
             with contextlib.closing(self.connection.cursor()) as cursor:
                 cursor.execute(wrapped)
