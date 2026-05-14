@@ -162,6 +162,139 @@ class TestExtractSchemaItems:
         assert items[0]["item_type"] == "model"
 
 
+# ── Cube fixture ──────────────────────────────────────────────────────────
+
+_CUBE_MANIFEST = {
+    "catalog": "test",
+    "schema": "public",
+    "models": [
+        {
+            "name": "orders",
+            "tableReference": "test.public.orders",
+            "columns": [
+                {"name": "o_totalprice", "type": "double", "isCalculated": False},
+                {"name": "o_orderstatus", "type": "varchar", "isCalculated": False},
+                {"name": "o_orderdate", "type": "date", "isCalculated": False},
+            ],
+        }
+    ],
+    "cubes": [
+        {
+            "name": "order_metrics",
+            "baseObject": "orders",
+            "measures": [
+                {
+                    "name": "revenue",
+                    "expression": "SUM(o_totalprice)",
+                    "type": "DOUBLE",
+                },
+                {"name": "order_count", "expression": "COUNT(*)", "type": "BIGINT"},
+            ],
+            "dimensions": [
+                {"name": "status", "expression": "o_orderstatus", "type": "VARCHAR"}
+            ],
+            "timeDimensions": [
+                {"name": "created_at", "expression": "o_orderdate", "type": "DATE"}
+            ],
+            "hierarchies": {"time_drill": ["created_at"]},
+        }
+    ],
+}
+
+
+@pytest.mark.unit
+class TestCubeSchemaItems:
+    def test_cube_record(self):
+        items = extract_schema_items(_CUBE_MANIFEST)
+        cubes = [i for i in items if i["item_type"] == "cube"]
+        assert len(cubes) == 1
+        cube = cubes[0]
+        assert cube["item_name"] == "order_metrics"
+        assert cube["model_name"] == "orders"
+        assert "revenue" in cube["text"]
+        assert "status" in cube["text"]
+        assert "created_at" in cube["text"]
+
+    def test_measure_records(self):
+        items = extract_schema_items(_CUBE_MANIFEST)
+        measures = [i for i in items if i["item_type"] == "measure"]
+        assert len(measures) == 2
+        revenue = next(m for m in measures if m["item_name"] == "revenue")
+        assert revenue["expression"] == "SUM(o_totalprice)"
+        assert revenue["model_name"] == "order_metrics"
+        assert revenue["is_calculated"] is True
+
+    def test_cube_dimension_record(self):
+        items = extract_schema_items(_CUBE_MANIFEST)
+        dims = [i for i in items if i["item_type"] == "cube_dimension"]
+        assert len(dims) == 1
+        assert dims[0]["item_name"] == "status"
+        assert dims[0]["expression"] == "o_orderstatus"
+
+    def test_time_dimension_record(self):
+        items = extract_schema_items(_CUBE_MANIFEST)
+        tdims = [i for i in items if i["item_type"] == "time_dimension"]
+        assert len(tdims) == 1
+        assert tdims[0]["item_name"] == "created_at"
+        assert tdims[0]["expression"] == "o_orderdate"
+
+    def test_total_count(self):
+        items = extract_schema_items(_CUBE_MANIFEST)
+        # 1 model + 3 columns + 1 cube + 2 measures + 1 dim + 1 time-dim = 9
+        assert len(items) == 9
+
+    def test_describe_schema_includes_cube(self):
+        text = describe_schema(_CUBE_MANIFEST)
+        assert "### Cube: order_metrics (base: orders)" in text
+        assert "revenue (DOUBLE): SUM(o_totalprice)" in text
+        assert "status (VARCHAR): o_orderstatus" in text
+        assert "created_at (DATE): o_orderdate" in text
+        assert "time_drill: created_at" in text
+
+    def test_extract_skips_cubes_when_absent(self):
+        # The original _MANIFEST has no cubes — confirm nothing leaks in.
+        items = extract_schema_items(_MANIFEST)
+        cube_types = {"cube", "measure", "cube_dimension", "time_dimension"}
+        assert not any(i["item_type"] in cube_types for i in items)
+
+    def test_malformed_cube_entries_are_skipped(self):
+        """Non-dict cubes / measures / dimensions / non-string hierarchy levels
+        must not raise — the indexer should drop the bad entries and keep
+        going so semantic memory rebuilds never fail on dirty manifests."""
+        manifest = {
+            "cubes": [
+                "not a dict",
+                {
+                    "name": "ok_cube",
+                    "baseObject": "orders",
+                    "measures": [
+                        "not a dict",
+                        {"name": "revenue", "expression": "SUM(x)", "type": "DOUBLE"},
+                    ],
+                    "dimensions": [None, {"name": "status", "expression": "s"}],
+                    "timeDimensions": [{"name": "ts", "expression": "ts"}, 42],
+                    "hierarchies": {"drill": ["status", ["nested"], None]},
+                },
+            ]
+        }
+        items = extract_schema_items(manifest)
+        names = {(i["item_type"], i["item_name"]) for i in items}
+        assert ("cube", "ok_cube") in names
+        assert ("measure", "revenue") in names
+        assert ("cube_dimension", "status") in names
+        assert ("time_dimension", "ts") in names
+        # Bad entries are silently dropped, not promoted to records.
+        assert sum(1 for i in items if i["item_type"] == "measure") == 1
+        assert sum(1 for i in items if i["item_type"] == "cube_dimension") == 1
+        assert sum(1 for i in items if i["item_type"] == "time_dimension") == 1
+
+        # describe_schema also tolerates the same shape.
+        text = describe_schema(manifest)
+        assert "### Cube: ok_cube" in text
+        # Non-string hierarchy levels are filtered out of the printed line.
+        assert "drill: status" in text
+
+
 # ── describe_schema tests ─────────────────────────────────────────────────
 
 

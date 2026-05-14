@@ -17,6 +17,7 @@ from wren.context import (
     convert_mdl_to_project,
     discover_project_path,
     get_schema_version,
+    load_cubes,
     load_instructions,
     load_models,
     load_relationships,
@@ -768,6 +769,172 @@ def test_validate_view_dialect_unknown(tmp_path):
     )
     errors = validate_project(tmp_path)
     assert any("unknown dialect" in e.message for e in errors)
+
+
+# ── Cubes ───────────────────────────────────────────────────────────────────
+
+
+def _make_v3_cube_project(tmp_path: Path) -> Path:
+    """v3 project with an orders model, ready for cubes/*.yml files."""
+    (tmp_path / "wren_project.yml").write_text(
+        "schema_version: 3\nname: test\ndata_source: postgres\ncatalog: wren\nschema: public\n"
+    )
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: orders\n"
+        "table_reference:\n  table: orders\n"
+        "columns:\n"
+        "  - name: o_totalprice\n    type: double\n"
+        "  - name: o_orderstatus\n    type: varchar\n"
+    )
+    return tmp_path
+
+
+def test_load_cubes_returns_empty_when_no_dir(tmp_path):
+    assert load_cubes(tmp_path) == []
+
+
+def test_load_cubes_parses_yaml(tmp_path):
+    _make_v3_cube_project(tmp_path)
+    cubes_dir = tmp_path / "cubes"
+    cubes_dir.mkdir()
+    (cubes_dir / "order_metrics.yml").write_text(
+        "name: order_metrics\n"
+        "base_object: orders\n"
+        "measures:\n"
+        "  - name: revenue\n    expression: SUM(o_totalprice)\n    type: DOUBLE\n"
+        "dimensions:\n"
+        "  - name: status\n    expression: o_orderstatus\n    type: VARCHAR\n"
+    )
+    cubes = load_cubes(tmp_path)
+    assert len(cubes) == 1
+    assert cubes[0]["name"] == "order_metrics"
+    assert cubes[0]["base_object"] == "orders"
+    assert cubes[0]["measures"][0]["name"] == "revenue"
+
+
+def test_build_manifest_includes_cubes(tmp_path):
+    _make_v3_cube_project(tmp_path)
+    cubes_dir = tmp_path / "cubes"
+    cubes_dir.mkdir()
+    (cubes_dir / "order_metrics.yml").write_text(
+        "name: order_metrics\n"
+        "base_object: orders\n"
+        "measures:\n"
+        "  - name: revenue\n    expression: SUM(o_totalprice)\n    type: DOUBLE\n"
+    )
+    manifest = build_manifest(tmp_path)
+    assert "cubes" in manifest
+    assert manifest["cubes"][0]["name"] == "order_metrics"
+    assert "_source_file" not in manifest["cubes"][0]
+
+
+def test_build_json_cube_camel_case(tmp_path):
+    _make_v3_cube_project(tmp_path)
+    cubes_dir = tmp_path / "cubes"
+    cubes_dir.mkdir()
+    (cubes_dir / "order_metrics.yml").write_text(
+        "name: order_metrics\n"
+        "base_object: orders\n"
+        "measures:\n"
+        "  - name: revenue\n    expression: SUM(o_totalprice)\n    type: DOUBLE\n"
+        "time_dimensions:\n"
+        "  - name: created_at\n    expression: o_orderdate\n    type: DATE\n"
+    )
+    result = build_json(tmp_path)
+    cube = result["cubes"][0]
+    assert cube["baseObject"] == "orders"
+    assert cube["timeDimensions"][0]["name"] == "created_at"
+
+
+def test_validate_cube_unknown_base_object(tmp_path):
+    _make_v3_cube_project(tmp_path)
+    cubes_dir = tmp_path / "cubes"
+    cubes_dir.mkdir()
+    (cubes_dir / "bad.yml").write_text(
+        "name: bad\nbase_object: nosuch\nmeasures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
+    )
+    errors = validate_project(tmp_path)
+    assert any("base_object 'nosuch'" in e.message for e in errors)
+
+
+def test_validate_cube_duplicate_name(tmp_path):
+    _make_v3_cube_project(tmp_path)
+    cubes_dir = tmp_path / "cubes"
+    cubes_dir.mkdir()
+    body = (
+        "name: order_metrics\nbase_object: orders\n"
+        "measures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
+    )
+    (cubes_dir / "a.yml").write_text(body)
+    (cubes_dir / "b.yml").write_text(body)
+    errors = validate_project(tmp_path)
+    assert any("duplicate cube name" in e.message for e in errors)
+
+
+def test_validate_cube_missing_base_object_uses_snake_case(tmp_path):
+    """Validation error should reference the YAML field name (snake_case)."""
+    _make_v3_cube_project(tmp_path)
+    cubes_dir = tmp_path / "cubes"
+    cubes_dir.mkdir()
+    (cubes_dir / "om.yml").write_text(
+        "name: order_metrics\n"
+        "measures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
+    )
+    errors = validate_project(tmp_path)
+    assert any("'base_object'" in e.message for e in errors)
+    assert not any("baseObject" in e.message for e in errors)
+
+
+def test_validate_cube_non_string_hierarchy_level(tmp_path):
+    """Non-string hierarchy levels must be reported, not crash."""
+    _make_v3_cube_project(tmp_path)
+    cubes_dir = tmp_path / "cubes"
+    cubes_dir.mkdir()
+    (cubes_dir / "om.yml").write_text(
+        "name: order_metrics\n"
+        "base_object: orders\n"
+        "measures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
+        "dimensions: [{name: status, expression: o_orderstatus, type: VARCHAR}]\n"
+        "hierarchies:\n"
+        "  drill:\n"
+        "    - status\n"
+        "    - [nested, list]\n"
+    )
+    errors = validate_project(tmp_path)
+    assert any("hierarchy levels must be strings" in e.message for e in errors)
+
+
+def test_validate_cube_bad_hierarchy(tmp_path):
+    _make_v3_cube_project(tmp_path)
+    cubes_dir = tmp_path / "cubes"
+    cubes_dir.mkdir()
+    (cubes_dir / "om.yml").write_text(
+        "name: order_metrics\n"
+        "base_object: orders\n"
+        "measures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
+        "dimensions: [{name: status, expression: o_orderstatus, type: VARCHAR}]\n"
+        "hierarchies:\n"
+        "  drill: [status, nonexistent_dim]\n"
+    )
+    errors = validate_project(tmp_path)
+    assert any("nonexistent_dim" in e.message for e in errors)
+
+
+def test_validate_cube_ok(tmp_path):
+    _make_v3_cube_project(tmp_path)
+    cubes_dir = tmp_path / "cubes"
+    cubes_dir.mkdir()
+    (cubes_dir / "om.yml").write_text(
+        "name: order_metrics\n"
+        "base_object: orders\n"
+        "measures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
+        "dimensions: [{name: status, expression: o_orderstatus, type: VARCHAR}]\n"
+    )
+    errors = validate_project(tmp_path)
+    # No cube-specific errors.
+    assert not any("cube" in e.message.lower() for e in errors)
 
 
 # ── Upgrade ──────────────────────────────────────────────────────────────────

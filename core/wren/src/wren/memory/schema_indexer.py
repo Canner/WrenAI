@@ -58,6 +58,12 @@ def describe_schema(manifest: dict) -> str:
     for view in manifest.get("views", []):
         _describe_view(view, lines)
 
+    cubes = manifest.get("cubes", []) or []
+    if isinstance(cubes, list):
+        for cube in cubes:
+            if isinstance(cube, dict):
+                _describe_cube(cube, lines)
+
     return "\n".join(lines)
 
 
@@ -119,6 +125,61 @@ def _describe_relationship(rel: dict, lines: list[str]) -> None:
     lines.append("")
 
 
+def _describe_cube(cube: dict, lines: list[str]) -> None:
+    name = cube.get("name", "")
+    base = cube.get("baseObject", "?")
+    lines.append(f"### Cube: {name} (base: {base})")
+    measures = [m for m in (cube.get("measures") or []) if isinstance(m, dict)]
+    if measures:
+        lines.append("  Measures:")
+        for m in measures:
+            mname = m.get("name", "")
+            expr = m.get("expression", "")
+            mtype = m.get("type", "")
+            line = f"    - {mname}"
+            if mtype:
+                line += f" ({mtype})"
+            if expr:
+                line += f": {expr}"
+            lines.append(line)
+    dims = [d for d in (cube.get("dimensions") or []) if isinstance(d, dict)]
+    if dims:
+        lines.append("  Dimensions:")
+        for d in dims:
+            dname = d.get("name", "")
+            expr = d.get("expression", "")
+            dtype = d.get("type", "")
+            line = f"    - {dname}"
+            if dtype:
+                line += f" ({dtype})"
+            if expr and expr != dname:
+                line += f": {expr}"
+            lines.append(line)
+    tdims = [td for td in (cube.get("timeDimensions") or []) if isinstance(td, dict)]
+    if tdims:
+        lines.append("  Time dimensions:")
+        for td in tdims:
+            tname = td.get("name", "")
+            expr = td.get("expression", "")
+            ttype = td.get("type", "")
+            line = f"    - {tname}"
+            if ttype:
+                line += f" ({ttype})"
+            if expr and expr != tname:
+                line += f": {expr}"
+            lines.append(line)
+    hierarchies = cube.get("hierarchies") or {}
+    if isinstance(hierarchies, dict) and hierarchies:
+        lines.append("  Hierarchies:")
+        for hname, levels in hierarchies.items():
+            if not isinstance(levels, list):
+                continue
+            safe = [lv for lv in levels if isinstance(lv, str)]
+            if safe:
+                lines.append(f"    - {hname}: {' → '.join(safe)}")
+    lines.append("")
+
+
 def _describe_view(view: dict, lines: list[str]) -> None:
     name = view["name"]
     stmt = view.get("statement", "")
@@ -149,6 +210,23 @@ def extract_schema_items(manifest: dict) -> list[dict]:
 
     for view in manifest.get("views", []):
         items.append(_view_record(view, mdl_h, now))
+
+    cubes = manifest.get("cubes", []) or []
+    if isinstance(cubes, list):
+        for cube in cubes:
+            if not isinstance(cube, dict):
+                continue
+            items.append(_cube_record(cube, mdl_h, now))
+            cube_name = cube.get("name", "")
+            for measure in cube.get("measures", []) or []:
+                if isinstance(measure, dict):
+                    items.append(_measure_record(measure, cube_name, mdl_h, now))
+            for dim in cube.get("dimensions", []) or []:
+                if isinstance(dim, dict):
+                    items.append(_cube_dimension_record(dim, cube_name, mdl_h, now))
+            for tdim in cube.get("timeDimensions", []) or []:
+                if isinstance(tdim, dict):
+                    items.append(_time_dimension_record(tdim, cube_name, mdl_h, now))
 
     return items
 
@@ -254,6 +332,116 @@ def _view_record(view: dict, mdl_h: str, now: datetime) -> dict:
         "item_name": name,
         "data_type": None,
         "expression": stmt or None,
+        "is_calculated": False,
+        "mdl_hash": mdl_h,
+        "indexed_at": now,
+    }
+
+
+def _cube_record(cube: dict, mdl_h: str, now: datetime) -> dict:
+    name = cube.get("name", "")
+    base = cube.get("baseObject", "?")
+    measures = ", ".join(
+        m.get("name", "") for m in (cube.get("measures") or []) if isinstance(m, dict)
+    )
+    dims = ", ".join(
+        d.get("name", "") for d in (cube.get("dimensions") or []) if isinstance(d, dict)
+    )
+    time_dims = ", ".join(
+        td.get("name", "")
+        for td in (cube.get("timeDimensions") or [])
+        if isinstance(td, dict)
+    )
+
+    parts = [f"Cube '{name}' over '{base}'"]
+    if measures:
+        parts.append(f". Measures: {measures}")
+    if dims:
+        parts.append(f". Dimensions: {dims}")
+    if time_dims:
+        parts.append(f". Time dimensions: {time_dims}")
+    text = "".join(parts) + "."
+
+    return {
+        "text": text,
+        "item_type": "cube",
+        "model_name": base,
+        "item_name": name,
+        "data_type": None,
+        "expression": None,
+        "is_calculated": False,
+        "mdl_hash": mdl_h,
+        "indexed_at": now,
+    }
+
+
+def _measure_record(measure: dict, cube_name: str, mdl_h: str, now: datetime) -> dict:
+    name = measure.get("name", "")
+    expr = measure.get("expression") or None
+    dtype = measure.get("type") or None
+    text = f"Measure '{name}' in cube '{cube_name}'"
+    if dtype:
+        text += f" ({dtype})"
+    if expr:
+        text += f". Expression: {expr}"
+    text += "."
+    return {
+        "text": text,
+        "item_type": "measure",
+        "model_name": cube_name,
+        "item_name": name,
+        "data_type": dtype,
+        "expression": expr,
+        "is_calculated": True,
+        "mdl_hash": mdl_h,
+        "indexed_at": now,
+    }
+
+
+def _cube_dimension_record(
+    dim: dict, cube_name: str, mdl_h: str, now: datetime
+) -> dict:
+    name = dim.get("name", "")
+    expr = dim.get("expression") or None
+    dtype = dim.get("type") or None
+    text = f"Dimension '{name}' in cube '{cube_name}'"
+    if dtype:
+        text += f" ({dtype})"
+    if expr:
+        text += f". Expression: {expr}"
+    text += "."
+    return {
+        "text": text,
+        "item_type": "cube_dimension",
+        "model_name": cube_name,
+        "item_name": name,
+        "data_type": dtype,
+        "expression": expr,
+        "is_calculated": False,
+        "mdl_hash": mdl_h,
+        "indexed_at": now,
+    }
+
+
+def _time_dimension_record(
+    tdim: dict, cube_name: str, mdl_h: str, now: datetime
+) -> dict:
+    name = tdim.get("name", "")
+    expr = tdim.get("expression") or None
+    dtype = tdim.get("type") or None
+    text = f"Time dimension '{name}' in cube '{cube_name}'"
+    if dtype:
+        text += f" ({dtype})"
+    if expr:
+        text += f". Expression: {expr}"
+    text += "."
+    return {
+        "text": text,
+        "item_type": "time_dimension",
+        "model_name": cube_name,
+        "item_name": name,
+        "data_type": dtype,
+        "expression": expr,
         "is_calculated": False,
         "mdl_hash": mdl_h,
         "indexed_at": now,

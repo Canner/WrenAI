@@ -584,6 +584,25 @@ def _load_views_v2(project_path: Path) -> list[dict]:
     return views
 
 
+def load_cubes(project_path: Path) -> list[dict]:
+    """Load cubes from project_path/cubes/*.yml.
+
+    Each file is one cube definition. Files use the same YAML shape on
+    every schema version (no v1/v2 dispatch — cubes were added after the
+    directory-per-entity migration).
+    """
+    cubes_dir = project_path / "cubes"
+    if not cubes_dir.is_dir():
+        return []
+    cubes = []
+    for f in sorted(cubes_dir.glob("*.yml")):
+        data = yaml.safe_load(f.read_text())
+        if isinstance(data, dict):
+            data["_source_file"] = f.name
+            cubes.append(data)
+    return cubes
+
+
 def load_relationships(project_path: Path) -> list[dict]:
     """Load relationships from project_path/relationships.yml."""
     rel_file = project_path / "relationships.yml"
@@ -615,12 +634,15 @@ def build_manifest(project_path: Path) -> dict:
     models = load_models(project_path)
     views = load_views(project_path)
     relationships = load_relationships(project_path)
+    cubes = load_cubes(project_path)
 
     # Strip internal metadata
     for m in models:
         m.pop("_source_dir", None)
     for v in views:
         v.pop("_source_dir", None)
+    for c in cubes:
+        c.pop("_source_file", None)
 
     manifest: dict = {
         "catalog": project_config.get("catalog", "wren"),
@@ -628,6 +650,7 @@ def build_manifest(project_path: Path) -> dict:
         "models": models,
         "relationships": relationships,
         "views": views,
+        "cubes": cubes,
     }
     data_source = project_config.get("data_source")
     if data_source:
@@ -731,6 +754,7 @@ def validate_project(project_path: Path) -> list[ValidationError]:
     models = load_models(project_path)
     views = load_views(project_path)
     relationships = load_relationships(project_path)
+    cubes = load_cubes(project_path)
 
     model_names: set[str] = set()
     view_names: set[str] = set()
@@ -946,6 +970,91 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                     "warning", f"relationships > {rel_name}", "missing join_type"
                 )
             )
+
+    # Check cubes — only structural / reference checks here. Deep validation
+    # (measure cycles, hierarchy levels) runs Rust-side in
+    # AnalyzedWrenMDL::analyze (see wren-core lineage::validate_cubes).
+    cube_names: set[str] = set()
+    for i, cube in enumerate(cubes):
+        src = cube.get("_source_file", f"cubes[{i}]")
+        src_path = f"cubes/{src}"
+        name = cube.get("name")
+        if not name:
+            errors.append(ValidationError("error", src_path, "cube missing 'name'"))
+            continue
+        if name in cube_names:
+            errors.append(
+                ValidationError("error", src_path, f"duplicate cube name '{name}'")
+            )
+        cube_names.add(name)
+
+        base = cube.get("base_object")
+        if not base:
+            errors.append(
+                ValidationError(
+                    "error",
+                    f"{src_path} > {name}",
+                    "cube missing 'base_object'",
+                )
+            )
+        elif base not in all_entity_names:
+            errors.append(
+                ValidationError(
+                    "error",
+                    f"{src_path} > {name}",
+                    f"base_object '{base}' is not a defined model or view",
+                )
+            )
+
+        measures = cube.get("measures") or []
+        if not measures:
+            errors.append(
+                ValidationError(
+                    "warning",
+                    f"{src_path} > {name}",
+                    "cube has no measures",
+                )
+            )
+
+        # Sanity-check hierarchy levels reference declared dimensions /
+        # time_dimensions. Rust-side validation does the same check, but
+        # surfacing it at YAML time gives faster feedback before build.
+        # Only keep string names so a malformed YAML entry doesn't leak a
+        # non-hashable value into the set lookup below.
+        dim_names = {
+            d.get("name")
+            for d in (cube.get("dimensions") or [])
+            if isinstance(d, dict) and isinstance(d.get("name"), str)
+        }
+        td_names = {
+            td.get("name")
+            for td in (cube.get("time_dimensions") or [])
+            if isinstance(td, dict) and isinstance(td.get("name"), str)
+        }
+        known_dims = dim_names | td_names
+        hierarchies = cube.get("hierarchies") or {}
+        if isinstance(hierarchies, dict):
+            for hname, levels in hierarchies.items():
+                if not isinstance(levels, list):
+                    continue
+                for level in levels:
+                    if not isinstance(level, str):
+                        errors.append(
+                            ValidationError(
+                                "error",
+                                f"{src_path} > {name} > hierarchies.{hname}",
+                                "hierarchy levels must be strings",
+                            )
+                        )
+                        continue
+                    if level not in known_dims:
+                        errors.append(
+                            ValidationError(
+                                "error",
+                                f"{src_path} > {name} > hierarchies.{hname}",
+                                f"references unknown dimension '{level}'",
+                            )
+                        )
 
     return errors
 
