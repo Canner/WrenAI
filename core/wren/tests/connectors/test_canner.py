@@ -15,7 +15,12 @@ from urllib.parse import urlparse
 import pyarrow as pa
 import pytest
 
-from wren.connector.canner import CannerConnector, _arrow_type, _build_column
+from wren.connector.canner import (
+    CannerConnector,
+    _arrow_type,
+    _build_column,
+    _strip_trailing_semicolon,
+)
 from wren.model import CannerConnectionInfo
 
 psycopg = pytest.importorskip("psycopg")
@@ -153,6 +158,24 @@ def test_build_column_preserves_unconstrained_numeric_precision() -> None:
     assert array.to_pylist() == [str(high_precision), None]
 
 
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("SELECT 1", "SELECT 1"),
+        ("SELECT 1;", "SELECT 1"),
+        ("SELECT 1  ;  ", "SELECT 1"),
+        ("SELECT 1;;", "SELECT 1"),
+        ("SELECT 1;\n", "SELECT 1"),
+        # Semicolons inside string literals are *not* terminators — only the
+        # trailing run is stripped.
+        ("SELECT 'a;b' FROM t", "SELECT 'a;b' FROM t"),
+        ("SELECT 'a;b' FROM t;", "SELECT 'a;b' FROM t"),
+    ],
+)
+def test_strip_trailing_semicolon(raw: str, expected: str) -> None:
+    assert _strip_trailing_semicolon(raw) == expected
+
+
 # ── end-to-end testcontainer test ─────────────────────────────────────────
 
 
@@ -264,3 +287,22 @@ def test_canner_connector_preserves_unconstrained_numeric_precision(
     table = canner_connector.query(f"SELECT '{literal}'::numeric AS n")
     assert table.schema.field("n").type == pa.string()
     assert table.to_pylist() == [{"n": literal}]
+
+
+def test_canner_connector_query_wraps_sql_with_trailing_semicolon(
+    canner_connector,
+) -> None:
+    # Regression: a trailing semicolon on the user SQL must not break the
+    # ``SELECT * FROM (...) AS _t LIMIT N`` wrap that the connector applies
+    # when ``limit`` is provided.
+    table = canner_connector.query("SELECT 1 AS x;", limit=1)
+    assert table.num_rows == 1
+    assert table.to_pylist() == [{"x": 1}]
+
+
+def test_canner_connector_dry_run_wraps_sql_with_trailing_semicolon(
+    canner_connector,
+) -> None:
+    # Same regression for dry_run, which always wraps as ``... LIMIT 0``.
+    assert canner_connector.dry_run("SELECT 1 AS x;") is None
+    assert canner_connector.dry_run("SELECT 1 AS x  ;  ") is None
