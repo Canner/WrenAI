@@ -5,10 +5,7 @@ Wren AI Core integrates with popular AI agent frameworks. Each SDK exposes a CLI
 ## Available
 
 - **[LangChain / LangGraph](./langchain.md)** — `wren-langchain` on PyPI
-
-## Coming soon
-
-- Pydantic-AI
+- **[Pydantic AI](./pydantic.md)** — `wren-pydantic` on PyPI
 
 ## Other access modes
 
