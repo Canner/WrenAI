@@ -72,7 +72,9 @@ createServer(async (req, res) => {
     }
 }).listen(PORT, () => {
     console.log(`Serving on http://localhost:${PORT}`);
-    console.log(`  inline demo:   http://localhost:${PORT}/examples/inline.html`);
-    console.log(`  url-mode demo: http://localhost:${PORT}/examples/url-mode.html`);
-    console.log(`  cdn demo:      http://localhost:${PORT}/examples/test-cdn.html`);
+    console.log(`  inline demo:      http://localhost:${PORT}/examples/inline.html`);
+    console.log(`  url-mode demo:    http://localhost:${PORT}/examples/url-mode.html`);
+    console.log(`  cdn demo:         http://localhost:${PORT}/examples/test-cdn.html`);
+    console.log(`  cube quickstart:  http://localhost:${PORT}/examples/cube-quickstart.html`);
+    console.log(`  cube explorer:    http://localhost:${PORT}/examples/cube-explorer.html`);
 });
