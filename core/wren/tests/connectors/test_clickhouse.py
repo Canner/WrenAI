@@ -1,16 +1,16 @@
 """ClickHouse connector tests.
 
-Uses ``testcontainers`` to spin up a real ClickHouse instance.
-TPCH data is generated via DuckDB's built-in extension and loaded over
-the native ``clickhouse-connect`` HTTP client.
+Uses ``testcontainers`` to spin up a real ClickHouse instance. TPCH-shaped
+fixture data is fabricated inline in Python (no network downloads) and loaded
+over the native ``clickhouse-connect`` HTTP client.
 """
 
 from __future__ import annotations
 
 import base64
+import datetime as _dt
 import time
 
-import duckdb
 import orjson
 import pytest
 from testcontainers.core.container import DockerContainer
@@ -27,6 +27,30 @@ from wren.model.data_source import DataSource
 pytestmark = pytest.mark.clickhouse
 
 _SCHEMA = "default"
+_ORDER_COUNT = 15000
+_CUSTOMER_COUNT = 1500
+_ORDER_STATUSES = ("O", "F", "P")
+_BASE_DATE = _dt.date(1992, 1, 1)
+
+
+def _make_fixture_rows() -> tuple[list[tuple], list[tuple]]:
+    """Fabricate TPCH-shaped orders + customer rows without network access.
+
+    Row counts match TPCH sf=0.01 so the shared ``WrenQueryTestSuite``
+    assertions (15000 orders, 1500 customers, first orderkey == 1) hold.
+    """
+    customers = [(i, f"Customer#{i:09d}") for i in range(1, _CUSTOMER_COUNT + 1)]
+    orders = [
+        (
+            i,
+            ((i - 1) % _CUSTOMER_COUNT) + 1,
+            _ORDER_STATUSES[i % len(_ORDER_STATUSES)],
+            float(100 + i),
+            _BASE_DATE + _dt.timedelta(days=i % 3650),
+        )
+        for i in range(1, _ORDER_COUNT + 1)
+    ]
+    return orders, customers
 
 
 class _ClickHouseContainer(DockerContainer):
@@ -64,32 +88,27 @@ def _wait_for_http_ready(host: str, port: int, timeout: float = 120.0) -> None:
     deadline = time.time() + timeout
     last_err: Exception | None = None
     while time.time() < deadline:
+        client = None
         try:
             client = clickhouse_connect.get_client(
                 host=host, port=port, username="default", password=""
             )
             client.query("SELECT 1")
-            client.close()
             return
         except Exception as e:  # noqa: BLE001
             last_err = e
             time.sleep(1)
+        finally:
+            if client is not None:
+                client.close()
     raise RuntimeError(f"ClickHouse did not become ready: {last_err}")
 
 
 def _load_tpch(host: str, port: int) -> None:
-    """Generate TPCH sf=0.01 via DuckDB and bulk-load into ClickHouse."""
+    """Bulk-load fabricated TPCH-shaped data into ClickHouse."""
     import clickhouse_connect  # noqa: PLC0415
 
-    with duckdb.connect() as duck:
-        duck.execute("INSTALL tpch; LOAD tpch; CALL dbgen(sf=0.01)")
-        orders_rows = duck.execute(
-            "SELECT o_orderkey, o_custkey, o_orderstatus, "
-            "cast(o_totalprice as double), o_orderdate FROM orders"
-        ).fetchall()
-        customer_rows = duck.execute(
-            "SELECT c_custkey, c_name FROM customer"
-        ).fetchall()
+    orders_rows, customer_rows = _make_fixture_rows()
 
     client = clickhouse_connect.get_client(
         host=host, port=port, username="default", password="", database=_SCHEMA
