@@ -4,7 +4,7 @@
 //! Output strings should match the Python implementation 1:1 so existing
 //! integration tests can be re-used.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use datafusion::common::{plan_err, Result};
 use regex::{NoExpand, Regex};
@@ -142,7 +142,7 @@ pub fn cube_query_to_sql(query: &CubeQuery, manifest: &Manifest) -> Result<Strin
         .collect();
 
     validate_query(query, &measure_map, &dimension_map, &time_dim_map)?;
-    let resolved_exprs = resolve_measures(&measure_map)?;
+    let resolved_exprs = resolve_measures(&query.measures, &measure_map)?;
 
     build_sql(query, cube, &resolved_exprs, &dimension_map, &time_dim_map)
 }
@@ -202,13 +202,52 @@ fn validate_query(
 
 /// Inline derived measure expressions by substituting referenced measure names.
 ///
+/// Only the transitive closure of `requested` is resolved, so a cycle among
+/// measures that the current query never references will not fail the query.
 /// Longer dependency names are substituted first to avoid partial-token
 /// replacement (e.g. `revenue_2` before `revenue`).
 fn resolve_measures(
+    requested: &[String],
     measure_map: &HashMap<&str, &Measure>,
 ) -> Result<HashMap<String, String>> {
+    // Pre-compile a word-boundary regex per measure name. Reused below for
+    // both dependency discovery and the substitution loop, so each name is
+    // compiled exactly once instead of once per fixpoint iteration.
+    let patterns: HashMap<&str, Regex> = measure_map
+        .keys()
+        .map(|&name| {
+            let pattern = format!(r"\b{}\b", regex::escape(name));
+            Regex::new(&pattern).map(|re| (name, re))
+        })
+        .collect::<std::result::Result<_, _>>()
+        .map_err(|e| {
+            datafusion::common::DataFusionError::Plan(format!(
+                "invalid measure-name regex: {e}"
+            ))
+        })?;
+
+    // Transitive closure of requested measures. Unknown names in `requested`
+    // are skipped here (validate_query has already rejected them upstream).
+    let mut needed: HashSet<&str> = HashSet::new();
+    let mut queue: VecDeque<&str> = VecDeque::new();
+    for name in requested {
+        if let Some((&key, _)) = measure_map.get_key_value(name.as_str()) {
+            if needed.insert(key) {
+                queue.push_back(key);
+            }
+        }
+    }
+    while let Some(name) = queue.pop_front() {
+        let expr = &measure_map[name].expression;
+        for dep in find_measure_refs(expr, &patterns, name) {
+            if needed.insert(dep) {
+                queue.push_back(dep);
+            }
+        }
+    }
+
     let mut resolved: HashMap<String, String> = HashMap::new();
-    let mut remaining: Vec<&str> = measure_map.keys().copied().collect();
+    let mut remaining: Vec<&str> = needed.iter().copied().collect();
 
     while !remaining.is_empty() {
         let mut progressed = false;
@@ -216,24 +255,18 @@ fn resolve_measures(
 
         for &name in &remaining {
             let expr = &measure_map[name].expression;
-            let deps = find_measure_refs(expr, measure_map, name);
+            let deps = find_measure_refs(expr, &patterns, name);
 
             if deps.iter().all(|dep| resolved.contains_key(*dep)) {
                 let mut resolved_expr = expr.clone();
                 let mut sorted_deps = deps.clone();
                 sorted_deps.sort_by_key(|d| std::cmp::Reverse(d.len()));
                 for dep in sorted_deps {
-                    let pattern = format!(r"\b{}\b", regex::escape(dep));
-                    let re = Regex::new(&pattern).map_err(|e| {
-                        datafusion::common::DataFusionError::Plan(format!(
-                            "invalid regex for measure '{dep}': {e}"
-                        ))
-                    })?;
                     let replacement = format!("({})", &resolved[dep]);
                     // NoExpand keeps `$1`, `$$tag$$` etc. literal — without it
                     // Regex::replace_all would treat them as capture-group templates
                     // and corrupt SQL expressions that contain `$`.
-                    resolved_expr = re
+                    resolved_expr = patterns[dep]
                         .replace_all(&resolved_expr, NoExpand(replacement.as_str()))
                         .into_owned();
                 }
@@ -258,19 +291,14 @@ fn resolve_measures(
 
 fn find_measure_refs<'a>(
     expr: &str,
-    measure_map: &HashMap<&'a str, &Measure>,
+    patterns: &HashMap<&'a str, Regex>,
     self_name: &str,
 ) -> Vec<&'a str> {
-    measure_map
-        .keys()
-        .filter(|&&name| name != self_name)
-        .filter(|&&name| {
-            let pattern = format!(r"\b{}\b", regex::escape(name));
-            Regex::new(&pattern)
-                .map(|re| re.is_match(expr))
-                .unwrap_or(false)
-        })
-        .copied()
+    patterns
+        .iter()
+        .filter(|(&name, _)| name != self_name)
+        .filter(|(_, re)| re.is_match(expr))
+        .map(|(&name, _)| name)
         .collect()
 }
 
@@ -669,6 +697,35 @@ mod tests {
         q.measures = vec!["derived".to_string()];
         let sql = cube_query_to_sql(&q, &manifest).unwrap();
         assert!(sql.contains("(fn($1, $$tag$$))"), "sql={sql}");
+    }
+
+    #[test]
+    fn test_resolve_measures_ignores_unrequested_cycle() {
+        // Cycle in measures a/b should not fail a query that only asks for a
+        // separate, well-formed measure. resolve_measures walks the transitive
+        // closure of the requested measures, so unrelated cycles are skipped.
+        let manifest = ManifestBuilder::new()
+            .model(
+                ModelBuilder::new("orders")
+                    .table_reference("orders")
+                    .column(ColumnBuilder::new("amount", "double").build())
+                    .build(),
+            )
+            .cube(
+                CubeBuilder::new("PartiallyBrokenCube", "orders")
+                    .measure(
+                        MeasureBuilder::new("standalone", "SUM(amount)", "number")
+                            .build(),
+                    )
+                    .measure(MeasureBuilder::new("a", "b + 1", "number").build())
+                    .measure(MeasureBuilder::new("b", "a + 1", "number").build())
+                    .build(),
+            )
+            .build();
+        let mut q = query("PartiallyBrokenCube");
+        q.measures = vec!["standalone".to_string()];
+        let sql = cube_query_to_sql(&q, &manifest).unwrap();
+        assert!(sql.contains("SUM(amount) AS standalone"), "sql={sql}");
     }
 
     #[test]
