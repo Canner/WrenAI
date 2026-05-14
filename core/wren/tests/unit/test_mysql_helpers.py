@@ -15,6 +15,11 @@ from wren.connector.mysql import (
     _arrow_decimal_from_mysql_field,
     _build_mysql_column,
     _coerce_limit,
+    _mysql_blob_codes,
+    _mysql_decimal_codes,
+    _mysql_field_type_map,
+    _mysql_string_codes,
+    _mysql_unsigned_variant_map,
 )
 
 pytestmark = pytest.mark.unit
@@ -151,3 +156,48 @@ def test_time_column_preserves_negative_and_over_24h() -> None:
     assert out[2] == datetime.timedelta(hours=838, minutes=59, seconds=59)
     assert out[3] == -datetime.timedelta(hours=838, minutes=59, seconds=59)
     assert out[4] is None
+
+
+# ── Thread-safe lazy init ────────────────────────────────────────────────
+
+
+def test_lazy_init_thread_safe() -> None:
+    """The cached FIELD_TYPE accessors must publish fully-populated results
+    even when many threads hit them concurrently on a cold cache.
+
+    The previous in-place dict/set mutation pattern could expose a partially
+    populated map to a thread that raced the initializer. ``functools.cache``
+    guarantees the initializer body runs to completion before the result is
+    visible to any caller.
+    """
+    from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
+
+    accessors = (
+        _mysql_field_type_map,
+        _mysql_unsigned_variant_map,
+        _mysql_blob_codes,
+        _mysql_string_codes,
+        _mysql_decimal_codes,
+    )
+    for fn in accessors:
+        fn.cache_clear()
+
+    # Capture the expected fully-populated reference values once, single-
+    # threaded, so the assertions below have a definitive ground truth.
+    expected = {fn: fn() for fn in accessors}
+    for fn in accessors:
+        fn.cache_clear()
+
+    def hit_all() -> tuple:
+        return tuple(fn() for fn in accessors)
+
+    with ThreadPoolExecutor(max_workers=16) as ex:
+        results = list(ex.map(lambda _: hit_all(), range(64)))
+
+    for row in results:
+        for fn, got in zip(accessors, row, strict=True):
+            # Every thread sees the same fully-populated object.
+            assert got == expected[fn]
+            # Sanity: the field-type map is non-empty (MySQLdb constants exist).
+            if fn is _mysql_field_type_map:
+                assert len(got) > 0

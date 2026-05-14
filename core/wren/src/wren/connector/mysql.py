@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 from contextlib import closing
 from decimal import Decimal as PyDecimal
+from functools import cache
 
 import pyarrow as pa
 from loguru import logger
@@ -130,12 +131,6 @@ def create_connector(data_source: DataSource, connection_info) -> MySqlConnector
 # Arrow conversion helpers
 # ---------------------------------------------------------------------------
 
-_MYSQL_FIELD_TYPE_TO_ARROW: dict[int, pa.DataType] = {}
-_MYSQL_UNSIGNED_VARIANT: dict[int, pa.DataType] = {}
-_MYSQL_BLOB_CODES: set[int] = set()
-_MYSQL_STRING_CODES: set[int] = set()
-_MYSQL_DECIMAL_CODES: set[int] = set()
-
 # MySQL ``DECIMAL(M, D)`` allows ``M`` up to 65 and ``D`` up to 30, while
 # PyArrow's ``decimal128`` only supports precision up to 38. We clamp the
 # precision derived from ``cursor.description`` to ``38`` and the scale to
@@ -149,10 +144,15 @@ _MYSQL_DECIMAL_FALLBACK_PRECISION = 38
 _MYSQL_DECIMAL_FALLBACK_SCALE = 9
 
 
-def _init_mysql_field_type_map() -> None:
-    """Lazily populate the FIELD_TYPE → Arrow map; needs MySQLdb to be importable."""
-    if _MYSQL_FIELD_TYPE_TO_ARROW:
-        return
+@cache
+def _mysql_field_type_map() -> dict[int, pa.DataType]:
+    """Build the FIELD_TYPE → Arrow map once per process.
+
+    Returns a fully-populated local dict, then ``functools.cache`` publishes
+    the reference atomically. Concurrent callers either see the fully-built
+    dict or wait on the cache's GIL-protected slot — they never observe a
+    partially-populated map.
+    """
     from MySQLdb.constants import FIELD_TYPE as FT  # noqa: PLC0415
 
     base_map: dict[str, pa.DataType] = {
@@ -195,18 +195,20 @@ def _init_mysql_field_type_map() -> None:
         "GEOMETRY": pa.string(),
         "NULL": pa.null(),
     }
+    result: dict[int, pa.DataType] = {}
     for name, arrow_type in base_map.items():
         code = getattr(FT, name, None)
         if code is not None:
-            _MYSQL_FIELD_TYPE_TO_ARROW[code] = arrow_type
+            result[code] = arrow_type
+    return result
 
 
-def _init_mysql_aux_maps() -> None:
-    """Populate the UNSIGNED / BLOB / STRING code sets once per process."""
-    if _MYSQL_UNSIGNED_VARIANT:
-        return
+@cache
+def _mysql_unsigned_variant_map() -> dict[int, pa.DataType]:
+    """Build the FIELD_TYPE → unsigned-Arrow map once per process."""
     from MySQLdb.constants import FIELD_TYPE as FT  # noqa: PLC0415
 
+    result: dict[int, pa.DataType] = {}
     for name, arrow_type in (
         ("TINY", pa.uint8()),
         ("SHORT", pa.uint16()),
@@ -216,19 +218,47 @@ def _init_mysql_aux_maps() -> None:
     ):
         code = getattr(FT, name, None)
         if code is not None:
-            _MYSQL_UNSIGNED_VARIANT[code] = arrow_type
-    for n in ("BLOB", "TINY_BLOB", "MEDIUM_BLOB", "LONG_BLOB"):
-        code = getattr(FT, n, None)
-        if code is not None:
-            _MYSQL_BLOB_CODES.add(code)
-    for n in ("STRING", "VAR_STRING", "VARCHAR"):
-        code = getattr(FT, n, None)
-        if code is not None:
-            _MYSQL_STRING_CODES.add(code)
-    for n in ("DECIMAL", "NEWDECIMAL"):
-        code = getattr(FT, n, None)
-        if code is not None:
-            _MYSQL_DECIMAL_CODES.add(code)
+            result[code] = arrow_type
+    return result
+
+
+@cache
+def _mysql_blob_codes() -> frozenset[int]:
+    """Build the set of BLOB-family FIELD_TYPE codes once per process."""
+    from MySQLdb.constants import FIELD_TYPE as FT  # noqa: PLC0415
+
+    return frozenset(
+        code
+        for code in (
+            getattr(FT, n, None)
+            for n in ("BLOB", "TINY_BLOB", "MEDIUM_BLOB", "LONG_BLOB")
+        )
+        if code is not None
+    )
+
+
+@cache
+def _mysql_string_codes() -> frozenset[int]:
+    """Build the set of STRING-family FIELD_TYPE codes once per process."""
+    from MySQLdb.constants import FIELD_TYPE as FT  # noqa: PLC0415
+
+    return frozenset(
+        code
+        for code in (getattr(FT, n, None) for n in ("STRING", "VAR_STRING", "VARCHAR"))
+        if code is not None
+    )
+
+
+@cache
+def _mysql_decimal_codes() -> frozenset[int]:
+    """Build the set of DECIMAL-family FIELD_TYPE codes once per process."""
+    from MySQLdb.constants import FIELD_TYPE as FT  # noqa: PLC0415
+
+    return frozenset(
+        code
+        for code in (getattr(FT, n, None) for n in ("DECIMAL", "NEWDECIMAL"))
+        if code is not None
+    )
 
 
 def _arrow_decimal_from_mysql_field(
@@ -274,21 +304,24 @@ def _mysql_field_arrow_type(
     precision: int | None = None,
     scale: int | None = None,
 ) -> pa.DataType:
-    _init_mysql_field_type_map()
-    _init_mysql_aux_maps()
-
     from MySQLdb.constants import FLAG  # noqa: PLC0415
 
-    base = _MYSQL_FIELD_TYPE_TO_ARROW.get(type_code, pa.string())
+    field_map = _mysql_field_type_map()
+    unsigned_map = _mysql_unsigned_variant_map()
+    blob_codes = _mysql_blob_codes()
+    string_codes = _mysql_string_codes()
+    decimal_codes = _mysql_decimal_codes()
 
-    if flags & FLAG.UNSIGNED and type_code in _MYSQL_UNSIGNED_VARIANT:
-        return _MYSQL_UNSIGNED_VARIANT[type_code]
+    base = field_map.get(type_code, pa.string())
+
+    if flags & FLAG.UNSIGNED and type_code in unsigned_map:
+        return unsigned_map[type_code]
 
     # DECIMAL precision/scale come from ``cursor.description`` (PEP 249 fields
     # ``precision`` / ``scale``). MySQL ``DECIMAL(M, D)`` allows scale up to 30
     # — the previous hard-coded ``decimal128(38, 9)`` would lose digits when
     # ``D > 9``.
-    if type_code in _MYSQL_DECIMAL_CODES:
+    if type_code in decimal_codes:
         return _arrow_decimal_from_mysql_field(
             precision, scale, is_unsigned=bool(flags & FLAG.UNSIGNED)
         )
@@ -296,11 +329,11 @@ def _mysql_field_arrow_type(
     # MySQL packs both TEXT and BLOB into FIELD_TYPE.*BLOB; BINARY flag is the
     # discriminator. Without BINARY they are TEXT (string); with BINARY they
     # are real BLOB (bytes — keep base type).
-    if type_code in _MYSQL_BLOB_CODES and not (flags & FLAG.BINARY):
+    if type_code in blob_codes and not (flags & FLAG.BINARY):
         return pa.string()
 
     # STRING / VAR_STRING with BINARY flag is BINARY/VARBINARY (bytes).
-    if type_code in _MYSQL_STRING_CODES and (flags & FLAG.BINARY):
+    if type_code in string_codes and (flags & FLAG.BINARY):
         return pa.binary()
 
     return base
