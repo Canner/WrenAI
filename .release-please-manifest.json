@@ -3,5 +3,5 @@
   "core/wren": "0.6.0",
   "core/wren-core-wasm": "0.3.0",
   "sdk/wren-langchain": "0.1.0",
-  "sdk/wren-pydantic": "0.1.0"
+  "sdk/wren-pydantic": "0.2.0"
 }
