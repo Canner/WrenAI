@@ -326,6 +326,12 @@ class DataSourceExtension(Enum):
         statement_timeout = kwargs.pop("statement_timeout", None)
         if statement_timeout is not None:
             settings["max_execution_time"] = int(statement_timeout)
+        # Merge any user-supplied ``settings`` from kwargs into the local dict
+        # *before* applying the rest, otherwise ``client_kwargs.update(kwargs)``
+        # below would clobber the statement_timeout-derived max_execution_time.
+        extra_settings = kwargs.pop("settings", None)
+        if extra_settings:
+            settings.update(extra_settings)
 
         client_kwargs = {
             "host": info.host,

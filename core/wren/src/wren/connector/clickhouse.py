@@ -21,7 +21,13 @@ from loguru import logger
 from sqlglot.expressions import DataType
 
 from wren.connector.base import ConnectorABC
-from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
+from wren.model.error import (
+    DIALECT_SQL,
+    DatabaseTimeoutError,
+    ErrorCode,
+    ErrorPhase,
+    WrenError,
+)
 
 try:
     import clickhouse_connect
@@ -263,6 +269,7 @@ def _build_clickhouse_client_kwargs(connection_info: Any) -> dict:
             out["database"] = parsed.path.lstrip("/")
         if parsed.scheme == "clickhouse+https":
             out["secure"] = True
+        # ``settings`` already popped above, so ``out["settings"]`` survives.
         out.update(kwargs)
         return out
 
@@ -272,6 +279,12 @@ def _build_clickhouse_client_kwargs(connection_info: Any) -> dict:
     statement_timeout = kwargs.pop("statement_timeout", None)
     if statement_timeout is not None:
         settings["max_execution_time"] = int(statement_timeout)
+    # Merge any user-supplied ``settings`` from kwargs into the local dict
+    # *before* applying the rest, otherwise ``out.update(kwargs)`` below
+    # would clobber the statement_timeout-derived max_execution_time.
+    extra_settings = kwargs.pop("settings", None)
+    if extra_settings:
+        settings.update(extra_settings)
 
     out = {
         "host": info.host,
@@ -307,7 +320,7 @@ class ClickHouseConnector(ConnectorABC):
             result = self.connection.query(statement)
         except _ClickHouseDbError as e:
             if "TIMEOUT_EXCEEDED" in str(e):
-                raise
+                raise DatabaseTimeoutError(str(e)) from e
             raise WrenError(
                 ErrorCode.INVALID_SQL,
                 str(e),
@@ -321,7 +334,7 @@ class ClickHouseConnector(ConnectorABC):
             self.connection.query(f"SELECT * FROM ({sql}) AS _wren_sub LIMIT 0")
         except _ClickHouseDbError as e:
             if "TIMEOUT_EXCEEDED" in str(e):
-                raise
+                raise DatabaseTimeoutError(str(e)) from e
             raise WrenError(
                 ErrorCode.INVALID_SQL,
                 str(e),

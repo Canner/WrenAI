@@ -18,7 +18,10 @@ from testcontainers.core.container import DockerContainer
 from tests.suite.manifests import make_tpch_manifest
 from tests.suite.query import WrenQueryTestSuite
 from wren import WrenEngine
-from wren.connector.clickhouse import _parse_clickhouse_type
+from wren.connector.clickhouse import (
+    _build_clickhouse_client_kwargs,
+    _parse_clickhouse_type,
+)
 from wren.model.data_source import DataSource
 
 pytestmark = pytest.mark.clickhouse
@@ -215,3 +218,55 @@ class TestClickHouseTypeParser:
     def test_none_type_defaults_to_string(self) -> None:
         result = _parse_clickhouse_type(None)
         assert str(result) == "string"
+
+
+class _FakeChInfo:
+    """Stand-in for ``ClickHouseConnectionInfo`` used by the kwargs builder.
+
+    Pydantic enforces ``kwargs: dict[str, str]`` on the real model, so we
+    bypass it here to exercise the merge logic with nested ``settings``.
+    ``_build_clickhouse_client_kwargs`` only reads attributes off the object.
+    """
+
+    def __init__(self, **attrs) -> None:
+        self.host = attrs.get("host", "localhost")
+        self.port = attrs.get("port", "8123")
+        self.database = attrs.get("database", "default")
+        self.user = attrs.get("user", "default")
+        self.password = attrs.get("password")
+        self.secure = attrs.get("secure", False)
+        self.settings = attrs.get("settings")
+        self.kwargs = attrs.get("kwargs")
+
+
+@pytest.mark.clickhouse
+class TestClickHouseClientKwargs:
+    """Pure-Python tests for ``_build_clickhouse_client_kwargs``.
+
+    Exercises the kwargs/settings merge logic without spinning up a real
+    ClickHouse instance.
+    """
+
+    def test_statement_timeout_survives_user_settings(self) -> None:
+        """statement_timeout must merge with — not be clobbered by — user settings."""
+        info = _FakeChInfo(
+            kwargs={
+                "statement_timeout": 10,
+                "settings": {"max_threads": 4},
+            },
+        )
+        out = _build_clickhouse_client_kwargs(info)
+        assert out["settings"] == {
+            "max_execution_time": 10,
+            "max_threads": 4,
+        }
+
+    def test_user_settings_only(self) -> None:
+        info = _FakeChInfo(kwargs={"settings": {"max_threads": 4}})
+        out = _build_clickhouse_client_kwargs(info)
+        assert out["settings"] == {"max_threads": 4}
+
+    def test_statement_timeout_only(self) -> None:
+        info = _FakeChInfo(kwargs={"statement_timeout": 10})
+        out = _build_clickhouse_client_kwargs(info)
+        assert out["settings"] == {"max_execution_time": 10}
