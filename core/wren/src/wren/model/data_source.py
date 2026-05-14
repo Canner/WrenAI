@@ -403,6 +403,16 @@ class DataSourceExtension(Enum):
 
         connect_kwargs = dict(kwargs) if kwargs else {}
         statement_timeout = connect_kwargs.pop("statement_timeout", None)
+        # Validate statement_timeout before opening the connection so a bad
+        # value can't leak the pyodbc connection we'd otherwise open first.
+        if statement_timeout is not None:
+            try:
+                statement_timeout = int(statement_timeout)
+            except (TypeError, ValueError) as exc:
+                raise WrenError(
+                    ErrorCode.INVALID_CONNECTION_INFO,
+                    f"Invalid statement_timeout for MSSQL: {statement_timeout!r}",
+                ) from exc
 
         connection_parts = [
             f"DRIVER={DataSourceExtension._escape_odbc_value(driver)}",
@@ -434,7 +444,7 @@ class DataSourceExtension(Enum):
         DataSourceExtension._register_mssql_output_converters(connection)
 
         if statement_timeout is not None:
-            connection.timeout = int(statement_timeout)
+            connection.timeout = statement_timeout
 
         return connection
 
