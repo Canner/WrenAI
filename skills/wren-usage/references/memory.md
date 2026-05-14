@@ -2,6 +2,10 @@
 
 This reference covers the decision logic for each memory command. The main workflow is in the parent SKILL.md.
 
+**Prerequisite:** every command in this file requires the `memory` extra (`pip install "wren-engine[memory]"`) and therefore only applies when `MEMORY_AVAILABLE = true` from Preflight Step 3a. If memory isn't installed, the entire `wren memory` subcommand group is missing — see the no-memory paths in SKILL.md.
+
+For exact flags, prefer `wren memory <subcommand> --help` over memorizing this file.
+
 ---
 
 ## Schema context: `fetch` and `describe`
@@ -105,6 +109,19 @@ After execution:
 
 ---
 
+## Managing stored pairs
+
+Pair management commands exist for inspection, sharing, and pruning. Don't use them in the default question-answering flow.
+
+| Command | When to use |
+|---------|-------------|
+| `wren memory list [--source seed\|user\|view] [-n N] [--offset N]` | Browse what's currently stored. Useful for debugging "did my store call land?" or auditing seed quality. |
+| `wren memory forget --id <ID> [--id <ID> ...] --force` | Remove specific bad pairs. **`--force` is required for headless agents** — without it the CLI still asks for confirmation, which hangs non-TTY callers. Pass row IDs from `list`. |
+| `wren memory forget --source seed --force` | Drop all pairs of one source (e.g. wipe outdated seed pairs before re-indexing). |
+| `wren memory forget` (no flags) | Interactive checkbox UI — requires `wren-engine[interactive]`. Headless agents should prefer `--id ... --force`. |
+| `wren memory dump [--source S] [-o file]` | Export pairs to YAML. Default target is `<project>/queries.yml` if inside a project, otherwise stdout. Use to commit curated pairs to a repo. |
+| `wren memory load <file> [--upsert] [--overwrite] [--dry-run]` | Import pairs from YAML. `--dry-run` validates without writing. `index` already auto-loads `queries.yml`, so explicit `load` is for ad-hoc imports. |
+
 ## Housekeeping
 
 ```bash
@@ -113,3 +130,15 @@ wren memory reset --force       # drop everything, start fresh
 ```
 
 All memory commands accept `--path DIR` to override the default storage directory (`<project>/.wren/memory/`, falling back to `~/.wren/memory/` outside a project).
+
+---
+
+## Common misuse to avoid
+
+- **Re-indexing every query.** `wren memory index` is expensive. Run it once after MDL changes, not before every question. The skill's Workflow 4 covers when it's actually needed.
+- **Echoing the stderr store hint.** After `wren --sql ...`, the CLI prints `# To save this query: wren memory store --nl '...' --sql '...'` to stderr. The NL there is a placeholder. Construct the `store` call yourself using the user's actual question.
+- **Storing exploratory queries manually.** The CLI auto-classifies queries like `SELECT * FROM t LIMIT N` as exploratory and skips the store hint. Don't try to "rescue" them by calling `store` directly — they're not worth few-shot retrieval.
+- **Repeated `fetch` + `recall` for the same question.** One `fetch` per question covers schema context; one `recall` covers few-shot examples. Calling them three times each before writing SQL is wasted tokens.
+- **Calling `wren memory <anything>` after Preflight returned `MEMORY_AVAILABLE = false`.** Every call will fail with "No such command 'memory'". Switch to `wren context show` for schema, and don't try to recall/store at all.
+- **Using `forget` in interactive mode from a non-TTY agent.** Use `--id <ID> --force` for headless removal — `--id` alone still triggers a confirmation prompt. The interactive checkbox UI also needs the `interactive` extra to be installed.
+- **Re-`load`ing `queries.yml` after `index`.** `wren memory index` already auto-loads `queries.yml` from the project root (unless `--no-queries`). Manual `load` is only for files outside the project.
