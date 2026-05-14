@@ -377,10 +377,12 @@ def _build_mysql_arrow_table(cursor) -> pa.Table:
             _build_mysql_column([row[i] for row in rows], schema.field(i).type)
             for i in range(len(fields))
         ]
-    return pa.table(
-        dict(zip([f.name for f in fields], arrays, strict=False)),
-        schema=schema,
-    )
+    # ``pa.table(dict(...), schema=...)`` silently drops a column when two
+    # fields share the same name (the dict collapses the duplicate). Use
+    # ``pa.Table.from_arrays`` so a query like
+    # ``SELECT a.id, b.id FROM t a JOIN t b`` round-trips both ``id``
+    # columns instead of returning a one-column table.
+    return pa.Table.from_arrays(arrays, schema=schema)
 
 
 def _build_mysql_column(values: list, arrow_type: pa.DataType) -> pa.Array:

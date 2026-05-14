@@ -287,6 +287,10 @@ def test_query_with_duplicate_column_names(connector: MySqlConnector) -> None:
     """``SELECT * FROM (...) AS _sub`` would fail with ER_DUP_FIELDNAME on a
     join that exposes the same column name twice. Appending ``LIMIT`` to the
     user SQL avoids the subquery and so avoids the duplicate-column error.
+
+    Also asserts the resulting Arrow table preserves BOTH ``id`` fields —
+    building the table via ``dict(zip(names, arrays))`` would silently drop
+    one of the duplicate columns because the dict collapses the key.
     """
     _exec(connector, "DROP TABLE IF EXISTS t_dup_a")
     _exec(connector, "DROP TABLE IF EXISTS t_dup_b")
@@ -297,6 +301,12 @@ def test_query_with_duplicate_column_names(connector: MySqlConnector) -> None:
     sql = "SELECT a.id, b.id FROM t_dup_a a JOIN t_dup_b b ON a.id = b.id"
     tbl = connector.query(sql, limit=10)
     assert tbl.num_rows == 2
+    # Two ``id`` columns must survive — the schema is name-positional.
+    assert tbl.num_columns == 2
+    assert [f.name for f in tbl.schema] == ["id", "id"]
+    # Both columns hold the same data (joined on ``id``), but they must each
+    # exist independently in the result.
+    assert tbl.column(0).to_pylist() == tbl.column(1).to_pylist()
     # dry_run should also work on duplicate-column queries.
     connector.dry_run(sql)
 
