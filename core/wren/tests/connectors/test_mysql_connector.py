@@ -21,7 +21,7 @@ pytestmark = pytest.mark.mysql
 
 @pytest.fixture(scope="module")
 def mysql_container():
-    with MySqlContainer("mysql:8") as mysql:
+    with MySqlContainer("mysql:8.0.36") as mysql:
         yield mysql
 
 
