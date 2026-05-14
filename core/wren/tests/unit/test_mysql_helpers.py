@@ -170,6 +170,7 @@ def test_lazy_init_thread_safe() -> None:
     guarantees the initializer body runs to completion before the result is
     visible to any caller.
     """
+    pytest.importorskip("MySQLdb")
     from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
 
     accessors = (
