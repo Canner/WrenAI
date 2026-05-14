@@ -370,14 +370,17 @@ class DataSourceExtension(Enum):
             )
 
         kwargs = dict(base_kwargs) if base_kwargs else {}
-        kwargs.update(dict(urllib.parse.parse_qsl(parsed.query)))
+        # parse_qsl already URL-decodes values, but we re-apply unquote_plus
+        # below only to components urlparse leaves encoded (user, path, password).
+        for key, value in urllib.parse.parse_qsl(parsed.query):
+            kwargs[key] = value
         driver = kwargs.pop("driver", "ODBC Driver 18 for SQL Server")
 
         return cls._connect_mssql_pyodbc(
             host=parsed.hostname,
             port=str(parsed.port or 1433),
-            database=parsed.path.lstrip("/"),
-            user=parsed.username,
+            database=unquote_plus(parsed.path.lstrip("/")),
+            user=unquote_plus(parsed.username),
             password=unquote_plus(parsed.password) if parsed.password else None,
             driver=driver,
             kwargs=kwargs,
