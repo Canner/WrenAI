@@ -248,7 +248,19 @@ class DataSourceExtension(Enum):
             raise WrenError(ErrorCode.GET_CONNECTION_ERROR, f"{e!s}") from e
 
     @staticmethod
-    def get_athena_connection(info: AthenaConnectionInfo) -> BaseBackend:
+    def get_athena_connection(info: AthenaConnectionInfo):
+        """Open a pyathena DB-API connection.
+
+        Returns a :class:`pyathena.connection.Connection`. Credentials are
+        resolved in priority order:
+
+        1. Web Identity Token (OIDC) → STS ``AssumeRoleWithWebIdentity``
+        2. Explicit ``aws_access_key_id`` / ``aws_secret_access_key``
+           (optionally with ``aws_session_token``)
+        3. Default AWS credential provider chain (env, profile, instance role)
+        """
+        from pyathena import connect  # noqa: PLC0415
+
         kwargs: dict[str, Any] = {
             "s3_staging_dir": info.s3_staging_dir.get_secret_value(),
             "schema_name": info.schema_name,
@@ -279,7 +291,7 @@ class DataSourceExtension(Enum):
             if info.aws_session_token:
                 kwargs["aws_session_token"] = info.aws_session_token.get_secret_value()
 
-        return ibis.athena.connect(**kwargs)
+        return connect(**kwargs)
 
     @staticmethod
     def get_bigquery_connection(info: BigQueryDatasetConnectionInfo) -> BaseBackend:

@@ -23,7 +23,7 @@ _REGISTRY: dict[DataSource, str] = {
     DataSource.clickhouse: "wren.connector.ibis",
     DataSource.oracle: "wren.connector.oracle",
     DataSource.snowflake: "wren.connector.ibis",
-    DataSource.athena: "wren.connector.ibis",
+    DataSource.athena: "wren.connector.athena",
 }
 
 # Map data sources to the correct pip extra when they share a connector module
@@ -42,7 +42,6 @@ _NEEDS_DATA_SOURCE = {
     DataSource.trino,
     DataSource.clickhouse,
     DataSource.snowflake,
-    DataSource.athena,
 }
 
 
