@@ -39,13 +39,13 @@ def _build_connection_params(connection_info) -> dict:
     return params
 
 
-def _make_snowflake_connection(connection_info):
+def make_snowflake_connection(connection_info):
     return snowflake.connector.connect(**_build_connection_params(connection_info))
 
 
 class SnowflakeConnector(ConnectorABC):
     def __init__(self, connection_info):
-        self.connection = _make_snowflake_connection(connection_info)
+        self.connection = make_snowflake_connection(connection_info)
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         try:

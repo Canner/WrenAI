@@ -401,9 +401,9 @@ class DataSourceExtension(Enum):
 
     @staticmethod
     def get_snowflake_connection(info: SnowflakeConnectionInfo):
-        from wren.connector.snowflake import _make_snowflake_connection  # noqa: PLC0415
+        from wren.connector.snowflake import make_snowflake_connection  # noqa: PLC0415
 
-        return _make_snowflake_connection(info)
+        return make_snowflake_connection(info)
 
     @staticmethod
     def get_trino_connection(info: TrinoConnectionInfo) -> BaseBackend:
