@@ -307,3 +307,29 @@ def test_connector_falls_back_to_default_chain_when_no_credentials():
 def test_data_source_get_athena_connection_returns_pyathena_connection():
     DataSourceExtension.get_athena_connection(_info())
     assert _pyathena_connect_calls, "pyathena.connect should be called"
+
+
+def test_data_source_get_athena_connection_propagates_schema_and_kwargs():
+    """Regression: data_source.get_athena_connection must funnel through the
+    same kwargs builder as AthenaConnector so schema_name, kill_on_interrupt,
+    and any user-supplied info.kwargs reach pyathena.connect consistently.
+    """
+    info = _info(schema_name="analytics")
+    # AthenaConnectionInfo currently has no ``kwargs`` field, but the shared
+    # builder reads it defensively. Simulate a future/user-provided value.
+    object.__setattr__(info, "kwargs", {"work_group": "wg-1", "kill_on_interrupt": False})
+
+    DataSourceExtension.get_athena_connection(info)
+
+    kwargs = _pyathena_connect_calls[-1]
+    assert kwargs["schema_name"] == "analytics"
+    assert kwargs["work_group"] == "wg-1"
+    # User-supplied kwargs override the default.
+    assert kwargs["kill_on_interrupt"] is False
+
+
+def test_data_source_get_athena_connection_defaults_kill_on_interrupt():
+    DataSourceExtension.get_athena_connection(_info())
+    kwargs = _pyathena_connect_calls[-1]
+    assert kwargs["kill_on_interrupt"] is True
+    assert kwargs["schema_name"] == "default"
