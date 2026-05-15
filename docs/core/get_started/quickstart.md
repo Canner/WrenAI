@@ -1,10 +1,19 @@
 # Quick Start: Wren CLI with jaffle_shop
 
-Use natural-language questions against the **jaffle\_shop** dataset using **Wren AI Core CLI** and **Claude Code** — no cloud database, no Docker, no MCP server.
+Ask natural-language questions of the **jaffle_shop** dataset using **Wren AI CLI** and **Claude Code** — no cloud database, no Docker, no extra infrastructure.
 
 > **Time:** ~15 minutes
 >
 > **What you'll get:** A local semantic layer + memory system that lets an AI agent write accurate SQL by understanding your data's meaning, not just its schema.
+
+## Terms used in this guide
+
+This guide drops three things on you in the first few steps. Skim before you start:
+
+- **Wren CLI (`wren`)** — the Python CLI that runs all of this. Connects to a database, holds your modeling files, executes SQL through the semantic layer, manages a local memory index. ([CLI reference →](/oss/reference/cli))
+- **MDL (Modeling Definition Language)** — YAML files under `models/`, `views/`, and `relationships.yml` that describe your tables, columns, and joins in business terms. The agent reads MDL instead of guessing from raw schema. ([MDL concept →](/oss/concepts/what_is_mdl) · [Wren project guide →](/oss/guides/modeling/wren_project))
+- **jaffle_shop** — a public sample database from dbt Labs. We use it so you do not need to bring your own database to follow this quickstart. It is a fictional ecommerce business with `customers`, `orders`, `products`, and `supplies`. *(Want to skip jaffle_shop and use your own database? Finish the install in step 2 then jump to [Connect your database](/oss/guides/connect).)*
+- **Skills** — markdown workflow guides that tell an AI coding agent (Claude Code, Openclaw, Hermes, Codex, etc.) how to operate the CLI. Two skills drive this quickstart: `wren-generate-mdl` (one-time scaffolding) and `wren-usage` (day-to-day querying). ([Skills concept →](/oss/concepts/skills))
 
 ---
 
@@ -58,17 +67,18 @@ pwd
 
 ## Step 2 — Install wren-engine Python package
 
-Install `wren-engine` with UI support and memory system:
+For this quickstart, install with **DuckDB + memory + UI + interactive prompts**:
 
 ```bash
-pip install "wren-engine[main]"
+pip install "wren-engine[memory,main]"
 ```
 
-DuckDB is included by default — no extra needed. For other data sources, install the corresponding extra (e.g. `pip install "wren-engine[postgres,main]"`).
+DuckDB is included by default — no extra needed. For other data sources, append the connector extra (e.g. `pip install "wren-engine[memory,main,postgres]"`).
 
 > **Available extras:**
 > - `postgres`, `mysql`, `bigquery`, `snowflake`, `clickhouse`, `trino`, `mssql`, `databricks`, `redshift`, `athena`, `oracle`, `spark` — data source connectors
-> - `main` — memory + interactive prompts + browser-based profile UI
+> - `memory` — LanceDB-backed semantic memory (NL-SQL recall, embedding retrieval). **Optional** but recommended for the quickstart.
+> - `main` — interactive prompts + browser-based profile UI
 
 Verify the installation:
 
@@ -97,7 +107,7 @@ This quickstart uses two of the installed skills:
 | **wren-usage** | Day-to-day workflow — gather context, recall past queries, write SQL, store results |
 | **wren-generate-mdl** | One-time setup — explore database schema and generate the MDL project |
 
-For the full skill list (including `wren-onboarding` and `wren-dlt-connector`), see [Installation](./installation.md#install-skills).
+For the full skill list (including `wren-onboarding` and `wren-dlt-connector`), see the [Skills reference](/oss/reference/skills).
 
 ---
 
@@ -178,7 +188,7 @@ This creates:
 
 The generated `wren_project.yml` contains default values for `catalog` and `schema`:
 
-> **Note:** `catalog` and `schema` in `wren_project.yml` define the **Wren AI Core namespace** — they have nothing to do with your database's catalog or schema. Keep the defaults (`wren` / `public`). The actual database location of each table is specified per-model in the `table_reference` section.
+> **Note:** `catalog` and `schema` in `wren_project.yml` define the **Wren AI namespace** — they have nothing to do with your database's catalog or schema. Keep the defaults (`wren` / `public`). The actual database location of each table is specified per-model in the `table_reference` section.
 
 Bind the profile you just created to this project:
 

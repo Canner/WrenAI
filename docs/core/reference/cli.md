@@ -60,7 +60,7 @@ wren --sql 'SELECT COUNT(*) FROM "orders"' \
   --connection-info '{"datasource":"mysql","host":"localhost","port":3306,"database":"mydb","user":"root","password":"secret"}'
 ```
 
-Both flat and MCP/web envelope formats are accepted:
+Both flat and envelope formats are accepted:
 
 ```bash
 # Flat format
@@ -77,9 +77,9 @@ Both flat and MCP/web envelope formats are accepted:
 Print the required and optional connection fields for a data source.
 
 ```bash
-wren docs connection-info --datasource postgres
-wren docs connection-info --datasource bigquery
-wren docs connection-info --datasource snowflake
+wren docs connection-info postgres
+wren docs connection-info bigquery
+wren docs connection-info snowflake
 ```
 
 Use this to check which fields are needed before creating a profile.
@@ -88,10 +88,12 @@ Use this to check which fields are needed before creating a profile.
 
 ## `wren memory` — Schema & Query Memory
 
-LanceDB-backed semantic memory for MDL schema search and NL-SQL retrieval. Install with the `main` extra bundle (includes `memory`, `interactive`, `ui`):
+LanceDB-backed semantic memory for MDL schema search and NL-SQL retrieval. Install with the `memory` extra (separate from `main`):
 
 ```bash
-pip install 'wren-engine[main]'   # includes memory, interactive, ui
+pip install 'wren-engine[memory]'
+# or combine with main for the browser UI and interactive prompts:
+pip install 'wren-engine[memory,main]'
 ```
 
 All `memory` subcommands accept `--path DIR` to override the default storage location (`~/.wren/memory/`).

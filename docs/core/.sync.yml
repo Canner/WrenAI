@@ -23,6 +23,7 @@ sync_dirs:
   - concepts
   - guides
   - reference
+  - sdk
 
 # Not synced (excluded by being outside sync_dirs / sync_files):
 # - README.md — this folder's index

@@ -1,6 +1,23 @@
 # Architecture
 
-Wren AI Core CLI is a modular Python application that transforms semantic SQL through an MDL layer before executing it against your database. This page explains how the components fit together.
+Wren AI is built as a system for **correctness** — not as a single feature. Text-to-SQL fails when any one of six pieces is missing; we build all six as primitives the agent orchestrates.
+
+## Correctness is a system, not a switch
+
+Correctness is the result of six things working together. Miss any one of them and the agent fails in that exact gap.
+
+| Pillar | What it means | Where it lives in Wren AI |
+|---|---|---|
+| **Schema linking** | Knowing which tables to look at for a given question. | MDL + memory schema retrieval (`wren memory fetch`) |
+| **Value profiling** | Knowing what values actually live in those columns — what `status = 4` resolves to, whether `is_active` is `'Y'/'N'` or `true/false`. | Connector type coercion + `instructions.md` indexed into memory |
+| **Ambiguity detection** | Knowing when a question is ambiguous and a clarification is needed before generating SQL. | Skill orchestration layer (handled by the agent using Wren AI's primitives) |
+| **Generation trace** | Being able to show *how* an answer was constructed — which models, which joins, which CTEs. | `wren dry-plan` returns the expanded SQL deterministically |
+| **Retry and repair** | Being able to recover when the first SQL fails — re-plan, try a different model, surface a structured error. | Structured error responses + `wren dry-run` for pre-flight validation |
+| **Eval** | Detecting regression when underlying definitions change — schema drift, business rule rewrites, model renames. | Golden NL-SQL eval runner (in development) |
+
+This is why Wren AI exposes **primitives**, not a closed product. The agent does the orchestration — picking the skill, asking the clarification, looping on retry. The trace lives where the agent's reasoning lives. We do not wrap correctness inside our own dashboard that you have to learn.
+
+The rest of this page documents the components that implement those primitives.
 
 ## Overview
 

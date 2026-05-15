@@ -1,8 +1,8 @@
 # Overview
 
-## Data modeling in Wren AI Core
+## Data modeling in Wren AI
 
-Wren AI Core uses Modeling Definition Language (MDL) to describe business data in a structured, queryable form. Modeling is how you turn physical tables and raw schemas into context that can be reused by SQL clients and AI agents.
+Wren AI uses Modeling Definition Language (MDL) to describe business data in a structured, queryable form. Modeling is how you turn physical tables and raw schemas into context that can be reused by SQL clients and AI agents.
 
 In practice, the modeling layer defines:
 
@@ -11,7 +11,7 @@ In practice, the modeling layer defines:
 - which calculations should be reused
 - which query interfaces should be published as stable objects
 
-This guide provides a high-level map of the core modeling primitives in Wren AI Core.
+This guide provides a high-level map of the core modeling primitives in Wren AI.
 
 ## Core modeling objects
 
@@ -33,7 +33,7 @@ See [Model](./model.md).
 
 ### Relationship
 
-A **Relationship** defines how two models are connected. Wren AI Core uses relationship metadata to plan joins and enable relationship-aware expressions.
+A **Relationship** defines how two models are connected. Wren AI uses relationship metadata to plan joins and enable relationship-aware expressions.
 
 Use a relationship when you need to:
 
@@ -121,4 +121,4 @@ Use this rule of thumb:
 
 ## Why this matters
 
-Good modeling is not only about query convenience. It is how Wren AI Core turns raw warehouse structure into durable business context. Once models, relationships, and calculations are defined centrally, queries become easier to write, easier to review, and more consistent across users, applications, and AI agents.
+Good modeling is not only about query convenience. It is how Wren AI turns raw warehouse structure into durable business context. Once models, relationships, and calculations are defined centrally, queries become easier to write, easier to review, and more consistent across users, applications, and AI agents.
