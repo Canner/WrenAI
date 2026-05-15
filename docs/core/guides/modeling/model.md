@@ -340,7 +340,7 @@ Wren translates these queries to the appropriate dialect SQL for the connected d
 
 A model does not have to expose every column in the underlying table. By explicitly listing only the columns a client should see, you create a hard boundary at the semantic layer — columns that are not declared in the model simply do not exist from the client's perspective.
 
-This is especially valuable in the AI era. When an AI agent (Claude, Cursor, Cline, etc.) connects through Wren MCP, it can only discover and query the columns that are declared in the model. Sensitive fields that are omitted from the model are physically invisible to the agent — no prompt injection or accidental exposure can retrieve them.
+This is especially valuable in the AI era. When an AI coding agent connects through Wren, it can only discover and query the columns that are declared in the model. Sensitive fields that are omitted from the model are physically invisible to the agent — no prompt injection or accidental exposure can retrieve them.
 
 ### Example: hiding PII from AI agents
 
