@@ -77,9 +77,9 @@ Both flat and envelope formats are accepted:
 Print the required and optional connection fields for a data source.
 
 ```bash
-wren docs connection-info --datasource postgres
-wren docs connection-info --datasource bigquery
-wren docs connection-info --datasource snowflake
+wren docs connection-info postgres
+wren docs connection-info bigquery
+wren docs connection-info snowflake
 ```
 
 Use this to check which fields are needed before creating a profile.

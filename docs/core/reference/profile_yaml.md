@@ -2,7 +2,7 @@
 
 A **profile** stores the credentials and connection details that Wren AI uses to talk to your data source. Profiles live outside the project in a single file at `~/.wren/profiles.yml` (override with `WREN_HOME`) so the same source can be reused across multiple projects, and credentials never end up in a Git repo.
 
-This page lists every supported field per data source. For the higher-level concept and CLI workflow, see [Connect your database](/oss/guides/connect/overview).
+This page lists every supported field per data source. For the higher-level concept and CLI workflow, see [Connect your database](/oss/guides/connect).
 
 ---
 
@@ -115,5 +115,5 @@ If you prefer a YAML you can commit (with credentials in `${ENV_VAR}` form), `wr
 
 See also:
 
-- [Connect your database](/oss/guides/connect/overview) — guided setup walkthrough.
+- [Connect your database](/oss/guides/connect) — guided setup walkthrough.
 - `wren profile --help` — full CLI reference.

@@ -98,7 +98,7 @@ The skill activates on phrases like:
 ### Reference docs (skill points to these, never duplicates)
 
 - [Installation](../get_started/installation.md)
-- [Connect your database](/oss/guides/connect/overview)
+- [Connect your database](/oss/guides/connect)
 - [Quickstart with sample data](../get_started/quickstart.md)
 
 ---

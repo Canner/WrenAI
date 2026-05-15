@@ -1,10 +1,10 @@
 ---
-sidebar_label: Overview
+sidebar_label: Connect your database
 ---
 
 # Connect your database
 
-Wren AI talks to your database through a **profile** — a set of credentials and connection details stored in `~/.wren/profiles.yml`. Once a profile is bound to a project, every CLI command and SDK call uses it.
+Wren AI talks to your database through a **profile** — credentials and connection details stored in `~/.wren/profiles.yml`. Once a profile is bound to a project, every CLI command and SDK call uses it.
 
 The flow is the same regardless of which database you use:
 
@@ -14,31 +14,49 @@ The flow is the same regardless of which database you use:
 4. **Generate the MDL** with the `wren-generate-mdl` skill (or manually).
 5. **Start querying.**
 
-If you have an AI coding agent installed, the `wren-onboarding` skill drives the whole thing — see [Installation](/oss/get_started/installation). The per-database pages below cover only the fields and quirks specific to each connector.
+If you have an AI coding agent installed, the `wren-onboarding` skill drives the whole thing — see [Installation](/oss/get_started/installation).
 
 ## Supported data sources
 
-| Data source | Connector extra | Page |
-|---|---|---|
-| DuckDB | _(included)_ | [DuckDB](./duckdb.md) |
-| PostgreSQL | `postgres` | [PostgreSQL](./postgresql.md) |
-| MySQL | `mysql` | [MySQL](./mysql.md) |
-| BigQuery | `bigquery` | [BigQuery](./bigquery.md) |
-| Snowflake | `snowflake` | [Snowflake](./snowflake.md) |
-| ClickHouse | `clickhouse` | [ClickHouse](./clickhouse.md) |
-| Trino / Presto | `trino` | [Trino](./trino.md) |
-| SQL Server | `mssql` | [SQL Server](./sqlserver.md) |
-| Databricks | `databricks` | [Databricks](./databricks.md) |
-| Redshift | `redshift` | [Redshift](./redshift.md) |
-| Oracle | `oracle` | [Oracle](./oracle.md) |
-| Athena | `athena` | [Athena](./athena.md) |
-| Spark | `spark` | [Spark](./spark.md) |
+| Data source | Connector extra |
+|---|---|
+| DuckDB | _(included)_ |
+| PostgreSQL | `postgres` |
+| MySQL | `mysql` |
+| BigQuery | `bigquery` |
+| Snowflake | `snowflake` |
+| ClickHouse | `clickhouse` |
+| Trino / Presto | `trino` |
+| SQL Server | `mssql` |
+| Databricks | `databricks` |
+| Redshift | `redshift` |
+| Oracle | `oracle` |
+| Athena | `athena` |
+| Spark | `spark` |
 
 Install one or more extras together:
 
 ```bash
 pip install "wren-engine[postgres,bigquery,main]"
 ```
+
+## Inspecting connection fields
+
+To see the exact fields required and accepted by a connector, run:
+
+```bash
+wren docs connection-info <ds>
+```
+
+The output is generated directly from the engine's connection schema, so it always matches the version of `wren-engine` you have installed. Examples:
+
+```bash
+wren docs connection-info postgres
+wren docs connection-info bigquery
+wren docs connection-info snowflake
+```
+
+Use this instead of memorizing field names — the CLI is the source of truth.
 
 ## Creating a profile
 
@@ -59,14 +77,6 @@ Or import from a YAML file (recommended for agent-driven setups so secrets live 
 ```bash
 wren profile add my-db --from-file connection.yml
 ```
-
-To see the exact fields for any data source:
-
-```bash
-wren docs connection-info postgres
-```
-
-For the full YAML schema of every connector, see the [Profile YAML reference](/oss/reference/profile_yaml).
 
 ## Verifying the connection
 

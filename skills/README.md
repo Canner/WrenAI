@@ -8,7 +8,7 @@ This directory contains AI agent skills for working with the Wren Engine CLI (`w
 
 Add the marketplace and install:
 ```
-/plugin marketplace add Canner/wren-engine --path skills
+/plugin marketplace add Canner/WrenAI --path skills
 /plugin install wren@wren
 ```
 
@@ -23,7 +23,7 @@ Skills are namespaced as `/wren:<skill>` (e.g., `/wren:wren-generate-mdl`, `/wre
 
 Install all skills:
 ```bash
-npx skills add Canner/wren-engine --skill '*'
+npx skills add Canner/WrenAI --skill '*'
 ```
 
 The CLI auto-detects your installed agent. To target a specific one, add `--agent <name>` (e.g., `claude-code`, `cursor`, `windsurf`, `cline`).
@@ -72,7 +72,7 @@ Each skill automatically checks for updates when invoked. To update manually:
 
 ```bash
 # Re-add to reinstall the latest version
-npx skills add Canner/wren-engine --skill '*'
+npx skills add Canner/WrenAI --skill '*'
 
 # Or reinstall from a local clone
 bash skills/install.sh --force

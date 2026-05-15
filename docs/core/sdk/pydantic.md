@@ -20,7 +20,7 @@ wren context build                                   # produces target/mdl.json
 wren memory index                                    # optional but recommended
 ```
 
-See [Connect Your Database](/oss/guides/connect/overview) for the full CLI setup walkthrough including `.env` configuration and per-datasource notes.
+See [Connect Your Database](/oss/guides/connect) for the full CLI setup walkthrough including `.env` configuration and how to inspect connector fields via `wren docs connection-info`.
 
 ---
 

@@ -53,5 +53,5 @@ What are the top 5 products by total revenue?
 ## What's next
 
 - [Quickstart](./quickstart.md) — walk through a full example with the bundled `jaffle_shop` sample dataset
-- [Connect your database](/oss/guides/connect/overview) — connection details per data source
+- [Connect your database](/oss/guides/connect) — connect a profile to a real data source
 - [Skills reference](/oss/reference/skills) — what each skill does in detail

@@ -48,5 +48,4 @@ npx skills add Canner/WrenAI --skill '*' --agent claude-code
 ## Tips
 
 - Re-run `wren memory index` after editing `instructions.md` or model descriptions so the new content is searchable.
-- Pin canonical questions with `wren memory store --pinned` to weight them higher during recall.
 - If Claude Code picks the wrong table, add a `## Canonical tables` section to `instructions.md` and rebuild.

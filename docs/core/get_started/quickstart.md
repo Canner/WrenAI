@@ -12,7 +12,7 @@ This guide drops three things on you in the first few steps. Skim before you sta
 
 - **Wren CLI (`wren`)** — the Python CLI that runs all of this. Connects to a database, holds your modeling files, executes SQL through the semantic layer, manages a local memory index. ([CLI reference →](/oss/reference/cli))
 - **MDL (Modeling Definition Language)** — YAML files under `models/`, `views/`, and `relationships.yml` that describe your tables, columns, and joins in business terms. The agent reads MDL instead of guessing from raw schema. ([MDL concept →](/oss/concepts/what_is_mdl) · [Wren project guide →](/oss/guides/modeling/wren_project))
-- **jaffle_shop** — a public sample database from dbt Labs. We use it so you do not need to bring your own database to follow this quickstart. It is a fictional ecommerce business with `customers`, `orders`, `products`, and `supplies`. *(Want to skip jaffle_shop and use your own database? Finish the install in step 2 then jump to [Connect your database](/oss/guides/connect/overview).)*
+- **jaffle_shop** — a public sample database from dbt Labs. We use it so you do not need to bring your own database to follow this quickstart. It is a fictional ecommerce business with `customers`, `orders`, `products`, and `supplies`. *(Want to skip jaffle_shop and use your own database? Finish the install in step 2 then jump to [Connect your database](/oss/guides/connect).)*
 - **Skills** — markdown workflow guides that tell an AI coding agent (Claude Code, Openclaw, Hermes, Codex, etc.) how to operate the CLI. Two skills drive this quickstart: `wren-generate-mdl` (one-time scaffolding) and `wren-usage` (day-to-day querying). ([Skills concept →](/oss/concepts/skills))
 
 ---
