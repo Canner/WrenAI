@@ -120,6 +120,75 @@
       },
       "required": ["name", "required"],
       "additionalProperties": false
+    },
+    "measure": {
+      "description": "A measure within a Cube — a named aggregation expression.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "the name of the measure",
+          "type": "string",
+          "minLength": 1
+        },
+        "expression": {
+          "description": "the SQL expression of the measure (typically an aggregation such as SUM, COUNT, AVG)",
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "description": "the data type of the measure result",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["name", "expression", "type"],
+      "additionalProperties": false
+    },
+    "cubeDimension": {
+      "description": "A grouping attribute within a Cube.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "the name of the dimension",
+          "type": "string",
+          "minLength": 1
+        },
+        "expression": {
+          "description": "the SQL expression of the dimension (typically a column reference)",
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "description": "the data type of the dimension",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["name", "expression", "type"],
+      "additionalProperties": false
+    },
+    "timeDimension": {
+      "description": "A time-based dimension within a Cube. Granularity is applied at query time via `wren cube query`, not declared here.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "the name of the time dimension",
+          "type": "string",
+          "minLength": 1
+        },
+        "expression": {
+          "description": "the SQL expression of the time dimension (typically a date/timestamp column reference)",
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "description": "the data type of the time dimension (DATE, TIMESTAMP, …)",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["name", "expression", "type"],
+      "additionalProperties": false
     }
   },
   "type": "object",
@@ -128,6 +197,11 @@
       "description": "the schema of WrenMDL",
       "type": "string",
       "const": "https://raw.githubusercontent.com/Canner/WrenAI/main/wren-mdl/mdl.schema.json"
+    },
+    "layoutVersion": {
+      "description": "the MDL wire-format layout version (default 1)",
+      "type": "integer",
+      "minimum": 1
     },
     "catalog": {
       "description": "the catalog name of WrenMDL",
@@ -145,10 +219,50 @@
       "minLength": 1
     },
     "dataSource": {
-      "description": "the data source type (case insensitive). Valid values are: BIGQUERY, CLICKHOUSE, CANNER, TRINO, MSSQL, MYSQL, POSTGRES, SNOWFLAKE, DUCKDB, LOCAL_FILE, S3_FILE, GCS_FILE, MINIO_FILE, ORACLE, ATHENA, REDSHIFT",
+      "description": "the data source type. Canonical form is UPPERCASE; Rust serde also accepts lowercase aliases (and the wren CLI emits lowercase by default).",
       "type": "string",
-      "pattern": "^(?:[Bb][Ii][Gg][Qq][Uu][Ee][Rr][Yy]|[Cc][Ll][Ii][Cc][Kk][Hh][Oo][Uu][Ss][Ee]|[Cc][Aa][Nn][Nn][Ee][Rr]|[Tt][Rr][Ii][Nn][Oo]|[Mm][Ss][Ss][Qq][Ll]|[Mm][Yy][Ss][Qq][Ll]|[Pp][Oo][Ss][Tt][Gg][Rr][Ee][Ss]|[Ss][Nn][Oo][Ww][Ff][Ll][Aa][Kk][Ee]|[Dd][Uu][Cc][Kk][Dd][Bb]|[Ll][Oo][Cc][Aa][Ll]_[Ff][Ii][Ll][Ee]|[Ss]3_[Ff][Ii][Ll][Ee]|[Gg][Cc][Ss]_[Ff][Ii][Ll][Ee]|[Mm][Ii][Nn][Ii][Oo]_[Ff][Ii][Ll][Ee]|[Oo][Rr][Aa][Cc][Ll][Ee]|[Aa][Tt][Hh][Ee][Nn][Aa]|[Rr][Ee][Dd][Ss][Hh][Ii][Ff][Tt])$",
-      "minLength": 1
+      "enum": [
+        "BIGQUERY",
+        "CLICKHOUSE",
+        "CANNER",
+        "TRINO",
+        "MSSQL",
+        "MYSQL",
+        "DORIS",
+        "POSTGRES",
+        "SNOWFLAKE",
+        "DATAFUSION",
+        "DUCKDB",
+        "LOCAL_FILE",
+        "S3_FILE",
+        "GCS_FILE",
+        "MINIO_FILE",
+        "ORACLE",
+        "ATHENA",
+        "REDSHIFT",
+        "DATABRICKS",
+        "SPARK",
+        "bigquery",
+        "clickhouse",
+        "canner",
+        "trino",
+        "mssql",
+        "mysql",
+        "doris",
+        "postgres",
+        "snowflake",
+        "datafusion",
+        "duckdb",
+        "local_file",
+        "s3_file",
+        "gcs_file",
+        "minio_file",
+        "oracle",
+        "athena",
+        "redshift",
+        "databricks",
+        "spark"
+      ]
     },
     "models": {
       "description": "the list of models",
@@ -295,94 +409,61 @@
         "required": ["name", "models", "joinType", "condition"]
       }
     },
-    "metrics": {
-      "description": "(WIP) the list of metrics",
+    "cubes": {
+      "description": "the list of cubes (pre-aggregation semantic objects on top of a Model or View)",
       "type": "array",
       "unevaluatedItems": false,
       "items": {
-        "description": "(WIP) the metric",
+        "description": "a cube — measures + dimensions + time dimensions + optional hierarchies over a baseObject",
         "type": "object",
         "properties": {
           "name": {
-            "description": "the name of the metric",
+            "description": "the name of the cube",
             "type": "string",
             "minLength": 1
           },
           "baseObject": {
-            "description": "the base object of the metric",
+            "description": "the base object of the cube (must reference a defined Model or View)",
             "type": "string",
             "minLength": 1
           },
-          "dimension": {
-            "description": "the list of dimensions",
+          "measures": {
+            "description": "the list of measures (aggregation expressions)",
             "type": "array",
             "items": {
-                "$ref": "#/$defs/column"
-            }
-          },
-          "measure": {
-            "description": "the list of measures",
-            "type": "array",
-            "items": {
-                "$ref": "#/$defs/column"
+              "$ref": "#/$defs/measure"
             },
             "minItems": 1
           },
-          "timeGrain": {
-            "description": "the time grain fields of the metric",
+          "dimensions": {
+            "description": "the list of dimensions (grouping attributes)",
             "type": "array",
-            "unevaluatedItems": false,
             "items": {
-              "description": "the time grain field. It's should belong to the dimension fields",
-              "type": "object",
-              "properties": {
-                "name": {
-                  "description": "the name of the time grain field",
-                  "type": "string",
-                  "minLength": 1
-                },
-                "refColumn": {
-                  "description": "the reference column name of the time grain field",
-                  "type": "string",
-                  "minLength": 1
-                },
-                "dateParts": {
-                  "description": "the acceptable time units of the time grain field",
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "enum": [
-                      "YEAR",
-                      "QUARTER",
-                      "MONTH",
-                      "WEEK",
-                      "DAY",
-                      "HOUR",
-                      "MINUTE",
-                      "SECOND"
-                    ]
-                  }
-                }
-              },
-              "required": ["name", "refColumn", "dateParts"]
+              "$ref": "#/$defs/cubeDimension"
             }
           },
-          "cached": {
-            "type": "boolean"
+          "timeDimensions": {
+            "description": "the list of time-based dimensions; granularity is applied at query time",
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/timeDimension"
+            }
           },
-          "refreshTime": {
-            "type": "string",
-            "description": "the cache refresh time of the metric",
-            "pattern": "^\\s*(\\d+(?:\\.\\d+)?)\\s*([a-zA-Z]+)\\s*$"
-          },
-          "properties": {
+          "hierarchies": {
+            "description": "drill-down paths — map of hierarchy name → ordered list of dimension or timeDimension names (coarsest to finest)",
             "type": "object",
             "additionalProperties": {
-              "type": ["string", "number", "boolean", "object", "array", "null"]
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           }
         },
-        "required": ["name", "baseObject", "dimension", "measure"]
+        "required": ["name", "baseObject", "measures"],
+        "additionalProperties": false
       }
     },
     "views": {
