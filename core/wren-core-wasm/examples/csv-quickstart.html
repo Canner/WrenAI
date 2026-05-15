@@ -100,10 +100,20 @@
                 + '</table>';
         }
 
-        async function fetchText(path) {
+        async function fetchBytes(path) {
             const res = await fetch(path);
             if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${path}`);
-            return res.text();
+            return new Uint8Array(await res.arrayBuffer());
+        }
+
+        // The raw WASM `registerCsv` signature is
+        //   registerCsv(table_name, data: Uint8Array, options_json: string)
+        // with all three args required. The TypeScript SDK adds a friendlier
+        // overload (string + object), but examples here import the raw module
+        // straight from pkg/ for transparency, so we call it raw-style.
+        function registerCsv(name, bytes, options) {
+            const optsJson = options ? JSON.stringify(options) : '';
+            return engine.registerCsv(name, bytes, optsJson);
         }
 
         async function runQuery(key, sql, resultKey = key) {
@@ -134,18 +144,18 @@
             log('Engine ready');
 
             // ── 1. Standard CSV with inferred schema ─────────────────────────
-            const ordersCsv = await fetchText('data/orders.csv');
-            await engine.registerCsv('orders', ordersCsv);
+            const ordersBytes = await fetchBytes('data/orders.csv');
+            await registerCsv('orders', ordersBytes);
             log('Registered "orders" from CSV (inferred schema)');
 
             // ── 2. TSV: tab delimiter ────────────────────────────────────────
-            const productsTsv = await fetchText('data/products.tsv');
-            await engine.registerCsv('products', productsTsv, { delimiter: '\t' });
+            const productsBytes = await fetchBytes('data/products.tsv');
+            await registerCsv('products', productsBytes, { delimiter: '\t' });
             log('Registered "products" from TSV (delimiter: tab)');
 
             // ── 3. Headerless CSV with explicit Arrow schema ────────────────
-            const targetsCsv = await fetchText('data/region_targets.csv');
-            await engine.registerCsv('region_targets', targetsCsv, {
+            const targetsBytes = await fetchBytes('data/region_targets.csv');
+            await registerCsv('region_targets', targetsBytes, {
                 header: false,
                 schema: [
                     { name: 'region',  type: 'string' },

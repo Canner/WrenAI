@@ -195,7 +195,7 @@ async registerCsv(
 
 Schema column types (case-insensitive): `int8`/`int16`/`int32`/`int64`,
 `uint8`/`uint16`/`uint32`/`uint64`, `float32`/`float64`, `boolean`,
-`string` (alias `utf8`/`varchar`/`text`), `date`/`date64`,
+`string` (alias `utf8`/`varchar`/`text`), `date`/`date32`/`date64`,
 `timestamp` and `timestamp_{s,ms,us,ns}`.
 
 ### `engine.query(sql)`
