@@ -53,8 +53,8 @@ WrenAI is the **open context layer** that gives your agents what schemas don't: 
 ## Why agent builders pick WrenAI
 
 - **Open by default** — Apache-2.0 core, SDK, and skills. Your MDL belongs to you. Self-host is a first-class deployment, not a teaser.
-- **Built for AI agents** — not retrofitted from BI. Skills, tool gating, task-scoped context retrieval are first-class. Ships as SDKs for the agent frameworks engineers already use.
-- **Correctness as primitives, not promises** — rich schema retrieval, dry-plan validation, structured errors with hints, value profiling, eval runner. The agent orchestrates; the trace lives in the agent's reasoning.
+- **Built for AI agents** — Skills, agentic architecutre, context retrieval are first-class. Ships as SDKs for the agent frameworks engineers already use.
+- **Correctness as primitives** — rich schema retrieval, dry-plan validation, structured errors with hints, value profiling, eval runner. The agent orchestrates; the trace lives in the agent's reasoning.
 - **Reviewable, reproducible context** — every definition, example, and mapping is versionable and evidence-linked. Git-friendly. Not chat history.
 - **Sits on top of your existing stack** — warehouse, transformation pipelines, your existing semantic layer. Not another tool to maintain.
 
