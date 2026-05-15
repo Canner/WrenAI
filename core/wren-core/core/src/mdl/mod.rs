@@ -1663,6 +1663,30 @@ mod test {
     }
 
     #[tokio::test]
+    async fn test_union_all_local_runtime() -> Result<()> {
+        // Reproduce wren-core-wasm bug: UNION ALL traps in LocalRuntime mode
+        // even with an empty manifest. The WASM panic shows up as RuntimeError
+        // unreachable; the native equivalent here lets us see the Rust message.
+        let ctx = create_wren_ctx(None, None);
+        let analyzed = Arc::new(AnalyzedWrenMDL::default());
+        let ctx = apply_wren_on_ctx(
+            &ctx,
+            Arc::clone(&analyzed),
+            Arc::new(HashMap::new()),
+            Mode::LocalRuntime,
+        )
+        .await?;
+        let sql = "SELECT a FROM (SELECT 1 AS a UNION ALL SELECT 2) t";
+        let batches = ctx.sql(sql).await?.collect().await?;
+        assert_eq!(
+            batches.iter().map(|b| b.num_rows()).sum::<usize>(),
+            2,
+            "UNION ALL should return 2 rows"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_disable_eliminate_nested_union() -> Result<()> {
         let ctx = create_wren_ctx(None, None);
         let sql = r#"SELECT * FROM (SELECT 1 x, 'a' y UNION ALL

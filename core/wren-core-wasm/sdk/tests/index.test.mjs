@@ -334,6 +334,66 @@ describe("loadMDL", () => {
 // query error handling
 // =========================================================================
 
+// =========================================================================
+// set operators (UNION ALL / UNION / INTERSECT / EXCEPT)
+//
+// Regression: 0.4.0 traps with `RuntimeError: unreachable` on any plan that
+// CoalescePartitionsExec parallelises (i.e. anything with >1 partition).
+// UNION ALL is the simplest trigger because Union sums child partitions.
+// =========================================================================
+
+describe("set operators", () => {
+  it("UNION ALL inside a subquery returns both branches", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    const rows = await engine.query(
+      "SELECT a FROM (SELECT 1 AS a UNION ALL SELECT 2) t ORDER BY a",
+    );
+    assert.deepEqual(rows, [{ a: 1 }, { a: 2 }]);
+    engine.free();
+  });
+
+  it("top-level UNION ALL returns both branches", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    const rows = await engine.query(
+      "SELECT 1 AS a UNION ALL SELECT 2 ORDER BY a",
+    );
+    assert.equal(rows.length, 2);
+    engine.free();
+  });
+
+  it("UNION (deduplicated) drops duplicates", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    const rows = await engine.query("SELECT 1 AS a UNION SELECT 1");
+    assert.equal(rows.length, 1);
+    engine.free();
+  });
+
+  it("INTERSECT returns rows in both inputs", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    const rows = await engine.query("SELECT 1 AS a INTERSECT SELECT 1");
+    assert.equal(rows.length, 1);
+    engine.free();
+  });
+
+  it("EXCEPT returns rows only in the first input", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    const rows = await engine.query("SELECT 1 AS a EXCEPT SELECT 2");
+    assert.equal(rows.length, 1);
+    engine.free();
+  });
+
+  it("UNION ALL across two registered tables", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    await engine.registerJson("a_rows", [{ k: "a", n: 1 }, { k: "a", n: 2 }]);
+    await engine.registerJson("b_rows", [{ k: "b", n: 3 }, { k: "b", n: 4 }]);
+    const rows = await engine.query(
+      "SELECT k, COUNT(*) AS c FROM (SELECT k FROM a_rows UNION ALL SELECT k FROM b_rows) t GROUP BY k ORDER BY k",
+    );
+    assert.deepEqual(rows, [{ k: "a", c: 2 }, { k: "b", c: 2 }]);
+    engine.free();
+  });
+});
+
 describe("query error handling", () => {
   it("rejects invalid SQL syntax", async () => {
     const engine = await WrenEngine.init({ wasmUrl: wasmBytes });

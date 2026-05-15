@@ -40,6 +40,15 @@ use wasm_bindgen::prelude::*;
 pub struct WrenEngine {
     ctx: datafusion::execution::context::SessionContext,
     analyzed_mdl: Option<std::sync::Arc<wren_core::mdl::AnalyzedWrenMDL>>,
+    /// Single-threaded tokio runtime owned by the engine. DataFusion's
+    /// physical operators (e.g. `CoalescePartitionsExec`, which wraps any
+    /// multi-partition plan such as `UNION ALL` / `INTERSECT` / `EXCEPT`)
+    /// call `tokio::task::spawn` internally. Spawn panics with
+    /// `there is no reactor running` unless it executes inside a tokio
+    /// runtime context — which `wasm-bindgen-futures` alone does not
+    /// provide. We drive the per-query future via `runtime.block_on(...)`
+    /// so DataFusion sees a live scheduler.
+    runtime: tokio::runtime::Runtime,
 }
 
 #[wasm_bindgen]
@@ -52,6 +61,10 @@ impl WrenEngine {
     /// comparisons match `create_wren_ctx` on the native side.
     #[wasm_bindgen(constructor)]
     pub fn new() -> Result<WrenEngine, JsError> {
+        // Surface Rust panic messages to the JS console instead of an
+        // opaque `RuntimeError: unreachable` trap. Safe to call repeatedly.
+        console_error_panic_hook::set_once();
+
         // Configure DataFusion for single-threaded WASM environment
         let mut config =
             datafusion::execution::context::SessionConfig::new().with_target_partitions(1); // Single-threaded in WASM
@@ -62,9 +75,16 @@ impl WrenEngine {
 
         let ctx = datafusion::execution::context::SessionContext::new_with_config(config);
 
+        // current_thread runtime — no I/O driver needed; DataFusion only
+        // requires a scheduler so its `tokio::task::spawn` calls don't panic.
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .map_err(|e| JsError::new(&format!("Failed to build tokio runtime: {e}")))?;
+
         Ok(WrenEngine {
             ctx,
             analyzed_mdl: None,
+            runtime,
         })
     }
 
@@ -569,37 +589,47 @@ impl WrenEngine {
     /// Execute a SQL query and return results as a JSON string.
     ///
     /// Returns a JSON array of objects, e.g. `[{"count":42,"avg":3.14},...]`
+    ///
+    /// The body runs via `runtime.block_on(...)` so DataFusion's
+    /// `tokio::task::spawn` calls (e.g. inside `CoalescePartitionsExec`,
+    /// which any multi-partition plan such as `UNION ALL` flows through)
+    /// see a live tokio scheduler. Without this wrapper the inner spawn
+    /// panics with `there is no reactor running`, surfacing in JS as
+    /// `RuntimeError: unreachable`.
     #[wasm_bindgen]
     pub async fn query(&self, sql: &str) -> Result<String, JsError> {
         use arrow::json::writer::JsonArray;
         use arrow::json::WriterBuilder;
 
-        let df = self
-            .ctx
-            .sql(sql)
-            .await
-            .map_err(|e| JsError::new(&format!("SQL error: {e}")))?;
+        self.runtime.block_on(async {
+            let df = self
+                .ctx
+                .sql(sql)
+                .await
+                .map_err(|e| JsError::new(&format!("SQL error: {e}")))?;
 
-        let batches = df
-            .collect()
-            .await
-            .map_err(|e| JsError::new(&format!("Execution error: {e}")))?;
+            let batches = df
+                .collect()
+                .await
+                .map_err(|e| JsError::new(&format!("Execution error: {e}")))?;
 
-        let mut buf = Vec::new();
-        let mut writer = WriterBuilder::new()
-            .with_explicit_nulls(true)
-            .build::<_, JsonArray>(&mut buf);
+            let mut buf = Vec::new();
+            let mut writer = WriterBuilder::new()
+                .with_explicit_nulls(true)
+                .build::<_, JsonArray>(&mut buf);
 
-        for batch in &batches {
+            for batch in &batches {
+                writer.write(batch).map_err(|e| {
+                    JsError::new(&format!("JSON serialization error: {e}"))
+                })?;
+            }
             writer
-                .write(batch)
-                .map_err(|e| JsError::new(&format!("JSON serialization error: {e}")))?;
-        }
-        writer
-            .finish()
-            .map_err(|e| JsError::new(&format!("JSON writer finish error: {e}")))?;
+                .finish()
+                .map_err(|e| JsError::new(&format!("JSON writer finish error: {e}")))?;
 
-        String::from_utf8(buf).map_err(|e| JsError::new(&format!("UTF-8 encoding error: {e}")))
+            String::from_utf8(buf)
+                .map_err(|e| JsError::new(&format!("UTF-8 encoding error: {e}")))
+        })
     }
 
     /// Execute a structured CubeQuery against the loaded MDL.
@@ -625,6 +655,7 @@ impl WrenEngine {
         let sql = wren_core::mdl::cube_query_to_sql(&query, manifest)
             .map_err(|e| JsError::new(&format!("CubeQuery error: {e}")))?;
 
+        // query() handles entering the tokio runtime — just delegate.
         self.query(&sql).await
     }
 
@@ -881,6 +912,23 @@ mod tests {
         let rows: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0]["cnt"], 3);
+    }
+
+    /// Regression: 0.4.0 traps with `RuntimeError: unreachable` on any plan
+    /// that DataFusion's `CoalescePartitionsExec` parallelises (`tokio::spawn`
+    /// inside `JoinSet` panics without a tokio reactor). `UNION ALL` is the
+    /// simplest trigger because the Union plan has >1 partition.
+    #[wasm_bindgen_test]
+    async fn test_union_all_does_not_trap() {
+        let engine = WrenEngine::new().unwrap();
+        let result = engine
+            .query("SELECT a FROM (SELECT 1 AS a UNION ALL SELECT 2) t ORDER BY a")
+            .await
+            .unwrap();
+        let rows: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
+        assert_eq!(rows.len(), 2, "UNION ALL should return both rows");
+        assert_eq!(rows[0]["a"], 1);
+        assert_eq!(rows[1]["a"], 2);
     }
 
     #[wasm_bindgen_test]
