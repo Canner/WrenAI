@@ -95,7 +95,10 @@ console.table(rows);
 
 ### 2. Inline data (JSON / CSV / Parquet)
 
-Pre-register tables before `loadMDL` with an empty `source`.
+Pre-register every table before `loadMDL`. Pass `source: ''` to let the
+engine auto-detect that no URL prefix is in play and use the registered
+tables (see [`loadMDL`](#engineloadmdlmdl-profile) for the full mode
+matrix).
 
 ```javascript
 const engine = await WrenEngine.init();
@@ -121,7 +124,7 @@ await engine.registerCsv('events', csvString, {
 const file = await fetch('orders.parquet').then(r => r.arrayBuffer());
 await engine.registerParquet('orders_pq', file);
 
-await engine.loadMDL(mdl, { source: '' });   // local mode
+await engine.loadMDL(mdl, { source: '' });   // auto-detect; uses the registered tables
 ```
 
 ### 3. Cube queries (structured aggregation)
@@ -180,16 +183,20 @@ async loadMDL(mdl: object, profile: WrenProfile): Promise<void>
 
 | `profile.source` | Mode | Behaviour |
 |---|---|---|
-| `"https://…/"` / `"http://…/"` | **URL mode** | Auto-registers `ListingTable` for each model at `{source}/{table_name}.parquet`. No pre-registration needed. |
-| `""` (empty) | **Fallback** | Auto-detects URL vs local per model based on its `tableReference`. |
-| anything else | **Local mode** | Caller must pre-register every model's physical table via `register*`. Missing tables raise `Unresolved models: [...]` up front. |
+| `"https://…/"` / `"http://…/"` | **URL mode** | Auto-registers a `ListingTable` for each model at `{source}/{table_name}.parquet`. No pre-registration needed. |
+| `""` (empty) | **Auto-detect mode** | For each model, picks URL mode if its `tableReference` looks like a URL, otherwise expects the table to already be registered. Used by the inline quickstart above. |
+| anything else | **Strict local mode** | All tables must be pre-registered via `register*`. Any missing table raises `Unresolved models: [...]` immediately from `loadMDL` instead of deferring to query time. |
 
 Bare model names resolve under the MDL's catalog/schema after this call.
+Use strict local mode (any non-URL, non-empty source string) when you've
+pre-registered everything and want missing-table errors to surface up
+front; use auto-detect (`""`) when matching the behaviour of the bundled
+browser examples.
 
 ### `engine.registerJson(name, data)`
 
 Register a JSON array as a named table. Schema is inferred from the first
-row. Pre-`loadMDL` step in inline mode.
+row. Call before `loadMDL` when using auto-detect or strict local mode.
 
 ```typescript
 async registerJson(name: string, data: object[]): Promise<void>
@@ -341,7 +348,7 @@ just serve              # http://localhost:8787
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `Unresolved models: [foo]` from `loadMDL` | Local mode but `foo`'s physical table wasn't pre-registered | Call `register*` for every model before `loadMDL`, or use URL mode |
+| `Unresolved models: [foo]` from `loadMDL` | Strict local mode but `foo`'s physical table wasn't pre-registered | Call `register*` for every model before `loadMDL`, or switch to URL mode |
 | `undefined is not an object (evaluating 'arg.length')` | Calling the raw WASM API with the wrong arg count or type (e.g. passing a string where bytes are expected) | Use the TypeScript SDK overloads (`engine.registerCsv(name, str)`); the raw `pkg/` API requires bytes + explicit options JSON |
 | `Cube query for 'X' must include at least one measure…` | Empty `measures` + `dimensions` + `timeDimensions` | A cube query must project something — add at least one field |
 | `Unsupported CSV column type 'bogus'` | Typo in explicit schema | See the type list under `registerCsv` for accepted names |
