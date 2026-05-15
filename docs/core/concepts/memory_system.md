@@ -1,6 +1,6 @@
 # The memory system
 
-Wren AI's memory layer is the second of five layers of context — the place where successful natural-language to SQL pairs, prior interactions, and user feedback accumulate so the agent gets better at querying your data the more it is used.
+Wren AI's memory layer is the second of five layers of context — the place where successful natural-language-to-SQL pairs, prior interactions, and user feedback accumulate so the agent gets better at querying your data the more it is used.
 
 Memory is local. It is stored under `.wren/memory/` in your project directory, indexed with [LanceDB](https://lancedb.com/), and never leaves your machine unless you commit it to a shared Git repository.
 

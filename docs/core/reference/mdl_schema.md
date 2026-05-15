@@ -35,7 +35,7 @@ Each model is a folder under `models/` with a `metadata.yml`. The model maps a W
 ```yaml
 name: customers
 table_reference:
-  database: main
+  catalog: main
   schema: main
   table: customers
 
@@ -63,11 +63,11 @@ columns:
 
 ### `table_reference`
 
-| Field | Type | Required |
-|---|---|---|
-| `database` | string | yes (most sources) |
-| `schema` | string | yes (most sources) |
-| `table` | string | yes |
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `catalog` | string | no | Source-side catalog (DuckDB database, BigQuery project, Snowflake database). Omit for sources without a catalog layer. |
+| `schema` | string | no | Source-side schema / dataset. Omit for flat sources. |
+| `table` | string | yes | Source-side table or view name. |
 
 ### `columns[]`
 
@@ -84,18 +84,19 @@ columns:
 ## Relationships (`relationships.yml`)
 
 ```yaml
-- name: orders_to_customers
-  type: many_to_one
-  models:
-    - orders
-    - customers
-  condition: orders.customer_id = customers.customer_id
+relationships:
+  - name: orders_to_customers
+    join_type: MANY_TO_ONE
+    models:
+      - orders
+      - customers
+    condition: orders.customer_id = customers.customer_id
 ```
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | yes | Relationship identifier. |
-| `type` | enum | yes | `one_to_one`, `one_to_many`, `many_to_one`, or `many_to_many`. |
+| `join_type` | enum | yes | `ONE_TO_ONE`, `ONE_TO_MANY`, `MANY_TO_ONE`, or `MANY_TO_MANY`. |
 | `models` | array[string] | yes | The two model names participating in the join. |
 | `condition` | string | yes | SQL join condition. |
 

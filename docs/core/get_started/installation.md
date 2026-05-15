@@ -8,7 +8,7 @@ Get Wren AI running. Your AI coding agent does the rest.
 
 ## 1. Install the skill bundle
 
-Skills are workflow guides that teach AI coding agents (Claude Code, Openclaw, Hermes, Codex, etc.) how to drive the Wren CLI for you. Pick one:
+Skills are workflow guides that teach AI coding agents (Claude Code, Openclaw, Hermes, Codex, etc.) how to drive the Wren CLI for you:
 
 ```bash
 npx skills add Canner/WrenAI --skill '*'
@@ -42,11 +42,11 @@ The agent will check your environment, install Python dependencies, create a con
 
 Once onboarding finishes, just ask your agent business questions in natural language. The agent uses Wren AI's semantic layer to resolve schema, recall similar past queries, and generate accurate SQL.
 
-```
+```text
 How many customers placed more than one order this month?
 ```
 
-```
+```text
 What are the top 5 products by total revenue?
 ```
 

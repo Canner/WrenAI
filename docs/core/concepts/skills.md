@@ -2,7 +2,7 @@
 
 Wren AI ships with a small set of **skills** — structured workflows that tell an AI coding agent (Claude Code, Openclaw, Hermes, Codex, etc.) how to operate the `wren` CLI without having to memorize commands.
 
-A skill is a markdown file with metadata that the agent reads before acting. Skills are installed once per project with `npx skills add Canner/WrenAI`, and from then on the agent picks the right skill for each user request — generating an MDL from a new database, querying through the semantic layer, enriching context from your team docs, and so on.
+A skill is a markdown file with metadata that the agent reads before acting. Skills are installed once per project with `npx skills add Canner/WrenAI --skill '*'`, and from then on the agent picks the right skill for each user request — generating an MDL from a new database, querying through the semantic layer, enriching context from your team docs, and so on.
 
 Two skills are central to the workflow:
 

@@ -39,7 +39,7 @@ npx skills add Canner/WrenAI --skill '*' --agent claude-code
 1. **Open Claude Code in your Wren project directory** — `cd ~/my-wren-project && claude`
 2. **Ask a question in natural language**:
 
-   ```
+   ```text
    How many customers placed more than one order this month?
    ```
 

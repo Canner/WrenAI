@@ -1,6 +1,6 @@
 # Profile YAML reference
 
-A **profile** stores the credentials and connection details that Wren AI uses to talk to your data source. Profiles live outside the project (typically in `~/.wren/profiles/`) so the same source can be reused across multiple projects, and credentials never end up in a Git repo.
+A **profile** stores the credentials and connection details that Wren AI uses to talk to your data source. Profiles live outside the project in a single file at `~/.wren/profiles.yml` (override with `WREN_HOME`) so the same source can be reused across multiple projects, and credentials never end up in a Git repo.
 
 This page lists every supported field per data source. For the higher-level concept and CLI workflow, see [Connect your database](/oss/guides/connect/overview).
 
@@ -72,17 +72,15 @@ ssl: true
 ```yaml
 datasource: bigquery
 project_id: my-gcp-project
-dataset: my_dataset
-credentials_path: /path/to/service-account.json
-location: US
+dataset_id: my_dataset
+credentials: ${BIGQUERY_CREDENTIALS}    # base64-encoded service-account JSON
 ```
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `project_id` | string | yes | GCP project. |
-| `dataset` | string | no | Default dataset; can be overridden in MDL `table_reference`. |
-| `credentials_path` | string | yes | Path to a service-account JSON key. |
-| `location` | string | no | BigQuery location (e.g. `US`, `EU`, `asia-northeast1`). |
+| `dataset_id` | string | yes | Default dataset; can be overridden in MDL `table_reference`. |
+| `credentials` | string | yes | Base64-encoded service-account JSON. Generate with `base64 -i service-account.json`. |
 
 ---
 
@@ -90,14 +88,13 @@ location: US
 
 ```yaml
 datasource: snowflake
-account: my-account.snowflakecomputing.com
+account: xy12345.us-east-1            # account locator only, NOT the full *.snowflakecomputing.com hostname
 user: WREN_USER
 password: ...
 warehouse: COMPUTE_WH
 database: MY_DB
 schema: PUBLIC
 role: WREN_ROLE
-authenticator: snowflake             # snowflake | externalbrowser | oauth
 ```
 
 ---

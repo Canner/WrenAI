@@ -4,7 +4,7 @@ sidebar_label: Overview
 
 # Connect your database
 
-Wren AI talks to your database through a **profile** — a single YAML file with credentials and connection details. Once a profile is bound to a project, every CLI command and SDK call uses it.
+Wren AI talks to your database through a **profile** — a set of credentials and connection details stored in `~/.wren/profiles.yml`. Once a profile is bound to a project, every CLI command and SDK call uses it.
 
 The flow is the same regardless of which database you use:
 
@@ -32,6 +32,7 @@ If you have an AI coding agent installed, the `wren-onboarding` skill drives the
 | Redshift | `redshift` | [Redshift](./redshift.md) |
 | Oracle | `oracle` | [Oracle](./oracle.md) |
 | Athena | `athena` | [Athena](./athena.md) |
+| Spark | `spark` | [Spark](./spark.md) |
 
 Install one or more extras together:
 
