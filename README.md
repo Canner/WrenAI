@@ -16,8 +16,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/wren-engine?label=wren-engine)](https://pypi.org/project/wren-engine/)
 [![GitHub Release](https://img.shields.io/github/v/release/Canner/WrenAI?logo=github&label=release)](https://github.com/Canner/WrenAI/releases)
-<!-- TODO: replace 0000000000 with the real Discord server ID before publishing -->
-[![Discord](https://img.shields.io/discord/0000000000?logo=discord&label=Discord)](https://discord.gg/wrenai)
+[![Discord](https://img.shields.io/discord/wrenai?logo=discord&label=Discord)](https://discord.gg/wrenai)
 [![Last commit](https://img.shields.io/github/last-commit/Canner/WrenAI)](https://github.com/Canner/WrenAI/commits/main)
 [![Follow on X](https://img.shields.io/badge/follow-@getwrenai-blue?logo=x&logoColor=white)](https://x.com/getwrenai)
 [![Made by Canner](https://img.shields.io/badge/made_by-Canner-blue)](https://cannerdata.com)
@@ -46,13 +45,13 @@
 
 ## What WrenAI is
 
-WrenAI is the **open context layer** that gives your agents what schemas don't: business semantics, examples, memory, governance, and — soon — the unstructured corporate knowledge that lives in your docs, wikis, and chat threads. Built for the agent frameworks you already use. Self-hostable. Apache 2.0.
+WrenAI is the **open context layer** that gives your agents what schemas don't: business semantics, examples, memory, governance, and — soon — the unstructured corporate knowledge that lives in your docs, wikis, and chat threads. Built for the agent frameworks you already use. 
 
 ![Wren AI architecture](./misc/wren-ai-architecture.png)
 
 ## Why agent builders pick WrenAI
 
-- **Open by default** — Apache-2.0 core, SDK, and skills. Your MDL belongs to you. Self-host is a first-class deployment, not a teaser.
+- **Open by default** — Apache-2.0 core, SDK, and skills.
 - **Built for AI agents** — Skills, agentic architecutre, context retrieval are first-class. Ships as SDKs for the agent frameworks engineers already use.
 - **Correctness as primitives** — rich schema retrieval, dry-plan validation, structured errors with hints, value profiling, eval runner. The agent orchestrates; the trace lives in the agent's reasoning.
 - **Reviewable, reproducible context** — every definition, example, and mapping is versionable and evidence-linked. Git-friendly. Not chat history.
@@ -94,9 +93,7 @@ See the [Skills reference](https://docs.getwren.ai/oss/reference/skills) for the
 
 Open your agent in a project directory and ask:
 
-```text
-Use the wren-onboarding skill to install and set up Wren AI.
-```
+Use the `/wren-onboarding` skill to install and set up Wren AI.
 
 The agent will check your environment, install `wren-engine`, create a connection profile, scaffold the project, and run a first query — all in one flow.
 
@@ -104,22 +101,20 @@ The agent will check your environment, install `wren-engine`, create a connectio
 
 Once onboarding finishes, give your project the business context schemas can't carry:
 
-```text
-Use the wren-enrich-context skill in grill mode.
-```
+Use the `/wren-enrich-context` skill in grill mode.
 
 Two modes: **grill** (one question at a time, you in the loop) or **auto-pilot** (agent reads `<project>/raw/` and proposes). Both modes write to MDL, instructions, queries, and memory — all reviewable, all Git-friendly.
 
 ### 4. Ask questions
 
 ```bash
-# Ask any questions
+# Ask any question
 "who are our top 10 customers by sales this quarter?"
 ```
 
 Or just ask your agent in natural language — it uses the context layer to resolve schema, recall similar past queries, and write governed SQL.
 
-**Want to try it without your own database?** Tell the agent to run `wren-onboarding` with the bundled `jaffle_shop` sample dataset — same flow, but you'll be querying a real warehouse end-to-end in a couple of minutes.
+**Want to try it without your own database?** Ask your agent to run `/wren-onboarding` with the bundled `jaffle_shop` sample dataset — same flow, but you'll be querying a real warehouse end-to-end in a couple of minutes.
 
 ## Two beats: scaffold fast, enrich deep
 
@@ -131,7 +126,7 @@ Or just ask your agent in natural language — it uses the context layer to reso
 wren ask "..."           # Query through the context layer
 ```
 
-Fast at first. Deep when you need it. Always reviewable. Always Git-friendly.
+Fast at first. Deep when you need it. Always reviewable and Git-friendly.
 
 <!--
   📷 OPTIONAL: 2-up screenshot showing grill mode (left) vs auto-pilot mode (right).
@@ -140,15 +135,15 @@ Fast at first. Deep when you need it. Always reviewable. Always Git-friendly.
 
 ## What works today
 
-- **MDL** — models, columns, relationships, views, cubes, metrics, row-level / column-level access control (RLAC / CLAC)
+- **Modeling Definition Language (MDL)** — models, columns, relationships, views, cubes, metrics, row-level / column-level access control (RLAC / CLAC)
 - **Engine** — Apache DataFusion based, 22+ data sources
 - **Memory & examples** — LanceDB-backed, hybrid retrieval, versionable
 - **Agent SDK** — `wren-langchain` (LangChain / LangGraph), `wren-pydantic`; reference Python integration for other stacks
-- **Governed execution primitives** — strict mode, denied functions, dry-plan, row limits, RLAC / CLAC
+- **Governed execution primitives** — functions, dry-plan, row limits, access control
 
 ## What's next
 
-- **Context enrichment skill** — `wren-enrich-context` (grill + auto-pilot modes) hardened across MDL, instructions, queries, and memory
+- **Context enrichment skill** — `/wren-enrich-context` (grill + auto-pilot modes) hardened across MDL, instructions, queries, and memory
 - **End-to-end correctness primitives** — value profiling, rich retrieval, structured errors, golden eval runner
 - **Agent-native distribution** — first-class SDKs across major agent frameworks; see [GitHub Discussions](https://github.com/Canner/WrenAI/discussions) for what's prioritized next
 - **Full governed execution** — audit logs, rate limits, approval workflow, data-flow inspector
@@ -215,7 +210,7 @@ Apache 2.0. See [LICENSE](./LICENSE).
 
 *Come build the context layer with us.*
 
-**If WrenAI helps you, drop a ⭐ — it genuinely helps us hire and ship.**
+**If WrenAI helps you, drop a ⭐ — it genuinely helps us grow!**
 
 <p><a href="#top">⬆️ Back to top</a></p>
 
