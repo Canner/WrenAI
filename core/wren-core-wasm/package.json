@@ -1,6 +1,6 @@
 {
   "name": "@wrenai/wren-core-wasm",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Browser-native semantic SQL engine powered by DataFusion WASM",
   "type": "module",
   "main": "dist/index.js",

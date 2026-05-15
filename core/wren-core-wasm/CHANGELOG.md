@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/Canner/WrenAI/compare/wren-core-wasm-v0.4.0...wren-core-wasm-v0.4.1) (2026-05-15)
+
+
+### Bug Fixes
+
+* **wren-core-wasm:** drive query() through a tokio runtime (UNION ALL trap) ([#2291](https://github.com/Canner/WrenAI/issues/2291)) ([f0748f5](https://github.com/Canner/WrenAI/commit/f0748f58a412a7708c39dae1e64ffeb13aa33dd6))
+
 ## [0.4.0](https://github.com/Canner/WrenAI/compare/wren-core-wasm-v0.3.0...wren-core-wasm-v0.4.0) (2026-05-15)
 
 
