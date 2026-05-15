@@ -76,7 +76,6 @@ const mdl = {
     },
   ],
   relationships: [],
-  metrics: [],
   views: [],
 };
 ```
@@ -195,7 +194,7 @@ const rows = await engine.cubeQuery({
           ],
           primaryKey: 'id',
         }],
-        relationships: [], metrics: [], views: [],
+        relationships: [], views: [],
       };
       await engine.loadMDL(mdl, { source: '' });
 

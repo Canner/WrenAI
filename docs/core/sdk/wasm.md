@@ -82,7 +82,7 @@ const mdl = {
     ],
     primaryKey: 'id',
   }],
-  relationships: [], metrics: [], views: [],
+  relationships: [], views: [],
 };
 
 await engine.loadMDL(mdl, { source: 'https://cdn.example.com/data/' });

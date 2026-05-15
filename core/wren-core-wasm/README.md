@@ -48,7 +48,6 @@ const mdl = {
     },
   ],
   relationships: [],
-  metrics: [],
   views: [],
 };
 

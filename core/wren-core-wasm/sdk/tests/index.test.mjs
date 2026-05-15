@@ -38,7 +38,6 @@ function minimalMDL(modelName, physicalTable) {
       },
     ],
     relationships: [],
-    metrics: [],
     views: [],
   };
 }
@@ -308,8 +307,7 @@ describe("loadMDL", () => {
         },
       ],
       relationships: [],
-      metrics: [],
-      views: [],
+        views: [],
     };
 
     await assert.rejects(
@@ -451,7 +449,6 @@ function cubeMDL() {
       },
     ],
     relationships: [],
-    metrics: [],
     views: [],
     cubes: [
       {

@@ -939,7 +939,6 @@ mod tests {
                 "primaryKey": "id"
             }],
             "relationships": [],
-            "metrics": [],
             "views": []
         })
         .to_string()
@@ -1043,7 +1042,6 @@ mod tests {
                 }
             ],
             "relationships": [],
-            "metrics": [],
             "views": []
         })
         .to_string();
