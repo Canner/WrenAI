@@ -135,6 +135,18 @@ def _make_dbt_project(tmp_path: Path) -> tuple[Path, Path]:
                             },
                         },
                     },
+                    "test.jaffle_shop.accepted_values_fct_orders_status": {
+                        "resource_type": "test",
+                        "attached_node": "model.jaffle_shop.fct_orders",
+                        "column_name": "status",
+                        "test_metadata": {
+                            "name": "accepted_values",
+                            "kwargs": {
+                                "column_name": "status",
+                                "values": ["placed", "returned, late"],
+                            },
+                        },
+                    },
                 },
                 "sources": {},
             }
@@ -177,6 +189,10 @@ def _make_dbt_project(tmp_path: Path) -> tuple[Path, Path]:
                     },
                     {
                         "unique_id": "test.jaffle_shop.relationships_fct_orders_order_id",
+                        "status": "pass",
+                    },
+                    {
+                        "unique_id": "test.jaffle_shop.accepted_values_fct_orders_status",
                         "status": "pass",
                     },
                 ]
@@ -557,6 +573,11 @@ def test_import_dbt_writes_project_and_builds(tmp_path):
         "fct_orders",
         "stg_orders",
     ]
+    fct_orders = yaml.safe_load(
+        (output_dir / "models" / "fct_orders" / "metadata.yml").read_text()
+    )
+    status_col = next(col for col in fct_orders["columns"] if col["name"] == "status")
+    assert status_col["properties"]["accepted_values"] == ["placed", "returned, late"]
 
     build = runner.invoke(
         app, ["context", "build", "--path", str(output_dir), "--no-validate"]
@@ -608,6 +629,22 @@ def test_import_dbt_force_overwrites_managed_files(tmp_path):
     assert forced.exit_code == 0, forced.output
     assert "jaffle_shop" in (output_dir / "wren_project.yml").read_text()
     assert "source: dbt" in (output_dir / "queries.yml").read_text()
+
+
+def test_write_project_files_force_preserves_queries_without_replacement(tmp_path):
+    from wren.context import ProjectFile, write_project_files  # noqa: PLC0415
+
+    (tmp_path / "queries.yml").write_text("version: 1\npairs:\n  - nl: keep\n")
+    files = [
+        ProjectFile(
+            relative_path="wren_project.yml",
+            content="schema_version: 3\nname: imported\ndata_source: duckdb\n",
+        )
+    ]
+
+    write_project_files(files, tmp_path, force=True)
+
+    assert "nl: keep" in (tmp_path / "queries.yml").read_text()
 
 
 # ── wren context set-profile ──────────────────────────────────────────────

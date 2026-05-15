@@ -5,6 +5,8 @@ Pure functions — no LanceDB or embedding dependency.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 _NUMERIC_TYPES = {
     "int",
     "integer",
@@ -98,13 +100,8 @@ def _model_seeds(model: dict) -> list[dict]:
         )
 
     for col in columns:
-        accepted_values = _prop_value(col, "acceptedValues", "accepted_values")
-        if not accepted_values:
-            continue
-        first_value = next(
-            (value.strip() for value in accepted_values.split(",") if value.strip()),
-            None,
-        )
+        accepted_values = _prop_raw(col, "acceptedValues", "accepted_values")
+        first_value = _first_accepted_value(accepted_values)
         if not first_value:
             continue
         quoted = first_value.replace("'", "''")
@@ -144,3 +141,21 @@ def _prop_value(obj: dict, *keys: str) -> str:
         if value not in (None, ""):
             return str(value)
     return ""
+
+
+def _prop_raw(obj: dict, *keys: str):
+    props = obj.get("properties") or {}
+    if not isinstance(props, dict):
+        return None
+    for key in keys:
+        if key in props:
+            return props[key]
+    return None
+
+
+def _first_accepted_value(value) -> str | None:
+    if isinstance(value, str):
+        return next((part.strip() for part in value.split(",") if part.strip()), None)
+    if isinstance(value, Sequence) and not isinstance(value, bytes):
+        return next((str(part).strip() for part in value if str(part).strip()), None)
+    return None

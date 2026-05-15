@@ -315,6 +315,30 @@ class TestGenerateSeedQueries:
             == "SELECT * FROM orders WHERE status = 'placed' LIMIT 100"
         )
 
+    def test_accepted_values_seed_accepts_list(self):
+        manifest = {
+            "models": [
+                _model(
+                    "customers",
+                    "customer_id",
+                    [
+                        _col("customer_id", "varchar"),
+                        _col(
+                            "name",
+                            "varchar",
+                            properties={"acceptedValues": ["Smith, John", "Ada"]},
+                        ),
+                    ],
+                )
+            ]
+        }
+        pairs = generate_seed_queries(manifest)
+        name_pair = next(p for p in pairs if "where name is Smith, John" in p["nl"])
+        assert (
+            name_pair["sql"]
+            == "SELECT * FROM customers WHERE name = 'Smith, John' LIMIT 100"
+        )
+
     def test_raw_models_are_not_seeded(self):
         manifest = {
             "models": [

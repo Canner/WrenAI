@@ -248,6 +248,24 @@ class TestDescribeSchema:
         assert "[accepted values: placed, shipped, completed]" in text
         assert "[test status: verified]" in text
 
+    def test_contains_list_accepted_values(self):
+        manifest = {
+            "models": [
+                {
+                    "name": "customers",
+                    "columns": [
+                        {
+                            "name": "name",
+                            "type": "VARCHAR",
+                            "properties": {"acceptedValues": ["Smith, John", "Ada"]},
+                        }
+                    ],
+                }
+            ]
+        }
+        text = describe_schema(manifest)
+        assert "[accepted values: Smith, John, Ada]" in text
+
     def test_excludes_table_reference(self):
         text = describe_schema(_MANIFEST)
         assert "tableReference" not in text

@@ -162,11 +162,17 @@ def load_dbt_profiles(
     profiles_path: str | Path | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Load dbt ``profiles.yml`` as a mapping of profile name to config."""
-    path = (
-        Path(profiles_path).expanduser()
-        if profiles_path is not None
-        else Path.home() / ".dbt" / _DBT_PROFILES_FILE
-    )
+    if profiles_path is not None:
+        path = _resolve_profiles_file_path(profiles_path)
+    elif os.environ.get("DBT_PROFILES_DIR"):
+        path = _resolve_profiles_file_path(
+            os.environ["DBT_PROFILES_DIR"], assume_dir=True
+        )
+    elif (Path.cwd() / _DBT_PROFILES_FILE).exists():
+        path = Path.cwd() / _DBT_PROFILES_FILE
+    else:
+        path = Path.home() / ".dbt" / _DBT_PROFILES_FILE
+
     profiles = _load_yaml_file(path, label="dbt profiles")
     if profiles is None:
         raise DbtLoadError(f"dbt profiles file is empty: {path}")
@@ -432,14 +438,16 @@ def convert_dbt_target_to_wren_profile(target: DbtTarget) -> dict[str, Any]:
         return {"datasource": "duckdb", "url": str(url), "format": "duckdb"}
 
     if datasource == "postgres":
-        return {
-            "datasource": "postgres",
-            "host": str(_require_output_field(output, "host")),
-            "port": str(output.get("port", "5432")),
-            "database": str(_require_output_field(output, "dbname", "database")),
-            "user": str(_require_output_field(output, "user")),
-            "password": str(output["password"]) if output.get("password") else None,
-        }
+        return _filter_none(
+            {
+                "datasource": "postgres",
+                "host": str(_require_output_field(output, "host")),
+                "port": str(output.get("port", "5432")),
+                "database": str(_require_output_field(output, "dbname", "database")),
+                "user": str(_require_output_field(output, "user")),
+                "password": str(output["password"]) if output.get("password") else None,
+            }
+        )
 
     if datasource in {"mysql", "redshift", "mssql", "clickhouse"}:
         return _filter_none(
@@ -546,6 +554,14 @@ def _load_yaml_file(path: Path, *, label: str) -> Any:
         return yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
         raise DbtLoadError(f"{label} is not valid YAML: {path}: {exc}") from exc
+
+
+def _resolve_profiles_file_path(path: str | Path, *, assume_dir: bool = False) -> Path:
+    """Resolve a dbt profiles path or directory to a profiles.yml file."""
+    resolved = Path(path).expanduser()
+    if resolved.is_dir() or (assume_dir and resolved.suffix == ""):
+        return resolved / _DBT_PROFILES_FILE
+    return resolved
 
 
 def _load_json_file(path: Path, *, label: str) -> dict[str, Any]:
@@ -711,10 +727,9 @@ def _apply_dbt_test_enrichment(
             elif test_name == "accepted_values":
                 values = kwargs.get("values") or []
                 if values:
-                    column.setdefault("properties", {})["accepted_values"] = ",".join(
-                        str(value) for value in values
-                    )
-                    event["values"] = [str(value) for value in values]
+                    str_values = [str(value) for value in values]
+                    column.setdefault("properties", {})["accepted_values"] = str_values
+                    event["values"] = str_values
             elif test_name == "relationships":
                 target_uid = _resolve_relationship_target_uid(node, attached_uid)
                 target_model = model_by_unique_id.get(target_uid)
@@ -791,15 +806,8 @@ def _extract_columns(node: dict[str, Any], catalog_entry: dict[str, Any]) -> lis
     catalog_columns = catalog_entry.get("columns", {}) or {}
 
     # When catalog data is available, restrict to columns that actually exist in
-    # the database. Manifest-only columns (documented in schema.yml but not
-    # materialized) are skipped to avoid referencing non-existent columns.
-    if catalog_columns:
-        merged_names = list(catalog_columns)
-        for name in manifest_columns:
-            if name not in merged_names:
-                pass  # manifest-only: skip
-    else:
-        merged_names = list(manifest_columns)
+    # the database; manifest-only columns are intentionally skipped.
+    merged_names = list(catalog_columns) if catalog_columns else list(manifest_columns)
 
     def _sort_key(name: str) -> tuple[int, int, str]:
         catalog_index = catalog_columns.get(name, {}).get("index")
@@ -835,11 +843,11 @@ def infer_dbt_layer(node: dict[str, Any]) -> str:
 
     if materialized == "ephemeral":
         return "ephemeral"
-    if any("staging" == part for part in fqn) or name.startswith("stg_"):
+    if "staging" in fqn or name.startswith("stg_"):
         return "staging"
-    if any("marts" == part for part in fqn) or name.startswith(("fct_", "dim_")):
+    if "marts" in fqn or name.startswith(("fct_", "dim_")):
         return "mart"
-    if any("intermediate" == part for part in fqn) or name.startswith("int_"):
+    if "intermediate" in fqn or name.startswith("int_"):
         return "intermediate"
     return "model"
 
@@ -1068,11 +1076,10 @@ def _finalize_column_tests(imported_models: list[dict[str, Any]]) -> None:
 
 
 def _aggregate_status(statuses: list[str]) -> str:
-    if any(status in {"failing", "error", "warning"} for status in statuses):
-        for priority in ("failing", "error", "warning"):
-            if priority in statuses:
-                return priority
-    if any(status == "verified" for status in statuses):
+    for priority in ("failing", "error", "warning"):
+        if priority in statuses:
+            return priority
+    if "verified" in statuses:
         return "verified"
     return "unknown"
 

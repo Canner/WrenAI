@@ -12,6 +12,7 @@ from wren.dbt import (
     default_wren_profile_name,
     load_compiled_sql,
     load_dbt_artifacts,
+    load_dbt_profiles,
     map_dbt_adapter_to_wren,
     resolve_dbt_target,
     resolve_env_vars,
@@ -119,6 +120,28 @@ class TestEnvResolution:
 
 @pytest.mark.unit
 class TestResolveDbtTarget:
+    def test_load_profiles_accepts_directory_path(self, tmp_path):
+        profiles_dir = tmp_path / "dbt"
+        profiles_dir.mkdir()
+        (profiles_dir / "profiles.yml").write_text("jaffle_shop: {}\n")
+
+        assert load_dbt_profiles(profiles_dir) == {"jaffle_shop": {}}
+
+    def test_load_profiles_uses_dbt_profiles_dir(self, tmp_path, monkeypatch):
+        profiles_dir = tmp_path / "profiles"
+        profiles_dir.mkdir()
+        (profiles_dir / "profiles.yml").write_text("jaffle_shop: {}\n")
+        monkeypatch.setenv("DBT_PROFILES_DIR", str(profiles_dir))
+
+        assert load_dbt_profiles() == {"jaffle_shop": {}}
+
+    def test_load_profiles_uses_cwd_before_home_fallback(self, tmp_path, monkeypatch):
+        (tmp_path / "profiles.yml").write_text("jaffle_shop: {}\n")
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.delenv("DBT_PROFILES_DIR", raising=False)
+
+        assert load_dbt_profiles() == {"jaffle_shop": {}}
+
     def test_resolve_target_from_project_and_profiles(self, tmp_path):
         project_dir, profiles_path = _write_basic_dbt_project(tmp_path)
         target = resolve_dbt_target(
@@ -204,6 +227,31 @@ class TestConvertDbtTargetToWrenProfile:
             "database": "analytics",
             "user": "postgres",
             "password": "secret",
+        }
+
+    def test_convert_postgres_profile_omits_missing_password(self, tmp_path):
+        project_dir, profiles_path = _write_basic_dbt_project(tmp_path)
+        profiles_path.write_text(
+            "jaffle_shop:\n"
+            "  target: dev\n"
+            "  outputs:\n"
+            "    dev:\n"
+            "      type: postgres\n"
+            "      host: localhost\n"
+            "      port: 5432\n"
+            "      dbname: analytics\n"
+            "      user: postgres\n"
+        )
+        target = resolve_dbt_target(project_dir, profiles_path=profiles_path)
+
+        profile = convert_dbt_target_to_wren_profile(target)
+
+        assert profile == {
+            "datasource": "postgres",
+            "host": "localhost",
+            "port": "5432",
+            "database": "analytics",
+            "user": "postgres",
         }
 
     def test_convert_bigquery_profile_from_keyfile_json(self, tmp_path):

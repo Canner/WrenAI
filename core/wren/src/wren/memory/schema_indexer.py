@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Sequence
 from datetime import datetime, timezone
 
 
@@ -110,8 +111,8 @@ def _describe_column(col: dict, lines: list[str]) -> None:
     if derived_from:
         parts.append(f" [derived from: {derived_from}]")
 
-    accepted_values = _format_csv_values(
-        _prop_value(col, "acceptedValues", "accepted_values")
+    accepted_values = _format_values(
+        _prop_raw(col, "acceptedValues", "accepted_values")
     )
     if accepted_values:
         parts.append(f" [accepted values: {accepted_values}]")
@@ -235,8 +236,8 @@ def _column_record(col: dict, model_name: str, mdl_h: str, now: datetime) -> dic
         parts.append(f". Derived from: {derived_from}")
     if rel:
         parts.append(f". Relationship: {rel}")
-    accepted_values = _format_csv_values(
-        _prop_value(col, "acceptedValues", "accepted_values")
+    accepted_values = _format_values(
+        _prop_raw(col, "acceptedValues", "accepted_values")
     )
     if accepted_values:
         parts.append(f". Accepted values: {accepted_values}")
@@ -326,10 +327,24 @@ def _prop_value(obj: dict, *keys: str) -> str:
     return ""
 
 
-def _format_csv_values(value: str) -> str:
+def _prop_raw(obj: dict, *keys: str):
+    props = obj.get("properties") or {}
+    if not isinstance(props, dict):
+        return None
+    for key in keys:
+        if key in props:
+            return props[key]
+    return None
+
+
+def _format_values(value) -> str:
     if not value:
         return ""
-    return ", ".join(part.strip() for part in value.split(",") if part.strip())
+    if isinstance(value, str):
+        return ", ".join(part.strip() for part in value.split(",") if part.strip())
+    if isinstance(value, Sequence) and not isinstance(value, bytes):
+        return ", ".join(str(part).strip() for part in value if str(part).strip())
+    return str(value).strip()
 
 
 def _column_constraints(col: dict) -> list[str]:
