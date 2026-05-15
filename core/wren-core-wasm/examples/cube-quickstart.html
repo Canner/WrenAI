@@ -47,11 +47,20 @@
             logEl.appendChild(div);
         }
 
+        function escapeHtml(v) {
+            return String(v)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         function renderTable(rows) {
             if (!rows.length) return '<p>No rows.</p>';
             const keys = Object.keys(rows[0]);
-            return '<table><tr>' + keys.map(k => `<th>${k}</th>`).join('')
-                + '</tr>' + rows.map(r => '<tr>' + keys.map(k => `<td>${r[k] ?? ''}</td>`).join('') + '</tr>').join('')
+            return '<table><tr>' + keys.map(k => `<th>${escapeHtml(k)}</th>`).join('')
+                + '</tr>' + rows.map(r => '<tr>' + keys.map(k => `<td>${escapeHtml(r[k] ?? '')}</td>`).join('') + '</tr>').join('')
                 + '</table>';
         }
 
@@ -64,7 +73,11 @@
                 const ms = (performance.now() - t).toFixed(1);
                 resultEl.innerHTML = `<p>${rows.length} row(s) in ${ms}ms</p>` + renderTable(rows);
             } catch (e) {
-                resultEl.innerHTML = `<div class="log err">${e.message || e}</div>`;
+                const err = document.createElement('div');
+                err.className = 'log err';
+                err.textContent = e.message || String(e);
+                resultEl.innerHTML = '';
+                resultEl.appendChild(err);
             }
         }
 

@@ -184,6 +184,15 @@
             logEl.appendChild(div);
         }
 
+        function escapeHtml(v) {
+            return String(v)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         const OPERATORS = ['eq', 'neq', 'in', 'not_in', 'gt', 'gte', 'lt', 'lte',
                            'contains', 'starts_with', 'is_null', 'is_not_null'];
 
@@ -198,7 +207,17 @@
             for (const item of items) {
                 const id = `${namePrefix}-${item.name}`;
                 const label = document.createElement('label');
-                label.innerHTML = `<input type="checkbox" id="${id}" value="${item.name}"> ${item.name} <span style="color:#999;font-size:0.85em;">${item.type || ''}</span>`;
+                const input = document.createElement('input');
+                input.type = 'checkbox';
+                input.id = id;
+                input.value = item.name;
+                const typeSpan = document.createElement('span');
+                typeSpan.style.color = '#999';
+                typeSpan.style.fontSize = '0.85em';
+                typeSpan.textContent = item.type || '';
+                label.appendChild(input);
+                label.appendChild(document.createTextNode(` ${item.name} `));
+                label.appendChild(typeSpan);
                 container.appendChild(label);
             }
         }
@@ -213,17 +232,19 @@
             for (const f of filterRows) {
                 const row = document.createElement('div');
                 row.className = 'filter-row';
+                const dimOptions = [...currentCube.dimensions, ...currentCube.timeDimensions]
+                    .map(d => `<option value="${escapeHtml(d.name)}" ${f.dim === d.name ? 'selected' : ''}>${escapeHtml(d.name)}</option>`).join('');
+                const opOptions = OPERATORS
+                    .map(o => `<option value="${escapeHtml(o)}" ${f.op === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('');
+                const placeholder = (f.op === 'in' || f.op === 'not_in')
+                    ? 'a,b,c'
+                    : 'value (or empty for is_null/is_not_null)';
                 row.innerHTML = `
-                    <select data-fid="${f.id}" data-attr="dim">
-                        ${[...currentCube.dimensions, ...currentCube.timeDimensions]
-                            .map(d => `<option value="${d.name}" ${f.dim === d.name ? 'selected' : ''}>${d.name}</option>`).join('')}
-                    </select>
-                    <select data-fid="${f.id}" data-attr="op">
-                        ${OPERATORS.map(o => `<option value="${o}" ${f.op === o ? 'selected' : ''}>${o}</option>`).join('')}
-                    </select>
-                    <input type="text" data-fid="${f.id}" data-attr="value" value="${f.value || ''}"
-                           placeholder="${(f.op === 'in' || f.op === 'not_in') ? 'a,b,c' : 'value (or empty for is_null/is_not_null)'}">
-                    <button type="button" data-fid="${f.id}" data-action="del" title="Remove">×</button>`;
+                    <select data-fid="${escapeHtml(f.id)}" data-attr="dim">${dimOptions}</select>
+                    <select data-fid="${escapeHtml(f.id)}" data-attr="op">${opOptions}</select>
+                    <input type="text" data-fid="${escapeHtml(f.id)}" data-attr="value" value="${escapeHtml(f.value || '')}"
+                           placeholder="${escapeHtml(placeholder)}">
+                    <button type="button" data-fid="${escapeHtml(f.id)}" data-action="del" title="Remove">×</button>`;
                 container.appendChild(row);
             }
         }
@@ -292,16 +313,25 @@
         function renderTable(rows) {
             if (!rows.length) return '<p>No rows.</p>';
             const keys = Object.keys(rows[0]);
-            return '<table><tr>' + keys.map(k => `<th>${k}</th>`).join('')
-                + '</tr>' + rows.map(r => '<tr>' + keys.map(k => `<td>${r[k] ?? ''}</td>`).join('') + '</tr>').join('')
+            return '<table><tr>' + keys.map(k => `<th>${escapeHtml(k)}</th>`).join('')
+                + '</tr>' + rows.map(r => '<tr>' + keys.map(k => `<td>${escapeHtml(r[k] ?? '')}</td>`).join('') + '</tr>').join('')
                 + '</table>';
+        }
+
+        function renderError(containerId, msg) {
+            const el = $(containerId);
+            el.innerHTML = '';
+            const div = document.createElement('div');
+            div.className = 'log err';
+            div.textContent = msg;
+            el.appendChild(div);
         }
 
         async function runQuery() {
             const q = buildQuery();
             if (!q) return;
             if (!q.measures || !q.measures.length) {
-                $('result').innerHTML = '<div class="log err">Pick at least one measure.</div>';
+                renderError('result', 'Pick at least one measure.');
                 return;
             }
             try {
@@ -314,7 +344,7 @@
                 $('result-raw').textContent = JSON.stringify(rows, null, 2);
             } catch (e) {
                 $('result-meta').textContent = '';
-                $('result').innerHTML = `<div class="log err">${e.message || e}</div>`;
+                renderError('result', e.message || String(e));
                 $('result-raw').textContent = '';
             }
         }
@@ -332,7 +362,7 @@
 
             const tdSel = $('td-name');
             tdSel.innerHTML = cube.timeDimensions
-                .map(td => `<option value="${td.name}">${td.name}</option>`).join('');
+                .map(td => `<option value="${escapeHtml(td.name)}">${escapeHtml(td.name)}</option>`).join('');
             if (!cube.timeDimensions.length) {
                 tdSel.innerHTML = '<option value="">(none defined)</option>';
             }
@@ -383,7 +413,7 @@
 
             const cubes = JSON.parse(engine.listCubes() || '[]');
             const sel = $('cube-select');
-            sel.innerHTML = cubes.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+            sel.innerHTML = cubes.map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('');
             sel.disabled = false;
             sel.addEventListener('change', e => {
                 const c = cubes.find(c => c.name === e.target.value);

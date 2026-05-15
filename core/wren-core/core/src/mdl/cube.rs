@@ -165,6 +165,15 @@ fn validate_query(
     dimension_map: &HashMap<&str, &CubeDimension>,
     time_dim_map: &HashMap<&str, &TimeDimension>,
 ) -> Result<()> {
+    if query.measures.is_empty()
+        && query.dimensions.is_empty()
+        && query.time_dimensions.is_empty()
+    {
+        return plan_err!(
+            "Cube query for '{}' must include at least one measure, dimension, or time dimension",
+            query.cube
+        );
+    }
     for name in &query.measures {
         if !measure_map.contains_key(name.as_str()) {
             return plan_err!("Unknown measure '{}' in cube '{}'", name, query.cube);
@@ -352,8 +361,8 @@ fn build_sql(
     for td_filter in &query.time_dimensions {
         if let Some((start, end)) = &td_filter.date_range {
             let col = &time_dim_map[td_filter.dimension.as_str()].expression;
-            where_parts.push(format!("{col} >= '{start}'"));
-            where_parts.push(format!("{col} < '{end}'"));
+            where_parts.push(format!("{col} >= {}", quote_string(start)));
+            where_parts.push(format!("{col} < {}", quote_string(end)));
         }
     }
     for f in &query.filters {
@@ -399,29 +408,53 @@ fn filter_to_sql(f: &CubeFilter, col_expr: &str) -> Result<String> {
     match f.operator {
         FilterOperator::IsNull => Ok(format!("{col_expr} IS NULL")),
         FilterOperator::IsNotNull => Ok(format!("{col_expr} IS NOT NULL")),
-        FilterOperator::Eq => Ok(format!("{col_expr} = {}", quote_value(&f.value))),
-        FilterOperator::Neq => Ok(format!("{col_expr} <> {}", quote_value(&f.value))),
-        FilterOperator::Gt => Ok(format!("{col_expr} > {}", quote_value(&f.value))),
-        FilterOperator::Gte => Ok(format!("{col_expr} >= {}", quote_value(&f.value))),
-        FilterOperator::Lt => Ok(format!("{col_expr} < {}", quote_value(&f.value))),
-        FilterOperator::Lte => Ok(format!("{col_expr} <= {}", quote_value(&f.value))),
+        FilterOperator::Eq => Ok(format!(
+            "{col_expr} = {}",
+            scalar_filter_value(&f.value, "eq")?
+        )),
+        FilterOperator::Neq => Ok(format!(
+            "{col_expr} <> {}",
+            scalar_filter_value(&f.value, "neq")?
+        )),
+        FilterOperator::Gt => Ok(format!(
+            "{col_expr} > {}",
+            scalar_filter_value(&f.value, "gt")?
+        )),
+        FilterOperator::Gte => Ok(format!(
+            "{col_expr} >= {}",
+            scalar_filter_value(&f.value, "gte")?
+        )),
+        FilterOperator::Lt => Ok(format!(
+            "{col_expr} < {}",
+            scalar_filter_value(&f.value, "lt")?
+        )),
+        FilterOperator::Lte => Ok(format!(
+            "{col_expr} <= {}",
+            scalar_filter_value(&f.value, "lte")?
+        )),
         FilterOperator::In => match &f.value {
-            Some(FilterValue::List(items)) => {
+            Some(FilterValue::List(items)) if !items.is_empty() => {
                 let vals: Vec<String> = items
                     .iter()
                     .map(|v| quote_value(&Some(v.clone())))
                     .collect();
                 Ok(format!("{col_expr} IN ({})", vals.join(", ")))
             }
+            Some(FilterValue::List(_)) => {
+                plan_err!("IN filter requires a non-empty list value")
+            }
             _ => plan_err!("IN filter requires a list value"),
         },
         FilterOperator::NotIn => match &f.value {
-            Some(FilterValue::List(items)) => {
+            Some(FilterValue::List(items)) if !items.is_empty() => {
                 let vals: Vec<String> = items
                     .iter()
                     .map(|v| quote_value(&Some(v.clone())))
                     .collect();
                 Ok(format!("{col_expr} NOT IN ({})", vals.join(", ")))
+            }
+            Some(FilterValue::List(_)) => {
+                plan_err!("NOT IN filter requires a non-empty list value")
             }
             _ => plan_err!("NOT IN filter requires a list value"),
         },
@@ -435,6 +468,20 @@ fn filter_to_sql(f: &CubeFilter, col_expr: &str) -> Result<String> {
             let quoted = quote_string(&format!("{raw}%"));
             Ok(format!("{col_expr} LIKE {quoted}"))
         }
+    }
+}
+
+/// Render a scalar filter value as SQL, rejecting missing values and lists.
+/// Scalar operators (eq, neq, gt, …) require a single concrete value — without
+/// this guard, an omitted value would silently produce `col = NULL` instead of
+/// the intended comparison.
+fn scalar_filter_value(val: &Option<FilterValue>, op: &str) -> Result<String> {
+    match val {
+        None => plan_err!("'{}' filter requires a value", op),
+        Some(FilterValue::List(_)) => {
+            plan_err!("'{}' filter requires a scalar value, not a list", op)
+        }
+        Some(_) => Ok(quote_value(val)),
     }
 }
 
@@ -946,6 +993,86 @@ mod tests {
             err.to_string().contains("Unknown filter dimension"),
             "err={err}"
         );
+    }
+
+    #[test]
+    fn test_empty_projection_rejected() {
+        // No measures, no dimensions, no time dimensions → invalid `SELECT  FROM`.
+        let q = query("OrdersCube");
+        let err = cube_query_to_sql(&q, &orders_manifest()).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("at least one measure"), "err={msg}");
+    }
+
+    #[test]
+    fn test_scalar_filter_without_value_rejected() {
+        let mut q = query("OrdersCube");
+        q.measures = vec!["revenue".to_string()];
+        q.filters = vec![filter("status", FilterOperator::Eq, None)];
+        let err = cube_query_to_sql(&q, &orders_manifest()).unwrap_err();
+        assert!(err.to_string().contains("requires a value"), "err={err}");
+    }
+
+    #[test]
+    fn test_scalar_filter_with_list_value_rejected() {
+        let mut q = query("OrdersCube");
+        q.measures = vec!["revenue".to_string()];
+        q.filters = vec![filter(
+            "status",
+            FilterOperator::Eq,
+            list(vec![FilterValue::String("a".to_string())]),
+        )];
+        let err = cube_query_to_sql(&q, &orders_manifest()).unwrap_err();
+        assert!(
+            err.to_string().contains("requires a scalar value"),
+            "err={err}"
+        );
+    }
+
+    #[test]
+    fn test_in_filter_with_empty_list_rejected() {
+        let mut q = query("OrdersCube");
+        q.measures = vec!["revenue".to_string()];
+        q.filters = vec![filter("status", FilterOperator::In, list(vec![]))];
+        let err = cube_query_to_sql(&q, &orders_manifest()).unwrap_err();
+        assert!(
+            err.to_string().contains("non-empty list value"),
+            "err={err}"
+        );
+    }
+
+    #[test]
+    fn test_not_in_filter_with_empty_list_rejected() {
+        let mut q = query("OrdersCube");
+        q.measures = vec!["revenue".to_string()];
+        q.filters = vec![filter("status", FilterOperator::NotIn, list(vec![]))];
+        let err = cube_query_to_sql(&q, &orders_manifest()).unwrap_err();
+        assert!(
+            err.to_string().contains("non-empty list value"),
+            "err={err}"
+        );
+    }
+
+    #[test]
+    fn test_date_range_bounds_escaped() {
+        // dateRange bounds must be quoted via quote_string to defeat injection.
+        let mut q = query("OrdersCube");
+        q.measures = vec!["revenue".to_string()];
+        q.time_dimensions = vec![TimeDimensionFilter {
+            dimension: "created_at".to_string(),
+            granularity: Granularity::Day,
+            date_range: Some((
+                "2024-01-01' OR '1'='1".to_string(),
+                "2025-01-01".to_string(),
+            )),
+        }];
+        let sql = cube_query_to_sql(&q, &orders_manifest()).unwrap();
+        // The embedded single quote should be doubled, not left to break out.
+        assert!(
+            sql.contains("created_at >= '2024-01-01'' OR ''1''=''1'"),
+            "sql={sql}"
+        );
+        assert!(!sql.contains("created_at >= '2024-01-01' OR "), "sql={sql}");
     }
 
     // ── quote_value ──────────────────────────────────────────────────────────

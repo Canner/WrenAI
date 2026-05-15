@@ -103,7 +103,7 @@ The server prints every demo URL on startup. Open any of them in a browser:
 |---|---|---|
 | Inline data | http://localhost:8787/examples/inline.html | `registerJson` + raw SQL `query()` |
 | URL mode | http://localhost:8787/examples/url-mode.html | Remote Parquet via HTTP range requests |
-| CDN smoke test | http://localhost:8787/examples/test-cdn.html | Loading the published wheel from unpkg |
+| CDN smoke test | http://localhost:8787/examples/test-cdn.html | Loading the published package from unpkg |
 | **Cube quickstart** | http://localhost:8787/examples/cube-quickstart.html | Minimal `cubeQuery()` — three preset queries (group-by, filter, time bucket) |
 | **Cube explorer** | http://localhost:8787/examples/cube-explorer.html | Form-driven builder for `CubeQuery` — pick measures/dimensions, add filters, choose granularity + date range |
 

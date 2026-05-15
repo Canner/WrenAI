@@ -115,10 +115,12 @@ avg_order_value  →  (SUM(o_totalprice)) / (COUNT(*))
 ```
 
 Substitution is longest-prefix-first to avoid partial-token replacement
-(e.g., `revenue_2` substitutes before `revenue`). **Only the transitive
-closure of measures actually requested by the query is resolved** — a cycle
-between unrelated measures elsewhere in the cube does not fail a query that
-never references them.
+(e.g., `revenue_2` substitutes before `revenue`). At query time the
+translator resolves only the transitive closure of the measures that the
+request actually names. Cube validity — including cycle detection across
+all derived measures — is enforced earlier during MDL analysis (see
+[Validation](#validation) below), so an invalid cube is rejected at load
+time regardless of which measures a later query references.
 
 Expressions containing `$` (Postgres `$1` placeholders or `$$tag$$`
 dollar-quoted strings) are preserved literally — the translator does not
