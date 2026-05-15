@@ -1,6 +1,6 @@
 # wren-langchain
 
-LangChain and LangGraph integration for Wren AI Core. Attach a CLI-prepared Wren project to your agent as a toolkit, with the semantic layer doing schema resolution, memory recall, and SQL execution.
+LangChain and LangGraph integration for Wren AI. Attach a CLI-prepared Wren project to your agent as a toolkit, with the semantic layer doing schema resolution, memory recall, and SQL execution.
 
 **Use this SDK when**: you're building a LangChain or LangGraph agent that needs to answer data questions against a Wren project. For one-shot CLI use, the `wren` command is fine on its own.
 

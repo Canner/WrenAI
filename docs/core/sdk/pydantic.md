@@ -1,6 +1,6 @@
 # wren-pydantic
 
-Pydantic AI integration for Wren AI Core. Attach a CLI-prepared Wren project to your agent as a toolkit, with the semantic layer doing schema resolution, memory recall, and SQL execution.
+Pydantic AI integration for Wren AI. Attach a CLI-prepared Wren project to your agent as a toolkit, with the semantic layer doing schema resolution, memory recall, and SQL execution.
 
 **Use this SDK when**: you're building a [Pydantic AI](https://ai.pydantic.dev) agent that needs to answer data questions against a Wren project. For one-shot CLI use, the `wren` command is fine on its own.
 
@@ -20,7 +20,7 @@ wren context build                                   # produces target/mdl.json
 wren memory index                                    # optional but recommended
 ```
 
-See [Connect Your Database](../get_started/connect.md) for the full CLI setup walkthrough including `.env` configuration and per-datasource notes.
+See [Connect Your Database](/oss/guides/connect) for the full CLI setup walkthrough including `.env` configuration and how to inspect connector fields via `wren docs connection-info`.
 
 ---
 
@@ -119,7 +119,7 @@ toolkit.memory.recall("top customers", limit=3)
 toolkit.memory.store(nl="...", sql="...", tags=["revenue"])
 ```
 
-Sync only — no `aquery` / `afetch` variants. The underlying engine is sync I/O; Pydantic AI auto-bridges sync tools to its async run loop, so wrapping them in `asyncio.to_thread` would be fake-async with no real concurrency benefit. Revisit when Core ships an async-native engine.
+Sync only — no `aquery` / `afetch` variants. The underlying engine is sync I/O; Pydantic AI auto-bridges sync tools to its async run loop, so wrapping them in `asyncio.to_thread` would be fake-async with no real concurrency benefit. Revisit when Wren AI ships an async-native engine.
 
 ---
 

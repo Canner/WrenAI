@@ -1,162 +1,57 @@
-# Installation
-
-## Quick install with an LLM agent
-
-If you are setting up Wren AI Core with an AI coding agent (Claude Code, Cursor, Aider, etc.), the fastest path is to install the full Wren AI skills package and let the agent drive the rest. Skills are structured workflow guides that teach AI coding agents how to use the Wren CLI — they are optional but **strongly recommended**.
-
-```bash
-# Via npx
-npx skills add Canner/WrenAI --skill '*'
-
-# Or via install script
-curl -fsSL https://raw.githubusercontent.com/Canner/WrenAI/main/skills/install.sh | bash
-```
-
-The installer auto-detects your AI agent. To target a specific one:
-
-```bash
-npx skills add Canner/WrenAI --skill '*' --agent claude-code
-```
-
-This installs all four skills into your agent's skill directory:
-
-| Skill | Purpose |
-|-------|---------|
-| **wren-onboarding** | Entry point — handles install, `.env` setup, profile creation, project scaffolding, profile binding, first query |
-| **wren-generate-mdl** | Schema discovery and MDL project generation from a connected database |
-| **wren-usage** | Day-to-day query workflow — context, recall, SQL, store results |
-| **wren-dlt-connector** | Connect SaaS APIs (HubSpot, Stripe, Salesforce, GitHub, Slack, …) into DuckDB via dlt |
-
-Then **start a new agent session** (skills are loaded at session start) and ask:
-
-> Use the `wren-onboarding` skill to install and set up Wren AI Core.
-
-The `wren-onboarding` skill drives the rest of the setup — environment checks, `.env` configuration, connection profile creation, project scaffolding, binding the profile to the project, and a first query — and dispatches to the other skills as needed. Skill source: [github.com/Canner/WrenAI/tree/main/skills](https://github.com/Canner/WrenAI/tree/main/skills)
-
-See the [Skills reference](../reference/skills.md) for what each skill does in detail.
-
-If you'd prefer to install manually, follow the steps below.
-
+---
+sidebar_label: Installation
 ---
 
-## Requirements
+# Installation
 
-- **Python 3.11+**
-- **pip** (or any Python package manager)
+Get Wren AI running. Your AI coding agent does the rest.
 
-Optional, depending on your workflow:
+## 1. Install the skill bundle
 
-- **Git** — for cloning skill repositories
-- **Node.js / npm** — for installing skills via `npx`
-- An AI coding agent ([Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview), Cursor, Windsurf, Cline, etc.) — for skill-driven workflows
-
-## Install the CLI
+Skills are workflow guides that teach AI coding agents (Claude Code, Openclaw, Hermes, Codex, etc.) how to drive the Wren CLI for you:
 
 ```bash
-pip install "wren-engine[main]"
-```
-
-This installs:
-
-- `wren` CLI — query, plan, validate, build, profile, and memory commands
-- `memory` — LanceDB-backed schema indexing and NL-SQL recall
-- `interactive` — terminal-based interactive prompts
-- `ui` — browser-based profile configuration form
-
-Verify the installation:
-
-```bash
-wren version
-```
-
-## Data source extras
-
-DuckDB is included by default. For other databases, add the corresponding extra:
-
-```bash
-# Single data source
-pip install "wren-engine[postgres,main]"
-
-# Multiple data sources
-pip install "wren-engine[postgres,bigquery,main]"
-```
-
-| Data source | Extra | Notes |
-|-------------|-------|-------|
-| DuckDB | _(included)_ | No extra needed |
-| PostgreSQL | `postgres` | |
-| MySQL | `mysql` | |
-| BigQuery | `bigquery` | Requires Google Cloud credentials |
-| Snowflake | `snowflake` | |
-| ClickHouse | `clickhouse` | |
-| Trino | `trino` | |
-| SQL Server | `mssql` | |
-| Databricks | `databricks` | |
-| Redshift | `redshift` | |
-| Oracle | `oracle` | |
-| Athena | `athena` | Requires AWS credentials |
-| Apache Spark | `spark` | |
-
-## Install skills
-
-Skills are structured workflow guides that teach AI coding agents how to use the Wren CLI. They are optional but strongly recommended.
-
-```bash
-# Via npx
 npx skills add Canner/WrenAI --skill '*'
+```
 
-# Or via install script
+Have multiple AI coding agents installed and want the skills available in all of them? Pass `--agent '*'`:
+
+```bash
+npx skills add Canner/WrenAI --skill '*' --agent '*'
+```
+
+Or via the install script:
+
+```bash
 curl -fsSL https://raw.githubusercontent.com/Canner/WrenAI/main/skills/install.sh | bash
 ```
 
-The installer auto-detects your AI agent. To target a specific one:
+> See the [Skills reference](/oss/reference/skills) for the full list of skills installed and what each one does.
 
-```bash
-npx skills add Canner/WrenAI --skill '*' --agent claude-code
+## 2. Ask your agent to set things up
+
+**Start a new agent session** (skills load at session start), open your project directory, and ask:
+
+```text
+Use the wren-onboarding skill to install and set up Wren AI.
 ```
 
-The installer drops these skills into your agent's skill directory:
+The agent will check your environment, install Python dependencies, create a connection profile for your data source, scaffold the project, and run a first query — all in one flow.
 
-| Skill | Purpose |
-|-------|---------|
-| **wren-onboarding** | End-to-end install + first-connection flow. Triggers on `/wren-onboarding`, "install wren", "set up wren engine" |
-| **wren-generate-mdl** | One-time setup — database introspection, type normalization, MDL generation |
-| **wren-usage** | Day-to-day workflow — schema context, query recall, SQL execution, result storage |
-| **wren-dlt-connector** | Connect SaaS data (HubSpot, Stripe, Salesforce, GitHub, Slack) via dlt pipelines into DuckDB, then auto-generate a Wren project |
+## 3. Start asking questions
 
-After installation, **start a new agent session** — skills are loaded at session start.
+Once onboarding finishes, just ask your agent business questions in natural language. The agent uses Wren AI's semantic layer to resolve schema, recall similar past queries, and generate accurate SQL.
 
-See [Skills Reference](../reference/skills.md) for details on what each skill does.
-
-## Virtual environment (recommended)
-
-Keep wren-engine and its dependencies isolated from your system Python:
-
-```bash
-python3 -m venv ~/.venvs/wren
-source ~/.venvs/wren/bin/activate
-pip install "wren-engine[postgres,main]"
+```text
+How many customers placed more than one order this month?
 ```
 
-Activate the environment in every new terminal session before running `wren` commands:
-
-```bash
-source ~/.venvs/wren/bin/activate
-```
-
-## Upgrading
-
-```bash
-pip install --upgrade "wren-engine[main]"
-```
-
-To update skills:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Canner/WrenAI/main/skills/install.sh | bash -s -- --force
+```text
+What are the top 5 products by total revenue?
 ```
 
 ## What's next
 
-- [Quickstart](./quickstart.md) — try the CLI with a sample dataset
-- [Connect Your Database](./connect.md) — set up your own data source
+- [Quickstart](./quickstart.md) — walk through a full example with the bundled `jaffle_shop` sample dataset
+- [Connect your database](/oss/guides/connect) — connect a profile to a real data source
+- [Skills reference](/oss/reference/skills) — what each skill does in detail

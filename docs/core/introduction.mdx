@@ -1,33 +1,32 @@
-# Wren AI Core
+# Wren AI
 
 <iframe src="https://ghbtns.com/github-btn.html?user=Canner&repo=WrenAI&type=star&count=true&size=large" frameborder="0" scrolling="0" height="50" title="Wren AI"></iframe>
 
-**Wren AI Core is the open context layer for AI agents.** It lets any agent — Claude, ChatGPT, Cursor, internal copilots, customer-facing apps, or your in-house BI surface — query your warehouse through the same governed semantic layer your analysts use.
+**Wren AI is the open context layer for AI agents.** It lets any agent — coding assistants, internal copilots, customer-facing apps, or your in-house BI surface — query your warehouse through the same governed semantic layer your analysts use.
 
-![wren ai core architecture](/img/oss/concept/wren-engine-architecture.png)
+In practice, Wren AI sits between your data sources and the agent or application that needs to query them. It provides a modeled, governed, and execution-aware layer so agents can reason over business concepts such as customers, revenue, relationships, and reusable calculations.
 
-In practice, Wren AI Core sits between your data sources and the agent or application that needs to query them. It provides a modeled, governed, and execution-aware layer so agents can reason over business concepts such as customers, revenue, relationships, and reusable calculations.
+## What problem Wren AI solves
 
-## What problem Wren AI Core solves
+Your AI agent does not know what your data means. It reads schemas. It catches column names. It even reads your semantic-layer YAML. But it misses the things that actually decide whether an answer is right — that `status = 4` means refunded, that `loyalty_v3` is the table your team actually uses, that "monthly active users" excludes service accounts, that "Project Lighthouse" was renamed to `campaign_id = 4172` six months ago in a doc nobody linked to the warehouse.
 
-Modern data systems are full of useful information, but they are rarely organized in a way that AI agents can use reliably. Raw schemas often contain:
+![Your agent sees schema. It misses meaning.](/img/oss/vision/vision-paper-02-agent-lacks-business-meaning.png)
 
-- many overlapping tables
-- inconsistent naming
-- business logic hidden in SQL or dashboards
-- unclear join paths and metric definitions
+So it picks the wrong table. It writes confident, plausible, wrong SQL. The demo looks fine. The pilot looks fine. Production is where it breaks.
 
-![the gap between raw schema and what agents need](/img/oss/concept/wren-engine-before.png)
+**AI agents over business data are bottlenecked on context, not on intelligence.** The missing piece is **context** — a machine-readable description of what the data means and how it should be used. Wren AI is designed to provide that context.
 
-Giving an agent direct database access does not solve those problems. The missing piece is **context** — a machine-readable description of what the data means and how it should be used. Wren AI Core is designed to provide that context.
+## What Wren AI does
 
-## What Wren AI Core does
+Wren AI combines modeling, context packaging, and query execution foundations in one open system. For an AI agent to answer real business questions on real company data, it needs **five layers of knowledge**:
 
-Wren AI Core combines modeling, context packaging, and query execution foundations in one open system.
+![Five layers of context](/img/oss/vision/vision-paper-03-five-layers-of-context.png)
+
+Layers 1–3 ship today. Layers 4–5 are in active development. See [What is context](/oss/concepts/what_is_context) for the full breakdown.
 
 ### 1. Models business context with MDL
 
-Wren AI Core uses [Modeling Definition Language (MDL)](/oss/concepts/what_is_mdl) to describe:
+Wren AI uses [Modeling Definition Language (MDL)](/oss/concepts/what_is_mdl) to describe:
 
 - models that map to tables or query results
 - relationships between datasets
@@ -38,7 +37,7 @@ This turns warehouse structure into a layer that is easier for both humans and A
 
 ### 2. Gives agents structured context, not raw schema alone
 
-Wren AI Core is built around the idea that agents need more than semantics alone. They need [context](/oss/concepts/what_is_context) — trusted definitions, reusable logic, and a consistent way to navigate business data.
+Wren AI is built around the idea that agents need more than semantics alone. They need [context](/oss/concepts/what_is_context) — trusted definitions, reusable logic, and a consistent way to navigate business data.
 
 That context helps agents:
 
@@ -49,23 +48,23 @@ That context helps agents:
 
 ### 3. Connects context to execution
 
-Wren AI Core is not only a metadata layer. It also serves as the execution foundation for modeled queries. Once data is described in MDL, Wren AI Core can plan and generate queries against supported data sources — the same engine powers both interactive analytics and AI agent workflows that need grounded text-to-SQL behavior.
+Wren AI is not only a metadata layer. It also serves as the execution foundation for modeled queries. Once data is described in MDL, Wren AI can plan and generate queries against supported data sources — the same engine powers both interactive analytics and AI agent workflows that need grounded text-to-SQL behavior.
 
-### 4. Built for MCP and agent-oriented workflows
+### 4. Works with the AI coding agents you already use
 
-Wren AI Core is designed to work well with MCP clients and AI coding agents. It exposes business context in a form that can be shared with agent systems, so agents operate on governed data definitions instead of rediscovering logic from scratch on every request.
+Wren AI exposes business context in a form that can be shared with agent systems, so agents operate on governed data definitions instead of rediscovering logic from scratch on every request.
 
-## What's in Wren AI Core
+## What's in Wren AI
 
 - **CLI (`wren`)** — query, plan, validate, build, profile, and memory commands
-- **MDL (Modeling Definition Language)** — the **OSI+** semantic contract (Open Semantic Interchange compliance plus agent extensions: MCP bindings, confidence, intent grain, governance-as-data) that powers governed agent access
+- **MDL (Modeling Definition Language)** — the semantic contract that powers governed agent access. It captures models, relationships, and reusable logic in a form humans and agents share, with agent-oriented extensions like confidence, intent grain, and governance-as-data.
 - **Skills** — structured workflows that let any AI coding agent operate the CLI safely
 
 ## Key ideas behind the project
 
 ### Open context layer
 
-Wren AI Core is described as an open context layer because its job is to make business context portable, inspectable, and usable by different agentic systems. Instead of locking meaning inside one application, it provides a reusable foundation that other tools and workflows can build on.
+Wren AI is an open context layer because its job is to make business context portable, inspectable, and usable by different agentic systems. Instead of locking meaning inside one application, it provides a reusable foundation that other tools and workflows can build on.
 
 ### Business-first modeling
 
@@ -73,40 +72,67 @@ The project focuses on modeling data the way people ask questions about it, not 
 
 ### Better reliability for AI
 
-Text-to-SQL systems fail when they guess incorrectly about definitions, joins, or source-of-truth tables. Wren AI Core improves reliability by making those assumptions explicit in the model.
+Text-to-SQL systems fail when they guess incorrectly about definitions, joins, or source-of-truth tables. Wren AI improves reliability by making those assumptions explicit in the model.
 
 ### Versionable, maintainable definitions
 
-Wren AI Core projects are managed as files, which makes modeling logic easy to review, version, and improve over time. See the [Wren Project](/oss/guides/modeling/wren_project) guide for how MDL projects are organized.
+Wren AI projects are stored as files, which makes modeling logic easy to review, version, and improve over time. See the [Wren Project](/oss/guides/modeling/wren_project) guide for how MDL projects are organized.
 
 ## Use cases
 
-Wren AI Core powers many agent-facing workflows. The flagship reference application is **WrenAI GenBI**, a chat-first BI app, but Wren AI Core is also used to wire governed warehouse access into Slack/Teams bots, Cursor/Claude Code workflows, internal copilots built on LangChain or CrewAI, customer-facing analytics agents, and existing BI tools (Hex, Mode, Metabase, Superset) via the SQL endpoint.
+Wren AI powers many agent-facing workflows. The flagship reference application is **Wren AI GenBI**, a chat-first BI app, but Wren AI is also used to wire governed warehouse access into chat bots, AI coding agent workflows, internal copilots, customer-facing analytics agents, and downstream BI surfaces that can talk to a SQL endpoint.
 
-## Typical workflow
+## Correctness is a system, not a switch
 
-1. Connect a supported data source.
-2. Define or generate an MDL project.
-3. Model datasets, relationships, and calculations.
-4. Deploy the compiled MDL.
-5. Use that modeled context from applications, MCP clients, or AI services.
+The temptation is to treat correctness like a setting — add a metadata field, add 100 examples, flip a switch. That does not work. Correctness is the result of six pieces working together: schema linking, value profiling, ambiguity detection, generation trace, retry and repair, and eval. Miss any one and the agent fails in that exact gap.
 
-From there, agents can query with more grounding, and teams can maintain one shared business layer instead of repeating logic across prompts and SQL.
+![Correctness is a system, not a switch.](/img/oss/vision/vision-paper-04-correctness-system.png)
+
+That is why we build context as a system, not as a feature — and why Wren AI exposes **primitives**, not a closed product. See [Architecture](/oss/concepts/architecture) for the six pillars in detail.
+
+## How you actually use it — scaffold fast, enrich deep
+
+A context layer fails if the on-ramp is painful. Wren AI works in two beats:
+
+![Scaffold fast. Enrich deep.](/img/oss/vision/vision-paper-05-scaffold-fast-enrich-deep.png)
+
+**Scaffold first.** Connect a database; scaffold a Wren project. The `wren-generate-mdl` skill drives an agent through your schema, normalizes types, and writes an initial MDL covering structure — tables, columns, relationships. The agent can already query through it.
+
+**Then enrich.** Structure isn't enough. The hard meaning — what `status = 4` really means, which table is canonical, what counts as "active", how internal project codenames map to data rows — lives outside `INFORMATION_SCHEMA`. The `wren-enrich-context` skill (in active development) covers this in two modes:
+
+- **Grill mode** — one question at a time, you in the loop. High precision; you stay in control.
+- **Auto-pilot mode** — drop PDFs, glossaries, handbooks, code, and NL→SQL pairs in `<project>/raw/`. The agent reads everything, proposes changes, and escalates only on conflicts.
+
+Both modes write to the same places: MDL, `instructions.md`, `queries.yml`, memory. Reviewable, versionable, Git-friendly.
+
+## Where this is going
+
+The next twelve months focus on three pillars:
+
+1. **Context enrichment, end to end** — `wren-enrich-context` brings grill and auto-pilot into a single skill across MDL, instructions, queries, and memory.
+2. **An end-to-end correctness system** — built as primitives the agent orchestrates: rich schema retrieval, dry-plan validation, structured error responses, value profiling, a small golden NL-SQL eval runner. No black-box dashboard, no "trust us, it's accurate" claim.
+3. **Agent-native distribution** — first-class SDKs for the agent frameworks where engineers already work. **LangChain** and **Pydantic AI** are supported today; other frameworks (LangGraph, Claude, Codex, and more) are on the roadmap.
+
+See the [Wren AI vision paper](https://getwren.ai/post/fueling-the-next-wave-of-ai-agents-building-the-foundation-for-future-mcp-clients-and-enterprise-data-access) for the full story.
+
+## Open and yours
+
+Wren AI is Apache 2.0. Self-hosted is a first-class deployment, not a teaser. We build this in the open because the context layer for AI must be inspectable, composable, and community-owned — your MDL is too important to live inside someone else's product.
 
 ## Start here
 
 If you are new, follow this path:
 
-1. [Install Wren AI Core](/oss/get_started/installation) — agent-driven or manual
+1. [Install Wren AI](/oss/get_started/installation) — agent-driven
 2. [Quickstart with sample data](/oss/get_started/quickstart) — try the CLI on the bundled `jaffle_shop` demo
-3. [Connect your own database](/oss/get_started/connect)
-4. [Learn the concepts](/oss/concepts/what_is_context) — context, MDL, why it helps LLMs, architecture
+3. [Connect your own database](/oss/guides/connect)
+4. [Learn the concepts](/oss/concepts/what_is_context) — context, MDL, skills, memory, architecture
 
-## When to use Wren AI Core
+## When to use Wren AI
 
-Wren AI Core is especially useful when you want to:
+Wren AI is especially useful when you want to:
 
-- build an agent or MCP workflow on top of business data
+- build an AI agent workflow on top of business data
 - create a reusable business layer across analytics tools
 - improve text-to-SQL reliability with explicit modeling
 - separate business logic from raw warehouse structure
@@ -114,7 +140,9 @@ Wren AI Core is especially useful when you want to:
 
 ## Looking for the GenBI app docs?
 
-If you are running the open-source **WrenAI GenBI** app (the Docker-based Wren AI Launcher product), see the [WrenAI GenBI](/oss/overview/introduction) section in the sidebar.
+The **Wren AI GenBI** app (the Docker-based chat-first BI product) is now in **sunset** — its code lives on a `legacy` branch and no security fixes will be issued. Existing deployments still work, and reference docs are kept under [Wren AI GenBI · Sunset](/oss/overview/introduction) in the sidebar.
+
+For an actively maintained version with the same feature set, see [Upgrade to Commercial Plans](/oss/genbi/upgrade-to-commercial) (Wren AI Cloud or Self-hosted Commercial).
 
 ## Learn more
 

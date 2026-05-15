@@ -5,12 +5,12 @@
 #   ./install.sh                     # install all skills
 #   ./install.sh wren-usage          # install specific skills
 #   ./install.sh --force wren-usage  # overwrite without prompt
-#   curl -fsSL https://raw.githubusercontent.com/Canner/wren-engine/main/skills/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Canner/WrenAI/main/skills/install.sh | bash
 #   curl -fsSL .../install.sh | bash -s -- wren-generate-mdl
 
 set -euo pipefail
 
-REPO="Canner/wren-engine"
+REPO="Canner/WrenAI"
 BRANCH="${WREN_SKILLS_BRANCH:-main}"
 DEST="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
 ALL_SKILLS=(wren-dlt-connector wren-generate-mdl wren-onboarding wren-usage)
@@ -166,7 +166,7 @@ else
 
   extract_paths=()
   for skill in "${SELECTED_SKILLS[@]}"; do
-    extract_paths+=("wren-engine-${BRANCH}/skills/${skill}")
+    extract_paths+=("WrenAI-${BRANCH}/skills/${skill}")
   done
 
   curl -fsSL "https://github.com/$REPO/archive/refs/heads/$BRANCH.tar.gz" \
@@ -184,4 +184,4 @@ for skill in "${SELECTED_SKILLS[@]}"; do
 done
 echo ""
 echo "To update skills later, re-run with --force:"
-echo "  curl -fsSL https://raw.githubusercontent.com/Canner/wren-engine/main/skills/install.sh | bash -s -- --force"
+echo "  curl -fsSL https://raw.githubusercontent.com/Canner/WrenAI/main/skills/install.sh | bash -s -- --force"
