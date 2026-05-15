@@ -166,9 +166,11 @@ const rows = await engine.cubeQuery({
 });
 ```
 
-See the [WASM Agent Guide](https://github.com/Canner/WrenAI/blob/main/core/wren-core-wasm/AGENT_GUIDE.md)
-and the [`cube-explorer.html`](https://github.com/Canner/WrenAI/blob/main/core/wren-core-wasm/examples/cube-explorer.html)
-demo for an interactive form-driven builder.
+See the [WASM SDK doc](../../sdk/wasm.md) for setup, the
+[WASM Agent Guide](https://github.com/Canner/WrenAI/blob/main/core/wren-core-wasm/AGENT_GUIDE.md)
+for embedding-in-an-agent patterns, and
+[`cube-explorer.html`](https://github.com/Canner/WrenAI/blob/main/core/wren-core-wasm/examples/cube-explorer.html)
+for an interactive form-driven builder.
 
 ## Validation
 
