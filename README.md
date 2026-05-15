@@ -44,6 +44,28 @@
 
 ---
 
+## What WrenAI is
+
+WrenAI is the **open context layer** that gives your agents what schemas don't: business semantics, examples, memory, governance, and — soon — the unstructured corporate knowledge that lives in your docs, wikis, and chat threads. Built for the agent frameworks you already use. Self-hostable. Apache 2.0.
+
+![Wren AI architecture](./misc/wren-ai-architecture.png)
+
+<!--
+  🎨 OPTIONAL: replace the ASCII block above with a proper architecture diagram.
+  Suggested: 3-row stack with the same labels but in your brand palette.
+  Save under  /assets/architecture.svg  and use:
+
+  <img src="./assets/architecture.svg" alt="WrenAI architecture" width="720" />
+-->
+
+## Why agent builders pick WrenAI
+
+- **Open by default** — Apache-2.0 core, SDK, and skills. Your MDL belongs to you. Self-host is a first-class deployment, not a teaser.
+- **Built for AI agents** — not retrofitted from BI. Skills, tool gating, task-scoped context retrieval are first-class. Ships as SDKs for the agent frameworks engineers already use.
+- **Correctness as primitives, not promises** — rich schema retrieval, dry-plan validation, structured errors with hints, value profiling, eval runner. The agent orchestrates; the trace lives in the agent's reasoning.
+- **Reviewable, reproducible context** — every definition, example, and mapping is versionable and evidence-linked. Git-friendly. Not chat history.
+- **Sits on top of your existing stack** — warehouse, transformation pipelines, your existing semantic layer. Not another tool to maintain.
+
 ## The problem
 
 Your AI agent reads `customers_v3.status = 4` and confidently tells you "active users grew 12%" — but half those rows were service accounts. The schema doesn't know that. Neither does your agent.
@@ -101,28 +123,6 @@ wren ask "who are our top 10 customers by sales this quarter?"
 Or just ask your agent in natural language — it uses the context layer to resolve schema, recall similar past queries, and write governed SQL.
 
 **Want to try it without your own database?** Tell the agent to run `wren-onboarding` with the bundled `jaffle_shop` sample dataset — same flow, but you'll be querying a real warehouse end-to-end in a couple of minutes.
-
-## What WrenAI is
-
-WrenAI is the **open context layer** that gives your agents what schemas don't: business semantics, examples, memory, governance, and — soon — the unstructured corporate knowledge that lives in your docs, wikis, and chat threads. Built for the agent frameworks you already use. Self-hostable. Apache 2.0.
-
-![Wren AI architecture](./misc/wren-ai-architecture.png)
-
-<!--
-  🎨 OPTIONAL: replace the ASCII block above with a proper architecture diagram.
-  Suggested: 3-row stack with the same labels but in your brand palette.
-  Save under  /assets/architecture.svg  and use:
-
-  <img src="./assets/architecture.svg" alt="WrenAI architecture" width="720" />
--->
-
-## Why agent builders pick WrenAI
-
-- **Open by default** — Apache-2.0 core, SDK, and skills. Your MDL belongs to you. Self-host is a first-class deployment, not a teaser.
-- **Built for AI agents** — not retrofitted from BI. Skills, tool gating, task-scoped context retrieval are first-class. Ships as SDKs for the agent frameworks engineers already use.
-- **Correctness as primitives, not promises** — rich schema retrieval, dry-plan validation, structured errors with hints, value profiling, eval runner. The agent orchestrates; the trace lives in the agent's reasoning.
-- **Reviewable, reproducible context** — every definition, example, and mapping is versionable and evidence-linked. Git-friendly. Not chat history.
-- **Sits on top of your existing stack** — warehouse, transformation pipelines, your existing semantic layer. Not another tool to maintain.
 
 ## Two beats: scaffold fast, enrich deep
 
