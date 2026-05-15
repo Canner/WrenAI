@@ -14,7 +14,7 @@ Or use directly via CDN:
 
 ```html
 <script type="module">
-  import { WrenEngine } from 'https://unpkg.com/@wrenai/wren-core-wasm@0.1.0/dist/index.js';
+  import { WrenEngine } from 'https://unpkg.com/@wrenai/wren-core-wasm@0.3.0/dist/index.js';
 </script>
 ```
 
@@ -23,14 +23,28 @@ Or use directly via CDN:
 
 ## Quick Start
 
-### URL Mode (remote Parquet files)
+### Inline Mode (recommended for local dev and bundled dashboards)
 
-Load Parquet files from a URL-accessible location. DataFusion reads them via HTTP range requests.
+Register data directly from JavaScript — no server requirements, no Range/CORS landmines. For data totals under ~50 MB this is the path of least resistance.
 
 ```javascript
 import { WrenEngine } from '@wrenai/wren-core-wasm';
 
 const engine = await WrenEngine.init();
+
+// Register JSON data as a table
+await engine.registerJson('orders', [
+  { id: 1, customer: 'Alice', amount: 100 },
+  { id: 2, customer: 'Alice', amount: 250 },
+  { id: 3, customer: 'Bob',   amount: 120 },
+]);
+
+// Or register Parquet from an ArrayBuffer
+const response = await fetch('orders.parquet');
+await engine.registerParquet('orders', await response.arrayBuffer());
+
+// Or register CSV — string or bytes, with optional schema / delimiter / quote
+await engine.registerCsv('orders', 'id,customer,amount\n1,Alice,100\n2,Bob,200');
 
 const mdl = {
   catalog: 'wren',
@@ -51,6 +65,17 @@ const mdl = {
   views: [],
 };
 
+// Load MDL with empty source (uses pre-registered tables)
+await engine.loadMDL(mdl, { source: '' });
+
+const rows = await engine.query('SELECT * FROM "Orders" LIMIT 10');
+```
+
+### URL Mode (remote Parquet, useful when data is large or already on a CDN)
+
+Data lives on an HTTP server. DataFusion reads each Parquet file via **HTTP range requests** (footer first, then row groups). The server **must support `Range:` headers** — see [Choosing a local dev server](#choosing-a-local-dev-server) below; otherwise prefer inline mode.
+
+```javascript
 await engine.loadMDL(mdl, { source: 'https://your-cdn.com/data/' });
 
 const rows = await engine.query('SELECT customer, sum(amount) AS total FROM "Orders" GROUP BY customer');
@@ -58,32 +83,41 @@ console.table(rows);
 // [{ customer: 'Alice', total: 350 }, { customer: 'Bob', total: 120 }]
 ```
 
-### Inline Mode (embedded data)
+### Node.js usage
 
-Register data directly from JavaScript — no server needed.
+`WrenEngine.init()` defaults to fetching the WASM binary via `import.meta.url`, which in Node resolves to a `file://` URL. Node's `undici` fetch does not support `file://` and `init()` will throw. Pass the binary directly as a `BufferSource`:
 
 ```javascript
-const engine = await WrenEngine.init();
+import { readFileSync } from 'node:fs';
+import { WrenEngine } from '@wrenai/wren-core-wasm';
 
-// Register JSON data as a table
-await engine.registerJson('orders', [
-  { id: 1, customer: 'Alice', amount: 100 },
-  { id: 2, customer: 'Alice', amount: 250 },
-  { id: 3, customer: 'Bob',   amount: 120 },
-]);
-
-// Or register Parquet from an ArrayBuffer
-const response = await fetch('orders.parquet');
-await engine.registerParquet('orders', await response.arrayBuffer());
-
-// Or register CSV — string or bytes, with optional schema / delimiter / quote
-await engine.registerCsv('orders', 'id,customer,amount\n1,Alice,100\n2,Bob,200');
-
-// Load MDL with empty source (uses pre-registered tables)
-await engine.loadMDL(mdl, { source: '' });
-
-const rows = await engine.query('SELECT * FROM "Orders" LIMIT 10');
+const buf = readFileSync(
+  'node_modules/@wrenai/wren-core-wasm/dist/wren_core_wasm_bg.wasm'
+);
+const engine = await WrenEngine.init({
+  wasmUrl: buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+});
 ```
+
+Useful for unit tests, CI smoke checks, and any non-browser environment (`node --test`).
+
+## Choosing a local dev server
+
+URL mode uses DataFusion's `ListingTable`, which reads Parquet via HTTP range requests. If the dev server doesn't support `Range:` headers, fetches hang silently after the footer.
+
+| Server | Range support | Notes |
+|---|---|---|
+| `python -m http.server` | ❌ No | Built-in — avoid for URL mode |
+| `python -m RangeHTTPServer` | ✅ Yes | `pip install rangehttpserver` |
+| `npx serve` | ⚠️ Single-range | Built on `sirv`; can return `416` on ranges that extend past EOF |
+| `npx http-server` | ✅ Yes | CORS by default |
+| `caddy file-server` | ✅ Yes | Production-ready |
+| Vite | ⚠️ Single-range | Also uses `sirv`; same `416` edge case as `npx serve` |
+| `webpack-dev-server` | ⚠️ Single-range | Multipart range requests fall back to returning the whole resource |
+
+**Quick check:** `curl -I -H "Range: bytes=0-1023" http://localhost:PORT/file.parquet` should return `HTTP/1.1 206 Partial Content` (not `200`).
+
+If you're stuck with a no-range server, use **inline mode** instead — fetch each file once with `fetch()` and register it via `registerParquet`.
 
 ## Examples
 
@@ -249,7 +283,9 @@ wasm-pack build --target web --release
 
 - `query()` returns `Record<string, unknown>[]` — directly usable with Chart.js, D3, Recharts, etc.
 - MDL `tableReference` uses bare table names (e.g., `"orders"`), not full URLs.
-- URL mode requires an HTTP server that supports CORS and range requests.
+- For local dev under ~50 MB, prefer **inline mode** — it eliminates the HTTP Range/CORS class of bugs.
+- URL mode requires an HTTP server that supports CORS **and** range requests (see [Choosing a local dev server](#choosing-a-local-dev-server)).
+- In Node, pass `wasmUrl: BufferSource` to `WrenEngine.init()` — Node's fetch can't load `file://` URLs.
 - WASM binary is ~68 MB raw / ~14 MB gzip.
 
 ## License

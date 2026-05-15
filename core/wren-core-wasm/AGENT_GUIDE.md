@@ -15,23 +15,9 @@ the WASM binary is ~68 MB raw, so jsDelivr returns 403 on the `.wasm` fetch.
 
 ## Two Data Loading Modes
 
-### URL Mode (recommended for large data)
+### Inline Mode (default for local dev and bundled dashboards)
 
-Data lives on a CORS-enabled HTTP server. DataFusion reads Parquet via range requests.
-
-```javascript
-const engine = await WrenEngine.init();
-await engine.loadMDL(mdlJson, { source: 'https://your-cdn.com/data/' });
-const rows = await engine.query('SELECT * FROM "Orders" LIMIT 100');
-```
-
-Requirements:
-- Server must support CORS and HTTP range requests
-- MDL `tableReference.table` uses bare names (e.g., `"orders"`) — the engine prepends `source` as URL prefix
-
-### Inline Mode (for small data, < 50 MB)
-
-Data is embedded directly in the HTML file.
+Data is embedded in the page (or read from local files in Node). No server requirements — the path of least resistance for anything under ~50 MB.
 
 ```javascript
 const engine = await WrenEngine.init();
@@ -53,6 +39,60 @@ await engine.registerCsv('orders', csvString);
 await engine.loadMDL(mdlJson, { source: '' });
 const rows = await engine.query('SELECT * FROM "Orders" LIMIT 100');
 ```
+
+A common dashboard pattern: `fetch()` each Parquet file once in parallel, then `registerParquet` them **sequentially** (the WASM engine is single-threaded and registration is not concurrent-safe).
+
+### URL Mode (large data already on a CDN)
+
+Data lives on an HTTP server. DataFusion reads Parquet via HTTP **range requests** (footer first, then individual row groups).
+
+```javascript
+const engine = await WrenEngine.init();
+await engine.loadMDL(mdlJson, { source: 'https://your-cdn.com/data/' });
+const rows = await engine.query('SELECT * FROM "Orders" LIMIT 100');
+```
+
+Requirements:
+- Server must support **CORS** and **HTTP `Range:` headers**. Most built-in dev servers do not — see [Choosing a local dev server](#choosing-a-local-dev-server).
+- MDL `tableReference.table` uses bare names (e.g., `"orders"`) — the engine prepends `source` as URL prefix.
+
+> **When to pick URL mode:** data total > ~50 MB AND you control the hosting (CDN/object store) AND range support is verified. Otherwise, inline mode is safer.
+
+### Node.js usage
+
+`WrenEngine.init()` defaults to fetching the WASM binary via `import.meta.url`. In Node, that resolves to a `file://` URL, and Node's `undici` fetch does not support `file://` — `init()` throws `TypeError: fetch failed → not implemented` immediately. Pass the binary as a `BufferSource` instead:
+
+```javascript
+import { readFileSync } from 'node:fs';
+import { WrenEngine } from '@wrenai/wren-core-wasm';
+
+const buf = readFileSync(
+  'node_modules/@wrenai/wren-core-wasm/dist/wren_core_wasm_bg.wasm'
+);
+const engine = await WrenEngine.init({
+  wasmUrl: buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+});
+```
+
+This is also the pattern for unit tests and CI smoke checks (`node --test`).
+
+## Choosing a local dev server
+
+URL mode uses DataFusion's `ListingTable`, which reads Parquet via HTTP **range requests** (it fetches the footer first, then individual row groups). The dev server you use **must support `Range:` headers** or fetches will hang silently after the first read.
+
+| Server | Range support | Notes |
+|---|---|---|
+| `python -m http.server` | ❌ No | Built-in Python — avoid for URL mode |
+| `python -m RangeHTTPServer` | ✅ Yes | `pip install rangehttpserver` |
+| `npx serve` | ⚠️ Single-range | Built on `sirv`; can return `416` when the requested range extends past EOF |
+| `npx http-server` | ✅ Yes | CORS by default |
+| `caddy file-server` | ✅ Yes | Production-ready |
+| Vite | ⚠️ Single-range | Also uses `sirv`; same `416` edge case as `npx serve` |
+| `webpack-dev-server` | ⚠️ Single-range | Single-range only via `webpack-dev-middleware`; multipart ranges fall back to returning the whole resource |
+
+**Quick check:** `curl -I -H "Range: bytes=0-1023" http://localhost:PORT/file.parquet` should return `HTTP/1.1 206 Partial Content` (not `200`).
+
+If you're stuck with a no-range server, use [Inline Mode](#inline-mode-default-for-local-dev-and-bundled-dashboards) — fetch each file once and register it via `registerParquet`.
 
 ## MDL Structure
 
@@ -229,8 +269,11 @@ const rows = await engine.cubeQuery({
 
 ## Common Pitfalls
 
-1. **Model names are case-sensitive** — use double quotes: `FROM "Orders"`, not `FROM Orders`
-2. **`loadMDL` must be called after `registerJson`/`registerParquet`/`registerCsv`** in inline mode
-3. **WASM binary is ~68 MB** — show a loading indicator during `WrenEngine.init()`
-4. **`source: ''`** means "use pre-registered tables only" — don't pass `''` if you expect URL mode
-5. **CORS required** for URL mode — `file://` protocol won't work for fetching remote Parquet
+1. **Model names are case-sensitive** — use double quotes: `FROM "Orders"`, not `FROM Orders`.
+2. **`loadMDL` must be called after `registerJson`/`registerParquet`/`registerCsv`** in inline mode.
+3. **WASM binary is ~68 MB** — show a loading indicator during `WrenEngine.init()`.
+4. **`source: ''`** means "use pre-registered tables only" — don't pass `''` if you expect URL mode.
+5. **URL mode needs HTTP(S) + CORS** — opening the dashboard from a `file://` URL won't work as the data source; serve both the page and the Parquet over HTTP(S) with CORS configured.
+6. **Range support required** for URL mode — `python -m http.server` lacks it. Use `npx serve` or fall back to inline mode.
+7. **Node needs `wasmUrl: BufferSource`** — `WrenEngine.init()` without options fails immediately under Node because `file://` fetch isn't supported.
+8. **Register sequentially** — call `registerParquet`/`registerJson` one at a time. The WASM engine is single-threaded; concurrent registration is not safe.
