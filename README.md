@@ -117,7 +117,8 @@ Two modes: **grill** (one question at a time, you in the loop) or **auto-pilot**
 ### 4. Ask questions
 
 ```bash
-wren ask "who are our top 10 customers by sales this quarter?"
+# Ask any questions
+"who are our top 10 customers by sales this quarter?"
 ```
 
 Or just ask your agent in natural language — it uses the context layer to resolve schema, recall similar past queries, and write governed SQL.
@@ -144,9 +145,9 @@ Fast at first. Deep when you need it. Always reviewable. Always Git-friendly.
 ## What works today
 
 - **MDL** — models, columns, relationships, views, cubes, metrics, row-level / column-level access control (RLAC / CLAC)
-- **Engine** — Apache DataFusion (Canner fork), 22+ data sources
+- **Engine** — Apache DataFusion based, 22+ data sources
 - **Memory & examples** — LanceDB-backed, hybrid retrieval, versionable
-- **Agent SDK** — `wren-langchain` (LangChain / LangGraph) shipping today; reference Python integration for other stacks
+- **Agent SDK** — `wren-langchain` (LangChain / LangGraph), `wren-pydantic`; reference Python integration for other stacks
 - **Governed execution primitives** — strict mode, denied functions, dry-plan, row limits, RLAC / CLAC
 
 ## What's next
@@ -172,40 +173,6 @@ Full roadmap and design notes: see the [vision paper](./vision_paper_en.md).
 - 🐙 [GitHub Discussions](https://github.com/Canner/WrenAI/discussions) — design conversations, RFCs, longer threads
 - 🐦 [Twitter / X](https://x.com/getwrenai) — release notes and short updates
 - 🗞 [Blog](https://www.getwren.ai/blog) — vision, post-mortems, deep dives
-
-<!--
-  📊 STAR HISTORY (place here)
-  ────────────────────────────
-  Generated from https://star-history.com — embeds a live chart of your
-  GitHub stars over time. Strong social proof for newcomers.
-
-  <p align="center">
-    <a href="https://star-history.com/#Canner/WrenAI&Timeline">
-      <img src="https://api.star-history.com/svg?repos=Canner/WrenAI&type=Timeline" alt="Star History" />
-    </a>
-  </p>
--->
-
-## Used by
-
-<!--
-  🏢 LOGO WALL (optional, place here)
-  ───────────────────────────────────
-  Suggested: 4–8 monochrome logos of early adopters / design partners.
-  Format: SVG monochrome (color version inverts in dark mode automatically).
-  Save under  /assets/adopters/<company>.svg
-
-  Layout example:
-
-  <p align="center">
-    <img src="./assets/adopters/acme.svg"     alt="Acme"      height="32" />&nbsp;&nbsp;
-    <img src="./assets/adopters/globex.svg"   alt="Globex"    height="32" />&nbsp;&nbsp;
-    <img src="./assets/adopters/initech.svg"  alt="Initech"   height="32" />&nbsp;&nbsp;
-    <img src="./assets/adopters/umbrella.svg" alt="Umbrella"  height="32" />
-  </p>
-
-  Remove this entire section if you don't have permission to use logos yet.
--->
 
 ## Contributing
 
