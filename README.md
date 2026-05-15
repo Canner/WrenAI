@@ -50,14 +50,6 @@ WrenAI is the **open context layer** that gives your agents what schemas don't: 
 
 ![Wren AI architecture](./misc/wren-ai-architecture.png)
 
-<!--
-  🎨 OPTIONAL: replace the ASCII block above with a proper architecture diagram.
-  Suggested: 3-row stack with the same labels but in your brand palette.
-  Save under  /assets/architecture.svg  and use:
-
-  <img src="./assets/architecture.svg" alt="WrenAI architecture" width="720" />
--->
-
 ## Why agent builders pick WrenAI
 
 - **Open by default** — Apache-2.0 core, SDK, and skills. Your MDL belongs to you. Self-host is a first-class deployment, not a teaser.
@@ -71,16 +63,6 @@ WrenAI is the **open context layer** that gives your agents what schemas don't: 
 Your AI agent reads `customers_v3.status = 4` and confidently tells you "active users grew 12%" — but half those rows were service accounts. The schema doesn't know that. Neither does your agent.
 
 Without business context, every AI agent over your data is one well-phrased question away from a confident, plausible, wrong answer.
-
-<!--
-  📷 OPTIONAL ILLUSTRATION (place here)
-  ────────────────────────────────────
-  Suggested: a single-frame "before/after" image.
-    LEFT — agent reading raw schema, generating wrong SQL
-    RIGHT — same agent reading MDL + memory, generating correct SQL
-  Format: .svg or .png (transparent bg works in light + dark).
-  Save under  /assets/before-after.svg
--->
 
 ## Quickstart
 
