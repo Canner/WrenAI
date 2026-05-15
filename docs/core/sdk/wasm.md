@@ -51,7 +51,7 @@ import { WrenEngine } from '@wrenai/wren-core-wasm';
 ```
 
 > ⚠️ Use **unpkg**, not jsDelivr. jsDelivr's free CDN has a 50 MB per-file
-> cap; the WASM binary is ~68 MB raw. Bundlers (Vite, Webpack, esbuild) are
+> cap; the WASM binary is ~72 MB raw. Bundlers (Vite, Webpack, esbuild) are
 > fine — see [Bundler configuration](#bundler-configuration).
 
 ---
@@ -345,7 +345,7 @@ just serve              # http://localhost:8787
 | `undefined is not an object (evaluating 'arg.length')` | Calling the raw WASM API with the wrong arg count or type (e.g. passing a string where bytes are expected) | Use the TypeScript SDK overloads (`engine.registerCsv(name, str)`); the raw `pkg/` API requires bytes + explicit options JSON |
 | `Cube query for 'X' must include at least one measure…` | Empty `measures` + `dimensions` + `timeDimensions` | A cube query must project something — add at least one field |
 | `Unsupported CSV column type 'bogus'` | Typo in explicit schema | See the type list under `registerCsv` for accepted names |
-| Page hangs on `init()` for >5s | Initial WASM fetch (72 MB raw, ~22 MB gzip) | Add a loading indicator; consider self-hosting + caching the binary instead of CDN |
+| Page hangs on `init()` for >5s | Initial WASM fetch (~72 MB raw, ~15 MB gzip) | Add a loading indicator; consider self-hosting + caching the binary instead of CDN |
 | jsDelivr returns 404 | jsDelivr's 50 MB per-file CDN limit blocks the binary | Use [unpkg](https://unpkg.com/) instead, or self-host |
 
 ---
