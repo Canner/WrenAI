@@ -32,11 +32,11 @@ authors = ["Wren AI <contact@getwren.ai>"]
 
 [tool.poetry.dependencies]
 python = ">=3.11"
-maturin = "1.9.4"
+maturin = "1.13.3"
 
 [tool.poetry.group.dev.dependencies]
-pytest = "8.4.2"
-ruff = "0.13.1"
+pytest = "9.0.3"
+ruff = "0.15.13"
 
 [tool.maturin]
 module-name = "wren_core"
