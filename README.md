@@ -88,11 +88,25 @@ WrenAI is **agent-driven by design**: you install the skill bundle once, then le
 
 ### 1. Install the skill bundle
 
+Skills are workflow guides that teach AI coding agents (Claude Code, Openclaw, Hermes, Codex, etc.) how to drive the Wren CLI for you.
+
 ```bash
 npx skills add Canner/WrenAI --skill '*'
 ```
 
-This installs the Wren skills into your agent's skill directory. Skills are workflow guides that teach AI coding agents how to drive the Wren CLI for you. See the [Skills reference](https://docs.getwren.ai/oss/reference/skills) for the full list.
+Have multiple AI coding agents installed and want the skills available in all of them? Pass `--agent '*'`:
+
+```bash
+npx skills add Canner/WrenAI --skill '*' --agent '*'
+```
+
+Or via the install script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Canner/WrenAI/main/skills/install.sh | bash
+```
+
+See the [Skills reference](https://docs.getwren.ai/oss/reference/skills) for the full list of skills installed and what each one does.
 
 ### 2. Ask your agent to set things up
 
