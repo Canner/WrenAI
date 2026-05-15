@@ -55,6 +55,7 @@ describe("WrenEngine.init", () => {
     assert.equal(typeof engine.loadMDL, "function");
     assert.equal(typeof engine.registerJson, "function");
     assert.equal(typeof engine.registerParquet, "function");
+    assert.equal(typeof engine.registerCsv, "function");
     assert.equal(typeof engine.free, "function");
     engine.free();
   });
@@ -151,6 +152,93 @@ describe("registerJson + query", () => {
     assert.equal(rows[0].group, "A");
     assert.equal(rows[1].group, "B");
     assert.equal(rows[0].cnt + rows[1].cnt, 100);
+    engine.free();
+  });
+});
+
+// =========================================================================
+// registerCsv + query
+// =========================================================================
+
+describe("registerCsv + query", () => {
+  it("registers a CSV string with inferred schema", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+
+    await engine.registerCsv(
+      "orders",
+      "id,name,amount\n1,Alice,100.5\n2,Bob,200\n3,Carol,300.25\n",
+    );
+
+    const rows = await engine.query(
+      "SELECT count(*) AS cnt, sum(amount) AS total FROM orders",
+    );
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].cnt, 3);
+    assert.ok(Math.abs(rows[0].total - 600.75) < 1e-6);
+    engine.free();
+  });
+
+  it("accepts Uint8Array input", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    const bytes = new TextEncoder().encode("id,v\n1,10\n2,20\n");
+
+    await engine.registerCsv("t", bytes);
+    const rows = await engine.query("SELECT sum(v) AS total FROM t");
+    assert.equal(rows[0].total, 30);
+    engine.free();
+  });
+
+  it("supports custom delimiter and quote", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+
+    await engine.registerCsv(
+      "t",
+      "id;label;amount\n1;'hello;world';10\n2;'plain';20\n",
+      { delimiter: ";", quote: "'" },
+    );
+
+    const rows = await engine.query("SELECT label FROM t WHERE id = 1");
+    assert.equal(rows[0].label, "hello;world");
+    engine.free();
+  });
+
+  it("supports header=false with an explicit schema", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+
+    await engine.registerCsv("t", "1,100\n2,200\n3,300\n", {
+      header: false,
+      schema: [
+        { name: "id", type: "int64" },
+        { name: "amount", type: "int64" },
+      ],
+    });
+
+    const rows = await engine.query("SELECT sum(amount) AS total FROM t");
+    assert.equal(rows[0].total, 600);
+    engine.free();
+  });
+
+  it("rejects unknown schema column types", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    await assert.rejects(
+      () =>
+        engine.registerCsv("t", "id\n1\n", {
+          schema: [{ name: "id", type: "bogus" }],
+        }),
+      /Unsupported CSV column type/,
+    );
+    engine.free();
+  });
+
+  it("rejects non-ASCII delimiter", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    await assert.rejects(
+      () =>
+        engine.registerCsv("t", "a,b\n1,2\n", {
+          delimiter: "，",
+        }),
+      /single ASCII character/,
+    );
     engine.free();
   });
 });

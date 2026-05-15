@@ -79,6 +79,74 @@ export interface CubeInfo {
   hierarchies: Record<string, string[]>;
 }
 
+/** Subset of Arrow types accepted by {@link CsvReadOptions.schema}. */
+export type CsvColumnType =
+  | "int8"
+  | "int16"
+  | "int32"
+  | "int64"
+  | "uint8"
+  | "uint16"
+  | "uint32"
+  | "uint64"
+  | "float32"
+  | "float64"
+  | "boolean"
+  | "string"
+  | "utf8"
+  | "varchar"
+  | "text"
+  | "date"
+  | "date32"
+  | "date64"
+  | "timestamp"
+  | "timestamp_s"
+  | "timestamp_ms"
+  | "timestamp_us"
+  | "timestamp_ns"
+  // Aliases accepted by the Rust side (case-insensitive).
+  | "int"
+  | "integer"
+  | "bigint"
+  | "long"
+  | "float"
+  | "double"
+  | "real"
+  | "number"
+  | "bool";
+
+export interface CsvSchemaColumn {
+  name: string;
+  type: CsvColumnType | string;
+  /** Defaults to true. */
+  nullable?: boolean;
+}
+
+/**
+ * Optional configuration for {@link WrenEngine.registerCsv}. All fields are
+ * optional; omit a field to take the arrow-csv default. Single-character
+ * fields (delimiter/quote/escape/terminator) take only the first byte of the
+ * supplied string and must be ASCII.
+ */
+export interface CsvReadOptions {
+  /** First row is a header. Default: true. */
+  header?: boolean;
+  /** Field delimiter. Default: ",". */
+  delimiter?: string;
+  /** Quote character. Default: '"'. */
+  quote?: string;
+  /** Escape character. Default: unset (no escape). */
+  escape?: string;
+  /** Record terminator. Default: any of "\\n", "\\r\\n". */
+  terminator?: string;
+  /** RecordBatch size. Default: 8192. */
+  batchSize?: number;
+  /** Rows to read for schema inference. Default: 1000. Ignored when `schema` is supplied. */
+  inferRows?: number;
+  /** Explicit Arrow schema; when set, inference is skipped. */
+  schema?: CsvSchemaColumn[];
+}
+
 export interface WrenEngineOptions {
   /**
    * WASM binary source. Accepts:
@@ -149,6 +217,48 @@ export class WrenEngine {
    */
   async registerJson(name: string, data: object[]): Promise<void> {
     await this.engine.registerJson(name, JSON.stringify(data));
+  }
+
+  /**
+   * Register CSV data as a named table.
+   * Call before loadMDL when using local mode.
+   *
+   * `data` may be a CSV string (treated as UTF-8) or any BufferSource —
+   * ArrayBuffer, TypedArray (e.g., `Uint8Array`), or Node.js Buffer.
+   *
+   * By default the first row is treated as a header and the column schema is
+   * inferred from the first 1000 rows. Pass {@link CsvReadOptions.schema} to
+   * skip inference.
+   *
+   * @example
+   * ```ts
+   * await engine.registerCsv("orders", "id,amount\n1,100\n2,200");
+   *
+   * await engine.registerCsv("metrics", csvBytes, {
+   *   header: true,
+   *   delimiter: ";",
+   *   schema: [
+   *     { name: "id", type: "int64" },
+   *     { name: "amount", type: "float64" },
+   *   ],
+   * });
+   * ```
+   */
+  async registerCsv(
+    name: string,
+    data: string | BufferSource,
+    options?: CsvReadOptions,
+  ): Promise<void> {
+    let bytes: Uint8Array;
+    if (typeof data === "string") {
+      bytes = new TextEncoder().encode(data);
+    } else if (data instanceof ArrayBuffer) {
+      bytes = new Uint8Array(data);
+    } else {
+      bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+    }
+    const optionsJson = options ? JSON.stringify(options) : "";
+    await this.engine.registerCsv(name, bytes, optionsJson);
   }
 
   /**

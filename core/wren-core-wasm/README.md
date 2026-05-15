@@ -77,6 +77,9 @@ await engine.registerJson('orders', [
 const response = await fetch('orders.parquet');
 await engine.registerParquet('orders', await response.arrayBuffer());
 
+// Or register CSV — string or bytes, with optional schema / delimiter / quote
+await engine.registerCsv('orders', 'id,customer,amount\n1,Alice,100\n2,Bob,200');
+
 // Load MDL with empty source (uses pre-registered tables)
 await engine.loadMDL(mdl, { source: '' });
 
@@ -163,6 +166,36 @@ Register JSON data as a named table. Call before `loadMDL` in inline mode.
 ```typescript
 async registerJson(name: string, data: object[]): Promise<void>
 ```
+
+### `engine.registerCsv(name, data, options?)`
+
+Register CSV data as a named table. Accepts a string (treated as UTF-8) or any
+`BufferSource` (ArrayBuffer / TypedArray / Node Buffer). By default the first
+row is the header and the schema is inferred from the first 1000 rows.
+
+```typescript
+async registerCsv(
+  name: string,
+  data: string | BufferSource,
+  options?: CsvReadOptions,
+): Promise<void>
+```
+
+| Option (camelCase) | Type | Default | Description |
+|---|---|---|---|
+| `header` | `boolean` | `true` | First row is a header. |
+| `delimiter` | `string` | `","` | Field delimiter (single ASCII char). |
+| `quote` | `string` | `"\""` | Quote character (single ASCII char). |
+| `escape` | `string` | unset | Escape character (single ASCII char). |
+| `terminator` | `string` | any of `\n`, `\r\n` | Record terminator (single ASCII char). |
+| `batchSize` | `number` | `8192` | RecordBatch size. |
+| `inferRows` | `number` | `1000` | Rows scanned for inference. Ignored when `schema` is set. |
+| `schema` | `CsvSchemaColumn[]` | inferred | Explicit Arrow schema `{ name, type, nullable? }[]`. |
+
+Schema column types (case-insensitive): `int8`/`int16`/`int32`/`int64`,
+`uint8`/`uint16`/`uint32`/`uint64`, `float32`/`float64`, `boolean`,
+`string` (alias `utf8`/`varchar`/`text`), `date`/`date64`,
+`timestamp` and `timestamp_{s,ms,us,ns}`.
 
 ### `engine.query(sql)`
 
