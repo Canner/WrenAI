@@ -46,6 +46,10 @@ await engine.registerJson('orders', [
 const parquetBytes = Uint8Array.from(atob(PARQUET_BASE64), c => c.charCodeAt(0));
 await engine.registerParquet('orders', parquetBytes.buffer);
 
+// Or from CSV (string or bytes). Inference handles common cases; pass
+// `{ schema: [...] }` to force a specific Arrow schema.
+await engine.registerCsv('orders', csvString);
+
 await engine.loadMDL(mdlJson, { source: '' });
 const rows = await engine.query('SELECT * FROM "Orders" LIMIT 100');
 ```
@@ -227,7 +231,7 @@ const rows = await engine.cubeQuery({
 ## Common Pitfalls
 
 1. **Model names are case-sensitive** — use double quotes: `FROM "Orders"`, not `FROM Orders`
-2. **`loadMDL` must be called after `registerJson`/`registerParquet`** in inline mode
+2. **`loadMDL` must be called after `registerJson`/`registerParquet`/`registerCsv`** in inline mode
 3. **WASM binary is ~68 MB** — show a loading indicator during `WrenEngine.init()`
 4. **`source: ''`** means "use pre-registered tables only" — don't pass `''` if you expect URL mode
 5. **CORS required** for URL mode — `file://` protocol won't work for fetching remote Parquet

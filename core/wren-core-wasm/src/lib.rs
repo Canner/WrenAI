@@ -156,6 +156,105 @@ impl WrenEngine {
         Ok(())
     }
 
+    /// Register an in-memory table from CSV bytes.
+    ///
+    /// CSV is read with `arrow::csv::ReaderBuilder`. Schema is inferred from
+    /// the first `inferRows` rows (default 1000) unless an explicit schema is
+    /// provided in `options.schema`.
+    ///
+    /// # Arguments
+    /// * `table_name` - Name to register the table under
+    /// * `data` - CSV bytes
+    /// * `options_json` - Optional JSON-encoded `CsvReadOptions`. Empty / `""`
+    ///   uses defaults (header on, comma delimiter, double-quote, batch 8192).
+    ///
+    /// # Options shape (camelCase)
+    /// ```json
+    /// {
+    ///   "header": true,
+    ///   "delimiter": ",",
+    ///   "quote": "\"",
+    ///   "escape": "\\",
+    ///   "terminator": "\n",
+    ///   "batchSize": 8192,
+    ///   "inferRows": 1000,
+    ///   "schema": [
+    ///     {"name": "id", "type": "int64"},
+    ///     {"name": "amount", "type": "float64"}
+    ///   ]
+    /// }
+    /// ```
+    /// All fields are optional. Single-character options (delimiter/quote/…)
+    /// take only the first byte of the supplied string.
+    #[wasm_bindgen(js_name = registerCsv)]
+    pub async fn register_csv(
+        &self,
+        table_name: &str,
+        data: &[u8],
+        options_json: &str,
+    ) -> Result<(), JsError> {
+        use arrow::csv::reader::Format;
+        use arrow::csv::ReaderBuilder;
+        use datafusion::datasource::MemTable;
+        use std::io::Cursor;
+        use std::sync::Arc;
+
+        let opts: CsvReadOptions = if options_json.trim().is_empty() {
+            CsvReadOptions::default()
+        } else {
+            serde_json::from_str(options_json).map_err(|e| {
+                JsError::new(&format!("Invalid CSV options JSON: {e}"))
+            })?
+        };
+
+        let header = opts.header.unwrap_or(true);
+        let mut format = Format::default().with_header(header);
+        if let Some(c) = single_byte(&opts.delimiter, "delimiter")? {
+            format = format.with_delimiter(c);
+        }
+        if let Some(c) = single_byte(&opts.quote, "quote")? {
+            format = format.with_quote(c);
+        }
+        if let Some(c) = single_byte(&opts.escape, "escape")? {
+            format = format.with_escape(c);
+        }
+        if let Some(c) = single_byte(&opts.terminator, "terminator")? {
+            format = format.with_terminator(c);
+        }
+
+        let schema = if let Some(cols) = &opts.schema {
+            Arc::new(arrow_schema_from_columns(cols)?)
+        } else {
+            let infer_rows = opts.infer_rows.or(Some(1000));
+            let (inferred, _) = format
+                .infer_schema(Cursor::new(data), infer_rows)
+                .map_err(|e| JsError::new(&format!("Failed to infer CSV schema: {e}")))?;
+            Arc::new(inferred)
+        };
+
+        let mut builder = ReaderBuilder::new(Arc::clone(&schema)).with_format(format);
+        if let Some(n) = opts.batch_size {
+            builder = builder.with_batch_size(n);
+        }
+
+        let reader = builder
+            .build(Cursor::new(data))
+            .map_err(|e| JsError::new(&format!("Failed to build CSV reader: {e}")))?;
+
+        let batches: Vec<_> = reader
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| JsError::new(&format!("Failed to read CSV batches: {e}")))?;
+
+        let table = MemTable::try_new(schema, vec![batches])
+            .map_err(|e| JsError::new(&format!("Failed to create table: {e}")))?;
+
+        self.ctx
+            .register_table(table_name, Arc::new(table))
+            .map_err(|e| JsError::new(&format!("Failed to register table: {e}")))?;
+
+        Ok(())
+    }
+
     /// Load an MDL (Modeling Definition Language) manifest.
     ///
     /// Parses the MDL JSON, builds the semantic layer (AnalyzedWrenMDL),
@@ -645,6 +744,106 @@ impl Default for WrenEngine {
     }
 }
 
+// ---------------------------------------------------------------------------
+// register_csv supporting types
+// ---------------------------------------------------------------------------
+
+/// User-supplied CSV reader options, deserialized from JSON. All fields are
+/// optional — omit a field to take the arrow-csv default.
+#[derive(Debug, Default, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase", default, deny_unknown_fields)]
+struct CsvReadOptions {
+    header: Option<bool>,
+    delimiter: Option<String>,
+    quote: Option<String>,
+    escape: Option<String>,
+    terminator: Option<String>,
+    batch_size: Option<usize>,
+    infer_rows: Option<usize>,
+    schema: Option<Vec<CsvColumn>>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CsvColumn {
+    name: String,
+    #[serde(rename = "type")]
+    ty: String,
+    #[serde(default)]
+    nullable: Option<bool>,
+}
+
+/// Single-character option helper: the arrow CSV reader takes a `u8`, but the
+/// JS side passes a string. We accept any non-empty string and use its first
+/// byte — single ASCII characters cover every realistic CSV separator. Reject
+/// strings that start with a multi-byte UTF-8 char to avoid silently slicing
+/// a codepoint.
+fn single_byte(s: &Option<String>, field: &str) -> Result<Option<u8>, JsError> {
+    match s {
+        None => Ok(None),
+        Some(v) if v.is_empty() => Err(JsError::new(&format!(
+            "CSV option '{field}' must be a single character, got empty string"
+        ))),
+        Some(v) => {
+            let bytes = v.as_bytes();
+            if bytes[0] >= 0x80 {
+                return Err(JsError::new(&format!(
+                    "CSV option '{field}' must be a single ASCII character"
+                )));
+            }
+            Ok(Some(bytes[0]))
+        }
+    }
+}
+
+/// Build an Arrow `Schema` from the user-supplied `[{name, type}]` list.
+/// Mirrors a small subset of Arrow types — enough for the common CSV column
+/// shapes (numeric / string / boolean / date / timestamp).
+fn arrow_schema_from_columns(cols: &[CsvColumn]) -> Result<arrow::datatypes::Schema, JsError> {
+    use arrow::datatypes::{DataType, Field, Schema, TimeUnit};
+
+    if cols.is_empty() {
+        return Err(JsError::new("CSV schema must have at least one column"));
+    }
+
+    let fields = cols
+        .iter()
+        .map(|c| {
+            let dt = match c.ty.to_ascii_lowercase().as_str() {
+                "int8" => DataType::Int8,
+                "int16" => DataType::Int16,
+                "int32" | "int" | "integer" => DataType::Int32,
+                "int64" | "bigint" | "long" => DataType::Int64,
+                "uint8" => DataType::UInt8,
+                "uint16" => DataType::UInt16,
+                "uint32" => DataType::UInt32,
+                "uint64" => DataType::UInt64,
+                "float32" | "float" | "real" => DataType::Float32,
+                "float64" | "double" | "number" => DataType::Float64,
+                "boolean" | "bool" => DataType::Boolean,
+                "utf8" | "string" | "varchar" | "text" => DataType::Utf8,
+                "date" | "date32" => DataType::Date32,
+                "date64" => DataType::Date64,
+                "timestamp" | "timestamp_ns" => {
+                    DataType::Timestamp(TimeUnit::Nanosecond, None)
+                }
+                "timestamp_us" => DataType::Timestamp(TimeUnit::Microsecond, None),
+                "timestamp_ms" => DataType::Timestamp(TimeUnit::Millisecond, None),
+                "timestamp_s" => DataType::Timestamp(TimeUnit::Second, None),
+                other => {
+                    return Err(JsError::new(&format!(
+                        "Unsupported CSV column type '{other}' (column '{}')",
+                        c.name
+                    )));
+                }
+            };
+            Ok(Field::new(&c.name, dt, c.nullable.unwrap_or(true)))
+        })
+        .collect::<Result<Vec<_>, JsError>>()?;
+
+    Ok(Schema::new(fields))
+}
+
 // =============================================================================
 // Tests (run via wasm-bindgen-test in browser/node)
 // =============================================================================
@@ -860,5 +1059,145 @@ mod tests {
             msg.contains("lineitem"),
             "expected 'lineitem' in error: {msg}"
         );
+    }
+
+    // ── register_csv ────────────────────────────────────────────────────────
+
+    #[wasm_bindgen_test]
+    async fn test_register_csv_basic() {
+        let engine = WrenEngine::new().unwrap();
+        let csv = "id,name,amount\n1,Alice,100.5\n2,Bob,200\n3,Carol,300.25\n";
+
+        engine
+            .register_csv("orders", csv.as_bytes(), "")
+            .await
+            .unwrap();
+
+        let json = engine
+            .query("SELECT count(*) AS cnt, sum(amount) AS total FROM orders")
+            .await
+            .unwrap();
+        let rows: Vec<serde_json::Value> = serde_json::from_str(&json).unwrap();
+        assert_eq!(rows[0]["cnt"], 3);
+        // Allow either float or int formatting for the total.
+        let total = rows[0]["total"].as_f64().unwrap_or_default();
+        assert!((total - 600.75).abs() < 1e-6, "total={total}");
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_register_csv_custom_delimiter_and_quote() {
+        let engine = WrenEngine::new().unwrap();
+        let csv = "id;label;amount\n1;'hello;world';10\n2;'plain';20\n";
+        let options = r#"{"delimiter":";","quote":"'"}"#;
+
+        engine
+            .register_csv("t", csv.as_bytes(), options)
+            .await
+            .unwrap();
+
+        let json = engine
+            .query("SELECT label FROM t WHERE id = 1")
+            .await
+            .unwrap();
+        let rows: Vec<serde_json::Value> = serde_json::from_str(&json).unwrap();
+        assert_eq!(rows[0]["label"], "hello;world");
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_register_csv_no_header_with_schema() {
+        let engine = WrenEngine::new().unwrap();
+        let csv = "1,100\n2,200\n3,300\n";
+        let options = r#"{
+            "header": false,
+            "schema": [
+                {"name": "id", "type": "int64"},
+                {"name": "amount", "type": "int64"}
+            ]
+        }"#;
+
+        engine
+            .register_csv("t", csv.as_bytes(), options)
+            .await
+            .unwrap();
+
+        let json = engine
+            .query("SELECT sum(amount) AS total FROM t")
+            .await
+            .unwrap();
+        let rows: Vec<serde_json::Value> = serde_json::from_str(&json).unwrap();
+        assert_eq!(rows[0]["total"], 600);
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_register_csv_rejects_unknown_type() {
+        let engine = WrenEngine::new().unwrap();
+        let csv = "id\n1\n";
+        let options = r#"{"schema":[{"name":"id","type":"bogus"}]}"#;
+        let err = engine
+            .register_csv("t", csv.as_bytes(), options)
+            .await
+            .unwrap_err();
+        let msg = js_sys::Error::from(JsValue::from(err))
+            .message()
+            .as_string()
+            .unwrap_or_default();
+        assert!(msg.contains("Unsupported CSV column type"), "msg={msg}");
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_register_csv_rejects_invalid_options_json() {
+        let engine = WrenEngine::new().unwrap();
+        let err = engine
+            .register_csv("t", b"a\n1\n", "{not json")
+            .await
+            .unwrap_err();
+        let msg = js_sys::Error::from(JsValue::from(err))
+            .message()
+            .as_string()
+            .unwrap_or_default();
+        assert!(msg.contains("Invalid CSV options JSON"), "msg={msg}");
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_register_csv_rejects_multibyte_delimiter() {
+        let engine = WrenEngine::new().unwrap();
+        let csv = "a,b\n1,2\n";
+        let options = r#"{"delimiter":"，"}"#;
+        let err = engine
+            .register_csv("t", csv.as_bytes(), options)
+            .await
+            .unwrap_err();
+        let msg = js_sys::Error::from(JsValue::from(err))
+            .message()
+            .as_string()
+            .unwrap_or_default();
+        assert!(msg.contains("single ASCII character"), "msg={msg}");
+    }
+
+    #[test]
+    fn test_arrow_schema_from_columns_maps_aliases() {
+        use arrow::datatypes::DataType;
+        let cols = vec![
+            CsvColumn {
+                name: "a".into(),
+                ty: "int".into(),
+                nullable: None,
+            },
+            CsvColumn {
+                name: "b".into(),
+                ty: "DOUBLE".into(),
+                nullable: Some(false),
+            },
+            CsvColumn {
+                name: "c".into(),
+                ty: "string".into(),
+                nullable: None,
+            },
+        ];
+        let schema = arrow_schema_from_columns(&cols).unwrap();
+        assert_eq!(schema.field(0).data_type(), &DataType::Int32);
+        assert_eq!(schema.field(1).data_type(), &DataType::Float64);
+        assert!(!schema.field(1).is_nullable());
+        assert_eq!(schema.field(2).data_type(), &DataType::Utf8);
     }
 }

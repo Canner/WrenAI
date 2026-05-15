@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>wren-core-wasm: CSV Quickstart</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; max-width: 900px; margin: 1.5em auto; padding: 0 1em; color: #333; }
+        h1 { margin: 0 0 0.2em; }
+        .sub { color: #666; margin: 0 0 1em; font-size: 0.95em; }
+        .log { padding: 0.3em 0.6em; margin: 0.2em 0; border-left: 3px solid #666; font-size: 0.85em; }
+        .ok { border-color: #2a2; color: #2a2; }
+        .err { border-color: #a22; color: #a22; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2em; margin-top: 1em; }
+        @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+        .panel { border: 1px solid #ddd; border-radius: 6px; padding: 0.8em 1em; }
+        .panel h3 { margin: 0 0 0.4em; font-size: 1em; }
+        .panel .src { color: #888; font-size: 0.75em; margin-bottom: 0.4em; font-family: monospace; }
+        pre { background: #f7f7f7; padding: 0.6em; border-radius: 4px; font-size: 0.8em; overflow-x: auto; margin: 0.4em 0; }
+        button { padding: 0.4em 1em; margin: 0.3em 0; cursor: pointer; }
+        table { border-collapse: collapse; margin: 0.4em 0; width: 100%; font-size: 0.85em; }
+        th, td { border: 1px solid #ddd; padding: 0.25em 0.55em; text-align: left; }
+        th { background: #f4f4f4; }
+        .row-meta { font-size: 0.85em; color: #666; }
+    </style>
+</head>
+<body>
+    <h1>CSV Quickstart</h1>
+    <p class="sub">Three patterns for <code>registerCsv()</code>:
+        <strong>(1)</strong> standard CSV with inferred schema,
+        <strong>(2)</strong> TSV with a custom delimiter, and
+        <strong>(3)</strong> headerless CSV with an explicit Arrow schema.
+        All three load real files from <code>data/</code>.</p>
+    <div id="log"></div>
+
+    <div class="grid">
+        <div class="panel">
+            <h3>1. orders.csv — inferred schema</h3>
+            <div class="src">data/orders.csv · defaults</div>
+            <pre>await engine.registerCsv('orders', csv);</pre>
+            <button data-q="orders">Run query</button>
+            <div class="row-meta" data-meta="orders"></div>
+            <div data-result="orders"></div>
+        </div>
+
+        <div class="panel">
+            <h3>2. products.tsv — tab delimiter</h3>
+            <div class="src">data/products.tsv · delimiter: "\t"</div>
+            <pre>await engine.registerCsv('products', tsv, {
+  delimiter: '\t',
+});</pre>
+            <button data-q="products">Run query</button>
+            <div class="row-meta" data-meta="products"></div>
+            <div data-result="products"></div>
+        </div>
+
+        <div class="panel" style="grid-column: 1 / -1;">
+            <h3>3. region_targets.csv — no header, explicit schema</h3>
+            <div class="src">data/region_targets.csv · header: false · schema: [region, quarter, target]</div>
+            <pre>await engine.registerCsv('region_targets', csv, {
+  header: false,
+  schema: [
+    { name: 'region',  type: 'string' },
+    { name: 'quarter', type: 'string' },
+    { name: 'target',  type: 'int64'  },
+  ],
+});</pre>
+            <button data-q="targets">Run query</button>
+            <div class="row-meta" data-meta="targets"></div>
+            <div data-result="targets"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import init, { WrenEngine } from '../pkg/wren_core_wasm.js';
+
+        const logEl = document.getElementById('log');
+
+        function log(msg, ok = true) {
+            const div = document.createElement('div');
+            div.className = `log ${ok ? 'ok' : 'err'}`;
+            div.textContent = msg;
+            logEl.appendChild(div);
+        }
+
+        function escapeHtml(v) {
+            return String(v)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function renderTable(rows) {
+            if (!rows.length) return '<p>No rows.</p>';
+            const keys = Object.keys(rows[0]);
+            return '<table><tr>' + keys.map(k => `<th>${escapeHtml(k)}</th>`).join('')
+                + '</tr>' + rows.map(r => '<tr>' + keys.map(k => `<td>${escapeHtml(r[k] ?? '')}</td>`).join('') + '</tr>').join('')
+                + '</table>';
+        }
+
+        async function fetchBytes(path) {
+            const res = await fetch(path);
+            if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${path}`);
+            return new Uint8Array(await res.arrayBuffer());
+        }
+
+        // The raw WASM `registerCsv` signature is
+        //   registerCsv(table_name, data: Uint8Array, options_json: string)
+        // with all three args required. The TypeScript SDK adds a friendlier
+        // overload (string + object), but examples here import the raw module
+        // straight from pkg/ for transparency, so we call it raw-style.
+        function registerCsv(name, bytes, options) {
+            const optsJson = options ? JSON.stringify(options) : '';
+            return engine.registerCsv(name, bytes, optsJson);
+        }
+
+        async function runQuery(key, sql, resultKey = key) {
+            const meta = document.querySelector(`[data-meta="${resultKey}"]`);
+            const out = document.querySelector(`[data-result="${resultKey}"]`);
+            try {
+                const t = performance.now();
+                const json = await engine.query(sql);
+                const rows = JSON.parse(json || '[]');
+                const ms = (performance.now() - t).toFixed(1);
+                meta.textContent = `${rows.length} row(s) in ${ms}ms`;
+                out.innerHTML = renderTable(rows);
+            } catch (e) {
+                meta.textContent = '';
+                out.innerHTML = '';
+                const err = document.createElement('div');
+                err.className = 'log err';
+                err.textContent = e.message || String(e);
+                out.appendChild(err);
+            }
+        }
+
+        let engine = null;
+
+        try {
+            await init();
+            engine = new WrenEngine();
+            log('Engine ready');
+
+            // ── 1. Standard CSV with inferred schema ─────────────────────────
+            const ordersBytes = await fetchBytes('data/orders.csv');
+            await registerCsv('orders', ordersBytes);
+            log('Registered "orders" from CSV (inferred schema)');
+
+            // ── 2. TSV: tab delimiter ────────────────────────────────────────
+            const productsBytes = await fetchBytes('data/products.tsv');
+            await registerCsv('products', productsBytes, { delimiter: '\t' });
+            log('Registered "products" from TSV (delimiter: tab)');
+
+            // ── 3. Headerless CSV with explicit Arrow schema ────────────────
+            const targetsBytes = await fetchBytes('data/region_targets.csv');
+            await registerCsv('region_targets', targetsBytes, {
+                header: false,
+                schema: [
+                    { name: 'region',  type: 'string' },
+                    { name: 'quarter', type: 'string' },
+                    { name: 'target',  type: 'int64'  },
+                ],
+            });
+            log('Registered "region_targets" from CSV (header=false, explicit schema)');
+
+            // Auto-run the three queries so the page lands populated.
+            document.querySelectorAll('button[data-q]').forEach(btn => {
+                btn.addEventListener('click', () => runFor(btn.dataset.q));
+            });
+            await runFor('orders');
+            await runFor('products');
+            await runFor('targets');
+        } catch (e) {
+            log(`Init failed: ${e.message || e}`, false);
+            console.error(e);
+        }
+
+        function runFor(key) {
+            if (key === 'orders') {
+                return runQuery('orders',
+                    "SELECT region, status, count(*) AS n, sum(amount) AS revenue " +
+                    "FROM orders GROUP BY region, status ORDER BY region, status");
+            }
+            if (key === 'products') {
+                return runQuery('products',
+                    "SELECT category, count(*) AS n, " +
+                    "       avg(unit_price) AS avg_price, " +
+                    "       sum(CASE WHEN in_stock THEN 1 ELSE 0 END) AS in_stock_count " +
+                    "FROM products GROUP BY category ORDER BY category");
+            }
+            if (key === 'targets') {
+                // Join the explicit-schema CSV to the inferred-schema CSV.
+                return runQuery('targets',
+                    "SELECT t.region, t.quarter, t.target, " +
+                    "       COALESCE(SUM(o.amount), 0) AS actual " +
+                    "FROM region_targets t " +
+                    "LEFT JOIN orders o ON o.region = t.region " +
+                    "  AND ('Q' || CAST(((EXTRACT(MONTH FROM CAST(o.created_at AS DATE)) - 1) / 3) + 1 AS VARCHAR)) = t.quarter " +
+                    "GROUP BY t.region, t.quarter, t.target " +
+                    "ORDER BY t.region, t.quarter");
+            }
+        }
+    </script>
+</body>
+</html>

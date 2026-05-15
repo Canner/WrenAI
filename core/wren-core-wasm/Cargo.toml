@@ -33,7 +33,7 @@ datafusion = { version = "53", default-features = false, features = [
 object_store = { version = "0.13.1", features = ["aws", "http"] }
 
 # --- Arrow / Parquet ---
-arrow = { version = "58.1", default-features = false, features = ["json"] }
+arrow = { version = "58.1", default-features = false, features = ["json", "csv"] }
 # No zstd: requires C library (zstd-sys) which cannot compile to WASM.
 # Snappy and LZ4 are pure Rust and WASM-compatible.
 parquet = { version = "58.1", default-features = false, features = ["arrow", "snap", "lz4"] }
