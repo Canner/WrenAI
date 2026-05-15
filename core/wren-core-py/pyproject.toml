@@ -35,7 +35,7 @@ python = ">=3.11"
 maturin = "1.9.4"
 
 [tool.poetry.group.dev.dependencies]
-pytest = "8.4.2"
+pytest = "9.0.3"
 ruff = "0.13.1"
 
 [tool.maturin]
