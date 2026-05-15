@@ -245,6 +245,10 @@ impl WrenEngine {
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| JsError::new(&format!("Failed to read CSV batches: {e}")))?;
 
+        if batches.is_empty() {
+            return Err(JsError::new("No data in CSV input"));
+        }
+
         let table = MemTable::try_new(schema, vec![batches])
             .map_err(|e| JsError::new(&format!("Failed to create table: {e}")))?;
 
@@ -1156,6 +1160,21 @@ mod tests {
             .as_string()
             .unwrap_or_default();
         assert!(msg.contains("Invalid CSV options JSON"), "msg={msg}");
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_register_csv_rejects_empty_body() {
+        // Header-only CSV — schema infers, but the body has no rows.
+        let engine = WrenEngine::new().unwrap();
+        let err = engine
+            .register_csv("t", b"id,amount\n", "")
+            .await
+            .unwrap_err();
+        let msg = js_sys::Error::from(JsValue::from(err))
+            .message()
+            .as_string()
+            .unwrap_or_default();
+        assert!(msg.contains("No data in CSV input"), "msg={msg}");
     }
 
     #[wasm_bindgen_test]

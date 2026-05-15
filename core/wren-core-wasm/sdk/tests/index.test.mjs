@@ -230,6 +230,15 @@ describe("registerCsv + query", () => {
     engine.free();
   });
 
+  it("rejects an empty CSV body", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    await assert.rejects(
+      () => engine.registerCsv("t", "id,amount\n"),
+      /No data in CSV input/,
+    );
+    engine.free();
+  });
+
   it("rejects non-ASCII delimiter", async () => {
     const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
     await assert.rejects(
