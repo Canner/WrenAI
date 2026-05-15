@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/Canner/WrenAI/compare/wren-core-wasm-v0.3.0...wren-core-wasm-v0.4.0) (2026-05-15)
+
+
+### Features
+
+* **wasm:** full Cube support — validate, translate, PyO3, CLI, WASM, docs ([#2282](https://github.com/Canner/WrenAI/issues/2282)) ([026111e](https://github.com/Canner/WrenAI/commit/026111e54ec31e7165f9fd79c5c998070e66626c))
+
 ## [0.3.0](https://github.com/Canner/WrenAI/compare/wren-core-wasm-v0.2.0...wren-core-wasm-v0.3.0) (2026-05-05)
 
 
