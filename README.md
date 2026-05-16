@@ -61,7 +61,7 @@ WrenAI is the **open context layer** that gives your agents what schemas don't: 
 
 If you're building AI agents, embedded analytics, or natural-language data products on top of your enterprise databases, you've hit the same wall: there's no shared governed layer between your data and your consumers. Your agents query Postgres, MySQL, SQL Server, Oracle, Snowflake, BigQuery, or Databricks through raw SQL or MCP — and they hallucinate joins, guess at table semantics, and invent metric definitions every time. Your analysts and your apps each reinvent the same logic in their own dialect. Your local LLMs and cloud LLMs need the same governed context to produce trustworthy answers, but nothing today provides it. The result is a multiplication problem: N agents × M databases × K models = N×M×K brittle integrations, none of which agree. The missing piece is a context layer purpose-built for the agent era — open, MCP-native, and interoperable across every database and every model.
 
-<img width="914" height="885" alt="the problem without context layer" src="https://github.com/user-attachments/assets/3413845d-18df-4263-a98e-9c102ac06356" />
+<img width="853" height="754" alt="The problem without context layer" src="https://github.com/user-attachments/assets/0fdb989a-e741-4d34-bcb9-4854787f73fb" />
 
 
 ## Quickstart
