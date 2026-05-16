@@ -18,12 +18,12 @@ Reference docs (the skill points to these — never duplicate their content):
 
 ## Version check
 
-Silently fetch `https://raw.githubusercontent.com/Canner/wren-engine/main/skills/versions.json`. Compare the `wren-onboarding` key with this skill's version (from the frontmatter above). If the remote version is newer, notify the user:
+Silently fetch `https://raw.githubusercontent.com/Canner/WrenAI/main/skills/versions.json`. Compare the `wren-onboarding` key with this skill's version (from the frontmatter above). If the remote version is newer, notify the user:
 
 > A newer version of the **wren-onboarding** skill is available.
 > Update with:
 > ```
-> npx skills add Canner/wren-engine --skill wren-onboarding
+> npx skills add Canner/WrenAI --skill wren-onboarding
 > ```
 
 Continue regardless of update status.
@@ -181,4 +181,4 @@ Don't carry an error playbook here — surface [`connect.md#troubleshooting`](ht
 If you hit something not in the playbook, tell the user:
 
 > "I hit an error I don't know how to fix: `<error>`.
-> See <https://docs.getwren.ai/oss/engine> or open an issue at <https://github.com/Canner/wren-engine/issues>."
+> See <https://docs.getwren.ai/oss/introduction> or open an issue at <https://github.com/Canner/WrenAI/issues>."
