@@ -1,3 +1,4 @@
+#ai
 import crypto from 'crypto';
 import * as fs from 'fs';
 import path from 'path';
@@ -44,11 +45,11 @@ export interface ProjectData {
   connectionInfo: WREN_AI_CONNECTION_INFO;
 }
 
-export interface ProjectRecommendationQuestionsResult {
+export type ProjectRecommendationQuestionsResult = {
   status: RecommendQuestionResultStatus;
   questions: RecommendationQuestion[];
-  error: WrenAIError;
-}
+  error: WrenAIError | null;
+};
 export interface IProjectService {
   createProject: (projectData: ProjectData) => Promise<Project>;
   updateProject: (
