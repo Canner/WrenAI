@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 from typing import Any
 
 import pyarrow as pa
@@ -34,6 +35,8 @@ from wren.mdl.cte_rewriter import CTERewriter, get_sqlglot_dialect
 from wren.model.data_source import DataSource
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 from wren.policy import validate_sql_policy
+
+logger = logging.getLogger(__name__)
 
 
 class WrenEngine:
@@ -97,8 +100,12 @@ class WrenEngine:
               → per-model: sqlglot parse (Wren dialect) → inject as CTE
               → sqlglot generate (target dialect)
               → output SQL with model CTEs in target dialect
+
+        Data-source-specific physical rewrites (e.g. YTsaurus path
+        substitution) are applied to the result so callers see the same SQL
+        that ``query()`` and ``dry_run()`` send to the backend.
         """
-        return self._plan(sql, properties)
+        return self._apply_physical_overrides(self._plan(sql, properties))
 
     # ------------------------------------------------------------------
     # SQL execution
@@ -140,6 +147,110 @@ class WrenEngine:
                 phase=ErrorPhase.SQL_DRY_RUN,
                 metadata={DIALECT_SQL: dialect_sql},
             ) from e
+
+    # ------------------------------------------------------------------
+    # Physical SQL rewriting (currently: YT path substitution)
+    # ------------------------------------------------------------------
+
+    def _apply_physical_overrides(self, sql: str) -> str:
+        """Apply data-source-specific rewrites to dialect SQL.
+
+        For YTsaurus, the MDL's ``table_reference`` carries a synthetic
+        ``schema.table`` name (e.g. ``cdm_clients.tenant_index``) that wren
+        emits as an unquoted identifier. CHYT can't resolve those — it needs
+        the full YT path in backticks. If a model declares
+        ``properties.ytPath``, this rewrites every reference to that model
+        into the backticked path form CHYT understands.
+        """
+        if self.data_source != DataSource.ytsaurus:
+            return sql
+        path_map = self._yt_path_map()
+        if not path_map:
+            return sql
+
+        try:
+            dialect = get_sqlglot_dialect(self.data_source)
+            tree = parse_one(sql, read=dialect)
+        except Exception:
+            return sql
+
+        def _rewrite(node):
+            """Replace a sqlglot ``Table`` node with the model's YT path when one is mapped."""
+            if not isinstance(node, exp.Table):
+                return node
+            db = node.args.get("db")
+            name = node.args.get("this")
+            db_name = db.name if db is not None else ""
+            tbl_name = name.name if name is not None else ""
+            if not tbl_name:
+                return node
+            yt_path = path_map.get(f"{db_name}.{tbl_name}") or path_map.get(tbl_name)
+            if not yt_path:
+                return node
+            # Replace with a single backtick-quoted identifier carrying the
+            # YT path. Set quoted=True so sqlglot preserves the backticks
+            # when serializing to the ClickHouse dialect.
+            replacement = exp.Table(
+                this=exp.Identifier(this=yt_path, quoted=True),
+                alias=node.args.get("alias"),
+            )
+            return replacement
+
+        tree = tree.transform(_rewrite)
+        return tree.sql(dialect=dialect)
+
+    def _yt_path_map(self) -> dict[str, str]:
+        """Build a `schema.table` / `table` → yt_path map from the manifest."""
+        cached = getattr(self, "_yt_path_map_cache", None)
+        if cached is not None:
+            return cached
+        try:
+            manifest = (
+                json.loads(self.manifest_str)
+                if self.manifest_str.lstrip().startswith("{")
+                else json.loads(base64.b64decode(self.manifest_str))
+            )
+        except Exception:
+            self._yt_path_map_cache = {}
+            return self._yt_path_map_cache
+        out: dict[str, str] = {}
+        # Unqualified `table` keys we've already chosen to remove because two
+        # models in different schemas share that bare name — the rewrite must
+        # not silently pick one yt_path over the other.
+        ambiguous: set[str] = set()
+        for m in manifest.get("models", []):
+            props = m.get("properties", {}) or {}
+            yt_path = props.get("ytPath") or props.get("yt_path")
+            if not yt_path:
+                continue
+            tr = m.get("tableReference") or m.get("table_reference") or {}
+            schema = (tr.get("schema") or "").strip()
+            table = (tr.get("table") or m.get("name") or "").strip()
+            if not table:
+                continue
+            if schema:
+                out[f"{schema}.{table}"] = yt_path
+            if table in ambiguous:
+                continue
+            existing = out.get(table)
+            if existing is None:
+                out[table] = yt_path
+            elif existing != yt_path:
+                # Conflict: drop the bare-name mapping so a query referencing
+                # just `<table>` falls through to whatever CHYT resolves
+                # natively rather than rewriting to the wrong YT path.
+                logger.warning(
+                    "YT path map collision on unqualified table %r "
+                    "(paths %r vs %r) — dropping bare-name rewrite; "
+                    "qualify with a schema to disambiguate.",
+                    table,
+                    existing,
+                    yt_path,
+                )
+                del out[table]
+                ambiguous.add(table)
+        self._yt_path_map_cache = out
+        return out
 
     # ------------------------------------------------------------------
     # Lifecycle
