@@ -43,7 +43,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-postgres = ["psycopg>=3", "ibis-framework[postgres]"]
+postgres = ["psycopg[binary]>=3"]
 mysql = ["mysqlclient>=2.2", "ibis-framework[mysql]"]
 bigquery = ["ibis-framework[bigquery]", "google-auth"]
 snowflake = ["ibis-framework[snowflake]"]
