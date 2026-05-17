@@ -1,3 +1,4 @@
+<div align="center" id="top">
 <a href="https://getwren.ai">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./misc/wrenai_logo_white.png">
