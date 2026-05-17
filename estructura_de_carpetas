@@ -1,0 +1,7 @@
+src/
+  ├── i18n/
+  │   ├── config.js
+  │   └── translations/
+  │       ├── en.json
+  │       ├── es.json
+  │       └── it.json 
