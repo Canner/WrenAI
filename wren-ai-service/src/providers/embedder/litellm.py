@@ -145,7 +145,10 @@ class AsyncDocumentEmbedder:
         meta: Dict[str, Any] = {}
 
         for response in responses:
-            embeddings = [el["embedding"] for el in response.data]
+            embeddings = [
+                el.embedding if hasattr(el, "embedding") else el["embedding"]
+                for el in response.data
+            ]
             all_embeddings.extend(embeddings)
 
             if "model" not in meta:
