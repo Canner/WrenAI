@@ -1,4 +1,3 @@
-#ai
 import crypto from 'crypto';
 import * as fs from 'fs';
 import path from 'path';

@@ -289,6 +289,14 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
             logger.warning(
                 "Called QdrantDocumentStore.delete_documents() on a non-existing ID",
             )
+        except Exception as err:
+            if _is_missing_collection_error(err):
+                logger.warning(
+                    "Qdrant collection %s does not exist yet, skipping delete",
+                    self.index,
+                )
+                return
+            raise
 
     async def count_documents(self, filters: Optional[Dict[str, Any]] = None) -> int:
         if not filters:
