@@ -101,7 +101,7 @@ class AsyncTextEmbedder:
             "usage": dict(response.usage) if hasattr(response, "usage") else {},
         }
 
-        return {"embedding": response.data[0]["embedding"], "meta": meta}
+        return {"embedding": response.data[0].embedding, "meta": meta}
 
 
 @component
