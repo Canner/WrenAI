@@ -1,6 +1,3 @@
-<img width="1430" height="753" alt="Screenshot 2026-05-17 at 1 12 36 PM" src="https://github.com/user-attachments/assets/d4ae3d71-b07c-49ee-8f04-35b1baa2c11c" />
-<div align="center" id="top">
-
 <a href="https://getwren.ai">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./misc/wrenai_logo_white.png">
@@ -66,7 +63,7 @@ If you're building AI agents, embedded analytics, or natural-language data produ
 
 ## With & Without Wren AI
 
-<img width="1430" height="753" alt="Screenshot 2026-05-17 at 1 12 36 PM" src="https://github.com/user-attachments/assets/ab54ee9f-b652-4826-b6f5-0c22f601419e" />
+<img width="1430" height="753" alt="before & after" src="https://github.com/user-attachments/assets/ab54ee9f-b652-4826-b6f5-0c22f601419e" />
 
 ## Quickstart
 
