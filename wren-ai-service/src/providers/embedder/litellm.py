@@ -61,7 +61,7 @@ class AsyncTextEmbedder:
 
         response = await aembedding(
             model=self._model,
-            input=[text_to_embed],
+            input=text_to_embed,
             api_key=self._api_key,
             api_base=self._api_base_url,
             timeout=self._timeout,
@@ -97,23 +97,20 @@ class AsyncDocumentEmbedder:
     async def _embed_batch(
         self, texts_to_embed: List[str], batch_size: int
     ) -> Tuple[List[List[float]], Dict[str, Any]]:
-        async def embed_single_batch(batch: List[str]) -> Any:
+        # Some OpenAI-compatible local embedding servers accept scalar string input
+        # but fail on array input. Embed documents individually to avoid that path.
+        async def embed_single_text(text: str) -> Any:
             return await aembedding(
                 model=self._model,
-                input=batch,
+                input=text,
                 api_key=self._api_key,
                 api_base=self._api_base_url,
                 timeout=self._timeout,
                 **self._kwargs,
             )
 
-        batches = [
-            texts_to_embed[i : i + batch_size]
-            for i in range(0, len(texts_to_embed), batch_size)
-        ]
-
         responses = await asyncio.gather(
-            *[embed_single_batch(batch) for batch in batches]
+            *[embed_single_text(text) for text in texts_to_embed]
         )
 
         all_embeddings = []
