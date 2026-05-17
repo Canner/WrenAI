@@ -2,13 +2,13 @@
   "name": "wren-engine",
   "description": "AI agent skills for Wren Engine CLI — semantic SQL layer for 22+ data sources.",
   "homepage": "https://wren.ai",
-  "repository": "https://github.com/Canner/wren-engine",
+  "repository": "https://github.com/Canner/WrenAI",
   "license": "Apache-2.0",
   "skills": [
     {
       "name": "wren-onboarding",
       "version": "2.1",
-      "description": "Onboard a user to Wren Engine end-to-end. Walks the user through environment checks, .env configuration, connection profile creation, project scaffolding, binding the profile to the project, and first query. Defers procedural details, per-datasource notes, and the troubleshooting playbook to docs/core/get_started/connect.md so the skill stays focused on agent-side rules and routing. Use when the user wants to install Wren Engine, set up a new data source connection, or bootstrap a new project from scratch.",
+      "description": "Onboard a user to Wren Engine end-to-end. Walks the user through environment checks, .env configuration, connection profile creation, project scaffolding, binding the profile to the project, and first query. Defers procedural details, per-datasource notes, and the troubleshooting playbook to docs/core/guides/connect.md so the skill stays focused on agent-side rules and routing. Use when the user wants to install Wren Engine, set up a new data source connection, or bootstrap a new project from scratch.",
       "tags": [
         "wren",
         "onboarding",
@@ -21,7 +21,7 @@
       "dependencies": [
         "wren-generate-mdl"
       ],
-      "repository": "https://github.com/Canner/wren-engine/tree/main/skills/wren-onboarding"
+      "repository": "https://github.com/Canner/WrenAI/tree/main/skills/wren-onboarding"
     },
     {
       "name": "wren-dlt-connector",
@@ -42,7 +42,7 @@
       "dependencies": [
         "wren-generate-mdl"
       ],
-      "repository": "https://github.com/Canner/wren-engine/tree/main/skills/wren-dlt-connector"
+      "repository": "https://github.com/Canner/WrenAI/tree/main/skills/wren-dlt-connector"
     },
     {
       "name": "wren-generate-mdl",
@@ -61,7 +61,7 @@
         "clickhouse",
         "trino"
       ],
-      "repository": "https://github.com/Canner/wren-engine/tree/main/skills/wren-generate-mdl"
+      "repository": "https://github.com/Canner/WrenAI/tree/main/skills/wren-generate-mdl"
     },
     {
       "name": "wren-usage",
@@ -82,7 +82,7 @@
       "dependencies": [
         "wren-generate-mdl"
       ],
-      "repository": "https://github.com/Canner/wren-engine/tree/main/skills/wren-usage"
+      "repository": "https://github.com/Canner/WrenAI/tree/main/skills/wren-usage"
     }
   ]
 }

@@ -11,14 +11,14 @@ metadata:
 
 ## Version check
 
-Silently fetch `https://raw.githubusercontent.com/Canner/wren-engine/main/skills/versions.json`.
+Silently fetch `https://raw.githubusercontent.com/Canner/WrenAI/main/skills/versions.json`.
 Compare the `wren-usage` key with this skill's version (from the frontmatter above).
 If the remote version is newer, notify the user before proceeding:
 
 > A newer version of the **wren-usage** skill is available.
 > Update with:
 > ```
-> npx skills add Canner/wren-engine --skill wren-usage
+> npx skills add Canner/WrenAI --skill wren-usage
 > ```
 > The CLI auto-detects your installed agent. To target a specific one, add `--agent <name>` (e.g., `claude-code`, `cursor`, `windsurf`, `cline`).
 
@@ -90,7 +90,7 @@ The CLI reads the active profile for connection info and datasource. Use `wren p
 
 For memory-specific decisions, see [references/memory.md](references/memory.md).
 For SQL syntax, CTE-based modeling, and error diagnosis, see [references/wren-sql.md](references/wren-sql.md).
-For project structure, MDL field definitions, and CLI workflow details, see the [documentation](https://github.com/Canner/wren-engine/tree/main/docs).
+For project structure, MDL field definitions, and CLI workflow details, see the [documentation](https://github.com/Canner/WrenAI/tree/main/docs/core).
 
 ---
 

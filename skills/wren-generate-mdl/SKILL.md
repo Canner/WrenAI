@@ -11,14 +11,14 @@ metadata:
 
 ## Version check
 
-Silently fetch `https://raw.githubusercontent.com/Canner/wren-engine/main/skills/versions.json`.
+Silently fetch `https://raw.githubusercontent.com/Canner/WrenAI/main/skills/versions.json`.
 Compare the `wren-generate-mdl` key with this skill's version (from the frontmatter above).
 If the remote version is newer, notify the user before proceeding:
 
 > A newer version of the **wren-generate-mdl** skill is available.
 > Update with:
 > ```
-> npx skills add Canner/wren-engine --skill wren-generate-mdl
+> npx skills add Canner/WrenAI --skill wren-generate-mdl
 > ```
 > The CLI auto-detects your installed agent. To target a specific one, add `--agent <name>` (e.g., `claude-code`, `cursor`, `windsurf`, `cline`).
 
