@@ -6,13 +6,41 @@ from typing import Any, Dict, List, Optional, Tuple
 import backoff
 import openai
 from haystack import Document, component
-from litellm import aembedding
 
 from src.core.provider import EmbedderProvider
 from src.providers.loader import provider
 from src.utils import remove_trailing_slash
 
 logger = logging.getLogger("wren-ai-service")
+
+
+def _normalize_model_name(model: str, api_base_url: Optional[str]) -> str:
+    # OpenAI-compatible local servers often expect the raw model name and will
+    # reject litellm-style "openai/<model>" prefixes.
+    if api_base_url and model.startswith("openai/"):
+        return model.split("/", 1)[1]
+    return model
+
+
+async def _create_embedding(
+    *,
+    model: str,
+    input_text: str,
+    api_key: Optional[str],
+    api_base_url: Optional[str],
+    timeout: Optional[float],
+    **kwargs,
+):
+    client = openai.AsyncOpenAI(
+        api_key=api_key,
+        base_url=api_base_url,
+        timeout=timeout,
+    )
+    return await client.embeddings.create(
+        model=_normalize_model_name(model, api_base_url),
+        input=input_text,
+        **kwargs,
+    )
 
 
 def _prepare_texts_to_embed(documents: List[Document]) -> List[str]:
@@ -59,11 +87,11 @@ class AsyncTextEmbedder:
         # replace newlines, which can negatively affect performance.
         text_to_embed = text.replace("\n", " ")
 
-        response = await aembedding(
+        response = await _create_embedding(
             model=self._model,
-            input=text_to_embed,
+            input_text=text_to_embed,
             api_key=self._api_key,
-            api_base=self._api_base_url,
+            api_base_url=self._api_base_url,
             timeout=self._timeout,
             **self._kwargs,
         )
@@ -100,11 +128,11 @@ class AsyncDocumentEmbedder:
         # Some OpenAI-compatible local embedding servers accept scalar string input
         # but fail on array input. Embed documents individually to avoid that path.
         async def embed_single_text(text: str) -> Any:
-            return await aembedding(
+            return await _create_embedding(
                 model=self._model,
-                input=text,
+                input_text=text,
                 api_key=self._api_key,
-                api_base=self._api_base_url,
+                api_base_url=self._api_base_url,
                 timeout=self._timeout,
                 **self._kwargs,
             )
