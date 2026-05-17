@@ -21,6 +21,7 @@ from haystack_integrations.document_stores.qdrant.converters import (
 from haystack_integrations.document_stores.qdrant.filters import (
     convert_filters_to_qdrant,
 )
+from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.http import models as rest
 from tqdm import tqdm
 
@@ -28,6 +29,21 @@ from src.core.provider import DocumentStoreProvider
 from src.providers.loader import provider
 
 logger = logging.getLogger("wren-ai-service")
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _is_missing_collection_error(err: Exception) -> bool:
+    if not isinstance(err, UnexpectedResponse):
+        return False
+
+    status_code = getattr(err, "status_code", None)
+    return status_code == 404 and "doesn't exist" in str(err)
 
 
 def convert_haystack_documents_to_qdrant_points(
@@ -172,27 +188,36 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
     ) -> List[Document]:
         qdrant_filters = convert_filters_to_qdrant(filters)
 
-        points = await self.async_client.search(
-            collection_name=self.index,
-            query_vector=rest.NamedVector(
-                name=DENSE_VECTORS_NAME if self.use_sparse_embeddings else "",
-                vector=query_embedding,
-            ),
-            search_params=(
-                rest.SearchParams(
-                    quantization=rest.QuantizationSearchParams(
-                        rescore=True,
-                        oversampling=3.0,
-                    ),
+        try:
+            points = await self.async_client.search(
+                collection_name=self.index,
+                query_vector=rest.NamedVector(
+                    name=DENSE_VECTORS_NAME if self.use_sparse_embeddings else "",
+                    vector=query_embedding,
+                ),
+                search_params=(
+                    rest.SearchParams(
+                        quantization=rest.QuantizationSearchParams(
+                            rescore=True,
+                            oversampling=3.0,
+                        ),
+                    )
+                    if len(query_embedding)
+                    >= 1024  # reference: https://qdrant.tech/articles/binary-quantization/#when-should-you-not-use-bq
+                    else None
+                ),
+                query_filter=qdrant_filters,
+                limit=top_k,
+                with_vectors=return_embedding,
+            )
+        except Exception as err:
+            if _is_missing_collection_error(err):
+                logger.warning(
+                    "Qdrant collection %s does not exist yet, returning no documents",
+                    self.index,
                 )
-                if len(query_embedding)
-                >= 1024  # reference: https://qdrant.tech/articles/binary-quantization/#when-should-you-not-use-bq
-                else None
-            ),
-            query_filter=qdrant_filters,
-            limit=top_k,
-            with_vectors=return_embedding,
-        )
+                return []
+            raise
         results = [
             convert_qdrant_point_to_haystack_document(
                 point, use_sparse_embeddings=self.use_sparse_embeddings
@@ -218,12 +243,21 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
         points_list = []
         offset = None
         while True:
-            points = await self.async_client.scroll(
-                collection_name=self.index,
-                offset=offset,
-                scroll_filter=qdrant_filters,
-                limit=top_k,
-            )
+            try:
+                points = await self.async_client.scroll(
+                    collection_name=self.index,
+                    offset=offset,
+                    scroll_filter=qdrant_filters,
+                    limit=top_k,
+                )
+            except Exception as err:
+                if _is_missing_collection_error(err):
+                    logger.warning(
+                        "Qdrant collection %s does not exist yet, returning no documents",
+                        self.index,
+                    )
+                    return []
+                raise
             points_list.extend(points[0])
             if points[1] is None:
                 break
@@ -262,11 +296,20 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
         else:
             qdrant_filters = convert_filters_to_qdrant(filters)
 
-        return (
-            await self.async_client.count(
-                collection_name=self.index, count_filter=qdrant_filters
-            )
-        ).count
+        try:
+            return (
+                await self.async_client.count(
+                    collection_name=self.index, count_filter=qdrant_filters
+                )
+            ).count
+        except Exception as err:
+            if _is_missing_collection_error(err):
+                logger.warning(
+                    "Qdrant collection %s does not exist yet, returning count 0",
+                    self.index,
+                )
+                return 0
+            raise
 
     async def write_documents(
         self, documents: List[Document], policy: DuplicatePolicy = DuplicatePolicy.FAIL
@@ -378,11 +421,7 @@ class QdrantProvider(DocumentStoreProvider):
             if os.getenv("EMBEDDING_MODEL_DIMENSION")
             else 0
         ),
-        recreate_index: bool = (
-            bool(os.getenv("SHOULD_FORCE_DEPLOY"))
-            if os.getenv("SHOULD_FORCE_DEPLOY")
-            else False
-        ),
+        recreate_index: bool = _env_flag("SHOULD_FORCE_DEPLOY"),
         **_,
     ):
         self._location = location

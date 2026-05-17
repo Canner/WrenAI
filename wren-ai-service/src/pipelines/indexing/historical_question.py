@@ -111,6 +111,9 @@ def chunk(
 
 @observe(capture_input=False, capture_output=False)
 async def embedding(chunk: Dict[str, Any], embedder: Any) -> Dict[str, Any]:
+    if not chunk["documents"]:
+        return chunk
+
     return await embedder.run(documents=chunk["documents"])
 
 
