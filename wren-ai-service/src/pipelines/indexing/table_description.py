@@ -18,9 +18,28 @@ from src.pipelines.indexing import AsyncDocumentWriter, DocumentCleaner, MDLVali
 
 logger = logging.getLogger("wren-ai-service")
 
+MAX_TABLE_DESCRIPTION_COLUMNS = 200
+MAX_TABLE_DESCRIPTION_DESCRIPTION_LENGTH = 4000
+
 
 @component
 class TableDescriptionChunker:
+    def _truncate_description(self, description: str) -> str:
+        if len(description) <= MAX_TABLE_DESCRIPTION_DESCRIPTION_LENGTH:
+            return description
+
+        return description[:MAX_TABLE_DESCRIPTION_DESCRIPTION_LENGTH].rstrip() + "..."
+
+    def _format_columns(self, columns: List[str]) -> str:
+        if len(columns) <= MAX_TABLE_DESCRIPTION_COLUMNS:
+            return ", ".join(columns)
+
+        remaining_columns = len(columns) - MAX_TABLE_DESCRIPTION_COLUMNS
+        truncated_columns = columns[:MAX_TABLE_DESCRIPTION_COLUMNS] + [
+            f"... (+{remaining_columns} more columns)"
+        ]
+        return ", ".join(truncated_columns)
+
     @component.output_types(documents=List[Document])
     def run(self, mdl: Dict[str, Any], project_id: Optional[str] = None):
         def _additional_meta() -> Dict[str, Any]:
@@ -67,8 +86,10 @@ class TableDescriptionChunker:
         return [
             {
                 "name": resource["name"],
-                "description": resource["properties"].get("description", ""),
-                "columns": ", ".join(resource["columns"]),
+                "description": self._truncate_description(
+                    resource["properties"].get("description", "")
+                ),
+                "columns": self._format_columns(resource["columns"]),
             }
             for resource in resources
             if resource["name"] is not None
@@ -94,6 +115,9 @@ def chunk(
 
 @observe(capture_input=False, capture_output=False)
 async def embedding(chunk: Dict[str, Any], embedder: Any) -> Dict[str, Any]:
+    if not chunk["documents"]:
+        return chunk
+
     return await embedder.run(documents=chunk["documents"])
 
 
