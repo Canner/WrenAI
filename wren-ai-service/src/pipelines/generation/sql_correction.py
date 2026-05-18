@@ -25,8 +25,14 @@ from src.utils import trace_cost
 logger = logging.getLogger("wren-ai-service")
 
 
-def get_sql_correction_system_prompt(sql_knowledge: SqlKnowledge | None = None) -> str:
-    text_to_sql_rules = get_text_to_sql_rules(sql_knowledge)
+def get_sql_correction_system_prompt(
+    sql_knowledge: SqlKnowledge | None = None,
+    data_source: str | None = None,
+) -> str:
+    text_to_sql_rules = get_text_to_sql_rules(
+        sql_knowledge,
+        data_source=data_source,
+    )
 
     return f"""
 ### TASK ###
@@ -52,6 +58,9 @@ The final answer must be in JSON format:
 
 
 sql_correction_user_prompt_template = """
+### TARGET DATA SOURCE ###
+{{ data_source }}
+
 {% if documents %}
 ### DATABASE SCHEMA ###
 {% for document in documents %}
@@ -87,10 +96,12 @@ def prompt(
     documents: List[Document],
     invalid_generation_result: Dict,
     prompt_builder: PromptBuilder,
+    data_source: str,
     instructions: list[dict] | None = None,
     sql_functions: list[SqlFunction] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
+        data_source=data_source,
         documents=documents,
         invalid_generation_result=invalid_generation_result,
         instructions=construct_instructions(
@@ -107,9 +118,13 @@ async def generate_sql_correction(
     prompt: dict,
     generator: Any,
     generator_name: str,
+    data_source: str,
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
-    current_system_prompt = get_sql_correction_system_prompt(sql_knowledge)
+    current_system_prompt = get_sql_correction_system_prompt(
+        sql_knowledge,
+        data_source=data_source,
+    )
     return await generator(
         prompt=prompt.get("prompt"), current_system_prompt=current_system_prompt
     ), generator_name
@@ -178,10 +193,7 @@ class SQLCorrection(BasicPipeline):
     ):
         logger.info("SQLCorrection pipeline is running...")
 
-        if use_dry_plan:
-            metadata = await retrieve_metadata(project_id or "", self._retriever)
-        else:
-            metadata = {}
+        metadata = await retrieve_metadata(project_id or "", self._retriever)
 
         return await self._pipe.execute(
             ["post_process"],

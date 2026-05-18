@@ -280,7 +280,11 @@ export class IbisAdaptor implements IIbisAdaptor {
       );
       return res.data;
     } catch (e) {
-      logger.debug(`Dry plan error: ${e.response?.data || e.message}`);
+      logger.debug(
+        `Dry plan error: ${this.stringifyDebugValue(
+          e.response?.data || e.message,
+        )}`,
+      );
       this.throwError(e, 'Error during dry plan execution');
     }
   }
@@ -322,7 +326,9 @@ export class IbisAdaptor implements IIbisAdaptor {
         override: res.headers['x-cache-override'] === 'true',
       };
     } catch (e) {
-      logger.debug(`Query error: ${e.response?.data || e.message}`);
+      logger.debug(
+        `Query error: ${this.stringifyDebugValue(e.response?.data || e.message)}`,
+      );
       this.throwError(e, 'Error querying ibis server');
     }
   }
@@ -351,7 +357,11 @@ export class IbisAdaptor implements IIbisAdaptor {
         processTime: response.headers['x-process-time'],
       };
     } catch (err) {
-      logger.debug(`Dry run error: ${err.response?.data || err.message}`);
+      logger.debug(
+        `Dry run error: ${this.stringifyDebugValue(
+          err.response?.data || err.message,
+        )}`,
+      );
       this.throwError(err, 'Error during dry run execution');
     }
   }
@@ -395,7 +405,11 @@ export class IbisAdaptor implements IIbisAdaptor {
       );
       return await getTablesByConnectionInfo(ibisConnectionInfo);
     } catch (e) {
-      logger.debug(`Get tables error: ${e.response?.data || e.message}`);
+      logger.debug(
+        `Get tables error: ${this.stringifyDebugValue(
+          e.response?.data || e.message,
+        )}`,
+      );
       this.throwError(e, 'Error getting table from ibis server');
     }
   }
@@ -417,7 +431,11 @@ export class IbisAdaptor implements IIbisAdaptor {
       );
       return res.data;
     } catch (e) {
-      logger.debug(`Get constraints error: ${e.response?.data || e.message}`);
+      logger.debug(
+        `Get constraints error: ${this.stringifyDebugValue(
+          e.response?.data || e.message,
+        )}`,
+      );
       this.throwError(e, 'Error getting constraint from ibis server');
     }
   }
@@ -511,8 +529,21 @@ export class IbisAdaptor implements IIbisAdaptor {
       );
       return res.data;
     } catch (e) {
-      logger.debug(`Get version error: ${e.response?.data || e.message}`);
+      logger.debug(
+        `Get version error: ${this.stringifyDebugValue(
+          e.response?.data || e.message,
+        )}`,
+      );
       this.throwError(e, 'Error getting version from ibis server');
+    }
+  }
+
+  private stringifyDebugValue(value: any): string {
+    if (typeof value === 'string') return value;
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
     }
   }
 

@@ -34,6 +34,9 @@ text_to_sql_with_followup_user_prompt_template = """
 Given the following user's follow-up question and previous SQL query and summary,
 generate one SQL query to best answer user's question.
 
+### TARGET DATA SOURCE ###
+{{ data_source }}
+
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
@@ -92,6 +95,7 @@ def prompt(
     documents: list[str],
     sql_generation_reasoning: str,
     prompt_builder: PromptBuilder,
+    data_source: str,
     sql_samples: list[dict] | None = None,
     instructions: list[dict] | None = None,
     has_calculated_field: bool = False,
@@ -102,6 +106,7 @@ def prompt(
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
+        data_source=data_source,
         documents=documents,
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
@@ -113,7 +118,9 @@ def prompt(
             else ""
         ),
         metric_instructions=(
-            get_metric_instructions(sql_knowledge) if has_metric else ""
+            get_metric_instructions(sql_knowledge, data_source=data_source)
+            if has_metric
+            else ""
         ),
         json_field_instructions=(
             get_json_field_instructions(sql_knowledge) if has_json_field else ""
@@ -131,10 +138,14 @@ async def generate_sql_in_followup(
     generator: Any,
     histories: list[AskHistory],
     generator_name: str,
+    data_source: str,
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
     history_messages = construct_ask_history_messages(histories)
-    current_system_prompt = get_sql_generation_system_prompt(sql_knowledge)
+    current_system_prompt = get_sql_generation_system_prompt(
+        sql_knowledge,
+        data_source=data_source,
+    )
     return await generator(
         prompt=prompt.get("prompt"),
         history_messages=history_messages,
@@ -211,10 +222,7 @@ class FollowUpSQLGeneration(BasicPipeline):
     ):
         logger.info("Follow-Up SQL Generation pipeline is running...")
 
-        if use_dry_plan:
-            metadata = await retrieve_metadata(project_id or "", self._retriever)
-        else:
-            metadata = {}
+        metadata = await retrieve_metadata(project_id or "", self._retriever)
 
         return await self._pipe.execute(
             ["post_process"],

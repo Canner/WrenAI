@@ -18,6 +18,7 @@ from src.pipelines.common import (
     build_table_ddl,
     clean_up_new_lines,
     get_engine_supported_data_type,
+    normalize_data_type,
 )
 from src.utils import trace_cost
 from src.web.v1.services.ask import AskHistory
@@ -101,9 +102,9 @@ table_columns_selection_user_prompt_template = """
 
 def _build_metric_ddl(content: dict) -> str:
     columns_ddl = [
-        f"{column['comment']}{column['name']} {get_engine_supported_data_type(column['data_type'])}"
+        f"{column['comment']}{column['name']} {get_engine_supported_data_type(normalize_data_type(column.get('data_type')))}"
         for column in content["columns"]
-        if column["data_type"].lower()
+        if normalize_data_type(column.get("data_type")).lower()
         != "unknown"  # quick fix: filtering out UNKNOWN column type
     ]
 

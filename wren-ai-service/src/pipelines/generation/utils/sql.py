@@ -17,6 +17,10 @@ from src.web.v1.services.ask import AskHistory
 logger = logging.getLogger("wren-ai-service")
 
 
+def normalize_data_source(data_source: str | None) -> str:
+    return (data_source or "").strip().upper()
+
+
 @component
 class SQLGenPostProcessor:
     def __init__(self, engine: Engine):
@@ -189,13 +193,12 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
     - example: TO_TIMESTAMP_MILLIS("<timestamp_column>")  # if the timestamp_column is in milliseconds
     - example: TO_TIMESTAMP_SECONDS("<timestamp_column>")  # if the timestamp_column is in seconds
     - example: TO_TIMESTAMP_MICROS("<timestamp_column>")  # if the timestamp_column is in microseconds
-- ALWAYS CAST the date/time related field to "TIMESTAMP WITH TIME ZONE" type when using them in the query
-    - example 1: CAST(properties_closedate AS TIMESTAMP WITH TIME ZONE)
-    - example 2: CAST('2024-11-09 00:00:00' AS TIMESTAMP WITH TIME ZONE)
-    - example 3: CAST(DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') AS TIMESTAMP WITH TIME ZONE)
+- When you need to cast a date/time related field, CAST it to a temporal type that is supported by the target data source and consistent with the SQL FUNCTIONS section.
+    - example 1: CAST(properties_closedate AS TIMESTAMP)
+    - example 2: CAST('2024-11-09 00:00:00' AS TIMESTAMP)
 - If the user asks for a specific date, please give the date range in SQL query
     - example: "What is the total revenue for the month of 2024-11-01?"
-    - answer: "SELECT SUM(r.PriceSum) FROM Revenue r WHERE CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) >= CAST('2024-11-01 00:00:00' AS TIMESTAMP WITH TIME ZONE) AND CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) < CAST('2024-11-02 00:00:00' AS TIMESTAMP WITH TIME ZONE)"
+    - answer: "SELECT SUM(r.PriceSum) FROM Revenue r WHERE CAST(r.PurchaseTimestamp AS TIMESTAMP) >= CAST('2024-11-01 00:00:00' AS TIMESTAMP) AND CAST(r.PurchaseTimestamp AS TIMESTAMP) < CAST('2024-11-02 00:00:00' AS TIMESTAMP)"
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
 - ONLY USE table/column alias in the final SELECT clause; don't use table/columnalias in the other clauses.
@@ -220,6 +223,20 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - You can only add "ORDER BY" and "LIMIT" to the final "UNION" result.
 - For the ranking problem, you must use the ranking function, `DENSE_RANK()` to rank the results and then use `WHERE` clause to filter the results.
 - For the ranking problem, you must add the ranking column to the final SELECT clause.
+"""
+
+_MSSQL_TEXT_TO_SQL_RULES = """
+### MSSQL-SPECIFIC RULES ###
+- The target database is MSSQL.
+- DO NOT use PostgreSQL-style or Trino-style date syntax such as DATE_TRUNC, INTERVAL, CURRENT_DATE, TIMESTAMP WITH TIME ZONE, TO_CHAR, or :: casts.
+- Prefer GETDATE() for the current timestamp and CAST(GETDATE() AS DATE) when you need the current date only.
+- For relative time windows, use DATEADD together with GETDATE().
+- For previous calendar month boundaries, prefer:
+    - start_of_previous_month: DATEADD(month, DATEDIFF(month, 0, GETDATE()) - 1, 0)
+    - start_of_current_month: DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0)
+- For month bucketing, prefer DATEADD(month, DATEDIFF(month, 0, <timestamp_expression>), 0). If DATETRUNC is available in your server version, you may use DATETRUNC(month, <timestamp_expression>), but prefer DATEADD/DATEDIFF when uncertain.
+- When a temporal cast is required, prefer DATETIME2. Use DATETIMEOFFSET only when timezone-aware semantics are explicitly required by the question.
+- Keep relative date logic simple and native to MSSQL. Never emit INTERVAL-like expressions for MSSQL.
 """
 
 
@@ -348,17 +365,9 @@ To answer this question, it is suitable to use the following components from the
 1. CustomerId (Dimension): This will be used to group the revenue data by each unique customer, allowing us to segment the total revenue by customer.
 2. PurchaseTimestamp (Dimension): This timestamp field will be used to filter the data to only include orders from the last month.
 3. PriceSum (Measure): Since PriceSum is a pre-aggregated measure of total revenue (sum of order_items.Price), it can be directly used to sum up the revenue without needing further aggregation in the SQL query.
-So utilize those metric components in the SQL generation process to give an answer like this:
+So utilize those metric components in the SQL generation process to give an answer using the date functions that are valid for the target data source and listed in the SQL FUNCTIONS section.
 
-SQL Query:
-SELECT
-  CustomerId,
-  PriceSum AS TotalRevenue
-FROM
-  Revenue
-WHERE
-  PurchaseTimestamp >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') AND
-  PurchaseTimestamp < DATE_TRUNC('month', CURRENT_DATE)
+For example, the SQL should filter PurchaseTimestamp to the previous calendar month using the dialect-appropriate month-boundary functions from the SQL FUNCTIONS section.
 """
 
 _DEFAULT_JSON_FIELD_INSTRUCTIONS = """
@@ -461,13 +470,24 @@ def _extract_from_sql_knowledge(
     return value if value and value.strip() else default_value
 
 
-def get_text_to_sql_rules(sql_knowledge: SqlKnowledge | None = None) -> str:
+def _append_data_source_rules(base_rules: str, data_source: str | None = None) -> str:
+    normalized_data_source = normalize_data_source(data_source)
+    if normalized_data_source == "MSSQL":
+        return f"{base_rules}\n\n{_MSSQL_TEXT_TO_SQL_RULES}"
+    return base_rules
+
+
+def get_text_to_sql_rules(
+    sql_knowledge: SqlKnowledge | None = None,
+    data_source: str | None = None,
+) -> str:
     if sql_knowledge is not None:
-        return _extract_from_sql_knowledge(
+        base_rules = _extract_from_sql_knowledge(
             sql_knowledge, "text_to_sql_rule", _DEFAULT_TEXT_TO_SQL_RULES
         )
+        return _append_data_source_rules(base_rules, data_source)
 
-    return _DEFAULT_TEXT_TO_SQL_RULES
+    return _append_data_source_rules(_DEFAULT_TEXT_TO_SQL_RULES, data_source)
 
 
 def get_calculated_field_instructions(sql_knowledge: SqlKnowledge | None = None) -> str:
@@ -481,13 +501,25 @@ def get_calculated_field_instructions(sql_knowledge: SqlKnowledge | None = None)
     return _DEFAULT_CALCULATED_FIELD_INSTRUCTIONS
 
 
-def get_metric_instructions(sql_knowledge: SqlKnowledge | None = None) -> str:
+def get_metric_instructions(
+    sql_knowledge: SqlKnowledge | None = None,
+    data_source: str | None = None,
+) -> str:
+    instructions = _DEFAULT_METRIC_INSTRUCTIONS
     if sql_knowledge is not None:
-        return _extract_from_sql_knowledge(
+        instructions = _extract_from_sql_knowledge(
             sql_knowledge, "metric_instructions", _DEFAULT_METRIC_INSTRUCTIONS
         )
 
-    return _DEFAULT_METRIC_INSTRUCTIONS
+    if normalize_data_source(data_source) == "MSSQL":
+        instructions += """
+
+#### MSSQL Metric Notes ####
+- When filtering metrics by month or other relative date windows in MSSQL, use DATEADD/DATEDIFF or other MSSQL-native date functions from the SQL FUNCTIONS section.
+- Do not use DATE_TRUNC, INTERVAL, CURRENT_DATE, or TIMESTAMP WITH TIME ZONE in MSSQL metric queries.
+"""
+
+    return instructions
 
 
 def get_json_field_instructions(sql_knowledge: SqlKnowledge | None = None) -> str:
@@ -499,8 +531,14 @@ def get_json_field_instructions(sql_knowledge: SqlKnowledge | None = None) -> st
     return _DEFAULT_JSON_FIELD_INSTRUCTIONS
 
 
-def get_sql_generation_system_prompt(sql_knowledge: SqlKnowledge | None = None) -> str:
-    text_to_sql_rules = get_text_to_sql_rules(sql_knowledge)
+def get_sql_generation_system_prompt(
+    sql_knowledge: SqlKnowledge | None = None,
+    data_source: str | None = None,
+) -> str:
+    text_to_sql_rules = get_text_to_sql_rules(
+        sql_knowledge,
+        data_source=data_source,
+    )
 
     return f"""
 You are a helpful assistant that converts natural language queries into ANSI SQL queries.

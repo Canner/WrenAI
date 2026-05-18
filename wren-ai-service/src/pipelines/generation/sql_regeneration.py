@@ -29,8 +29,12 @@ logger = logging.getLogger("wren-ai-service")
 
 def get_sql_regeneration_system_prompt(
     sql_knowledge: SqlKnowledge | None = None,
+    data_source: str | None = None,
 ) -> str:
-    text_to_sql_rules = get_text_to_sql_rules(sql_knowledge)
+    text_to_sql_rules = get_text_to_sql_rules(
+        sql_knowledge,
+        data_source=data_source,
+    )
 
     return f"""
 ### TASK ###
@@ -51,6 +55,9 @@ The final answer must be a ANSI SQL query in JSON format:
 
 
 sql_regeneration_user_prompt_template = """
+### TARGET DATA SOURCE ###
+{{ data_source }}
+
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
@@ -107,6 +114,7 @@ def prompt(
     sql_generation_reasoning: str,
     sql: str,
     prompt_builder: PromptBuilder,
+    data_source: str,
     sql_samples: list[dict] | None = None,
     instructions: list[dict] | None = None,
     has_calculated_field: bool = False,
@@ -117,6 +125,7 @@ def prompt(
 ) -> dict:
     _prompt = prompt_builder.run(
         sql=sql,
+        data_source=data_source,
         documents=documents,
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
@@ -128,7 +137,9 @@ def prompt(
             else ""
         ),
         metric_instructions=(
-            get_metric_instructions(sql_knowledge) if has_metric else ""
+            get_metric_instructions(sql_knowledge, data_source=data_source)
+            if has_metric
+            else ""
         ),
         json_field_instructions=(
             get_json_field_instructions(sql_knowledge) if has_json_field else ""
@@ -145,9 +156,13 @@ async def regenerate_sql(
     prompt: dict,
     generator: Any,
     generator_name: str,
+    data_source: str,
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
-    current_system_prompt = get_sql_regeneration_system_prompt(sql_knowledge)
+    current_system_prompt = get_sql_regeneration_system_prompt(
+        sql_knowledge,
+        data_source=data_source,
+    )
     return await generator(
         prompt=prompt.get("prompt"), current_system_prompt=current_system_prompt
     ), generator_name
@@ -197,6 +212,7 @@ class SQLRegeneration(BasicPipeline):
         contexts: list[str],
         sql_generation_reasoning: str,
         sql: str,
+        data_source: str = "local_file",
         sql_samples: list[dict] | None = None,
         instructions: list[dict] | None = None,
         project_id: str | None = None,
@@ -222,6 +238,7 @@ class SQLRegeneration(BasicPipeline):
                 "has_json_field": has_json_field,
                 "sql_functions": sql_functions,
                 "sql_knowledge": sql_knowledge,
+                "data_source": data_source,
                 **self._components,
             },
         )
