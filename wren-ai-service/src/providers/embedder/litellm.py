@@ -58,6 +58,14 @@ def _prepare_texts_to_embed(documents: List[Document]) -> List[str]:
     return texts_to_embed
 
 
+def _iter_batches(items: List[str], batch_size: int) -> List[List[str]]:
+    effective_batch_size = max(batch_size, 1)
+    return [
+        items[index : index + effective_batch_size]
+        for index in range(0, len(items), effective_batch_size)
+    ]
+
+
 @component
 class AsyncTextEmbedder:
     def __init__(
@@ -137,30 +145,31 @@ class AsyncDocumentEmbedder:
                 **self._kwargs,
             )
 
-        responses = await asyncio.gather(
-            *[embed_single_text(text) for text in texts_to_embed]
-        )
-
         all_embeddings = []
         meta: Dict[str, Any] = {}
 
-        for response in responses:
-            embeddings = [
-                el.embedding if hasattr(el, "embedding") else el["embedding"]
-                for el in response.data
-            ]
-            all_embeddings.extend(embeddings)
+        for batch in _iter_batches(texts_to_embed, batch_size):
+            responses = await asyncio.gather(
+                *[embed_single_text(text) for text in batch]
+            )
 
-            if "model" not in meta:
-                meta["model"] = response.model
-            if "usage" not in meta:
-                meta["usage"] = (
-                    dict(response.usage) if hasattr(response, "usage") else {}
-                )
-            else:
-                if hasattr(response, "usage"):
-                    meta["usage"]["prompt_tokens"] += response.usage.prompt_tokens
-                    meta["usage"]["total_tokens"] += response.usage.total_tokens
+            for response in responses:
+                embeddings = [
+                    el.embedding if hasattr(el, "embedding") else el["embedding"]
+                    for el in response.data
+                ]
+                all_embeddings.extend(embeddings)
+
+                if "model" not in meta:
+                    meta["model"] = response.model
+                if "usage" not in meta:
+                    meta["usage"] = (
+                        dict(response.usage) if hasattr(response, "usage") else {}
+                    )
+                else:
+                    if hasattr(response, "usage"):
+                        meta["usage"]["prompt_tokens"] += response.usage.prompt_tokens
+                        meta["usage"]["total_tokens"] += response.usage.total_tokens
 
         return all_embeddings, meta
 
@@ -176,6 +185,9 @@ class AsyncDocumentEmbedder:
                 "AsyncDocumentEmbedder expects a list of Documents as input."
                 "In case you want to embed a string, please use the AsyncTextEmbedder."
             )
+
+        if not documents:
+            return {"documents": documents, "meta": {}}
 
         texts_to_embed = _prepare_texts_to_embed(documents=documents)
 
