@@ -13,6 +13,8 @@ from src.utils import remove_trailing_slash
 
 logger = logging.getLogger("wren-ai-service")
 
+DEFAULT_MAX_EMBED_INPUT_CHARS = 1800
+
 
 def _normalize_model_name(model: str, api_base_url: Optional[str]) -> str:
     # OpenAI-compatible local servers often expect the raw model name and will
@@ -43,7 +45,16 @@ async def _create_embedding(
     )
 
 
-def _prepare_texts_to_embed(documents: List[Document]) -> List[str]:
+def _truncate_text_for_embedding(text: str, max_input_chars: int) -> str:
+    if len(text) <= max_input_chars:
+        return text
+
+    return text[:max_input_chars].rstrip() + "..."
+
+
+def _prepare_texts_to_embed(
+    documents: List[Document], max_input_chars: int
+) -> List[str]:
     """
     Prepare the texts to embed by concatenating the Document text with the metadata fields to embed.
     """
@@ -54,6 +65,7 @@ def _prepare_texts_to_embed(documents: List[Document]) -> List[str]:
         # copied from OpenAI embedding_utils (https://github.com/openai/openai-python/blob/main/openai/embeddings_utils.py)
         # replace newlines, which can negatively affect performance.
         text_to_embed = text_to_embed.replace("\n", " ")
+        text_to_embed = _truncate_text_for_embedding(text_to_embed, max_input_chars)
         texts_to_embed.append(text_to_embed)
     return texts_to_embed
 
@@ -74,12 +86,14 @@ class AsyncTextEmbedder:
         api_key: Optional[str] = None,
         api_base_url: Optional[str] = None,
         timeout: Optional[float] = None,
+        max_input_chars: int = DEFAULT_MAX_EMBED_INPUT_CHARS,
         **kwargs,
     ):
         self._api_key = api_key
         self._model = model
         self._api_base_url = api_base_url
         self._timeout = timeout
+        self._max_input_chars = max(max_input_chars, 1)
         self._kwargs = kwargs
 
     @component.output_types(embedding=List[float], meta=Dict[str, Any])
@@ -94,6 +108,10 @@ class AsyncTextEmbedder:
         # copied from OpenAI embedding_utils (https://github.com/openai/openai-python/blob/main/openai/embeddings_utils.py)
         # replace newlines, which can negatively affect performance.
         text_to_embed = text.replace("\n", " ")
+        text_to_embed = _truncate_text_for_embedding(
+            text_to_embed,
+            self._max_input_chars,
+        )
 
         response = await _create_embedding(
             model=self._model,
@@ -121,6 +139,7 @@ class AsyncDocumentEmbedder:
         api_key: Optional[str] = None,
         api_base_url: Optional[str] = None,
         timeout: Optional[float] = None,
+        max_input_chars: int = DEFAULT_MAX_EMBED_INPUT_CHARS,
         **kwargs,
     ):
         self._api_key = api_key
@@ -128,6 +147,7 @@ class AsyncDocumentEmbedder:
         self._batch_size = batch_size
         self._api_base_url = api_base_url
         self._timeout = timeout
+        self._max_input_chars = max(max_input_chars, 1)
         self._kwargs = kwargs
 
     async def _embed_batch(
@@ -189,7 +209,10 @@ class AsyncDocumentEmbedder:
         if not documents:
             return {"documents": documents, "meta": {}}
 
-        texts_to_embed = _prepare_texts_to_embed(documents=documents)
+        texts_to_embed = _prepare_texts_to_embed(
+            documents=documents,
+            max_input_chars=self._max_input_chars,
+        )
 
         embeddings, meta = await self._embed_batch(
             texts_to_embed=texts_to_embed,
