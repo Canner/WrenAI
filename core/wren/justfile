@@ -57,7 +57,7 @@ test-postgres:
     uv run pytest tests/connectors/test_postgres.py -v -m postgres
 
 test-mysql:
-    uv run pytest tests/connectors/test_mysql.py -v -m mysql
+    uv run pytest tests/connectors/test_mysql.py tests/connectors/test_mysql_connector.py -v -m mysql
 
 test-connector marker:
     uv run pytest tests/connectors/ -v -m {{ marker }}
