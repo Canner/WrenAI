@@ -16,45 +16,6 @@ except ImportError:
         pass
 
 
-class TrinoConnector(IbisConnector):
-    def __init__(self, connection_info):
-        super().__init__(DataSource.trino, connection_info)
-
-    def query(self, sql: str, limit: int | None = None) -> pa.Table:
-        import trino  # noqa: PLC0415
-
-        try:
-            return super().query(sql, limit)
-        except trino.exceptions.TrinoQueryError as e:
-            if not e.error_name == "EXCEEDED_TIME_LIMIT":
-                raise WrenError(
-                    ErrorCode.INVALID_SQL,
-                    str(e),
-                    phase=ErrorPhase.SQL_EXECUTION,
-                    metadata={DIALECT_SQL: sql},
-                ) from e
-            raise
-        except (WrenError, TimeoutError):
-            raise
-
-    def dry_run(self, sql: str) -> None:
-        import trino  # noqa: PLC0415
-
-        try:
-            super().dry_run(sql)
-        except trino.exceptions.TrinoQueryError as e:
-            if not e.error_name == "EXCEEDED_TIME_LIMIT":
-                raise WrenError(
-                    ErrorCode.INVALID_SQL,
-                    str(e),
-                    phase=ErrorPhase.SQL_DRY_RUN,
-                    metadata={DIALECT_SQL: sql},
-                ) from e
-            raise
-        except (WrenError, TimeoutError):
-            raise
-
-
 class ClickHouseConnector(IbisConnector):
     def __init__(self, connection_info):
         super().__init__(DataSource.clickhouse, connection_info)
@@ -91,7 +52,6 @@ class ClickHouseConnector(IbisConnector):
 
 
 _DATA_SOURCE_TO_CLASS = {
-    DataSource.trino: TrinoConnector,
     DataSource.clickhouse: ClickHouseConnector,
 }
 
