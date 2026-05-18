@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cloneDeep, uniq } from 'lodash';
 import {
   AdjustmentTask,
@@ -169,18 +169,20 @@ export default function useAskPrompt(threadId?: number) {
   const [rerunAskingTask] = useRerunAskingTaskMutation({
     onError: (error) => console.error(error),
   });
-  const [fetchAskingTask, askingTaskResult] = useAskingTaskLazyQuery({
-    pollInterval: 1000,
-  });
+  const [fetchAskingTask, askingTaskResult] = useAskingTaskLazyQuery();
   const [fetchAskingStreamTask, askingStreamTaskResult] = useAskingStreamTask();
   const [createInstantRecommendedQuestions] =
     useCreateInstantRecommendedQuestionsMutation({
       onError: (error) => console.error(error),
     });
   const [fetchInstantRecommendedQuestions, instantRecommendedQuestionsResult] =
-    useInstantRecommendedQuestionsLazyQuery({
-      pollInterval: 1000,
-    });
+    useInstantRecommendedQuestionsLazyQuery();
+  const askingTaskPollingRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
+  const recommendedPollingRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
 
   const askingTask = useMemo(
     () => askingTaskResult.data?.askingTask || null,
@@ -196,6 +198,64 @@ export default function useAskPrompt(threadId?: number) {
   );
 
   const loading = askingStreamTaskResult.loading;
+
+  const stopAskingTaskPolling = useCallback(() => {
+    if (askingTaskPollingRef.current) {
+      clearInterval(askingTaskPollingRef.current);
+      askingTaskPollingRef.current = null;
+    }
+  }, []);
+
+  const stopRecommendedPolling = useCallback(() => {
+    if (recommendedPollingRef.current) {
+      clearInterval(recommendedPollingRef.current);
+      recommendedPollingRef.current = null;
+    }
+  }, []);
+
+  const startAskingTaskPolling = useCallback(
+    async (taskId?: string) => {
+      if (!taskId) return;
+
+      stopAskingTaskPolling();
+
+      const run = async () => {
+        try {
+          await fetchAskingTask({
+            variables: { taskId },
+          });
+        } catch (error) {
+          console.error(error);
+        }
+      };
+
+      await run();
+      askingTaskPollingRef.current = setInterval(run, 1000);
+    },
+    [fetchAskingTask, stopAskingTaskPolling],
+  );
+
+  const startRecommendedPolling = useCallback(
+    async (taskId?: string) => {
+      if (!taskId) return;
+
+      stopRecommendedPolling();
+
+      const run = async () => {
+        try {
+          await fetchInstantRecommendedQuestions({
+            variables: { taskId },
+          });
+        } catch (error) {
+          console.error(error);
+        }
+      };
+
+      await run();
+      recommendedPollingRef.current = setInterval(run, 1000);
+    },
+    [fetchInstantRecommendedQuestions, stopRecommendedPolling],
+  );
 
   const data = useMemo(
     () => ({
@@ -221,10 +281,8 @@ export default function useAskPrompt(threadId?: number) {
     const taskId = response.data?.createInstantRecommendedQuestions?.id;
     if (!taskId) return;
 
-    fetchInstantRecommendedQuestions({
-      variables: { taskId },
-    });
-  }, [originalQuestion, threadQuestions]);
+    await startRecommendedPolling(taskId);
+  }, [originalQuestion, threadQuestions, startRecommendedPolling]);
 
   const checkFetchAskingStreamTask = useCallback(
     (task: AskingTask) => {
@@ -241,7 +299,7 @@ export default function useAskPrompt(threadId?: number) {
 
   useEffect(() => {
     const isFinished = getIsFinished(askingTask?.status);
-    if (isFinished) askingTaskResult.stopPolling();
+    if (isFinished) stopAskingTaskPolling();
 
     // handle update cache for preparing component
     if (isNeedPreparing(askingTask)) {
@@ -260,8 +318,9 @@ export default function useAskPrompt(threadId?: number) {
   }, [askingTask?.type]);
 
   useEffect(() => {
-    if (isRecommendedFinished(recommendedQuestions?.status))
-      instantRecommendedQuestionsResult.stopPolling();
+    if (isRecommendedFinished(recommendedQuestions?.status)) {
+      stopRecommendedPolling();
+    }
   }, [recommendedQuestions]);
 
   useEffect(() => {
@@ -277,6 +336,7 @@ export default function useAskPrompt(threadId?: number) {
       await cancelAskingTask({ variables: { taskId } }).catch((error) =>
         console.error(error),
       );
+      stopAskingTaskPolling();
       // waiting for polling fetching stop
       await nextTick(1000);
     }
@@ -294,10 +354,10 @@ export default function useAskPrompt(threadId?: number) {
       const taskId = response.data?.rerunAskingTask?.id;
       if (!taskId) return;
 
-      const { data } = await fetchAskingTask({
-        variables: { taskId },
-      });
+      const { data } = await fetchAskingTask({ variables: { taskId } });
       if (!data?.askingTask) return;
+
+      await startAskingTaskPolling(taskId);
 
       // update the asking task in cache manually
       handleUpdateRerunAskingTaskCache(
@@ -321,9 +381,7 @@ export default function useAskPrompt(threadId?: number) {
       const taskId = response.data?.createAskingTask?.id;
       if (!taskId) return;
 
-      await fetchAskingTask({
-        variables: { taskId },
-      });
+      await startAskingTaskPolling(taskId);
     } catch (error) {
       console.error(error);
     }
@@ -332,16 +390,21 @@ export default function useAskPrompt(threadId?: number) {
   const onFetching = async (queryId: string) => {
     if (!queryId) return;
 
-    await fetchAskingTask({
-      variables: { taskId: queryId },
-    });
+    await startAskingTaskPolling(queryId);
   };
 
-  const onStopPolling = () => askingTaskResult.stopPolling();
+  const onStopPolling = () => stopAskingTaskPolling();
 
   const onStopStreaming = () => askingStreamTaskResult.reset();
 
-  const onStopRecommend = () => instantRecommendedQuestionsResult.stopPolling();
+  const onStopRecommend = () => stopRecommendedPolling();
+
+  useEffect(() => {
+    return () => {
+      stopAskingTaskPolling();
+      stopRecommendedPolling();
+    };
+  }, [stopAskingTaskPolling, stopRecommendedPolling]);
 
   const onStoreThreadQuestions = (questions: string[]) =>
     setThreadQuestions(questions);

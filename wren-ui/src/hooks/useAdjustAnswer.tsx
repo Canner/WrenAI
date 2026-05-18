@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { cloneDeep } from 'lodash';
 import { ApolloClient, NormalizedCacheObject } from '@apollo/client';
 import { THREAD } from '@/apollo/client/graphql/home';
@@ -71,9 +71,10 @@ export default function useAdjustAnswer(threadId?: number) {
       onError: (error) => console.error(error),
     });
   const [fetchThreadResponse, threadResponseResult] =
-    useThreadResponseLazyQuery({
-      pollInterval: 1000,
-    });
+    useThreadResponseLazyQuery();
+  const threadResponsePollingRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
 
   const loading = adjustThreadResponseResult.loading;
 
@@ -87,9 +88,38 @@ export default function useAdjustAnswer(threadId?: number) {
     };
   }, [adjustmentTask]);
 
+  const stopThreadResponsePolling = useCallback(() => {
+    if (threadResponsePollingRef.current) {
+      clearInterval(threadResponsePollingRef.current);
+      threadResponsePollingRef.current = null;
+    }
+  }, []);
+
+  const startThreadResponsePolling = useCallback(
+    async (responseId?: number) => {
+      if (!responseId) return;
+
+      stopThreadResponsePolling();
+
+      const run = async () => {
+        try {
+          await fetchThreadResponse({
+            variables: { responseId },
+          });
+        } catch (error) {
+          console.error(error);
+        }
+      };
+
+      await run();
+      threadResponsePollingRef.current = setInterval(run, 1000);
+    },
+    [fetchThreadResponse, stopThreadResponsePolling],
+  );
+
   useEffect(() => {
     const isFinished = getIsFinished(adjustmentTask?.status);
-    if (isFinished) threadResponseResult.stopPolling();
+    if (isFinished) stopThreadResponsePolling();
   }, [adjustmentTask?.status]);
 
   const onAdjustReasoningSteps = async (
@@ -112,9 +142,7 @@ export default function useAdjustAnswer(threadId?: number) {
     const nextThreadResponse = response.data?.adjustThreadResponse;
     if (!nextThreadResponse?.id) return;
 
-    await fetchThreadResponse({
-      variables: { responseId: nextThreadResponse.id },
-    });
+    await startThreadResponsePolling(nextThreadResponse.id);
 
     // update new thread response to cache
     handleUpdateThreadCache(
@@ -161,8 +189,14 @@ export default function useAdjustAnswer(threadId?: number) {
     if (!responseId) return;
 
     await rerunAdjustmentTask({ variables: { responseId } });
-    await fetchThreadResponse({ variables: { responseId } });
+    await startThreadResponsePolling(responseId);
   };
+
+  useEffect(() => {
+    return () => {
+      stopThreadResponsePolling();
+    };
+  }, [stopThreadResponsePolling]);
 
   return {
     data,

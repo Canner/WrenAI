@@ -2,10 +2,10 @@ import { useRouter } from 'next/router';
 import { useParams } from 'next/navigation';
 import {
   ComponentRef,
+  useRef,
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from 'react';
 import { isEmpty } from 'lodash';
@@ -123,7 +123,6 @@ export default function HomeThread() {
     });
   const [fetchThreadResponse, threadResponseResult] =
     useThreadResponseLazyQuery({
-      pollInterval: 1000,
       onCompleted(next) {
         const nextResponse = next.threadResponse;
         updateThreadQuery((prev) => ({
@@ -146,9 +145,13 @@ export default function HomeThread() {
   const [
     fetchThreadRecommendationQuestions,
     threadRecommendationQuestionsResult,
-  ] = useGetThreadRecommendationQuestionsLazyQuery({
-    pollInterval: 1000,
-  });
+  ] = useGetThreadRecommendationQuestionsLazyQuery();
+  const threadResponsePollingRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
+  const threadRecommendationPollingRef = useRef<
+    ReturnType<typeof setInterval> | null
+  >(null);
 
   const [generateThreadResponseAnswer] =
     useGenerateThreadResponseAnswerMutation({
@@ -183,6 +186,64 @@ export default function HomeThread() {
     [pollingResponse],
   );
 
+  const stopThreadResponsePolling = useCallback(() => {
+    if (threadResponsePollingRef.current) {
+      clearInterval(threadResponsePollingRef.current);
+      threadResponsePollingRef.current = null;
+    }
+  }, []);
+
+  const startThreadResponsePolling = useCallback(
+    async (responseId?: number) => {
+      if (!responseId) return;
+
+      stopThreadResponsePolling();
+
+      const run = async () => {
+        try {
+          await fetchThreadResponse({
+            variables: { responseId },
+          });
+        } catch (error) {
+          console.error(error);
+        }
+      };
+
+      await run();
+      threadResponsePollingRef.current = setInterval(run, 1000);
+    },
+    [fetchThreadResponse, stopThreadResponsePolling],
+  );
+
+  const stopThreadRecommendationPolling = useCallback(() => {
+    if (threadRecommendationPollingRef.current) {
+      clearInterval(threadRecommendationPollingRef.current);
+      threadRecommendationPollingRef.current = null;
+    }
+  }, []);
+
+  const startThreadRecommendationPolling = useCallback(
+    async (nextThreadId?: number) => {
+      if (!nextThreadId) return;
+
+      stopThreadRecommendationPolling();
+
+      const run = async () => {
+        try {
+          await fetchThreadRecommendationQuestions({
+            variables: { threadId: nextThreadId },
+          });
+        } catch (error) {
+          console.error(error);
+        }
+      };
+
+      await run();
+      threadRecommendationPollingRef.current = setInterval(run, 1000);
+    },
+    [fetchThreadRecommendationQuestions, stopThreadRecommendationPolling],
+  );
+
   const onFixSQLStatement = async (responseId: number, sql: string) => {
     await updateThreadResponse({
       variables: { where: { id: responseId }, data: { sql } },
@@ -193,14 +254,14 @@ export default function HomeThread() {
     if (!responseId) return;
 
     await generateThreadResponseAnswer({ variables: { responseId } });
-    fetchThreadResponse({ variables: { responseId } });
+    await startThreadResponsePolling(responseId);
   };
 
   const onGenerateThreadResponseChart = async (responseId: number) => {
     if (!responseId) return;
 
     await generateThreadResponseChart({ variables: { responseId } });
-    fetchThreadResponse({ variables: { responseId } });
+    await startThreadResponsePolling(responseId);
   };
 
   const onAdjustThreadResponseChart = async (
@@ -212,14 +273,14 @@ export default function HomeThread() {
     await adjustThreadResponseChart({
       variables: { responseId, data },
     });
-    fetchThreadResponse({ variables: { responseId } });
+    await startThreadResponsePolling(responseId);
   };
 
   const onGenerateThreadRecommendedQuestions = async () => {
     if (!threadId) return;
 
     await generateThreadRecommendationQuestions({ variables: { threadId } });
-    fetchThreadRecommendationQuestions({ variables: { threadId } });
+    await startThreadRecommendationPolling(threadId);
   };
 
   const handleUnfinishedTasks = useCallback(
@@ -244,12 +305,10 @@ export default function HomeThread() {
         canFetchThreadResponse(unfinishedThreadResponse?.askingTask) &&
         unfinishedThreadResponse
       ) {
-        fetchThreadResponse({
-          variables: { responseId: unfinishedThreadResponse.id },
-        });
+        startThreadResponsePolling(unfinishedThreadResponse.id);
       }
     },
-    [askPrompt, fetchThreadResponse],
+    [askPrompt, startThreadResponsePolling],
   );
 
   // store thread questions for instant recommended questions
@@ -264,13 +323,13 @@ export default function HomeThread() {
   // stop all requests when change thread
   useEffect(() => {
     if (threadId !== null) {
-      fetchThreadRecommendationQuestions({ variables: { threadId } });
+      startThreadRecommendationPolling(threadId);
       setShowRecommendedQuestions(true);
     }
     return () => {
       askPrompt.onStopPolling();
-      threadResponseResult.stopPolling();
-      threadRecommendationQuestionsResult.stopPolling();
+      stopThreadResponsePolling();
+      stopThreadRecommendationPolling();
       $prompt.current?.close();
     };
   }, [threadId]);
@@ -284,7 +343,7 @@ export default function HomeThread() {
 
   useEffect(() => {
     if (isPollingResponseFinished) {
-      threadResponseResult.stopPolling();
+      stopThreadResponsePolling();
       setShowRecommendedQuestions(true);
     }
   }, [isPollingResponseFinished]);
@@ -298,7 +357,7 @@ export default function HomeThread() {
 
   useEffect(() => {
     if (isRecommendedFinished(recommendedQuestions?.status)) {
-      threadRecommendationQuestionsResult.stopPolling();
+      stopThreadRecommendationPolling();
     }
   }, [recommendedQuestions]);
 
