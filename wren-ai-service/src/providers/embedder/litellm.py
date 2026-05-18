@@ -13,7 +13,8 @@ from src.utils import remove_trailing_slash
 
 logger = logging.getLogger("wren-ai-service")
 
-DEFAULT_MAX_EMBED_INPUT_CHARS = 1800
+DEFAULT_MAX_EMBED_INPUT_CHARS = 900
+MIN_EMBED_INPUT_CHARS = 128
 
 
 def _normalize_model_name(model: str, api_base_url: Optional[str]) -> str:
@@ -50,6 +51,19 @@ def _truncate_text_for_embedding(text: str, max_input_chars: int) -> str:
         return text
 
     return text[:max_input_chars].rstrip() + "..."
+
+
+def _is_input_too_large_error(error: Exception) -> bool:
+    error_message = str(error).lower()
+    return any(
+        phrase in error_message
+        for phrase in [
+            "too large to process",
+            "context size has been exceeded",
+            "physical batch size",
+            "input (",
+        ]
+    )
 
 
 def _prepare_texts_to_embed(
@@ -156,14 +170,33 @@ class AsyncDocumentEmbedder:
         # Some OpenAI-compatible local embedding servers accept scalar string input
         # but fail on array input. Embed documents individually to avoid that path.
         async def embed_single_text(text: str) -> Any:
-            return await _create_embedding(
-                model=self._model,
-                input_text=text,
-                api_key=self._api_key,
-                api_base_url=self._api_base_url,
-                timeout=self._timeout,
-                **self._kwargs,
-            )
+            candidate_text = text
+            while True:
+                try:
+                    return await _create_embedding(
+                        model=self._model,
+                        input_text=candidate_text,
+                        api_key=self._api_key,
+                        api_base_url=self._api_base_url,
+                        timeout=self._timeout,
+                        **self._kwargs,
+                    )
+                except openai.APIError as error:
+                    if (
+                        not _is_input_too_large_error(error)
+                        or len(candidate_text) <= MIN_EMBED_INPUT_CHARS
+                    ):
+                        raise
+
+                    next_max_chars = max(len(candidate_text) // 2, MIN_EMBED_INPUT_CHARS)
+                    logger.warning(
+                        "Embedding input exceeded provider limits; retrying with %s characters",
+                        next_max_chars,
+                    )
+                    candidate_text = _truncate_text_for_embedding(
+                        candidate_text,
+                        next_max_chars,
+                    )
 
         all_embeddings = []
         meta: Dict[str, Any] = {}
