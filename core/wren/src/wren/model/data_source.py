@@ -1,16 +1,22 @@
 from __future__ import annotations
 
 import base64
+import datetime as dtlib
 import ssl
 import urllib
 from enum import Enum, StrEnum, auto
 from json import loads
 from typing import Any
-from urllib.parse import unquote_plus
+from urllib.parse import unquote_plus, urlparse
 
 import boto3
 import ibis
 from ibis import BaseBackend
+
+try:
+    import pyodbc
+except ImportError:  # pragma: no cover
+    pyodbc = None
 
 from wren.model import (
     AthenaConnectionInfo,
@@ -43,6 +49,7 @@ from wren.model import (
 from wren.model.error import ErrorCode, WrenError
 
 X_WREN_DB_STATEMENT_TIMEOUT = "x-wren-db-statement_timeout"
+MSSQL_DATETIMEOFFSET_TYPE_CODE = -155
 
 
 class DataSource(StrEnum):
@@ -234,6 +241,10 @@ class DataSourceExtension(Enum):
         try:
             if hasattr(info, "connection_url"):
                 kwargs = info.kwargs if info.kwargs else {}
+                if self.name == "mssql":
+                    return self.get_mssql_connection_from_url(
+                        info.connection_url.get_secret_value(), kwargs
+                    )
                 return ibis.connect(info.connection_url.get_secret_value(), **kwargs)
             if self.name in {"local_file", "redshift", "spark", "duckdb", "datafusion"}:
                 raise NotImplementedError(
@@ -327,16 +338,159 @@ class DataSourceExtension(Enum):
         )
 
     @classmethod
-    def get_mssql_connection(cls, info: MSSqlConnectionInfo) -> BaseBackend:
-        return ibis.mssql.connect(
+    def get_mssql_connection(cls, info: MSSqlConnectionInfo):
+        return cls._connect_mssql_pyodbc(
             host=info.host,
             port=info.port,
             database=info.database,
             user=info.user,
-            password=info.password.get_secret_value(),
+            password=info.password.get_secret_value() if info.password else None,
             driver=info.driver,
-            TDS_Version=info.tds_version,
-            **info.kwargs if info.kwargs else {},
+            kwargs={
+                "TDS_Version": info.tds_version,
+                **(info.kwargs if info.kwargs else {}),
+            },
+        )
+
+    @classmethod
+    def get_mssql_connection_from_url(
+        cls, connection_url: str, base_kwargs: dict[str, Any] | None = None
+    ):
+        parsed = urlparse(connection_url)
+        if parsed.scheme != "mssql":
+            raise WrenError(
+                ErrorCode.INVALID_CONNECTION_INFO,
+                "Invalid connection URL for MSSQL",
+            )
+
+        if not parsed.hostname or not parsed.path or not parsed.username:
+            raise WrenError(
+                ErrorCode.INVALID_CONNECTION_INFO,
+                "MSSQL connection URL must include user, host and database",
+            )
+
+        kwargs = dict(base_kwargs) if base_kwargs else {}
+        # parse_qsl already URL-decodes values, but we re-apply unquote_plus
+        # below only to components urlparse leaves encoded (user, path, password).
+        for key, value in urllib.parse.parse_qsl(parsed.query):
+            kwargs[key] = value
+        driver = kwargs.pop("driver", "ODBC Driver 18 for SQL Server")
+
+        return cls._connect_mssql_pyodbc(
+            host=parsed.hostname,
+            port=str(parsed.port or 1433),
+            database=unquote_plus(parsed.path.lstrip("/")),
+            user=unquote_plus(parsed.username),
+            password=unquote_plus(parsed.password) if parsed.password else None,
+            driver=driver,
+            kwargs=kwargs,
+        )
+
+    @staticmethod
+    def _connect_mssql_pyodbc(
+        host: str,
+        port: str,
+        database: str,
+        user: str | None,
+        password: str | None,
+        driver: str,
+        kwargs: dict[str, Any] | None = None,
+    ):
+        if pyodbc is None:  # pragma: no cover
+            raise WrenError(
+                ErrorCode.GET_CONNECTION_ERROR, "pyodbc is required for MSSQL"
+            )
+
+        connect_kwargs = dict(kwargs) if kwargs else {}
+        statement_timeout = connect_kwargs.pop("statement_timeout", None)
+        # Validate statement_timeout before opening the connection so a bad
+        # value can't leak the pyodbc connection we'd otherwise open first.
+        if statement_timeout is not None:
+            try:
+                statement_timeout = int(statement_timeout)
+            except (TypeError, ValueError) as exc:
+                raise WrenError(
+                    ErrorCode.INVALID_CONNECTION_INFO,
+                    f"Invalid statement_timeout for MSSQL: {statement_timeout!r}",
+                ) from exc
+
+        connection_parts = [
+            f"DRIVER={DataSourceExtension._escape_odbc_value(driver)}",
+            f"SERVER={host},{port}",
+            f"DATABASE={DataSourceExtension._escape_odbc_value(database)}",
+        ]
+        if user is None and password is None:
+            connection_parts.append("Trusted_Connection=yes")
+        elif user is None or password is None:
+            raise WrenError(
+                ErrorCode.INVALID_CONNECTION_INFO,
+                "MSSQL connection requires both user and password, "
+                "or neither (for Trusted_Connection)",
+            )
+        else:
+            connection_parts.append(
+                f"UID={DataSourceExtension._escape_odbc_value(user)}"
+            )
+            connection_parts.append(
+                f"PWD={DataSourceExtension._escape_odbc_value(password)}"
+            )
+
+        for key, value in connect_kwargs.items():
+            connection_parts.append(
+                f"{key}={DataSourceExtension._escape_odbc_value(str(value))}"
+            )
+
+        connection = pyodbc.connect(";".join(connection_parts))
+        DataSourceExtension._register_mssql_output_converters(connection)
+
+        if statement_timeout is not None:
+            connection.timeout = statement_timeout
+
+        return connection
+
+    @staticmethod
+    def _escape_odbc_value(value: str) -> str:
+        return "{" + value.replace("}", "}}") + "}"
+
+    @staticmethod
+    def _register_mssql_output_converters(connection) -> None:
+        connection.add_output_converter(
+            MSSQL_DATETIMEOFFSET_TYPE_CODE,
+            DataSourceExtension._decode_mssql_datetimeoffset,
+        )
+
+    @staticmethod
+    def _decode_mssql_datetimeoffset(value: bytes | None) -> dtlib.datetime | None:
+        if value is None:
+            return None
+        if len(value) != 20:
+            raise ValueError(
+                "unexpected mssql datetimeoffset payload length: "
+                f"expected 20, got {len(value)}"
+            )
+
+        year = int.from_bytes(value[0:2], "little")
+        month = int.from_bytes(value[2:4], "little")
+        day = int.from_bytes(value[4:6], "little")
+        hour = int.from_bytes(value[6:8], "little")
+        minute = int.from_bytes(value[8:10], "little")
+        second = int.from_bytes(value[10:12], "little")
+        nanoseconds = int.from_bytes(value[12:16], "little")
+        offset_hours = int.from_bytes(value[16:18], "little", signed=True)
+        offset_minutes = int.from_bytes(value[18:20], "little", signed=True)
+
+        tzinfo = dtlib.timezone(
+            dtlib.timedelta(hours=offset_hours, minutes=offset_minutes)
+        )
+        return dtlib.datetime(
+            year=year,
+            month=month,
+            day=day,
+            hour=hour,
+            minute=minute,
+            second=second,
+            microsecond=nanoseconds // 1000,
+            tzinfo=tzinfo,
         )
 
     @classmethod
