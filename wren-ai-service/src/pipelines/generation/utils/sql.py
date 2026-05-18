@@ -229,12 +229,17 @@ _MSSQL_TEXT_TO_SQL_RULES = """
 ### MSSQL-SPECIFIC RULES ###
 - The target database is MSSQL.
 - DO NOT use PostgreSQL-style or Trino-style date syntax such as DATE_TRUNC, INTERVAL, CURRENT_DATE, TIMESTAMP WITH TIME ZONE, TO_CHAR, or :: casts.
+- DO NOT use YEAR(...), MONTH(...), DAY(...), or DATEPART(...) in generated SQL unless the exact function is explicitly listed as supported in the SQL FUNCTIONS section. Prefer range predicates or DATEADD/DATEDIFF bucket expressions instead.
 - Prefer GETDATE() for the current timestamp and CAST(GETDATE() AS DATE) when you need the current date only.
 - For relative time windows, use DATEADD together with GETDATE().
 - For previous calendar month boundaries, prefer:
     - start_of_previous_month: DATEADD(month, DATEDIFF(month, 0, GETDATE()) - 1, 0)
     - start_of_current_month: DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0)
 - For month bucketing, prefer DATEADD(month, DATEDIFF(month, 0, <timestamp_expression>), 0). If DATETRUNC is available in your server version, you may use DATETRUNC(month, <timestamp_expression>), but prefer DATEADD/DATEDIFF when uncertain.
+- For year bucketing, prefer DATEADD(year, DATEDIFF(year, 0, <timestamp_expression>), 0) instead of YEAR(...).
+- For filtering a specific year such as 2025, prefer a closed-open range:
+    - <timestamp_expression> >= CAST('2025-01-01 00:00:00' AS DATETIME2)
+    - AND <timestamp_expression> < CAST('2026-01-01 00:00:00' AS DATETIME2)
 - When a temporal cast is required, prefer DATETIME2. Use DATETIMEOFFSET only when timezone-aware semantics are explicitly required by the question.
 - Keep relative date logic simple and native to MSSQL. Never emit INTERVAL-like expressions for MSSQL.
 """
@@ -517,6 +522,7 @@ def get_metric_instructions(
 #### MSSQL Metric Notes ####
 - When filtering metrics by month or other relative date windows in MSSQL, use DATEADD/DATEDIFF or other MSSQL-native date functions from the SQL FUNCTIONS section.
 - Do not use DATE_TRUNC, INTERVAL, CURRENT_DATE, or TIMESTAMP WITH TIME ZONE in MSSQL metric queries.
+- Avoid YEAR(...), MONTH(...), DAY(...), and DATEPART(...) in MSSQL metric queries unless the SQL FUNCTIONS section explicitly shows they are supported by the target engine.
 """
 
     return instructions

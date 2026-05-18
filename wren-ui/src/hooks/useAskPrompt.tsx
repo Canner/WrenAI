@@ -208,6 +208,8 @@ export default function useAskPrompt(threadId?: number) {
   );
 
   const startRecommendedQuestions = useCallback(async () => {
+    if (!originalQuestion?.trim()) return;
+
     const previousQuestions = [
       // slice the last 5 questions in threadQuestions
       ...uniq(threadQuestions).slice(-5),
@@ -216,14 +218,21 @@ export default function useAskPrompt(threadId?: number) {
     const response = await createInstantRecommendedQuestions({
       variables: { data: { previousQuestions } },
     });
+    const taskId = response.data?.createInstantRecommendedQuestions?.id;
+    if (!taskId) return;
+
     fetchInstantRecommendedQuestions({
-      variables: { taskId: response.data.createInstantRecommendedQuestions.id },
+      variables: { taskId },
     });
-  }, [originalQuestion]);
+  }, [originalQuestion, threadQuestions]);
 
   const checkFetchAskingStreamTask = useCallback(
     (task: AskingTask) => {
-      if (!askingStreamTask && task.status === AskingTaskStatus.PLANNING) {
+      if (
+        !askingStreamTask &&
+        task?.queryId &&
+        task.status === AskingTaskStatus.PLANNING
+      ) {
         fetchAskingStreamTask(task.queryId);
       }
     },
@@ -274,15 +283,22 @@ export default function useAskPrompt(threadId?: number) {
   };
 
   const onReRun = async (threadResponse: ThreadResponse) => {
+    if (!threadResponse?.id) return;
+
     askingStreamTaskResult.reset();
     setOriginalQuestion(threadResponse.question);
     try {
       const response = await rerunAskingTask({
         variables: { responseId: threadResponse.id },
       });
+      const taskId = response.data?.rerunAskingTask?.id;
+      if (!taskId) return;
+
       const { data } = await fetchAskingTask({
-        variables: { taskId: response.data.rerunAskingTask.id },
+        variables: { taskId },
       });
+      if (!data?.askingTask) return;
+
       // update the asking task in cache manually
       handleUpdateRerunAskingTaskCache(
         threadId,
@@ -302,8 +318,11 @@ export default function useAskPrompt(threadId?: number) {
       const response = await createAskingTask({
         variables: { data: { question: value, threadId } },
       });
+      const taskId = response.data?.createAskingTask?.id;
+      if (!taskId) return;
+
       await fetchAskingTask({
-        variables: { taskId: response.data.createAskingTask.id },
+        variables: { taskId },
       });
     } catch (error) {
       console.error(error);
@@ -311,6 +330,8 @@ export default function useAskPrompt(threadId?: number) {
   };
 
   const onFetching = async (queryId: string) => {
+    if (!queryId) return;
+
     await fetchAskingTask({
       variables: { taskId: queryId },
     });

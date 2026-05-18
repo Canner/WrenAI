@@ -190,11 +190,15 @@ export default function HomeThread() {
   };
 
   const onGenerateThreadResponseAnswer = async (responseId: number) => {
+    if (!responseId) return;
+
     await generateThreadResponseAnswer({ variables: { responseId } });
     fetchThreadResponse({ variables: { responseId } });
   };
 
   const onGenerateThreadResponseChart = async (responseId: number) => {
+    if (!responseId) return;
+
     await generateThreadResponseChart({ variables: { responseId } });
     fetchThreadResponse({ variables: { responseId } });
   };
@@ -203,6 +207,8 @@ export default function HomeThread() {
     responseId: number,
     data: AdjustThreadResponseChartInput,
   ) => {
+    if (!responseId) return;
+
     await adjustThreadResponseChart({
       variables: { responseId, data },
     });
@@ -210,6 +216,8 @@ export default function HomeThread() {
   };
 
   const onGenerateThreadRecommendedQuestions = async () => {
+    if (!threadId) return;
+
     await generateThreadRecommendationQuestions({ variables: { threadId } });
     fetchThreadRecommendationQuestions({ variables: { threadId } });
   };
@@ -221,8 +229,9 @@ export default function HomeThread() {
         (response) =>
           response?.askingTask && !getIsFinished(response?.askingTask?.status),
       );
-      if (unfinishedAskingResponse) {
-        askPrompt.onFetching(unfinishedAskingResponse?.askingTask?.queryId);
+      const unfinishedTaskId = unfinishedAskingResponse?.askingTask?.queryId;
+      if (unfinishedAskingResponse && unfinishedTaskId) {
+        askPrompt.onFetching(unfinishedTaskId);
         return;
       }
 
@@ -297,7 +306,9 @@ export default function HomeThread() {
     try {
       askPrompt.onStopPolling();
 
-      const threadId = thread.id;
+      const threadId = thread?.id;
+      if (!threadId) return;
+
       await createThreadResponse({
         variables: { threadId, data: payload },
       });

@@ -96,6 +96,8 @@ export default function useAdjustAnswer(threadId?: number) {
     responseId: number,
     input: { tables: string[]; sqlGenerationReasoning: string },
   ) => {
+    if (!responseId) return;
+
     const response = await adjustThreadResponse({
       variables: {
         responseId,
@@ -108,6 +110,8 @@ export default function useAdjustAnswer(threadId?: number) {
 
     // start polling new thread response
     const nextThreadResponse = response.data?.adjustThreadResponse;
+    if (!nextThreadResponse?.id) return;
+
     await fetchThreadResponse({
       variables: { responseId: nextThreadResponse.id },
     });
@@ -121,12 +125,16 @@ export default function useAdjustAnswer(threadId?: number) {
   };
 
   const onAdjustSQL = async (responseId: number, sql: string) => {
+    if (!responseId) return;
+
     const response = await adjustThreadResponse({
       variables: { responseId, data: { sql } },
     });
 
     // update thread cache
     const nextThreadResponse = response.data?.adjustThreadResponse;
+    if (!nextThreadResponse) return;
+
     handleUpdateThreadCache(
       threadId,
       nextThreadResponse,
@@ -150,6 +158,8 @@ export default function useAdjustAnswer(threadId?: number) {
 
   const onReRun = async (threadResponse: ThreadResponse) => {
     const responseId = threadResponse.id;
+    if (!responseId) return;
+
     await rerunAdjustmentTask({ variables: { responseId } });
     await fetchThreadResponse({ variables: { responseId } });
   };
