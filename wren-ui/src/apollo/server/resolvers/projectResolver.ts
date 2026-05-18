@@ -637,8 +637,9 @@ export class ProjectResolver {
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     const deployRes = await ctx.deployService.deploy(manifest, project.id);
 
-    // only generating for user's data source
-    if (project.sampleDataset === null) {
+    // Recommendation generation depends on a successful deployment because
+    // question validation calls previewSql against the deployed manifest.
+    if (deployRes.status === 'SUCCESS' && project.sampleDataset === null) {
       await ctx.projectService.generateProjectRecommendationQuestions();
     }
     return deployRes;

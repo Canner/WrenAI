@@ -235,8 +235,9 @@ export class ModelResolver {
       args.force,
     );
 
-    // only generating for user's data source
-    if (project.sampleDataset === null) {
+    // Recommendation generation depends on a successful deployment because
+    // question validation calls previewSql against the deployed manifest.
+    if (deployRes.status === 'SUCCESS' && project.sampleDataset === null) {
       await ctx.projectService.generateProjectRecommendationQuestions();
     }
     return deployRes;
@@ -812,7 +813,7 @@ export class ModelResolver {
 
     // create view
     const project = await ctx.projectService.getCurrentProject();
-    const { manifest } = await ctx.deployService.getLastDeployment(project.id);
+    const manifest = await this.getLastDeployedManifest(ctx, project.id);
 
     // get sql statement of a response
     const response = await ctx.askingService.getResponse(responseId);
@@ -941,7 +942,7 @@ export class ModelResolver {
     const project = projectId
       ? await ctx.projectService.getProjectById(parseInt(projectId))
       : await ctx.projectService.getCurrentProject();
-    const { manifest } = await ctx.deployService.getLastDeployment(project.id);
+    const manifest = await this.getLastDeployedManifest(ctx, project.id);
     return await ctx.queryService.preview(sql, {
       project,
       limit: limit,
@@ -1087,6 +1088,17 @@ export class ModelResolver {
     return {
       valid: true,
     };
+  }
+
+  private async getLastDeployedManifest(ctx: IContext, projectId: number) {
+    const deployment = await ctx.deployService.getLastDeployment(projectId);
+    if (!deployment?.manifest) {
+      throw new Error(
+        'Project has not been deployed successfully yet. Deploy the model before previewing or validating SQL.',
+      );
+    }
+
+    return deployment.manifest;
   }
 
   private validateTableExist(
