@@ -288,14 +288,18 @@ def write_project_files(
     if force and output_dir.exists():
         import shutil  # noqa: PLC0415
 
-        for managed in (
+        managed_paths = {
             "models",
             "views",
             "relationships.yml",
             "instructions.md",
             "wren_project.yml",
             "AGENTS.md",
-        ):
+        }
+        if any(f.relative_path == "queries.yml" for f in files):
+            managed_paths.add("queries.yml")
+
+        for managed in managed_paths:
             target = output_dir / managed
             if target.is_dir():
                 shutil.rmtree(target)
