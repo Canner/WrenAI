@@ -45,6 +45,7 @@ export interface IAskingTaskTracker {
   getAskingResult(queryId: string): Promise<TrackedAskingResult | null>;
   getAskingResultById(id: number): Promise<TrackedAskingResult | null>;
   cancelAskingTask(queryId: string): Promise<void>;
+  initialize(): Promise<void>;
   bindThreadResponse(
     id: number,
     queryId: string,
@@ -64,6 +65,7 @@ export class AskingTaskTracker implements IAskingTaskTracker {
   private runningJobs = new Set<string>();
   private threadResponseRepository: IThreadResponseRepository;
   private viewRepository: IViewRepository;
+  private initialized = false;
 
   constructor({
     wrenAIAdaptor,
@@ -112,6 +114,12 @@ export class AskingTaskTracker implements IAskingTaskTracker {
         queryId,
         lastPolled: Date.now(),
         question: input.query,
+        result: {
+          type: null,
+          status: AskResultStatus.UNDERSTANDING,
+          response: null,
+          error: null,
+        },
         isFinalized: false,
         rerunFromCancelled: input.rerunFromCancelled,
       } as TrackedTask;
@@ -140,7 +148,16 @@ export class AskingTaskTracker implements IAskingTaskTracker {
         // update the query id in database
         await this.askingTaskRepository.updateOne(input.previousTaskId, {
           queryId,
+          detail: task.result,
         });
+      } else {
+        const createdTask = await this.askingTaskRepository.createOne({
+          queryId,
+          question: input.query,
+          detail: task.result,
+        });
+        task.taskId = createdTask.id;
+        this.trackedTasksById.set(createdTask.id, task);
       }
 
       logger.info(`Created asking task with queryId: ${queryId}`);
@@ -167,7 +184,11 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     }
 
     // If not in memory or no result yet, check the database
-    return this.getAskingResultFromDB({ queryId });
+    const result = await this.getAskingResultFromDB({ queryId });
+    if (result && !this.isTaskFinalized(result.status)) {
+      this.restoreTrackedTask(result);
+    }
+    return result;
   }
 
   public async getAskingResultById(
@@ -178,11 +199,36 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       return this.getAskingResult(task.queryId);
     }
 
-    return this.getAskingResultFromDB({ taskId: id });
+    const result = await this.getAskingResultFromDB({ taskId: id });
+    if (result && !this.isTaskFinalized(result.status)) {
+      this.restoreTrackedTask(result);
+    }
+    return result;
   }
 
   public async cancelAskingTask(queryId: string): Promise<void> {
     await this.wrenAIAdaptor.cancelAsk(queryId);
+  }
+
+  public async initialize(): Promise<void> {
+    if (this.initialized) return;
+
+    const taskRecords = await this.askingTaskRepository.findAll();
+    taskRecords.forEach((taskRecord) => {
+      const detail = taskRecord.detail as AskResult | undefined;
+      if (!taskRecord.queryId || !detail || this.isTaskFinalized(detail.status)) {
+        return;
+      }
+
+      this.restoreTrackedTask({
+        ...detail,
+        queryId: taskRecord.queryId,
+        question: taskRecord.question,
+        taskId: taskRecord.id,
+      });
+    });
+
+    this.initialized = true;
   }
 
   public stopPolling(): void {
@@ -467,5 +513,20 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     }
 
     return false;
+  }
+
+  private restoreTrackedTask(result: TrackedAskingResult) {
+    const restoredTask: TrackedTask = {
+      queryId: result.queryId,
+      taskId: result.taskId,
+      lastPolled: Date.now(),
+      question: result.question,
+      result,
+      isFinalized: false,
+    };
+    this.trackedTasks.set(result.queryId, restoredTask);
+    if (result.taskId) {
+      this.trackedTasksById.set(result.taskId, restoredTask);
+    }
   }
 }

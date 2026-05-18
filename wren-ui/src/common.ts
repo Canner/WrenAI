@@ -221,5 +221,11 @@ export const initComponents = () => {
   };
 };
 
-// singleton components
-export const components = initComponents();
+declare global {
+  // eslint-disable-next-line no-var
+  var __wrenComponents: ReturnType<typeof initComponents> | undefined;
+}
+
+// Keep a single server-side component graph across Next.js dev reloads.
+export const components =
+  globalThis.__wrenComponents || (globalThis.__wrenComponents = initComponents());

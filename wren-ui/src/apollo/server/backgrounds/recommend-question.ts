@@ -29,6 +29,7 @@ export class ProjectRecommendQuestionBackgroundTracker {
   private runningJobs = new Set();
   private telemetry: ITelemetry;
   private logger: Logger;
+  private initialized = false;
 
   constructor({
     telemetry,
@@ -150,6 +151,10 @@ export class ProjectRecommendQuestionBackgroundTracker {
   }
 
   public async initialize() {
+    if (this.initialized) {
+      return;
+    }
+
     const projects = await this.projectRepository.findAll();
     for (const project of projects) {
       if (
@@ -159,6 +164,8 @@ export class ProjectRecommendQuestionBackgroundTracker {
         this.addTask(project);
       }
     }
+
+    this.initialized = true;
   }
 
   public taskKey(project: Project) {
@@ -179,6 +186,7 @@ export class ThreadRecommendQuestionBackgroundTracker {
   private runningJobs = new Set();
   private telemetry: ITelemetry;
   private logger: Logger;
+  private initialized = false;
 
   constructor({
     telemetry,
@@ -299,6 +307,10 @@ export class ThreadRecommendQuestionBackgroundTracker {
   }
 
   public async initialize() {
+    if (this.initialized) {
+      return;
+    }
+
     const threads = await this.threadRepository.findAll();
     for (const thread of threads) {
       if (
@@ -309,6 +321,8 @@ export class ThreadRecommendQuestionBackgroundTracker {
         this.addTask(thread);
       }
     }
+
+    this.initialized = true;
   }
 
   public taskKey(thread: Thread) {

@@ -416,6 +416,7 @@ export class AskingService implements IAskingService {
   private askingTaskTracker: IAskingTaskTracker;
   private askingTaskRepository: IAskingTaskRepository;
   private adjustmentBackgroundTracker: AdjustmentBackgroundTaskTracker;
+  private initialized = false;
 
   constructor({
     telemetry,
@@ -563,6 +564,12 @@ export class AskingService implements IAskingService {
   }
 
   public async initialize() {
+    if (this.initialized) {
+      return;
+    }
+
+    await this.askingTaskTracker.initialize();
+
     // list thread responses from database
     // filter status not finalized and put them into background tracker
     const threadResponses = await this.threadResponseRepository.findAll();
@@ -579,6 +586,8 @@ export class AskingService implements IAskingService {
     for (const threadResponse of unfininshedBreakdownThreadResponses) {
       this.breakdownBackgroundTracker.addTask(threadResponse);
     }
+
+    this.initialized = true;
   }
 
   /**
