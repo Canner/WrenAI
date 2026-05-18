@@ -221,7 +221,50 @@ def build_chunk(chunk: Any) -> StreamingChunk:
     return chunk_message
 
 
-def convert_message_to_openai_format(message: ChatMessage) -> Dict[str, str]:
+def _get_message_role_value(message: Any) -> str:
+    role = getattr(message, "role", ChatRole.USER)
+    return role.value if hasattr(role, "value") else str(role)
+
+
+def _get_message_text_content(message: Any) -> Optional[str]:
+    try:
+        content = getattr(message, "content", None)
+        if isinstance(content, str) and content:
+            return content
+    except AttributeError:
+        # Haystack 2.x removed `.content` in favor of `.text`.
+        pass
+
+    text = getattr(message, "text", None)
+    if isinstance(text, str) and text:
+        return text
+
+    raw_content = getattr(message, "_content", None)
+    if isinstance(raw_content, str) and raw_content:
+        return raw_content
+
+    if isinstance(raw_content, list):
+        text_parts = []
+        for part in raw_content:
+            if isinstance(part, str) and part:
+                text_parts.append(part)
+                continue
+
+            part_text = getattr(part, "text", None)
+            if isinstance(part_text, str) and part_text:
+                text_parts.append(part_text)
+        if text_parts:
+            return "\n".join(text_parts)
+
+    return None
+
+
+def _get_message_image_url(message: Any) -> Optional[str]:
+    image_url = getattr(message, "image_url", None)
+    return image_url if isinstance(image_url, str) and image_url else None
+
+
+def convert_message_to_openai_format(message: Any) -> Dict[str, Any]:
     """
     Convert a message to the format expected by OpenAI's Chat API.
 
@@ -232,21 +275,24 @@ def convert_message_to_openai_format(message: ChatMessage) -> Dict[str, str]:
         - `content`
         - `name` (optional)
     """
-    openai_msg = {"role": message.role.value}
+    openai_msg = {"role": _get_message_role_value(message)}
+    message_text = _get_message_text_content(message)
+    image_url = _get_message_image_url(message)
 
-    if message.content and hasattr(message, "image_url") and message.image_url:
+    if message_text and image_url:
         openai_msg["content"] = [
-            {"type": "text", "text": message.content},
-            {"type": "image_url", "image_url": {"url": message.image_url}},
+            {"type": "text", "text": message_text},
+            {"type": "image_url", "image_url": {"url": image_url}},
         ]
-    elif message.content:
-        openai_msg["content"] = message.content
-    elif hasattr(message, "image_url") and message.image_url:
+    elif message_text:
+        openai_msg["content"] = message_text
+    elif image_url:
         openai_msg["content"] = [
-            {"type": "image_url", "image_url": {"url": message.image_url}}
+            {"type": "image_url", "image_url": {"url": image_url}}
         ]
 
-    if hasattr(message, "name") and message.name:
-        openai_msg["name"] = message.name
+    name = getattr(message, "name", None)
+    if name:
+        openai_msg["name"] = name
 
     return openai_msg
