@@ -50,19 +50,15 @@ WrenAI is the **open context layer** that gives your agents what schemas don't: 
 
 ## Why agent builders pick WrenAI
 
-- **Open by default** — Apache-2.0 core, SDK, and skills.
-- **Built for AI agents** — Skills, agentic architecutre, context retrieval are first-class. Ships as SDKs for the agent frameworks engineers already use.
+- **Open by default** — Open-sourced core, SDK, and skills through Apache-2.0 license.
+- **Built for AI agents** — Skills, agentic architecture, context retrieval are first-class. Ships as SDKs for the agent frameworks that engineers already use.
 - **Correctness as primitives** — rich schema retrieval, dry-plan validation, structured errors with hints, value profiling, eval runner. The agent orchestrates; the trace lives in the agent's reasoning.
-- **Reviewable, reproducible context** — every definition, example, and mapping is versionable and evidence-linked. Git-friendly. Not chat history.
+- **Reviewable, reproducible context** — every definition, example, and mapping is versionable and evidence-linked. Git-friendly.
 - **Sits on top of your existing stack** — warehouse, transformation pipelines, your existing semantic layer. Not another tool to maintain.
 
-## The problem
-
-If you're building AI agents, embedded analytics, or natural-language data products on top of your enterprise databases, you've hit the same wall: there's no shared governed layer between your data and your consumers. Your agents query Postgres, MySQL, SQL Server, Oracle, Snowflake, BigQuery, or Databricks through raw SQL or MCP — and they hallucinate joins, guess at table semantics, and invent metric definitions every time. Your analysts and your apps each reinvent the same logic in their own dialect. Your local LLMs and cloud LLMs need the same governed context to produce trustworthy answers, but nothing today provides it. The result is a multiplication problem: N agents × M databases × K models = N×M×K brittle integrations, none of which agree. The missing piece is a context layer purpose-built for the agent era — open, MCP-native, and interoperable across every database and every model.
-
-<img width="853" height="754" alt="The problem without context layer" src="https://github.com/user-attachments/assets/0fdb989a-e741-4d34-bcb9-4854787f73fb" />
-
 ## With & Without Wren AI
+
+Agents are everywhere. Claude Code, Cursor, ChatGPT, Aider, LangChain pipelines, Pydantic AI flows, in-house copilots, customer-facing apps. None of them should have to rediscover your business logic from scratch. With Wren AI, "the context layer," they query through a standalone, shared interface usable by every agent and person, not gated behind a single vendor's UI and architecture.
 
 <img width="1430" height="753" alt="before & after" src="https://github.com/user-attachments/assets/ab54ee9f-b652-4826-b6f5-0c22f601419e" />
 
@@ -136,7 +132,7 @@ Fast at first. Deep when you need it. Always reviewable and Git-friendly.
   Save under  /assets/two-beats.png
 -->
 
-## What works today
+## What's Included
 
 - **Modeling Definition Language (MDL)** — models, columns, relationships, views, cubes, metrics, row-level / column-level access control (RLAC / CLAC)
 - **Engine** — Apache DataFusion based, 22+ data sources
