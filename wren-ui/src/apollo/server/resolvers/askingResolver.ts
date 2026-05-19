@@ -624,10 +624,13 @@ export class AskingResolver {
 
   public async getResponse(
     _root: any,
-    args: { responseId: number },
+    args: { responseId?: number | null },
     ctx: IContext,
   ): Promise<ThreadResponse> {
     const { responseId } = args;
+    if (!responseId) {
+      return null;
+    }
     const askingService = ctx.askingService;
     const response = await askingService.getResponse(responseId);
 

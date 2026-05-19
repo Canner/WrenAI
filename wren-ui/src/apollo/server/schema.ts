@@ -1133,7 +1133,7 @@ export const typeDefs = gql`
     suggestedQuestions: SuggestedQuestionResponse!
     threads: [Thread!]!
     thread(threadId: Int!): DetailedThread!
-    threadResponse(responseId: Int!): ThreadResponse!
+    threadResponse(responseId: Int): ThreadResponse
     nativeSql(responseId: Int!): String!
 
     # Adjustment

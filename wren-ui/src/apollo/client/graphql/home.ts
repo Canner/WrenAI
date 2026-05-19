@@ -194,7 +194,7 @@ export const THREAD = gql`
 `;
 
 export const THREAD_RESPONSE = gql`
-  query ThreadResponse($responseId: Int!) {
+  query ThreadResponse($responseId: Int) {
     threadResponse(responseId: $responseId) {
       ...CommonResponse
     }
