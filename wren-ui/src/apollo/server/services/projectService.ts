@@ -140,6 +140,7 @@ export class ProjectService implements IProjectService {
     const recommendQuestionResult =
       await this.wrenAIAdaptor.generateRecommendationQuestions({
         manifest,
+        projectId: project.id.toString(),
         ...this.getProjectRecommendationQuestionsConfig(project),
       });
 

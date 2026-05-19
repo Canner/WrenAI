@@ -70,6 +70,8 @@ async def count_documents(
         else None
     )
     document_count = await store.count_documents(filters=filters)
+    if document_count == 0 and project_id:
+        document_count = await store.count_documents(filters=None)
     return document_count
 
 
@@ -102,6 +104,17 @@ async def retrieval(embedding: dict, project_id: str, retriever: Any) -> dict:
         query_embedding=embedding.get("embedding"),
         filters=filters,
     )
+    if not res.get("documents") and project_id:
+        fallback_filters = {
+            "operator": "AND",
+            "conditions": [
+                {"field": "is_default", "operator": "==", "value": False},
+            ],
+        }
+        res = await retriever.run(
+            query_embedding=embedding.get("embedding"),
+            filters=fallback_filters,
+        )
     return dict(documents=res.get("documents"))
 
 
@@ -156,6 +169,17 @@ async def default_instructions(
         query_embedding=None,
         filters=filters,
     )
+    if not _res.get("documents") and project_id:
+        fallback_filters = {
+            "operator": "AND",
+            "conditions": [
+                {"field": "is_default", "operator": "==", "value": True},
+            ],
+        }
+        _res = await retriever.run(
+            query_embedding=None,
+            filters=fallback_filters,
+        )
 
     res = scope_filter.run(
         documents=_res.get("documents"),

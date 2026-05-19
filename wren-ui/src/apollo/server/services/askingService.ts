@@ -58,6 +58,7 @@ export interface Task {
 export interface AskingPayload {
   threadId?: number;
   language: string;
+  projectId?: number;
 }
 
 export interface AskingTaskInput {
@@ -545,6 +546,7 @@ export class AskingService implements IAskingService {
     const questions = slicedThreadResponses.map(({ question }) => question);
     const recommendQuestionData: RecommendationQuestionsInput = {
       manifest,
+      projectId: project.id.toString(),
       previousQuestions: questions,
       ...this.getThreadRecommendationQuestionsConfig(project),
     };
@@ -601,6 +603,8 @@ export class AskingService implements IAskingService {
     threadResponseId?: number,
   ): Promise<Task> {
     const { threadId, language } = payload;
+    const projectId =
+      payload.projectId ?? (await this.projectService.getCurrentProject()).id;
     const deployId = await this.getDeployId();
 
     // if it's a follow-up question, then the input will have a threadId
@@ -613,6 +617,7 @@ export class AskingService implements IAskingService {
       query: input.question,
       histories,
       deployId,
+      projectId: projectId.toString(),
       configurations: { language },
       rerunFromCancelled,
       previousTaskId,
@@ -1013,6 +1018,7 @@ export class AskingService implements IAskingService {
 
     const response = await this.wrenAIAdaptor.generateRecommendationQuestions({
       manifest,
+      projectId: project.id.toString(),
       previousQuestions: input.previousQuestions,
       ...this.getThreadRecommendationQuestionsConfig(project),
     });

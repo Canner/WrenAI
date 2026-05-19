@@ -206,6 +206,7 @@ class AskFeedbackService:
                         original_sql = failed_dry_run_result["original_sql"]
                         invalid_sql = failed_dry_run_result["sql"]
                         error_message = failed_dry_run_result["error"]
+                        sql_diagnosis_reasoning = None
 
                         self._ask_feedback_results[
                             query_id
@@ -222,10 +223,17 @@ class AskFeedbackService:
                                 original_sql=original_sql,
                                 invalid_sql=invalid_sql,
                                 error_message=error_message,
+                                language=ask_feedback_request.configurations.language,
                             )
                             sql_diagnosis_reasoning = sql_diagnosis_results[
                                 "post_process"
                             ].get("reasoning")
+
+                        correction_error_message = error_message
+                        if sql_diagnosis_reasoning:
+                            correction_error_message = (
+                                f"{error_message}\nDiagnosis: {sql_diagnosis_reasoning}"
+                            )
 
                         sql_correction_results = await self._pipelines[
                             "sql_correction"
@@ -233,10 +241,9 @@ class AskFeedbackService:
                             contexts=table_ddls,
                             instructions=instructions,
                             invalid_generation_result={
-                                "sql": original_sql,
-                                "error": sql_diagnosis_reasoning
-                                if allow_sql_diagnosis
-                                else error_message,
+                                "original_sql": original_sql,
+                                "sql": invalid_sql,
+                                "error": correction_error_message,
                             },
                             project_id=ask_feedback_request.project_id,
                             sql_functions=sql_functions,

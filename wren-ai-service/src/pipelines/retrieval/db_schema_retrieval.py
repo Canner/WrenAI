@@ -141,7 +141,7 @@ async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> d
 async def table_retrieval(
     embedding: dict, project_id: str, tables: list[str], table_retriever: Any
 ) -> dict:
-    filters = {
+    base_filters = {
         "operator": "AND",
         "conditions": [
             {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
@@ -149,23 +149,48 @@ async def table_retrieval(
     }
 
     if project_id:
-        filters["conditions"].append(
+        base_filters["conditions"].append(
             {"field": "project_id", "operator": "==", "value": project_id}
         )
 
     if embedding:
+        result = await table_retriever.run(
+            query_embedding=embedding.get("embedding"),
+            filters=base_filters,
+        )
+        if result.get("documents") or not project_id:
+            return result
+        fallback_filters = {
+            "operator": "AND",
+            "conditions": [
+                {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
+            ],
+        }
         return await table_retriever.run(
             query_embedding=embedding.get("embedding"),
-            filters=filters,
+            filters=fallback_filters,
         )
     else:
-        filters["conditions"].append(
+        base_filters["conditions"].append(
             {"field": "name", "operator": "in", "value": tables}
         )
 
+        result = await table_retriever.run(
+            query_embedding=[],
+            filters=base_filters,
+        )
+        if result.get("documents") or not project_id:
+            return result
+        fallback_filters = {
+            "operator": "AND",
+            "conditions": [
+                {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
+                {"field": "name", "operator": "in", "value": tables},
+            ],
+        }
         return await table_retriever.run(
             query_embedding=[],
-            filters=filters,
+            filters=fallback_filters,
         )
 
 
@@ -199,7 +224,20 @@ async def dbschema_retrieval(
             )
 
         results = await dbschema_retriever.run(query_embedding=[], filters=filters)
-        return results["documents"]
+        if results.get("documents") or not project_id:
+            return results["documents"]
+
+        fallback_filters = {
+            "operator": "AND",
+            "conditions": [
+                {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+                {"operator": "OR", "conditions": table_name_conditions},
+            ],
+        }
+        fallback_results = await dbschema_retriever.run(
+            query_embedding=[], filters=fallback_filters
+        )
+        return fallback_results["documents"]
 
     return []
 

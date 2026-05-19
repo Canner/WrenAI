@@ -83,7 +83,10 @@ sql_correction_user_prompt_template = """
 {% endif %}
 
 ### QUESTION ###
-SQL: {{ invalid_generation_result.sql }}
+{% if invalid_generation_result.original_sql %}
+Original SQL: {{ invalid_generation_result.original_sql }}
+{% endif %}
+Invalid SQL: {{ invalid_generation_result.sql }}
 Error Message: {{ invalid_generation_result.error }}
 
 Let's think step by step.

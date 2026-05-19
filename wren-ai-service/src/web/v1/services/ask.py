@@ -518,6 +518,7 @@ class AskService:
                         original_sql = failed_dry_run_result["original_sql"]
                         invalid_sql = failed_dry_run_result["sql"]
                         error_message = failed_dry_run_result["error"]
+                        sql_diagnosis_reasoning = None
                         current_sql_correction_retries += 1
 
                         self._ask_results[query_id] = AskResultResponse(
@@ -545,16 +546,21 @@ class AskService:
                                 "post_process"
                             ].get("reasoning")
 
+                        correction_error_message = error_message
+                        if sql_diagnosis_reasoning:
+                            correction_error_message = (
+                                f"{error_message}\nDiagnosis: {sql_diagnosis_reasoning}"
+                            )
+
                         sql_correction_results = await self._pipelines[
                             "sql_correction"
                         ].run(
                             contexts=table_ddls,
                             instructions=instructions,
                             invalid_generation_result={
-                                "sql": original_sql,
-                                "error": sql_diagnosis_reasoning
-                                if allow_sql_diagnosis
-                                else error_message,
+                                "original_sql": original_sql,
+                                "sql": invalid_sql,
+                                "error": correction_error_message,
                             },
                             project_id=ask_request.project_id,
                             use_dry_plan=use_dry_plan,
@@ -579,6 +585,10 @@ class AskService:
                         failed_dry_run_result = sql_correction_results["post_process"][
                             "invalid_generation_result"
                         ]
+                        invalid_sql = failed_dry_run_result.get("sql", invalid_sql)
+                        error_message = failed_dry_run_result.get(
+                            "error", error_message
+                        )
 
             if api_results:
                 if not self._is_stopped(query_id, self._ask_results):
