@@ -30,6 +30,7 @@ _SQLGLOT_DIALECT_MAP: dict[DataSource, str] = {
     DataSource.s3_file: "duckdb",
     DataSource.minio_file: "duckdb",
     DataSource.gcs_file: "duckdb",
+    DataSource.ytsaurus: "clickhouse",
 }
 
 

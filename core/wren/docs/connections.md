@@ -125,3 +125,18 @@ Both formats are accepted. The CLI auto-flattens the envelope format.
   "format": "parquet"
 }
 ```
+
+## YTsaurus (via CHYT)
+
+```json
+{
+  "datasource": "ytsaurus",
+  "proxy": "yt-proxy.example.com",
+  "clique": "*ch_public",
+  "token": "y0_AgAA..."
+}
+```
+
+`token` is optional — if omitted, the connector reads `YT_TOKEN` from the
+environment. See [`connectors/ytsaurus.md`](connectors/ytsaurus.md) for the
+full field reference and CHYT-specific behavior.

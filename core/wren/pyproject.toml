@@ -48,6 +48,7 @@ mysql = ["mysqlclient>=2.2", "ibis-framework[mysql]"]
 bigquery = ["ibis-framework[bigquery]", "google-auth"]
 snowflake = ["ibis-framework[snowflake]"]
 clickhouse = ["ibis-framework[clickhouse]"]
+ytsaurus = ["ibis-framework[clickhouse]"]
 trino = ["ibis-framework[trino]", "trino>=0.321"]
 mssql = ["ibis-framework[mssql]"]
 databricks = ["databricks-sql-connector", "databricks-sdk"]
@@ -60,7 +61,7 @@ interactive = ["InquirerPy>=0.3.4"]
 ui = ["starlette>=0.37", "uvicorn>=0.29", "jinja2>=3.1", "python-multipart>=0.0.9"]
 main = ["wren-engine[interactive,ui]"]
 all = [
-  "wren-engine[postgres,mysql,bigquery,snowflake,clickhouse,trino,mssql,databricks,redshift,athena,oracle,spark,main,memory]",
+  "wren-engine[postgres,mysql,bigquery,snowflake,clickhouse,ytsaurus,trino,mssql,databricks,redshift,athena,oracle,spark,main,memory]",
 ]
 dev = [
   "pytest>=8",
