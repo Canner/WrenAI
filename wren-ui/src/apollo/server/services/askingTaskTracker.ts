@@ -1,4 +1,5 @@
 import { getLogger } from '@server/utils';
+import { isEqual } from 'lodash';
 import {
   AskResult,
   AskResultType,
@@ -507,12 +508,10 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     previousResult: AskResult,
     newResult: AskResult,
   ): boolean {
-    // check status change
-    if (previousResult?.status !== newResult.status) {
-      return true;
-    }
-
-    return false;
+    return !isEqual(
+      this.getComparableAskResult(previousResult),
+      this.getComparableAskResult(newResult),
+    );
   }
 
   private restoreTrackedTask(result: TrackedAskingResult) {
@@ -521,12 +520,27 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       taskId: result.taskId,
       lastPolled: Date.now(),
       question: result.question,
-      result,
+      result: this.getComparableAskResult(result),
       isFinalized: false,
     };
     this.trackedTasks.set(result.queryId, restoredTask);
     if (result.taskId) {
       this.trackedTasksById.set(result.taskId, restoredTask);
     }
+  }
+
+  private getComparableAskResult(result: AskResult | TrackedAskingResult) {
+    return {
+      status: result?.status ?? null,
+      type: result?.type ?? null,
+      response: result?.response ?? null,
+      error: result?.error ?? null,
+      rephrasedQuestion: result?.rephrasedQuestion ?? null,
+      intentReasoning: result?.intentReasoning ?? null,
+      sqlGenerationReasoning: result?.sqlGenerationReasoning ?? null,
+      retrievedTables: result?.retrievedTables ?? null,
+      invalidSql: result?.invalidSql ?? null,
+      traceId: result?.traceId ?? null,
+    } as AskResult;
   }
 }
