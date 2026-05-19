@@ -31,6 +31,12 @@ DEFAULT_VALIDATION_SQL_FUNCTION_ITEMS = 12
 DEFAULT_VALIDATION_SQL_FUNCTION_CHARS = 2500
 STRICT_VALIDATION_SQL_FUNCTION_ITEMS = 0
 STRICT_VALIDATION_SQL_FUNCTION_CHARS = 0
+DEFAULT_QUESTION_CATEGORIES = [
+    "Descriptive Questions",
+    "Segmentation Questions",
+    "Comparative Questions",
+    "Data Quality/Accuracy Questions",
+]
 
 
 class QuestionRecommendation:
@@ -141,6 +147,31 @@ class QuestionRecommendation:
                 "prompt is too long",
             ]
         )
+
+    def _get_target_categories(
+        self,
+        requested_categories: list[str],
+        max_categories: int,
+    ) -> list[str]:
+        categories = requested_categories or DEFAULT_QUESTION_CATEGORIES
+        return categories[:max_categories]
+
+    def _get_underfilled_categories(
+        self,
+        response_questions: dict[str, list[dict]],
+        requested_categories: list[str],
+        max_categories: int,
+        max_questions: int,
+    ) -> list[str]:
+        target_categories = self._get_target_categories(
+            requested_categories=requested_categories,
+            max_categories=max_categories,
+        )
+        return [
+            category
+            for category in target_categories
+            if len(response_questions.get(category, [])) < max_questions
+        ]
 
     def _handle_exception(
         self,
@@ -333,6 +364,7 @@ class QuestionRecommendation:
         event_id: str
         mdl: str
         previous_questions: list[str] = []
+        categories: list[str] = []
         max_questions: int = 5
         max_categories: int = 3
         regenerate: bool = False
@@ -380,6 +412,10 @@ class QuestionRecommendation:
             request = {
                 "contexts": table_ddls,
                 "previous_questions": input.previous_questions,
+                "categories": self._get_target_categories(
+                    requested_categories=input.categories,
+                    max_categories=input.max_categories,
+                ),
                 "language": input.configurations.language,
                 "max_questions": input.max_questions,
                 "max_categories": input.max_categories,
@@ -394,17 +430,18 @@ class QuestionRecommendation:
             resource.trace_id = trace_id
             response = resource.response
 
-            categories_count = {
-                category: input.max_questions - len(questions)
-                for category, questions in response["questions"].items()
-                if len(questions) < input.max_questions
-            }
-            categories = list(categories_count.keys())
-            need_regenerate = len(categories) > 0 and input.regenerate
+            categories = self._get_underfilled_categories(
+                response_questions=response["questions"],
+                requested_categories=request["categories"],
+                max_categories=input.max_categories,
+                max_questions=input.max_questions,
+            )
+            need_regenerate = bool(categories) and input.regenerate
 
             resource.status = "generating" if need_regenerate else "finished"
 
             if resource.status == "finished":
+                resource.request_from = input.request_from
                 return resource.with_metadata()
 
             await self._recommend(

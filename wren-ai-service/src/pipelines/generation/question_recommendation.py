@@ -16,6 +16,13 @@ from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
 
+DEFAULT_QUESTION_CATEGORIES = [
+    "Descriptive Questions",
+    "Segmentation Questions",
+    "Comparative Questions",
+    "Data Quality/Accuracy Questions",
+]
+
 
 system_prompt = """
 You are an expert in data analysis and SQL query generation. Given a data model specification, optionally a user's question, and a list of categories, your task is to generate insightful, specific questions that can be answered using the provided data model. Each question should be accompanied by a brief explanation of its relevance or importance.
@@ -66,6 +73,9 @@ Output all questions in the following JSON format:
 
 5. **General Guidelines for All Questions:**
    - Ensure questions can be answered using the data model.
+   - Use only the tables, fields, and relationships that are explicitly present in the provided database schema.
+   - Do not invent tables, columns, business entities, or time dimensions that are not present in the schema.
+   - Keep the question grounded in the deployed database domain shown by the schema context.
    - Mix simple and complex questions.
    - Avoid open-ended questions - each should have a definite answer.
    - Incorporate time-based analysis where relevant.

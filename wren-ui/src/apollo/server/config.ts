@@ -147,7 +147,7 @@ const config = {
   threadRecommendationQuestionsMaxQuestions: process.env
     .THREAD_RECOMMENDATION_QUESTIONS_MAX_QUESTIONS
     ? parseInt(process.env.THREAD_RECOMMENDATION_QUESTIONS_MAX_QUESTIONS)
-    : 1,
+    : 3,
 };
 
 export function getConfig(): IConfig {

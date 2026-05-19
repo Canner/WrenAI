@@ -1198,6 +1198,7 @@ export class AskingService implements IAskingService {
     return {
       maxCategories: config.threadRecommendationQuestionMaxCategories,
       maxQuestions: config.threadRecommendationQuestionsMaxQuestions,
+      regenerate: true,
       configuration: {
         language: WrenAILanguage[project.language] || WrenAILanguage.EN,
       },
