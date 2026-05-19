@@ -164,7 +164,7 @@ export const SUGGESTED_QUESTIONS = gql`
 `;
 
 export const ASKING_TASK = gql`
-  query AskingTask($taskId: String!) {
+  query AskingTask($taskId: String) {
     askingTask(taskId: $taskId) {
       ...CommonAskingTask
     }
@@ -317,7 +317,7 @@ export const CREATE_INSTANT_RECOMMENDED_QUESTIONS = gql`
 `;
 
 export const INSTANT_RECOMMENDED_QUESTIONS = gql`
-  query InstantRecommendedQuestions($taskId: String!) {
+  query InstantRecommendedQuestions($taskId: String) {
     instantRecommendedQuestions(taskId: $taskId) {
       ...CommonRecommendedQuestionsTask
     }
@@ -389,7 +389,7 @@ export const ADJUST_THREAD_RESPONSE_CHART = gql`
 `;
 
 export const ADJUSTMENT_TASK = gql`
-  query AdjustmentTask($taskId: String!) {
+  query AdjustmentTask($taskId: String) {
     adjustmentTask(taskId: $taskId) {
       queryId
       status

@@ -1129,7 +1129,7 @@ export const typeDefs = gql`
     view(where: ViewWhereUniqueInput!): ViewInfo!
 
     # Ask
-    askingTask(taskId: String!): AskingTask
+    askingTask(taskId: String): AskingTask
     suggestedQuestions: SuggestedQuestionResponse!
     threads: [Thread!]!
     thread(threadId: Int!): DetailedThread!
@@ -1137,7 +1137,7 @@ export const typeDefs = gql`
     nativeSql(responseId: Int!): String!
 
     # Adjustment
-    adjustmentTask(taskId: String!): AdjustmentTask
+    adjustmentTask(taskId: String): AdjustmentTask
 
     # Settings
     settings: Settings!
@@ -1151,7 +1151,7 @@ export const typeDefs = gql`
     # Recommendation questions
     getThreadRecommendationQuestions(threadId: Int!): RecommendedQuestionsTask!
     getProjectRecommendationQuestions: RecommendedQuestionsTask!
-    instantRecommendedQuestions(taskId: String!): RecommendedQuestionsTask!
+    instantRecommendedQuestions(taskId: String): RecommendedQuestionsTask!
 
     # Dashboard
     dashboardItems: [DashboardItem!]!

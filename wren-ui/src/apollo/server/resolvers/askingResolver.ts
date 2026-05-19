@@ -19,6 +19,7 @@ import { safeFormatSQL } from '@server/utils/sqlFormat';
 import {
   AskingDetailTaskInput,
   constructCteSql,
+  RecommendQuestionResultStatus,
   ThreadRecommendQuestionResult,
 } from '../services/askingService';
 import {
@@ -78,7 +79,7 @@ export interface RecommendedQuestionsTask {
     category: string;
     sql: string;
   }[];
-  status: RecommendationQuestionStatus;
+  status: RecommendationQuestionStatus | RecommendQuestionResultStatus;
   error: WrenAIError | null;
 }
 
@@ -205,10 +206,13 @@ export class AskingResolver {
 
   public async getAskingTask(
     _root: any,
-    args: { taskId: string },
+    args: { taskId?: string | null },
     ctx: IContext,
   ): Promise<AskingTask> {
     const { taskId } = args;
+    if (!taskId) {
+      return null;
+    }
     const askingService = ctx.askingService;
     const askResult = await askingService.getAskingTask(taskId);
 
@@ -543,10 +547,13 @@ export class AskingResolver {
 
   public async getAdjustmentTask(
     _root: any,
-    args: { taskId: string },
+    args: { taskId?: string | null },
     ctx: IContext,
   ): Promise<AdjustmentTask> {
     const { taskId } = args;
+    if (!taskId) {
+      return null;
+    }
     const askingService = ctx.askingService;
     const adjustmentTask = await askingService.getAdjustmentTask(taskId);
     return {
@@ -665,10 +672,17 @@ export class AskingResolver {
 
   public async getInstantRecommendedQuestions(
     _root: any,
-    args: { taskId: string },
+    args: { taskId?: string | null },
     ctx: IContext,
   ): Promise<RecommendedQuestionsTask> {
     const { taskId } = args;
+    if (!taskId) {
+      return {
+        questions: [],
+        status: RecommendQuestionResultStatus.NOT_STARTED,
+        error: null,
+      };
+    }
     const askingService = ctx.askingService;
     const result = await askingService.getInstantRecommendedQuestions(taskId);
     return {
