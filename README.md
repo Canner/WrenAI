@@ -60,7 +60,7 @@ WrenAI is the **open context layer** that gives your agents what schemas don't: 
 
 Agents are everywhere. Claude Code, Cursor, ChatGPT, Aider, LangChain pipelines, Pydantic AI flows, in-house copilots, customer-facing apps. None of them should have to rediscover your business logic from scratch. With Wren AI, "the context layer," they query through a standalone, shared interface usable by every agent and person, not gated behind a single vendor's UI and architecture.
 
-<img width="1430" height="753" alt="before & after" src="https://github.com/user-attachments/assets/ab54ee9f-b652-4826-b6f5-0c22f601419e" />
+<img width="1445" height="758" alt="before & after" src="https://github.com/user-attachments/assets/d6ef8b73-b844-4e11-9586-b4f7ab6ae9dc" />
 
 ## Quickstart
 
