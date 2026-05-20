@@ -217,4 +217,40 @@ def extract_braces_content(resp: str) -> str:
     Returns the JSON string including braces, or the original string if no match is found.
     """
     match = re.search(r"```json\s*(\{.*?\})\s*```", resp, re.DOTALL)
-    return match.group(1) if match else resp
+    if match:
+        return match.group(1)
+
+    start = resp.find("{")
+    if start == -1:
+        return resp
+
+    depth = 0
+    in_string = False
+    escaped = False
+
+    for index in range(start, len(resp)):
+        char = resp[index]
+
+        if escaped:
+            escaped = False
+            continue
+
+        if char == "\\":
+            escaped = True
+            continue
+
+        if char == '"':
+            in_string = not in_string
+            continue
+
+        if in_string:
+            continue
+
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return resp[start : index + 1]
+
+    return resp

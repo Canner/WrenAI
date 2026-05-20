@@ -12,12 +12,12 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.sql import (
-    SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
     construct_instructions,
     get_calculated_field_instructions,
     get_json_field_instructions,
     get_metric_instructions,
+    get_sql_generation_model_kwargs,
     get_text_to_sql_rules,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
@@ -193,7 +193,7 @@ class SQLRegeneration(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=get_sql_regeneration_system_prompt(None),
-                generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
+                generation_kwargs=get_sql_generation_model_kwargs(llm_provider),
             ),
             "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(

@@ -11,6 +11,7 @@ from src.core.engine import (
     Engine,
     clean_generation_result,
 )
+from src.core.provider import LLMProvider
 from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 from src.web.v1.services.ask import AskHistory
 
@@ -583,6 +584,16 @@ SQL_GENERATION_MODEL_KWARGS = {
         },
     }
 }
+
+
+def get_sql_generation_model_kwargs(llm_provider: LLMProvider) -> dict:
+    model_kwargs = llm_provider.get_model_kwargs() or {}
+    response_format = model_kwargs.get("response_format", {})
+
+    if isinstance(response_format, dict) and response_format.get("type") == "text":
+        return {}
+
+    return SQL_GENERATION_MODEL_KWARGS
 
 
 def construct_instructions(
