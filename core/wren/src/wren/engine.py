@@ -33,7 +33,7 @@ from wren.mdl import get_manifest_extractor, get_session_context, to_json_base64
 from wren.mdl.cte_rewriter import CTERewriter, get_sqlglot_dialect
 from wren.model.data_source import DataSource
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
-from wren.policy import validate_sql_policy
+from wren.policy import resolve_model_name, validate_sql_policy
 
 
 class WrenEngine:
@@ -171,13 +171,27 @@ class WrenEngine:
             dialect = get_sqlglot_dialect(self.data_source)
             ast = parse_one(sql, dialect=dialect)
 
+            manifest_json = json.loads(base64.b64decode(self.manifest_str))
+            model_names = {m["name"] for m in manifest_json.get("models", [])}
+
             # Policy validation: check tables and functions before execution.
             if self._config.strict_mode or self._config.denied_functions:
-                manifest_json = json.loads(base64.b64decode(self.manifest_str))
-                model_names = {m["name"] for m in manifest_json.get("models", [])}
                 validate_sql_policy(ast, model_names, self._config)
 
-            tables = [t.name for t in ast.find_all(exp.Table)]
+            # Resolve table refs to canonical manifest model names so that
+            # ``extract_by`` (case-sensitive in Rust) finds them under SQL's
+            # case-sensitivity rules: quoted identifiers match exactly,
+            # unquoted fall back to a case-insensitive scan.
+            tables: list[str] = []
+            for t in ast.find_all(exp.Table):
+                if not t.name:
+                    continue
+                quoted = (
+                    bool(t.this.quoted) if isinstance(t.this, exp.Identifier) else False
+                )
+                resolved = resolve_model_name(t.name, quoted, model_names)
+                tables.append(resolved if resolved is not None else t.name)
+
             extractor = get_manifest_extractor(self.manifest_str)
             manifest = extractor.extract_by(tables)
             effective_manifest = to_json_base64(manifest)
