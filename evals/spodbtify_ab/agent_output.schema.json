@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SpodbtifyEvalAgentOutput",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "question_id",
+    "workflow",
+    "agent",
+    "selected_tables",
+    "sql",
+    "answer",
+    "notes"
+  ],
+  "properties": {
+    "question_id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20
+    },
+    "workflow": {
+      "type": "string",
+      "enum": ["schema_only", "dbt_integrated"]
+    },
+    "agent": {
+      "type": "string",
+      "minLength": 1
+    },
+    "selected_tables": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "sql": {
+      "type": "string"
+    },
+    "answer": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}
