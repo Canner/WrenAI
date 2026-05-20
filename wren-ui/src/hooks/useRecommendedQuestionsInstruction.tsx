@@ -63,6 +63,9 @@ export default function useRecommendedQuestionsInstruction() {
     const fetchRecommendationQuestionsData = async () => {
       const result = await fetchRecommendationQuestions();
       const data = result.data?.getProjectRecommendationQuestions;
+      if (!data) {
+        return;
+      }
 
       // for existing projects that do not have to generate recommended questions yet
       if (isRecommendedFinished(data.status)) {
@@ -79,6 +82,10 @@ export default function useRecommendedQuestionsInstruction() {
   }, []);
 
   useEffect(() => {
+    if (!recommendedQuestionsTask) {
+      return;
+    }
+
     if (isRecommendedFinished(recommendedQuestionsTask?.status)) {
       recommendationQuestionsResult.stopPolling();
 

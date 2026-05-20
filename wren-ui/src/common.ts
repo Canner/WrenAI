@@ -43,6 +43,10 @@ import {
   DashboardCacheBackgroundTracker,
 } from './apollo/server/backgrounds';
 import { SqlPairService } from './apollo/server/services/sqlPairService';
+import {
+  disposeComponentGraph,
+  isReusableComponentGraph,
+} from './componentGraph';
 
 export const serverConfig = getConfig();
 
@@ -227,5 +231,11 @@ declare global {
 }
 
 // Keep a single server-side component graph across Next.js dev reloads.
-export const components =
-  globalThis.__wrenComponents || (globalThis.__wrenComponents = initComponents());
+const existingComponents = globalThis.__wrenComponents;
+
+if (!isReusableComponentGraph(existingComponents)) {
+  disposeComponentGraph(existingComponents);
+  globalThis.__wrenComponents = initComponents();
+}
+
+export const components = globalThis.__wrenComponents;
