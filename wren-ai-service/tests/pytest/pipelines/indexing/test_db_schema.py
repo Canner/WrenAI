@@ -5,7 +5,11 @@ import pytest
 from haystack import Document
 from pytest_mock import MockFixture
 
-from src.pipelines.indexing.db_schema import DBSchema, DDLChunker
+from src.pipelines.indexing.db_schema import (
+    MAX_DB_SCHEMA_DOCUMENT_LENGTH,
+    DBSchema,
+    DDLChunker,
+)
 
 
 @pytest.mark.asyncio
@@ -441,6 +445,71 @@ async def test_column_batch_size():
                 }
             ],
         }
+    )
+
+
+@pytest.mark.asyncio
+async def test_long_model_description_is_truncated():
+    chunker = DDLChunker()
+    mdl = {
+        "models": [
+            {
+                "name": "user",
+                "properties": {
+                    "displayName": "user",
+                    "description": "x" * 5000,
+                },
+            }
+        ],
+        "views": [],
+        "relationships": [],
+        "metrics": [],
+    }
+
+    actual = await chunker.run(mdl, column_batch_size=1)
+
+    assert len(actual["documents"]) == 1
+    document: Document = actual["documents"][0]
+    assert len(document.content) < 5000
+    assert "..." in document.content
+
+
+@pytest.mark.asyncio
+async def test_table_columns_are_bounded_to_document_length():
+    chunker = DDLChunker()
+    mdl = {
+        "models": [
+            {
+                "name": "user",
+                "columns": [
+                    {
+                        "name": f"column_{index}",
+                        "type": "VARCHAR",
+                        "properties": {
+                            "displayName": f"column_{index}",
+                            "description": "x" * 6000,
+                        },
+                    }
+                    for index in range(2)
+                ],
+            }
+        ],
+        "views": [],
+        "relationships": [],
+        "metrics": [],
+    }
+
+    actual = await chunker.run(mdl, column_batch_size=50)
+    table_column_documents = [
+        document
+        for document in actual["documents"]
+        if "TABLE_COLUMNS" in document.content
+    ]
+
+    assert len(table_column_documents) >= 1
+    assert all(
+        len(document.content) <= MAX_DB_SCHEMA_DOCUMENT_LENGTH
+        for document in table_column_documents
     )
 
 

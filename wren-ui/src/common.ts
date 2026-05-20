@@ -43,12 +43,48 @@ import {
   DashboardCacheBackgroundTracker,
 } from './apollo/server/backgrounds';
 import { SqlPairService } from './apollo/server/services/sqlPairService';
-import {
-  disposeComponentGraph,
-  isReusableComponentGraph,
-} from './componentGraph';
 
 export const serverConfig = getConfig();
+
+type Initializable = {
+  initialize?: unknown;
+};
+
+type ReusableComponentGraph = {
+  askingTaskTracker?: Initializable;
+  askingService?: Initializable;
+  projectRecommendQuestionBackgroundTracker?: Initializable;
+  threadRecommendQuestionBackgroundTracker?: Initializable;
+  knex?: {
+    destroy?: () => unknown;
+  };
+};
+
+const hasInitialize = (
+  value: Initializable | null | undefined,
+): value is { initialize: () => Promise<void> | void } => {
+  return typeof value?.initialize === 'function';
+};
+
+const isReusableComponentGraph = (
+  graph?: ReusableComponentGraph,
+): boolean => {
+  return Boolean(
+    graph &&
+      hasInitialize(graph.askingTaskTracker) &&
+      hasInitialize(graph.askingService) &&
+      hasInitialize(graph.projectRecommendQuestionBackgroundTracker) &&
+      hasInitialize(graph.threadRecommendQuestionBackgroundTracker),
+  );
+};
+
+const disposeComponentGraph = (graph?: ReusableComponentGraph): void => {
+  if (typeof graph?.knex?.destroy !== 'function') {
+    return;
+  }
+
+  void Promise.resolve(graph.knex.destroy()).catch(() => undefined);
+};
 
 export const initComponents = () => {
   const telemetry = new PostHogTelemetry();

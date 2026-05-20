@@ -126,6 +126,30 @@ def test_table_description_missing_description():
     assert document.content == str({"name": "user", "description": "", "columns": ""})
 
 
+def test_table_description_truncates_long_column_lists():
+    chunker = TableDescriptionChunker()
+    mdl = {
+        "models": [
+            {
+                "name": "user",
+                "columns": [
+                    {"name": f"column_{index}"}
+                    for index in range(205)
+                ],
+            }
+        ],
+        "views": [],
+        "relationships": [],
+        "metrics": [],
+    }
+
+    actual = chunker.run(mdl)
+
+    assert len(actual["documents"]) == 1
+    document: Document = actual["documents"][0]
+    assert "... (+5 more columns)" in document.content
+
+
 @pytest.mark.asyncio
 async def test_pipeline_run(mocker: MockFixture):
     test_mdl = {
