@@ -1,5 +1,6 @@
 import logging
 import re
+from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 import aiohttp
@@ -21,6 +22,109 @@ logger = logging.getLogger("wren-ai-service")
 
 def normalize_data_source(data_source: str | None) -> str:
     return (data_source or "").strip().upper()
+
+
+def _format_timestamp_literal(value: datetime) -> str:
+    return value.strftime("'%Y-%m-%d %H:%M:%S'")
+
+
+def _add_months(value: datetime, months: int) -> datetime:
+    month_index = value.month - 1 + months
+    year = value.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(
+        value.day,
+        [
+            31,
+            29 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 28,
+            31,
+            30,
+            31,
+            30,
+            31,
+            31,
+            30,
+            31,
+            30,
+            31,
+        ][month - 1],
+    )
+    return value.replace(year=year, month=month, day=day)
+
+
+def _start_of_month(value: datetime) -> datetime:
+    return value.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def _replace_relative_getdate_calls(sql: str, now: datetime) -> str:
+    def replace_month_offset(match: re.Match[str]) -> str:
+        months = int(match.group(1))
+        return _format_timestamp_literal(_add_months(now, months))
+
+    def replace_year_offset(match: re.Match[str]) -> str:
+        years = int(match.group(1))
+        return _format_timestamp_literal(_add_months(now, years * 12))
+
+    def replace_day_offset(match: re.Match[str]) -> str:
+        days = int(match.group(1))
+        return _format_timestamp_literal(now + timedelta(days=days))
+
+    sql = re.sub(
+        r"DATEADD\(\s*month\s*,\s*([+-]?\d+)\s*,\s*GETDATE\(\)\s*\)",
+        replace_month_offset,
+        sql,
+        flags=re.IGNORECASE,
+    )
+    sql = re.sub(
+        r"DATEADD\(\s*year\s*,\s*([+-]?\d+)\s*,\s*GETDATE\(\)\s*\)",
+        replace_year_offset,
+        sql,
+        flags=re.IGNORECASE,
+    )
+    sql = re.sub(
+        r"DATEADD\(\s*day\s*,\s*([+-]?\d+)\s*,\s*GETDATE\(\)\s*\)",
+        replace_day_offset,
+        sql,
+        flags=re.IGNORECASE,
+    )
+
+    current_month_start = _format_timestamp_literal(_start_of_month(now))
+    previous_month_start = _format_timestamp_literal(
+        _start_of_month(_add_months(now, -1))
+    )
+    sql = re.sub(
+        r"DATEADD\(\s*month\s*,\s*DATEDIFF\(\s*month\s*,\s*0\s*,\s*GETDATE\(\)\s*\)\s*,\s*0\s*\)",
+        current_month_start,
+        sql,
+        flags=re.IGNORECASE,
+    )
+    sql = re.sub(
+        r"DATEADD\(\s*month\s*,\s*DATEDIFF\(\s*month\s*,\s*0\s*,\s*GETDATE\(\)\s*\)\s*-\s*1\s*,\s*0\s*\)",
+        previous_month_start,
+        sql,
+        flags=re.IGNORECASE,
+    )
+    return sql
+
+
+def _rewrite_mssql_bucket_functions(sql: str) -> str:
+    expression_pattern = r'((?:"[^"]+"(?:\."[^"]+")?)|(?:[A-Za-z_][A-Za-z0-9_\.]*))'
+
+    sql = re.sub(
+        rf"DATEADD\(\s*month\s*,\s*DATEDIFF\(\s*month\s*,\s*0\s*,\s*{expression_pattern}\s*\)\s*,\s*0\s*\)",
+        lambda m: (
+            f"(DATEPART('YEAR', {m.group(1)}) * 100 + DATEPART('MONTH', {m.group(1)}))"
+        ),
+        sql,
+        flags=re.IGNORECASE,
+    )
+    sql = re.sub(
+        rf"DATEADD\(\s*year\s*,\s*DATEDIFF\(\s*year\s*,\s*0\s*,\s*{expression_pattern}\s*\)\s*,\s*0\s*\)",
+        lambda m: f"DATEPART('YEAR', {m.group(1)})",
+        sql,
+        flags=re.IGNORECASE,
+    )
+    return sql
 
 
 def _rewrite_temporal_bucket_functions(sql: str) -> str:
@@ -86,9 +190,18 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
     normalized = sql
 
     if normalize_data_source(data_source) == "MSSQL":
+        now = datetime.now()
         normalized = re.sub(
             r"\s+NULLS\s+(?:LAST|FIRST)\b", "", normalized, flags=re.IGNORECASE
         )
+        normalized = re.sub(
+            r"CAST\(\s*('(?:[^']|'')*')\s+AS\s+DATETIME(?:2|OFFSET)\s*\)",
+            r"\1",
+            normalized,
+            flags=re.IGNORECASE,
+        )
+        normalized = _replace_relative_getdate_calls(normalized, now)
+        normalized = _rewrite_mssql_bucket_functions(normalized)
         normalized = _rewrite_temporal_bucket_functions(normalized)
 
     return re.sub(r"\s+", " ", normalized).strip()
@@ -316,20 +429,20 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 _MSSQL_TEXT_TO_SQL_RULES = """
 ### MSSQL-SPECIFIC RULES ###
 - The target database is MSSQL.
-- DO NOT use PostgreSQL-style or Trino-style date syntax such as DATE_TRUNC, INTERVAL, CURRENT_DATE, TIMESTAMP WITH TIME ZONE, TO_CHAR, or :: casts.
-- DO NOT use YEAR(...), MONTH(...), DAY(...), or DATEPART(...) in generated SQL unless the exact function is explicitly listed as supported in the SQL FUNCTIONS section. Prefer range predicates or DATEADD/DATEDIFF bucket expressions instead.
-- Prefer GETDATE() for the current timestamp and CAST(GETDATE() AS DATE) when you need the current date only.
-- For relative time windows, use DATEADD together with GETDATE().
-- For previous calendar month boundaries, prefer:
-    - start_of_previous_month: DATEADD(month, DATEDIFF(month, 0, GETDATE()) - 1, 0)
-    - start_of_current_month: DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0)
-- For month bucketing, prefer DATEADD(month, DATEDIFF(month, 0, <timestamp_expression>), 0). If DATETRUNC is available in your server version, you may use DATETRUNC(month, <timestamp_expression>), but prefer DATEADD/DATEDIFF when uncertain.
-- For year bucketing, prefer DATEADD(year, DATEDIFF(year, 0, <timestamp_expression>), 0) instead of YEAR(...).
+- The planner in this environment accepts DATEPART with quoted date-part literals, for example DATEPART('YEAR', "created_at").
+- DO NOT use PostgreSQL-style or Trino-style date syntax such as DATE_TRUNC, DATETRUNC, INTERVAL, CURRENT_DATE, TIMESTAMP WITH TIME ZONE, TO_CHAR, or :: casts.
+- DO NOT use DATEADD, DATEDIFF, DATETIME2, or DATETIMEOFFSET unless the SQL FUNCTIONS section explicitly proves they are supported by the target runtime.
+- Resolve relative time phrases such as "last 12 months", "last month", or "this year" into absolute ISO timestamp boundaries using the current time context. Prefer closed-open literal ranges over runtime date arithmetic.
+- For month bucketing, prefer separate year/month fields:
+    - DATEPART('YEAR', <timestamp_expression>) AS "year"
+    - DATEPART('MONTH', <timestamp_expression>) AS "month"
+  Then GROUP BY and ORDER BY the same year/month expressions.
+- For year bucketing, prefer DATEPART('YEAR', <timestamp_expression>).
 - For filtering a specific year such as 2025, prefer a closed-open range:
-    - <timestamp_expression> >= CAST('2025-01-01 00:00:00' AS DATETIME2)
-    - AND <timestamp_expression> < CAST('2026-01-01 00:00:00' AS DATETIME2)
-- When a temporal cast is required, prefer DATETIME2. Use DATETIMEOFFSET only when timezone-aware semantics are explicitly required by the question.
-- Keep relative date logic simple and native to MSSQL. Never emit INTERVAL-like expressions for MSSQL.
+    - <timestamp_expression> >= '2025-01-01 00:00:00'
+    - AND <timestamp_expression> < '2026-01-01 00:00:00'
+- When a temporal cast is required, keep literal timestamps as plain ISO strings if the column is already datetime-like.
+- Keep MSSQL date logic simple and planner-safe. Never emit DATEADD/DATEDIFF fallback expressions unless the SQL FUNCTIONS section explicitly requires them.
 """
 
 
@@ -532,9 +645,9 @@ You are a helpful data analyst who is great at thinking deeply and reasoning abo
 
 ### INSTRUCTIONS ###
 1. Think deeply and reason about the user's question, the database schema, and the user's query history if provided.
-2. Explicitly state the following information in the reasoning plan: 
-if the user puts any specific timeframe(e.g. YYYY-MM-DD) in the user's question(excluding the value of the current time), you will put the absolute time frame in the SQL query; 
-otherwise, you will put the relative timeframe in the SQL query.
+2. Explicitly state the following information in the reasoning plan:
+if the user puts any specific timeframe(e.g. YYYY-MM-DD) in the user's question(excluding the value of the current time), you will put the absolute time frame in the SQL query;
+if the user uses a relative timeframe and Current Time is provided in the input, you will resolve it into an absolute time frame in the SQL query using exact dates rather than relative date arithmetic.
 3. For the ranking problem(e.g. "top x", "bottom x", "first x", "last x"), you must use the ranking function, `DENSE_RANK()` to rank the results and then use `WHERE` clause to filter the results.
 4. For the ranking problem(e.g. "top x", "bottom x", "first x", "last x"), you must add the ranking column to the final SELECT clause.
 5. If USER INSTRUCTIONS section is provided, make sure to consider them in the reasoning plan.
@@ -608,9 +721,9 @@ def get_metric_instructions(
         instructions += """
 
 #### MSSQL Metric Notes ####
-- When filtering metrics by month or other relative date windows in MSSQL, use DATEADD/DATEDIFF or other MSSQL-native date functions from the SQL FUNCTIONS section.
-- Do not use DATE_TRUNC, INTERVAL, CURRENT_DATE, or TIMESTAMP WITH TIME ZONE in MSSQL metric queries.
-- Avoid YEAR(...), MONTH(...), DAY(...), and DATEPART(...) in MSSQL metric queries unless the SQL FUNCTIONS section explicitly shows they are supported by the target engine.
+- Resolve relative metric time windows into absolute ISO date ranges whenever current time context is available.
+- Do not use DATE_TRUNC, DATETRUNC, DATEADD, DATEDIFF, INTERVAL, CURRENT_DATE, or TIMESTAMP WITH TIME ZONE in MSSQL metric queries unless the SQL FUNCTIONS section explicitly shows they are supported by the target engine.
+- For month trend metrics, prefer DATEPART('YEAR', <timestamp_expression>) and DATEPART('MONTH', <timestamp_expression>) as separate grouped columns.
 """
 
     return instructions
