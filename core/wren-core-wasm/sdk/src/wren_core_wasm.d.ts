@@ -10,8 +10,15 @@ export class WrenEngine {
   constructor();
   registerJson(table_name: string, json_data: string): Promise<void>;
   registerParquet(table_name: string, data: Uint8Array): Promise<void>;
+  registerCsv(
+    table_name: string,
+    data: Uint8Array,
+    options_json: string,
+  ): Promise<void>;
   loadMDL(mdl_json: string, source: string): Promise<void>;
   query(sql: string): Promise<string>;
+  cubeQuery(cube_query_json: string): Promise<string>;
+  listCubes(): string;
 }
 
 export type InitInput =

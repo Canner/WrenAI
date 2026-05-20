@@ -1,6 +1,6 @@
 # Skills
 
-Wren AI Core provides **skills** — reusable AI agent workflow guides that teach Claude Code (or other AI coding agents) how to use the Wren CLI effectively. Skills are not plugins or extensions; they are structured prompts with decision trees that guide an agent through multi-step tasks.
+Wren AI provides **skills** — reusable AI agent workflow guides that teach Claude Code (or other AI coding agents) how to use the Wren CLI effectively. Skills are not plugins or extensions; they are structured prompts with decision trees that guide an agent through multi-step tasks.
 
 ## Available skills
 
@@ -13,15 +13,17 @@ Wren AI Core provides **skills** — reusable AI agent workflow guides that teac
 
 ## Installation
 
+The installer supports every major AI coding agent (Claude Code, Openclaw, Hermes, Codex, etc.) and auto-detects which one you're using:
+
 ```bash
 # All skills at once
-npx skills add Canner/WrenAI --skill '*' --agent claude-code
+npx skills add Canner/WrenAI --skill '*'
 
 # Or via install script
 curl -fsSL https://raw.githubusercontent.com/Canner/WrenAI/main/skills/install.sh | bash
 ```
 
-After installation, **start a new Claude Code session** — skills are loaded at session start.
+After installation, **start a new agent session** — skills are loaded at session start.
 
 ### Update skills
 
@@ -96,7 +98,7 @@ The skill activates on phrases like:
 ### Reference docs (skill points to these, never duplicates)
 
 - [Installation](../get_started/installation.md)
-- [Connect Your Database](../get_started/connect.md)
+- [Connect your database](/oss/guides/connect)
 - [Quickstart with sample data](../get_started/quickstart.md)
 
 ---
@@ -221,7 +223,7 @@ The user can enter at any phase. If they already have a `.duckdb` file from a pr
 
 ### Two non-negotiable invariants
 
-1. **DuckDB catalog naming** — when Wren AI Core `ATTACH`es a `.duckdb` file, it uses the filename stem as the catalog alias. So every model's `table_reference.catalog` **must equal the filename stem**. `stripe_data.duckdb` → catalog `stripe_data`. The `introspect_dlt.py` script handles this automatically — never override.
+1. **DuckDB catalog naming** — when Wren AI `ATTACH`es a `.duckdb` file, it uses the filename stem as the catalog alias. So every model's `table_reference.catalog` **must equal the filename stem**. `stripe_data.duckdb` → catalog `stripe_data`. The `introspect_dlt.py` script handles this automatically — never override.
 2. **Type normalization through wren SDK** — column types must go through `wren.type_mapping.parse_type()` (sqlglot-based). Don't hardcode mappings; DuckDB-specific types like `HUGEINT` or `TIMESTAMP WITH TIME ZONE` need canonical conversion.
 
 ### When to trigger

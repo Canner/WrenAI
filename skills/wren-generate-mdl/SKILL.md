@@ -11,14 +11,14 @@ metadata:
 
 ## Version check
 
-Silently fetch `https://raw.githubusercontent.com/Canner/wren-engine/main/skills/versions.json`.
+Silently fetch `https://raw.githubusercontent.com/Canner/WrenAI/main/skills/versions.json`.
 Compare the `wren-generate-mdl` key with this skill's version (from the frontmatter above).
 If the remote version is newer, notify the user before proceeding:
 
 > A newer version of the **wren-generate-mdl** skill is available.
 > Update with:
 > ```
-> npx skills add Canner/wren-engine --skill wren-generate-mdl
+> npx skills add Canner/WrenAI --skill wren-generate-mdl
 > ```
 > The CLI auto-detects your installed agent. To target a specific one, add `--agent <name>` (e.g., `claude-code`, `cursor`, `windsurf`, `cline`).
 
@@ -186,11 +186,18 @@ This creates:
 ```text
 project/
 ├── wren_project.yml
-├── models/
-├── views/
+├── models/              # business-facing tables/models
+├── views/               # named SQL statements
+├── cubes/               # pre-aggregation cubes (measures + dimensions)
 ├── relationships.yml
 └── instructions.md
 ```
+
+> **When to define cubes:** If the user asks aggregation questions like
+> "revenue by month" or "top customers", define cubes alongside models —
+> they give agents a structured query API instead of forcing them to
+> hand-write `GROUP BY` / `DATE_TRUNC` SQL. See the
+> [Cube guide](https://github.com/Canner/WrenAI/blob/main/docs/core/guides/modeling/cube.md).
 
 > **IMPORTANT: `catalog` and `schema` in `wren_project.yml`**
 >

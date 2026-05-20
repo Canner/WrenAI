@@ -38,7 +38,6 @@ function minimalMDL(modelName, physicalTable) {
       },
     ],
     relationships: [],
-    metrics: [],
     views: [],
   };
 }
@@ -55,6 +54,7 @@ describe("WrenEngine.init", () => {
     assert.equal(typeof engine.loadMDL, "function");
     assert.equal(typeof engine.registerJson, "function");
     assert.equal(typeof engine.registerParquet, "function");
+    assert.equal(typeof engine.registerCsv, "function");
     assert.equal(typeof engine.free, "function");
     engine.free();
   });
@@ -156,6 +156,102 @@ describe("registerJson + query", () => {
 });
 
 // =========================================================================
+// registerCsv + query
+// =========================================================================
+
+describe("registerCsv + query", () => {
+  it("registers a CSV string with inferred schema", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+
+    await engine.registerCsv(
+      "orders",
+      "id,name,amount\n1,Alice,100.5\n2,Bob,200\n3,Carol,300.25\n",
+    );
+
+    const rows = await engine.query(
+      "SELECT count(*) AS cnt, sum(amount) AS total FROM orders",
+    );
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].cnt, 3);
+    assert.ok(Math.abs(rows[0].total - 600.75) < 1e-6);
+    engine.free();
+  });
+
+  it("accepts Uint8Array input", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    const bytes = new TextEncoder().encode("id,v\n1,10\n2,20\n");
+
+    await engine.registerCsv("t", bytes);
+    const rows = await engine.query("SELECT sum(v) AS total FROM t");
+    assert.equal(rows[0].total, 30);
+    engine.free();
+  });
+
+  it("supports custom delimiter and quote", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+
+    await engine.registerCsv(
+      "t",
+      "id;label;amount\n1;'hello;world';10\n2;'plain';20\n",
+      { delimiter: ";", quote: "'" },
+    );
+
+    const rows = await engine.query("SELECT label FROM t WHERE id = 1");
+    assert.equal(rows[0].label, "hello;world");
+    engine.free();
+  });
+
+  it("supports header=false with an explicit schema", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+
+    await engine.registerCsv("t", "1,100\n2,200\n3,300\n", {
+      header: false,
+      schema: [
+        { name: "id", type: "int64" },
+        { name: "amount", type: "int64" },
+      ],
+    });
+
+    const rows = await engine.query("SELECT sum(amount) AS total FROM t");
+    assert.equal(rows[0].total, 600);
+    engine.free();
+  });
+
+  it("rejects unknown schema column types", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    await assert.rejects(
+      () =>
+        engine.registerCsv("t", "id\n1\n", {
+          schema: [{ name: "id", type: "bogus" }],
+        }),
+      /Unsupported CSV column type/,
+    );
+    engine.free();
+  });
+
+  it("rejects an empty CSV body", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    await assert.rejects(
+      () => engine.registerCsv("t", "id,amount\n"),
+      /No data in CSV input/,
+    );
+    engine.free();
+  });
+
+  it("rejects non-ASCII delimiter", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    await assert.rejects(
+      () =>
+        engine.registerCsv("t", "a,b\n1,2\n", {
+          delimiter: "，",
+        }),
+      /single ASCII character/,
+    );
+    engine.free();
+  });
+});
+
+// =========================================================================
 // loadMDL (semantic layer)
 // =========================================================================
 
@@ -211,8 +307,7 @@ describe("loadMDL", () => {
         },
       ],
       relationships: [],
-      metrics: [],
-      views: [],
+        views: [],
     };
 
     await assert.rejects(
@@ -238,6 +333,66 @@ describe("loadMDL", () => {
 // =========================================================================
 // query error handling
 // =========================================================================
+
+// =========================================================================
+// set operators (UNION ALL / UNION / INTERSECT / EXCEPT)
+//
+// Regression: 0.4.0 traps with `RuntimeError: unreachable` on any plan that
+// CoalescePartitionsExec parallelises (i.e. anything with >1 partition).
+// UNION ALL is the simplest trigger because Union sums child partitions.
+// =========================================================================
+
+describe("set operators", () => {
+  it("UNION ALL inside a subquery returns both branches", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    const rows = await engine.query(
+      "SELECT a FROM (SELECT 1 AS a UNION ALL SELECT 2) t ORDER BY a",
+    );
+    assert.deepEqual(rows, [{ a: 1 }, { a: 2 }]);
+    engine.free();
+  });
+
+  it("top-level UNION ALL returns both branches", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    const rows = await engine.query(
+      "SELECT 1 AS a UNION ALL SELECT 2 ORDER BY a",
+    );
+    assert.equal(rows.length, 2);
+    engine.free();
+  });
+
+  it("UNION (deduplicated) drops duplicates", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    const rows = await engine.query("SELECT 1 AS a UNION SELECT 1");
+    assert.equal(rows.length, 1);
+    engine.free();
+  });
+
+  it("INTERSECT returns rows in both inputs", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    const rows = await engine.query("SELECT 1 AS a INTERSECT SELECT 1");
+    assert.equal(rows.length, 1);
+    engine.free();
+  });
+
+  it("EXCEPT returns rows only in the first input", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    const rows = await engine.query("SELECT 1 AS a EXCEPT SELECT 2");
+    assert.equal(rows.length, 1);
+    engine.free();
+  });
+
+  it("UNION ALL across two registered tables", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    await engine.registerJson("a_rows", [{ k: "a", n: 1 }, { k: "a", n: 2 }]);
+    await engine.registerJson("b_rows", [{ k: "b", n: 3 }, { k: "b", n: 4 }]);
+    const rows = await engine.query(
+      "SELECT k, COUNT(*) AS c FROM (SELECT k FROM a_rows UNION ALL SELECT k FROM b_rows) t GROUP BY k ORDER BY k",
+    );
+    assert.deepEqual(rows, [{ k: "a", c: 2 }, { k: "b", c: 2 }]);
+    engine.free();
+  });
+});
 
 describe("query error handling", () => {
   it("rejects invalid SQL syntax", async () => {
@@ -331,5 +486,182 @@ describe("free", () => {
     const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
     engine.free();
     // No assertion needed — just verify it doesn't throw
+  });
+});
+
+// =========================================================================
+// cubeQuery + listCubes
+// =========================================================================
+
+function cubeMDL() {
+  return {
+    catalog: "wren",
+    schema: "public",
+    models: [
+      {
+        name: "orders",
+        tableReference: { table: "orders" },
+        columns: [
+          { name: "amount", type: "DOUBLE" },
+          { name: "status", type: "VARCHAR" },
+          { name: "created_at", type: "DATE" },
+        ],
+      },
+    ],
+    relationships: [],
+    views: [],
+    cubes: [
+      {
+        name: "order_metrics",
+        baseObject: "orders",
+        measures: [
+          { name: "total", expression: "SUM(amount)", type: "DOUBLE" },
+          { name: "order_count", expression: "COUNT(*)", type: "BIGINT" },
+        ],
+        dimensions: [
+          { name: "status", expression: "status", type: "VARCHAR" },
+        ],
+        timeDimensions: [
+          { name: "created_at", expression: "created_at", type: "DATE" },
+        ],
+        hierarchies: { time_drill: ["created_at"] },
+      },
+    ],
+  };
+}
+
+describe("cubeQuery + listCubes", () => {
+  it("listCubes returns cubes from the loaded MDL", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    await engine.registerJson("orders", [{ amount: 10, status: "open" }]);
+    await engine.loadMDL(cubeMDL(), { source: "" });
+
+    const cubes = engine.listCubes();
+    assert.equal(cubes.length, 1);
+    assert.equal(cubes[0].name, "order_metrics");
+    assert.equal(cubes[0].baseObject, "orders");
+    assert.equal(cubes[0].measures.length, 2);
+    assert.equal(cubes[0].measures[0].name, "total");
+    assert.equal(cubes[0].dimensions.length, 1);
+    assert.equal(cubes[0].dimensions[0].name, "status");
+    assert.equal(cubes[0].timeDimensions.length, 1);
+    assert.equal(cubes[0].timeDimensions[0].name, "created_at");
+    assert.deepEqual(cubes[0].hierarchies, { time_drill: ["created_at"] });
+    engine.free();
+  });
+
+  it("cubeQuery aggregates by dimension", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    await engine.registerJson("orders", [
+      { amount: 10, status: "open" },
+      { amount: 25, status: "open" },
+      { amount: 7, status: "closed" },
+    ]);
+    await engine.loadMDL(cubeMDL(), { source: "" });
+
+    const rows = await engine.cubeQuery({
+      cube: "order_metrics",
+      measures: ["total", "order_count"],
+      dimensions: ["status"],
+    });
+
+    assert.equal(rows.length, 2);
+    const byStatus = Object.fromEntries(rows.map((r) => [r.status, r]));
+    assert.equal(byStatus.open.total, 35);
+    assert.equal(byStatus.open.order_count, 2);
+    assert.equal(byStatus.closed.total, 7);
+    assert.equal(byStatus.closed.order_count, 1);
+    engine.free();
+  });
+
+  it("cubeQuery rejects an unknown cube", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    await engine.registerJson("orders", [{ amount: 10, status: "open" }]);
+    await engine.loadMDL(cubeMDL(), { source: "" });
+
+    await assert.rejects(
+      () => engine.cubeQuery({ cube: "nonexistent", measures: ["total"] }),
+      /not found/i,
+    );
+    engine.free();
+  });
+
+  it("cubeQuery without loadMDL fails clearly", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    await assert.rejects(
+      () => engine.cubeQuery({ cube: "order_metrics", measures: ["total"] }),
+      /No MDL loaded/i,
+    );
+    engine.free();
+  });
+
+  it("listCubes without loadMDL fails clearly", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    assert.throws(
+      () => engine.listCubes(),
+      /No MDL loaded/i,
+    );
+    engine.free();
+  });
+
+  it("cubeQuery applies dimension filters", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    await engine.registerJson("orders", [
+      { amount: 10, status: "open", created_at: "2024-01-15" },
+      { amount: 25, status: "open", created_at: "2024-02-20" },
+      { amount: 7, status: "closed", created_at: "2024-01-05" },
+      { amount: 5, status: "cancelled", created_at: "2024-02-10" },
+    ]);
+    await engine.loadMDL(cubeMDL(), { source: "" });
+
+    const rows = await engine.cubeQuery({
+      cube: "order_metrics",
+      measures: ["total"],
+      dimensions: ["status"],
+      filters: [
+        { dimension: "status", operator: "in", value: ["open", "closed"] },
+      ],
+    });
+
+    assert.equal(rows.length, 2);
+    const byStatus = Object.fromEntries(rows.map((r) => [r.status, r.total]));
+    assert.equal(byStatus.open, 35);
+    assert.equal(byStatus.closed, 7);
+    assert.equal(byStatus.cancelled, undefined);
+    engine.free();
+  });
+
+  it("cubeQuery bucketizes a time dimension with date range", async () => {
+    const engine = await WrenEngine.init({ wasmUrl: wasmBytes });
+    await engine.registerJson("orders", [
+      { amount: 10, status: "open", created_at: "2024-01-15" },
+      { amount: 25, status: "open", created_at: "2024-01-20" },
+      { amount: 7, status: "closed", created_at: "2024-02-05" },
+      // Outside the dateRange window — excluded.
+      { amount: 1000, status: "open", created_at: "2025-01-15" },
+    ]);
+    await engine.loadMDL(cubeMDL(), { source: "" });
+
+    const rows = await engine.cubeQuery({
+      cube: "order_metrics",
+      measures: ["total"],
+      timeDimensions: [
+        {
+          dimension: "created_at",
+          granularity: "month",
+          dateRange: ["2024-01-01", "2025-01-01"],
+        },
+      ],
+    });
+
+    assert.equal(rows.length, 2);
+    // Buckets are exposed as `<dim>__<granularity>` columns.
+    const bucketCol = "created_at__month";
+    assert.ok(bucketCol in rows[0], `expected ${bucketCol} column in ${JSON.stringify(rows[0])}`);
+    const totals = Object.fromEntries(rows.map((r) => [r[bucketCol], r.total]));
+    // Two distinct months — Jan totals 35, Feb totals 7.
+    const values = Object.values(totals).sort((a, b) => a - b);
+    assert.deepEqual(values, [7, 35]);
+    engine.free();
   });
 });

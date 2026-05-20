@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wren-langchain"
-version = "0.1.0"
+version = "0.2.0"
 description = "LangChain and LangGraph integration for Wren AI Core — attach a CLI-prepared Wren project to your agent in three lines."
 readme = "README.md"
 requires-python = ">=3.11"

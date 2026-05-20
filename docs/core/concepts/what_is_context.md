@@ -1,69 +1,80 @@
 # What is context?
 
-In Wren AI Core, context is the structured business understanding an AI agent needs in order to work with data correctly. It goes beyond raw schemas and table access. Context helps an agent understand what your data means, which sources to trust, how entities relate to each other, how metrics should be calculated, and what rules or guidance should shape its behavior.
+Your AI agent does not know what your data means. It reads schemas. It catches column names. It even reads your semantic-layer YAML. But it misses the things that actually decide whether an answer is right — that `status = 4` means refunded, that `loyalty_v3` is the table your team actually uses, that "monthly active users" excludes service accounts, that "Project Lighthouse" was renamed to `campaign_id = 4172` six months ago in a doc nobody linked to the warehouse.
 
-For AI agents, this matters because answering a question is rarely just a SQL generation problem. The harder problem is knowing what the question means inside a business. Questions like "What is revenue growth last quarter?" depend on business definitions, trusted sources, time conventions, relationships, and sometimes team-specific instructions. Context is what makes those answers reliable.
+So it picks the wrong table. It writes confident, plausible, wrong SQL. The demo looks fine. The pilot looks fine. Production is where it breaks.
 
-## Why context matters for AI agents
+**AI agents over business data are bottlenecked on context, not on intelligence.** Wren AI exists to close that gap.
 
-AI agents often fail not because they cannot write SQL, but because they lack the business and operational grounding needed to plan correctly. A warehouse may contain many similar tables, overlapping metrics, legacy definitions, and tribal knowledge that never appears in a schema.
+## The five layers of context
 
-Context helps agents:
+For an AI agent to answer real business questions on real company data, it needs five layers of knowledge — not one.
 
-- understand business entities and terminology
-- identify the right source of truth
-- follow approved relationships and calculations
-- apply business rules consistently
-- generate more reliable answers across multi-step workflows
+1. **Structured business semantics.** What your schema means in business terms — display names, descriptions, synonyms, enum labels, relationships, metrics, business rules. Today this lives in MDL.
 
-This is why Wren AI Core is positioned as an open context layer for AI agents: it helps turn raw data systems into usable context that agents can reason over.
+2. **Examples and memory.** The successful NL-SQL pairs, prior interactions, user feedback, and pinned business questions that teach the agent what *correct* looks like in your specific environment. Today this lives in the memory layer.
 
-## Context vs. semantics
+3. **Governance and skills.** Access control, read-only enforcement, audit, query gating, agent skills, default query patterns. What makes context safe to expose to an autonomous system. Today this lives in profiles, skills, and the CLI's safety primitives.
 
-Semantics and context are related, but they are not the same thing.
+4. **Unstructured corporate knowledge.** The docs, emails, chat threads, wikis, and SOPs where business definitions and project codenames live before they ever appear in a table. *(Actively in development — `wren-enrich-context` skill in auto-pilot mode.)*
 
-**Semantics** is about meaning. In data systems, semantics usually refers to the business meaning of entities, metrics, relationships, and attributes. For example, semantics defines what "revenue" means, how "customer" is modeled, or how two datasets should be joined.
+5. **Cross-modal alignment.** The bridge between layer 4 and layer 1 — mappings from "Project Lighthouse" to `campaign_id = 4172`, from "Northstar metric" to a CTE the analytics team agreed on last quarter. *(Actively in development.)*
 
-**Context** is broader. It includes semantics, but also adds the surrounding information an agent needs to act correctly in real workflows.
+Layers 1–3 ship today. Layers 4–5 are gated by a synthetic-corpus validation experiment before they reach alpha.
 
-Context can include:
+## Context vs. semantic layer
 
-- semantic definitions of metrics and entities
-- source-of-truth guidance
-- modeling rules and reusable calculations
-- identity resolution across systems
-- governance and access expectations
-- operational instructions and tribal knowledge
-- evolving business conventions over time
+The traditional **semantic layer** was the industry's answer to text-to-SQL for *dashboards*. The audience was a human — or a BI tool that tolerated a slow setup because the payoff lived in long-lived charts.
 
-Put simply:
+In an AI-native world the audience is different: an agent, a coding assistant, an application that needs structured context in real time. Agents do not click buttons. Agents do not consult a metric catalogue. They need context delivered as primitives they can reason over — and they need it fast enough that the journey from "connect a database" to "first correct answer" is minutes, not weeks.
 
-- semantics explains what data means
-- context explains how an agent should use that meaning in practice
+**Wren AI is a context layer.** The distinction from a semantic layer is small in words and large in consequence: a context layer is a *superset* of a semantic layer, adding the four other layers an autonomous system needs to act correctly.
 
-## Why context is broader than a semantic layer
+## What Wren AI gives AI workflows
 
-A traditional semantic layer is valuable because it gives business definitions to data. It helps define metrics, entities, and relationships in a structured way. That is an important foundation.
+The five layers above turn into concrete benefits for any agent built on top of them:
 
-But for AI agents, a semantic layer alone is often not enough. Agents also need to know which definitions are current, which systems are authoritative, what exceptions exist, and what instructions should apply in ambiguous situations.
+### Shared business context (layer 1)
 
-This idea aligns with the argument in a16z's article [Your Data Agents Need Context](https://a16z.com/your-data-agents-need-context/): a modern context layer should be a superset of the traditional semantic layer, adding the business and operational grounding that autonomous agents need.
+MDL captures the meaning of your data in a form both humans and AI agents can use — business entities, relationships, reusable calculations, curated dataset structure. An agent can map "top customers by revenue" to the right models, joins, and metrics without reconstructing logic from raw schema.
 
-## What context includes in Wren AI Core
+### More reliable text-to-SQL planning (layers 1 + 5)
 
-Wren AI Core builds context from structured modeling and execution primitives, including:
+LLMs are good at pattern matching, weak at domain-specific modeling rules. Explicit structure cuts incorrect joins, misuse of similarly named columns, duplicated metric definitions, and brittle query generation based on incomplete schema interpretation.
 
-- MDL definitions for models, relationships, calculations, and views
-- business-facing dataset structure
-- reusable analytical logic
-- governed access patterns between agents and data sources
-- MCP-friendly interfaces for connecting that context to AI agents
-- a [memory layer](../guides/memory.md) that indexes schema context and stores confirmed NL-SQL pairs, enabling agents to retrieve relevant context per question and learn from past interactions
+### Better RAG context (layers 1 + 2)
 
-Together, these give agents a clearer and more durable understanding of how to reason over data. Notably, the memory layer makes context **adaptive** — it grows with usage. As more queries are confirmed and stored, the agent's ability to answer domain-specific questions improves without changes to the MDL or the underlying model.
+RAG works when retrieved context is structured, relevant, and grounded in how the business actually defines data. Wren exposes modeled entities, documented relationships, and reusable logic — higher-quality fuel for retrieval than raw database metadata.
+
+### Consistent answers across tools and agents (layer 1)
+
+When multiple AI agents or applications access the same modeled context, they reason from the same definitions. One place to define how metrics, dimensions, and relationships behave; consistency by design.
+
+### Governed access to data (layer 3)
+
+AI systems should not have unlimited freedom over every object in a warehouse. Operating against modeled data definitions instead of arbitrary warehouse exploration limits the working surface area, makes approved objects explicit, and keeps business logic in a reviewable form.
+
+### Memory and self-learning (layer 2)
+
+Most text-to-SQL systems treat every question as if it were the first. Wren AI breaks that pattern with a built-in [memory layer](/oss/concepts/memory_system) that learns from successful queries:
+
+- **Schema context retrieval** — the memory layer indexes your MDL and retrieves only the relevant models, columns, and relationships for each question. Embedding search for large schemas; full text for small.
+- **Query recall** — every confirmed NL-SQL pair is stored as a few-shot example. The more questions you ask, the more accurate future answers become — without retraining a model or writing custom prompts.
+
+A traditional text-to-SQL pipeline has a fixed accuracy ceiling determined by the LLM. With memory, that ceiling rises with usage.
+
+## Why this cannot be solved one feature at a time
+
+The temptation is to treat correctness like a setting. Add a metadata field. Add 100 examples. Flip a switch.
+
+That does not work. Correctness is the result of [six pieces working together](/oss/concepts/architecture): schema linking, value profiling, ambiguity detection, generation trace, retry and repair, and eval. Miss any one of them and the agent fails in that exact gap.
+
+That is why we build context as a system, not as a feature — and why Wren AI exposes **primitives**, not a closed product. The agent does the orchestration. The trace lives where the agent's reasoning lives.
 
 ## In short
 
-Context is the full set of information an AI agent needs to operate reliably on top of business data. Semantics is one part of that picture, but context goes further by combining meaning with source selection, modeling logic, governance, and practical instructions.
+- **Context** = the full set of information an AI agent needs to operate reliably on business data.
+- **Semantic layer** = one slice of that picture (layer 1).
+- **Context layer** = all five layers, designed for autonomous agents instead of humans clicking buttons.
 
-That is the shift from semantic layer thinking to context thinking: not just defining what data means, but packaging the full business understanding that agents need to act correctly.
+That is the shift Wren AI is built around.

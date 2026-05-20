@@ -10,7 +10,7 @@ use petgraph::Graph;
 use crate::logical_plan::utils::from_qualified_name;
 use crate::mdl::{utils, WrenMDL};
 
-use super::manifest::{JoinType, Relationship};
+use super::manifest::{Cube, JoinType, Relationship};
 use super::utils::{
     collect_identifiers, qualify_name_from_column_name, quoted, to_expr_queue,
 };
@@ -299,6 +299,76 @@ impl Display for DatasetLink {
     }
 }
 
+/// Validate every cube in the manifest:
+/// 1. `base_object` must point to an existing Model or View.
+/// 2. Derived-measure expressions must not form a cycle.
+/// 3. Every level in each hierarchy must reference a defined dimension or time_dimension.
+pub(super) fn validate_cubes(mdl: &WrenMDL) -> Result<()> {
+    for cube in mdl.manifest.cubes.iter() {
+        if mdl.get_model(&cube.base_object).is_none()
+            && mdl.get_view(&cube.base_object).is_none()
+        {
+            return plan_err!(
+                "Cube '{}': baseObject '{}' is not a defined Model or View",
+                cube.name,
+                cube.base_object
+            );
+        }
+
+        validate_measure_cycles(cube)?;
+
+        let all_dim_names: HashSet<&str> = cube
+            .dimensions
+            .iter()
+            .map(|d| d.name.as_str())
+            .chain(cube.time_dimensions.iter().map(|td| td.name.as_str()))
+            .collect();
+        for (hierarchy_name, levels) in &cube.hierarchies {
+            for level in levels {
+                if !all_dim_names.contains(level.as_str()) {
+                    return plan_err!(
+                        "Cube '{}': hierarchy '{}' references unknown dimension '{}'",
+                        cube.name,
+                        hierarchy_name,
+                        level
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_measure_cycles(cube: &Cube) -> Result<()> {
+    let mut graph: Graph<&str, ()> = Graph::new();
+    let mut node_map: HashMap<&str, _> = HashMap::new();
+    for measure in cube.measures.iter() {
+        let idx = graph.add_node(measure.name.as_str());
+        node_map.insert(measure.name.as_str(), idx);
+    }
+
+    let measure_names: HashSet<&str> = node_map.keys().copied().collect();
+
+    for measure in cube.measures.iter() {
+        let identifiers = collect_identifiers(&measure.expression)?;
+        for ident in &identifiers {
+            if measure_names.contains(ident.name.as_str()) {
+                let from = node_map[measure.name.as_str()];
+                let to = node_map[ident.name.as_str()];
+                graph.add_edge(from, to, ());
+            }
+        }
+    }
+
+    if !utils::is_dag(&graph) {
+        return plan_err!(
+            "Cube '{}': circular dependency detected in measure expressions",
+            cube.name
+        );
+    }
+    Ok(())
+}
+
 fn get_dataset_link_revers_if_need(
     source: Dataset,
     rs: Arc<Relationship>,
@@ -320,13 +390,17 @@ mod test {
     use datafusion::common::{Column, Spans};
     use datafusion::error::Result;
     use datafusion::sql::TableReference;
-    use std::collections::HashSet;
+    use std::collections::{HashMap, HashSet};
+    use std::sync::Arc;
 
     use crate::mdl::builder::{
-        ColumnBuilder, ManifestBuilder, ModelBuilder, RelationshipBuilder,
+        ColumnBuilder, CubeBuilder, CubeDimensionBuilder, ManifestBuilder,
+        MeasureBuilder, ModelBuilder, RelationshipBuilder, TimeDimensionBuilder,
     };
+    use crate::mdl::context::Mode;
     use crate::mdl::lineage::Lineage;
     use crate::mdl::manifest::JoinType;
+    use crate::mdl::AnalyzedWrenMDL;
     use crate::mdl::Dataset;
     use crate::mdl::WrenMDL;
 
@@ -741,5 +815,161 @@ mod test {
             .column(ColumnBuilder::new("c1", "varchar").build())
             .column(ColumnBuilder::new("b1", "varchar").build())
             .primary_key("id")
+    }
+
+    #[test]
+    fn test_validate_cube_valid() {
+        let manifest = ManifestBuilder::new()
+            .model(
+                ModelBuilder::new("orders")
+                    .table_reference("orders")
+                    .column(ColumnBuilder::new("o_totalprice", "double").build())
+                    .column(ColumnBuilder::new("o_orderstatus", "varchar").build())
+                    .column(ColumnBuilder::new("o_orderdate", "date").build())
+                    .build(),
+            )
+            .cube(
+                CubeBuilder::new("order_metrics", "orders")
+                    .measure(
+                        MeasureBuilder::new("revenue", "SUM(o_totalprice)", "DOUBLE")
+                            .build(),
+                    )
+                    .dimension(
+                        CubeDimensionBuilder::new("status", "o_orderstatus", "VARCHAR")
+                            .build(),
+                    )
+                    .time_dimension(
+                        TimeDimensionBuilder::new("created_at", "o_orderdate", "DATE")
+                            .build(),
+                    )
+                    .hierarchy("time_drill", vec!["created_at"])
+                    .build(),
+            )
+            .build();
+        if let Err(err) = AnalyzedWrenMDL::analyze(
+            manifest,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        ) {
+            panic!("expected Ok, got error: {err}");
+        }
+    }
+
+    #[test]
+    fn test_validate_cube_bad_base_object() {
+        let manifest = ManifestBuilder::new()
+            .cube(
+                CubeBuilder::new("bad_cube", "nonexistent_model")
+                    .measure(MeasureBuilder::new("count", "COUNT(*)", "BIGINT").build())
+                    .build(),
+            )
+            .build();
+        let result = AnalyzedWrenMDL::analyze(
+            manifest,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        );
+        let Err(err) = result else {
+            panic!("expected error for unknown baseObject");
+        };
+        assert!(
+            err.to_string().contains("not a defined Model or View"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_validate_cube_measure_cycle() {
+        let manifest = ManifestBuilder::new()
+            .model(
+                ModelBuilder::new("orders")
+                    .table_reference("orders")
+                    .column(ColumnBuilder::new("amount", "double").build())
+                    .build(),
+            )
+            .cube(
+                CubeBuilder::new("cycle_cube", "orders")
+                    .measure(MeasureBuilder::new("a", "b + 1", "DOUBLE").build())
+                    .measure(MeasureBuilder::new("b", "a + 1", "DOUBLE").build())
+                    .build(),
+            )
+            .build();
+        let result = AnalyzedWrenMDL::analyze(
+            manifest,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        );
+        let Err(err) = result else {
+            panic!("expected error for measure cycle");
+        };
+        assert!(
+            err.to_string().contains("circular dependency"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_validate_cube_measure_self_reference() {
+        let manifest = ManifestBuilder::new()
+            .model(
+                ModelBuilder::new("orders")
+                    .table_reference("orders")
+                    .column(ColumnBuilder::new("amount", "double").build())
+                    .build(),
+            )
+            .cube(
+                CubeBuilder::new("self_ref_cube", "orders")
+                    .measure(
+                        MeasureBuilder::new("revenue", "revenue * 1.1", "DOUBLE").build(),
+                    )
+                    .build(),
+            )
+            .build();
+        let result = AnalyzedWrenMDL::analyze(
+            manifest,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        );
+        let Err(err) = result else {
+            panic!("expected error for self-referential measure");
+        };
+        assert!(
+            err.to_string().contains("circular dependency"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_validate_cube_bad_hierarchy() {
+        let manifest = ManifestBuilder::new()
+            .model(
+                ModelBuilder::new("orders")
+                    .table_reference("orders")
+                    .column(ColumnBuilder::new("status_col", "varchar").build())
+                    .build(),
+            )
+            .cube(
+                CubeBuilder::new("bad_hier", "orders")
+                    .measure(MeasureBuilder::new("count", "COUNT(*)", "BIGINT").build())
+                    .dimension(
+                        CubeDimensionBuilder::new("status", "status_col", "VARCHAR")
+                            .build(),
+                    )
+                    .hierarchy("drill", vec!["status", "nonexistent_dim"])
+                    .build(),
+            )
+            .build();
+        let result = AnalyzedWrenMDL::analyze(
+            manifest,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        );
+        let Err(err) = result else {
+            panic!("expected error for bad hierarchy");
+        };
+        assert!(
+            err.to_string().contains("unknown dimension"),
+            "unexpected error: {err}"
+        );
     }
 }

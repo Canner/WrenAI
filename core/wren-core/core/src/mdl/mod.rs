@@ -38,6 +38,8 @@ pub mod builder {
     pub use wren_core_base::mdl::builder::*;
 }
 pub mod context;
+pub(crate) mod cube;
+pub use cube::{cube_query_to_sql, CubeQuery};
 pub(crate) mod dataset;
 mod dialect;
 pub mod function;
@@ -82,6 +84,7 @@ impl AnalyzedWrenMDL {
         let wren_mdl = Arc::new(WrenMDL::infer_and_register_remote_table(
             manifest, properties, mode,
         )?);
+        lineage::validate_cubes(&wren_mdl)?;
         let lineage = Arc::new(lineage::Lineage::new(&wren_mdl)?);
         Ok(AnalyzedWrenMDL { wren_mdl, lineage })
     }
@@ -94,6 +97,7 @@ impl AnalyzedWrenMDL {
         for (name, table) in register_tables {
             wren_mdl.register_table(name, table);
         }
+        lineage::validate_cubes(&wren_mdl)?;
         let lineage = lineage::Lineage::new(&wren_mdl)?;
         Ok(AnalyzedWrenMDL {
             wren_mdl: Arc::new(wren_mdl),
@@ -159,6 +163,7 @@ impl AnalyzedWrenMDL {
             wren_mdl.register_table(table_reference.to_string(), Arc::new(table));
         }
 
+        lineage::validate_cubes(&wren_mdl)?;
         let lineage = lineage::Lineage::new(&wren_mdl)?;
         Ok(AnalyzedWrenMDL {
             wren_mdl: Arc::new(wren_mdl),
@@ -1654,6 +1659,30 @@ mod test {
         .await?;
         assert_snapshot!(actual, @"SELECT list_table.list_col[1] FROM (SELECT list_table.list_col FROM \
         (SELECT __source.list_col AS list_col FROM list_table AS __source) AS list_table) AS list_table");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_union_all_local_runtime() -> Result<()> {
+        // Reproduce wren-core-wasm bug: UNION ALL traps in LocalRuntime mode
+        // even with an empty manifest. The WASM panic shows up as RuntimeError
+        // unreachable; the native equivalent here lets us see the Rust message.
+        let ctx = create_wren_ctx(None, None);
+        let analyzed = Arc::new(AnalyzedWrenMDL::default());
+        let ctx = apply_wren_on_ctx(
+            &ctx,
+            Arc::clone(&analyzed),
+            Arc::new(HashMap::new()),
+            Mode::LocalRuntime,
+        )
+        .await?;
+        let sql = "SELECT a FROM (SELECT 1 AS a UNION ALL SELECT 2) t";
+        let batches = ctx.sql(sql).await?.collect().await?;
+        assert_eq!(
+            batches.iter().map(|b| b.num_rows()).sum::<usize>(),
+            2,
+            "UNION ALL should return 2 rows"
+        );
         Ok(())
     }
 

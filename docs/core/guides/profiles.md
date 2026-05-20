@@ -63,7 +63,7 @@ wren profile add my-db --ui
 Opens a browser form with data-source-specific fields. Select the data source type, fill in the fields, and submit. Requires the `ui` extra:
 
 ```bash
-pip install "wren-engine[main]"   # recommended: includes ui + memory + interactive
+pip install "wren-engine[main]"   # includes ui + interactive (add 'memory' separately if needed)
 ```
 
 ### Option B: Interactive CLI

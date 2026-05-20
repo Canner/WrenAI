@@ -3,6 +3,7 @@ use pyo3::prelude::*;
 use remote_functions::PyRemoteFunction;
 
 pub mod context;
+mod cube;
 mod errors;
 mod extractor;
 mod manifest;
@@ -25,5 +26,6 @@ fn wren_core_wrapper(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(validation::validate_rlac_rule, m)?)?;
     m.add_function(wrap_pyfunction!(manifest::is_backward_compatible, m)?)?;
     m.add_function(wrap_pyfunction!(manifest::migrate_manifest_json, m)?)?;
+    m.add_function(wrap_pyfunction!(cube::cube_query_to_sql, m)?)?;
     Ok(())
 }

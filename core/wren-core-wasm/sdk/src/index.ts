@@ -5,6 +5,148 @@ export interface WrenProfile {
   source: string;
 }
 
+export type Granularity =
+  | "year"
+  | "quarter"
+  | "month"
+  | "week"
+  | "day"
+  | "hour"
+  | "minute";
+
+export type FilterOperator =
+  | "eq"
+  | "neq"
+  | "in"
+  | "not_in"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte"
+  | "contains"
+  | "starts_with"
+  | "is_null"
+  | "is_not_null";
+
+export type FilterValue =
+  | string
+  | number
+  | boolean
+  | (string | number | boolean)[];
+
+export interface TimeDimensionInput {
+  dimension: string;
+  granularity: Granularity;
+  /** Inclusive start, exclusive end. */
+  dateRange?: [string, string];
+}
+
+export interface CubeFilterInput {
+  dimension: string;
+  operator: FilterOperator;
+  /** Omit for `is_null`/`is_not_null`. Use an array for `in`/`not_in`. */
+  value?: FilterValue;
+}
+
+export interface CubeQueryInput {
+  cube: string;
+  measures: string[];
+  dimensions?: string[];
+  timeDimensions?: TimeDimensionInput[];
+  filters?: CubeFilterInput[];
+  limit?: number;
+  offset?: number;
+}
+
+export interface CubeMeasureInfo {
+  name: string;
+  expression: string;
+  type: string;
+}
+
+export interface CubeDimensionInfo {
+  name: string;
+  expression: string;
+  type: string;
+}
+
+export interface CubeInfo {
+  name: string;
+  baseObject: string;
+  measures: CubeMeasureInfo[];
+  dimensions: CubeDimensionInfo[];
+  timeDimensions: CubeDimensionInfo[];
+  hierarchies: Record<string, string[]>;
+}
+
+/** Subset of Arrow types accepted by {@link CsvReadOptions.schema}. */
+export type CsvColumnType =
+  | "int8"
+  | "int16"
+  | "int32"
+  | "int64"
+  | "uint8"
+  | "uint16"
+  | "uint32"
+  | "uint64"
+  | "float32"
+  | "float64"
+  | "boolean"
+  | "string"
+  | "utf8"
+  | "varchar"
+  | "text"
+  | "date"
+  | "date32"
+  | "date64"
+  | "timestamp"
+  | "timestamp_s"
+  | "timestamp_ms"
+  | "timestamp_us"
+  | "timestamp_ns"
+  // Aliases accepted by the Rust side (case-insensitive).
+  | "int"
+  | "integer"
+  | "bigint"
+  | "long"
+  | "float"
+  | "double"
+  | "real"
+  | "number"
+  | "bool";
+
+export interface CsvSchemaColumn {
+  name: string;
+  type: CsvColumnType | string;
+  /** Defaults to true. */
+  nullable?: boolean;
+}
+
+/**
+ * Optional configuration for {@link WrenEngine.registerCsv}. All fields are
+ * optional; omit a field to take the arrow-csv default. Single-character
+ * fields (delimiter/quote/escape/terminator) take only the first byte of the
+ * supplied string and must be ASCII.
+ */
+export interface CsvReadOptions {
+  /** First row is a header. Default: true. */
+  header?: boolean;
+  /** Field delimiter. Default: ",". */
+  delimiter?: string;
+  /** Quote character. Default: '"'. */
+  quote?: string;
+  /** Escape character. Default: unset (no escape). */
+  escape?: string;
+  /** Record terminator. Default: any of "\\n", "\\r\\n". */
+  terminator?: string;
+  /** RecordBatch size. Default: 8192. */
+  batchSize?: number;
+  /** Rows to read for schema inference. Default: 1000. Ignored when `schema` is supplied. */
+  inferRows?: number;
+  /** Explicit Arrow schema; when set, inference is skipped. */
+  schema?: CsvSchemaColumn[];
+}
+
 export interface WrenEngineOptions {
   /**
    * WASM binary source. Accepts:
@@ -78,11 +220,80 @@ export class WrenEngine {
   }
 
   /**
+   * Register CSV data as a named table.
+   * Call before loadMDL when using local mode.
+   *
+   * `data` may be a CSV string (treated as UTF-8) or any BufferSource —
+   * ArrayBuffer, TypedArray (e.g., `Uint8Array`), or Node.js Buffer.
+   *
+   * By default the first row is treated as a header and the column schema is
+   * inferred from the first 1000 rows. Pass {@link CsvReadOptions.schema} to
+   * skip inference.
+   *
+   * @example
+   * ```ts
+   * await engine.registerCsv("orders", "id,amount\n1,100\n2,200");
+   *
+   * await engine.registerCsv("metrics", csvBytes, {
+   *   header: true,
+   *   delimiter: ";",
+   *   schema: [
+   *     { name: "id", type: "int64" },
+   *     { name: "amount", type: "float64" },
+   *   ],
+   * });
+   * ```
+   */
+  async registerCsv(
+    name: string,
+    data: string | BufferSource,
+    options?: CsvReadOptions,
+  ): Promise<void> {
+    let bytes: Uint8Array;
+    if (typeof data === "string") {
+      bytes = new TextEncoder().encode(data);
+    } else if (data instanceof ArrayBuffer) {
+      bytes = new Uint8Array(data);
+    } else {
+      bytes = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+    }
+    const optionsJson = options ? JSON.stringify(options) : "";
+    await this.engine.registerCsv(name, bytes, optionsJson);
+  }
+
+  /**
    * Execute SQL query through the semantic layer.
    * Returns parsed result objects.
    */
   async query(sql: string): Promise<Record<string, unknown>[]> {
     const jsonStr = await this.engine.query(sql);
+    if (!jsonStr) return [];
+    return JSON.parse(jsonStr);
+  }
+
+  /**
+   * Execute a structured cube query against the loaded MDL.
+   *
+   * Translates the CubeQuery to SQL via wren-core, then executes the SQL
+   * through the same path as `query()`. Requires `loadMDL` first.
+   *
+   * Prefer this over hand-written SQL for aggregation queries — the cube
+   * layer assembles `GROUP BY`, `DATE_TRUNC`, and `WHERE` clauses for you.
+   */
+  async cubeQuery(query: CubeQueryInput): Promise<Record<string, unknown>[]> {
+    const jsonStr = await this.engine.cubeQuery(JSON.stringify(query));
+    if (!jsonStr) return [];
+    return JSON.parse(jsonStr);
+  }
+
+  /**
+   * List the cubes defined in the loaded MDL.
+   *
+   * Useful for an agent to discover what's queryable before calling
+   * `cubeQuery`. Requires `loadMDL` first.
+   */
+  listCubes(): CubeInfo[] {
+    const jsonStr = this.engine.listCubes();
     if (!jsonStr) return [];
     return JSON.parse(jsonStr);
   }

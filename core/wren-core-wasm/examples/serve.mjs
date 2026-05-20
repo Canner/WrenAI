@@ -22,6 +22,8 @@ const MIME = {
     '.wasm': 'application/wasm',
     '.json': 'application/json; charset=utf-8',
     '.css':  'text/css; charset=utf-8',
+    '.csv':  'text/csv; charset=utf-8',
+    '.tsv':  'text/tab-separated-values; charset=utf-8',
     '.parquet': 'application/octet-stream',
 };
 
@@ -72,7 +74,10 @@ createServer(async (req, res) => {
     }
 }).listen(PORT, () => {
     console.log(`Serving on http://localhost:${PORT}`);
-    console.log(`  inline demo:   http://localhost:${PORT}/examples/inline.html`);
-    console.log(`  url-mode demo: http://localhost:${PORT}/examples/url-mode.html`);
-    console.log(`  cdn demo:      http://localhost:${PORT}/examples/test-cdn.html`);
+    console.log(`  inline demo:      http://localhost:${PORT}/examples/inline.html`);
+    console.log(`  url-mode demo:    http://localhost:${PORT}/examples/url-mode.html`);
+    console.log(`  cdn demo:         http://localhost:${PORT}/examples/test-cdn.html`);
+    console.log(`  cube quickstart:  http://localhost:${PORT}/examples/cube-quickstart.html`);
+    console.log(`  cube explorer:    http://localhost:${PORT}/examples/cube-explorer.html`);
+    console.log(`  csv quickstart:   http://localhost:${PORT}/examples/csv-quickstart.html`);
 });

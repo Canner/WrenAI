@@ -23,6 +23,24 @@ Override with `--threshold`:
 wren memory fetch -q "revenue" --threshold 50000   # raise for larger context windows
 ```
 
+### Cube schema items
+
+When the MDL defines cubes, `wren memory index` emits these additional schema items:
+
+- `cube:<cube_name>` — cube overview (base object, measure list, dimension list)
+- `measure:<cube>.<measure_name>` — each measure (with expression and type)
+- `cube_dimension:<cube>.<dimension_name>` — each dimension
+- `time_dimension:<cube>.<time_dim_name>` — each time dimension
+
+These items are reachable via `wren memory fetch "<question>"`. For aggregation
+questions like "revenue by month", cube schema items typically rank higher than
+model columns because they match the aggregation intent more directly — then
+the agent should follow up with `wren cube describe <cube>` and `wren cube query`
+rather than hand-writing `GROUP BY` SQL.
+
+`wren memory describe` also adds a cube section that lists each cube's measures,
+dimensions, time dimensions, and hierarchies in markdown.
+
 ---
 
 ## Indexing: `wren memory index`

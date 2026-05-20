@@ -1,6 +1,8 @@
 # Memory
 
-Wren AI Core includes a **memory layer** — a LanceDB-backed semantic index that gives AI agents the context they need to write accurate SQL. Instead of sending the entire schema to an LLM on every question, the memory layer provides targeted context: relevant tables, columns, and past query examples.
+Wren AI ships an optional **memory layer** — a LanceDB-backed semantic index that gives AI agents the context they need to write accurate SQL. Instead of sending the entire schema to an LLM on every question, the memory layer provides targeted context: relevant tables, columns, and past query examples.
+
+> **Memory is opt-in.** It is not bundled with the base CLI — install the `memory` extra to enable it. Without memory, the agent can still query through MDL, but features like NL-SQL recall, embedding-based schema retrieval, and the self-learning loop will be unavailable.
 
 ## Why memory matters
 
@@ -24,12 +26,20 @@ Both collections live in `<project>/.wren/memory/` (or `~/.wren/memory/` outside
 
 ## Installation
 
-The memory system requires the `memory` extra (included in `main`):
+Memory is a separate optional extra — it is **not** included in the base install:
 
 ```bash
-pip install "wren-engine[main]"    # recommended: memory + interactive + ui
-pip install "wren-engine[memory]"  # memory only
+pip install "wren-engine[memory]"
 ```
+
+Combine with your data source extra:
+
+```bash
+pip install "wren-engine[memory,postgres]"
+pip install "wren-engine[memory,bigquery]"
+```
+
+If you skip the `memory` extra, memory commands (`wren memory index`, `fetch`, `recall`, `store`, etc.) will not be available.
 
 ## Indexing the schema
 
@@ -67,7 +77,7 @@ wren memory status
 ```bash
 wren memory fetch -q "customer order price"
 wren memory fetch -q "revenue" --type column --model orders
-wren memory fetch -q "日期" --threshold 50000 --output json
+wren memory fetch -q "order date" --threshold 50000 --output json
 ```
 
 ### Why hybrid?
@@ -118,7 +128,7 @@ Before writing new SQL, search for similar past queries:
 
 ```bash
 wren memory recall -q "best customers"
-wren memory recall -q "月度營收" --datasource mysql --limit 5 --output json
+wren memory recall -q "monthly revenue" --datasource mysql --limit 5 --output json
 ```
 
 Results are returned ranked by semantic similarity. Use them as few-shot examples — adapt the SQL pattern to the current question.
@@ -166,11 +176,10 @@ wren memory forget --id 3 --id 7 --id 12 --force
 wren memory forget --source seed --force
 ```
 
-The interactive mode requires the `interactive` extra (included in `main`):
+The interactive mode requires the `interactive` extra:
 
 ```bash
-pip install "wren-engine[main]"          # recommended
-pip install "wren-engine[interactive]"   # interactive only
+pip install "wren-engine[memory,interactive]"
 ```
 
 If InquirerPy is not installed, the command prints a hint and suggests using `--id` mode instead.

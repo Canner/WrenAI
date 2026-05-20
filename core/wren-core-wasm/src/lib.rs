@@ -32,11 +32,23 @@ use wasm_bindgen::prelude::*;
 
 /// Wren Engine WASM instance.
 ///
-/// Holds a DataFusion SessionContext and (in M3+) an AnalyzedWrenMDL.
-/// All query execution happens in-browser via DataFusion.
+/// Holds a DataFusion SessionContext and (after `loadMDL`) the analyzed
+/// MDL. `analyzed_mdl` is kept so the cube API (`cubeQuery`, `listCubes`)
+/// can read the manifest after `loadMDL` returns. All query execution
+/// happens in-browser via DataFusion.
 #[wasm_bindgen]
 pub struct WrenEngine {
     ctx: datafusion::execution::context::SessionContext,
+    analyzed_mdl: Option<std::sync::Arc<wren_core::mdl::AnalyzedWrenMDL>>,
+    /// Single-threaded tokio runtime owned by the engine. DataFusion's
+    /// physical operators (e.g. `CoalescePartitionsExec`, which wraps any
+    /// multi-partition plan such as `UNION ALL` / `INTERSECT` / `EXCEPT`)
+    /// call `tokio::task::spawn` internally. Spawn panics with
+    /// `there is no reactor running` unless it executes inside a tokio
+    /// runtime context — which `wasm-bindgen-futures` alone does not
+    /// provide. We drive the per-query future via `runtime.block_on(...)`
+    /// so DataFusion sees a live scheduler.
+    runtime: tokio::runtime::Runtime,
 }
 
 #[wasm_bindgen]
@@ -49,6 +61,10 @@ impl WrenEngine {
     /// comparisons match `create_wren_ctx` on the native side.
     #[wasm_bindgen(constructor)]
     pub fn new() -> Result<WrenEngine, JsError> {
+        // Surface Rust panic messages to the JS console instead of an
+        // opaque `RuntimeError: unreachable` trap. Safe to call repeatedly.
+        console_error_panic_hook::set_once();
+
         // Configure DataFusion for single-threaded WASM environment
         let mut config =
             datafusion::execution::context::SessionConfig::new().with_target_partitions(1); // Single-threaded in WASM
@@ -59,7 +75,17 @@ impl WrenEngine {
 
         let ctx = datafusion::execution::context::SessionContext::new_with_config(config);
 
-        Ok(WrenEngine { ctx })
+        // current_thread runtime — no I/O driver needed; DataFusion only
+        // requires a scheduler so its `tokio::task::spawn` calls don't panic.
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .map_err(|e| JsError::new(&format!("Failed to build tokio runtime: {e}")))?;
+
+        Ok(WrenEngine {
+            ctx,
+            analyzed_mdl: None,
+            runtime,
+        })
     }
 
     /// Register an in-memory table from a JSON array of objects.
@@ -150,6 +176,109 @@ impl WrenEngine {
         Ok(())
     }
 
+    /// Register an in-memory table from CSV bytes.
+    ///
+    /// CSV is read with `arrow::csv::ReaderBuilder`. Schema is inferred from
+    /// the first `inferRows` rows (default 1000) unless an explicit schema is
+    /// provided in `options.schema`.
+    ///
+    /// # Arguments
+    /// * `table_name` - Name to register the table under
+    /// * `data` - CSV bytes
+    /// * `options_json` - Optional JSON-encoded `CsvReadOptions`. Empty / `""`
+    ///   uses defaults (header on, comma delimiter, double-quote, batch 8192).
+    ///
+    /// # Options shape (camelCase)
+    /// ```json
+    /// {
+    ///   "header": true,
+    ///   "delimiter": ",",
+    ///   "quote": "\"",
+    ///   "escape": "\\",
+    ///   "terminator": "\n",
+    ///   "batchSize": 8192,
+    ///   "inferRows": 1000,
+    ///   "schema": [
+    ///     {"name": "id", "type": "int64"},
+    ///     {"name": "amount", "type": "float64"}
+    ///   ]
+    /// }
+    /// ```
+    /// All fields are optional. Single-character options (delimiter/quote/…)
+    /// take only the first byte of the supplied string.
+    #[wasm_bindgen(js_name = registerCsv)]
+    pub async fn register_csv(
+        &self,
+        table_name: &str,
+        data: &[u8],
+        options_json: &str,
+    ) -> Result<(), JsError> {
+        use arrow::csv::reader::Format;
+        use arrow::csv::ReaderBuilder;
+        use datafusion::datasource::MemTable;
+        use std::io::Cursor;
+        use std::sync::Arc;
+
+        let opts: CsvReadOptions = if options_json.trim().is_empty() {
+            CsvReadOptions::default()
+        } else {
+            serde_json::from_str(options_json).map_err(|e| {
+                JsError::new(&format!("Invalid CSV options JSON: {e}"))
+            })?
+        };
+
+        let header = opts.header.unwrap_or(true);
+        let mut format = Format::default().with_header(header);
+        if let Some(c) = single_byte(&opts.delimiter, "delimiter")? {
+            format = format.with_delimiter(c);
+        }
+        if let Some(c) = single_byte(&opts.quote, "quote")? {
+            format = format.with_quote(c);
+        }
+        if let Some(c) = single_byte(&opts.escape, "escape")? {
+            format = format.with_escape(c);
+        }
+        if let Some(c) = single_byte(&opts.terminator, "terminator")? {
+            format = format.with_terminator(c);
+        }
+
+        let schema = if let Some(cols) = &opts.schema {
+            Arc::new(arrow_schema_from_columns(cols)?)
+        } else {
+            let infer_rows = opts.infer_rows.or(Some(1000));
+            let (inferred, _) = format
+                .infer_schema(Cursor::new(data), infer_rows)
+                .map_err(|e| JsError::new(&format!("Failed to infer CSV schema: {e}")))?;
+            Arc::new(inferred)
+        };
+
+        let mut builder = ReaderBuilder::new(Arc::clone(&schema)).with_format(format);
+        if let Some(n) = opts.batch_size {
+            builder = builder.with_batch_size(n);
+        }
+
+        let reader = builder
+            .build(Cursor::new(data))
+            .map_err(|e| JsError::new(&format!("Failed to build CSV reader: {e}")))?;
+
+        let batches: Vec<_> = reader
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| JsError::new(&format!("Failed to read CSV batches: {e}")))?;
+
+        if batches.is_empty() {
+            return Err(JsError::new("No data in CSV input"));
+        }
+
+        let table = MemTable::try_new(schema, vec![batches])
+            .map_err(|e| JsError::new(&format!("Failed to create table: {e}")))?;
+
+        self.ctx
+            .register_table(table_name, Arc::new(table))
+            .map_err(|e| JsError::new(&format!("Failed to register table: {e}")))?;
+
+        Ok(())
+    }
+
     /// Load an MDL (Modeling Definition Language) manifest.
     ///
     /// Parses the MDL JSON, builds the semantic layer (AnalyzedWrenMDL),
@@ -198,11 +327,19 @@ impl WrenEngine {
 
         let properties: Arc<HashMap<String, Option<String>>> = Arc::new(HashMap::new());
 
-        let new_ctx = apply_wren_on_ctx(&self.ctx, analyzed_mdl, properties, Mode::LocalRuntime)
-            .await
-            .map_err(|e| JsError::new(&format!("Failed to apply MDL rules: {e}")))?;
+        // Clone the Arc so `apply_wren_on_ctx` can take ownership while
+        // we keep a handle on `self` for cubeQuery/listCubes access.
+        let new_ctx = apply_wren_on_ctx(
+            &self.ctx,
+            Arc::clone(&analyzed_mdl),
+            properties,
+            Mode::LocalRuntime,
+        )
+        .await
+        .map_err(|e| JsError::new(&format!("Failed to apply MDL rules: {e}")))?;
 
         self.ctx = new_ctx;
+        self.analyzed_mdl = Some(analyzed_mdl);
         Ok(())
     }
 
@@ -452,37 +589,119 @@ impl WrenEngine {
     /// Execute a SQL query and return results as a JSON string.
     ///
     /// Returns a JSON array of objects, e.g. `[{"count":42,"avg":3.14},...]`
+    ///
+    /// The body runs via `runtime.block_on(...)` so DataFusion's
+    /// `tokio::task::spawn` calls (e.g. inside `CoalescePartitionsExec`,
+    /// which any multi-partition plan such as `UNION ALL` flows through)
+    /// see a live tokio scheduler. Without this wrapper the inner spawn
+    /// panics with `there is no reactor running`, surfacing in JS as
+    /// `RuntimeError: unreachable`.
     #[wasm_bindgen]
     pub async fn query(&self, sql: &str) -> Result<String, JsError> {
         use arrow::json::writer::JsonArray;
         use arrow::json::WriterBuilder;
 
-        let df = self
-            .ctx
-            .sql(sql)
-            .await
-            .map_err(|e| JsError::new(&format!("SQL error: {e}")))?;
+        self.runtime.block_on(async {
+            let df = self
+                .ctx
+                .sql(sql)
+                .await
+                .map_err(|e| JsError::new(&format!("SQL error: {e}")))?;
 
-        let batches = df
-            .collect()
-            .await
-            .map_err(|e| JsError::new(&format!("Execution error: {e}")))?;
+            let batches = df
+                .collect()
+                .await
+                .map_err(|e| JsError::new(&format!("Execution error: {e}")))?;
 
-        let mut buf = Vec::new();
-        let mut writer = WriterBuilder::new()
-            .with_explicit_nulls(true)
-            .build::<_, JsonArray>(&mut buf);
+            let mut buf = Vec::new();
+            let mut writer = WriterBuilder::new()
+                .with_explicit_nulls(true)
+                .build::<_, JsonArray>(&mut buf);
 
-        for batch in &batches {
+            for batch in &batches {
+                writer.write(batch).map_err(|e| {
+                    JsError::new(&format!("JSON serialization error: {e}"))
+                })?;
+            }
             writer
-                .write(batch)
-                .map_err(|e| JsError::new(&format!("JSON serialization error: {e}")))?;
-        }
-        writer
-            .finish()
-            .map_err(|e| JsError::new(&format!("JSON writer finish error: {e}")))?;
+                .finish()
+                .map_err(|e| JsError::new(&format!("JSON writer finish error: {e}")))?;
 
-        String::from_utf8(buf).map_err(|e| JsError::new(&format!("UTF-8 encoding error: {e}")))
+            String::from_utf8(buf)
+                .map_err(|e| JsError::new(&format!("UTF-8 encoding error: {e}")))
+        })
+    }
+
+    /// Execute a structured CubeQuery against the loaded MDL.
+    ///
+    /// Takes a JSON-encoded `CubeQuery` (matching the camelCase shape used
+    /// by the Python binding), translates it to SQL via wren-core, and
+    /// runs the SQL through the existing `query()` path. Returns a JSON
+    /// array of result rows.
+    ///
+    /// Requires `loadMDL` to have been called first.
+    #[wasm_bindgen(js_name = cubeQuery)]
+    pub async fn cube_query(&self, cube_query_json: &str) -> Result<String, JsError> {
+        let analyzed = self
+            .analyzed_mdl
+            .as_ref()
+            .ok_or_else(|| JsError::new("No MDL loaded. Call loadMDL() first."))?;
+        let wren_mdl = analyzed.wren_mdl();
+        let manifest = &wren_mdl.manifest;
+
+        let query: wren_core::mdl::CubeQuery = serde_json::from_str(cube_query_json)
+            .map_err(|e| JsError::new(&format!("Invalid CubeQuery JSON: {e}")))?;
+
+        let sql = wren_core::mdl::cube_query_to_sql(&query, manifest)
+            .map_err(|e| JsError::new(&format!("CubeQuery error: {e}")))?;
+
+        // query() handles entering the tokio runtime — just delegate.
+        self.query(&sql).await
+    }
+
+    /// List the cubes defined in the loaded MDL.
+    ///
+    /// Returns a JSON array of `{ name, baseObject, measures, dimensions,
+    /// timeDimensions, hierarchies }` records. Requires `loadMDL` to have
+    /// been called first.
+    #[wasm_bindgen(js_name = listCubes)]
+    pub fn list_cubes(&self) -> Result<String, JsError> {
+        let analyzed = self
+            .analyzed_mdl
+            .as_ref()
+            .ok_or_else(|| JsError::new("No MDL loaded. Call loadMDL() first."))?;
+        let wren_mdl = analyzed.wren_mdl();
+        let manifest = &wren_mdl.manifest;
+
+        let cubes: Vec<serde_json::Value> = manifest
+            .cubes
+            .iter()
+            .map(|c| {
+                serde_json::json!({
+                    "name": c.name,
+                    "baseObject": c.base_object,
+                    "measures": c.measures.iter().map(|m| serde_json::json!({
+                        "name": m.name,
+                        "expression": m.expression,
+                        "type": m.r#type,
+                    })).collect::<Vec<_>>(),
+                    "dimensions": c.dimensions.iter().map(|d| serde_json::json!({
+                        "name": d.name,
+                        "expression": d.expression,
+                        "type": d.r#type,
+                    })).collect::<Vec<_>>(),
+                    "timeDimensions": c.time_dimensions.iter().map(|td| serde_json::json!({
+                        "name": td.name,
+                        "expression": td.expression,
+                        "type": td.r#type,
+                    })).collect::<Vec<_>>(),
+                    "hierarchies": c.hierarchies,
+                })
+            })
+            .collect();
+
+        serde_json::to_string(&cubes)
+            .map_err(|e| JsError::new(&format!("Serialization error: {e}")))
     }
 }
 
@@ -560,6 +779,106 @@ impl Default for WrenEngine {
     }
 }
 
+// ---------------------------------------------------------------------------
+// register_csv supporting types
+// ---------------------------------------------------------------------------
+
+/// User-supplied CSV reader options, deserialized from JSON. All fields are
+/// optional — omit a field to take the arrow-csv default.
+#[derive(Debug, Default, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase", default, deny_unknown_fields)]
+struct CsvReadOptions {
+    header: Option<bool>,
+    delimiter: Option<String>,
+    quote: Option<String>,
+    escape: Option<String>,
+    terminator: Option<String>,
+    batch_size: Option<usize>,
+    infer_rows: Option<usize>,
+    schema: Option<Vec<CsvColumn>>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CsvColumn {
+    name: String,
+    #[serde(rename = "type")]
+    ty: String,
+    #[serde(default)]
+    nullable: Option<bool>,
+}
+
+/// Single-character option helper: the arrow CSV reader takes a `u8`, but the
+/// JS side passes a string. We accept any non-empty string and use its first
+/// byte — single ASCII characters cover every realistic CSV separator. Reject
+/// strings that start with a multi-byte UTF-8 char to avoid silently slicing
+/// a codepoint.
+fn single_byte(s: &Option<String>, field: &str) -> Result<Option<u8>, JsError> {
+    match s {
+        None => Ok(None),
+        Some(v) if v.is_empty() => Err(JsError::new(&format!(
+            "CSV option '{field}' must be a single character, got empty string"
+        ))),
+        Some(v) => {
+            let bytes = v.as_bytes();
+            if bytes[0] >= 0x80 {
+                return Err(JsError::new(&format!(
+                    "CSV option '{field}' must be a single ASCII character"
+                )));
+            }
+            Ok(Some(bytes[0]))
+        }
+    }
+}
+
+/// Build an Arrow `Schema` from the user-supplied `[{name, type}]` list.
+/// Mirrors a small subset of Arrow types — enough for the common CSV column
+/// shapes (numeric / string / boolean / date / timestamp).
+fn arrow_schema_from_columns(cols: &[CsvColumn]) -> Result<arrow::datatypes::Schema, JsError> {
+    use arrow::datatypes::{DataType, Field, Schema, TimeUnit};
+
+    if cols.is_empty() {
+        return Err(JsError::new("CSV schema must have at least one column"));
+    }
+
+    let fields = cols
+        .iter()
+        .map(|c| {
+            let dt = match c.ty.to_ascii_lowercase().as_str() {
+                "int8" => DataType::Int8,
+                "int16" => DataType::Int16,
+                "int32" | "int" | "integer" => DataType::Int32,
+                "int64" | "bigint" | "long" => DataType::Int64,
+                "uint8" => DataType::UInt8,
+                "uint16" => DataType::UInt16,
+                "uint32" => DataType::UInt32,
+                "uint64" => DataType::UInt64,
+                "float32" | "float" | "real" => DataType::Float32,
+                "float64" | "double" | "number" => DataType::Float64,
+                "boolean" | "bool" => DataType::Boolean,
+                "utf8" | "string" | "varchar" | "text" => DataType::Utf8,
+                "date" | "date32" => DataType::Date32,
+                "date64" => DataType::Date64,
+                "timestamp" | "timestamp_ns" => {
+                    DataType::Timestamp(TimeUnit::Nanosecond, None)
+                }
+                "timestamp_us" => DataType::Timestamp(TimeUnit::Microsecond, None),
+                "timestamp_ms" => DataType::Timestamp(TimeUnit::Millisecond, None),
+                "timestamp_s" => DataType::Timestamp(TimeUnit::Second, None),
+                other => {
+                    return Err(JsError::new(&format!(
+                        "Unsupported CSV column type '{other}' (column '{}')",
+                        c.name
+                    )));
+                }
+            };
+            Ok(Field::new(&c.name, dt, c.nullable.unwrap_or(true)))
+        })
+        .collect::<Result<Vec<_>, JsError>>()?;
+
+    Ok(Schema::new(fields))
+}
+
 // =============================================================================
 // Tests (run via wasm-bindgen-test in browser/node)
 // =============================================================================
@@ -593,6 +912,23 @@ mod tests {
         let rows: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0]["cnt"], 3);
+    }
+
+    /// Regression: 0.4.0 traps with `RuntimeError: unreachable` on any plan
+    /// that DataFusion's `CoalescePartitionsExec` parallelises (`tokio::spawn`
+    /// inside `JoinSet` panics without a tokio reactor). `UNION ALL` is the
+    /// simplest trigger because the Union plan has >1 partition.
+    #[wasm_bindgen_test]
+    async fn test_union_all_does_not_trap() {
+        let engine = WrenEngine::new().unwrap();
+        let result = engine
+            .query("SELECT a FROM (SELECT 1 AS a UNION ALL SELECT 2) t ORDER BY a")
+            .await
+            .unwrap();
+        let rows: Vec<serde_json::Value> = serde_json::from_str(&result).unwrap();
+        assert_eq!(rows.len(), 2, "UNION ALL should return both rows");
+        assert_eq!(rows[0]["a"], 1);
+        assert_eq!(rows[1]["a"], 2);
     }
 
     #[wasm_bindgen_test]
@@ -651,7 +987,6 @@ mod tests {
                 "primaryKey": "id"
             }],
             "relationships": [],
-            "metrics": [],
             "views": []
         })
         .to_string()
@@ -755,7 +1090,6 @@ mod tests {
                 }
             ],
             "relationships": [],
-            "metrics": [],
             "views": []
         })
         .to_string();
@@ -775,5 +1109,160 @@ mod tests {
             msg.contains("lineitem"),
             "expected 'lineitem' in error: {msg}"
         );
+    }
+
+    // ── register_csv ────────────────────────────────────────────────────────
+
+    #[wasm_bindgen_test]
+    async fn test_register_csv_basic() {
+        let engine = WrenEngine::new().unwrap();
+        let csv = "id,name,amount\n1,Alice,100.5\n2,Bob,200\n3,Carol,300.25\n";
+
+        engine
+            .register_csv("orders", csv.as_bytes(), "")
+            .await
+            .unwrap();
+
+        let json = engine
+            .query("SELECT count(*) AS cnt, sum(amount) AS total FROM orders")
+            .await
+            .unwrap();
+        let rows: Vec<serde_json::Value> = serde_json::from_str(&json).unwrap();
+        assert_eq!(rows[0]["cnt"], 3);
+        // Allow either float or int formatting for the total.
+        let total = rows[0]["total"].as_f64().unwrap_or_default();
+        assert!((total - 600.75).abs() < 1e-6, "total={total}");
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_register_csv_custom_delimiter_and_quote() {
+        let engine = WrenEngine::new().unwrap();
+        let csv = "id;label;amount\n1;'hello;world';10\n2;'plain';20\n";
+        let options = r#"{"delimiter":";","quote":"'"}"#;
+
+        engine
+            .register_csv("t", csv.as_bytes(), options)
+            .await
+            .unwrap();
+
+        let json = engine
+            .query("SELECT label FROM t WHERE id = 1")
+            .await
+            .unwrap();
+        let rows: Vec<serde_json::Value> = serde_json::from_str(&json).unwrap();
+        assert_eq!(rows[0]["label"], "hello;world");
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_register_csv_no_header_with_schema() {
+        let engine = WrenEngine::new().unwrap();
+        let csv = "1,100\n2,200\n3,300\n";
+        let options = r#"{
+            "header": false,
+            "schema": [
+                {"name": "id", "type": "int64"},
+                {"name": "amount", "type": "int64"}
+            ]
+        }"#;
+
+        engine
+            .register_csv("t", csv.as_bytes(), options)
+            .await
+            .unwrap();
+
+        let json = engine
+            .query("SELECT sum(amount) AS total FROM t")
+            .await
+            .unwrap();
+        let rows: Vec<serde_json::Value> = serde_json::from_str(&json).unwrap();
+        assert_eq!(rows[0]["total"], 600);
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_register_csv_rejects_unknown_type() {
+        let engine = WrenEngine::new().unwrap();
+        let csv = "id\n1\n";
+        let options = r#"{"schema":[{"name":"id","type":"bogus"}]}"#;
+        let err = engine
+            .register_csv("t", csv.as_bytes(), options)
+            .await
+            .unwrap_err();
+        let msg = js_sys::Error::from(JsValue::from(err))
+            .message()
+            .as_string()
+            .unwrap_or_default();
+        assert!(msg.contains("Unsupported CSV column type"), "msg={msg}");
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_register_csv_rejects_invalid_options_json() {
+        let engine = WrenEngine::new().unwrap();
+        let err = engine
+            .register_csv("t", b"a\n1\n", "{not json")
+            .await
+            .unwrap_err();
+        let msg = js_sys::Error::from(JsValue::from(err))
+            .message()
+            .as_string()
+            .unwrap_or_default();
+        assert!(msg.contains("Invalid CSV options JSON"), "msg={msg}");
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_register_csv_rejects_empty_body() {
+        // Header-only CSV — schema infers, but the body has no rows.
+        let engine = WrenEngine::new().unwrap();
+        let err = engine
+            .register_csv("t", b"id,amount\n", "")
+            .await
+            .unwrap_err();
+        let msg = js_sys::Error::from(JsValue::from(err))
+            .message()
+            .as_string()
+            .unwrap_or_default();
+        assert!(msg.contains("No data in CSV input"), "msg={msg}");
+    }
+
+    #[wasm_bindgen_test]
+    async fn test_register_csv_rejects_multibyte_delimiter() {
+        let engine = WrenEngine::new().unwrap();
+        let csv = "a,b\n1,2\n";
+        let options = r#"{"delimiter":"，"}"#;
+        let err = engine
+            .register_csv("t", csv.as_bytes(), options)
+            .await
+            .unwrap_err();
+        let msg = js_sys::Error::from(JsValue::from(err))
+            .message()
+            .as_string()
+            .unwrap_or_default();
+        assert!(msg.contains("single ASCII character"), "msg={msg}");
+    }
+
+    #[test]
+    fn test_arrow_schema_from_columns_maps_aliases() {
+        use arrow::datatypes::DataType;
+        let cols = vec![
+            CsvColumn {
+                name: "a".into(),
+                ty: "int".into(),
+                nullable: None,
+            },
+            CsvColumn {
+                name: "b".into(),
+                ty: "DOUBLE".into(),
+                nullable: Some(false),
+            },
+            CsvColumn {
+                name: "c".into(),
+                ty: "string".into(),
+                nullable: None,
+            },
+        ];
+        let schema = arrow_schema_from_columns(&cols).unwrap();
+        assert_eq!(schema.field(0).data_type(), &DataType::Int32);
+        assert_eq!(schema.field(1).data_type(), &DataType::Float64);
+        assert!(!schema.field(1).is_nullable());
+        assert_eq!(schema.field(2).data_type(), &DataType::Utf8);
     }
 }
