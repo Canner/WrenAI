@@ -113,14 +113,14 @@ def _rewrite_mssql_bucket_functions(sql: str) -> str:
     sql = re.sub(
         rf"DATEADD\(\s*month\s*,\s*DATEDIFF\(\s*month\s*,\s*0\s*,\s*{expression_pattern}\s*\)\s*,\s*0\s*\)",
         lambda m: (
-            f"(DATEPART('YEAR', {m.group(1)}) * 100 + DATEPART('MONTH', {m.group(1)}))"
+            f"(DATEPART(YEAR, {m.group(1)}) * 100 + DATEPART(MONTH, {m.group(1)}))"
         ),
         sql,
         flags=re.IGNORECASE,
     )
     sql = re.sub(
         rf"DATEADD\(\s*year\s*,\s*DATEDIFF\(\s*year\s*,\s*0\s*,\s*{expression_pattern}\s*\)\s*,\s*0\s*\)",
-        lambda m: f"DATEPART('YEAR', {m.group(1)})",
+        lambda m: f"DATEPART(YEAR, {m.group(1)})",
         sql,
         flags=re.IGNORECASE,
     )
@@ -135,47 +135,89 @@ def _rewrite_temporal_bucket_functions(sql: str) -> str:
                 rf"DATEPART\(\s*YEAR\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART('YEAR', {m.group(1)})",
+            lambda m: f"DATEPART(YEAR, {m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATEPART\(\s*MONTH\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART('MONTH', {m.group(1)})",
+            lambda m: f"DATEPART(MONTH, {m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATEPART\(\s*DAY\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART('DAY', {m.group(1)})",
+            lambda m: f"DATEPART(DAY, {m.group(1)})",
         ),
         (
             re.compile(rf"YEAR\(\s*{expression_pattern}\s*\)", re.IGNORECASE),
-            lambda m: f"DATEPART('YEAR', {m.group(1)})",
+            lambda m: f"DATEPART(YEAR, {m.group(1)})",
         ),
         (
             re.compile(rf"MONTH\(\s*{expression_pattern}\s*\)", re.IGNORECASE),
-            lambda m: f"DATEPART('MONTH', {m.group(1)})",
+            lambda m: f"DATEPART(MONTH, {m.group(1)})",
         ),
         (
             re.compile(rf"DAY\(\s*{expression_pattern}\s*\)", re.IGNORECASE),
-            lambda m: f"DATEPART('DAY', {m.group(1)})",
+            lambda m: f"DATEPART(DAY, {m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATE_TRUNC\(\s*'?\s*MONTH\s*'?\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART('MONTH', {m.group(1)})",
+            lambda m: f"DATEPART(MONTH, {m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATE_TRUNC\(\s*'?\s*YEAR\s*'?\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART('YEAR', {m.group(1)})",
+            lambda m: f"DATEPART(YEAR, {m.group(1)})",
+        ),
+        (
+            re.compile(
+                rf"DATE_PART\(\s*'?\s*YEAR\s*'?\s*,\s*{expression_pattern}\s*\)",
+                re.IGNORECASE,
+            ),
+            lambda m: f"DATEPART(YEAR, {m.group(1)})",
+        ),
+        (
+            re.compile(
+                rf"DATE_PART\(\s*'?\s*MONTH\s*'?\s*,\s*{expression_pattern}\s*\)",
+                re.IGNORECASE,
+            ),
+            lambda m: f"DATEPART(MONTH, {m.group(1)})",
+        ),
+        (
+            re.compile(
+                rf"DATE_PART\(\s*'?\s*DAY\s*'?\s*,\s*{expression_pattern}\s*\)",
+                re.IGNORECASE,
+            ),
+            lambda m: f"DATEPART(DAY, {m.group(1)})",
+        ),
+        (
+            re.compile(
+                rf"DATEPART\(\s*'YEAR'\s*,\s*{expression_pattern}\s*\)",
+                re.IGNORECASE,
+            ),
+            lambda m: f"DATEPART(YEAR, {m.group(1)})",
+        ),
+        (
+            re.compile(
+                rf"DATEPART\(\s*'MONTH'\s*,\s*{expression_pattern}\s*\)",
+                re.IGNORECASE,
+            ),
+            lambda m: f"DATEPART(MONTH, {m.group(1)})",
+        ),
+        (
+            re.compile(
+                rf"DATEPART\(\s*'DAY'\s*,\s*{expression_pattern}\s*\)",
+                re.IGNORECASE,
+            ),
+            lambda m: f"DATEPART(DAY, {m.group(1)})",
         ),
     ]
 
@@ -429,15 +471,15 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 _MSSQL_TEXT_TO_SQL_RULES = """
 ### MSSQL-SPECIFIC RULES ###
 - The target database is MSSQL.
-- The planner in this environment accepts DATEPART with quoted date-part literals, for example DATEPART('YEAR', "created_at").
+- Prefer native T-SQL date bucket syntax such as DATEPART(YEAR, "created_at") and DATEPART(MONTH, "created_at").
 - DO NOT use PostgreSQL-style or Trino-style date syntax such as DATE_TRUNC, DATETRUNC, INTERVAL, CURRENT_DATE, TIMESTAMP WITH TIME ZONE, TO_CHAR, or :: casts.
 - DO NOT use DATEADD, DATEDIFF, DATETIME2, or DATETIMEOFFSET unless the SQL FUNCTIONS section explicitly proves they are supported by the target runtime.
 - Resolve relative time phrases such as "last 12 months", "last month", or "this year" into absolute ISO timestamp boundaries using the current time context. Prefer closed-open literal ranges over runtime date arithmetic.
 - For month bucketing, prefer separate year/month fields:
-    - DATEPART('YEAR', <timestamp_expression>) AS "year"
-    - DATEPART('MONTH', <timestamp_expression>) AS "month"
+    - DATEPART(YEAR, <timestamp_expression>) AS "year"
+    - DATEPART(MONTH, <timestamp_expression>) AS "month"
   Then GROUP BY and ORDER BY the same year/month expressions.
-- For year bucketing, prefer DATEPART('YEAR', <timestamp_expression>).
+- For year bucketing, prefer DATEPART(YEAR, <timestamp_expression>).
 - For filtering a specific year such as 2025, prefer a closed-open range:
     - <timestamp_expression> >= '2025-01-01 00:00:00'
     - AND <timestamp_expression> < '2026-01-01 00:00:00'
@@ -723,7 +765,7 @@ def get_metric_instructions(
 #### MSSQL Metric Notes ####
 - Resolve relative metric time windows into absolute ISO date ranges whenever current time context is available.
 - Do not use DATE_TRUNC, DATETRUNC, DATEADD, DATEDIFF, INTERVAL, CURRENT_DATE, or TIMESTAMP WITH TIME ZONE in MSSQL metric queries unless the SQL FUNCTIONS section explicitly shows they are supported by the target engine.
-- For month trend metrics, prefer DATEPART('YEAR', <timestamp_expression>) and DATEPART('MONTH', <timestamp_expression>) as separate grouped columns.
+- For month trend metrics, prefer DATEPART(YEAR, <timestamp_expression>) and DATEPART(MONTH, <timestamp_expression>) as separate grouped columns.
 """
 
     return instructions
