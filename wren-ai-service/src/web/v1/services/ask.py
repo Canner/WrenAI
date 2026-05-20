@@ -205,6 +205,10 @@ class AskService:
         }
 
         query_id = ask_request.query_id
+        if not query_id:
+            raise ValueError("query_id is required for ask service execution")
+
+        logger.info(f"Ask pipeline started for query_id: {query_id}")
         histories = ask_request.histories[: self._max_histories][
             ::-1
         ]  # reverse the order of histories

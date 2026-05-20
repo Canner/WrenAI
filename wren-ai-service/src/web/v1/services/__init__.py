@@ -56,7 +56,7 @@ class SSEEvent(BaseModel):
 
 # for POST, PATCH, UPDATE, DELETE requests
 class BaseRequest(BaseModel):
-    _query_id: str | None = None
+    query_id: Optional[str] = Field(default=None, exclude=True)
     project_id: Optional[str] = None
     thread_id: Optional[str] = None
     configurations: Configuration = Field(
@@ -64,14 +64,6 @@ class BaseRequest(BaseModel):
         alias=AliasChoices("configurations", "configuration"),  # accept both keys
     )
     request_from: Literal["ui", "api"] = "ui"
-
-    @property
-    def query_id(self) -> str:
-        return self._query_id
-
-    @query_id.setter
-    def query_id(self, query_id: str):
-        self._query_id = query_id
 
 
 # Put the services imports here to avoid circular imports and make them accessible directly to the rest of packages
