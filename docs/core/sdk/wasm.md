@@ -129,7 +129,7 @@ await engine.loadMDL(mdl, { source: '' });   // auto-detect; uses the registered
 
 ### 3. Cube queries (structured aggregation)
 
-When the MDL defines a [cube](../guides/modeling/cube.md), prefer `cubeQuery`
+When the MDL defines a [cube](../guides/cubes.md), prefer `cubeQuery`
 over hand-written `GROUP BY` SQL. The engine assembles `DATE_TRUNC` / filters
 / projections from a JSON request — useful for an agent that doesn't need to
 think about SQL syntax.
@@ -269,7 +269,7 @@ interface CubeQueryInput {
 }
 ```
 
-See [`docs/core/guides/modeling/cube.md`](../guides/modeling/cube.md) for the
+See [`docs/co../guides/cubes.md`](../guides/cubes.md) for the
 full input shape and filter operator list.
 
 ### `engine.listCubes()`

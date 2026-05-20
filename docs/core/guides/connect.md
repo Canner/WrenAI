@@ -98,6 +98,6 @@ This writes `profile: my-db` and `data_source: <ds>` into `wren_project.yml`. Fu
 
 ## Next steps
 
-- [Generate MDL](/oss/guides/modeling/overview) — let the agent introspect your schema
-- [Memory](/oss/guides/memory) — how the index keeps your queries accurate
-- [Profiles](/oss/guides/profiles) — managing multiple profiles
+- [Model your business](/oss/guides/model) — let the agent scaffold MDL from your schema
+- [Refine answer quality](/oss/guides/refine) — close the loop with memory and instructions
+- [Manage project](/oss/guides/manage_project) — multi-environment profile workflow
