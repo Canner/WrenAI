@@ -31,47 +31,47 @@ def _rewrite_temporal_bucket_functions(sql: str) -> str:
                 rf"DATEPART\(\s*YEAR\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f'DATEADD(year, DATEDIFF(year, 0, {m.group(1)}), 0)',
+            lambda m: f"DATEPART('YEAR', {m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATEPART\(\s*MONTH\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f'DATEADD(month, DATEDIFF(month, 0, {m.group(1)}), 0)',
+            lambda m: f"DATEPART('MONTH', {m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATEPART\(\s*DAY\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f'DATEADD(day, DATEDIFF(day, 0, {m.group(1)}), 0)',
+            lambda m: f"DATEPART('DAY', {m.group(1)})",
         ),
         (
             re.compile(rf"YEAR\(\s*{expression_pattern}\s*\)", re.IGNORECASE),
-            lambda m: f'DATEADD(year, DATEDIFF(year, 0, {m.group(1)}), 0)',
+            lambda m: f"DATEPART('YEAR', {m.group(1)})",
         ),
         (
             re.compile(rf"MONTH\(\s*{expression_pattern}\s*\)", re.IGNORECASE),
-            lambda m: f'DATEADD(month, DATEDIFF(month, 0, {m.group(1)}), 0)',
+            lambda m: f"DATEPART('MONTH', {m.group(1)})",
         ),
         (
             re.compile(rf"DAY\(\s*{expression_pattern}\s*\)", re.IGNORECASE),
-            lambda m: f'DATEADD(day, DATEDIFF(day, 0, {m.group(1)}), 0)',
+            lambda m: f"DATEPART('DAY', {m.group(1)})",
         ),
         (
             re.compile(
-                rf"DATETRUNC\(\s*month\s*,\s*{expression_pattern}\s*\)",
+                rf"DATE_TRUNC\(\s*'?\s*MONTH\s*'?\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f'DATEADD(month, DATEDIFF(month, 0, {m.group(1)}), 0)',
+            lambda m: f"DATEPART('MONTH', {m.group(1)})",
         ),
         (
             re.compile(
-                rf"DATETRUNC\(\s*year\s*,\s*{expression_pattern}\s*\)",
+                rf"DATE_TRUNC\(\s*'?\s*YEAR\s*'?\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f'DATEADD(year, DATEDIFF(year, 0, {m.group(1)}), 0)',
+            lambda m: f"DATEPART('YEAR', {m.group(1)})",
         ),
     ]
 
