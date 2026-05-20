@@ -169,14 +169,20 @@ export default function useAskPrompt(threadId?: number) {
   const [rerunAskingTask] = useRerunAskingTaskMutation({
     onError: (error) => console.error(error),
   });
-  const [fetchAskingTask, askingTaskResult] = useAskingTaskLazyQuery();
+  const [fetchAskingTask, askingTaskResult] = useAskingTaskLazyQuery({
+    fetchPolicy: 'network-only',
+    nextFetchPolicy: 'network-only',
+  });
   const [fetchAskingStreamTask, askingStreamTaskResult] = useAskingStreamTask();
   const [createInstantRecommendedQuestions] =
     useCreateInstantRecommendedQuestionsMutation({
       onError: (error) => console.error(error),
     });
   const [fetchInstantRecommendedQuestions, instantRecommendedQuestionsResult] =
-    useInstantRecommendedQuestionsLazyQuery();
+    useInstantRecommendedQuestionsLazyQuery({
+      fetchPolicy: 'network-only',
+      nextFetchPolicy: 'network-only',
+    });
   const askingTaskPollingRef = useRef<ReturnType<typeof setInterval> | null>(
     null,
   );

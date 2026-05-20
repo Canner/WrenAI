@@ -123,6 +123,8 @@ export default function HomeThread() {
     });
   const [fetchThreadResponse, threadResponseResult] =
     useThreadResponseLazyQuery({
+      fetchPolicy: 'network-only',
+      nextFetchPolicy: 'network-only',
       onCompleted(next) {
         const nextResponse = next.threadResponse;
         updateThreadQuery((prev) => ({
@@ -145,7 +147,10 @@ export default function HomeThread() {
   const [
     fetchThreadRecommendationQuestions,
     threadRecommendationQuestionsResult,
-  ] = useGetThreadRecommendationQuestionsLazyQuery();
+  ] = useGetThreadRecommendationQuestionsLazyQuery({
+    fetchPolicy: 'network-only',
+    nextFetchPolicy: 'network-only',
+  });
   const threadResponsePollingRef = useRef<ReturnType<typeof setInterval> | null>(
     null,
   );
