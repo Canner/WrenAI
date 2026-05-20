@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from typing import Dict, List, Literal, Optional
 
 from cachetools import TTLCache
@@ -105,6 +106,7 @@ class AskService:
         allow_sql_knowledge_retrieval: bool = True,
         enable_column_pruning: bool = False,
         max_sql_correction_retries: int = 3,
+        pipeline_timeout_seconds: int = 90,
         max_histories: int = 5,
         maxsize: int = 1_000_000,
         ttl: int = 120,
@@ -119,6 +121,7 @@ class AskService:
         self._allow_sql_diagnosis = allow_sql_diagnosis
         self._allow_sql_knowledge_retrieval = allow_sql_knowledge_retrieval
         self._enable_column_pruning = enable_column_pruning
+        self._pipeline_timeout_seconds = pipeline_timeout_seconds
         self._max_histories = max_histories
         self._max_sql_correction_retries = max_sql_correction_retries
 
@@ -129,6 +132,34 @@ class AskService:
             return True
 
         return False
+
+    def _is_greeting_query(self, query: str) -> bool:
+        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
+        greeting_patterns = {
+            "hi",
+            "hello",
+            "hey",
+            "hii",
+            "hola",
+            "good morning",
+            "good afternoon",
+            "good evening",
+            "how are you",
+            "thanks",
+            "thank you",
+        }
+        return normalized in greeting_patterns
+
+    async def _run_with_timeout(self, label: str, coroutine):
+        try:
+            return await asyncio.wait_for(
+                coroutine,
+                timeout=self._pipeline_timeout_seconds,
+            )
+        except TimeoutError as exc:
+            raise TimeoutError(
+                f"{label} timed out after {self._pipeline_timeout_seconds} seconds"
+            ) from exc
 
     @observe(name="Ask Question")
     @trace_metadata
@@ -189,9 +220,36 @@ class AskService:
                     is_followup=True if histories else False,
                 )
 
-                historical_question = await self._pipelines["historical_question"].run(
-                    query=user_query,
-                    project_id=ask_request.project_id,
+                if self._is_greeting_query(user_query):
+                    asyncio.create_task(
+                        self._pipelines["user_guide_assistance"].run(
+                            query=(
+                                f'The user said "{user_query}". '
+                                "Reply with a short greeting and ask how you can help "
+                                "with their PCB database or Wren AI."
+                            ),
+                            language=ask_request.configurations.language,
+                            query_id=ask_request.query_id,
+                            custom_instruction=ask_request.custom_instruction,
+                        )
+                    )
+
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="finished",
+                        type="GENERAL",
+                        trace_id=trace_id,
+                        is_followup=True if histories else False,
+                        general_type="USER_GUIDE",
+                    )
+                    results["metadata"]["type"] = "GENERAL"
+                    return results
+
+                historical_question = await self._run_with_timeout(
+                    "Historical question retrieval",
+                    self._pipelines["historical_question"].run(
+                        query=user_query,
+                        project_id=ask_request.project_id,
+                    ),
                 )
 
                 # we only return top 1 result
@@ -213,15 +271,18 @@ class AskService:
                     sql_generation_reasoning = ""
                 else:
                     # Run both pipeline operations concurrently
-                    sql_samples_task, instructions_task = await asyncio.gather(
-                        self._pipelines["sql_pairs_retrieval"].run(
-                            query=user_query,
-                            project_id=ask_request.project_id,
-                        ),
-                        self._pipelines["instructions_retrieval"].run(
-                            query=user_query,
-                            project_id=ask_request.project_id,
-                            scope="sql",
+                    sql_samples_task, instructions_task = await self._run_with_timeout(
+                        "SQL pair and instruction retrieval",
+                        asyncio.gather(
+                            self._pipelines["sql_pairs_retrieval"].run(
+                                query=user_query,
+                                project_id=ask_request.project_id,
+                            ),
+                            self._pipelines["instructions_retrieval"].run(
+                                query=user_query,
+                                project_id=ask_request.project_id,
+                                scope="sql",
+                            ),
                         ),
                     )
 
@@ -235,13 +296,16 @@ class AskService:
 
                     if self._allow_intent_classification:
                         intent_classification_result = (
-                            await self._pipelines["intent_classification"].run(
-                                query=user_query,
-                                histories=histories,
-                                sql_samples=sql_samples,
-                                instructions=instructions,
-                                project_id=ask_request.project_id,
-                                configuration=ask_request.configurations,
+                            await self._run_with_timeout(
+                                "Intent classification",
+                                self._pipelines["intent_classification"].run(
+                                    query=user_query,
+                                    histories=histories,
+                                    sql_samples=sql_samples,
+                                    instructions=instructions,
+                                    project_id=ask_request.project_id,
+                                    configuration=ask_request.configurations,
+                                ),
                             )
                         ).get("post_process", {})
                         intent = intent_classification_result.get("intent")
@@ -343,11 +407,14 @@ class AskService:
                     is_followup=True if histories else False,
                 )
 
-                retrieval_result = await self._pipelines["db_schema_retrieval"].run(
-                    query=user_query,
-                    histories=histories,
-                    project_id=ask_request.project_id,
-                    enable_column_pruning=enable_column_pruning,
+                retrieval_result = await self._run_with_timeout(
+                    "Schema retrieval",
+                    self._pipelines["db_schema_retrieval"].run(
+                        query=user_query,
+                        histories=histories,
+                        project_id=ask_request.project_id,
+                        enable_column_pruning=enable_column_pruning,
+                    ),
                 )
                 _retrieval_result = retrieval_result.get(
                     "construct_retrieval_results", {}
@@ -392,25 +459,31 @@ class AskService:
 
                 if histories:
                     sql_generation_reasoning = (
-                        await self._pipelines["followup_sql_generation_reasoning"].run(
-                            query=user_query,
-                            contexts=table_ddls,
-                            histories=histories,
-                            sql_samples=sql_samples,
-                            instructions=instructions,
-                            configuration=ask_request.configurations,
-                            query_id=query_id,
+                        await self._run_with_timeout(
+                            "Follow-up SQL generation reasoning",
+                            self._pipelines["followup_sql_generation_reasoning"].run(
+                                query=user_query,
+                                contexts=table_ddls,
+                                histories=histories,
+                                sql_samples=sql_samples,
+                                instructions=instructions,
+                                configuration=ask_request.configurations,
+                                query_id=query_id,
+                            ),
                         )
                     ).get("post_process", {})
                 else:
                     sql_generation_reasoning = (
-                        await self._pipelines["sql_generation_reasoning"].run(
-                            query=user_query,
-                            contexts=table_ddls,
-                            sql_samples=sql_samples,
-                            instructions=instructions,
-                            configuration=ask_request.configurations,
-                            query_id=query_id,
+                        await self._run_with_timeout(
+                            "SQL generation reasoning",
+                            self._pipelines["sql_generation_reasoning"].run(
+                                query=user_query,
+                                contexts=table_ddls,
+                                sql_samples=sql_samples,
+                                instructions=instructions,
+                                configuration=ask_request.configurations,
+                                query_id=query_id,
+                            ),
                         )
                     ).get("post_process", {})
 
@@ -438,19 +511,21 @@ class AskService:
                 )
 
                 if allow_sql_functions_retrieval:
-                    sql_functions = await self._pipelines[
-                        "sql_functions_retrieval"
-                    ].run(
-                        project_id=ask_request.project_id,
+                    sql_functions = await self._run_with_timeout(
+                        "SQL functions retrieval",
+                        self._pipelines["sql_functions_retrieval"].run(
+                            project_id=ask_request.project_id,
+                        ),
                     )
                 else:
                     sql_functions = []
 
                 if allow_sql_knowledge_retrieval:
-                    sql_knowledge = await self._pipelines[
-                        "sql_knowledge_retrieval"
-                    ].run(
-                        project_id=ask_request.project_id,
+                    sql_knowledge = await self._run_with_timeout(
+                        "SQL knowledge retrieval",
+                        self._pipelines["sql_knowledge_retrieval"].run(
+                            project_id=ask_request.project_id,
+                        ),
                     )
 
                 has_calculated_field = _retrieval_result.get(
@@ -460,41 +535,43 @@ class AskService:
                 has_json_field = _retrieval_result.get("has_json_field", False)
 
                 if histories:
-                    text_to_sql_generation_results = await self._pipelines[
-                        "followup_sql_generation"
-                    ].run(
-                        query=user_query,
-                        contexts=table_ddls,
-                        sql_generation_reasoning=sql_generation_reasoning,
-                        histories=histories,
-                        project_id=ask_request.project_id,
-                        sql_samples=sql_samples,
-                        instructions=instructions,
-                        has_calculated_field=has_calculated_field,
-                        has_metric=has_metric,
-                        has_json_field=has_json_field,
-                        sql_functions=sql_functions,
-                        use_dry_plan=use_dry_plan,
-                        allow_dry_plan_fallback=allow_dry_plan_fallback,
-                        sql_knowledge=sql_knowledge,
+                    text_to_sql_generation_results = await self._run_with_timeout(
+                        "Follow-up SQL generation",
+                        self._pipelines["followup_sql_generation"].run(
+                            query=user_query,
+                            contexts=table_ddls,
+                            sql_generation_reasoning=sql_generation_reasoning,
+                            histories=histories,
+                            project_id=ask_request.project_id,
+                            sql_samples=sql_samples,
+                            instructions=instructions,
+                            has_calculated_field=has_calculated_field,
+                            has_metric=has_metric,
+                            has_json_field=has_json_field,
+                            sql_functions=sql_functions,
+                            use_dry_plan=use_dry_plan,
+                            allow_dry_plan_fallback=allow_dry_plan_fallback,
+                            sql_knowledge=sql_knowledge,
+                        ),
                     )
                 else:
-                    text_to_sql_generation_results = await self._pipelines[
-                        "sql_generation"
-                    ].run(
-                        query=user_query,
-                        contexts=table_ddls,
-                        sql_generation_reasoning=sql_generation_reasoning,
-                        project_id=ask_request.project_id,
-                        sql_samples=sql_samples,
-                        instructions=instructions,
-                        has_calculated_field=has_calculated_field,
-                        has_metric=has_metric,
-                        has_json_field=has_json_field,
-                        sql_functions=sql_functions,
-                        use_dry_plan=use_dry_plan,
-                        allow_dry_plan_fallback=allow_dry_plan_fallback,
-                        sql_knowledge=sql_knowledge,
+                    text_to_sql_generation_results = await self._run_with_timeout(
+                        "SQL generation",
+                        self._pipelines["sql_generation"].run(
+                            query=user_query,
+                            contexts=table_ddls,
+                            sql_generation_reasoning=sql_generation_reasoning,
+                            project_id=ask_request.project_id,
+                            sql_samples=sql_samples,
+                            instructions=instructions,
+                            has_calculated_field=has_calculated_field,
+                            has_metric=has_metric,
+                            has_json_field=has_json_field,
+                            sql_functions=sql_functions,
+                            use_dry_plan=use_dry_plan,
+                            allow_dry_plan_fallback=allow_dry_plan_fallback,
+                            sql_knowledge=sql_knowledge,
+                        ),
                     )
 
                 if sql_valid_result := text_to_sql_generation_results["post_process"][
@@ -533,14 +610,15 @@ class AskService:
                         )
 
                         if allow_sql_diagnosis:
-                            sql_diagnosis_results = await self._pipelines[
-                                "sql_diagnosis"
-                            ].run(
-                                contexts=table_ddls,
-                                original_sql=original_sql,
-                                invalid_sql=invalid_sql,
-                                error_message=error_message,
-                                language=ask_request.configurations.language,
+                            sql_diagnosis_results = await self._run_with_timeout(
+                                "SQL diagnosis",
+                                self._pipelines["sql_diagnosis"].run(
+                                    contexts=table_ddls,
+                                    original_sql=original_sql,
+                                    invalid_sql=invalid_sql,
+                                    error_message=error_message,
+                                    language=ask_request.configurations.language,
+                                ),
                             )
                             sql_diagnosis_reasoning = sql_diagnosis_results[
                                 "post_process"
@@ -552,21 +630,22 @@ class AskService:
                                 f"{error_message}\nDiagnosis: {sql_diagnosis_reasoning}"
                             )
 
-                        sql_correction_results = await self._pipelines[
-                            "sql_correction"
-                        ].run(
-                            contexts=table_ddls,
-                            instructions=instructions,
-                            invalid_generation_result={
-                                "original_sql": original_sql,
-                                "sql": invalid_sql,
-                                "error": correction_error_message,
-                            },
-                            project_id=ask_request.project_id,
-                            use_dry_plan=use_dry_plan,
-                            allow_dry_plan_fallback=allow_dry_plan_fallback,
-                            sql_functions=sql_functions,
-                            sql_knowledge=sql_knowledge,
+                        sql_correction_results = await self._run_with_timeout(
+                            "SQL correction",
+                            self._pipelines["sql_correction"].run(
+                                contexts=table_ddls,
+                                instructions=instructions,
+                                invalid_generation_result={
+                                    "original_sql": original_sql,
+                                    "sql": invalid_sql,
+                                    "error": correction_error_message,
+                                },
+                                project_id=ask_request.project_id,
+                                use_dry_plan=use_dry_plan,
+                                allow_dry_plan_fallback=allow_dry_plan_fallback,
+                                sql_functions=sql_functions,
+                                sql_knowledge=sql_knowledge,
+                            ),
                         )
 
                         if valid_generation_result := sql_correction_results[

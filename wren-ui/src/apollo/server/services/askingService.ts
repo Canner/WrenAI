@@ -570,7 +570,13 @@ export class AskingService implements IAskingService {
       return;
     }
 
-    await this.askingTaskTracker.initialize();
+    if (typeof this.askingTaskTracker?.initialize === 'function') {
+      await this.askingTaskTracker.initialize();
+    } else {
+      logger.warn(
+        'Asking task tracker does not expose initialize(); skipping tracker restoration',
+      );
+    }
 
     // list thread responses from database
     // filter status not finalized and put them into background tracker

@@ -69,10 +69,15 @@ const hasInitialize = (
 const isReusableComponentGraph = (
   graph?: ReusableComponentGraph,
 ): boolean => {
+  const nestedAskingTaskTracker = (
+    graph?.askingService as { askingTaskTracker?: Initializable } | undefined
+  )?.askingTaskTracker;
+
   return Boolean(
     graph &&
       hasInitialize(graph.askingTaskTracker) &&
       hasInitialize(graph.askingService) &&
+      hasInitialize(nestedAskingTaskTracker) &&
       hasInitialize(graph.projectRecommendQuestionBackgroundTracker) &&
       hasInitialize(graph.threadRecommendQuestionBackgroundTracker),
   );

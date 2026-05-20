@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Any, Dict, List
 
 import aiohttp
@@ -20,6 +21,77 @@ logger = logging.getLogger("wren-ai-service")
 
 def normalize_data_source(data_source: str | None) -> str:
     return (data_source or "").strip().upper()
+
+
+def _rewrite_temporal_bucket_functions(sql: str) -> str:
+    expression_pattern = r'((?:"[^"]+"(?:\."[^"]+")?)|(?:[A-Za-z_][A-Za-z0-9_\.]*))'
+    replacements = [
+        (
+            re.compile(
+                rf"DATEPART\(\s*YEAR\s*,\s*{expression_pattern}\s*\)",
+                re.IGNORECASE,
+            ),
+            lambda m: f'DATEADD(year, DATEDIFF(year, 0, {m.group(1)}), 0)',
+        ),
+        (
+            re.compile(
+                rf"DATEPART\(\s*MONTH\s*,\s*{expression_pattern}\s*\)",
+                re.IGNORECASE,
+            ),
+            lambda m: f'DATEADD(month, DATEDIFF(month, 0, {m.group(1)}), 0)',
+        ),
+        (
+            re.compile(
+                rf"DATEPART\(\s*DAY\s*,\s*{expression_pattern}\s*\)",
+                re.IGNORECASE,
+            ),
+            lambda m: f'DATEADD(day, DATEDIFF(day, 0, {m.group(1)}), 0)',
+        ),
+        (
+            re.compile(rf"YEAR\(\s*{expression_pattern}\s*\)", re.IGNORECASE),
+            lambda m: f'DATEADD(year, DATEDIFF(year, 0, {m.group(1)}), 0)',
+        ),
+        (
+            re.compile(rf"MONTH\(\s*{expression_pattern}\s*\)", re.IGNORECASE),
+            lambda m: f'DATEADD(month, DATEDIFF(month, 0, {m.group(1)}), 0)',
+        ),
+        (
+            re.compile(rf"DAY\(\s*{expression_pattern}\s*\)", re.IGNORECASE),
+            lambda m: f'DATEADD(day, DATEDIFF(day, 0, {m.group(1)}), 0)',
+        ),
+        (
+            re.compile(
+                rf"DATETRUNC\(\s*month\s*,\s*{expression_pattern}\s*\)",
+                re.IGNORECASE,
+            ),
+            lambda m: f'DATEADD(month, DATEDIFF(month, 0, {m.group(1)}), 0)',
+        ),
+        (
+            re.compile(
+                rf"DATETRUNC\(\s*year\s*,\s*{expression_pattern}\s*\)",
+                re.IGNORECASE,
+            ),
+            lambda m: f'DATEADD(year, DATEDIFF(year, 0, {m.group(1)}), 0)',
+        ),
+    ]
+
+    rewritten = sql
+    for pattern, replacement in replacements:
+        rewritten = pattern.sub(replacement, rewritten)
+
+    return rewritten
+
+
+def normalize_generation_result_sql(sql: str, data_source: str | None = None) -> str:
+    normalized = sql
+
+    if normalize_data_source(data_source) == "MSSQL":
+        normalized = re.sub(
+            r"\s+NULLS\s+(?:LAST|FIRST)\b", "", normalized, flags=re.IGNORECASE
+        )
+        normalized = _rewrite_temporal_bucket_functions(normalized)
+
+    return re.sub(r"\s+", " ", normalized).strip()
 
 
 @component
@@ -48,6 +120,10 @@ class SQLGenPostProcessor:
                 cleaned_generation_result = orjson.loads(cleaned_generation_result)[
                     "sql"
                 ]
+
+            cleaned_generation_result = normalize_generation_result_sql(
+                cleaned_generation_result, data_source=data_source
+            )
 
             (
                 valid_generation_result,
@@ -84,6 +160,9 @@ class SQLGenPostProcessor:
     ) -> Dict[str, str]:
         valid_generation_result = {}
         invalid_generation_result = {}
+        generation_result = normalize_generation_result_sql(
+            generation_result, data_source=data_source
+        )
         use_dry_run = not allow_data_preview
 
         async with aiohttp.ClientSession() as session:
@@ -125,8 +204,12 @@ class SQLGenPostProcessor:
                     }
                 else:
                     error_message = addition.get("error_message", "")
+                    normalized_error_sql = normalize_generation_result_sql(
+                        addition.get("error_sql", generation_result),
+                        data_source=data_source,
+                    )
                     invalid_generation_result = {
-                        "sql": addition.get("error_sql", generation_result),
+                        "sql": normalized_error_sql,
                         "original_sql": generation_result,
                         "type": "TIME_OUT"
                         if error_message.startswith("Request timed out")
@@ -155,8 +238,12 @@ class SQLGenPostProcessor:
                         if error_message == ""
                         else "PREVIEW_FAILED"
                     )
+                    normalized_error_sql = normalize_generation_result_sql(
+                        addition.get("error_sql", generation_result),
+                        data_source=data_source,
+                    )
                     invalid_generation_result = {
-                        "sql": addition.get("error_sql", generation_result),
+                        "sql": normalized_error_sql,
                         "original_sql": generation_result,
                         "type": "TIME_OUT"
                         if error_message.startswith("Request timed out")
