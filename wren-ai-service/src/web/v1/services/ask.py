@@ -115,6 +115,9 @@ class AskService:
         self._ask_results: Dict[str, AskResultResponse] = TTLCache(
             maxsize=maxsize, ttl=ttl
         )
+        self._general_streaming_results: Dict[str, str] = TTLCache(
+            maxsize=maxsize, ttl=ttl
+        )
         self._allow_sql_generation_reasoning = allow_sql_generation_reasoning
         self._allow_sql_functions_retrieval = allow_sql_functions_retrieval
         self._allow_intent_classification = allow_intent_classification
@@ -160,6 +163,28 @@ class AskService:
             raise TimeoutError(
                 f"{label} timed out after {self._pipeline_timeout_seconds} seconds"
             ) from exc
+
+    def _build_greeting_response(self, query: str) -> str:
+        return (
+            f"Hi. I can help with questions about your PCB database and Wren AI.\n\n"
+            f"Try a data question like:\n"
+            f"- Show repair trends for the last 12 months\n"
+            f"- Compare average debug hours by product family\n"
+            f"- Which failure codes occur most often?\n\n"
+            f"If you want, ask a database question directly instead of `{query}`."
+        )
+
+    def _extract_pipeline_reply(self, result: dict, key: str) -> str:
+        payload = result.get(key)
+        if isinstance(payload, tuple):
+            payload = payload[0]
+
+        if isinstance(payload, dict):
+            replies = payload.get("replies") or []
+            if replies and isinstance(replies[0], str):
+                return replies[0]
+
+        return ""
 
     @observe(name="Ask Question")
     @trace_metadata
@@ -221,17 +246,8 @@ class AskService:
                 )
 
                 if self._is_greeting_query(user_query):
-                    asyncio.create_task(
-                        self._pipelines["user_guide_assistance"].run(
-                            query=(
-                                f'The user said "{user_query}". '
-                                "Reply with a short greeting and ask how you can help "
-                                "with their PCB database or Wren AI."
-                            ),
-                            language=ask_request.configurations.language,
-                            query_id=ask_request.query_id,
-                            custom_instruction=ask_request.custom_instruction,
-                        )
+                    self._general_streaming_results[query_id] = (
+                        self._build_greeting_response(user_query)
                     )
 
                     self._ask_results[query_id] = AskResultResponse(
@@ -318,7 +334,8 @@ class AskService:
                             user_query = rephrased_question
 
                         if intent == "MISLEADING_QUERY":
-                            asyncio.create_task(
+                            general_result = await self._run_with_timeout(
+                                "Misleading assistance",
                                 self._pipelines["misleading_assistance"].run(
                                     query=user_query,
                                     histories=histories,
@@ -326,14 +343,18 @@ class AskService:
                                         "db_schemas"
                                     ),
                                     language=ask_request.configurations.language,
-                                    query_id=ask_request.query_id,
                                     custom_instruction=ask_request.custom_instruction,
+                                ),
+                            )
+                            self._general_streaming_results[query_id] = (
+                                self._extract_pipeline_reply(
+                                    general_result, "misleading_assistance"
                                 )
                             )
 
                             self._ask_results[query_id] = AskResultResponse(
                                 status="finished",
-                                type="GENERAL",
+                                type="MISLEADING_QUERY",
                                 rephrased_question=rephrased_question,
                                 intent_reasoning=intent_reasoning,
                                 trace_id=trace_id,
@@ -343,7 +364,8 @@ class AskService:
                             results["metadata"]["type"] = "MISLEADING_QUERY"
                             return results
                         elif intent == "GENERAL":
-                            asyncio.create_task(
+                            general_result = await self._run_with_timeout(
+                                "Data assistance",
                                 self._pipelines["data_assistance"].run(
                                     query=user_query,
                                     histories=histories,
@@ -351,8 +373,12 @@ class AskService:
                                         "db_schemas"
                                     ),
                                     language=ask_request.configurations.language,
-                                    query_id=ask_request.query_id,
                                     custom_instruction=ask_request.custom_instruction,
+                                ),
+                            )
+                            self._general_streaming_results[query_id] = (
+                                self._extract_pipeline_reply(
+                                    general_result, "data_assistance"
                                 )
                             )
 
@@ -368,12 +394,17 @@ class AskService:
                             results["metadata"]["type"] = "GENERAL"
                             return results
                         elif intent == "USER_GUIDE":
-                            asyncio.create_task(
+                            general_result = await self._run_with_timeout(
+                                "User guide assistance",
                                 self._pipelines["user_guide_assistance"].run(
                                     query=user_query,
                                     language=ask_request.configurations.language,
-                                    query_id=ask_request.query_id,
                                     custom_instruction=ask_request.custom_instruction,
+                                ),
+                            )
+                            self._general_streaming_results[query_id] = (
+                                self._extract_pipeline_reply(
+                                    general_result, "user_guide_assistance"
                                 )
                             )
 
@@ -757,6 +788,13 @@ class AskService:
         self,
         query_id: str,
     ):
+        if general_response := self._general_streaming_results.get(query_id):
+            event = SSEEvent(
+                data=SSEEvent.SSEEventMessage(message=general_response),
+            )
+            yield event.serialize()
+            return
+
         if self._ask_results.get(query_id):
             _pipeline_name = ""
             if self._ask_results.get(query_id).type == "GENERAL":

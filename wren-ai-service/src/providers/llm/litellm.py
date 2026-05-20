@@ -103,6 +103,11 @@ class LitellmLLMProvider(LLMProvider):
                 **combined_generation_kwargs,
                 **(generation_kwargs or {}),
             }
+            should_stream = (
+                streaming_callback is not None
+                and query_id is not None
+                and generation_kwargs.pop("stream", True)
+            )
 
             allowed_openai_params = generation_kwargs.get(
                 "allowed_openai_params", []
@@ -112,7 +117,7 @@ class LitellmLLMProvider(LLMProvider):
                 completion = await self._router.acompletion(
                     model=self._model,
                     messages=openai_formatted_messages,
-                    stream=streaming_callback is not None,
+                    stream=should_stream,
                     allowed_openai_params=allowed_openai_params,
                     mock_testing_fallbacks=self._enable_fallback_testing,
                     **generation_kwargs,
@@ -125,13 +130,13 @@ class LitellmLLMProvider(LLMProvider):
                     api_version=self._api_version,
                     timeout=self._timeout,
                     messages=openai_formatted_messages,
-                    stream=streaming_callback is not None,
+                    stream=should_stream,
                     allowed_openai_params=allowed_openai_params,
                     **generation_kwargs,
                 )
 
             completions: List[ChatMessage] = []
-            if streaming_callback is not None:
+            if should_stream:
                 num_responses = generation_kwargs.pop("n", 1)
                 if num_responses > 1:
                     raise ValueError(

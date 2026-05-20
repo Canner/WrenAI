@@ -350,6 +350,8 @@ export class AskingTaskTracker implements IAskingTaskTracker {
                     },
                   },
                 );
+              } else {
+                await this.updateTaskInDatabase({ queryId }, task);
               }
               this.runningJobs.delete(queryId);
               return;
