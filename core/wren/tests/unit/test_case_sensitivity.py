@@ -309,5 +309,8 @@ def test_cte_rewriter_oracle_uppercases_columns():
     sql = "SELECT o_orderkey FROM orders"
     rewritten = rewriter.rewrite(sql)
     # Must contain the original lowercase column from the manifest, not the
-    # post-normalize uppercase form.
-    assert "o_orderkey" in rewritten.lower()
+    # post-normalize uppercase form. Don't lowercase the output before
+    # checking — that would mask a regression where Oracle's uppercased
+    # ``O_ORDERKEY`` leaks into the rewritten CTE body.
+    assert '"o_orderkey"' in rewritten, rewritten
+    assert '"O_ORDERKEY"' not in rewritten, rewritten
