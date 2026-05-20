@@ -70,6 +70,23 @@ class LitellmLLMProvider(LLMProvider):
             **(self._model_kwargs or {}),
         }
 
+        def _normalize_generation_kwargs(
+            kwargs: Optional[Dict[str, Any]],
+        ) -> Dict[str, Any]:
+            normalized = dict(kwargs or {})
+            response_format = normalized.get("response_format")
+
+            # Plain text is the default chat-completions behavior.
+            # Some OpenAI-compatible endpoints reject an explicit
+            # {"type": "text"} payload or serialize it incorrectly.
+            if (
+                isinstance(response_format, dict)
+                and response_format.get("type") == "text"
+            ):
+                normalized.pop("response_format", None)
+
+            return normalized
+
         @backoff.on_exception(backoff.expo, openai.APIError, max_time=60.0, max_tries=3)
         async def _run(
             prompt: str,
@@ -99,10 +116,12 @@ class LitellmLLMProvider(LLMProvider):
                 convert_message_to_openai_format(message) for message in messages
             ]
 
-            generation_kwargs = {
-                **combined_generation_kwargs,
-                **(generation_kwargs or {}),
-            }
+            generation_kwargs = _normalize_generation_kwargs(
+                {
+                    **combined_generation_kwargs,
+                    **(generation_kwargs or {}),
+                }
+            )
             should_stream = (
                 streaming_callback is not None
                 and query_id is not None
