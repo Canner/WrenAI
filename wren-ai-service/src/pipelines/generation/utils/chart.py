@@ -1,4 +1,6 @@
 import logging
+import re
+from copy import deepcopy
 from typing import Any, Dict, Literal, Optional
 
 import orjson
@@ -9,6 +11,214 @@ from jsonschema.exceptions import ValidationError
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger("wren-ai-service")
+
+
+def _humanize_title(name: str) -> str:
+    return name.replace("_", " ").strip().title()
+
+
+def _detect_requested_chart_type(query: str | None) -> str:
+    normalized = (query or "").lower()
+    checks = [
+        ("grouped_bar", ["grouped bar"]),
+        ("stacked_bar", ["stacked bar"]),
+        ("multi_line", ["multi line", "multi-line"]),
+        ("line", ["line chart", "line graph", "line plot"]),
+        ("bar", ["bar chart", "bar graph", "column chart"]),
+        ("pie", ["pie chart", "donut chart", "doughnut chart"]),
+        ("area", ["area chart", "area graph"]),
+    ]
+    for chart_type, patterns in checks:
+        if any(pattern in normalized for pattern in patterns):
+            return chart_type
+    if re.search(r"\b(chart|graph|plot|visuali[sz](?:e|ation)?)\b", normalized):
+        return "bar"
+    return ""
+
+
+def _match_column_name(field: str, columns: list[str]) -> str:
+    if field in columns:
+        return field
+
+    lowered = {column.lower(): column for column in columns}
+    normalized = lowered.get(field.lower())
+    if normalized:
+        return normalized
+
+    compact = re.sub(r"[\s_]+", "", field.lower())
+    for column in columns:
+        if re.sub(r"[\s_]+", "", column.lower()) == compact:
+            return column
+
+    return field
+
+
+def _normalize_chart_schema_fields(chart_schema: dict, columns: list[str]) -> dict:
+    normalized = deepcopy(chart_schema)
+    encoding = normalized.get("encoding", {})
+
+    for key in ("x", "y", "color", "xOffset", "theta"):
+        axis = encoding.get(key)
+        if isinstance(axis, dict) and axis.get("field"):
+            axis["field"] = _match_column_name(axis["field"], columns)
+
+    for transform in normalized.get("transform", []) or []:
+        if isinstance(transform, dict) and isinstance(transform.get("fold"), list):
+            transform["fold"] = [
+                _match_column_name(field, columns) for field in transform["fold"]
+            ]
+
+    return normalized
+
+
+def _infer_column_types(sample_data: list[dict]) -> dict[str, list[str]]:
+    if not sample_data:
+        return {"quantitative": [], "temporal": [], "nominal": []}
+
+    df = pd.DataFrame(sample_data)
+    quantitative: list[str] = []
+    temporal: list[str] = []
+    nominal: list[str] = []
+
+    for column in df.columns:
+        values = df[column].dropna()
+        if values.empty:
+            nominal.append(column)
+            continue
+
+        column_name = str(column).lower()
+        numeric_values = pd.to_numeric(
+            values.astype(str).str.replace(",", "", regex=False),
+            errors="coerce",
+        )
+        temporal_values = pd.to_datetime(values, errors="coerce")
+        is_temporal_name = bool(
+            re.search(r"(date|time|month|year|day|created|updated)", column_name)
+        )
+
+        if numeric_values.notna().all() and not is_temporal_name:
+            quantitative.append(column)
+        elif temporal_values.notna().all() or is_temporal_name:
+            temporal.append(column)
+        else:
+            nominal.append(column)
+
+    return {
+        "quantitative": quantitative,
+        "temporal": temporal,
+        "nominal": nominal,
+    }
+
+
+def _build_fallback_chart_schema(
+    query: str | None,
+    chart_type: str,
+    sample_data: list[dict],
+) -> dict:
+    if not sample_data:
+        return {}
+
+    columns = list(sample_data[0].keys())
+    inferred = _infer_column_types(sample_data)
+    quantitative = inferred["quantitative"]
+    temporal = inferred["temporal"]
+    nominal = inferred["nominal"]
+
+    title = _humanize_title(query or "Chart")
+
+    def axis(field: str, field_type: str) -> dict:
+        base = {"field": field, "type": field_type, "title": _humanize_title(field)}
+        if field_type == "temporal":
+            base["timeUnit"] = "yearmonth"
+        return base
+
+    if chart_type == "pie":
+        color_field = nominal[0] if nominal else columns[0]
+        theta_field = quantitative[0] if quantitative else (
+            columns[1] if len(columns) > 1 else columns[0]
+        )
+        return {
+            "title": title,
+            "mark": {"type": "arc"},
+            "encoding": {
+                "theta": axis(theta_field, "quantitative"),
+                "color": axis(color_field, "nominal"),
+            },
+        }
+
+    if chart_type in {"line", "area", "multi_line"}:
+        y_field = quantitative[0] if quantitative else columns[-1]
+        if {"year", "month"}.issubset({c.lower() for c in columns}):
+            month_field = next(c for c in columns if c.lower() == "month")
+            encoding = {
+                "x": axis(month_field, "ordinal"),
+                "y": axis(y_field, "quantitative"),
+            }
+            years = [c for c in columns if c.lower() == "year"]
+            if years:
+                encoding["color"] = axis(years[0], "nominal")
+            return {
+                "title": title,
+                "mark": {"type": "area" if chart_type == "area" else "line"},
+                "encoding": encoding,
+            }
+
+        x_field = temporal[0] if temporal else (nominal[0] if nominal else columns[0])
+        x_type = "temporal" if x_field in temporal else "ordinal"
+        return {
+            "title": title,
+            "mark": {"type": "area" if chart_type == "area" else "line"},
+            "encoding": {
+                "x": axis(x_field, x_type),
+                "y": axis(y_field, "quantitative"),
+            },
+        }
+
+    x_field = nominal[0] if nominal else (temporal[0] if temporal else columns[0])
+    y_field = quantitative[0] if quantitative else (columns[1] if len(columns) > 1 else columns[0])
+    x_type = "nominal" if x_field in nominal else ("temporal" if x_field in temporal else "ordinal")
+    encoding = {
+        "x": axis(x_field, x_type),
+        "y": axis(y_field, "quantitative"),
+    }
+    if chart_type == "grouped_bar" and len(nominal) > 1:
+        encoding["xOffset"] = axis(nominal[1], "nominal")
+        encoding["color"] = axis(nominal[1], "nominal")
+    elif nominal:
+        encoding["color"] = axis(nominal[0], "nominal")
+
+    mark = {"type": "bar"}
+    if chart_type == "stacked_bar":
+        encoding["y"]["stack"] = "zero"
+
+    return {
+        "title": title,
+        "mark": mark,
+        "encoding": encoding,
+    }
+
+
+def _is_schema_compatible_with_sample_data(
+    chart_schema: dict,
+    sample_data: list[dict],
+) -> bool:
+    if not chart_schema or not sample_data:
+        return False
+
+    columns = set(sample_data[0].keys())
+    encoding = chart_schema.get("encoding", {})
+    for key in ("x", "y", "color", "xOffset", "theta"):
+        axis = encoding.get(key)
+        if isinstance(axis, dict) and axis.get("field") and axis["field"] not in columns:
+            return False
+
+    for transform in chart_schema.get("transform", []) or []:
+        if isinstance(transform, dict):
+            for field in transform.get("fold", []) or []:
+                if field not in columns:
+                    return False
+
+    return True
 
 
 chart_generation_instructions = """
@@ -288,16 +498,27 @@ class ChartGenerationPostProcessor:
         replies: str,
         vega_schema: Dict[str, Any],
         sample_data: list[dict],
+        query: Optional[str] = None,
         remove_data_from_chart_schema: Optional[bool] = True,
     ):
         try:
             generation_result = orjson.loads(replies[0])
             reasoning = generation_result.get("reasoning", "")
-            chart_type = generation_result.get("chart_type", "")
+            requested_chart_type = _detect_requested_chart_type(query)
+            chart_type = requested_chart_type or generation_result.get("chart_type", "")
             if chart_schema := generation_result.get("chart_schema", {}):
                 # sometimes the chart_schema is still in string format
                 if isinstance(chart_schema, str):
                     chart_schema = orjson.loads(chart_schema)
+
+                chart_schema = _normalize_chart_schema_fields(
+                    chart_schema, list(sample_data[0].keys()) if sample_data else []
+                )
+
+                if not _is_schema_compatible_with_sample_data(chart_schema, sample_data):
+                    chart_schema = _build_fallback_chart_schema(
+                        query, chart_type or "bar", sample_data
+                    )
 
                 chart_schema[
                     "$schema"
@@ -319,29 +540,40 @@ class ChartGenerationPostProcessor:
 
             return {
                 "results": {
-                    "chart_schema": {},
+                    "chart_schema": _build_fallback_chart_schema(
+                        query, chart_type or "bar", sample_data
+                    ),
                     "reasoning": reasoning,
                     "chart_type": chart_type,
                 }
             }
         except ValidationError as e:
             logger.exception(f"Vega-lite schema is not valid: {e}")
+            fallback_schema = _build_fallback_chart_schema(
+                query,
+                _detect_requested_chart_type(query) or "",
+                sample_data,
+            )
 
             return {
                 "results": {
-                    "chart_schema": {},
+                    "chart_schema": fallback_schema,
                     "reasoning": "",
-                    "chart_type": "",
+                    "chart_type": _detect_requested_chart_type(query) or "",
                 }
             }
         except Exception as e:
             logger.exception(f"JSON deserialization failed: {e}")
+            fallback_chart_type = _detect_requested_chart_type(query) or ""
+            fallback_schema = _build_fallback_chart_schema(
+                query, fallback_chart_type, sample_data
+            )
 
             return {
                 "results": {
-                    "chart_schema": {},
+                    "chart_schema": fallback_schema,
                     "reasoning": "",
-                    "chart_type": "",
+                    "chart_type": fallback_chart_type,
                 }
             }
 

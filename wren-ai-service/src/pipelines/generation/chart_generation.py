@@ -97,12 +97,14 @@ def post_process(
     vega_schema: Dict[str, Any],
     remove_data_from_chart_schema: bool,
     preprocess_data: dict,
+    query: str,
     post_processor: ChartGenerationPostProcessor,
 ) -> dict:
     return post_processor.run(
         generate_chart.get("replies"),
         vega_schema,
         preprocess_data["sample_data"],
+        query,
         remove_data_from_chart_schema,
     )
 

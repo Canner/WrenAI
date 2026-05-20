@@ -415,30 +415,31 @@ export default class ChartSpecHandler {
     return encoding[axis]?.title || undefined;
   }
 
-  private transformDataValues(
-    data: DataSpec,
-    encoding: {
-      x?: { type?: string; field?: string };
-      y?: { type?: string; field?: string };
-    },
-  ) {
-    // If axis x is temporal
-    if (encoding?.x?.type === 'temporal') {
-      const transformedValues = data.values.map((val) => ({
-        ...val,
-        [encoding.x.field]: this.transformTemporalValue(val[encoding.x.field]),
-      }));
-      return { ...data, values: transformedValues };
-    }
-    // If axis y is temporal
-    if (encoding?.y?.type === 'temporal') {
-      const transformedValues = data.values.map((val) => ({
-        ...val,
-        [encoding.y.field]: this.transformTemporalValue(val[encoding.y.field]),
-      }));
-      return { ...data, values: transformedValues };
-    }
-    return data;
+  private transformDataValues(data: DataSpec, encoding?: EncodingSpec) {
+    const encodingKeys = ['x', 'y', 'theta', 'color', 'xOffset'];
+    const transformedValues = data.values.map((val) => {
+      const next = { ...val };
+
+      encodingKeys.forEach((key) => {
+        const axis = encoding?.[key] as
+          | { type?: string; field?: string }
+          | undefined;
+        if (!axis || typeof axis.field !== 'string') return;
+
+        if (axis.type === 'temporal') {
+          next[axis.field] = this.transformTemporalValue(val[axis.field]);
+          return;
+        }
+
+        if (axis.type === 'quantitative') {
+          next[axis.field] = this.transformQuantitativeValue(val[axis.field]);
+        }
+      });
+
+      return next;
+    });
+
+    return { ...data, values: transformedValues };
   }
 
   private transformTemporalValue(value: string | any) {
@@ -452,6 +453,18 @@ export default class ChartSpecHandler {
       return strValue.replace(/\s+UTC([+-][0-9]+)?(:[0-9]+)?/, '');
     }
     return strValue;
+  }
+
+  private transformQuantitativeValue(value: any) {
+    if (value === null || value === undefined || value === '') {
+      return value;
+    }
+    if (typeof value === 'number') {
+      return value;
+    }
+
+    const numericValue = Number(String(value).replace(/,/g, ''));
+    return Number.isFinite(numericValue) ? numericValue : value;
   }
 }
 
