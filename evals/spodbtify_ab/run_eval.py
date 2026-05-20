@@ -98,10 +98,24 @@ def validate_score_file(score_file: dict[str, Any], spec: dict[str, Any]) -> lis
             errors.append(f"run {run_index}: unknown workflow {workflow!r}")
 
         scores = run.get("scores", [])
-        seen_ids = {entry.get("question_id") for entry in scores}
+        seen_ids: set[Any] = set()
+        duplicate_ids: set[Any] = set()
+        for entry in scores:
+            qid = entry.get("question_id")
+            if qid in seen_ids:
+                duplicate_ids.add(qid)
+            seen_ids.add(qid)
+        if duplicate_ids:
+            errors.append(
+                "run "
+                f"{run_index}: duplicate question ids: "
+                f"{sorted(duplicate_ids, key=str)}"
+            )
         if seen_ids != expected_ids:
             errors.append(
-                f"run {run_index}: expected question ids 1-20, got {sorted(seen_ids)}"
+                "run "
+                f"{run_index}: expected question ids 1-20, "
+                f"got {sorted(seen_ids, key=str)}"
             )
 
         for entry in scores:
@@ -315,7 +329,17 @@ def run_agent(args: argparse.Namespace, spec: dict[str, Any]) -> None:
             }
             command = args.agent_command.format(**quote_mapping(raw_mapping))
             print(f"running q{question_id:02d} {workflow}: {command}")
-            result = subprocess.run(command, shell=True, cwd=str(Path.cwd()))
+            try:
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    cwd=str(Path.cwd()),
+                    timeout=args.timeout_seconds,
+                )
+            except subprocess.TimeoutExpired:
+                raise SystemExit(
+                    f"agent command timed out for q{question_id:02d} {workflow}"
+                ) from None
             if result.returncode != 0:
                 raise SystemExit(result.returncode)
 
@@ -352,17 +376,24 @@ def main() -> None:
     run_parser.add_argument("--command", dest="agent_command")
     run_parser.add_argument("--output-dir")
     run_parser.add_argument("--dry-run", action="store_true")
+    run_parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=300,
+        help="Per-question timeout for external agent command.",
+    )
 
     args = parser.parse_args()
     spec = load_json(SPEC_PATH)
 
     if args.command == "validate":
         spec_errors = validate_spec(spec)
-        try:
-            load_json(AGENT_OUTPUT_SCHEMA_PATH)
-            schema_errors: list[str] = []
-        except ValueError as exc:
-            schema_errors = [str(exc)]
+        schema_errors: list[str] = []
+        if AGENT_OUTPUT_SCHEMA_PATH.exists():
+            try:
+                load_json(AGENT_OUTPUT_SCHEMA_PATH)
+            except (OSError, ValueError) as exc:
+                schema_errors = [str(exc)]
         errors = spec_errors + schema_errors
         if errors:
             for error in errors:
