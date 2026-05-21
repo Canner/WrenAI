@@ -76,6 +76,34 @@ export interface IQueryService {
   ): Promise<ValidateResponse>;
 }
 
+const normalizePreviewSqlForIbis = (
+  sql: string,
+  dataSource: DataSourceName,
+  limit?: number,
+): { sql: string; limit?: number } => {
+  if (dataSource !== DataSourceName.MSSQL) {
+    return { sql, limit };
+  }
+
+  const topMatch = sql.match(/^\s*SELECT\s+(DISTINCT\s+)?TOP\s*\(?\s*(\d+)\s*\)?\s+/i);
+  if (!topMatch) {
+    return { sql, limit };
+  }
+
+  const distinctClause = topMatch[1] || '';
+  const topLimit = Number(topMatch[2]);
+  const normalizedSql = sql.replace(
+    /^\s*SELECT\s+(DISTINCT\s+)?TOP\s*\(?\s*\d+\s*\)?\s+/i,
+    `SELECT ${distinctClause}`,
+  );
+
+  return {
+    sql: normalizedSql,
+    limit:
+      limit && limit > 0 ? Math.min(limit, topLimit) : topLimit,
+  };
+};
+
 export class QueryService implements IQueryService {
   private readonly ibisAdaptor: IIbisAdaptor;
   private readonly wrenEngineAdaptor: IWrenEngineAdaptor;
@@ -194,19 +222,23 @@ export class QueryService implements IQueryService {
     connectionInfo: any,
     mdl: Manifest,
   ): Promise<IbisResponse> {
+    const normalizedQuery = normalizePreviewSqlForIbis(sql, dataSource).sql;
     const event = TelemetryEvent.IBIS_DRY_RUN;
     try {
-      const res = await this.ibisAdaptor.dryRun(sql, {
+      const res = await this.ibisAdaptor.dryRun(normalizedQuery, {
         dataSource,
         connectionInfo,
         mdl,
       });
-      this.sendIbisEvent(event, res, { dataSource, sql });
+      this.sendIbisEvent(event, res, { dataSource, sql: normalizedQuery });
       return {
         correlationId: res.correlationId,
       };
     } catch (err: any) {
-      this.sendIbisFailedEvent(event, err, { dataSource, sql });
+      this.sendIbisFailedEvent(event, err, {
+        dataSource,
+        sql: normalizedQuery,
+      });
       throw err;
     }
   }
@@ -220,17 +252,21 @@ export class QueryService implements IQueryService {
     refresh?: boolean,
     cacheEnabled?: boolean,
   ): Promise<PreviewDataResponse> {
+    const normalizedPreview = normalizePreviewSqlForIbis(sql, dataSource, limit);
     const event = TelemetryEvent.IBIS_QUERY;
     try {
-      const res = await this.ibisAdaptor.query(sql, {
+      const res = await this.ibisAdaptor.query(normalizedPreview.sql, {
         dataSource,
         connectionInfo,
         mdl,
-        limit,
+        limit: normalizedPreview.limit,
         refresh,
         cacheEnabled,
       });
-      this.sendIbisEvent(event, res, { dataSource, sql });
+      this.sendIbisEvent(event, res, {
+        dataSource,
+        sql: normalizedPreview.sql,
+      });
       const data = this.transformDataType(res);
       return {
         correlationId: res.correlationId,
@@ -241,7 +277,10 @@ export class QueryService implements IQueryService {
         ...data,
       };
     } catch (err: any) {
-      this.sendIbisFailedEvent(event, err, { dataSource, sql });
+      this.sendIbisFailedEvent(event, err, {
+        dataSource,
+        sql: normalizedPreview.sql,
+      });
       throw err;
     }
   }

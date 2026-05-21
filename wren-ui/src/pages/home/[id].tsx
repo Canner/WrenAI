@@ -413,8 +413,21 @@ export default function HomeThread() {
   // stop all requests when change thread
   useEffect(() => {
     if (threadId !== null) {
-      startThreadRecommendationPolling(threadId);
       setShowRecommendedQuestions(true);
+      void (async () => {
+        try {
+          const result = await fetchThreadRecommendationQuestions({
+            variables: { threadId },
+          });
+          const status =
+            result.data?.getThreadRecommendationQuestions?.status || null;
+          if (status && !isRecommendedFinished(status)) {
+            await startThreadRecommendationPolling(threadId);
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      })();
     }
     return () => {
       askPrompt.onStopPolling();

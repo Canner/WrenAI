@@ -297,12 +297,12 @@ class BreakdownBackgroundTracker {
   }: {
     telemetry: PostHogTelemetry;
     wrenAIAdaptor: IWrenAIAdaptor;
-    threadResponseRepository: IThreadResponseRepository;
+      threadResponseRepository: IThreadResponseRepository;
   }) {
     this.telemetry = telemetry;
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.threadResponseRepository = threadResponseRepository;
-    this.intervalTime = 1000;
+    this.intervalTime = 2000;
     this.start();
   }
 
@@ -349,6 +349,7 @@ class BreakdownBackgroundTracker {
           await this.threadResponseRepository.updateOne(threadResponse.id, {
             breakdownDetail: updatedBreakdownDetail,
           });
+          threadResponse.breakdownDetail = updatedBreakdownDetail;
 
           // remove the task from tracker if it is finalized
           if (isFinalized(result.status)) {

@@ -42,7 +42,7 @@ export class ChartBackgroundTracker {
     this.telemetry = telemetry;
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.threadResponseRepository = threadResponseRepository;
-    this.intervalTime = 1000;
+    this.intervalTime = 2000;
     this.start();
   }
 
@@ -92,6 +92,7 @@ export class ChartBackgroundTracker {
           await this.threadResponseRepository.updateOne(threadResponse.id, {
             chartDetail: updatedChartDetail,
           });
+          threadResponse.chartDetail = updatedChartDetail;
 
           // remove the task from tracker if it is finalized
           if (isFinalized(result.status)) {
@@ -164,7 +165,7 @@ export class ChartAdjustmentBackgroundTracker {
     this.telemetry = telemetry;
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.threadResponseRepository = threadResponseRepository;
-    this.intervalTime = 1000;
+    this.intervalTime = 2000;
     this.start();
   }
 
@@ -215,6 +216,7 @@ export class ChartAdjustmentBackgroundTracker {
           await this.threadResponseRepository.updateOne(threadResponse.id, {
             chartDetail: updatedChartDetail,
           });
+          threadResponse.chartDetail = updatedChartDetail;
 
           // remove the task from tracker if it is finalized
           if (isFinalized(result.status)) {
