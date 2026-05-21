@@ -65,6 +65,9 @@ test-snowflake:
 test-canner:
     uv run pytest tests/connectors/test_canner.py -v -m canner
 
+test-clickhouse:
+    uv run pytest tests/connectors/test_clickhouse.py -v -m clickhouse
+
 test-connector marker:
     uv run pytest tests/connectors/ -v -m {{ marker }}
 

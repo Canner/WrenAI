@@ -22,3 +22,6 @@ def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line(
         "markers", "canner: Canner connector tests — requires Docker"
     )
+    config.addinivalue_line(
+        "markers", "clickhouse: ClickHouse connector tests — requires Docker"
+    )

@@ -341,17 +341,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/cd/ef/60d269c6aeb9a42216b526466f02b07dbc186866f9f945891cff871c5581/clickhouse_connect-0.14.1-cp314-cp314t-win_amd64.whl", hash = "sha256:e1546b22c2914bf25823fcecf95399783e0748f31ce72e78276c91ecf6253b5f", size = 299443, upload-time = "2026-03-12T15:50:33.936Z" },
 ]
 
-[package.optional-dependencies]
-arrow = [
-    { name = "pyarrow" },
-]
-numpy = [
-    { name = "numpy" },
-]
-pandas = [
-    { name = "pandas" },
-]
-
 [[package]]
 name = "colorama"
 version = "0.4.6"
@@ -628,6 +617,11 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d5/7d/5df2650c57d47c57232af5ef4b4fdbff182070421e405e0d62c6cdbfaa87/fsspec-2026.1.0.tar.gz", hash = "sha256:e987cb0496a0d81bba3a9d1cee62922fb395e7d4c3b575e57f547953334fe07b", size = 310496, upload-time = "2026-01-09T15:21:35.562Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/01/c9/97cc5aae1648dcb851958a3ddf73ccd7dbe5650d95203ecb4d7720b4cdbf/fsspec-2026.1.0-py3-none-any.whl", hash = "sha256:cb76aa913c2285a3b49bdd5fc55b1d7c708d7208126b60f2eb8194fe1b4cbdcc", size = 201838, upload-time = "2026-01-09T15:21:34.041Z" },
+]
+
+[package.optional-dependencies]
+s3 = [
+    { name = "s3fs" },
 ]
 
 [[package]]
@@ -999,6 +993,15 @@ wheels = [
 ]
 
 [package.optional-dependencies]
+athena = [
+    { name = "fsspec", extra = ["s3"] },
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "pyarrow" },
+    { name = "pyarrow-hotfix" },
+    { name = "pyathena", extra = ["arrow", "pandas"] },
+    { name = "rich" },
+]
 bigquery = [
     { name = "db-dtypes" },
     { name = "google-cloud-bigquery" },
@@ -1009,14 +1012,6 @@ bigquery = [
     { name = "pyarrow" },
     { name = "pyarrow-hotfix" },
     { name = "pydata-google-auth" },
-    { name = "rich" },
-]
-clickhouse = [
-    { name = "clickhouse-connect", extra = ["arrow", "numpy", "pandas"] },
-    { name = "numpy" },
-    { name = "pandas" },
-    { name = "pyarrow" },
-    { name = "pyarrow-hotfix" },
     { name = "rich" },
 ]
 mssql = [
@@ -2105,6 +2100,9 @@ wheels = [
 ]
 
 [package.optional-dependencies]
+arrow = [
+    { name = "pyarrow" },
+]
 pandas = [
     { name = "pandas" },
 ]
@@ -2676,6 +2674,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/6c/25/3fc9114abf979a41673ce877c08016f8e660ad6cf508c3957f537d2e9fa9/ruff-0.15.6-py3-none-win32.whl", hash = "sha256:bbf67d39832404812a2d23020dda68fee7f18ce15654e96fb1d3ad21a5fe436c", size = 10616872, upload-time = "2026-03-12T23:05:42.451Z" },
     { url = "https://files.pythonhosted.org/packages/89/7a/09ece68445ceac348df06e08bf75db72d0e8427765b96c9c0ffabc1be1d9/ruff-0.15.6-py3-none-win_amd64.whl", hash = "sha256:aee25bc84c2f1007ecb5037dff75cef00414fdf17c23f07dc13e577883dca406", size = 11787271, upload-time = "2026-03-12T23:05:20.168Z" },
     { url = "https://files.pythonhosted.org/packages/7f/d0/578c47dd68152ddddddf31cd7fc67dc30b7cdf639a86275fda821b0d9d98/ruff-0.15.6-py3-none-win_arm64.whl", hash = "sha256:c34de3dd0b0ba203be50ae70f5910b17188556630e2178fd7d79fc030eb0d837", size = 11060497, upload-time = "2026-03-12T23:05:25.968Z" },
+]
+
+[[package]]
+name = "s3fs"
+version = "0.4.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "botocore" },
+    { name = "fsspec" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d9/9a/504cb277632c4d325beabbd03bb43778f0decb9be22d9e0e6c62f44540c7/s3fs-0.4.2.tar.gz", hash = "sha256:2ca5de8dc18ad7ad350c0bd01aef0406aa5d0fff78a561f0f710f9d9858abdd0", size = 57527, upload-time = "2020-03-31T15:24:26.388Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b8/e4/b8fc59248399d2482b39340ec9be4bb2493846ac23641b43115a7e5cd675/s3fs-0.4.2-py3-none-any.whl", hash = "sha256:91c1dfb45e5217bd441a7a560946fe865ced6225ff7eb0fb459fe6e601a95ed3", size = 19791, upload-time = "2020-03-31T15:24:24.952Z" },
 ]
 
 [[package]]
@@ -3455,17 +3466,17 @@ dependencies = [
 
 [package.optional-dependencies]
 all = [
+    { name = "clickhouse-connect" },
     { name = "databricks-sdk" },
     { name = "databricks-sql-connector" },
     { name = "google-auth" },
-    { name = "ibis-framework", extra = ["bigquery", "clickhouse", "mssql", "mysql", "postgres", "snowflake", "trino"] },
+    { name = "ibis-framework", extra = ["athena", "bigquery", "mssql", "mysql", "postgres", "snowflake", "trino"] },
     { name = "inquirerpy" },
     { name = "jinja2" },
     { name = "lancedb" },
     { name = "mysqlclient" },
     { name = "oracledb" },
     { name = "psycopg" },
-    { name = "pyathena", extra = ["pandas"] },
     { name = "pyspark" },
     { name = "python-multipart" },
     { name = "redshift-connector" },
@@ -3475,14 +3486,14 @@ all = [
     { name = "uvicorn" },
 ]
 athena = [
-    { name = "pyathena", extra = ["pandas"] },
+    { name = "ibis-framework", extra = ["athena"] },
 ]
 bigquery = [
     { name = "google-auth" },
     { name = "ibis-framework", extra = ["bigquery"] },
 ]
 clickhouse = [
-    { name = "ibis-framework", extra = ["clickhouse"] },
+    { name = "clickhouse-connect" },
 ]
 databricks = [
     { name = "databricks-sdk" },
@@ -3551,14 +3562,15 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "boto3", specifier = ">=1.26" },
+    { name = "clickhouse-connect", marker = "extra == 'clickhouse'", specifier = ">=0.8" },
     { name = "databricks-sdk", marker = "extra == 'databricks'" },
     { name = "databricks-sql-connector", marker = "extra == 'databricks'" },
     { name = "duckdb", specifier = ">=1.0" },
     { name = "google-auth", marker = "extra == 'bigquery'" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
     { name = "ibis-framework", specifier = ">=10" },
+    { name = "ibis-framework", extras = ["athena"], marker = "extra == 'athena'" },
     { name = "ibis-framework", extras = ["bigquery"], marker = "extra == 'bigquery'" },
-    { name = "ibis-framework", extras = ["clickhouse"], marker = "extra == 'clickhouse'" },
     { name = "ibis-framework", extras = ["mssql"], marker = "extra == 'mssql'" },
     { name = "ibis-framework", extras = ["mysql"], marker = "extra == 'mysql'" },
     { name = "ibis-framework", extras = ["postgres"], marker = "extra == 'postgres'" },
@@ -3577,7 +3589,6 @@ requires-dist = [
     { name = "pyarrow", specifier = ">=14" },
     { name = "pyarrow-hotfix", specifier = ">=0.6" },
     { name = "pyasn1", specifier = ">=0.6.3" },
-    { name = "pyathena", extras = ["pandas"], marker = "extra == 'athena'", specifier = ">=3" },
     { name = "pydantic", specifier = ">=2" },
     { name = "pyopenssl", specifier = ">=26.0.0" },
     { name = "pyspark", marker = "extra == 'spark'", specifier = ">=3.5" },

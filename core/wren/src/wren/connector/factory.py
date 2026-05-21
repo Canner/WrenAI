@@ -20,7 +20,7 @@ _REGISTRY: dict[DataSource, str] = {
     DataSource.spark: "wren.connector.spark",
     DataSource.databricks: "wren.connector.databricks",
     DataSource.trino: "wren.connector.ibis",
-    DataSource.clickhouse: "wren.connector.ibis",
+    DataSource.clickhouse: "wren.connector.clickhouse",
     DataSource.oracle: "wren.connector.oracle",
     DataSource.snowflake: "wren.connector.snowflake",
     DataSource.athena: "wren.connector.athena",
@@ -40,7 +40,6 @@ _NEEDS_DATA_SOURCE = {
     DataSource.mysql,
     DataSource.doris,
     DataSource.trino,
-    DataSource.clickhouse,
 }
 
 

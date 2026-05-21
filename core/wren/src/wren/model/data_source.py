@@ -188,7 +188,8 @@ class DataSource(StrEnum):
     def _handle_clickhouse_url(
         self, parsed: urllib.parse.ParseResult
     ) -> ClickHouseConnectionInfo:
-        if not parsed.scheme or parsed.scheme != "clickhouse":
+        allowed_schemes = {"clickhouse", "clickhouse+http", "clickhouse+https"}
+        if not parsed.scheme or parsed.scheme not in allowed_schemes:
             raise WrenError(
                 ErrorCode.INVALID_CONNECTION_INFO,
                 "Invalid connection URL for ClickHouse",
@@ -208,6 +209,8 @@ class DataSource(StrEnum):
         if "secure" in parsed_kwargs:
             kwargs["secure"] = self._safe_strtobool(parsed_kwargs["secure"])
             parsed_kwargs.pop("secure")
+        elif parsed.scheme == "clickhouse+https":
+            kwargs["secure"] = True
         kwargs["kwargs"] = parsed_kwargs
         return ClickHouseConnectionInfo(**kwargs)
 
@@ -307,16 +310,32 @@ class DataSourceExtension(Enum):
         )
 
     @staticmethod
-    def get_clickhouse_connection(info: ClickHouseConnectionInfo) -> BaseBackend:
-        return ibis.clickhouse.connect(
-            host=info.host,
-            port=int(info.port),
-            database=info.database,
-            user=info.user,
-            password=(info.password and info.password.get_secret_value()),
-            settings=info.settings if info.settings else {},
-            **info.kwargs if info.kwargs else {},
-        )
+    def get_clickhouse_connection(info: ClickHouseConnectionInfo):
+        import clickhouse_connect  # noqa: PLC0415
+
+        settings = dict(info.settings) if info.settings else {}
+        kwargs = dict(info.kwargs) if info.kwargs else {}
+        statement_timeout = kwargs.pop("statement_timeout", None)
+        if statement_timeout is not None:
+            settings["max_execution_time"] = int(statement_timeout)
+        # Merge any user-supplied ``settings`` from kwargs into the local dict
+        # *before* applying the rest, otherwise ``client_kwargs.update(kwargs)``
+        # below would clobber the statement_timeout-derived max_execution_time.
+        extra_settings = kwargs.pop("settings", None)
+        if extra_settings:
+            settings.update(extra_settings)
+
+        client_kwargs = {
+            "host": info.host,
+            "port": int(info.port),
+            "database": info.database,
+            "username": info.user,
+            "password": info.password.get_secret_value() if info.password else "",
+            "secure": info.secure,
+            "settings": settings,
+        }
+        client_kwargs.update(kwargs)
+        return clickhouse_connect.get_client(**client_kwargs)
 
     @classmethod
     def get_mssql_connection(cls, info: MSSqlConnectionInfo) -> BaseBackend:
