@@ -5,10 +5,9 @@ import ssl
 import urllib
 from enum import Enum, StrEnum, auto
 from json import loads
-from typing import Any
+from typing import TYPE_CHECKING, Any, Union
 from urllib.parse import unquote_plus
 
-import boto3
 import ibis
 from ibis import BaseBackend
 
@@ -42,6 +41,14 @@ from wren.model import (
 )
 from wren.model.error import ErrorCode, WrenError
 
+if TYPE_CHECKING:
+    from pyathena.connection import Connection as PyAthenaConnection
+
+# get_connection() may return either an ibis BaseBackend (for connectors
+# still routed through ibis) or a native driver connection (for connectors
+# that have dropped the ibis dependency, e.g. Athena via pyathena).
+BackendOrConnection = Union[BaseBackend, "PyAthenaConnection"]
+
 X_WREN_DB_STATEMENT_TIMEOUT = "x-wren-db-statement_timeout"
 
 
@@ -67,7 +74,7 @@ class DataSource(StrEnum):
     spark = auto()
     databricks = auto()
 
-    def get_connection(self, info: ConnectionInfo) -> BaseBackend:
+    def get_connection(self, info: ConnectionInfo) -> BackendOrConnection:
         try:
             return DataSourceExtension[self].get_connection(info)
         except KeyError:
@@ -230,7 +237,7 @@ class DataSourceExtension(Enum):
     databricks = "databricks"
     spark = "spark"
 
-    def get_connection(self, info: ConnectionInfo) -> BaseBackend:
+    def get_connection(self, info: ConnectionInfo) -> BackendOrConnection:
         try:
             if hasattr(info, "connection_url"):
                 kwargs = info.kwargs if info.kwargs else {}
@@ -248,38 +255,20 @@ class DataSourceExtension(Enum):
             raise WrenError(ErrorCode.GET_CONNECTION_ERROR, f"{e!s}") from e
 
     @staticmethod
-    def get_athena_connection(info: AthenaConnectionInfo) -> BaseBackend:
-        kwargs: dict[str, Any] = {
-            "s3_staging_dir": info.s3_staging_dir.get_secret_value(),
-            "schema_name": info.schema_name,
-        }
-        if info.region_name:
-            kwargs["region_name"] = info.region_name
+    def get_athena_connection(info: AthenaConnectionInfo) -> PyAthenaConnection:
+        """Open a pyathena DB-API connection.
 
-        if info.web_identity_token and info.role_arn:
-            oidc_token = info.web_identity_token.get_secret_value()
-            role_arn = info.role_arn.get_secret_value()
-            session_name = info.role_session_name or "wren-oidc-session"
-            region = info.region_name if info.region_name else None
-            sts = boto3.client("sts", region_name=region)
-            resp = sts.assume_role_with_web_identity(
-                RoleArn=role_arn,
-                RoleSessionName=session_name,
-                WebIdentityToken=oidc_token,
-            )
-            creds = resp["Credentials"]
-            kwargs["aws_access_key_id"] = creds["AccessKeyId"]
-            kwargs["aws_secret_access_key"] = creds["SecretAccessKey"]
-            kwargs["aws_session_token"] = creds["SessionToken"]
-        elif info.aws_access_key_id and info.aws_secret_access_key:
-            kwargs["aws_access_key_id"] = info.aws_access_key_id.get_secret_value()
-            kwargs["aws_secret_access_key"] = (
-                info.aws_secret_access_key.get_secret_value()
-            )
-            if info.aws_session_token:
-                kwargs["aws_session_token"] = info.aws_session_token.get_secret_value()
+        Delegates connection-kwargs construction to
+        :func:`wren.connector.athena._build_connect_kwargs` so the legacy
+        ``data_source`` path and the native :class:`AthenaConnector` stay in
+        lockstep on credential resolution, ``schema_name`` propagation,
+        ``kill_on_interrupt``, and user ``kwargs`` merge semantics.
+        """
+        from pyathena import connect  # noqa: PLC0415
 
-        return ibis.athena.connect(**kwargs)
+        from wren.connector.athena import _build_connect_kwargs  # noqa: PLC0415
+
+        return connect(**_build_connect_kwargs(info))
 
     @staticmethod
     def get_bigquery_connection(info: BigQueryDatasetConnectionInfo) -> BaseBackend:

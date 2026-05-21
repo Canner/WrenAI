@@ -630,11 +630,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/01/c9/97cc5aae1648dcb851958a3ddf73ccd7dbe5650d95203ecb4d7720b4cdbf/fsspec-2026.1.0-py3-none-any.whl", hash = "sha256:cb76aa913c2285a3b49bdd5fc55b1d7c708d7208126b60f2eb8194fe1b4cbdcc", size = 201838, upload-time = "2026-01-09T15:21:34.041Z" },
 ]
 
-[package.optional-dependencies]
-s3 = [
-    { name = "s3fs" },
-]
-
 [[package]]
 name = "google-api-core"
 version = "2.30.0"
@@ -1004,15 +999,6 @@ wheels = [
 ]
 
 [package.optional-dependencies]
-athena = [
-    { name = "fsspec", extra = ["s3"] },
-    { name = "numpy" },
-    { name = "pandas" },
-    { name = "pyarrow" },
-    { name = "pyarrow-hotfix" },
-    { name = "pyathena", extra = ["arrow", "pandas"] },
-    { name = "rich" },
-]
 bigquery = [
     { name = "db-dtypes" },
     { name = "google-cloud-bigquery" },
@@ -1056,6 +1042,14 @@ postgres = [
     { name = "pyarrow" },
     { name = "pyarrow-hotfix" },
     { name = "rich" },
+]
+snowflake = [
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "pyarrow" },
+    { name = "pyarrow-hotfix" },
+    { name = "rich" },
+    { name = "snowflake-connector-python" },
 ]
 trino = [
     { name = "numpy" },
@@ -2111,9 +2105,6 @@ wheels = [
 ]
 
 [package.optional-dependencies]
-arrow = [
-    { name = "pyarrow" },
-]
 pandas = [
     { name = "pandas" },
 ]
@@ -2688,19 +2679,6 @@ wheels = [
 ]
 
 [[package]]
-name = "s3fs"
-version = "0.4.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "botocore" },
-    { name = "fsspec" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/d9/9a/504cb277632c4d325beabbd03bb43778f0decb9be22d9e0e6c62f44540c7/s3fs-0.4.2.tar.gz", hash = "sha256:2ca5de8dc18ad7ad350c0bd01aef0406aa5d0fff78a561f0f710f9d9858abdd0", size = 57527, upload-time = "2020-03-31T15:24:26.388Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b8/e4/b8fc59248399d2482b39340ec9be4bb2493846ac23641b43115a7e5cd675/s3fs-0.4.2-py3-none-any.whl", hash = "sha256:91c1dfb45e5217bd441a7a560946fe865ced6225ff7eb0fb459fe6e601a95ed3", size = 19791, upload-time = "2020-03-31T15:24:24.952Z" },
-]
-
-[[package]]
 name = "s3transfer"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2954,12 +2932,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/75/d2/e1cc3871439a8b73cd2e9ab0398290a66a504c64b31804d847845831b230/snowflake_connector_python-4.4.0-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:9fa43d330389df27024757c4f97dabddafbedc74b8bcc189b6a86e8b4d036014", size = 2834023, upload-time = "2026-03-25T23:31:21.536Z" },
     { url = "https://files.pythonhosted.org/packages/30/e3/53cb5b019b5a06a627e279c0bde410dfa23e0c5dfaa462e83e9200a9b20a/snowflake_connector_python-4.4.0-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:43e1a2f3ac51d24406d4eb0c23a8ceb9d6f5cb4854c941e5e1375d8c481e2844", size = 2864401, upload-time = "2026-03-25T23:31:23.297Z" },
     { url = "https://files.pythonhosted.org/packages/0d/22/2a02e6af15bb1070a09543e7d11a33a297d171bdca39566a0e307f5c7deb/snowflake_connector_python-4.4.0-cp314-cp314-win_amd64.whl", hash = "sha256:d8ac1659c8e588b9502f8d3d03c1ded2f274de0da9c09e62fe007cba5b46d6a5", size = 12206879, upload-time = "2026-03-25T23:31:53.355Z" },
-]
-
-[package.optional-dependencies]
-pandas = [
-    { name = "pandas" },
-    { name = "pyarrow" },
 ]
 
 [[package]]
@@ -3486,24 +3458,24 @@ all = [
     { name = "databricks-sdk" },
     { name = "databricks-sql-connector" },
     { name = "google-auth" },
-    { name = "ibis-framework", extra = ["athena", "bigquery", "clickhouse", "mssql", "mysql", "postgres", "trino"] },
+    { name = "ibis-framework", extra = ["bigquery", "clickhouse", "mssql", "mysql", "postgres", "snowflake", "trino"] },
     { name = "inquirerpy" },
     { name = "jinja2" },
     { name = "lancedb" },
     { name = "mysqlclient" },
     { name = "oracledb" },
     { name = "psycopg" },
+    { name = "pyathena", extra = ["pandas"] },
     { name = "pyspark" },
     { name = "python-multipart" },
     { name = "redshift-connector" },
     { name = "sentence-transformers" },
-    { name = "snowflake-connector-python", extra = ["pandas"] },
     { name = "starlette" },
     { name = "trino" },
     { name = "uvicorn" },
 ]
 athena = [
-    { name = "ibis-framework", extra = ["athena"] },
+    { name = "pyathena", extra = ["pandas"] },
 ]
 bigquery = [
     { name = "google-auth" },
@@ -3555,7 +3527,7 @@ redshift = [
     { name = "redshift-connector" },
 ]
 snowflake = [
-    { name = "snowflake-connector-python", extra = ["pandas"] },
+    { name = "ibis-framework", extra = ["snowflake"] },
 ]
 spark = [
     { name = "pyspark" },
@@ -3585,12 +3557,12 @@ requires-dist = [
     { name = "google-auth", marker = "extra == 'bigquery'" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
     { name = "ibis-framework", specifier = ">=10" },
-    { name = "ibis-framework", extras = ["athena"], marker = "extra == 'athena'" },
     { name = "ibis-framework", extras = ["bigquery"], marker = "extra == 'bigquery'" },
     { name = "ibis-framework", extras = ["clickhouse"], marker = "extra == 'clickhouse'" },
     { name = "ibis-framework", extras = ["mssql"], marker = "extra == 'mssql'" },
     { name = "ibis-framework", extras = ["mysql"], marker = "extra == 'mysql'" },
     { name = "ibis-framework", extras = ["postgres"], marker = "extra == 'postgres'" },
+    { name = "ibis-framework", extras = ["snowflake"], marker = "extra == 'snowflake'" },
     { name = "ibis-framework", extras = ["trino"], marker = "extra == 'trino'" },
     { name = "inquirerpy", marker = "extra == 'interactive'", specifier = ">=0.3.4" },
     { name = "jinja2", marker = "extra == 'ui'", specifier = ">=3.1" },
@@ -3605,6 +3577,7 @@ requires-dist = [
     { name = "pyarrow", specifier = ">=14" },
     { name = "pyarrow-hotfix", specifier = ">=0.6" },
     { name = "pyasn1", specifier = ">=0.6.3" },
+    { name = "pyathena", extras = ["pandas"], marker = "extra == 'athena'", specifier = ">=3" },
     { name = "pydantic", specifier = ">=2" },
     { name = "pyopenssl", specifier = ">=26.0.0" },
     { name = "pyspark", marker = "extra == 'spark'", specifier = ">=3.5" },
@@ -3616,7 +3589,6 @@ requires-dist = [
     { name = "requests", specifier = ">=2.33.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
     { name = "sentence-transformers", marker = "extra == 'memory'", specifier = ">=2.2" },
-    { name = "snowflake-connector-python", extras = ["pandas"], marker = "extra == 'snowflake'", specifier = ">=3.10" },
     { name = "sqlglot", specifier = ">=27" },
     { name = "starlette", marker = "extra == 'ui'", specifier = ">=0.37" },
     { name = "testcontainers", extras = ["postgres", "mysql"], marker = "extra == 'dev'", specifier = ">=4" },
