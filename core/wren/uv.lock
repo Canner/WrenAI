@@ -1033,12 +1033,12 @@ clickhouse = [
     { name = "pyarrow-hotfix" },
     { name = "rich" },
 ]
-mysql = [
-    { name = "mysqlclient" },
+mssql = [
     { name = "numpy" },
     { name = "pandas" },
     { name = "pyarrow" },
     { name = "pyarrow-hotfix" },
+    { name = "pyodbc" },
     { name = "rich" },
 ]
 postgres = [
@@ -3480,14 +3480,13 @@ all = [
     { name = "databricks-sdk" },
     { name = "databricks-sql-connector" },
     { name = "google-auth" },
-    { name = "ibis-framework", extra = ["athena", "bigquery", "clickhouse", "mysql", "postgres", "snowflake", "trino"] },
+    { name = "ibis-framework", extra = ["athena", "bigquery", "clickhouse", "mssql", "postgres", "snowflake", "trino"] },
     { name = "inquirerpy" },
     { name = "jinja2" },
     { name = "lancedb" },
     { name = "mysqlclient" },
     { name = "oracledb" },
     { name = "psycopg" },
-    { name = "pyodbc" },
     { name = "pyspark" },
     { name = "python-multipart" },
     { name = "redshift-connector" },
@@ -3532,10 +3531,9 @@ memory = [
     { name = "sentence-transformers" },
 ]
 mssql = [
-    { name = "pyodbc" },
+    { name = "ibis-framework", extra = ["mssql"] },
 ]
 mysql = [
-    { name = "ibis-framework", extra = ["mysql"] },
     { name = "mysqlclient" },
 ]
 oracle = [
@@ -3582,7 +3580,7 @@ requires-dist = [
     { name = "ibis-framework", extras = ["athena"], marker = "extra == 'athena'" },
     { name = "ibis-framework", extras = ["bigquery"], marker = "extra == 'bigquery'" },
     { name = "ibis-framework", extras = ["clickhouse"], marker = "extra == 'clickhouse'" },
-    { name = "ibis-framework", extras = ["mysql"], marker = "extra == 'mysql'" },
+    { name = "ibis-framework", extras = ["mssql"], marker = "extra == 'mssql'" },
     { name = "ibis-framework", extras = ["postgres"], marker = "extra == 'postgres'" },
     { name = "ibis-framework", extras = ["snowflake"], marker = "extra == 'snowflake'" },
     { name = "ibis-framework", extras = ["trino"], marker = "extra == 'trino'" },
@@ -3600,7 +3598,6 @@ requires-dist = [
     { name = "pyarrow-hotfix", specifier = ">=0.6" },
     { name = "pyasn1", specifier = ">=0.6.3" },
     { name = "pydantic", specifier = ">=2" },
-    { name = "pyodbc", marker = "extra == 'mssql'", specifier = ">=5,<6" },
     { name = "pyopenssl", specifier = ">=26.0.0" },
     { name = "pyspark", marker = "extra == 'spark'", specifier = ">=3.5" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
