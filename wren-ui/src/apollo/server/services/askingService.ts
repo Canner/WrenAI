@@ -102,6 +102,21 @@ export enum ThreadResponseAnswerStatus {
   INTERRUPTED = 'INTERRUPTED',
 }
 
+const isAnswerGenerationInProgress = (
+  status?: ThreadResponseAnswerStatus | string | null,
+) =>
+  ([
+    ThreadResponseAnswerStatus.NOT_STARTED,
+    ThreadResponseAnswerStatus.FETCHING_DATA,
+    ThreadResponseAnswerStatus.PREPROCESSING,
+    ThreadResponseAnswerStatus.STREAMING,
+  ] as string[]).includes(status || "");
+
+const isChartGenerationInProgress = (status?: ChartStatus | string | null) =>
+  ([ChartStatus.FETCHING, ChartStatus.GENERATING] as string[]).includes(
+    status || "",
+  );
+
 // adjustment input
 export interface AdjustmentReasoningInput {
   tables: string[];
@@ -847,6 +862,13 @@ export class AskingService implements IAskingService {
       throw new Error(`Thread response ${threadResponseId} not found`);
     }
 
+    if (isAnswerGenerationInProgress(threadResponse.answerDetail?.status)) {
+      logger.debug(
+        `Thread response ${threadResponseId} answer generation already in progress, skipping duplicate request`,
+      );
+      return threadResponse;
+    }
+
     // update with initial status
     const updatedThreadResponse = await this.threadResponseRepository.updateOne(
       threadResponse.id,
@@ -873,6 +895,13 @@ export class AskingService implements IAskingService {
 
     if (!threadResponse) {
       throw new Error(`Thread response ${threadResponseId} not found`);
+    }
+
+    if (isChartGenerationInProgress(threadResponse.chartDetail?.status)) {
+      logger.debug(
+        `Thread response ${threadResponseId} chart generation already in progress, skipping duplicate request`,
+      );
+      return threadResponse;
     }
 
     // 1. create a task on AI service to generate the chart
@@ -910,6 +939,16 @@ export class AskingService implements IAskingService {
 
     if (!threadResponse) {
       throw new Error(`Thread response ${threadResponseId} not found`);
+    }
+
+    if (
+      isChartGenerationInProgress(threadResponse.chartDetail?.status) &&
+      threadResponse.chartDetail?.adjustment
+    ) {
+      logger.debug(
+        `Thread response ${threadResponseId} chart adjustment already in progress, skipping duplicate request`,
+      );
+      return threadResponse;
     }
 
     // 1. create a task on AI service to adjust the chart

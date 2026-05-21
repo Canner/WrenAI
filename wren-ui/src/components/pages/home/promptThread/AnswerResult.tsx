@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { isEmpty, debounce } from 'lodash';
 import clsx from 'clsx';
 import { Button, Typography, Tabs, Tag, Tooltip } from 'antd';
@@ -25,6 +25,7 @@ import ChartAnswer from '@/components/pages/home/promptThread/ChartAnswer';
 import Preparation from '@/components/pages/home/preparation';
 import {
   AskingTaskStatus,
+  ChartTaskStatus,
   ThreadResponse,
   ThreadResponseAnswerDetail,
   ThreadResponseAnswerStatus,
@@ -186,6 +187,19 @@ const isNeedGenerateAnswer = (answerDetail: ThreadResponseAnswerDetail) => {
   return answerDetail?.queryId === null && !isFinished && !isProcessing;
 };
 
+const isAnswerGenerationInProgress = (
+  status?: ThreadResponseAnswerStatus | null,
+) =>
+  [
+    ThreadResponseAnswerStatus.NOT_STARTED,
+    ThreadResponseAnswerStatus.FETCHING_DATA,
+    ThreadResponseAnswerStatus.PREPROCESSING,
+    ThreadResponseAnswerStatus.STREAMING,
+  ].includes(status);
+
+const isChartGenerationActive = (status?: ChartTaskStatus | null) =>
+  [ChartTaskStatus.FETCHING, ChartTaskStatus.GENERATING].includes(status);
+
 export default function AnswerResult(props: Props) {
   const { threadResponse, isLastThreadResponse, isOpeningQuestion } = props;
 
@@ -213,6 +227,7 @@ export default function AnswerResult(props: Props) {
     view,
     adjustment,
   } = threadResponse;
+  const autoGenerateAnswerRef = useRef<number | null>(null);
 
   const resultStyle = isLastThreadResponse
     ? { minHeight: 'calc(100vh - (194px))' }
@@ -236,9 +251,16 @@ export default function AnswerResult(props: Props) {
   useEffect(() => {
     if (isBreakdownOnly) return;
     if (
+      autoGenerateAnswerRef.current === id &&
+      isAnswerGenerationInProgress(answerDetail?.status)
+    ) {
+      return;
+    }
+    if (
       canGenerateAnswer(askingTask, adjustmentTask) &&
       isNeedGenerateAnswer(answerDetail)
     ) {
+      autoGenerateAnswerRef.current = id;
       const debouncedGenerateAnswer = debounce(
         () => {
           onGenerateTextBasedAnswer(id);
@@ -254,14 +276,25 @@ export default function AnswerResult(props: Props) {
       };
     }
   }, [
+    id,
     isBreakdownOnly,
     askingTask?.status,
     adjustmentTask?.status,
     answerDetail?.status,
   ]);
 
+  useEffect(() => {
+    if (getAnswerIsFinished(answerDetail?.status)) {
+      autoGenerateAnswerRef.current = null;
+    }
+  }, [answerDetail?.status]);
+
   const onTabClick = (activeKey: string) => {
-    if (activeKey === ANSWER_TAB_KEYS.CHART && !threadResponse.chartDetail) {
+    if (
+      activeKey === ANSWER_TAB_KEYS.CHART &&
+      !threadResponse.chartDetail &&
+      !isChartGenerationActive(threadResponse.chartDetail?.status)
+    ) {
       onGenerateChartAnswer(id);
     }
   };
