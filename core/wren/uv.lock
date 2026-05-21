@@ -341,6 +341,17 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/cd/ef/60d269c6aeb9a42216b526466f02b07dbc186866f9f945891cff871c5581/clickhouse_connect-0.14.1-cp314-cp314t-win_amd64.whl", hash = "sha256:e1546b22c2914bf25823fcecf95399783e0748f31ce72e78276c91ecf6253b5f", size = 299443, upload-time = "2026-03-12T15:50:33.936Z" },
 ]
 
+[package.optional-dependencies]
+arrow = [
+    { name = "pyarrow" },
+]
+numpy = [
+    { name = "numpy" },
+]
+pandas = [
+    { name = "pandas" },
+]
+
 [[package]]
 name = "colorama"
 version = "0.4.6"
@@ -1014,12 +1025,12 @@ bigquery = [
     { name = "pydata-google-auth" },
     { name = "rich" },
 ]
-mssql = [
+clickhouse = [
+    { name = "clickhouse-connect", extra = ["arrow", "numpy", "pandas"] },
     { name = "numpy" },
     { name = "pandas" },
     { name = "pyarrow" },
     { name = "pyarrow-hotfix" },
-    { name = "pyodbc" },
     { name = "rich" },
 ]
 mysql = [
@@ -3466,17 +3477,17 @@ dependencies = [
 
 [package.optional-dependencies]
 all = [
-    { name = "clickhouse-connect" },
     { name = "databricks-sdk" },
     { name = "databricks-sql-connector" },
     { name = "google-auth" },
-    { name = "ibis-framework", extra = ["athena", "bigquery", "mssql", "mysql", "postgres", "snowflake", "trino"] },
+    { name = "ibis-framework", extra = ["athena", "bigquery", "clickhouse", "mysql", "postgres", "snowflake", "trino"] },
     { name = "inquirerpy" },
     { name = "jinja2" },
     { name = "lancedb" },
     { name = "mysqlclient" },
     { name = "oracledb" },
     { name = "psycopg" },
+    { name = "pyodbc" },
     { name = "pyspark" },
     { name = "python-multipart" },
     { name = "redshift-connector" },
@@ -3493,7 +3504,7 @@ bigquery = [
     { name = "ibis-framework", extra = ["bigquery"] },
 ]
 clickhouse = [
-    { name = "clickhouse-connect" },
+    { name = "ibis-framework", extra = ["clickhouse"] },
 ]
 databricks = [
     { name = "databricks-sdk" },
@@ -3521,7 +3532,7 @@ memory = [
     { name = "sentence-transformers" },
 ]
 mssql = [
-    { name = "ibis-framework", extra = ["mssql"] },
+    { name = "pyodbc" },
 ]
 mysql = [
     { name = "ibis-framework", extra = ["mysql"] },
@@ -3562,7 +3573,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "boto3", specifier = ">=1.26" },
-    { name = "clickhouse-connect", marker = "extra == 'clickhouse'", specifier = ">=0.8" },
     { name = "databricks-sdk", marker = "extra == 'databricks'" },
     { name = "databricks-sql-connector", marker = "extra == 'databricks'" },
     { name = "duckdb", specifier = ">=1.0" },
@@ -3571,7 +3581,7 @@ requires-dist = [
     { name = "ibis-framework", specifier = ">=10" },
     { name = "ibis-framework", extras = ["athena"], marker = "extra == 'athena'" },
     { name = "ibis-framework", extras = ["bigquery"], marker = "extra == 'bigquery'" },
-    { name = "ibis-framework", extras = ["mssql"], marker = "extra == 'mssql'" },
+    { name = "ibis-framework", extras = ["clickhouse"], marker = "extra == 'clickhouse'" },
     { name = "ibis-framework", extras = ["mysql"], marker = "extra == 'mysql'" },
     { name = "ibis-framework", extras = ["postgres"], marker = "extra == 'postgres'" },
     { name = "ibis-framework", extras = ["snowflake"], marker = "extra == 'snowflake'" },
@@ -3590,6 +3600,7 @@ requires-dist = [
     { name = "pyarrow-hotfix", specifier = ">=0.6" },
     { name = "pyasn1", specifier = ">=0.6.3" },
     { name = "pydantic", specifier = ">=2" },
+    { name = "pyodbc", marker = "extra == 'mssql'", specifier = ">=5,<6" },
     { name = "pyopenssl", specifier = ">=26.0.0" },
     { name = "pyspark", marker = "extra == 'spark'", specifier = ">=3.5" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },

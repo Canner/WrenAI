@@ -25,3 +25,4 @@ def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line(
         "markers", "clickhouse: ClickHouse connector tests — requires Docker"
     )
+    config.addinivalue_line("markers", "mssql: MSSQL connector tests — requires Docker")
