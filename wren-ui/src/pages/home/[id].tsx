@@ -70,6 +70,9 @@ const getThreadResponseIsFinished = (threadResponse: ThreadResponse) => {
   return isAnswerFinished !== false && isChartFinished !== false;
 };
 
+const THREAD_RESPONSE_POLL_INTERVAL_MS = 2000;
+const THREAD_RECOMMENDATION_POLL_INTERVAL_MS = 2000;
+
 export default function HomeThread() {
   const $prompt = useRef<ComponentRef<typeof Prompt>>(null);
   const router = useRouter();
@@ -151,12 +154,14 @@ export default function HomeThread() {
     fetchPolicy: 'network-only',
     nextFetchPolicy: 'network-only',
   });
-  const threadResponsePollingRef = useRef<ReturnType<typeof setInterval> | null>(
+  const threadResponsePollingRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
+  const threadResponsePollingSessionRef = useRef(0);
   const threadRecommendationPollingRef = useRef<
-    ReturnType<typeof setInterval> | null
+    ReturnType<typeof setTimeout> | null
   >(null);
+  const threadRecommendationPollingSessionRef = useRef(0);
 
   const [generateThreadResponseAnswer] =
     useGenerateThreadResponseAnswerMutation({
@@ -192,8 +197,9 @@ export default function HomeThread() {
   );
 
   const stopThreadResponsePolling = useCallback(() => {
+    threadResponsePollingSessionRef.current += 1;
     if (threadResponsePollingRef.current) {
-      clearInterval(threadResponsePollingRef.current);
+      clearTimeout(threadResponsePollingRef.current);
       threadResponsePollingRef.current = null;
     }
   }, []);
@@ -203,26 +209,36 @@ export default function HomeThread() {
       if (!responseId) return;
 
       stopThreadResponsePolling();
+      const pollingSessionId = threadResponsePollingSessionRef.current;
 
       const run = async () => {
+        if (threadResponsePollingSessionRef.current !== pollingSessionId) return;
+
         try {
           await fetchThreadResponse({
             variables: { responseId },
           });
         } catch (error) {
           console.error(error);
+        } finally {
+          if (threadResponsePollingSessionRef.current === pollingSessionId) {
+            threadResponsePollingRef.current = setTimeout(
+              run,
+              THREAD_RESPONSE_POLL_INTERVAL_MS,
+            );
+          }
         }
       };
 
       await run();
-      threadResponsePollingRef.current = setInterval(run, 1000);
     },
     [fetchThreadResponse, stopThreadResponsePolling],
   );
 
   const stopThreadRecommendationPolling = useCallback(() => {
+    threadRecommendationPollingSessionRef.current += 1;
     if (threadRecommendationPollingRef.current) {
-      clearInterval(threadRecommendationPollingRef.current);
+      clearTimeout(threadRecommendationPollingRef.current);
       threadRecommendationPollingRef.current = null;
     }
   }, []);
@@ -232,19 +248,34 @@ export default function HomeThread() {
       if (!nextThreadId) return;
 
       stopThreadRecommendationPolling();
+      const pollingSessionId = threadRecommendationPollingSessionRef.current;
 
       const run = async () => {
+        if (
+          threadRecommendationPollingSessionRef.current !== pollingSessionId
+        ) {
+          return;
+        }
+
         try {
           await fetchThreadRecommendationQuestions({
             variables: { threadId: nextThreadId },
           });
         } catch (error) {
           console.error(error);
+        } finally {
+          if (
+            threadRecommendationPollingSessionRef.current === pollingSessionId
+          ) {
+            threadRecommendationPollingRef.current = setTimeout(
+              run,
+              THREAD_RECOMMENDATION_POLL_INTERVAL_MS,
+            );
+          }
         }
       };
 
       await run();
-      threadRecommendationPollingRef.current = setInterval(run, 1000);
     },
     [fetchThreadRecommendationQuestions, stopThreadRecommendationPolling],
   );

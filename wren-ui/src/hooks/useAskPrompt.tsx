@@ -30,6 +30,9 @@ export interface AskPromptData {
   recommendedQuestions?: RecommendedQuestionsTask;
 }
 
+const ASKING_TASK_POLL_INTERVAL_MS = 2000;
+const RECOMMENDED_QUESTIONS_POLL_INTERVAL_MS = 2000;
+
 export const getIsFinished = (status: AskingTaskStatus) =>
   [
     AskingTaskStatus.FINISHED,
@@ -183,12 +186,14 @@ export default function useAskPrompt(threadId?: number) {
       fetchPolicy: 'network-only',
       nextFetchPolicy: 'network-only',
     });
-  const askingTaskPollingRef = useRef<ReturnType<typeof setInterval> | null>(
+  const askingTaskPollingRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
-  const recommendedPollingRef = useRef<ReturnType<typeof setInterval> | null>(
+  const askingTaskPollingSessionRef = useRef(0);
+  const recommendedPollingRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
+  const recommendedPollingSessionRef = useRef(0);
 
   const askingTask = useMemo(
     () => askingTaskResult.data?.askingTask || null,
@@ -206,15 +211,17 @@ export default function useAskPrompt(threadId?: number) {
   const loading = askingStreamTaskResult.loading;
 
   const stopAskingTaskPolling = useCallback(() => {
+    askingTaskPollingSessionRef.current += 1;
     if (askingTaskPollingRef.current) {
-      clearInterval(askingTaskPollingRef.current);
+      clearTimeout(askingTaskPollingRef.current);
       askingTaskPollingRef.current = null;
     }
   }, []);
 
   const stopRecommendedPolling = useCallback(() => {
+    recommendedPollingSessionRef.current += 1;
     if (recommendedPollingRef.current) {
-      clearInterval(recommendedPollingRef.current);
+      clearTimeout(recommendedPollingRef.current);
       recommendedPollingRef.current = null;
     }
   }, []);
@@ -224,19 +231,28 @@ export default function useAskPrompt(threadId?: number) {
       if (!taskId) return;
 
       stopAskingTaskPolling();
+      const pollingSessionId = askingTaskPollingSessionRef.current;
 
       const run = async () => {
+        if (askingTaskPollingSessionRef.current !== pollingSessionId) return;
+
         try {
           await fetchAskingTask({
             variables: { taskId },
           });
         } catch (error) {
           console.error(error);
+        } finally {
+          if (askingTaskPollingSessionRef.current === pollingSessionId) {
+            askingTaskPollingRef.current = setTimeout(
+              run,
+              ASKING_TASK_POLL_INTERVAL_MS,
+            );
+          }
         }
       };
 
       await run();
-      askingTaskPollingRef.current = setInterval(run, 1000);
     },
     [fetchAskingTask, stopAskingTaskPolling],
   );
@@ -246,19 +262,28 @@ export default function useAskPrompt(threadId?: number) {
       if (!taskId) return;
 
       stopRecommendedPolling();
+      const pollingSessionId = recommendedPollingSessionRef.current;
 
       const run = async () => {
+        if (recommendedPollingSessionRef.current !== pollingSessionId) return;
+
         try {
           await fetchInstantRecommendedQuestions({
             variables: { taskId },
           });
         } catch (error) {
           console.error(error);
+        } finally {
+          if (recommendedPollingSessionRef.current === pollingSessionId) {
+            recommendedPollingRef.current = setTimeout(
+              run,
+              RECOMMENDED_QUESTIONS_POLL_INTERVAL_MS,
+            );
+          }
         }
       };
 
       await run();
-      recommendedPollingRef.current = setInterval(run, 1000);
     },
     [fetchInstantRecommendedQuestions, stopRecommendedPolling],
   );

@@ -21,7 +21,12 @@ logger = logging.getLogger("wren-ai-service")
 
 
 def normalize_data_source(data_source: str | None) -> str:
-    return (data_source or "").strip().upper()
+    normalized = (data_source or "").strip().upper().replace("-", "_").replace(
+        " ", "_"
+    )
+    if normalized in {"SQLSERVER", "SQL_SERVER", "MS_SQL", "MSSQLSERVER"}:
+        return "MSSQL"
+    return normalized
 
 
 def _format_timestamp_literal(value: datetime) -> str:
@@ -108,7 +113,7 @@ def _replace_relative_getdate_calls(sql: str, now: datetime) -> str:
 
 
 def _rewrite_mssql_bucket_functions(sql: str) -> str:
-    expression_pattern = r'((?:"[^"]+"(?:\."[^"]+")?)|(?:[A-Za-z_][A-Za-z0-9_\.]*))'
+    expression_pattern = r"((?:[^(),]|\([^()]*\))+?)"
 
     sql = re.sub(
         rf"DATEADD\(\s*month\s*,\s*DATEDIFF\(\s*month\s*,\s*0\s*,\s*{expression_pattern}\s*\)\s*,\s*0\s*\)",
@@ -128,7 +133,7 @@ def _rewrite_mssql_bucket_functions(sql: str) -> str:
 
 
 def _rewrite_temporal_bucket_functions(sql: str) -> str:
-    expression_pattern = r'((?:"[^"]+"(?:\."[^"]+")?)|(?:[A-Za-z_][A-Za-z0-9_\.]*))'
+    expression_pattern = r"((?:[^(),]|\([^()]*\))+?)"
     replacements = [
         (
             re.compile(
@@ -165,6 +170,20 @@ def _rewrite_temporal_bucket_functions(sql: str) -> str:
         ),
         (
             re.compile(
+                rf"DATETRUNC\(\s*MONTH\s*,\s*{expression_pattern}\s*\)",
+                re.IGNORECASE,
+            ),
+            lambda m: f"DATEPART('MONTH', {m.group(1)})",
+        ),
+        (
+            re.compile(
+                rf"DATETRUNC\(\s*YEAR\s*,\s*{expression_pattern}\s*\)",
+                re.IGNORECASE,
+            ),
+            lambda m: f"DATEPART('YEAR', {m.group(1)})",
+        ),
+        (
+            re.compile(
                 rf"DATE_TRUNC\(\s*'?\s*MONTH\s*'?\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
@@ -194,6 +213,27 @@ def _rewrite_temporal_bucket_functions(sql: str) -> str:
         (
             re.compile(
                 rf"DATE_PART\(\s*'?\s*DAY\s*'?\s*,\s*{expression_pattern}\s*\)",
+                re.IGNORECASE,
+            ),
+            lambda m: f"DATEPART('DAY', {m.group(1)})",
+        ),
+        (
+            re.compile(
+                rf"EXTRACT\(\s*YEAR\s+FROM\s+{expression_pattern}\s*\)",
+                re.IGNORECASE,
+            ),
+            lambda m: f"DATEPART('YEAR', {m.group(1)})",
+        ),
+        (
+            re.compile(
+                rf"EXTRACT\(\s*MONTH\s+FROM\s+{expression_pattern}\s*\)",
+                re.IGNORECASE,
+            ),
+            lambda m: f"DATEPART('MONTH', {m.group(1)})",
+        ),
+        (
+            re.compile(
+                rf"EXTRACT\(\s*DAY\s+FROM\s+{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
             lambda m: f"DATEPART('DAY', {m.group(1)})",

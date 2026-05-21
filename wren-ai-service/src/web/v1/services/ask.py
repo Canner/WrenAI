@@ -14,6 +14,10 @@ from src.web.v1.services import BaseRequest, SSEEvent
 logger = logging.getLogger("wren-ai-service")
 
 
+async def _return_value(value):
+    return value
+
+
 class AskHistory(BaseModel):
     sql: str
     question: str
@@ -493,34 +497,52 @@ class AskService:
                 )
 
                 if histories:
-                    sql_generation_reasoning = (
-                        await self._run_with_timeout(
-                            "Follow-up SQL generation reasoning",
-                            self._pipelines["followup_sql_generation_reasoning"].run(
-                                query=user_query,
-                                contexts=table_ddls,
-                                histories=histories,
-                                sql_samples=sql_samples,
-                                instructions=instructions,
-                                configuration=ask_request.configurations,
-                                query_id=query_id,
-                            ),
+                    try:
+                        sql_generation_reasoning = (
+                            await self._run_with_timeout(
+                                "Follow-up SQL generation reasoning",
+                                self._pipelines[
+                                    "followup_sql_generation_reasoning"
+                                ].run(
+                                    query=user_query,
+                                    contexts=table_ddls,
+                                    histories=histories,
+                                    sql_samples=sql_samples,
+                                    instructions=instructions,
+                                    configuration=ask_request.configurations,
+                                    query_id=query_id,
+                                ),
+                            )
+                        ).get("post_process", {})
+                    except Exception as reasoning_error:
+                        logger.warning(
+                            "Follow-up SQL generation reasoning failed for query_id %s; continuing without reasoning: %s",
+                            query_id,
+                            reasoning_error,
                         )
-                    ).get("post_process", {})
+                        sql_generation_reasoning = ""
                 else:
-                    sql_generation_reasoning = (
-                        await self._run_with_timeout(
-                            "SQL generation reasoning",
-                            self._pipelines["sql_generation_reasoning"].run(
-                                query=user_query,
-                                contexts=table_ddls,
-                                sql_samples=sql_samples,
-                                instructions=instructions,
-                                configuration=ask_request.configurations,
-                                query_id=query_id,
-                            ),
+                    try:
+                        sql_generation_reasoning = (
+                            await self._run_with_timeout(
+                                "SQL generation reasoning",
+                                self._pipelines["sql_generation_reasoning"].run(
+                                    query=user_query,
+                                    contexts=table_ddls,
+                                    sql_samples=sql_samples,
+                                    instructions=instructions,
+                                    configuration=ask_request.configurations,
+                                    query_id=query_id,
+                                ),
+                            )
+                        ).get("post_process", {})
+                    except Exception as reasoning_error:
+                        logger.warning(
+                            "SQL generation reasoning failed for query_id %s; continuing without reasoning: %s",
+                            query_id,
+                            reasoning_error,
                         )
-                    ).get("post_process", {})
+                        sql_generation_reasoning = ""
 
                 self._ask_results[query_id] = AskResultResponse(
                     status="planning",
@@ -545,23 +567,25 @@ class AskService:
                     is_followup=True if histories else False,
                 )
 
-                if allow_sql_functions_retrieval:
-                    sql_functions = await self._run_with_timeout(
-                        "SQL functions retrieval",
-                        self._pipelines["sql_functions_retrieval"].run(
-                            project_id=ask_request.project_id,
+                sql_functions, sql_knowledge = await self._run_with_timeout(
+                    "SQL helper retrieval",
+                    asyncio.gather(
+                        (
+                            self._pipelines["sql_functions_retrieval"].run(
+                                project_id=ask_request.project_id,
+                            )
+                            if allow_sql_functions_retrieval
+                            else _return_value([])
                         ),
-                    )
-                else:
-                    sql_functions = []
-
-                if allow_sql_knowledge_retrieval:
-                    sql_knowledge = await self._run_with_timeout(
-                        "SQL knowledge retrieval",
-                        self._pipelines["sql_knowledge_retrieval"].run(
-                            project_id=ask_request.project_id,
+                        (
+                            self._pipelines["sql_knowledge_retrieval"].run(
+                                project_id=ask_request.project_id,
+                            )
+                            if allow_sql_knowledge_retrieval
+                            else _return_value(None)
                         ),
-                    )
+                    ),
+                )
 
                 has_calculated_field = _retrieval_result.get(
                     "has_calculated_field", False
