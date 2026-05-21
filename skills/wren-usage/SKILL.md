@@ -39,7 +39,7 @@ whether a virtual environment is active.
   - Create one (e.g., `python -m venv .venv && source .venv/bin/activate`)
   - Continue without a venv (not recommended — may pollute global packages)
 
-### Step 2 — Check if `wrenai` is installed
+### Step 2 — Check if the `wren` CLI is installed
 
 Run `wren --version`. If the command is not found or errors:
 
