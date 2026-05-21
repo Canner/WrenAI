@@ -47,12 +47,16 @@ from wren.model.error import ErrorCode, WrenError
 
 if TYPE_CHECKING:
     import MySQLdb
+    import psycopg
     from pyathena.connection import Connection as PyAthenaConnection
 
 # get_connection() may return either an ibis BaseBackend (for connectors still
 # routed through ibis) or a native driver connection for connectors that have
-# dropped the ibis dependency (e.g. Athena via pyathena, MySQL/Doris via MySQLdb).
-BackendOrConnection = Union[BaseBackend, "PyAthenaConnection", "MySQLdb.Connection"]
+# dropped the ibis dependency (Athena via pyathena, MySQL/Doris via MySQLdb,
+# Postgres/Canner via psycopg).
+BackendOrConnection = Union[
+    BaseBackend, "PyAthenaConnection", "MySQLdb.Connection", "psycopg.Connection"
+]
 
 X_WREN_DB_STATEMENT_TIMEOUT = "x-wren-db-statement_timeout"
 MSSQL_DATETIMEOFFSET_TYPE_CODE = -155
@@ -288,6 +292,7 @@ class DataSourceExtension(Enum):
 
     @staticmethod
     def get_bigquery_connection(info: BigQueryDatasetConnectionInfo) -> BaseBackend:
+        import ibis  # noqa: PLC0415
         from google.cloud import bigquery  # noqa: PLC0415
         from google.oauth2 import service_account  # noqa: PLC0415
 
@@ -523,18 +528,30 @@ class DataSourceExtension(Enum):
         return MySQLdb.connect(**_build_doris_connect_kwargs(info))
 
     @staticmethod
-    def get_postgres_connection(info: PostgresConnectionInfo) -> BaseBackend:
-        return ibis.postgres.connect(
+    def get_postgres_connection(
+        info: PostgresConnectionInfo,
+    ) -> "psycopg.Connection":
+        """Open a native psycopg3 connection to PostgreSQL.
+
+        Returned object is a ``psycopg.Connection`` — the postgres connector
+        uses raw cursors and an OID-to-Arrow mapping to convert results.
+        """
+        import psycopg  # noqa: PLC0415
+
+        kwargs: dict[str, Any] = dict(info.kwargs) if info.kwargs else {}
+        return psycopg.connect(
             host=info.host,
             port=int(info.port),
-            database=info.database,
+            dbname=info.database,
             user=info.user,
             password=(info.password and info.password.get_secret_value()),
-            **info.kwargs if info.kwargs else {},
+            **kwargs,
         )
 
     @staticmethod
     def get_oracle_connection(info: OracleConnectionInfo) -> BaseBackend:
+        import ibis  # noqa: PLC0415
+
         if hasattr(info, "dsn") and info.dsn:
             return ibis.oracle.connect(
                 dsn=info.dsn.get_secret_value(),
@@ -557,6 +574,8 @@ class DataSourceExtension(Enum):
 
     @staticmethod
     def get_trino_connection(info: TrinoConnectionInfo) -> BaseBackend:
+        import ibis  # noqa: PLC0415
+
         return ibis.trino.connect(
             host=info.host,
             port=int(info.port),
@@ -569,6 +588,8 @@ class DataSourceExtension(Enum):
 
     @staticmethod
     def get_databricks_connection(info: DatabricksTokenConnectionInfo) -> BaseBackend:
+        import ibis  # noqa: PLC0415
+
         return ibis.databricks.connect(
             server_hostname=info.server_hostname,
             http_path=info.http_path,
