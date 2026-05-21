@@ -90,7 +90,7 @@ Run `bash skills/check-versions.sh` to verify parity before merging.
 
 ## Requirements
 
-- `wren` CLI installed (`pip install wren-engine` or `pip install wren-engine[<datasource>]`)
+- `wren` CLI installed (`pip install wrenai` or `pip install wrenai[<datasource>]`)
 - A database connection (configured via `wren profile add` or `~/.wren/connection_info.json`)
 - An AI client that supports skills (Claude Code, Cline, Cursor, etc.)
 

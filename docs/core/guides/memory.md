@@ -29,14 +29,14 @@ Both collections live in `<project>/.wren/memory/` (or `~/.wren/memory/` outside
 Memory is a separate optional extra — it is **not** included in the base install:
 
 ```bash
-pip install "wren-engine[memory]"
+pip install "wrenai[memory]"
 ```
 
 Combine with your data source extra:
 
 ```bash
-pip install "wren-engine[memory,postgres]"
-pip install "wren-engine[memory,bigquery]"
+pip install "wrenai[memory,postgres]"
+pip install "wrenai[memory,bigquery]"
 ```
 
 If you skip the `memory` extra, memory commands (`wren memory index`, `fetch`, `recall`, `store`, etc.) will not be available.
@@ -164,7 +164,7 @@ Remove incorrect or outdated NL-SQL pairs with `wren memory forget`. Three modes
 | **Batch** | `--source TAG --force` | Delete all pairs matching a source tag |
 
 ```bash
-# Interactive: checkbox UI (requires wren-engine[interactive])
+# Interactive: checkbox UI (requires wrenai[interactive])
 wren memory forget
 wren memory forget --source seed
 
@@ -179,7 +179,7 @@ wren memory forget --source seed --force
 The interactive mode requires the `interactive` extra:
 
 ```bash
-pip install "wren-engine[memory,interactive]"
+pip install "wrenai[memory,interactive]"
 ```
 
 If InquirerPy is not installed, the command prints a hint and suggests using `--id` mode instead.

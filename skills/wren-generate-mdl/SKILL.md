@@ -37,7 +37,7 @@ For memory and query workflows after setup, see the **wren-usage** skill.
 
 ## Prerequisites
 
-- `wren` CLI installed (`pip install wren-engine[<datasource>]`)
+- `wren` CLI installed (`pip install wrenai[<datasource>]`)
 - A working database connection (credentials available to the agent)
 - A wren profile configured (`wren profile add`) or connection info ready
 

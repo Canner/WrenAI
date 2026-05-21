@@ -28,7 +28,7 @@ This guide drops three things on you in the first few steps. Skim before you sta
 
 ## Step 0 — Create a Python virtual environment
 
-Create and activate a virtual environment before installing any packages. This keeps dbt and wren-engine dependencies isolated from your system Python:
+Create and activate a virtual environment before installing any packages. This keeps dbt and wrenai dependencies isolated from your system Python:
 
 ```bash
 python3 -m venv ~/.venvs/wren
@@ -65,15 +65,15 @@ pwd
 
 ---
 
-## Step 2 — Install wren-engine Python package
+## Step 2 — Install wrenai Python package
 
 For this quickstart, install with **DuckDB + memory + UI + interactive prompts**:
 
 ```bash
-pip install "wren-engine[memory,main]"
+pip install "wrenai[memory,main]"
 ```
 
-DuckDB is included by default — no extra needed. For other data sources, append the connector extra (e.g. `pip install "wren-engine[memory,main,postgres]"`).
+DuckDB is included by default — no extra needed. For other data sources, append the connector extra (e.g. `pip install "wrenai[memory,main,postgres]"`).
 
 > **Available extras:**
 > - `postgres`, `mysql`, `bigquery`, `snowflake`, `clickhouse`, `trino`, `mssql`, `databricks`, `redshift`, `athena`, `oracle`, `spark` — data source connectors

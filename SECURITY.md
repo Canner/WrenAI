@@ -22,6 +22,6 @@ This information will help us triage your report more quickly.
 
 ## Supported versions
 
-Security fixes are issued only for the most recent minor release of each published package (`wren-engine`, `wren-core`, `wren-core-wasm`). Older releases may be patched on a best-effort basis.
+Security fixes are issued only for the most recent minor release of each published package (`wrenai`, `wren-core`, `wren-core-wasm`). Older releases may be patched on a best-effort basis.
 
 The historical WrenAI GenBI app (preserved on `legacy/v1`, tag `v1-final`) is **not** receiving security updates beyond the freeze. Use the maintained [`main`](https://github.com/Canner/WrenAI/tree/main) branch for new deployments.

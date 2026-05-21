@@ -91,9 +91,9 @@ Use this to check which fields are needed before creating a profile.
 LanceDB-backed semantic memory for MDL schema search and NL-SQL retrieval. Install with the `memory` extra (separate from `main`):
 
 ```bash
-pip install 'wren-engine[memory]'
+pip install 'wrenai[memory]'
 # or combine with main for the browser UI and interactive prompts:
-pip install 'wren-engine[memory,main]'
+pip install 'wrenai[memory,main]'
 ```
 
 All `memory` subcommands accept `--path DIR` to override the default storage location (`~/.wren/memory/`).

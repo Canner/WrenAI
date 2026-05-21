@@ -13,7 +13,7 @@
 [Docs](https://docs.getwren.ai) · [Discord](https://discord.gg/5DvshJqG8Z) · [Vision](https://www.getwren.ai/post/the-missing-context-layer-for-ai-agents-over-business-data) · [Blog](https://www.getwren.ai/blog)
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![PyPI](https://img.shields.io/pypi/v/wren-engine?label=wren-engine)](https://pypi.org/project/wren-engine/)
+[![PyPI](https://img.shields.io/pypi/v/wrenai?label=wrenai)](https://pypi.org/project/wrenai/)
 [![GitHub Release](https://img.shields.io/github/v/release/Canner/WrenAI?logo=github&label=release)](https://github.com/Canner/WrenAI/releases)
 [![Discord](https://img.shields.io/discord/1227143286951514152?logo=discord&label=Discord)](https://discord.gg/5DvshJqG8Z)
 [![Last commit](https://img.shields.io/github/last-commit/Canner/WrenAI)](https://github.com/Canner/WrenAI/commits/main)
@@ -94,7 +94,7 @@ Open your agent in a project directory and ask:
 
 Use the `/wren-onboarding` skill to install and set up Wren AI.
 
-The agent will check your environment, install `wren-engine`, create a connection profile, scaffold the project, and run a first query — all in one flow.
+The agent will check your environment, install `wrenai`, create a connection profile, scaffold the project, and run a first query — all in one flow.
 
 ### 3. (Optional) Enrich the project
 
@@ -182,7 +182,7 @@ core/
   wren-core-base/    Shared manifest types + MDL builder
   wren-core-py/      Python bindings (PyPI: wren-core)
   wren-core-wasm/    WebAssembly build (npm: wren-core-wasm)
-  wren/              Python SDK and CLI (PyPI: wren-engine)
+  wren/              Python SDK and CLI (PyPI: wrenai)
   wren-mdl/          MDL JSON schema
 sdk/
   wren-langchain/    Reference agent SDK integration

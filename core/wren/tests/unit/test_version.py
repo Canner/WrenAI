@@ -37,7 +37,7 @@ def test_version_matches_package_metadata():
     from importlib.metadata import PackageNotFoundError, version  # noqa: PLC0415
 
     try:
-        meta_version = version("wren-engine")
+        meta_version = version("wrenai")
     except PackageNotFoundError:
-        pytest.skip("wren-engine not installed as a distribution")
+        pytest.skip("wrenai not installed as a distribution")
     assert __version__ == meta_version

@@ -63,7 +63,7 @@ wren profile add my-db --ui
 Opens a browser form with data-source-specific fields. Select the data source type, fill in the fields, and submit. Requires the `ui` extra:
 
 ```bash
-pip install "wren-engine[main]"   # includes ui + interactive (add 'memory' separately if needed)
+pip install "wrenai[main]"   # includes ui + interactive (add 'memory' separately if needed)
 ```
 
 ### Option B: Interactive CLI
@@ -125,24 +125,24 @@ If no profile is active when you add the first one, it becomes active automatica
 
 | Data source | Datasource value | Extra to install |
 |-------------|-----------------|------------------|
-| PostgreSQL | `postgres` | `wren-engine[postgres]` |
-| MySQL | `mysql` | `wren-engine[mysql]` |
-| BigQuery | `bigquery` | `wren-engine[bigquery]` |
-| Snowflake | `snowflake` | `wren-engine[snowflake]` |
+| PostgreSQL | `postgres` | `wrenai[postgres]` |
+| MySQL | `mysql` | `wrenai[mysql]` |
+| BigQuery | `bigquery` | `wrenai[bigquery]` |
+| Snowflake | `snowflake` | `wrenai[snowflake]` |
 | DuckDB | `duckdb` | _(included by default)_ |
-| ClickHouse | `clickhouse` | `wren-engine[clickhouse]` |
-| Trino | `trino` | `wren-engine[trino]` |
-| SQL Server | `mssql` | `wren-engine[mssql]` |
-| Databricks | `databricks` | `wren-engine[databricks]` |
-| Redshift | `redshift` | `wren-engine[redshift]` |
-| Oracle | `oracle` | `wren-engine[oracle]` |
-| Athena | `athena` | `wren-engine[athena]` |
-| Apache Spark | `spark` | `wren-engine[spark]` |
+| ClickHouse | `clickhouse` | `wrenai[clickhouse]` |
+| Trino | `trino` | `wrenai[trino]` |
+| SQL Server | `mssql` | `wrenai[mssql]` |
+| Databricks | `databricks` | `wrenai[databricks]` |
+| Redshift | `redshift` | `wrenai[redshift]` |
+| Oracle | `oracle` | `wrenai[oracle]` |
+| Athena | `athena` | `wrenai[athena]` |
+| Apache Spark | `spark` | `wrenai[spark]` |
 
 Install the extra for your data source before creating a profile:
 
 ```bash
-pip install "wren-engine[postgres,main]"
+pip install "wrenai[postgres,main]"
 ```
 
 ## Secrets: `${VAR}` references and `.env` files

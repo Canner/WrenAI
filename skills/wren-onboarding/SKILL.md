@@ -3,7 +3,7 @@ name: wren-onboarding
 description: "Onboard a user to Wren Engine end-to-end. Walks through environment checks, project scaffolding, connection configuration via .env, and first query. Use when: user wants to install Wren Engine, set up a new data source connection, or bootstrap a new project from scratch. Triggers: '/wren-onboarding', 'install wren', 'set up wren engine', 'wren onboarding', 'connect new database to wren'."
 license: Apache-2.0
 metadata:
-  author: wren-engine
+  author: wrenai
   version: "2.1"
 ---
 
@@ -69,12 +69,12 @@ Wait for both. Don't ask for credentials.
 
 ## Step 2 — Workspace + .env setup (batch)
 
-Side effects: creates `~/<project>/`, installs `wren-engine[<ds>,main]`, generates an empty `.env` template. The project files (`wren_project.yml` etc.) come later in Step 3.5 — at this point we only have a directory with credentials waiting to be filled.
+Side effects: creates `~/<project>/`, installs `wrenai[<ds>,main]`, generates an empty `.env` template. The project files (`wren_project.yml` etc.) come later in Step 3.5 — at this point we only have a directory with credentials waiting to be filled.
 
 Run as a batch — report each command briefly, then end with one "please fill `.env`" ask:
 
 1. `mkdir -p ~/<project> && cd ~/<project>`.
-2. `pip install "wren-engine[<ds>,main]"`. For datasource-specific install gotchas (macOS mysql, etc.), see [`connect.md#per-datasource-setup-notes`](https://github.com/Canner/WrenAI/blob/main/docs/core/guides/connect.md).
+2. `pip install "wrenai[<ds>,main]"`. For datasource-specific install gotchas (macOS mysql, etc.), see [`connect.md#per-datasource-setup-notes`](https://github.com/Canner/WrenAI/blob/main/docs/core/guides/connect.md).
 3. **Generate the `.env` template by introspecting the connector**:
 
    ```bash
@@ -151,7 +151,7 @@ wren context build
 
 Report the model count and any validate warnings.
 
-**Memory recommendation**: count models with `wren context show | grep -c '^model:'`. If `>= 200`, suggest `pip install "wren-engine[memory]"` + `wren memory index` (~800 MB). If `< 200`, skip.
+**Memory recommendation**: count models with `wren context show | grep -c '^model:'`. If `>= 200`, suggest `pip install "wrenai[memory]"` + `wren memory index` (~800 MB). If `< 200`, skip.
 
 ## Step 5 — Ready to explore (hand off)
 

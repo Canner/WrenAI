@@ -37,7 +37,7 @@ If you have an AI coding agent installed, the `wren-onboarding` skill drives the
 Install one or more extras together:
 
 ```bash
-pip install "wren-engine[postgres,bigquery,main]"
+pip install "wrenai[postgres,bigquery,main]"
 ```
 
 ## Inspecting connection fields
@@ -48,7 +48,7 @@ To see the exact fields required and accepted by a connector, run:
 wren docs connection-info <ds>
 ```
 
-The output is generated directly from the engine's connection schema, so it always matches the version of `wren-engine` you have installed. Examples:
+The output is generated directly from the engine's connection schema, so it always matches the version of `wrenai` you have installed. Examples:
 
 ```bash
 wren docs connection-info postgres

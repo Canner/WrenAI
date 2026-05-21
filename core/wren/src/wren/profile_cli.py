@@ -92,7 +92,7 @@ def add(
         raise typer.Exit(1)
 
     if ui:
-        # starlette / uvicorn / jinja2 ship with core wren-engine so this
+        # starlette / uvicorn / jinja2 ship with core wrenai so this
         # import normally succeeds; the except branch is defensive for
         # broken installs where the web stack got stripped.
         try:
@@ -102,8 +102,8 @@ def add(
                 raise
             typer.echo(
                 "Error: --ui requires the browser UI dependencies, which "
-                "normally ship with wren-engine.\n"
-                "Reinstall wren-engine, or use --interactive instead.",
+                "normally ship with wrenai.\n"
+                "Reinstall wrenai, or use --interactive instead.",
                 err=True,
             )
             raise typer.Exit(1)

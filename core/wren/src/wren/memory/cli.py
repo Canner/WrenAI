@@ -100,7 +100,7 @@ def _get_store(path: str | None):
             raise
         typer.echo(
             "Error: wren[memory] extras not installed. "
-            "Run: pip install 'wren-engine[memory]'",
+            "Run: pip install 'wrenai[memory]'",
             err=True,
         )
         raise typer.Exit(1)
@@ -419,7 +419,7 @@ def _interactive_forget(mem_store, source: str | None, limit: int) -> None:
     except ImportError:
         typer.echo(
             "Interactive mode requires InquirerPy.\n"
-            "Install with: pip install wren-engine[interactive]\n"
+            "Install with: pip install wrenai[interactive]\n"
             "Or use: wren memory forget --id <ID> [--id <ID> ...]",
             err=True,
         )
