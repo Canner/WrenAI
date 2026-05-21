@@ -1,12 +1,15 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 import pyarrow as pa
-from ibis.expr.datatypes import Decimal
-from ibis.expr.datatypes.core import UUID
-from ibis.expr.types import Table
 from loguru import logger
 
 from wren.model.data_source import DataSource
+
+if TYPE_CHECKING:
+    from ibis.expr.types import Table
 
 
 class ConnectorABC(ABC):
@@ -37,6 +40,9 @@ class IbisConnector(ConnectorABC):
         return ibis_table.to_pyarrow()
 
     def _handle_pyarrow_unsupported_type(self, ibis_table: Table, **kwargs) -> Table:
+        from ibis.expr.datatypes import Decimal  # noqa: PLC0415
+        from ibis.expr.datatypes.core import UUID  # noqa: PLC0415
+
         result_table = ibis_table
         for name, dtype in ibis_table.schema().items():
             if isinstance(dtype, Decimal):
@@ -55,6 +61,8 @@ class IbisConnector(ConnectorABC):
     def _round_decimal_columns(
         self, result_table: Table, col_name: str, scale: int = 9
     ) -> Table:
+        from ibis.expr.datatypes import Decimal  # noqa: PLC0415
+
         col = result_table[col_name]
         decimal_type = Decimal(precision=38, scale=scale)
         rounded_col = col.cast(decimal_type).round(scale)
