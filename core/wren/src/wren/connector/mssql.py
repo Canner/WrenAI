@@ -38,15 +38,17 @@ class MSSqlConnector(ConnectorABC):
                 return pa.table({})
 
             rows = cursor.fetchmany(limit) if limit is not None else cursor.fetchall()
-            names = [desc[0] for desc in cursor.description]
             arrow_schema = self._build_mssql_arrow_schema(cursor.description, rows)
             arrays = [
                 self._build_mssql_column(
                     [row[index] for row in rows], arrow_schema.field(index).type
                 )
-                for index in range(len(names))
+                for index in range(len(cursor.description))
             ]
-            return pa.table(dict(zip(names, arrays)), schema=arrow_schema)
+            # ``dict(zip(...))`` collapses duplicate column names — build the
+            # table from arrays + schema so projections like ``SELECT a, a``
+            # are preserved.
+            return pa.Table.from_arrays(arrays, schema=arrow_schema)
 
     def dry_run(self, sql: str) -> None:
         sql = self._flatten_pagination_limit(sql)

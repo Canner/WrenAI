@@ -10,9 +10,10 @@ column-by-column to that schema.
 from __future__ import annotations
 
 import json
+import re
 from decimal import Decimal as PyDecimal
 from typing import Any
-from urllib.parse import parse_qsl, urlparse
+from urllib.parse import parse_qsl, unquote_plus, urlparse
 
 import pyarrow as pa
 import sqlglot
@@ -186,10 +187,9 @@ def _build_clickhouse_arrow_table(query_result: Any) -> pa.Table:
             _build_clickhouse_column([row[i] for row in rows], schema.field(i).type)
             for i in range(len(fields))
         ]
-    return pa.table(
-        dict(zip([f.name for f in fields], arrays, strict=False)),
-        schema=schema,
-    )
+    # ``dict(zip(...))`` collapses duplicate column names — build the table
+    # from arrays + schema so projections like ``SELECT a, a`` are preserved.
+    return pa.Table.from_arrays(arrays, schema=schema)
 
 
 def _build_clickhouse_column(values: list, arrow_type: pa.DataType) -> pa.Array:
@@ -258,11 +258,16 @@ def _build_clickhouse_client_kwargs(connection_info: Any) -> dict:
         if statement_timeout is not None:
             settings["max_execution_time"] = int(statement_timeout)
 
+        # urlparse leaves percent-encoded characters in userinfo, so decode
+        # them before clickhouse-connect sees the credentials. Matches the
+        # mssql / postgres URL handling elsewhere in this package.
         out: dict = {
             "host": parsed.hostname,
             "port": int(parsed.port) if parsed.port else 8123,
-            "username": parsed.username or "default",
-            "password": parsed.password or "",
+            "username": (
+                unquote_plus(parsed.username) if parsed.username else "default"
+            ),
+            "password": unquote_plus(parsed.password) if parsed.password else "",
             "settings": settings,
         }
         if parsed.path and parsed.path != "/":
@@ -304,6 +309,21 @@ def _build_clickhouse_client_kwargs(connection_info: Any) -> dict:
 # --------------------------------------------------------------------------
 
 
+_TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
+
+
+def _strip_trailing_semicolon(sql: str) -> str:
+    """Strip the terminating run of ``;`` characters and surrounding whitespace.
+
+    Matches the canner helper of the same name. Wrapping user SQL as
+    ``SELECT * FROM ({sql}) AS _wren_sub LIMIT N`` breaks when ``sql`` ends
+    in a semicolon — ClickHouse rejects ``SELECT 1;`` inside a subquery. Only
+    the terminating run is removed so semicolons inside string literals
+    (e.g. ``SELECT 'a;b'``) are preserved.
+    """
+    return _TRAILING_SEMICOLONS_RE.sub("", sql)
+
+
 class ClickHouseConnector(ConnectorABC):
     """Native ``clickhouse-connect`` connector that bypasses ``ibis-project``."""
 
@@ -313,9 +333,13 @@ class ClickHouseConnector(ConnectorABC):
         self._closed = False
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
-        statement = sql
+        # Strip the terminating run of ``;`` / whitespace before wrapping —
+        # ``SELECT * FROM (SELECT 1;) AS _wren_sub LIMIT N`` is invalid SQL.
+        # Semicolons inside string literals are preserved.
+        stripped = _strip_trailing_semicolon(sql)
+        statement = stripped
         if limit is not None:
-            statement = f"SELECT * FROM ({sql}) AS _wren_sub LIMIT {limit}"
+            statement = f"SELECT * FROM ({stripped}) AS _wren_sub LIMIT {limit}"
         try:
             result = self.connection.query(statement)
         except _ClickHouseDbError as e:
@@ -330,8 +354,9 @@ class ClickHouseConnector(ConnectorABC):
         return _build_clickhouse_arrow_table(result)
 
     def dry_run(self, sql: str) -> None:
+        stripped = _strip_trailing_semicolon(sql)
         try:
-            self.connection.query(f"SELECT * FROM ({sql}) AS _wren_sub LIMIT 0")
+            self.connection.query(f"SELECT * FROM ({stripped}) AS _wren_sub LIMIT 0")
         except _ClickHouseDbError as e:
             if "TIMEOUT_EXCEEDED" in str(e):
                 raise DatabaseTimeoutError(str(e)) from e

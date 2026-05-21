@@ -243,3 +243,38 @@ def test_mssql_decode_datetimeoffset_rejects_truncated_payload() -> None:
 def test_mssql_decode_datetimeoffset_accepts_none() -> None:
     """``None`` continues to pass through (NULL values from pyodbc)."""
     assert DataSourceExtension._decode_mssql_datetimeoffset(None) is None
+
+
+# ---------------------------------------------------------------------------
+# 6. Duplicate column names survive ``query()``
+# ---------------------------------------------------------------------------
+
+
+def test_mssql_query_preserves_duplicate_column_names() -> None:
+    """``SELECT a, a`` must yield a two-column Arrow table, not one column.
+
+    Earlier the result was built via ``dict(zip(names, arrays))`` which
+    silently collapsed duplicate names. Build the table from arrays + schema
+    directly to keep each projection.
+    """
+    cursor = MagicMock()
+    # internal_size 4 → int32. Two columns both named ``a`` with distinct values.
+    cursor.description = [
+        ("a", int, None, 4, 10, 0, True),
+        ("a", int, None, 4, 10, 0, True),
+    ]
+    cursor.fetchall.return_value = [(1, 2), (3, 4)]
+    cursor.fetchmany.return_value = [(1, 2), (3, 4)]
+
+    fake_conn = MagicMock()
+    fake_conn.cursor.return_value = cursor
+
+    connector = MSSqlConnector.__new__(MSSqlConnector)
+    connector.connection = fake_conn
+
+    table = connector.query("SELECT a, a FROM t")
+
+    assert table.num_columns == 2
+    assert table.column_names == ["a", "a"]
+    assert table.column(0).to_pylist() == [1, 3]
+    assert table.column(1).to_pylist() == [2, 4]
