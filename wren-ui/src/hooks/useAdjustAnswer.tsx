@@ -15,6 +15,9 @@ import {
   ThreadResponse,
 } from '@/apollo/client/graphql/__types__';
 
+const ADJUSTMENT_POLL_INTERVAL_MS = 2000;
+const ADJUSTMENT_POLL_MAX_INTERVAL_MS = 10000;
+
 export const getIsFinished = (status: AskingTaskStatus) =>
   [
     AskingTaskStatus.FINISHED,
@@ -72,9 +75,14 @@ export default function useAdjustAnswer(threadId?: number) {
     });
   const [fetchThreadResponse, threadResponseResult] =
     useThreadResponseLazyQuery();
-  const threadResponsePollingRef = useRef<ReturnType<typeof setInterval> | null>(
+  const threadResponsePollingRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
+  const threadResponsePollingSessionRef = useRef(0);
+  const threadResponsePollingTargetRef = useRef<number | null>(null);
+  const threadResponsePollingRequestRef = useRef<Promise<void> | null>(null);
+  const threadResponsePollingDelayRef = useRef(ADJUSTMENT_POLL_INTERVAL_MS);
+  const lastAdjustmentTaskFingerprintRef = useRef<string | null>(null);
 
   const loading = adjustThreadResponseResult.loading;
 
@@ -89,30 +97,56 @@ export default function useAdjustAnswer(threadId?: number) {
   }, [adjustmentTask]);
 
   const stopThreadResponsePolling = useCallback(() => {
+    threadResponsePollingSessionRef.current += 1;
+    threadResponsePollingTargetRef.current = null;
     if (threadResponsePollingRef.current) {
-      clearInterval(threadResponsePollingRef.current);
+      clearTimeout(threadResponsePollingRef.current);
       threadResponsePollingRef.current = null;
     }
+    threadResponsePollingDelayRef.current = ADJUSTMENT_POLL_INTERVAL_MS;
   }, []);
 
   const startThreadResponsePolling = useCallback(
     async (responseId?: number) => {
       if (!responseId) return;
+      if (
+        threadResponsePollingTargetRef.current === responseId &&
+        (threadResponsePollingRequestRef.current || threadResponsePollingRef.current)
+      ) {
+        return;
+      }
 
       stopThreadResponsePolling();
+      threadResponsePollingTargetRef.current = responseId;
+      const pollingSessionId = threadResponsePollingSessionRef.current;
 
       const run = async () => {
+        if (threadResponsePollingSessionRef.current !== pollingSessionId) return;
+        if (threadResponsePollingRequestRef.current) {
+          await threadResponsePollingRequestRef.current;
+          if (threadResponsePollingSessionRef.current !== pollingSessionId) return;
+        }
+
         try {
-          await fetchThreadResponse({
+          const request = fetchThreadResponse({
             variables: { responseId },
-          });
+          }).then(() => undefined);
+          threadResponsePollingRequestRef.current = request;
+          await request;
         } catch (error) {
           console.error(error);
+        } finally {
+          threadResponsePollingRequestRef.current = null;
+          if (threadResponsePollingSessionRef.current === pollingSessionId) {
+            threadResponsePollingRef.current = setTimeout(
+              run,
+              threadResponsePollingDelayRef.current,
+            );
+          }
         }
       };
 
       await run();
-      threadResponsePollingRef.current = setInterval(run, 1000);
     },
     [fetchThreadResponse, stopThreadResponsePolling],
   );
@@ -121,6 +155,32 @@ export default function useAdjustAnswer(threadId?: number) {
     const isFinished = getIsFinished(adjustmentTask?.status);
     if (isFinished) stopThreadResponsePolling();
   }, [adjustmentTask?.status]);
+
+  useEffect(() => {
+    const fingerprint = JSON.stringify({
+      queryId: adjustmentTask?.queryId || null,
+      status: adjustmentTask?.status || null,
+      sql: adjustmentTask?.sql || null,
+      errorCode: adjustmentTask?.error?.code || null,
+      invalidSql: adjustmentTask?.invalidSql || null,
+    });
+
+    if (lastAdjustmentTaskFingerprintRef.current === fingerprint) {
+      threadResponsePollingDelayRef.current = Math.min(
+        threadResponsePollingDelayRef.current * 2,
+        ADJUSTMENT_POLL_MAX_INTERVAL_MS,
+      );
+    } else {
+      threadResponsePollingDelayRef.current = ADJUSTMENT_POLL_INTERVAL_MS;
+      lastAdjustmentTaskFingerprintRef.current = fingerprint;
+    }
+  }, [
+    adjustmentTask?.queryId,
+    adjustmentTask?.status,
+    adjustmentTask?.sql,
+    adjustmentTask?.error?.code,
+    adjustmentTask?.invalidSql,
+  ]);
 
   const onAdjustReasoningSteps = async (
     responseId: number,

@@ -72,6 +72,8 @@ const getThreadResponseIsFinished = (threadResponse: ThreadResponse) => {
 
 const THREAD_RESPONSE_POLL_INTERVAL_MS = 2000;
 const THREAD_RECOMMENDATION_POLL_INTERVAL_MS = 2000;
+const THREAD_RESPONSE_POLL_MAX_INTERVAL_MS = 10000;
+const THREAD_RECOMMENDATION_POLL_MAX_INTERVAL_MS = 10000;
 
 export default function HomeThread() {
   const $prompt = useRef<ComponentRef<typeof Prompt>>(null);
@@ -158,10 +160,22 @@ export default function HomeThread() {
     null,
   );
   const threadResponsePollingSessionRef = useRef(0);
+  const threadResponsePollingTargetRef = useRef<number | null>(null);
+  const threadResponsePollingRequestRef = useRef<Promise<void> | null>(null);
+  const threadResponsePollingDelayRef = useRef(THREAD_RESPONSE_POLL_INTERVAL_MS);
+  const lastThreadResponseFingerprintRef = useRef<string | null>(null);
   const threadRecommendationPollingRef = useRef<
     ReturnType<typeof setTimeout> | null
   >(null);
   const threadRecommendationPollingSessionRef = useRef(0);
+  const threadRecommendationPollingTargetRef = useRef<number | null>(null);
+  const threadRecommendationPollingRequestRef = useRef<Promise<void> | null>(
+    null,
+  );
+  const threadRecommendationPollingDelayRef = useRef(
+    THREAD_RECOMMENDATION_POLL_INTERVAL_MS,
+  );
+  const lastThreadRecommendationFingerprintRef = useRef<string | null>(null);
 
   const [generateThreadResponseAnswer] =
     useGenerateThreadResponseAnswerMutation({
@@ -198,33 +212,51 @@ export default function HomeThread() {
 
   const stopThreadResponsePolling = useCallback(() => {
     threadResponsePollingSessionRef.current += 1;
+    threadResponsePollingTargetRef.current = null;
     if (threadResponsePollingRef.current) {
       clearTimeout(threadResponsePollingRef.current);
       threadResponsePollingRef.current = null;
     }
+    threadResponsePollingDelayRef.current = THREAD_RESPONSE_POLL_INTERVAL_MS;
   }, []);
 
   const startThreadResponsePolling = useCallback(
     async (responseId?: number) => {
       if (!responseId) return;
+      if (
+        threadResponsePollingTargetRef.current === responseId &&
+        (threadResponsePollingRequestRef.current || threadResponsePollingRef.current)
+      ) {
+        return;
+      }
 
       stopThreadResponsePolling();
+      threadResponsePollingTargetRef.current = responseId;
       const pollingSessionId = threadResponsePollingSessionRef.current;
 
       const run = async () => {
         if (threadResponsePollingSessionRef.current !== pollingSessionId) return;
+        if (threadResponsePollingRequestRef.current) {
+          await threadResponsePollingRequestRef.current;
+          if (threadResponsePollingSessionRef.current !== pollingSessionId) {
+            return;
+          }
+        }
 
         try {
-          await fetchThreadResponse({
+          const request = fetchThreadResponse({
             variables: { responseId },
-          });
+          }).then(() => undefined);
+          threadResponsePollingRequestRef.current = request;
+          await request;
         } catch (error) {
           console.error(error);
         } finally {
+          threadResponsePollingRequestRef.current = null;
           if (threadResponsePollingSessionRef.current === pollingSessionId) {
             threadResponsePollingRef.current = setTimeout(
               run,
-              THREAD_RESPONSE_POLL_INTERVAL_MS,
+              threadResponsePollingDelayRef.current,
             );
           }
         }
@@ -237,17 +269,28 @@ export default function HomeThread() {
 
   const stopThreadRecommendationPolling = useCallback(() => {
     threadRecommendationPollingSessionRef.current += 1;
+    threadRecommendationPollingTargetRef.current = null;
     if (threadRecommendationPollingRef.current) {
       clearTimeout(threadRecommendationPollingRef.current);
       threadRecommendationPollingRef.current = null;
     }
+    threadRecommendationPollingDelayRef.current =
+      THREAD_RECOMMENDATION_POLL_INTERVAL_MS;
   }, []);
 
   const startThreadRecommendationPolling = useCallback(
     async (nextThreadId?: number) => {
       if (!nextThreadId) return;
+      if (
+        threadRecommendationPollingTargetRef.current === nextThreadId &&
+        (threadRecommendationPollingRequestRef.current ||
+          threadRecommendationPollingRef.current)
+      ) {
+        return;
+      }
 
       stopThreadRecommendationPolling();
+      threadRecommendationPollingTargetRef.current = nextThreadId;
       const pollingSessionId = threadRecommendationPollingSessionRef.current;
 
       const run = async () => {
@@ -256,20 +299,31 @@ export default function HomeThread() {
         ) {
           return;
         }
+        if (threadRecommendationPollingRequestRef.current) {
+          await threadRecommendationPollingRequestRef.current;
+          if (
+            threadRecommendationPollingSessionRef.current !== pollingSessionId
+          ) {
+            return;
+          }
+        }
 
         try {
-          await fetchThreadRecommendationQuestions({
+          const request = fetchThreadRecommendationQuestions({
             variables: { threadId: nextThreadId },
-          });
+          }).then(() => undefined);
+          threadRecommendationPollingRequestRef.current = request;
+          await request;
         } catch (error) {
           console.error(error);
         } finally {
+          threadRecommendationPollingRequestRef.current = null;
           if (
             threadRecommendationPollingSessionRef.current === pollingSessionId
           ) {
             threadRecommendationPollingRef.current = setTimeout(
               run,
-              THREAD_RECOMMENDATION_POLL_INTERVAL_MS,
+              threadRecommendationPollingDelayRef.current,
             );
           }
         }
@@ -384,6 +438,38 @@ export default function HomeThread() {
     }
   }, [isPollingResponseFinished]);
 
+  useEffect(() => {
+    const fingerprint = JSON.stringify({
+      id: pollingResponse?.id || null,
+      askingStatus: pollingResponse?.askingTask?.status || null,
+      askingType: pollingResponse?.askingTask?.type || null,
+      answerStatus: pollingResponse?.answerDetail?.status || null,
+      chartStatus: pollingResponse?.chartDetail?.status || null,
+      breakdownStatus: pollingResponse?.breakdownDetail?.status || null,
+      adjustmentStatus: pollingResponse?.adjustmentTask?.status || null,
+      sql: pollingResponse?.sql || null,
+    });
+
+    if (lastThreadResponseFingerprintRef.current === fingerprint) {
+      threadResponsePollingDelayRef.current = Math.min(
+        threadResponsePollingDelayRef.current * 2,
+        THREAD_RESPONSE_POLL_MAX_INTERVAL_MS,
+      );
+    } else {
+      threadResponsePollingDelayRef.current = THREAD_RESPONSE_POLL_INTERVAL_MS;
+      lastThreadResponseFingerprintRef.current = fingerprint;
+    }
+  }, [
+    pollingResponse?.id,
+    pollingResponse?.askingTask?.status,
+    pollingResponse?.askingTask?.type,
+    pollingResponse?.answerDetail?.status,
+    pollingResponse?.chartDetail?.status,
+    pollingResponse?.breakdownDetail?.status,
+    pollingResponse?.adjustmentTask?.status,
+    pollingResponse?.sql,
+  ]);
+
   const recommendedQuestions = useMemo(
     () =>
       threadRecommendationQuestionsResult.data
@@ -396,6 +482,29 @@ export default function HomeThread() {
       stopThreadRecommendationPolling();
     }
   }, [recommendedQuestions]);
+
+  useEffect(() => {
+    const fingerprint = JSON.stringify({
+      status: recommendedQuestions?.status || null,
+      count: recommendedQuestions?.questions?.length || 0,
+      errorCode: recommendedQuestions?.error?.code || null,
+    });
+
+    if (lastThreadRecommendationFingerprintRef.current === fingerprint) {
+      threadRecommendationPollingDelayRef.current = Math.min(
+        threadRecommendationPollingDelayRef.current * 2,
+        THREAD_RECOMMENDATION_POLL_MAX_INTERVAL_MS,
+      );
+    } else {
+      threadRecommendationPollingDelayRef.current =
+        THREAD_RECOMMENDATION_POLL_INTERVAL_MS;
+      lastThreadRecommendationFingerprintRef.current = fingerprint;
+    }
+  }, [
+    recommendedQuestions?.status,
+    recommendedQuestions?.questions?.length,
+    recommendedQuestions?.error?.code,
+  ]);
 
   const onCreateResponse = async (payload: CreateThreadResponseInput) => {
     try {

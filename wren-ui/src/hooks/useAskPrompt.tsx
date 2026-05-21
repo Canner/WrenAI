@@ -32,6 +32,8 @@ export interface AskPromptData {
 
 const ASKING_TASK_POLL_INTERVAL_MS = 2000;
 const RECOMMENDED_QUESTIONS_POLL_INTERVAL_MS = 2000;
+const ASKING_TASK_POLL_MAX_INTERVAL_MS = 10000;
+const RECOMMENDED_QUESTIONS_POLL_MAX_INTERVAL_MS = 10000;
 
 export const getIsFinished = (status: AskingTaskStatus) =>
   [
@@ -190,10 +192,20 @@ export default function useAskPrompt(threadId?: number) {
     null,
   );
   const askingTaskPollingSessionRef = useRef(0);
+  const askingTaskPollingTargetRef = useRef<string | null>(null);
+  const askingTaskPollingRequestRef = useRef<Promise<void> | null>(null);
+  const askingTaskPollingDelayRef = useRef(ASKING_TASK_POLL_INTERVAL_MS);
+  const lastAskingTaskFingerprintRef = useRef<string | null>(null);
   const recommendedPollingRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
   const recommendedPollingSessionRef = useRef(0);
+  const recommendedPollingTargetRef = useRef<string | null>(null);
+  const recommendedPollingRequestRef = useRef<Promise<void> | null>(null);
+  const recommendedPollingDelayRef = useRef(
+    RECOMMENDED_QUESTIONS_POLL_INTERVAL_MS,
+  );
+  const lastRecommendedFingerprintRef = useRef<string | null>(null);
 
   const askingTask = useMemo(
     () => askingTaskResult.data?.askingTask || null,
@@ -212,41 +224,59 @@ export default function useAskPrompt(threadId?: number) {
 
   const stopAskingTaskPolling = useCallback(() => {
     askingTaskPollingSessionRef.current += 1;
+    askingTaskPollingTargetRef.current = null;
     if (askingTaskPollingRef.current) {
       clearTimeout(askingTaskPollingRef.current);
       askingTaskPollingRef.current = null;
     }
+    askingTaskPollingDelayRef.current = ASKING_TASK_POLL_INTERVAL_MS;
   }, []);
 
   const stopRecommendedPolling = useCallback(() => {
     recommendedPollingSessionRef.current += 1;
+    recommendedPollingTargetRef.current = null;
     if (recommendedPollingRef.current) {
       clearTimeout(recommendedPollingRef.current);
       recommendedPollingRef.current = null;
     }
+    recommendedPollingDelayRef.current = RECOMMENDED_QUESTIONS_POLL_INTERVAL_MS;
   }, []);
 
   const startAskingTaskPolling = useCallback(
     async (taskId?: string) => {
       if (!taskId) return;
+      if (
+        askingTaskPollingTargetRef.current === taskId &&
+        (askingTaskPollingRequestRef.current || askingTaskPollingRef.current)
+      ) {
+        return;
+      }
 
       stopAskingTaskPolling();
+      askingTaskPollingTargetRef.current = taskId;
       const pollingSessionId = askingTaskPollingSessionRef.current;
 
       const run = async () => {
         if (askingTaskPollingSessionRef.current !== pollingSessionId) return;
+        if (askingTaskPollingRequestRef.current) {
+          await askingTaskPollingRequestRef.current;
+          if (askingTaskPollingSessionRef.current !== pollingSessionId) return;
+        }
 
         try {
-          await fetchAskingTask({
+          const request = fetchAskingTask({
             variables: { taskId },
-          });
+          }).then(() => undefined);
+          askingTaskPollingRequestRef.current = request;
+          await request;
         } catch (error) {
           console.error(error);
         } finally {
+          askingTaskPollingRequestRef.current = null;
           if (askingTaskPollingSessionRef.current === pollingSessionId) {
             askingTaskPollingRef.current = setTimeout(
               run,
-              ASKING_TASK_POLL_INTERVAL_MS,
+              askingTaskPollingDelayRef.current,
             );
           }
         }
@@ -260,24 +290,38 @@ export default function useAskPrompt(threadId?: number) {
   const startRecommendedPolling = useCallback(
     async (taskId?: string) => {
       if (!taskId) return;
+      if (
+        recommendedPollingTargetRef.current === taskId &&
+        (recommendedPollingRequestRef.current || recommendedPollingRef.current)
+      ) {
+        return;
+      }
 
       stopRecommendedPolling();
+      recommendedPollingTargetRef.current = taskId;
       const pollingSessionId = recommendedPollingSessionRef.current;
 
       const run = async () => {
         if (recommendedPollingSessionRef.current !== pollingSessionId) return;
+        if (recommendedPollingRequestRef.current) {
+          await recommendedPollingRequestRef.current;
+          if (recommendedPollingSessionRef.current !== pollingSessionId) return;
+        }
 
         try {
-          await fetchInstantRecommendedQuestions({
+          const request = fetchInstantRecommendedQuestions({
             variables: { taskId },
-          });
+          }).then(() => undefined);
+          recommendedPollingRequestRef.current = request;
+          await request;
         } catch (error) {
           console.error(error);
         } finally {
+          recommendedPollingRequestRef.current = null;
           if (recommendedPollingSessionRef.current === pollingSessionId) {
             recommendedPollingRef.current = setTimeout(
               run,
-              RECOMMENDED_QUESTIONS_POLL_INTERVAL_MS,
+              recommendedPollingDelayRef.current,
             );
           }
         }
@@ -342,11 +386,61 @@ export default function useAskPrompt(threadId?: number) {
   }, [askingTask?.status, threadId, checkFetchAskingStreamTask]);
 
   useEffect(() => {
+    const fingerprint = JSON.stringify({
+      queryId: askingTask?.queryId || null,
+      status: askingTask?.status || null,
+      type: askingTask?.type || null,
+      candidateCount: askingTask?.candidates?.length || 0,
+      errorCode: askingTask?.error?.code || null,
+      traceId: askingTask?.traceId || null,
+    });
+
+    if (lastAskingTaskFingerprintRef.current === fingerprint) {
+      askingTaskPollingDelayRef.current = Math.min(
+        askingTaskPollingDelayRef.current * 2,
+        ASKING_TASK_POLL_MAX_INTERVAL_MS,
+      );
+    } else {
+      askingTaskPollingDelayRef.current = ASKING_TASK_POLL_INTERVAL_MS;
+      lastAskingTaskFingerprintRef.current = fingerprint;
+    }
+  }, [
+    askingTask?.queryId,
+    askingTask?.status,
+    askingTask?.type,
+    askingTask?.candidates?.length,
+    askingTask?.error?.code,
+    askingTask?.traceId,
+  ]);
+
+  useEffect(() => {
     // handle instant recommended questions
     if (isNeedRecommendedQuestions(askingTask)) {
       startRecommendedQuestions();
     }
   }, [askingTask?.type]);
+
+  useEffect(() => {
+    const fingerprint = JSON.stringify({
+      status: recommendedQuestions?.status || null,
+      count: recommendedQuestions?.questions?.length || 0,
+      errorCode: recommendedQuestions?.error?.code || null,
+    });
+
+    if (lastRecommendedFingerprintRef.current === fingerprint) {
+      recommendedPollingDelayRef.current = Math.min(
+        recommendedPollingDelayRef.current * 2,
+        RECOMMENDED_QUESTIONS_POLL_MAX_INTERVAL_MS,
+      );
+    } else {
+      recommendedPollingDelayRef.current = RECOMMENDED_QUESTIONS_POLL_INTERVAL_MS;
+      lastRecommendedFingerprintRef.current = fingerprint;
+    }
+  }, [
+    recommendedQuestions?.status,
+    recommendedQuestions?.questions?.length,
+    recommendedQuestions?.error?.code,
+  ]);
 
   useEffect(() => {
     if (isRecommendedFinished(recommendedQuestions?.status)) {
