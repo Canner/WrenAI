@@ -1,6 +1,6 @@
 ---
 name: wren-enrich-context
-description: "Augment a Wren project with business context that DB schema cannot carry. Runs in one of two modes selected at session start: `grill` (one question at a time, user-driven) or `auto-pilot` (agent infers and applies, escalates only on conflicts and high-blast-radius additions). Reads everything under <project>/raw/ (PDFs, glossaries, handbooks, code, data dictionaries), compares against the current MDL / instructions.md / queries.yml / memory pairs, then fills gaps in relationships, metrics, views, default filters, business rules, and NL→SQL patterns. Confirmed findings are written back to the right sink. Use when: user says 'enrich context', 'augment my project', 'grill me on this project', 'auto-fill my context', 'agent doesn't understand our docs', 'business context is missing', 'we have a handbook / glossary / data dictionary the agent should know'; or after generating an MDL and noticing the agent lacks business semantics."
+description: "Augment a Wren project with business context that DB schema cannot carry — enum value meanings, units (USD vs cents, ms vs sec), NULL semantics, magic sentinels (-1 = unknown), soft-delete default filters, business synonyms, time-grain / TZ conventions, cross-system identifiers, currency rules, canonical-table preferences, AND named aggregation metrics (ARR, churn, DAU, WAU, NRR) proposed as cubes. Runs in one of two modes selected at session start: `grill` (one question at a time, user-driven) or `auto-pilot` (agent infers and applies, escalates only on conflicts and high-blast-radius additions like new cubes / views / relationships). Reads everything under <project>/raw/ (PDFs, glossaries, handbooks, code, data dictionaries) and optionally samples low-cardinality columns from the live DB (grill mode), compares against the current MDL / cubes / instructions.md / queries.yml / memory pairs, then fills gaps via the ten-category gap catalog and the cube proposal flow. Confirmed findings are written back to the right sink. Use when: user says 'enrich context', 'augment my project', 'grill me on this project', 'auto-fill my context', 'agent doesn't understand our docs / enum values / units / null meanings', 'business context is missing', 'what does status=A mean', 'is this amount in USD or cents', 'we keep getting wrong aggregations', 'add cubes for ARR / DAU / churn', 'we have a handbook / glossary / data dictionary the agent should know'; or after generating an MDL and noticing the agent lacks business semantics."
 license: Apache-2.0
 metadata:
   author: wren-engine
@@ -46,8 +46,8 @@ Continue regardless of update status.
 
 7. **Drop into grill for three cases.** Always interrupt auto-pilot and ask the user when:
    - (a) **Lane 2 conflict** — raw and current MDL disagree.
-   - (b) **Lane 3 high-blast-radius proposal** — new metric / view / relationship.
-   - (c) **Lane 2 routing ambiguity** — you can't confidently pick a sink (MDL / `instructions.md` / `queries.yml`).
+   - (b) **High-blast-radius proposal (any lane)** — new cube, new view, new relationship, or new MDL metric/calculated column. These become public artifacts visible to every future agent session, so blast radius doesn't depend on whether the trigger was raw evidence (Lane 2) or inference (Lane 3).
+   - (c) **Lane 2 routing ambiguity** — you can't confidently pick a sink (MDL / `instructions.md` / `queries.yml` / `cubes/`).
 
    Everything else: apply directly and log to the audit list.
 
@@ -153,17 +153,62 @@ Read every file under `raw/`. Use whatever capability your agent has natively (t
 |---|---|
 | MDL (full) | `wren context show --output json` |
 | Project instructions | `wren context instructions` |
+| Existing cubes (names) | `wren cube list` |
+| Existing cubes (measures + dimensions) | `wren cube describe <cube>` for each name above |
 | Curated NL-SQL pairs | read `queries.yml` directly |
 | (Memory) stored pairs | `wren memory list -n 200 --output json` |
 | (Memory) schema as text | `wren memory describe` |
 
-The memory rows only matter when `MEMORY_AVAILABLE = true`.
+The memory rows only matter when `MEMORY_AVAILABLE = true`. Reading cubes is essential before any Lane 3 metric proposal — see `references/cube_proposals.md` for the duplication guard.
+
+---
+
+## Step 4.5 — Ground-truth probe (grill mode default; auto-pilot opt-out)
+
+When raw is silent on a column's enum / unit / null / magic / time semantics, the catalog's column-local categories (#1, #2, #3, #5, #7 in `references/gap_catalog.md`) can often be settled directly by sampling distinct values from the live DB. Read `references/gap_catalog.md` before this step — its *Trigger* column tells you which columns are probe candidates.
+
+**Default policy by mode:**
+
+| Mode | Default | How to override |
+|---|---|---|
+| **Grill** | Probe on. Before the first query, ask the user once: "I want to sample N columns with `LIMIT 30` each to find enum / sentinel / time-grain values — OK?" Lock the answer for the session. | User says no → skip Step 4.5 entirely; rely on Lane 2 + Lane 3 instead. |
+| **Auto-pilot** | Probe off. The skill never queries the live DB in auto-pilot mode. | None — user must re-run in grill mode if probe would unblock high-confidence inferences. |
+
+**Candidate selection (no DB call yet):**
+
+A column is a probe candidate when *all* hold:
+
+- Description is empty OR does not yet contain the relevant `[tag]` (catalog write format).
+- Column type / name pattern matches catalog #1 (enum), #3 (NULL), #5 (magic), or #7 (time grain).
+- For #3 and #7, the description also lacks event-vs-record or TZ wording.
+
+Categories #2 (unit), #4, #6, #8, #9, #10 are **not** probable — `SELECT DISTINCT` doesn't reveal units, default filters, synonyms, external mappings, currency conventions, or canonical-table preferences. Those need raw evidence or human judgment.
+
+**Probe query:**
+
+```bash
+wren --sql "SELECT DISTINCT <col> FROM <model> LIMIT 30" --output json
+# For magic sentinels (catalog #5), also fetch min/max:
+wren --sql "SELECT MIN(<col>) AS lo, MAX(<col>) AS hi FROM <model>" --output json
+```
+
+- **≤ 30 distinct values returned** → enum / sentinel / grain candidate. Draft the `[tag]` line and surface to user (grill) with confidence "med — probed values, semantics still inferred".
+- **30 returned (LIMIT hit)** → cardinality too high; not an enum / sentinel candidate. Skip.
+- **Query fails** (permissions, connection, large-table timeout) → do not retry. Log the failure to the audit list, surface in Step 9, continue with Lane 2 + Lane 3 only.
+
+**Safety:**
+
+- Probe each (model, column) at most once per session.
+- Never probe a column that already has a matching `[tag]` line — Universal Rule 1.
+- Probe results stay in working memory; do not write them to disk.
 
 ---
 
 ## Step 5 — Three gap-detection lanes (in your head, no artifact)
 
 Hold all three lanes in working memory. Do not write a `gaps.yml`.
+
+Before sweeping, load `references/gap_catalog.md` — the ten business-semantic categories the schema cannot carry. Each lane consumes the catalog differently: Lane 1 walks it as type-aware mechanical triggers, Lane 2 classifies each atomic raw claim into one of the 10 categories before routing, Lane 3 seeds inference prompts when a trigger fires but raw is silent.
 
 ### Lane 1 — Structural coverage (mechanical)
 
@@ -176,7 +221,15 @@ Scan the current MDL and check:
 - `instructions.md` is more than the scaffold default?
 - `queries.yml` has at least a few canonical pairs?
 
-Each gap here is a candidate to resolve.
+Plus, walk every column / model against `references/gap_catalog.md` triggers:
+
+- For each column matching catalog #1 / #2 / #3 / #5 / #7 triggers → is the corresponding `[tag]` line present in `properties.description`?
+- For each model with a soft-delete column (`deleted_at`, `is_active`, `archived_at`, etc.) → is there a `## Default filters` rule in `instructions.md` covering it (catalog #4)?
+- For each lookalike table pair (e.g. `users` / `users_v3`) → is there a `## Canonical tables` rule (catalog #10)?
+- For each `*_currency` / `fx_rate` / external-system ID column → is the matching `## Currency` (#9) or `## External identifiers` (#8) section present?
+- Business terms in `instructions.md` or raw that don't map verbatim to model / column names → catalog #6 `## Naming conventions` rule missing.
+
+Each unsatisfied check is a candidate. Combine with Step 4.5 probe results (if available) before moving to Lane 2.
 
 ### Lane 2 — Claim-diff (raw vs current context)
 
@@ -193,9 +246,11 @@ For each raw file, internally extract 5–15 **atomic claims** — single statem
 
 After reading raw and the current MDL, propose additions the user did **not** literally state in raw but that would clearly help the agent later. Examples:
 
-- "I see `quarterly_churn` referenced five times in `finance.pdf`. There's no metric for it. Want me to add one?"
+- "I see `quarterly_churn` referenced five times in `finance.pdf`. No existing cube covers it. Want me to add `cubes/quarterly_churn/metadata.yml` with measure = `COUNT(*) FILTER (WHERE churned_at IS NOT NULL) / NULLIF(COUNT(*), 0)`?" — see `references/cube_proposals.md` for the YAML template and duplication guard.
 - "Your support handbook keeps mentioning `core users` without defining it. Is this `users WHERE tier = 'premium'`? Want me to make a view?"
 - "The data dictionary says `events.payload` is JSON but the column has no description — let me draft one."
+
+For any aggregation-shaped proposal (`SUM`, `COUNT`, `AVG`, "by month / by status / per customer" patterns), **default to a cube**. Run `wren cube list` + `wren cube describe` first to confirm no existing cube already covers the measure expression; if one does, skip the proposal and add a `queries.yml` example pointing at the existing cube instead. The full decision tree, naming rules, and validation flow live in `references/cube_proposals.md`.
 
 **In grill mode, open every Lane 3 question with "I'm guessing — ".** In auto-pilot, tag the audit entry with `agent inference` so the user sees you extrapolated.
 
@@ -253,10 +308,13 @@ Decide the sink as part of the proposal (Step 6.3 in grill mode; Step 6.2 in aut
 
 | Finding type | Sink | How to write |
 |---|---|---|
-| Schema structure / relationship / metric / view / model or column description | **MDL YAML** under `models/`, `views/`, `relationships.yml` | Edit the YAML file directly |
-| Default filter / implicit rule / business convention / naming convention | **`instructions.md`** | Append new entries only (do not modify existing text) |
+| Schema structure / relationship / view / model or column description | **MDL YAML** under `models/`, `views/`, `relationships.yml` | Edit the YAML file directly. For catalog #1 / #2 / #3 / #5 / #7 / PII, append a `[tag]` line to `properties.description` (prose first, then one tag per category). See `references/gap_catalog.md` for the exact tag format and triggers. |
+| Aggregation metric / named measure (with measures + dimensions) | **`cubes/<name>/metadata.yml`** | New file per cube. Default sink for any `SUM` / `COUNT` / `AVG` / ratio metric raw defines or Lane 3 infers. See `references/cube_proposals.md` for the YAML template, naming policy, duplication guard, and validation flow. Run `wren context validate` + `wren cube query --cube <name> --sql-only` after writing; revert on either failure. **Always escalates to grill in auto-pilot** (Universal Rule 7b). |
+| Default filter / implicit rule / business convention / naming convention / external mapping / currency / canonical table | **`instructions.md`** | Append under the catalog-specified `##` section heading (#4 → `## Default filters`, #6 → `## Naming conventions`, #8 → `## External identifiers`, #9 → `## Currency`, #10 → `## Canonical tables`). Create the heading if absent; never modify existing text. |
 | Canonical NL→SQL example the team should share | **`queries.yml`** | Append a new entry under `pairs:` |
 | Ad-hoc NL→SQL pair (user-local, not for the repo) — **only if `MEMORY_AVAILABLE = true`** | **`wren memory store`** | `wren memory store --nl "..." --sql "..." --tags "source:enrich"` |
+
+Catalog-driven routing means every column-local proposal goes to the column's `properties.description` with a `[tag]` line; every cross-model rule goes to `instructions.md` under a fixed heading. This keeps re-enrichment deterministic (greppable) and avoids inventing new sink locations.
 
 ### After every MDL edit
 
@@ -308,10 +366,14 @@ Print a tight session report:
 Wren Enrich Context — session summary  (mode: <grill|autopilot>)
 
 Added:
-  MDL              : N model descriptions, N column descriptions, N relationships, N metrics, N views
-  instructions.md  : N new rules
+  MDL              : N model descriptions, N column descriptions, N relationships, N views
+                     by tag: [enum]=N [unit]=N [null]=N [magic]=N [time]=N [pii]=N
+  cubes            : N new (names: <list>)                                    via cubes/<name>/metadata.yml
+  instructions.md  : N new rules across sections
+                     by section: Default filters=N | Naming conventions=N | External identifiers=N | Currency=N | Canonical tables=N
   queries.yml      : N new NL→SQL pairs
-  memory store     : N ad-hoc pairs   (only if MEMORY_AVAILABLE)
+  memory store     : N ad-hoc pairs                                          (only if MEMORY_AVAILABLE)
+  Probe            : N columns sampled, M failed                             (grill mode only)
 
 Please fix manually (we don't edit existing fields):
   - models/orders/metadata.yml: existing description seems to contradict raw/glossary.pdf p.3
@@ -363,4 +425,18 @@ The user should be encouraged to skim the audit and either accept it as-is, manu
 - Do not run `wren context build` after every single MDL edit — once at the end is enough. Do run `wren context validate` after every edit.
 - Do not assume `raw/` was created by `wren context init` — it isn't. This skill creates it.
 - Do not switch modes mid-session. The user re-runs to change mode.
+- Do not append a `[tag]` line if the same category tag already exists for that column — Universal Rule 1. Surface contradictions on the manual-fix list instead.
+- Do not invent new `instructions.md` section headings. Stick to the five catalog-defined headings (`## Default filters`, `## Naming conventions`, `## External identifiers`, `## Currency`, `## Canonical tables`). Anything that doesn't fit goes on the manual-fix list.
+- Do not probe the live DB in auto-pilot mode. Step 4.5 is grill-only by default.
+- Do not propose a cube whose measure expression already exists in another cube on the same `base_object` — write a `queries.yml` example pointing at the existing cube instead. See `references/cube_proposals.md` duplication guard.
+- Do not modify an existing cube YAML even when raw contradicts it — Universal Rule 1. Surface on the manual-fix list.
+- Do not write a new cube alongside an old MDL `metrics:` entry that already covers the same logic. Surface as "consider migrating to cube" on the manual-fix list.
+- Do not skip `wren cube query --cube <name> --sql-only` after creating a cube. Structural `wren context validate` doesn't catch unresolvable measure / dimension expressions.
 - In auto-pilot, do not auto-apply Lane 2 conflicts or new metric / view / relationship inferences — always drop into grill for those.
+
+---
+
+## See also
+
+- [`references/gap_catalog.md`](references/gap_catalog.md) — the ten business-semantic gap categories, with triggers, default sinks, and write formats. Read this before Step 4.5 and Step 5.
+- [`references/cube_proposals.md`](references/cube_proposals.md) — decision tree for when to propose a cube vs view vs calculated column, the cube YAML template, naming policy, duplication guard, and validation flow. Read this before any Lane 3 aggregation-shaped proposal.
