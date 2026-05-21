@@ -19,3 +19,6 @@ def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line(
         "markers", "snowflake: Snowflake connector tests — mocked, no Docker required"
     )
+    config.addinivalue_line(
+        "markers", "canner: Canner connector tests — requires Docker"
+    )
