@@ -11,9 +11,9 @@ Ask natural-language questions of the **jaffle_shop** dataset using **Wren AI CL
 This guide drops three things on you in the first few steps. Skim before you start:
 
 - **Wren CLI (`wren`)** — the Python CLI that runs all of this. Connects to a database, holds your modeling files, executes SQL through the semantic layer, manages a local memory index. ([CLI reference →](/oss/reference/cli))
-- **MDL (Modeling Definition Language)** — YAML files under `models/`, `views/`, and `relationships.yml` that describe your tables, columns, and joins in business terms. The agent reads MDL instead of guessing from raw schema. ([MDL concept →](/oss/concepts/what_is_mdl) · [Wren project guide →](/oss/guides/modeling/wren_project))
+- **MDL (Modeling Definition Language)** — YAML files under `models/`, `views/`, and `relationships.yml` that describe your tables, columns, and joins in business terms. The agent reads MDL instead of guessing from raw schema. ([MDL concept →](/oss/concepts/what_is_mdl) · [Wren project guide →](/oss/reference/mdl))
 - **jaffle_shop** — a public sample database from dbt Labs. We use it so you do not need to bring your own database to follow this quickstart. It is a fictional ecommerce business with `customers`, `orders`, `products`, and `supplies`. *(Want to skip jaffle_shop and use your own database? Finish the install in step 2 then jump to [Connect your database](/oss/guides/connect).)*
-- **Skills** — markdown workflow guides that tell an AI coding agent (Claude Code, Openclaw, Hermes, Codex, etc.) how to operate the CLI. Two skills drive this quickstart: `wren-generate-mdl` (one-time scaffolding) and `wren-usage` (day-to-day querying). ([Skills concept →](/oss/concepts/skills))
+- **Skills** — markdown workflow guides that tell an AI coding agent (Claude Code, Openclaw, Hermes, Codex, etc.) how to operate the CLI. Two skills drive this quickstart: `wren-generate-mdl` (one-time scaffolding) and `wren-usage` (day-to-day querying). ([Skills concept →](/oss/reference/skills))
 
 ---
 
@@ -286,7 +286,7 @@ wren cube query \
 
 Cube queries are the recommended path for aggregation when a cube covers the
 question. Lower error rate, especially on small / local models. See the
-[Cube guide](../guides/modeling/cube.md) for the YAML structure and the
+[Cube guide](../guides/cubes.md) for the YAML structure and the
 [CLI reference](../reference/cli.md#wren-cube--pre-aggregation-queries) for all flags.
 
 ---

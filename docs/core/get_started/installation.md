@@ -32,9 +32,7 @@ curl -fsSL https://raw.githubusercontent.com/Canner/WrenAI/main/skills/install.s
 
 **Start a new agent session** (skills load at session start), open your project directory, and ask:
 
-```text
-Use the wren-onboarding skill to install and set up Wren AI.
-```
+Use the `/wren-onboarding` skill to install and set up Wren AI.
 
 The agent will check your environment, install Python dependencies, create a connection profile for your data source, scaffold the project, and run a first query — all in one flow.
 

@@ -269,5 +269,5 @@ cat query.json | wren cube query --from -
 **Supported filter operators:** `eq`, `neq`, `in`, `not_in`, `gt`, `gte`, `lt`,
 `lte`, `contains`, `starts_with`, `is_null`, `is_not_null`.
 
-See the [Cube guide](../guides/modeling/cube.md) for YAML structure and
+See the [Cube guide](../guides/cubes.md) for YAML structure and
 validation rules.

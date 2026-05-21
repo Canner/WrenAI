@@ -148,7 +148,7 @@ Fast at first. Deep when you need it. Always reviewable and Git-friendly.
 - **Full governed execution** — audit logs, rate limits, approval workflow, data-flow inspector
 
 <!-- TODO: vision_paper_en.md is currently at .tmp/roadmap-discuss/vision_paper_en.md — move to a published path (e.g. docs/vision-paper.md or repo root) and update this link before publishing. -->
-Full roadmap and design notes: see the [vision paper](./vision_paper_en.md).
+Full roadmap and design notes: see the [vision paper](https://docs.getwren.ai/oss/introduction).
 
 ## Documentation
 

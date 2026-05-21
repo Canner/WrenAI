@@ -1,67 +1,122 @@
 # What is Modeling Definition Language (MDL)?
 
-Modeling Definition Language (MDL) is the way Wren AI describes business data in a structured, machine-readable form. It defines models, relationships, calculations, and views so that both humans and AI agents can work from the same business context.
+Modeling Definition Language (MDL) is the semantic contract at the center of Wren AI.
 
-Instead of exposing only raw tables and columns, MDL gives your data a logical shape. It tells Wren AI how datasets relate to each other, how business metrics should be defined, and how analytical logic should be reused across queries.
+It is how you tell agents, applications, and humans what your business data means: which datasets exist, which fields are exposed, how entities relate, which calculations are reusable, and which query-shaped objects should be treated as stable interfaces.
 
-## Why MDL matters
+Raw schemas describe storage. MDL describes meaning.
 
-Raw schemas are not enough for reliable analytics or AI-driven querying. A warehouse may contain hundreds of tables, inconsistent naming, and business logic scattered across dashboards or SQL scripts. MDL helps centralize that logic into a form that is easier to understand, review, and execute.
+## Why MDL exists
 
-With MDL, Wren AI can provide AI agents with the context they need to:
+Warehouses are optimized for systems that store data, not for people and agents trying to reason about the business.
 
-- understand business entities and terminology
-- follow defined relationships between datasets
-- reuse approved calculations and aggregations
-- generate more reliable SQL from natural language
+A warehouse can tell an agent that a table has a column named `status`, but not that `status = 4` means refunded. It can expose `loyalty_v3`, but not explain that this is the canonical loyalty table. It can show foreign keys, but not always the join path your analytics team trusts.
+
+Without MDL, every agent, dashboard, SQL script, and embedded analytics feature has to rediscover the same logic from raw structure. That leads to duplicated definitions, inconsistent metrics, brittle SQL, and answers no one fully trusts.
+
+MDL makes the important parts explicit. It turns business logic into files your team can review, version, and share.
+
+## MDL in the context layer
+
+Wren AI is the open context layer for AI agents. MDL is the core layer where structural, semantic, and business meaning become machine-readable.
+
+In the five-layer context model, MDL carries the first three layers:
+
+| Context layer | How MDL helps |
+| --- | --- |
+| **Structural** | Defines the datasets, columns, types, keys, and relationships the agent can use. |
+| **Semantic** | Gives raw warehouse objects business-facing names, descriptions, calculations, views, and cubes. |
+| **Business** | Captures canonical tables, reusable metrics, relationship meaning, and agreed analytical interfaces. |
+
+Operational guidance and behavioral memory live alongside MDL in project instructions, skills, and the memory layer. Together, they give agents the wider context they need to query safely and improve over time.
 
 ## What MDL defines
 
-MDL is used to model the business-facing structure of your data. Depending on your use case, it can define:
+MDL models the business-facing shape of your data. A Wren project stores these definitions as readable YAML and compiles them into an engine-ready `target/mdl.json` manifest.
 
-- models that reference physical tables or query results
-- columns and their expressions
-- relationships between models
-- calculated fields and reusable metrics
-- views built on top of modeled datasets
+Core MDL objects include:
 
-This gives Wren AI a consistent representation of how your data should behave, rather than forcing every user or agent to rediscover that logic from scratch.
+- **Models** - logical datasets backed by physical tables or SQL definitions.
+- **Columns** - exposed fields, including renamed fields, expressions, primary keys, and calculated fields.
+- **Relationships** - reusable join logic between models.
+- **Calculated fields** - business logic defined once and reused across queries.
+- **Views** - named SQL statements that behave like stable virtual tables.
+- **Cubes** - structured aggregation objects with measures, dimensions, time dimensions, and hierarchies.
+
+See the [MDL schema reference](/oss/reference/mdl) for the full field surface of every modeling object.
+
+## MDL as a contract
+
+The word contract matters.
+
+MDL is not just documentation. It is the agreement between your data team, your agents, and your query engine.
+
+- **For data teams**, MDL is a reviewable place to define business logic.
+- **For agents**, MDL is the structured context used to choose models, joins, and calculations.
+- **For applications**, MDL is a stable interface over changing warehouse structure.
+- **For the engine**, MDL is the source of truth for planning modeled SQL against the underlying data source.
+
+When the contract changes, you can review the diff. When a query runs, Wren AI can plan against the contract. When another agent joins the workflow, it does not need to learn the business from scratch.
 
 ## How MDL helps AI agents
 
-AI agents perform better when they can reason over structured context instead of guessing from raw schema alone. MDL helps by giving Wren AI an explicit description of your business layer.
+AI agents are good at pattern matching, but raw schemas leave too much room for interpretation. MDL narrows that space.
 
-That improves agent behavior in several ways:
+With MDL, an agent can:
 
-- better mapping from business questions to data models
-- fewer incorrect joins and ambiguous field selections
-- more consistent metric definitions across queries
-- clearer grounding for text-to-SQL and RAG workflows
+- map business questions to the right modeled datasets
+- prefer canonical tables over legacy or staging tables
+- follow defined relationships instead of inventing joins
+- reuse approved calculations instead of creating one-off metrics
+- query views and cubes as stable analytical interfaces
+- ground retrieval and text-to-SQL planning in explicit business structure
 
-In this sense, MDL is one of the core building blocks that lets Wren AI act as an open context layer for AI agents.
+The result is not magic accuracy. It is better grounding. MDL gives the agent fewer reasons to guess.
 
-## Benefits of MDL
+## Why files matter
 
-### 1. Shared definitions
+MDL lives in files because business context should be portable.
 
-MDL creates a single, reviewable place to define business logic. Teams can align on the meaning of models, relationships, and metrics instead of duplicating that logic across prompts, dashboards, and SQL files.
+Your definitions should not be trapped inside one BI tool, one prompt, or one vendor UI. They should be easy to inspect, commit, review, fork, and deploy across environments.
 
-### 2. Reusable modeling logic
+A Wren project separates the parts that should move with the project from the parts that belong to an environment:
 
-Once a relationship or calculation is defined in MDL, it can be reused across workflows. This reduces repeated SQL logic and makes analytical behavior more consistent.
+- Models, views, relationships, cubes, and instructions live in the project and can be version controlled.
+- Connection profiles live outside the project, so credentials and environment-specific settings do not leak into shared files.
+- The compiled `target/mdl.json` is derived from source YAML and can be rebuilt.
 
-### 3. Better collaboration
+See [Manage project](/oss/guides/manage_project) for the project structure and lifecycle commands.
 
-Because MDL is structured and explicit, it is easier for data teams to review, maintain, and improve over time. It also makes the business context more accessible to non-authors, including AI systems.
+## From raw schema to trusted context
 
-### 4. More reliable execution
+MDL usually starts with scaffolding. The `wren-generate-mdl` skill can inspect a database, normalize types, detect structure, and generate an initial project so the agent can query through a modeled layer quickly.
 
-Wren AI can plan and generate queries more reliably when it has modeled definitions to work from. This helps reduce errors caused by incomplete schema interpretation or one-off query logic.
+That first pass is useful, but it is only the beginning. The deeper value comes when your team enriches the model:
 
-### 5. A stronger foundation for agentic analytics
+- add descriptions and business names
+- mark primary keys and relationships clearly
+- define reusable calculations
+- publish views for common analytical paths
+- define cubes for governed aggregations
+- hide or avoid fields that should not be exposed
+- document canonical sources and business rules
 
-If you want AI agents to operate on business data safely and accurately, they need more than access. They need context. MDL gives Wren AI that context in a durable, portable form.
+This is the same philosophy as the broader Wren AI workflow: **scaffold fast, then enrich deep**.
+
+## MDL and execution
+
+MDL is not only metadata for prompts. Wren AI uses MDL during SQL planning.
+
+When a query references modeled objects, Wren AI expands those models, relationships, calculated fields, and views into executable SQL for the target data source. The Rust semantic engine is the source of truth for how MDL semantics map to SQL.
+
+This matters because agent reliability depends on more than generating SQL text. The query needs to be planned against the same definitions your team agreed on.
+
+See [Architecture](/oss/reference/architecture) for how planning and execution work.
 
 ## In short
 
-MDL is the modeling language that powers Wren AI. It turns raw data structures into usable business context, making analytics workflows easier to govern for people and easier to reason over for AI agents.
+- **Schema** describes how data is stored.
+- **MDL** describes how data should be understood and queried.
+- **Context** combines MDL with instructions, memory, skills, and governance so agents can operate reliably.
+
+MDL is the durable semantic contract for Wren AI: readable by humans, usable by agents, enforceable by the engine, and portable across every app that needs trusted business data.
