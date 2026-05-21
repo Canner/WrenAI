@@ -75,7 +75,7 @@ class TestMySQL(WrenQueryTestSuite):
 
     @pytest.fixture(scope="class")
     def engine(self) -> WrenEngine:  # type: ignore[override]
-        with MySqlContainer("mysql:8") as mysql:
+        with MySqlContainer("mysql:8.0.36") as mysql:
             url = mysql.get_connection_url()
             _load_tpch(url)
 
