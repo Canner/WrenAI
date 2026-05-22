@@ -268,6 +268,26 @@ def _rewrite_temporal_bucket_functions(sql: str) -> str:
     return rewritten
 
 
+def _rewrite_mssql_timestamp_casts(sql: str) -> str:
+    expression_pattern = r"((?:[^(),]|\([^()]*\))+?)"
+    timestamp_function_pattern = re.compile(
+        rf"\bTO_TIMESTAMP(?:_(?:MILLIS|SECONDS|MICROS|NANOS))?\(\s*{expression_pattern}\s*\)",
+        re.IGNORECASE,
+    )
+    timestamp_cast_pattern = re.compile(
+        r"CAST\(\s*((?:[^()]|\([^()]*\))+?)\s+AS\s+TIMESTAMP\s*\)",
+        re.IGNORECASE,
+    )
+
+    rewritten = timestamp_function_pattern.sub(
+        lambda m: f"CAST({m.group(1)} AS DATETIME)", sql
+    )
+    rewritten = timestamp_cast_pattern.sub(
+        lambda m: f"CAST({m.group(1)} AS DATETIME)", rewritten
+    )
+    return rewritten
+
+
 def normalize_generation_result_sql(sql: str, data_source: str | None = None) -> str:
     normalized = sql
 
@@ -283,6 +303,7 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
             flags=re.IGNORECASE,
         )
         normalized = _replace_relative_getdate_calls(normalized, now)
+        normalized = _rewrite_mssql_timestamp_casts(normalized)
         normalized = _rewrite_mssql_bucket_functions(normalized)
         normalized = _rewrite_temporal_bucket_functions(normalized)
 
@@ -472,10 +493,10 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
     - Use "lower(<table_name>.<column_name>) = lower(<value>)" when:
         - The user requests an exact, specific value.
         - There is no ambiguity or pattern in the value.
-- If the column is date/time related field, and it is a INT/BIGINT/DOUBLE/FLOAT type, please use the appropriate function mentioned in the SQL FUNCTIONS section to cast the column to "TIMESTAMP" type first before using it in the query
-    - example: TO_TIMESTAMP_MILLIS("<timestamp_column>")  # if the timestamp_column is in milliseconds
-    - example: TO_TIMESTAMP_SECONDS("<timestamp_column>")  # if the timestamp_column is in seconds
-    - example: TO_TIMESTAMP_MICROS("<timestamp_column>")  # if the timestamp_column is in microseconds
+- If the column is date/time related field, and it is a INT/BIGINT/DOUBLE/FLOAT type, please use the appropriate function mentioned in the SQL FUNCTIONS section to cast the column to a temporal type first before using it in the query.
+    - For engines that list these functions in SQL FUNCTIONS, use TO_TIMESTAMP_MILLIS("<timestamp_column>") if the timestamp_column is in milliseconds.
+    - For engines that list these functions in SQL FUNCTIONS, use TO_TIMESTAMP_SECONDS("<timestamp_column>") if the timestamp_column is in seconds.
+    - For engines that list these functions in SQL FUNCTIONS, use TO_TIMESTAMP_MICROS("<timestamp_column>") if the timestamp_column is in microseconds.
 - When you need to cast a date/time related field, CAST it to a temporal type that is supported by the target data source and consistent with the SQL FUNCTIONS section.
     - example 1: CAST(properties_closedate AS TIMESTAMP)
     - example 2: CAST('2024-11-09 00:00:00' AS TIMESTAMP)
@@ -512,7 +533,7 @@ _MSSQL_TEXT_TO_SQL_RULES = """
 ### MSSQL-SPECIFIC RULES ###
 - The target database is MSSQL.
 - Prefer native T-SQL date bucket syntax such as DATEPART(YEAR, "created_at") and DATEPART(MONTH, "created_at").
-- DO NOT use PostgreSQL-style or Trino-style date syntax such as DATE_TRUNC, DATETRUNC, INTERVAL, CURRENT_DATE, TIMESTAMP WITH TIME ZONE, TO_CHAR, or :: casts.
+- DO NOT use PostgreSQL-style or Trino-style date syntax such as DATE_TRUNC, DATETRUNC, INTERVAL, CURRENT_DATE, TIMESTAMP WITH TIME ZONE, TO_CHAR, TO_TIMESTAMP, TO_TIMESTAMP_MILLIS, TO_TIMESTAMP_SECONDS, TO_TIMESTAMP_MICROS, TO_TIMESTAMP_NANOS, or :: casts.
 - DO NOT use DATEADD, DATEDIFF, DATETIME2, or DATETIMEOFFSET unless the SQL FUNCTIONS section explicitly proves they are supported by the target runtime.
 - Resolve relative time phrases such as "last 12 months", "last month", or "this year" into absolute ISO timestamp boundaries using the current time context. Prefer closed-open literal ranges over runtime date arithmetic.
 - For month bucketing, prefer separate year/month fields:
@@ -523,7 +544,7 @@ _MSSQL_TEXT_TO_SQL_RULES = """
 - For filtering a specific year such as 2025, prefer a closed-open range:
     - <timestamp_expression> >= '2025-01-01 00:00:00'
     - AND <timestamp_expression> < '2026-01-01 00:00:00'
-- When a temporal cast is required, keep literal timestamps as plain ISO strings if the column is already datetime-like.
+- When a temporal cast is required, use CAST(<expression> AS DATETIME), or keep literal timestamps as plain ISO strings if the column is already datetime-like.
 - Keep MSSQL date logic simple and planner-safe. Never emit DATEADD/DATEDIFF fallback expressions unless the SQL FUNCTIONS section explicitly requires them.
 """
 
