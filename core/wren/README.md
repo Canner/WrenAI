@@ -223,6 +223,28 @@ uv run pytest tests/test_profile_web.py -v
 ./scripts/publish.sh --build    # Build only
 ```
 
+## Package rename: `wren-engine` → `wrenai`
+
+Starting with the 0.7.0 release, this package is published on PyPI as
+[`wrenai`](https://pypi.org/project/wrenai/). The legacy
+[`wren-engine`](https://pypi.org/project/wren-engine/) project on PyPI is
+frozen at 0.6.x and no longer receives updates.
+
+Nothing about the Python API or the CLI changes — `import wren`, the
+`wren` command, and every subcommand stay the same. Only the
+distribution name on PyPI is different.
+
+To migrate:
+
+```bash
+pip uninstall wren-engine
+pip install wrenai            # or: pip install "wrenai[<extras>]"
+```
+
+Direct dependents (`wren-langchain`, `wren-pydantic`) will switch to
+`wrenai` in their next release; until then they continue to pull
+`wren-engine` transitively.
+
 ## License
 
 Apache-2.0
