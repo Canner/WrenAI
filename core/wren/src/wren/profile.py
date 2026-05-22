@@ -64,7 +64,7 @@ def _ensure_env_loaded() -> None:
     try:
         from dotenv import load_dotenv  # noqa: PLC0415
     except ImportError:
-        # python-dotenv ships with core wren-engine; this branch is defensive
+        # python-dotenv ships with core wrenai; this branch is defensive
         # for broken installs.  Profiles without ${VAR} still work fine.
         return
 

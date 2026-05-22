@@ -20,7 +20,7 @@ _TARGET_FILE = "mdl.json"
 _AGENTS_MD_TEMPLATE = """\
 # AGENTS.md
 
-This project uses [Wren Engine](https://github.com/Canner/wren-engine) as the semantic layer for data querying. Queries are written against MDL model names, not raw database tables.
+This project uses [Wren Engine](https://github.com/Canner/WrenAI) as the semantic layer for data querying. Queries are written against MDL model names, not raw database tables.
 
 ## Answering data questions
 
@@ -48,7 +48,7 @@ When the user wants to add models, change schema, or onboard a new table:
 This project requires the `wren` CLI. Install with your data source extra:
 
 ```bash
-pip install "wren-engine[postgres,memory,ui]"
+pip install "wrenai[postgres,memory,ui]"
 ```
 
 Replace `postgres` with your data source (`mysql`, `bigquery`, `snowflake`, `clickhouse`, `trino`, `mssql`, `databricks`, `redshift`, `spark`, `athena`, `oracle`). The `memory` extra enables semantic search; `ui` enables the interactive UI.

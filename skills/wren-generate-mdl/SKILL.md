@@ -3,7 +3,7 @@ name: wren-generate-mdl
 description: "Generate a Wren MDL project by exploring a database with available tools (SQLAlchemy, database drivers, MCP connectors, or raw SQL). Guides agents through schema discovery, type normalization, and MDL YAML generation using the wren CLI. Use when: user wants to create or set up a new MDL, onboard a new data source, or scaffold a project from an existing database."
 license: Apache-2.0
 metadata:
-  author: wren-engine
+  author: wrenai
   version: "2.2"
 ---
 
@@ -37,7 +37,7 @@ For memory and query workflows after setup, see the **wren-usage** skill.
 
 ## Prerequisites
 
-- `wren` CLI installed (`pip install wren-engine[<datasource>]`)
+- `wren` CLI installed (`pip install wrenai[<datasource>]`)
 - A working database connection (credentials available to the agent)
 - A wren profile configured (`wren profile add`) or connection info ready
 

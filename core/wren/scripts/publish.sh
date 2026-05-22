@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Build and publish wren-engine to PyPI or TestPyPI.
+# Build and publish wrenai to PyPI or TestPyPI.
 #
 # Usage:
 #   ./scripts/publish.sh            # build + publish to PyPI
@@ -68,7 +68,7 @@ if [[ -z "$VERSION" ]]; then
     echo "Error: failed to parse __version__ from src/wren/__init__.py" >&2
     exit 1
 fi
-echo "==> Building wren-engine v${VERSION}"
+echo "==> Building wrenai v${VERSION}"
 
 # --- Clean previous dist ---
 rm -rf "$DIST_DIR"
@@ -105,7 +105,7 @@ echo ""
 if [[ "$REPOSITORY" == "testpypi" ]]; then
     echo "==> Publishing to TestPyPI"
     echo "    After upload, install with:"
-    echo "    pip install --index-url https://test.pypi.org/simple/ wren-engine"
+    echo "    pip install --index-url https://test.pypi.org/simple/ wrenai"
 else
     echo "==> Publishing to PyPI"
 fi
@@ -114,4 +114,4 @@ echo ""
 twine upload --repository "$REPOSITORY" "$DIST_DIR"/*
 
 echo ""
-echo "==> Done! Published wren-engine v${VERSION} to ${REPOSITORY}"
+echo "==> Done! Published wrenai v${VERSION} to ${REPOSITORY}"

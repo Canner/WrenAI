@@ -3,7 +3,7 @@ name: wren-usage
 description: "Wren Engine CLI workflow guide for AI agents. Answer data questions end-to-end using the wren CLI: gather schema context, recall past queries, write SQL through the MDL semantic layer, execute, and learn from confirmed results. Use when: user asks a data question, requests a report or analysis, asks about metrics, revenue, customers, orders, trends, or any business data; user says 'how many', 'show me', 'what is the', 'top N', 'compare', 'trend', 'growth', 'breakdown'; user wants to explore, analyze, filter, aggregate, or summarize data from a database; agent needs to query data, connect a data source, handle errors, or manage MDL changes via the wren CLI."
 license: Apache-2.0
 metadata:
-  author: wren-engine
+  author: wrenai
   version: "2.3"
 ---
 
@@ -39,7 +39,7 @@ whether a virtual environment is active.
   - Create one (e.g., `python -m venv .venv && source .venv/bin/activate`)
   - Continue without a venv (not recommended — may pollute global packages)
 
-### Step 2 — Check if `wren-engine` is installed
+### Step 2 — Check if the `wren` CLI is installed
 
 Run `wren --version`. If the command is not found or errors:
 
@@ -62,16 +62,16 @@ Run `wren --version`. If the command is not found or errors:
 4. Install with the detected or chosen extra:
    ```bash
    # DuckDB (no extra needed)
-   pip install "wren-engine"
+   pip install "wrenai"
 
    # Other datasources
-   pip install "wren-engine[<datasource>]"
+   pip install "wrenai[<datasource>]"
    ```
    To also enable semantic memory, interactive prompts, and web UI (recommended):
    ```bash
-   pip install "wren-engine[<datasource>,main]"
+   pip install "wrenai[<datasource>,main]"
    # or for DuckDB:
-   pip install "wren-engine[main]"
+   pip install "wrenai[main]"
    ```
 
 5. Verify: `wren --version`

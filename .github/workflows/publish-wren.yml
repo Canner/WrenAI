@@ -1,4 +1,4 @@
-name: Publish wren-engine to PyPI
+name: Publish wrenai to PyPI
 
 on:
   workflow_call:
@@ -63,7 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.pypi_target }}
-      url: ${{ inputs.pypi_target == 'pypi' && 'https://pypi.org/project/wren-engine/' || 'https://test.pypi.org/project/wren-engine/' }}
+      url: ${{ inputs.pypi_target == 'pypi' && 'https://pypi.org/project/wrenai/' || 'https://test.pypi.org/project/wrenai/' }}
     steps:
       - name: Download distributions
         uses: actions/download-artifact@v4

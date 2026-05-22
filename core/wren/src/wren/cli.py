@@ -348,7 +348,7 @@ def _version_callback(value: bool) -> None:
         return
     from wren import __version__  # noqa: PLC0415
 
-    typer.echo(f"wren-engine {__version__}")
+    typer.echo(f"wrenai {__version__}")
     raise typer.Exit()
 
 
@@ -374,7 +374,7 @@ def main(
             "-V",
             callback=_version_callback,
             is_eager=True,
-            help="Print the wren-engine version and exit.",
+            help="Print the wrenai version and exit.",
         ),
     ] = None,
 ) -> None:
@@ -583,10 +583,10 @@ def _print_result(table, output: str) -> None:
 
 @app.command()
 def version():
-    """Print the wren-engine version."""
+    """Print the wrenai version."""
     from wren import __version__  # noqa: PLC0415
 
-    typer.echo(f"wren-engine {__version__}")
+    typer.echo(f"wrenai {__version__}")
 
 
 # ── Docs subcommand ───────────────────────────────────────────────────────
@@ -648,7 +648,7 @@ try:
 
     app.add_typer(memory_app)
 except ImportError:
-    # `memory` is installed on demand via `pip install "wren-engine[memory]"`;
+    # `memory` is installed on demand via `pip install "wrenai[memory]"`;
     # until then the subcommand group simply isn't registered.
     pass
 

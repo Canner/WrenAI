@@ -219,7 +219,7 @@ def init(
     typer.echo("")
     typer.echo(
         "Next: Install agent skills via "
-        "`curl -fsSL https://raw.githubusercontent.com/Canner/wren-engine/main/skills/install.sh | bash`, "
+        "`curl -fsSL https://raw.githubusercontent.com/Canner/WrenAI/main/skills/install.sh | bash`, "
         "then use the `wren-generate-mdl` skill in your agent to populate models/"
         " (or edit them manually). Run `wren context build` when done."
     )
@@ -465,7 +465,7 @@ def build(
     if n_models >= 200:
         typer.echo(
             f"\nYour schema has {n_models} models — consider enabling semantic memory:\n"
-            '  pip install "wren-engine[memory]"\n'
+            '  pip install "wrenai[memory]"\n'
             "  wren memory index"
         )
 
