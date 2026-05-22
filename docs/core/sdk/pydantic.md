@@ -38,7 +38,7 @@ pip install "wren-pydantic[postgres,memory]"   # or mysql, bigquery, ...
 | `memory` | Enables the 3 memory tools (`wren_fetch_context`, `wren_recall_queries`, `wren_store_query`) |
 | `all` | All datasources at once — useful for experimentation, heavy for production |
 
-If `wren-engine` is already installed (e.g. you use the CLI), the bare `pip install wren-pydantic` is enough — your existing extras carry over.
+If `wrenai` is already installed (e.g. you use the CLI), the bare `pip install wren-pydantic` is enough — your existing extras carry over.
 
 ---
 
@@ -215,7 +215,7 @@ Cross-project joins must happen in Python, not in SQL — each project has its o
 
 ## Compatibility
 
-| `wren-pydantic` | `wren-engine` | `pydantic-ai` |
+| `wren-pydantic` | `wrenai` | `pydantic-ai` |
 |---|---|---|
 | 0.1.x | >= 0.5.0 | >= 1.0, < 2.0 |
 

@@ -31,7 +31,7 @@ description: "What this skill does and when to trigger it. Include specific
   trigger keywords. This field is loaded at startup for every conversation."
 license: Apache-2.0
 metadata:
-  author: wren-engine
+  author: wrenai
   version: "1.0"
 ---
 ```

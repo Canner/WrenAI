@@ -1,5 +1,5 @@
 {
-  "name": "wren-engine",
+  "name": "wrenai",
   "description": "AI agent skills for Wren Engine CLI — semantic SQL layer for 22+ data sources.",
   "homepage": "https://wren.ai",
   "repository": "https://github.com/Canner/WrenAI",

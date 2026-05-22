@@ -18,14 +18,14 @@ Scaffolding gives you a baseline MDL. This recipe is how you close the loop — 
 The memory layer is an optional extra. It is **not** included in the base CLI. Install it before running any `wren memory ...` command:
 
 ```bash
-pip install "wren-engine[memory]"
+pip install "wrenai[memory]"
 ```
 
 Combine with your data source extra as needed:
 
 ```bash
-pip install "wren-engine[memory,postgres]"
-pip install "wren-engine[memory,bigquery]"
+pip install "wrenai[memory,postgres]"
+pip install "wrenai[memory,bigquery]"
 ```
 
 Without the `memory` extra, the memory commands below will not be available.
