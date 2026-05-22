@@ -113,7 +113,7 @@ See the [MDL schema reference](/oss/reference/mdl) for the full project structur
 
 ### Wren Python SDK
 
-The `wren-engine` Python package exposes the same plan-and-execute pipeline that the CLI drives. The CLI is a thin Typer wrapper over the SDK — both share the orchestration code, both can be embedded in agent frameworks, notebooks, and applications.
+The `wrenai` Python package exposes the same plan-and-execute pipeline that the CLI drives. The CLI is a thin Typer wrapper over the SDK — both share the orchestration code, both can be embedded in agent frameworks, notebooks, and applications.
 
 When invoked (via CLI or SDK), the orchestrator:
 
