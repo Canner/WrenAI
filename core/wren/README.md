@@ -241,10 +241,6 @@ pip uninstall wren-engine
 pip install wrenai            # or: pip install "wrenai[<extras>]"
 ```
 
-Direct dependents (`wren-langchain`, `wren-pydantic`) will switch to
-`wrenai` in their next release; until then they continue to pull
-`wren-engine` transitively.
-
 ## License
 
 Apache-2.0
