@@ -6,7 +6,7 @@
 
 Wren AI CLI and Python SDK — semantic SQL layer for 20+ data sources.
 
-Translate natural SQL queries through an [MDL (Modeling Definition Language)](https://docs.getwren.ai/) semantic layer and execute them against your database. Powered by [Apache DataFusion](https://datafusion.apache.org/) and [Ibis](https://ibis-project.org/).
+Translate natural SQL queries through an [MDL (Modeling Definition Language)](https://docs.getwren.ai/) semantic layer and execute them against your database. Powered by [Apache DataFusion](https://datafusion.apache.org/).
 
 ## Installation
 
