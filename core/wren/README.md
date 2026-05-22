@@ -4,9 +4,9 @@
 [![Python](https://img.shields.io/pypi/pyversions/wrenai.svg)](https://pypi.org/project/wrenai/)
 [![License](https://img.shields.io/pypi/l/wrenai.svg)](https://github.com/Canner/WrenAI/blob/main/LICENSE)
 
-Wren Engine CLI and Python SDK — semantic SQL layer for 20+ data sources.
+Wren AI CLI and Python SDK — semantic SQL layer for 20+ data sources.
 
-Translate natural SQL queries through an [MDL (Modeling Definition Language)](https://docs.getwren.ai/) semantic layer and execute them against your database. Powered by [Apache DataFusion](https://datafusion.apache.org/) and [Ibis](https://ibis-project.org/).
+Translate natural SQL queries through an [MDL (Modeling Definition Language)](https://docs.getwren.ai/) semantic layer and execute them against your database. Powered by [Apache DataFusion](https://datafusion.apache.org/).
 
 ## Installation
 
@@ -225,21 +225,33 @@ uv run pytest tests/test_profile_web.py -v
 
 ## Package rename: `wren-engine` → `wrenai`
 
-Starting with the 0.7.0 release, this package is published on PyPI as
-[`wrenai`](https://pypi.org/project/wrenai/). The legacy
-[`wren-engine`](https://pypi.org/project/wren-engine/) project on PyPI is
-frozen at 0.6.x and no longer receives updates.
+Starting with the 0.7.0 release, this PyPI distribution is renamed from
+[`wren-engine`](https://pypi.org/project/wren-engine/) to
+[`wrenai`](https://pypi.org/project/wrenai/) to align with the **Wren AI**
+brand. The legacy `wren-engine` project on PyPI is frozen at 0.6.x and
+will not receive further updates.
 
-Nothing about the Python API or the CLI changes — `import wren`, the
-`wren` command, and every subcommand stay the same. Only the
-distribution name on PyPI is different.
+### What stays the same
 
-To migrate:
+- The Python import path: `import wren` (and submodules under `wren.*`)
+- The `wren` CLI entrypoint and every subcommand (`wren query`,
+  `wren context`, `wren profile`, `wren memory`, …)
+- All extras (`postgres`, `mysql`, `bigquery`, …, `memory`, `ui`, `main`,
+  `all`)
+- Configuration files under `~/.wren/` (profiles, memory, config)
+
+Only the name you type after `pip install` is different.
+
+### Migration
 
 ```bash
 pip uninstall wren-engine
-pip install wrenai            # or: pip install "wrenai[<extras>]"
+pip install wrenai                  # or: pip install "wrenai[<extras>]"
+wren --version                      # should print: wrenai X.Y.Z
 ```
+
+If your project pinned `wren-engine` in a `requirements.txt`,
+`pyproject.toml`, or lockfile, replace it with `wrenai` and re-lock.
 
 ## License
 
