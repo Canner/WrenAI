@@ -22,8 +22,13 @@ const isFinalized = (status: ChartStatus) => {
   );
 };
 
+const MIN_POLL_DELAY = 2000;
+const MAX_POLL_DELAY = 10000;
+
 export class ChartBackgroundTracker {
   private tasks: Record<number, ThreadResponse> = {};
+  private nextPollAt: Record<number, number> = {};
+  private pollDelay: Record<number, number> = {};
   private intervalTime: number;
   private wrenAIAdaptor: IWrenAIAdaptor;
   private threadResponseRepository: IThreadResponseRepository;
@@ -56,6 +61,10 @@ export class ChartBackgroundTracker {
             return;
           }
 
+          if (Date.now() < (this.nextPollAt[threadResponse.id] || 0)) {
+            return;
+          }
+
           // mark the job as running
           this.runningJobs.add(threadResponse.id);
 
@@ -67,8 +76,17 @@ export class ChartBackgroundTracker {
             chartDetail.queryId,
           );
 
+          const statusChanged = chartDetail.status !== result.status;
+          this.scheduleNextPoll(threadResponse.id, result.status, statusChanged);
+
+          if (isFinalized(result.status) && !statusChanged) {
+            this.finalizeTask(threadResponse, result);
+            this.runningJobs.delete(threadResponse.id);
+            return;
+          }
+
           // check if status change
-          if (chartDetail.status === result.status) {
+          if (!statusChanged) {
             // mark the job as finished
             logger.debug(
               `Job ${threadResponse.id} chart status not changed, finished`,
@@ -96,27 +114,7 @@ export class ChartBackgroundTracker {
 
           // remove the task from tracker if it is finalized
           if (isFinalized(result.status)) {
-            const eventProperties = {
-              question: threadResponse.question,
-              error: result.error,
-            };
-            if (result.status === ChartStatus.FINISHED) {
-              this.telemetry.sendEvent(
-                TelemetryEvent.HOME_ANSWER_CHART,
-                eventProperties,
-              );
-            } else {
-              this.telemetry.sendEvent(
-                TelemetryEvent.HOME_ANSWER_CHART,
-                eventProperties,
-                WrenService.AI,
-                false,
-              );
-            }
-            logger.debug(
-              `Job ${threadResponse.id} chart is finalized, removing`,
-            );
-            delete this.tasks[threadResponse.id];
+            this.finalizeTask(threadResponse, result);
           }
 
           // mark the job as finished
@@ -138,15 +136,60 @@ export class ChartBackgroundTracker {
 
   public addTask(threadResponse: ThreadResponse) {
     this.tasks[threadResponse.id] = threadResponse;
+    this.nextPollAt[threadResponse.id] = Date.now();
+    this.pollDelay[threadResponse.id] = MIN_POLL_DELAY;
   }
 
   public getTasks() {
     return this.tasks;
   }
+
+  private scheduleNextPoll(
+    taskId: number,
+    status: ChartStatus,
+    resultChanged: boolean,
+  ) {
+    if (isFinalized(status)) {
+      this.nextPollAt[taskId] = Number.MAX_SAFE_INTEGER;
+      return;
+    }
+
+    const baseDelay = status === ChartStatus.FETCHING ? MIN_POLL_DELAY : 3000;
+    this.pollDelay[taskId] = resultChanged
+      ? baseDelay
+      : Math.min(
+          Math.max((this.pollDelay[taskId] || baseDelay) * 1.5, baseDelay),
+          MAX_POLL_DELAY,
+        );
+    this.nextPollAt[taskId] = Date.now() + this.pollDelay[taskId];
+  }
+
+  private finalizeTask(threadResponse: ThreadResponse, result) {
+    const eventProperties = {
+      question: threadResponse.question,
+      error: result.error,
+    };
+    if (result.status === ChartStatus.FINISHED) {
+      this.telemetry.sendEvent(TelemetryEvent.HOME_ANSWER_CHART, eventProperties);
+    } else {
+      this.telemetry.sendEvent(
+        TelemetryEvent.HOME_ANSWER_CHART,
+        eventProperties,
+        WrenService.AI,
+        false,
+      );
+    }
+    logger.debug(`Job ${threadResponse.id} chart is finalized, removing`);
+    delete this.tasks[threadResponse.id];
+    delete this.nextPollAt[threadResponse.id];
+    delete this.pollDelay[threadResponse.id];
+  }
 }
 
 export class ChartAdjustmentBackgroundTracker {
   private tasks: Record<number, ThreadResponse> = {};
+  private nextPollAt: Record<number, number> = {};
+  private pollDelay: Record<number, number> = {};
   private intervalTime: number;
   private wrenAIAdaptor: IWrenAIAdaptor;
   private threadResponseRepository: IThreadResponseRepository;
@@ -179,6 +222,10 @@ export class ChartAdjustmentBackgroundTracker {
             return;
           }
 
+          if (Date.now() < (this.nextPollAt[threadResponse.id] || 0)) {
+            return;
+          }
+
           // mark the job as running
           this.runningJobs.add(threadResponse.id);
 
@@ -190,8 +237,17 @@ export class ChartAdjustmentBackgroundTracker {
             chartDetail.queryId,
           );
 
+          const statusChanged = chartDetail.status !== result.status;
+          this.scheduleNextPoll(threadResponse.id, result.status, statusChanged);
+
+          if (isFinalized(result.status) && !statusChanged) {
+            this.finalizeTask(threadResponse, result);
+            this.runningJobs.delete(threadResponse.id);
+            return;
+          }
+
           // check if status change
-          if (chartDetail.status === result.status) {
+          if (!statusChanged) {
             // mark the job as finished
             logger.debug(
               `Job ${threadResponse.id} chart status not changed, finished`,
@@ -220,27 +276,7 @@ export class ChartAdjustmentBackgroundTracker {
 
           // remove the task from tracker if it is finalized
           if (isFinalized(result.status)) {
-            const eventProperties = {
-              question: threadResponse.question,
-              error: result.error,
-            };
-            if (result.status === ChartStatus.FINISHED) {
-              this.telemetry.sendEvent(
-                TelemetryEvent.HOME_ANSWER_ADJUST_CHART,
-                eventProperties,
-              );
-            } else {
-              this.telemetry.sendEvent(
-                TelemetryEvent.HOME_ANSWER_ADJUST_CHART,
-                eventProperties,
-                WrenService.AI,
-                false,
-              );
-            }
-            logger.debug(
-              `Job ${threadResponse.id} chart is finalized, removing`,
-            );
-            delete this.tasks[threadResponse.id];
+            this.finalizeTask(threadResponse, result);
           }
 
           // mark the job as finished
@@ -262,9 +298,55 @@ export class ChartAdjustmentBackgroundTracker {
 
   public addTask(threadResponse: ThreadResponse) {
     this.tasks[threadResponse.id] = threadResponse;
+    this.nextPollAt[threadResponse.id] = Date.now();
+    this.pollDelay[threadResponse.id] = MIN_POLL_DELAY;
   }
 
   public getTasks() {
     return this.tasks;
+  }
+
+  private scheduleNextPoll(
+    taskId: number,
+    status: ChartStatus,
+    resultChanged: boolean,
+  ) {
+    if (isFinalized(status)) {
+      this.nextPollAt[taskId] = Number.MAX_SAFE_INTEGER;
+      return;
+    }
+
+    const baseDelay = status === ChartStatus.FETCHING ? MIN_POLL_DELAY : 3000;
+    this.pollDelay[taskId] = resultChanged
+      ? baseDelay
+      : Math.min(
+          Math.max((this.pollDelay[taskId] || baseDelay) * 1.5, baseDelay),
+          MAX_POLL_DELAY,
+        );
+    this.nextPollAt[taskId] = Date.now() + this.pollDelay[taskId];
+  }
+
+  private finalizeTask(threadResponse: ThreadResponse, result) {
+    const eventProperties = {
+      question: threadResponse.question,
+      error: result.error,
+    };
+    if (result.status === ChartStatus.FINISHED) {
+      this.telemetry.sendEvent(
+        TelemetryEvent.HOME_ANSWER_ADJUST_CHART,
+        eventProperties,
+      );
+    } else {
+      this.telemetry.sendEvent(
+        TelemetryEvent.HOME_ANSWER_ADJUST_CHART,
+        eventProperties,
+        WrenService.AI,
+        false,
+      );
+    }
+    logger.debug(`Job ${threadResponse.id} chart is finalized, removing`);
+    delete this.tasks[threadResponse.id];
+    delete this.nextPollAt[threadResponse.id];
+    delete this.pollDelay[threadResponse.id];
   }
 }

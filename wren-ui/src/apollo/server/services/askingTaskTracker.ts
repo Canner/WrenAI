@@ -22,6 +22,8 @@ interface TrackedTask {
   queryId: string;
   taskId?: number;
   lastPolled: number;
+  nextPollAt: number;
+  pollDelay: number;
   question?: string;
   result?: AskResult;
   isFinalized: boolean;
@@ -56,6 +58,8 @@ export interface IAskingTaskTracker {
 }
 
 export class AskingTaskTracker implements IAskingTaskTracker {
+  private readonly minPollDelay = 2000;
+  private readonly maxPollDelay = 8000;
   private wrenAIAdaptor: IWrenAIAdaptor;
   private askingTaskRepository: IAskingTaskRepository;
   private trackedTasks: Map<string, TrackedTask> = new Map();
@@ -114,6 +118,8 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       const task = {
         queryId,
         lastPolled: Date.now(),
+        nextPollAt: Date.now(),
+        pollDelay: this.minPollDelay,
         question: input.query,
         result: {
           type: null,
@@ -296,16 +302,22 @@ export class AskingTaskTracker implements IAskingTaskTracker {
               return;
             }
 
+            if (now < task.nextPollAt) {
+              return;
+            }
+
             // Mark the job as running
             this.runningJobs.add(queryId);
 
             // Poll for updates
-            logger.info(`Polling for updates for task ${queryId}`);
+            logger.debug(`Polling for updates for task ${queryId}`);
             const result = await this.wrenAIAdaptor.getAskResult(queryId);
             task.lastPolled = now;
+            const resultChanged = this.isResultChanged(task.result, result);
+            this.scheduleNextPoll(task, result.status, resultChanged);
 
             // if result is not changed, we don't need to update the database
-            if (!this.isResultChanged(task.result, result)) {
+            if (!resultChanged) {
               this.runningJobs.delete(queryId);
               return;
             }
@@ -521,6 +533,8 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       queryId: result.queryId,
       taskId: result.taskId,
       lastPolled: Date.now(),
+      nextPollAt: Date.now(),
+      pollDelay: this.minPollDelay,
       question: result.question,
       result: this.getComparableAskResult(result),
       isFinalized: false,
@@ -544,5 +558,36 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       invalidSql: result?.invalidSql ?? null,
       traceId: result?.traceId ?? null,
     } as AskResult;
+  }
+
+  private scheduleNextPoll(
+    task: TrackedTask,
+    status: AskResultStatus,
+    resultChanged: boolean,
+  ) {
+    if (this.isTaskFinalized(status)) {
+      task.nextPollAt = Number.MAX_SAFE_INTEGER;
+      return;
+    }
+
+    const baseDelay = this.getBasePollDelay(status);
+    task.pollDelay = resultChanged
+      ? baseDelay
+      : Math.min(Math.max(task.pollDelay * 1.5, baseDelay), this.maxPollDelay);
+    task.nextPollAt = Date.now() + task.pollDelay;
+  }
+
+  private getBasePollDelay(status: AskResultStatus) {
+    if (
+      [
+        AskResultStatus.UNDERSTANDING,
+        AskResultStatus.SEARCHING,
+        AskResultStatus.PLANNING,
+      ].includes(status)
+    ) {
+      return this.minPollDelay;
+    }
+
+    return 3000;
   }
 }

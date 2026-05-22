@@ -185,6 +185,7 @@ export default class ChartSpecHandler {
 
     // avoid mutating the original spec
     const clonedSpec = cloneDeep(spec);
+    this.normalizeSpecFields(clonedSpec);
     this.parseSpec(clonedSpec);
   }
 
@@ -256,6 +257,42 @@ export default class ChartSpecHandler {
 
       this.addEncoding(spec.encoding as EncodingSpec);
     }
+  }
+
+  private normalizeSpecFields(spec: TopLevelSpec) {
+    const values = ((this.data as any)?.values || []) as Record<string, any>[];
+    if (!values.length) return;
+
+    const columns = Object.keys(values[0]);
+    const normalizeField = (field?: string) => {
+      if (!field) return field;
+      if (columns.includes(field)) return field;
+
+      const lowered = columns.find(
+        (column) => column.toLowerCase() === field.toLowerCase(),
+      );
+      if (lowered) return lowered;
+
+      const compactField = field.replace(/[\s_]+/g, '').toLowerCase();
+      return (
+        columns.find(
+          (column) =>
+            column.replace(/[\s_]+/g, '').toLowerCase() === compactField,
+        ) || field
+      );
+    };
+
+    const encoding = (spec as any).encoding as EncodingSpec;
+    ['x', 'y', 'theta', 'color', 'xOffset'].forEach((key) => {
+      const axis = encoding?.[key] as { field?: string } | undefined;
+      if (axis?.field) axis.field = normalizeField(axis.field);
+    });
+
+    (spec.transform || []).forEach((transform: any) => {
+      if (Array.isArray(transform?.fold)) {
+        transform.fold = transform.fold.map(normalizeField);
+      }
+    });
   }
 
   private addMark(mark: MarkSpec) {
