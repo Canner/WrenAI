@@ -20,9 +20,14 @@ const isFinalized = (status: RecommendationQuestionStatus) => {
   ].includes(status);
 };
 
+const MIN_POLL_DELAY = 2000;
+const MAX_POLL_DELAY = 10000;
+
 export class ProjectRecommendQuestionBackgroundTracker {
   // tasks is a kv pair of task id and thread response
   private tasks: Record<number, Project> = {};
+  private nextPollAt: Record<number, number> = {};
+  private pollDelay: Record<number, number> = {};
   private intervalTime: number;
   private wrenAIAdaptor: IWrenAIAdaptor;
   private projectRepository: IProjectRepository;
@@ -58,6 +63,10 @@ export class ProjectRecommendQuestionBackgroundTracker {
           return;
         }
 
+        if (Date.now() < (this.nextPollAt[this.taskKey(project)] || 0)) {
+          return;
+        }
+
         // mark the job as running
         this.runningJobs.add(this.taskKey(project));
 
@@ -68,11 +77,19 @@ export class ProjectRecommendQuestionBackgroundTracker {
             project.queryId,
           );
 
+        const changed =
+          project.questionsStatus !== result.status ||
+          result.response?.questions.length !== (project.questions || []).length;
+        this.scheduleNextPoll(this.taskKey(project), result.status, changed);
+
+        if (isFinalized(result.status) && !changed) {
+          this.finalizeTask(project, result);
+          this.runningJobs.delete(this.taskKey(project));
+          return;
+        }
+
         // check if status change
-        if (
-          project.questionsStatus === result.status &&
-          result.response?.questions.length === (project.questions || []).length
-        ) {
+        if (!changed) {
           // mark the job as finished
           this.logger.debug(
             `${loggerPrefix}job ${this.taskKey(project)} status not changed, returning question count: ${result.response?.questions.length || 0}`,
@@ -82,10 +99,7 @@ export class ProjectRecommendQuestionBackgroundTracker {
         }
 
         // update database
-        if (
-          result.status !== project.questionsStatus ||
-          result.response?.questions.length !== (project.questions || []).length
-        ) {
+        if (changed) {
           this.logger.debug(
             `${loggerPrefix}job ${this.taskKey(project)} have changes, returning question count: ${result.response?.questions.length || 0}, updating`,
           );
@@ -100,30 +114,7 @@ export class ProjectRecommendQuestionBackgroundTracker {
 
         // remove the task from tracker if it is finalized
         if (isFinalized(result.status)) {
-          const eventProperties = {
-            projectId: project.id,
-            projectType: project.type,
-            status: result.status,
-            questions: project.questions,
-            error: result.error,
-          };
-          if (result.status === RecommendationQuestionStatus.FINISHED) {
-            this.telemetry.sendEvent(
-              TelemetryEvent.HOME_GENERATE_PROJECT_RECOMMENDATION_QUESTIONS,
-              eventProperties,
-            );
-          } else {
-            this.telemetry.sendEvent(
-              TelemetryEvent.HOME_GENERATE_PROJECT_RECOMMENDATION_QUESTIONS,
-              eventProperties,
-              WrenService.AI,
-              false,
-            );
-          }
-          this.logger.debug(
-            `${loggerPrefix}job ${this.taskKey(project)} is finalized, removing`,
-          );
-          delete this.tasks[this.taskKey(project)];
+          this.finalizeTask(project, result);
         }
 
         // mark the job as finished
@@ -144,6 +135,8 @@ export class ProjectRecommendQuestionBackgroundTracker {
 
   public addTask(project: Project) {
     this.tasks[this.taskKey(project)] = project;
+    this.nextPollAt[this.taskKey(project)] = Date.now();
+    this.pollDelay[this.taskKey(project)] = MIN_POLL_DELAY;
   }
 
   public getTasks() {
@@ -175,11 +168,60 @@ export class ProjectRecommendQuestionBackgroundTracker {
   public isExist(project: Project) {
     return this.tasks[this.taskKey(project)];
   }
+
+  private scheduleNextPoll(
+    taskKey: number,
+    status: RecommendationQuestionStatus,
+    resultChanged: boolean,
+  ) {
+    if (isFinalized(status)) {
+      this.nextPollAt[taskKey] = Number.MAX_SAFE_INTEGER;
+      return;
+    }
+
+    this.pollDelay[taskKey] = resultChanged
+      ? MIN_POLL_DELAY
+      : Math.min(
+          Math.max((this.pollDelay[taskKey] || MIN_POLL_DELAY) * 1.5, MIN_POLL_DELAY),
+          MAX_POLL_DELAY,
+        );
+    this.nextPollAt[taskKey] = Date.now() + this.pollDelay[taskKey];
+  }
+
+  private finalizeTask(project: Project, result) {
+    const eventProperties = {
+      projectId: project.id,
+      projectType: project.type,
+      status: result.status,
+      questions: project.questions,
+      error: result.error,
+    };
+    if (result.status === RecommendationQuestionStatus.FINISHED) {
+      this.telemetry.sendEvent(
+        TelemetryEvent.HOME_GENERATE_PROJECT_RECOMMENDATION_QUESTIONS,
+        eventProperties,
+      );
+    } else {
+      this.telemetry.sendEvent(
+        TelemetryEvent.HOME_GENERATE_PROJECT_RECOMMENDATION_QUESTIONS,
+        eventProperties,
+        WrenService.AI,
+        false,
+      );
+    }
+    const taskKey = this.taskKey(project);
+    this.logger.debug(`${loggerPrefix}job ${taskKey} is finalized, removing`);
+    delete this.tasks[taskKey];
+    delete this.nextPollAt[taskKey];
+    delete this.pollDelay[taskKey];
+  }
 }
 
 export class ThreadRecommendQuestionBackgroundTracker {
   // tasks is a kv pair of task id and thread response
   private tasks: Record<number, Thread> = {};
+  private nextPollAt: Record<number, number> = {};
+  private pollDelay: Record<number, number> = {};
   private intervalTime: number;
   private wrenAIAdaptor: IWrenAIAdaptor;
   private threadRepository: IThreadRepository;
@@ -215,6 +257,10 @@ export class ThreadRecommendQuestionBackgroundTracker {
           return;
         }
 
+        if (Date.now() < (this.nextPollAt[this.taskKey(thread)] || 0)) {
+          return;
+        }
+
         // mark the job as running
         this.runningJobs.add(this.taskKey(thread));
 
@@ -225,11 +271,19 @@ export class ThreadRecommendQuestionBackgroundTracker {
             thread.queryId,
           );
 
+        const changed =
+          thread.questionsStatus !== result.status ||
+          result.response?.questions.length !== (thread.questions || []).length;
+        this.scheduleNextPoll(this.taskKey(thread), result.status, changed);
+
+        if (isFinalized(result.status) && !changed) {
+          this.finalizeTask(thread, result);
+          this.runningJobs.delete(this.taskKey(thread));
+          return;
+        }
+
         // check if status change
-        if (
-          thread.questionsStatus === result.status &&
-          result.response?.questions.length === (thread.questions || []).length
-        ) {
+        if (!changed) {
           // mark the job as finished
           this.logger.debug(
             `${loggerPrefix}job ${this.taskKey(thread)} status not changed, returning question count: ${result.response?.questions.length || 0}`,
@@ -239,10 +293,7 @@ export class ThreadRecommendQuestionBackgroundTracker {
         }
 
         // update database
-        if (
-          result.status !== thread.questionsStatus ||
-          result.response?.questions.length !== (thread.questions || []).length
-        ) {
+        if (changed) {
           this.logger.debug(
             `${loggerPrefix}job ${this.taskKey(thread)} have changes, returning question count: ${result.response?.questions.length || 0}, updating`,
           );
@@ -257,29 +308,7 @@ export class ThreadRecommendQuestionBackgroundTracker {
 
         // remove the task from tracker if it is finalized
         if (isFinalized(result.status)) {
-          const eventProperties = {
-            thread_id: thread.id,
-            status: result.status,
-            questions: thread.questions,
-            error: result.error,
-          };
-          if (result.status === RecommendationQuestionStatus.FINISHED) {
-            this.telemetry.sendEvent(
-              TelemetryEvent.HOME_GENERATE_THREAD_RECOMMENDATION_QUESTIONS,
-              eventProperties,
-            );
-          } else {
-            this.telemetry.sendEvent(
-              TelemetryEvent.HOME_GENERATE_THREAD_RECOMMENDATION_QUESTIONS,
-              eventProperties,
-              WrenService.AI,
-              false,
-            );
-          }
-          this.logger.debug(
-            `${loggerPrefix}job ${this.taskKey(thread)} is finalized, removing`,
-          );
-          delete this.tasks[this.taskKey(thread)];
+          this.finalizeTask(thread, result);
         }
 
         // mark the job as finished
@@ -300,6 +329,8 @@ export class ThreadRecommendQuestionBackgroundTracker {
 
   public addTask(thread: Thread) {
     this.tasks[this.taskKey(thread)] = thread;
+    this.nextPollAt[this.taskKey(thread)] = Date.now();
+    this.pollDelay[this.taskKey(thread)] = MIN_POLL_DELAY;
   }
 
   public getTasks() {
@@ -331,5 +362,51 @@ export class ThreadRecommendQuestionBackgroundTracker {
 
   public isExist(thread: Thread) {
     return this.tasks[this.taskKey(thread)];
+  }
+
+  private scheduleNextPoll(
+    taskKey: number,
+    status: RecommendationQuestionStatus,
+    resultChanged: boolean,
+  ) {
+    if (isFinalized(status)) {
+      this.nextPollAt[taskKey] = Number.MAX_SAFE_INTEGER;
+      return;
+    }
+
+    this.pollDelay[taskKey] = resultChanged
+      ? MIN_POLL_DELAY
+      : Math.min(
+          Math.max((this.pollDelay[taskKey] || MIN_POLL_DELAY) * 1.5, MIN_POLL_DELAY),
+          MAX_POLL_DELAY,
+        );
+    this.nextPollAt[taskKey] = Date.now() + this.pollDelay[taskKey];
+  }
+
+  private finalizeTask(thread: Thread, result) {
+    const eventProperties = {
+      thread_id: thread.id,
+      status: result.status,
+      questions: thread.questions,
+      error: result.error,
+    };
+    if (result.status === RecommendationQuestionStatus.FINISHED) {
+      this.telemetry.sendEvent(
+        TelemetryEvent.HOME_GENERATE_THREAD_RECOMMENDATION_QUESTIONS,
+        eventProperties,
+      );
+    } else {
+      this.telemetry.sendEvent(
+        TelemetryEvent.HOME_GENERATE_THREAD_RECOMMENDATION_QUESTIONS,
+        eventProperties,
+        WrenService.AI,
+        false,
+      );
+    }
+    const taskKey = this.taskKey(thread);
+    this.logger.debug(`${loggerPrefix}job ${taskKey} is finalized, removing`);
+    delete this.tasks[taskKey];
+    delete this.nextPollAt[taskKey];
+    delete this.pollDelay[taskKey];
   }
 }

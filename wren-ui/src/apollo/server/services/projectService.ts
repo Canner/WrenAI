@@ -88,6 +88,7 @@ export class ProjectService implements IProjectService {
   private mdlService: IMDLService;
   private wrenAIAdaptor: IWrenAIAdaptor;
   private projectRecommendQuestionBackgroundTracker: ProjectRecommendQuestionBackgroundTracker;
+  private projectRecommendationJob: Promise<void> | null = null;
   constructor({
     projectRepository,
     metadataService,
@@ -132,6 +133,22 @@ export class ProjectService implements IProjectService {
   }
 
   public async generateProjectRecommendationQuestions(): Promise<void> {
+    if (this.projectRecommendationJob) {
+      logger.debug(
+        'project recommended questions are already being requested, reusing in-flight job',
+      );
+      return this.projectRecommendationJob;
+    }
+
+    this.projectRecommendationJob = this.doGenerateProjectRecommendationQuestions();
+    try {
+      return await this.projectRecommendationJob;
+    } finally {
+      this.projectRecommendationJob = null;
+    }
+  }
+
+  private async doGenerateProjectRecommendationQuestions(): Promise<void> {
     const project = await this.getCurrentProject();
     if (!project) {
       throw new Error(`Project not found`);

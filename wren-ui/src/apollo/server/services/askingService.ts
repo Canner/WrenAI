@@ -433,6 +433,8 @@ export class AskingService implements IAskingService {
   private askingTaskTracker: IAskingTaskTracker;
   private askingTaskRepository: IAskingTaskRepository;
   private adjustmentBackgroundTracker: AdjustmentBackgroundTaskTracker;
+  private instantRecommendationJobs = new Map<string, Promise<Task>>();
+  private threadRecommendationJobs = new Map<number, Promise<void>>();
   private initialized = false;
 
   constructor({
@@ -535,6 +537,26 @@ export class AskingService implements IAskingService {
   }
 
   public async generateThreadRecommendationQuestions(
+    threadId: number,
+  ): Promise<void> {
+    const existingJob = this.threadRecommendationJobs.get(threadId);
+    if (existingJob) {
+      logger.debug(
+        `thread "${threadId}" recommended questions are already being requested, reusing in-flight job`,
+      );
+      return existingJob;
+    }
+
+    const job = this.doGenerateThreadRecommendationQuestions(threadId);
+    this.threadRecommendationJobs.set(threadId, job);
+    try {
+      return await job;
+    } finally {
+      this.threadRecommendationJobs.delete(threadId);
+    }
+  }
+
+  private async doGenerateThreadRecommendationQuestions(
     threadId: number,
   ): Promise<void> {
     const thread = await this.threadRepository.findOneBy({ id: threadId });
@@ -1057,6 +1079,25 @@ export class AskingService implements IAskingService {
   }
 
   public async createInstantRecommendedQuestions(
+    input: InstantRecommendedQuestionsInput,
+  ): Promise<Task> {
+    const key = JSON.stringify(input.previousQuestions || []);
+    const existingJob = this.instantRecommendationJobs.get(key);
+    if (existingJob) {
+      logger.debug('instant recommended questions are already being requested');
+      return existingJob;
+    }
+
+    const job = this.doCreateInstantRecommendedQuestions(input);
+    this.instantRecommendationJobs.set(key, job);
+    try {
+      return await job;
+    } finally {
+      this.instantRecommendationJobs.delete(key);
+    }
+  }
+
+  private async doCreateInstantRecommendedQuestions(
     input: InstantRecommendedQuestionsInput,
   ): Promise<Task> {
     const project = await this.projectService.getCurrentProject();

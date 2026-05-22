@@ -206,6 +206,8 @@ export default function useAskPrompt(threadId?: number) {
     RECOMMENDED_QUESTIONS_POLL_INTERVAL_MS,
   );
   const lastRecommendedFingerprintRef = useRef<string | null>(null);
+  const recommendedCreationKeyRef = useRef<string | null>(null);
+  const recommendedCreationRequestRef = useRef<Promise<void> | null>(null);
 
   const askingTask = useMemo(
     () => askingTaskResult.data?.askingTask || null,
@@ -240,6 +242,8 @@ export default function useAskPrompt(threadId?: number) {
       recommendedPollingRef.current = null;
     }
     recommendedPollingDelayRef.current = RECOMMENDED_QUESTIONS_POLL_INTERVAL_MS;
+    recommendedCreationKeyRef.current = null;
+    recommendedCreationRequestRef.current = null;
   }, []);
 
   const startAskingTaskPolling = useCallback(
@@ -350,14 +354,42 @@ export default function useAskPrompt(threadId?: number) {
       ...uniq(threadQuestions).slice(-5),
       originalQuestion,
     ];
-    const response = await createInstantRecommendedQuestions({
-      variables: { data: { previousQuestions } },
+    const creationKey = JSON.stringify({
+      askingQueryId: askingTask?.queryId || null,
+      previousQuestions,
     });
-    const taskId = response.data?.createInstantRecommendedQuestions?.id;
-    if (!taskId) return;
 
-    await startRecommendedPolling(taskId);
-  }, [originalQuestion, threadQuestions, startRecommendedPolling]);
+    if (recommendedCreationKeyRef.current === creationKey) {
+      if (recommendedCreationRequestRef.current) {
+        await recommendedCreationRequestRef.current;
+      }
+      return;
+    }
+
+    recommendedCreationKeyRef.current = creationKey;
+    const request = (async () => {
+      const response = await createInstantRecommendedQuestions({
+        variables: { data: { previousQuestions } },
+      });
+      const taskId = response.data?.createInstantRecommendedQuestions?.id;
+      if (!taskId) return;
+
+      await startRecommendedPolling(taskId);
+    })();
+
+    recommendedCreationRequestRef.current = request;
+    try {
+      await request;
+    } finally {
+      recommendedCreationRequestRef.current = null;
+    }
+  }, [
+    originalQuestion,
+    threadQuestions,
+    askingTask?.queryId,
+    createInstantRecommendedQuestions,
+    startRecommendedPolling,
+  ]);
 
   const checkFetchAskingStreamTask = useCallback(
     (task: AskingTask) => {
