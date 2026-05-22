@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.7.0](https://github.com/Canner/WrenAI/compare/wren-v0.6.0...wren-v0.7.0) (2026-05-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* **wren:** rename PyPI package from wren-engine to wrenai ([#2315](https://github.com/Canner/WrenAI/issues/2315))
+
+### Features
+
+* **wasm:** full Cube support — validate, translate, PyO3, CLI, WASM, docs ([#2282](https://github.com/Canner/WrenAI/issues/2282)) ([026111e](https://github.com/Canner/WrenAI/commit/026111e54ec31e7165f9fd79c5c998070e66626c))
+
+
+### Documentation
+
+* **wren:** rebrand README to Wren AI and expand rename migration note ([#2316](https://github.com/Canner/WrenAI/issues/2316)) ([f3a00eb](https://github.com/Canner/WrenAI/commit/f3a00eb971a27186824954eff64b32f7e290db3c))
+
+
+### Miscellaneous Chores
+
+* **wren:** rename PyPI package from wren-engine to wrenai ([#2315](https://github.com/Canner/WrenAI/issues/2315)) ([20cffa9](https://github.com/Canner/WrenAI/commit/20cffa904f2d47c048c9247a77687b3fdfe24416))
+
 ## [0.6.0](https://github.com/Canner/WrenAI/compare/wren-v0.5.0...wren-v0.6.0) (2026-05-13)
 
 
