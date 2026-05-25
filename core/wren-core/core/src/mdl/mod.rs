@@ -4231,4 +4231,85 @@ mod test {
 
         Ok(())
     }
+
+    /// Verify that a relationship `condition` containing a conjunction of equalities
+    /// (composite-key join) propagates ALL equality predicates into the generated SQL,
+    /// instead of silently dropping any beyond the first pair.
+    #[tokio::test]
+    async fn test_composite_key_relationship() -> Result<()> {
+        let ctx = create_wren_ctx(None, None);
+        let manifest = ManifestBuilder::new()
+            .catalog("wren")
+            .schema("test")
+            .model(
+                ModelBuilder::new("part")
+                    .table_reference("part")
+                    .column(ColumnBuilder::new("p_partkey", "int").build())
+                    .column(ColumnBuilder::new("p_suppkey", "int").build())
+                    .column(ColumnBuilder::new("p_brand", "string").build())
+                    .primary_key("p_partkey")
+                    .build(),
+            )
+            .model(
+                ModelBuilder::new("partsupp")
+                    .table_reference("partsupp")
+                    .column(ColumnBuilder::new("ps_partkey", "int").build())
+                    .column(ColumnBuilder::new("ps_suppkey", "int").build())
+                    .column(ColumnBuilder::new("ps_availqty", "int").build())
+                    .column(
+                        ColumnBuilder::new_relationship("part", "part", "partsupp_part")
+                            .build(),
+                    )
+                    .column(
+                        ColumnBuilder::new_calculated("part_brand", "string")
+                            .expression("part.p_brand")
+                            .build(),
+                    )
+                    .primary_key("ps_partkey")
+                    .build(),
+            )
+            .relationship(
+                RelationshipBuilder::new("partsupp_part")
+                    .model("partsupp")
+                    .model("part")
+                    .join_type(JoinType::ManyToOne)
+                    .condition(
+                        "partsupp.ps_partkey = part.p_partkey AND \
+                         partsupp.ps_suppkey = part.p_suppkey",
+                    )
+                    .build(),
+            )
+            .build();
+        let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+            manifest,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        )?);
+        let sql = "SELECT part_brand FROM partsupp";
+        let transformed = transform_sql_with_ctx(
+            &ctx,
+            Arc::clone(&analyzed_mdl),
+            &[],
+            Arc::new(HashMap::default()),
+            sql,
+        )
+        .await?;
+        // Both join predicates must appear in the generated SQL, AND-ed together —
+        // the second pair (ps_suppkey/p_suppkey) was silently dropped before
+        // composite-key support landed.
+        let pk_pair = transformed.contains(r#""part".p_partkey = partsupp.ps_partkey"#)
+            || transformed.contains(r#"partsupp.ps_partkey = "part".p_partkey"#);
+        let sk_pair = transformed.contains(r#""part".p_suppkey = partsupp.ps_suppkey"#)
+            || transformed.contains(r#"partsupp.ps_suppkey = "part".p_suppkey"#);
+        assert!(pk_pair, "partkey predicate missing: {transformed}");
+        assert!(
+            sk_pair,
+            "suppkey predicate missing — composite key dropped: {transformed}"
+        );
+        assert!(
+            transformed.contains(" AND "),
+            "composite predicates should be conjoined with AND: {transformed}"
+        );
+        Ok(())
+    }
 }
