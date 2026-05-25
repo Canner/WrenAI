@@ -13,19 +13,22 @@ wren context build --from-osi semantic_model.yaml --data-source postgres
 
 ## OSI project vs. wren project
 
-|  | Wren project (native) | OSI project (this guide) |
-|---|---|---|
-| **Source files** | `wren_project.yml` + `models/<name>/metadata.yml` + `views/` + `relationships.yml` | A single `*.yaml` OSI file |
-| **Author** | You (or `wren-generate-mdl` agent skill) | OSI tooling / vendor-supplied / external team |
-| **Wren commands** | `wren context init` → edit → `build` | `wren context build --from-osi <file>` |
-| **Editable inside Wren?** | Yes — that's the point | No — Wren reads the file as-is |
-| **Where wren-specific hints live** | Each model's YAML | OSI's `custom_extensions[vendor_name=WREN]` block |
+|  | Wren project (native) | OSI project, kept as source | OSI project, migrated once |
+|---|---|---|---|
+| **Source files** | `wren_project.yml` + `models/<name>/metadata.yml` + `views/` + `relationships.yml` | A single `*.yaml` OSI file | After migration: wren project layout |
+| **Author** | You (or `wren-generate-mdl` agent skill) | OSI tooling / vendor / external team | You take ownership after `init` |
+| **Wren commands** | `wren context init` → edit → `build` | `wren context build --from-osi <file>` | `wren context init --from-osi <file>` → edit → `build` |
+| **Editable inside Wren?** | Yes — that's the point | No — Wren reads the file as-is | Yes after migration |
+| **Where wren-specific hints live** | Each model's YAML | OSI's `custom_extensions[vendor_name=WREN]` block | Each model's YAML (lifted from OSI at migration time) |
+| **Stays in sync with OSI?** | n/a | Yes — every build re-reads OSI | No — one-way snapshot |
 
-**Use the wren project flow when:** you own the semantic model and want full control over the YAML.
+Three places you might land:
 
-**Use the OSI flow when:** the OSI file is shared with other tools (Snowflake Cortex, Salesforce, Cube, …) and you want Wren to be one consumer among many, without forking the source.
+- **You own the semantic model from day one** → use the native wren project flow.
+- **The OSI file is shared with other tools (Snowflake Cortex, Salesforce, Cube, …) and you want Wren to be one of many consumers without forking** → use `wren context build --from-osi`. Every build re-reads the OSI file.
+- **You started with an OSI file but now want full control inside Wren (cubes, views, RLAC, custom calculations OSI doesn't model)** → use `wren context init --from-osi` to migrate once, then edit the generated YAML directly. See [Migrate to a native wren project](#migrate-to-a-native-wren-project).
 
-Both flows ultimately produce the same `target/mdl.json` — Wren itself doesn't care how you got there.
+All three paths produce the same `target/mdl.json` shape — Wren doesn't care how you got there.
 
 ## Quick start
 
@@ -227,6 +230,10 @@ wren context build --from-osi semantic_model.yaml --data-source postgres
 wren context build --from-osi semantic_model.yaml --data-source snowflake \
   --output build/mdl.json
 
+# Migrate to a native wren project (one-way)
+wren context init --from-osi semantic_model.yaml --data-source postgres \
+  --path my_project
+
 # Validate — lints the conversion and prints actionable snippets
 wren context validate --from-osi semantic_model.yaml --data-source postgres
 wren context validate --from-osi semantic_model.yaml --data-source postgres --strict
@@ -239,6 +246,39 @@ wren context show --from-osi semantic_model.yaml --data-source postgres --output
 ```
 
 `--data-source` is required because OSI deliberately does not carry connection or dialect environment information. Pair `--from-osi` with `--semantic-model` if the file contains more than one model.
+
+## Migrate to a native wren project
+
+When OSI's surface area isn't enough — you need cubes, views, RLAC/CLAC, or calculated columns OSI doesn't model — convert the OSI file into a native wren project once and edit the YAML from there:
+
+```bash
+wren context init --from-osi semantic_model.yaml --data-source postgres --path my_project
+```
+
+This reuses the same converter as `build --from-osi`, then scaffolds the standard wren layout:
+
+```text
+my_project/
+├── wren_project.yml          # name lifted from OSI semantic_model.name
+├── models/
+│   ├── customers/metadata.yml
+│   └── orders/metadata.yml
+├── relationships.yml
+├── instructions.md           # OSI ai_context.instructions + metrics notes
+└── AGENTS.md
+```
+
+After migration:
+
+- The OSI file is **no longer referenced**. You can delete it, archive it, or keep it for diffing — Wren never reads it again.
+- Edit the generated YAML directly. Add cubes under `cubes/`, views under `views/`, RLAC under each model's `properties`, etc.
+- Use the standard flow: `wren context validate` → `wren context build`.
+
+Any warnings the OSI conversion would normally emit (untyped fields, composite primary keys, cross-dataset metrics) are printed once during init so you know which spots in the generated YAML need a human review.
+
+### When *not* to migrate
+
+If your OSI file is updated by an upstream team and you want Wren to stay in sync, **do not** migrate — use `build --from-osi` instead. A migrated project is a snapshot; later OSI edits won't reach Wren without manually merging or re-running `init --from-osi --force` (which loses your post-migration edits).
 
 ## Limitations
 

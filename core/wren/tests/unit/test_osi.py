@@ -733,3 +733,239 @@ def test_cli_show_from_osi_json():
     data = json.loads(result.output)
     assert data["layoutVersion"] == 2
     assert "tableReference" in data["models"][0]
+
+
+# ── CLI: init --from-osi (one-way migration) ─────────────────────────────
+
+
+def test_cli_init_from_osi_scaffolds_project(tmp_path: Path):
+    """OSI → wren project layout, ready for the standard build flow."""
+    proj = tmp_path / "migrated"
+    result = runner.invoke(
+        app,
+        [
+            "context",
+            "init",
+            "--from-osi",
+            str(_fixture("minimal.yaml")),
+            "--data-source",
+            "postgres",
+            "--path",
+            str(proj),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Migrated OSI" in result.output
+    # Standard wren project layout
+    assert (proj / "wren_project.yml").exists()
+    assert (proj / "models" / "orders" / "metadata.yml").exists()
+    assert (proj / "models" / "customers" / "metadata.yml").exists()
+    assert (proj / "relationships.yml").exists()
+    assert (proj / "instructions.md").exists()
+    assert (proj / "AGENTS.md").exists()
+    # The OSI semantic_model.name flowed into wren_project.yml
+    import yaml as _yaml  # noqa: PLC0415
+
+    cfg = _yaml.safe_load((proj / "wren_project.yml").read_text())
+    assert cfg["name"] == "shop"
+    assert cfg["data_source"] == "postgres"
+
+
+def test_cli_init_from_osi_roundtrip_matches_direct_build(tmp_path: Path):
+    """init --from-osi then context build should produce a manifest with the
+    same models / relationships as a direct build --from-osi."""
+    proj = tmp_path / "migrated"
+    _invoke = lambda args: runner.invoke(app, args)  # noqa: E731
+
+    init = _invoke(
+        [
+            "context",
+            "init",
+            "--from-osi",
+            str(_fixture("minimal.yaml")),
+            "--data-source",
+            "postgres",
+            "--path",
+            str(proj),
+        ]
+    )
+    assert init.exit_code == 0, init.output
+    build = _invoke(["context", "build", "--path", str(proj)])
+    assert build.exit_code == 0, build.output
+
+    migrated_mdl = json.loads((proj / "target" / "mdl.json").read_text())
+
+    direct_out = tmp_path / "direct.mdl.json"
+    direct = _invoke(
+        [
+            "context",
+            "build",
+            "--from-osi",
+            str(_fixture("minimal.yaml")),
+            "--data-source",
+            "postgres",
+            "--output",
+            str(direct_out),
+        ]
+    )
+    assert direct.exit_code == 0, direct.output
+    direct_mdl = json.loads(direct_out.read_text())
+
+    assert {m["name"] for m in migrated_mdl["models"]} == {
+        m["name"] for m in direct_mdl["models"]
+    }
+    assert len(migrated_mdl["relationships"]) == len(direct_mdl["relationships"])
+    # Per-column type / expression should survive the round-trip.
+    mig_orders = next(m for m in migrated_mdl["models"] if m["name"] == "orders")
+    direct_orders = next(m for m in direct_mdl["models"] if m["name"] == "orders")
+    mig_cols = {c["name"]: c.get("type") for c in mig_orders["columns"]}
+    direct_cols = {c["name"]: c.get("type") for c in direct_orders["columns"]}
+    assert mig_cols == direct_cols
+
+
+def test_cli_init_from_osi_requires_data_source(tmp_path: Path):
+    result = runner.invoke(
+        app,
+        [
+            "context",
+            "init",
+            "--from-osi",
+            str(_fixture("minimal.yaml")),
+            "--path",
+            str(tmp_path / "p"),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "--data-source" in result.output
+
+
+def test_cli_init_from_osi_missing_file(tmp_path: Path):
+    result = runner.invoke(
+        app,
+        [
+            "context",
+            "init",
+            "--from-osi",
+            str(tmp_path / "nonexistent.yaml"),
+            "--data-source",
+            "postgres",
+            "--path",
+            str(tmp_path / "p"),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "not found" in result.output
+
+
+def test_cli_init_from_osi_mutually_exclusive_with_from_mdl(tmp_path: Path):
+    """--from-mdl and --from-osi cannot be combined — bail before either runs."""
+    fake_mdl = tmp_path / "fake.json"
+    fake_mdl.write_text("{}")
+    result = runner.invoke(
+        app,
+        [
+            "context",
+            "init",
+            "--from-mdl",
+            str(fake_mdl),
+            "--from-osi",
+            str(_fixture("minimal.yaml")),
+            "--data-source",
+            "postgres",
+            "--path",
+            str(tmp_path / "p"),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "mutually exclusive" in result.output
+
+
+def test_cli_init_from_osi_refuses_overwrite_without_force(tmp_path: Path):
+    """Without --force, an existing wren_project.yml blocks the migration."""
+    proj = tmp_path / "existing"
+    proj.mkdir()
+    (proj / "wren_project.yml").write_text("name: prior\n")
+    result = runner.invoke(
+        app,
+        [
+            "context",
+            "init",
+            "--from-osi",
+            str(_fixture("minimal.yaml")),
+            "--data-source",
+            "postgres",
+            "--path",
+            str(proj),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "already exists" in result.output
+
+
+def test_cli_init_from_osi_force_overwrites(tmp_path: Path):
+    proj = tmp_path / "existing"
+    proj.mkdir()
+    (proj / "wren_project.yml").write_text("name: prior\n")
+    result = runner.invoke(
+        app,
+        [
+            "context",
+            "init",
+            "--from-osi",
+            str(_fixture("minimal.yaml")),
+            "--data-source",
+            "postgres",
+            "--path",
+            str(proj),
+            "--force",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    import yaml as _yaml  # noqa: PLC0415
+
+    cfg = _yaml.safe_load((proj / "wren_project.yml").read_text())
+    assert cfg["name"] == "shop"
+
+
+def test_cli_init_from_osi_aborts_on_hard_error(tmp_path: Path):
+    """Ambiguous semantic_model selection is a hard error — migration must
+    bail without touching the target directory."""
+    proj = tmp_path / "p"
+    result = runner.invoke(
+        app,
+        [
+            "context",
+            "init",
+            "--from-osi",
+            str(_fixture("multi_semantic_model.yaml")),
+            "--data-source",
+            "postgres",
+            "--path",
+            str(proj),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "semantic_models" in result.output
+    assert not proj.exists() or not any(proj.iterdir())
+
+
+def test_cli_init_from_osi_with_semantic_model_picks_one(tmp_path: Path):
+    proj = tmp_path / "migrated_b"
+    result = runner.invoke(
+        app,
+        [
+            "context",
+            "init",
+            "--from-osi",
+            str(_fixture("multi_semantic_model.yaml")),
+            "--data-source",
+            "postgres",
+            "--semantic-model",
+            "model_b",
+            "--path",
+            str(proj),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert (proj / "models" / "t2" / "metadata.yml").exists()
+    assert not (proj / "models" / "t1").exists()

@@ -65,6 +65,20 @@ def init(
         Optional[str],
         typer.Option("--from-mdl", help="Import from MDL JSON file (camelCase)."),
     ] = None,
+    from_osi: Annotated[
+        Optional[str],
+        typer.Option(
+            "--from-osi",
+            help=(
+                "Migrate from an Open Semantic Interchange (OSI) YAML file. "
+                "One-way conversion: produces a native wren project; the "
+                "OSI file is no longer referenced afterwards. Requires "
+                "--data-source."
+            ),
+        ),
+    ] = None,
+    data_source: DataSourceOpt = None,
+    semantic_model: SemanticModelOpt = None,
     force: Annotated[
         bool,
         typer.Option("--force", help="Overwrite existing project files."),
@@ -83,12 +97,34 @@ def init(
 ) -> None:
     """Initialize a new Wren project.
 
-    Without --from-mdl: scaffolds the project.  Pass ``--empty`` to leave
-    ``models/`` and ``views/`` untouched (no placeholder example).
-    With --from-mdl: imports an existing MDL JSON and produces a complete
-    YAML project, ready for `wren context validate/build`.
+    Without --from-mdl / --from-osi: scaffolds the project. Pass ``--empty``
+    to leave ``models/`` and ``views/`` untouched (no placeholder example).
+
+    With --from-mdl: imports an existing MDL JSON.
+
+    With --from-osi: migrates from an OSI semantic_model file. Use this when
+    you want to leave the OSI flow and own the YAML going forward; for
+    keeping OSI as the source of truth, use ``wren context build --from-osi``
+    instead.
     """
+    if from_mdl and from_osi:
+        typer.echo(
+            "Error: --from-mdl and --from-osi are mutually exclusive.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
     project_path = Path(path).expanduser() if path else Path.cwd()
+
+    if from_osi:
+        _init_from_osi(
+            from_osi=from_osi,
+            data_source=data_source,
+            semantic_model=semantic_model,
+            project_path=project_path,
+            force=force,
+        )
+        return
 
     if from_mdl:
         # ── Import from MDL JSON ──────────────────────────────
@@ -843,6 +879,71 @@ def _require_data_source(data_source: Optional[str]) -> str:
         )
         raise typer.Exit(1)
     return data_source
+
+
+def _init_from_osi(
+    *,
+    from_osi: str,
+    data_source: Optional[str],
+    semantic_model: Optional[str],
+    project_path: Path,
+    force: bool,
+) -> None:
+    """Migrate an OSI file to a native wren project (one-way).
+
+    Reuses ``build_json_from_osi`` to produce the MDL, then
+    ``convert_mdl_to_project`` + ``write_project_files`` to scaffold the
+    full wren YAML layout. The OSI file is read once and never referenced
+    again after this command — the wren project becomes the source of truth.
+    """
+    from wren.context import (  # noqa: PLC0415
+        convert_mdl_to_project,
+        write_project_files,
+    )
+    from wren.osi import build_json_from_osi  # noqa: PLC0415
+
+    osi_path = _resolve_osi_path(from_osi)
+    ds = _require_data_source(data_source)
+
+    mdl_json, errors = build_json_from_osi(
+        osi_path,
+        data_source=ds,
+        semantic_model=semantic_model,
+    )
+
+    hard_errors = [e for e in errors if e.level == "error"]
+    if hard_errors:
+        for e in hard_errors:
+            typer.echo(str(e), err=True)
+        typer.echo("\nMigration aborted due to OSI errors.", err=True)
+        raise typer.Exit(1)
+
+    warnings = [str(e) for e in errors if e.level == "warning"]
+
+    files = convert_mdl_to_project(mdl_json)
+    try:
+        write_project_files(files, project_path, force=force)
+    except SystemExit as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1)
+
+    model_count = len(mdl_json.get("models", []))
+    rel_count = len(mdl_json.get("relationships", []))
+
+    typer.echo(f"Migrated OSI → wren project at {project_path}/")
+    typer.echo(f"  {model_count} models, {rel_count} relationships")
+
+    if warnings:
+        typer.echo("")
+        _print_warnings(warnings, verbose=False)
+        typer.echo(
+            "  Review the generated YAML — items above were defaulted "
+            "or omitted and may need manual fixes."
+        )
+
+    typer.echo("\nNext steps:")
+    typer.echo(f"  wren context validate --path {project_path}")
+    typer.echo(f"  wren context build --path {project_path}")
 
 
 def _build_from_osi(

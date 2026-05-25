@@ -760,6 +760,13 @@ def build_manifest_from_osi(
         "views": [],
         "cubes": [],
     }
+    # Carry the OSI semantic_model name through so downstream consumers
+    # (notably context.convert_mdl_to_project for `init --from-osi`) can
+    # stamp it into wren_project.yml. The wren engine ignores extra
+    # top-level fields, so the build-path output is unaffected.
+    sm_name = sm.get("name")
+    if isinstance(sm_name, str) and sm_name:
+        manifest["name"] = sm_name
     if instructions:
         manifest["_instructions"] = instructions
     return (manifest, errors)
