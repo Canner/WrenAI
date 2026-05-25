@@ -4,7 +4,7 @@ description: "Generate a Wren MDL project by exploring a database with available
 license: Apache-2.0
 metadata:
   author: wrenai
-  version: "2.2"
+  version: "2.3"
 ---
 
 # Generate Wren MDL — CLI Agent Workflow
@@ -77,7 +77,7 @@ If no existing project is detected, proceed directly to Phase 1.
 2. Ask the user:
    - Which **schema(s)** or **dataset(s)** to include (skip if only one exists)
    - Whether to include **all tables** or a subset
-   - The **datasource type** for wren (e.g., `postgres`, `bigquery`, `snowflake`) — needed for type normalization dialect
+   - The **datasource type** for wren (e.g., `postgres` (including Aurora), `mysql` (including Aurora), `bigquery`, `snowflake`) — needed for type normalization dialect
 
 ---
 
