@@ -733,6 +733,11 @@ def test_cli_show_from_osi_json():
     data = json.loads(result.output)
     assert data["layoutVersion"] == 2
     assert "tableReference" in data["models"][0]
+    # The show --output json path must shield `_instructions` from the
+    # snake→camel pass, same as build_json_from_osi.
+    assert "_instructions" in data
+    assert "Instructions" not in data
+    assert "Shop analytics model" in data["_instructions"]
 
 
 # ── CLI: init --from-osi (one-way migration) ─────────────────────────────

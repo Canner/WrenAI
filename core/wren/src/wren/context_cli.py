@@ -1057,8 +1057,13 @@ def _show_from_osi(
     if output == "json":
         from wren.context import _convert_keys  # noqa: PLC0415
 
+        # Mirror build_json_from_osi: shield `_instructions` from the
+        # snake→camel pass so downstream tooling sees the exact key.
+        instructions = manifest.pop("_instructions", None)
         manifest_json = _convert_keys(manifest)
         manifest_json["layoutVersion"] = 2
+        if instructions:
+            manifest_json["_instructions"] = instructions
         typer.echo(json.dumps(manifest_json, indent=2, ensure_ascii=False))
         return
     if output == "yaml":
