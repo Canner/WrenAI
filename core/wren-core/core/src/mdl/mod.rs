@@ -4286,29 +4286,12 @@ mod test {
             Mode::Unparse,
         )?);
         let sql = "SELECT part_brand FROM partsupp";
-        let transformed = transform_sql_with_ctx(
-            &ctx,
-            Arc::clone(&analyzed_mdl),
-            &[],
-            Arc::new(HashMap::default()),
-            sql,
-        )
-        .await?;
-        // Both join predicates must appear in the generated SQL, AND-ed together —
+        // The ON clause must carry BOTH equality predicates joined by AND —
         // the second pair (ps_suppkey/p_suppkey) was silently dropped before
         // composite-key support landed.
-        let pk_pair = transformed.contains(r#""part".p_partkey = partsupp.ps_partkey"#)
-            || transformed.contains(r#"partsupp.ps_partkey = "part".p_partkey"#);
-        let sk_pair = transformed.contains(r#""part".p_suppkey = partsupp.ps_suppkey"#)
-            || transformed.contains(r#"partsupp.ps_suppkey = "part".p_suppkey"#);
-        assert!(pk_pair, "partkey predicate missing: {transformed}");
-        assert!(
-            sk_pair,
-            "suppkey predicate missing — composite key dropped: {transformed}"
-        );
-        assert!(
-            transformed.contains(" AND "),
-            "composite predicates should be conjoined with AND: {transformed}"
+        assert_snapshot!(
+            transform_sql_with_ctx(&ctx, Arc::clone(&analyzed_mdl), &[], Arc::new(HashMap::default()), sql).await?,
+            @r#"SELECT partsupp.part_brand FROM (SELECT __relation__1.p_brand AS part_brand FROM (SELECT "part".p_brand, "part".p_partkey, "part".p_suppkey, partsupp.ps_partkey, partsupp.ps_suppkey FROM (SELECT "part".p_brand, "part".p_partkey, "part".p_suppkey FROM (SELECT "part".p_brand, "part".p_partkey, "part".p_suppkey FROM (SELECT __source.p_brand AS p_brand, __source.p_partkey AS p_partkey, __source.p_suppkey AS p_suppkey FROM "part" AS __source) AS "part") AS "part") AS "part" RIGHT OUTER JOIN (SELECT __source.ps_partkey AS ps_partkey, __source.ps_suppkey AS ps_suppkey FROM partsupp AS __source) AS partsupp ON "part".p_partkey = partsupp.ps_partkey AND "part".p_suppkey = partsupp.ps_suppkey) AS __relation__1) AS partsupp"#
         );
         Ok(())
     }
