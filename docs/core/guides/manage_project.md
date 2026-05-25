@@ -163,15 +163,16 @@ Rules:
 
 AI coding agents should **never** ask for credentials in chat. The agent writes a profile referencing `${POSTGRES_PASSWORD}` and instructs you to fill the value in `.env` via your editor.
 
-## Migrate from an existing `mdl.json`
+## Migrate from an existing manifest
 
-If you have an older `mdl.json` from a previous Wren setup or another tool:
+`wren context init` accepts two import flags, one per external manifest format. Both produce the same wren project layout, ready for `validate` / `build`. They are mutually exclusive.
 
-```bash
-wren context init --from-mdl /path/to/mdl.json --path my_project
-```
+| Source | Command | When to use |
+|---|---|---|
+| Wren `mdl.json` (camelCase) | `wren context init --from-mdl /path/to/mdl.json --path my_project` | You have an older `mdl.json` from a previous Wren setup. |
+| OSI `semantic_model.yaml` | `wren context init --from-osi /path/to/semantic_model.yaml --data-source postgres --path my_project` | You have an [Open Semantic Interchange](./osi.md) file and want to leave the OSI flow to use Wren-only features (cubes, views, RLAC). |
 
-This converts camelCase JSON to snake_case YAML and writes the full directory structure. Then:
+After either import:
 
 ```bash
 wren context validate --path my_project
@@ -179,6 +180,8 @@ wren context build --path my_project
 ```
 
 If the target directory already has project files, use `--force` to overwrite.
+
+For `--from-osi`, see the dedicated [OSI guide](./osi.md) — it covers the alternative of keeping OSI as the source of truth (`wren context build --from-osi`) instead of migrating once.
 
 ## Upgrade an existing project
 
