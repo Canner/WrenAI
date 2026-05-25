@@ -357,6 +357,18 @@ def test_build_json_emits_camel_case_and_layout_version():
     assert "joinType" in rel
 
 
+def test_build_json_preserves_instructions_key():
+    """`_instructions` must survive the snake→camel pass with its leading
+    underscore intact — downstream tooling (memory indexer, MDL importer)
+    looks for that exact key."""
+    json_manifest, _ = build_json_from_osi(
+        _fixture("minimal.yaml"), data_source="postgres"
+    )
+    assert "_instructions" in json_manifest
+    assert "Instructions" not in json_manifest  # the bug we're guarding against
+    assert "Shop analytics model" in json_manifest["_instructions"]
+
+
 # ── Integration: TPC-DS full fixture (exercises every warning path) ───────
 
 

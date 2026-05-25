@@ -789,8 +789,14 @@ def build_json_from_osi(
     )
     if not manifest:
         return ({}, errors)
+    # `_instructions` is consumed by downstream tooling under that exact name
+    # (see context.convert_mdl_to_project, memory.schema_indexer); pull it out
+    # so the snake→camel pass doesn't mangle it into `Instructions`.
+    instructions = manifest.pop("_instructions", None)
     manifest_json = _convert_keys(manifest)
     manifest_json["layoutVersion"] = 2
+    if instructions:
+        manifest_json["_instructions"] = instructions
     return (manifest_json, errors)
 
 
