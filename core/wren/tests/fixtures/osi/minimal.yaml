@@ -1,0 +1,70 @@
+version: "0.2.0"
+semantic_model:
+  - name: shop
+    ai_context:
+      instructions: "Shop analytics model. Revenue in USD."
+    datasets:
+      - name: orders
+        source: shop.public.orders
+        primary_key: [order_id]
+        description: Order fact table
+        custom_extensions:
+          - vendor_name: WREN
+            data: |
+              {
+                "column_types": {
+                  "order_id": "BIGINT",
+                  "customer_id": "BIGINT",
+                  "amount": "DECIMAL(18,2)"
+                }
+              }
+        fields:
+          - name: order_id
+            expression: order_id
+            description: Order primary key
+          - name: customer_id
+            expression: customer_id
+            description: FK to customers
+          - name: amount
+            expression: amount
+            description: Order total
+      - name: customers
+        source: shop.public.customers
+        primary_key: [customer_id]
+        description: Customer dimension
+        custom_extensions:
+          - vendor_name: WREN
+            data: |
+              {
+                "column_types": {
+                  "customer_id": "BIGINT",
+                  "email": "VARCHAR"
+                }
+              }
+        fields:
+          - name: customer_id
+            expression: customer_id
+          - name: email
+            expression: email
+          - name: full_name
+            expression:
+              dialects:
+                - dialect: ANSI_SQL
+                  expression: first_name || ' ' || last_name
+            description: Computed full name
+            custom_extensions:
+              - vendor_name: WREN
+                data: '{"type": "VARCHAR"}'
+    relationships:
+      - name: orders_to_customers
+        from: orders
+        to: customers
+        from_columns: [customer_id]
+        to_columns: [customer_id]
+    metrics:
+      - name: total_revenue
+        expression:
+          dialects:
+            - dialect: ANSI_SQL
+              expression: SUM(orders.amount)
+        description: Total order revenue
