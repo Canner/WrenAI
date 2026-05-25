@@ -288,6 +288,40 @@ def _rewrite_mssql_timestamp_casts(sql: str) -> str:
     return rewritten
 
 
+def _rewrite_mssql_datepart_alias_references(sql: str) -> str:
+    datepart_alias_pattern = re.compile(
+        r"\b(DATEPART\(\s*(YEAR|MONTH|DAY)\s*,\s*((?:[^()]|\([^()]*\))+?)\s*\))\s+AS\s+\"([^\"]+)\"",
+        re.IGNORECASE,
+    )
+    aliases: dict[str, str] = {}
+
+    for match in datepart_alias_pattern.finditer(sql):
+        expression = match.group(1)
+        alias = match.group(4)
+        aliases[alias.lower()] = expression
+
+    if not aliases:
+        return sql
+
+    clause_pattern = re.compile(
+        r"\b(GROUP\s+BY|ORDER\s+BY|HAVING)\b(?P<body>.*?)(?=\b(?:ORDER\s+BY|GROUP\s+BY|HAVING|LIMIT|OFFSET|FETCH|UNION|WHERE)\b|$)",
+        re.IGNORECASE | re.DOTALL,
+    )
+
+    def replace_clause(match: re.Match) -> str:
+        body = match.group("body")
+        for alias, expression in aliases.items():
+            body = re.sub(
+                rf'"{re.escape(alias)}"',
+                expression,
+                body,
+                flags=re.IGNORECASE,
+            )
+        return f"{match.group(1)}{body}"
+
+    return clause_pattern.sub(replace_clause, sql)
+
+
 def normalize_generation_result_sql(sql: str, data_source: str | None = None) -> str:
     normalized = sql
 
@@ -306,6 +340,7 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
         normalized = _rewrite_mssql_timestamp_casts(normalized)
         normalized = _rewrite_mssql_bucket_functions(normalized)
         normalized = _rewrite_temporal_bucket_functions(normalized)
+        normalized = _rewrite_mssql_datepart_alias_references(normalized)
 
     return re.sub(r"\s+", " ", normalized).strip()
 
@@ -540,6 +575,7 @@ _MSSQL_TEXT_TO_SQL_RULES = """
     - DATEPART(YEAR, <timestamp_expression>) AS "year"
     - DATEPART(MONTH, <timestamp_expression>) AS "month"
   Then GROUP BY and ORDER BY the same year/month expressions.
+- Do not GROUP BY or ORDER BY quoted year/month aliases such as "YEAR" or "MONTH"; repeat the DATEPART(...) expression instead.
 - For year bucketing, prefer DATEPART(YEAR, <timestamp_expression>).
 - For filtering a specific year such as 2025, prefer a closed-open range:
     - <timestamp_expression> >= '2025-01-01 00:00:00'

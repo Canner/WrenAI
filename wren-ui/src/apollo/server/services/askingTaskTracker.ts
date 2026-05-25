@@ -59,8 +59,8 @@ export interface IAskingTaskTracker {
 }
 
 export class AskingTaskTracker implements IAskingTaskTracker {
-  private readonly minPollDelay = 5000;
-  private readonly maxPollDelay = 30000;
+  private readonly minPollDelay = 10000;
+  private readonly maxPollDelay = 60000;
   private wrenAIAdaptor: IWrenAIAdaptor;
   private askingTaskRepository: IAskingTaskRepository;
   private trackedTasks: Map<string, TrackedTask> = new Map();
