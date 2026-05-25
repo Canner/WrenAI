@@ -58,7 +58,7 @@ type Disposable = {
 };
 
 type ReusableComponentGraph = {
-  askingTaskTracker?: Initializable;
+  askingTaskTracker?: Initializable & Disposable;
   askingService?: Initializable & Disposable;
   projectService?: Disposable;
   projectRecommendQuestionBackgroundTracker?: Initializable & Disposable;
@@ -93,6 +93,7 @@ const isReusableComponentGraph = (graph?: ReusableComponentGraph): boolean => {
 const disposeComponentGraph = (graph?: ReusableComponentGraph): void => {
   const disposables = [
     graph?.askingService,
+    graph?.askingTaskTracker,
     graph?.projectService,
     graph?.projectRecommendQuestionBackgroundTracker,
     graph?.threadRecommendQuestionBackgroundTracker,

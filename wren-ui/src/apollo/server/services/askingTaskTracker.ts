@@ -49,6 +49,7 @@ export interface IAskingTaskTracker {
   getAskingResultById(id: number): Promise<TrackedAskingResult | null>;
   cancelAskingTask(queryId: string): Promise<void>;
   initialize(): Promise<void>;
+  stopPolling(): void;
   bindThreadResponse(
     id: number,
     queryId: string,
@@ -58,15 +59,15 @@ export interface IAskingTaskTracker {
 }
 
 export class AskingTaskTracker implements IAskingTaskTracker {
-  private readonly minPollDelay = 2000;
-  private readonly maxPollDelay = 8000;
+  private readonly minPollDelay = 5000;
+  private readonly maxPollDelay = 30000;
   private wrenAIAdaptor: IWrenAIAdaptor;
   private askingTaskRepository: IAskingTaskRepository;
   private trackedTasks: Map<string, TrackedTask> = new Map();
   private trackedTasksById: Map<number, TrackedTask> = new Map();
   private pollingInterval: number;
   private memoryRetentionTime: number;
-  private pollingIntervalId: NodeJS.Timeout;
+  private pollingIntervalId?: NodeJS.Timeout;
   private runningJobs = new Set<string>();
   private threadResponseRepository: IThreadResponseRepository;
   private viewRepository: IViewRepository;
@@ -223,7 +224,11 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     const taskRecords = await this.askingTaskRepository.findAll();
     taskRecords.forEach((taskRecord) => {
       const detail = taskRecord.detail as AskResult | undefined;
-      if (!taskRecord.queryId || !detail || this.isTaskFinalized(detail.status)) {
+      if (
+        !taskRecord.queryId ||
+        !detail ||
+        this.isTaskFinalized(detail.status)
+      ) {
         return;
       }
 
@@ -241,6 +246,7 @@ export class AskingTaskTracker implements IAskingTaskTracker {
   public stopPolling(): void {
     if (this.pollingIntervalId) {
       clearInterval(this.pollingIntervalId);
+      this.pollingIntervalId = undefined;
     }
   }
 
@@ -269,6 +275,10 @@ export class AskingTaskTracker implements IAskingTaskTracker {
   }
 
   private startPolling(): void {
+    if (this.pollingIntervalId) {
+      return;
+    }
+
     this.pollingIntervalId = setInterval(() => {
       this.pollTasks();
     }, this.pollingInterval);

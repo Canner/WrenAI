@@ -528,6 +528,7 @@ export class AskingService implements IAskingService {
     this.chartBackgroundTracker.stop();
     this.chartAdjustmentBackgroundTracker.stop();
     this.threadRecommendQuestionBackgroundTracker.stop();
+    this.askingTaskTracker.stopPolling();
   }
 
   public async getThreadRecommendationQuestions(
