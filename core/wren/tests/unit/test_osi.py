@@ -478,6 +478,81 @@ def test_lint_minimal_clean():
     assert hard == []
 
 
+# ── Regression: malformed inputs surface as ValidationError ──────────────
+
+
+def test_build_manifest_malformed_yaml_returns_error(tmp_path: Path):
+    """Broken YAML must produce a structured error, not a raw exception."""
+    p = tmp_path / "bad.yaml"
+    p.write_text("semantic_model: [\n")  # unterminated flow sequence
+    manifest, errors = build_manifest_from_osi(p, data_source="postgres")
+    assert manifest == {}
+    assert any(e.level == "error" for e in errors)
+    assert any("failed to read OSI file" in e.message for e in errors)
+
+
+def test_lint_malformed_yaml_does_not_raise(tmp_path: Path):
+    """lint_osi_file likewise reports parse failure cleanly."""
+    p = tmp_path / "bad.yaml"
+    p.write_text("not: [a, b,")
+    errors = lint_osi_file(p, data_source="postgres")
+    assert errors and errors[0].level == "error"
+    assert "failed to read OSI file" in errors[0].message
+
+
+def test_relationship_non_string_join_columns_error(tmp_path: Path):
+    """Non-string from_columns / to_columns must error before any SQL is built."""
+    bad = {
+        "version": "0.2.0",
+        "semantic_model": [
+            {
+                "name": "x",
+                "datasets": [
+                    {
+                        "name": "a",
+                        "source": "c.s.a",
+                        "primary_key": ["id"],
+                        "custom_extensions": [
+                            {
+                                "vendor_name": "WREN",
+                                "data": '{"column_types": {"id": "INTEGER"}}',
+                            }
+                        ],
+                        "fields": [{"name": "id", "expression": "id"}],
+                    },
+                    {
+                        "name": "b",
+                        "source": "c.s.b",
+                        "primary_key": ["id"],
+                        "custom_extensions": [
+                            {
+                                "vendor_name": "WREN",
+                                "data": '{"column_types": {"id": "INTEGER"}}',
+                            }
+                        ],
+                        "fields": [{"name": "id", "expression": "id"}],
+                    },
+                ],
+                "relationships": [
+                    {
+                        "name": "a_to_b",
+                        "from": "a",
+                        "to": "b",
+                        "from_columns": ["id"],
+                        "to_columns": [123],  # non-string entry
+                    }
+                ],
+            }
+        ],
+    }
+    p = tmp_path / "bad_rel.yaml"
+    p.write_text(json.dumps(bad))
+    _, errors = build_manifest_from_osi(p, data_source="postgres")
+    rel_errs = [e for e in errors if "relationship 'a_to_b'" in e.path]
+    assert rel_errs and rel_errs[0].level == "error"
+    assert "non-empty strings" in rel_errs[0].message
+
+
 # ── CLI integration ──────────────────────────────────────────────────────
 
 

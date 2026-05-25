@@ -553,6 +553,17 @@ def _convert_relationship(rel: dict) -> tuple[dict, list[ValidationError]]:
             )
         )
         return ({}, errors)
+    if not all(isinstance(c, str) and c for c in from_cols) or not all(
+        isinstance(c, str) and c for c in to_cols
+    ):
+        errors.append(
+            ValidationError(
+                "error",
+                f"relationship '{name}'",
+                "from_columns / to_columns entries must be non-empty strings",
+            )
+        )
+        return ({}, errors)
     if len(from_cols) != len(to_cols):
         errors.append(
             ValidationError(
@@ -671,8 +682,18 @@ def build_manifest_from_osi(
     ``context.build_manifest``; pass through :func:`build_json_from_osi` to
     get camelCase JSON for the engine.
     """
-    osi = load_osi_file(osi_path)
     errors: list[ValidationError] = []
+    try:
+        osi = load_osi_file(osi_path)
+    except (OSError, yaml.YAMLError, json.JSONDecodeError) as exc:
+        errors.append(
+            ValidationError(
+                "error",
+                str(osi_path),
+                f"failed to read OSI file: {exc}",
+            )
+        )
+        return ({}, errors)
 
     sm, sm_errors = select_semantic_model(osi, semantic_model)
     errors.extend(sm_errors)
