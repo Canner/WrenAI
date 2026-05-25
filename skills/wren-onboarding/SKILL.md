@@ -4,7 +4,7 @@ description: "Onboard a user to Wren Engine end-to-end. Walks through environmen
 license: Apache-2.0
 metadata:
   author: wrenai
-  version: "2.1"
+  version: "2.2"
 ---
 
 # Wren Onboarding — Agent Workflow
@@ -63,7 +63,7 @@ These two are the only thing Step 2 needs; ask both together so the user has a c
 
 > "Two things before I scaffold:
 > 1. **Project name** — I'll create `~/<name>/` and `cd` into it.
-> 2. **Database type** — run `wren docs connection-info` (no argument) to see the full list, or pick a common one: `postgres`, `mysql`, `bigquery`, `snowflake`, `clickhouse`, `trino`, `duckdb`, …"
+> 2. **Database type** — run `wren docs connection-info` (no argument) to see the full list, or pick a common one: `postgres` (use for Aurora PostgreSQL), `mysql` (use for Aurora MySQL), `bigquery`, `snowflake`, `clickhouse`, `trino`, `duckdb`, …"
 
 Wait for both. Don't ask for credentials.
 
