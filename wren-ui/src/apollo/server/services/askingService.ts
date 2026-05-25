@@ -105,16 +105,18 @@ export enum ThreadResponseAnswerStatus {
 const isAnswerGenerationInProgress = (
   status?: ThreadResponseAnswerStatus | string | null,
 ) =>
-  ([
-    ThreadResponseAnswerStatus.NOT_STARTED,
-    ThreadResponseAnswerStatus.FETCHING_DATA,
-    ThreadResponseAnswerStatus.PREPROCESSING,
-    ThreadResponseAnswerStatus.STREAMING,
-  ] as string[]).includes(status || "");
+  (
+    [
+      ThreadResponseAnswerStatus.NOT_STARTED,
+      ThreadResponseAnswerStatus.FETCHING_DATA,
+      ThreadResponseAnswerStatus.PREPROCESSING,
+      ThreadResponseAnswerStatus.STREAMING,
+    ] as string[]
+  ).includes(status || '');
 
 const isChartGenerationInProgress = (status?: ChartStatus | string | null) =>
   ([ChartStatus.FETCHING, ChartStatus.GENERATING] as string[]).includes(
-    status || "",
+    status || '',
   );
 
 // adjustment input
@@ -312,7 +314,7 @@ class BreakdownBackgroundTracker {
   }: {
     telemetry: PostHogTelemetry;
     wrenAIAdaptor: IWrenAIAdaptor;
-      threadResponseRepository: IThreadResponseRepository;
+    threadResponseRepository: IThreadResponseRepository;
   }) {
     this.telemetry = telemetry;
     this.wrenAIAdaptor = wrenAIAdaptor;
@@ -449,6 +451,9 @@ export class AskingService implements IAskingService {
     queryService,
     mdlService,
     askingTaskTracker,
+    chartBackgroundTracker,
+    chartAdjustmentBackgroundTracker,
+    threadRecommendQuestionBackgroundTracker,
   }: {
     telemetry: PostHogTelemetry;
     wrenAIAdaptor: IWrenAIAdaptor;
@@ -461,6 +466,9 @@ export class AskingService implements IAskingService {
     queryService: IQueryService;
     mdlService: IMDLService;
     askingTaskTracker: IAskingTaskTracker;
+    chartBackgroundTracker?: ChartBackgroundTracker;
+    chartAdjustmentBackgroundTracker?: ChartAdjustmentBackgroundTracker;
+    threadRecommendQuestionBackgroundTracker?: ThreadRecommendQuestionBackgroundTracker;
   }) {
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.deployService = deployService;
@@ -483,18 +491,22 @@ export class AskingService implements IAskingService {
         deployService,
         queryService,
       });
-    this.chartBackgroundTracker = new ChartBackgroundTracker({
-      telemetry,
-      wrenAIAdaptor,
-      threadResponseRepository,
-    });
+    this.chartBackgroundTracker =
+      chartBackgroundTracker ??
+      new ChartBackgroundTracker({
+        telemetry,
+        wrenAIAdaptor,
+        threadResponseRepository,
+      });
     this.chartAdjustmentBackgroundTracker =
+      chartAdjustmentBackgroundTracker ??
       new ChartAdjustmentBackgroundTracker({
         telemetry,
         wrenAIAdaptor,
         threadResponseRepository,
       });
     this.threadRecommendQuestionBackgroundTracker =
+      threadRecommendQuestionBackgroundTracker ??
       new ThreadRecommendQuestionBackgroundTracker({
         telemetry,
         wrenAIAdaptor,
@@ -510,6 +522,12 @@ export class AskingService implements IAskingService {
     this.askingTaskRepository = askingTaskRepository;
     this.mdlService = mdlService;
     this.askingTaskTracker = askingTaskTracker;
+  }
+
+  public dispose(): void {
+    this.chartBackgroundTracker.stop();
+    this.chartAdjustmentBackgroundTracker.stop();
+    this.threadRecommendQuestionBackgroundTracker.stop();
   }
 
   public async getThreadRecommendationQuestions(

@@ -25,6 +25,7 @@ export class DashboardCacheBackgroundTracker {
   private deployService: IDeployService;
   private queryService: IQueryService;
   private runningJobs = new Set<number>();
+  private intervalId?: NodeJS.Timeout;
 
   constructor({
     dashboardRepository,
@@ -52,10 +53,21 @@ export class DashboardCacheBackgroundTracker {
   }
 
   private start(): void {
+    if (this.intervalId) {
+      return;
+    }
     logger.info('Dashboard cache background tracker started');
-    setInterval(() => {
+    this.intervalId = setInterval(() => {
       this.checkAndRefreshCaches();
     }, this.intervalTime);
+  }
+
+  public stop(): void {
+    if (!this.intervalId) {
+      return;
+    }
+    clearInterval(this.intervalId);
+    this.intervalId = undefined;
   }
 
   private async checkAndRefreshCaches(): Promise<void> {

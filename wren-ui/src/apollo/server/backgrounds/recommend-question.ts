@@ -35,6 +35,7 @@ export class ProjectRecommendQuestionBackgroundTracker {
   private telemetry: ITelemetry;
   private logger: Logger;
   private initialized = false;
+  private intervalId?: NodeJS.Timeout;
 
   constructor({
     telemetry,
@@ -55,8 +56,11 @@ export class ProjectRecommendQuestionBackgroundTracker {
   }
 
   public start() {
+    if (this.intervalId) {
+      return;
+    }
     this.logger.info('Recommend question background tracker started');
-    setInterval(() => {
+    this.intervalId = setInterval(() => {
       const jobs = Object.values(this.tasks).map((project) => async () => {
         // check if same job is running
         if (this.runningJobs.has(this.taskKey(project))) {
@@ -79,7 +83,8 @@ export class ProjectRecommendQuestionBackgroundTracker {
 
         const changed =
           project.questionsStatus !== result.status ||
-          result.response?.questions.length !== (project.questions || []).length;
+          result.response?.questions.length !==
+            (project.questions || []).length;
         this.scheduleNextPoll(this.taskKey(project), result.status, changed);
 
         if (isFinalized(result.status) && !changed) {
@@ -133,6 +138,14 @@ export class ProjectRecommendQuestionBackgroundTracker {
     }, this.intervalTime);
   }
 
+  public stop() {
+    if (!this.intervalId) {
+      return;
+    }
+    clearInterval(this.intervalId);
+    this.intervalId = undefined;
+  }
+
   public addTask(project: Project) {
     this.tasks[this.taskKey(project)] = project;
     this.nextPollAt[this.taskKey(project)] = Date.now();
@@ -182,7 +195,10 @@ export class ProjectRecommendQuestionBackgroundTracker {
     this.pollDelay[taskKey] = resultChanged
       ? MIN_POLL_DELAY
       : Math.min(
-          Math.max((this.pollDelay[taskKey] || MIN_POLL_DELAY) * 1.5, MIN_POLL_DELAY),
+          Math.max(
+            (this.pollDelay[taskKey] || MIN_POLL_DELAY) * 1.5,
+            MIN_POLL_DELAY,
+          ),
           MAX_POLL_DELAY,
         );
     this.nextPollAt[taskKey] = Date.now() + this.pollDelay[taskKey];
@@ -229,6 +245,7 @@ export class ThreadRecommendQuestionBackgroundTracker {
   private telemetry: ITelemetry;
   private logger: Logger;
   private initialized = false;
+  private intervalId?: NodeJS.Timeout;
 
   constructor({
     telemetry,
@@ -249,8 +266,11 @@ export class ThreadRecommendQuestionBackgroundTracker {
   }
 
   public start() {
+    if (this.intervalId) {
+      return;
+    }
     this.logger.info('Recommend question background tracker started');
-    setInterval(() => {
+    this.intervalId = setInterval(() => {
       const jobs = Object.values(this.tasks).map((thread) => async () => {
         // check if same job is running
         if (this.runningJobs.has(this.taskKey(thread))) {
@@ -327,6 +347,14 @@ export class ThreadRecommendQuestionBackgroundTracker {
     }, this.intervalTime);
   }
 
+  public stop() {
+    if (!this.intervalId) {
+      return;
+    }
+    clearInterval(this.intervalId);
+    this.intervalId = undefined;
+  }
+
   public addTask(thread: Thread) {
     this.tasks[this.taskKey(thread)] = thread;
     this.nextPollAt[this.taskKey(thread)] = Date.now();
@@ -377,7 +405,10 @@ export class ThreadRecommendQuestionBackgroundTracker {
     this.pollDelay[taskKey] = resultChanged
       ? MIN_POLL_DELAY
       : Math.min(
-          Math.max((this.pollDelay[taskKey] || MIN_POLL_DELAY) * 1.5, MIN_POLL_DELAY),
+          Math.max(
+            (this.pollDelay[taskKey] || MIN_POLL_DELAY) * 1.5,
+            MIN_POLL_DELAY,
+          ),
           MAX_POLL_DELAY,
         );
     this.nextPollAt[taskKey] = Date.now() + this.pollDelay[taskKey];

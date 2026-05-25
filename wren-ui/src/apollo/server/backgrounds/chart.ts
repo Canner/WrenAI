@@ -34,6 +34,7 @@ export class ChartBackgroundTracker {
   private threadResponseRepository: IThreadResponseRepository;
   private runningJobs = new Set();
   private telemetry: PostHogTelemetry;
+  private intervalId?: NodeJS.Timeout;
 
   constructor({
     telemetry,
@@ -52,8 +53,11 @@ export class ChartBackgroundTracker {
   }
 
   private start() {
+    if (this.intervalId) {
+      return;
+    }
     logger.info('Chart background tracker started');
-    setInterval(() => {
+    this.intervalId = setInterval(() => {
       const jobs = Object.values(this.tasks).map(
         (threadResponse) => async () => {
           // check if same job is running
@@ -77,7 +81,11 @@ export class ChartBackgroundTracker {
           );
 
           const statusChanged = chartDetail.status !== result.status;
-          this.scheduleNextPoll(threadResponse.id, result.status, statusChanged);
+          this.scheduleNextPoll(
+            threadResponse.id,
+            result.status,
+            statusChanged,
+          );
 
           if (isFinalized(result.status) && !statusChanged) {
             this.finalizeTask(threadResponse, result);
@@ -134,6 +142,14 @@ export class ChartBackgroundTracker {
     }, this.intervalTime);
   }
 
+  public stop() {
+    if (!this.intervalId) {
+      return;
+    }
+    clearInterval(this.intervalId);
+    this.intervalId = undefined;
+  }
+
   public addTask(threadResponse: ThreadResponse) {
     this.tasks[threadResponse.id] = threadResponse;
     this.nextPollAt[threadResponse.id] = Date.now();
@@ -170,7 +186,10 @@ export class ChartBackgroundTracker {
       error: result.error,
     };
     if (result.status === ChartStatus.FINISHED) {
-      this.telemetry.sendEvent(TelemetryEvent.HOME_ANSWER_CHART, eventProperties);
+      this.telemetry.sendEvent(
+        TelemetryEvent.HOME_ANSWER_CHART,
+        eventProperties,
+      );
     } else {
       this.telemetry.sendEvent(
         TelemetryEvent.HOME_ANSWER_CHART,
@@ -195,6 +214,7 @@ export class ChartAdjustmentBackgroundTracker {
   private threadResponseRepository: IThreadResponseRepository;
   private runningJobs = new Set();
   private telemetry: PostHogTelemetry;
+  private intervalId?: NodeJS.Timeout;
 
   constructor({
     telemetry,
@@ -213,8 +233,11 @@ export class ChartAdjustmentBackgroundTracker {
   }
 
   private start() {
+    if (this.intervalId) {
+      return;
+    }
     logger.info('Chart adjustment background tracker started');
-    setInterval(() => {
+    this.intervalId = setInterval(() => {
       const jobs = Object.values(this.tasks).map(
         (threadResponse) => async () => {
           // check if same job is running
@@ -238,7 +261,11 @@ export class ChartAdjustmentBackgroundTracker {
           );
 
           const statusChanged = chartDetail.status !== result.status;
-          this.scheduleNextPoll(threadResponse.id, result.status, statusChanged);
+          this.scheduleNextPoll(
+            threadResponse.id,
+            result.status,
+            statusChanged,
+          );
 
           if (isFinalized(result.status) && !statusChanged) {
             this.finalizeTask(threadResponse, result);
@@ -294,6 +321,14 @@ export class ChartAdjustmentBackgroundTracker {
         });
       });
     }, this.intervalTime);
+  }
+
+  public stop() {
+    if (!this.intervalId) {
+      return;
+    }
+    clearInterval(this.intervalId);
+    this.intervalId = undefined;
   }
 
   public addTask(threadResponse: ThreadResponse) {

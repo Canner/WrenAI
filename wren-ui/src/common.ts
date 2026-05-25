@@ -41,6 +41,8 @@ import {
   ProjectRecommendQuestionBackgroundTracker,
   ThreadRecommendQuestionBackgroundTracker,
   DashboardCacheBackgroundTracker,
+  ChartBackgroundTracker,
+  ChartAdjustmentBackgroundTracker,
 } from './apollo/server/backgrounds';
 import { SqlPairService } from './apollo/server/services/sqlPairService';
 
@@ -50,11 +52,18 @@ type Initializable = {
   initialize?: unknown;
 };
 
+type Disposable = {
+  dispose?: unknown;
+  stop?: unknown;
+};
+
 type ReusableComponentGraph = {
   askingTaskTracker?: Initializable;
-  askingService?: Initializable;
-  projectRecommendQuestionBackgroundTracker?: Initializable;
-  threadRecommendQuestionBackgroundTracker?: Initializable;
+  askingService?: Initializable & Disposable;
+  projectService?: Disposable;
+  projectRecommendQuestionBackgroundTracker?: Initializable & Disposable;
+  threadRecommendQuestionBackgroundTracker?: Initializable & Disposable;
+  dashboardCacheBackgroundTracker?: Disposable;
   knex?: {
     destroy?: () => unknown;
   };
@@ -66,9 +75,7 @@ const hasInitialize = (
   return typeof value?.initialize === 'function';
 };
 
-const isReusableComponentGraph = (
-  graph?: ReusableComponentGraph,
-): boolean => {
+const isReusableComponentGraph = (graph?: ReusableComponentGraph): boolean => {
   const nestedAskingTaskTracker = (
     graph?.askingService as { askingTaskTracker?: Initializable } | undefined
   )?.askingTaskTracker;
@@ -84,11 +91,25 @@ const isReusableComponentGraph = (
 };
 
 const disposeComponentGraph = (graph?: ReusableComponentGraph): void => {
-  if (typeof graph?.knex?.destroy !== 'function') {
-    return;
-  }
+  const disposables = [
+    graph?.askingService,
+    graph?.projectService,
+    graph?.projectRecommendQuestionBackgroundTracker,
+    graph?.threadRecommendQuestionBackgroundTracker,
+    graph?.dashboardCacheBackgroundTracker,
+  ];
 
-  void Promise.resolve(graph.knex.destroy()).catch(() => undefined);
+  disposables.forEach((disposable) => {
+    if (typeof disposable?.dispose === 'function') {
+      disposable.dispose();
+    } else if (typeof disposable?.stop === 'function') {
+      disposable.stop();
+    }
+  });
+
+  if (typeof graph?.knex?.destroy === 'function') {
+    void Promise.resolve(graph.knex.destroy()).catch(() => undefined);
+  }
 };
 
 export const initComponents = () => {
@@ -132,6 +153,32 @@ export const initComponents = () => {
     ibisServerEndpoint: serverConfig.ibisServerEndpoint,
   });
 
+  // background trackers
+  const projectRecommendQuestionBackgroundTracker =
+    new ProjectRecommendQuestionBackgroundTracker({
+      telemetry,
+      wrenAIAdaptor,
+      projectRepository,
+    });
+  const threadRecommendQuestionBackgroundTracker =
+    new ThreadRecommendQuestionBackgroundTracker({
+      telemetry,
+      wrenAIAdaptor,
+      threadRepository,
+    });
+  const chartBackgroundTracker = new ChartBackgroundTracker({
+    telemetry,
+    wrenAIAdaptor,
+    threadResponseRepository,
+  });
+  const chartAdjustmentBackgroundTracker = new ChartAdjustmentBackgroundTracker(
+    {
+      telemetry,
+      wrenAIAdaptor,
+      threadResponseRepository,
+    },
+  );
+
   // services
   const metadataService = new DataSourceMetadataService({
     ibisAdaptor,
@@ -161,6 +208,7 @@ export const initComponents = () => {
     mdlService,
     wrenAIAdaptor,
     telemetry,
+    projectRecommendQuestionBackgroundTracker,
   });
   const askingTaskTracker = new AskingTaskTracker({
     wrenAIAdaptor,
@@ -180,6 +228,9 @@ export const initComponents = () => {
     mdlService,
     askingTaskTracker,
     askingTaskRepository,
+    chartBackgroundTracker,
+    chartAdjustmentBackgroundTracker,
+    threadRecommendQuestionBackgroundTracker,
   });
   const dashboardService = new DashboardService({
     projectService,
@@ -196,19 +247,6 @@ export const initComponents = () => {
     wrenAIAdaptor,
   });
 
-  // background trackers
-  const projectRecommendQuestionBackgroundTracker =
-    new ProjectRecommendQuestionBackgroundTracker({
-      telemetry,
-      wrenAIAdaptor,
-      projectRepository,
-    });
-  const threadRecommendQuestionBackgroundTracker =
-    new ThreadRecommendQuestionBackgroundTracker({
-      telemetry,
-      wrenAIAdaptor,
-      threadRepository,
-    });
   const dashboardCacheBackgroundTracker = new DashboardCacheBackgroundTracker({
     dashboardRepository,
     dashboardItemRepository,

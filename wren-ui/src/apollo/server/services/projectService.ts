@@ -95,23 +95,30 @@ export class ProjectService implements IProjectService {
     mdlService,
     wrenAIAdaptor,
     telemetry,
+    projectRecommendQuestionBackgroundTracker,
   }: {
     projectRepository: IProjectRepository;
     metadataService: IDataSourceMetadataService;
     mdlService: IMDLService;
     wrenAIAdaptor: IWrenAIAdaptor;
     telemetry: ITelemetry;
+    projectRecommendQuestionBackgroundTracker?: ProjectRecommendQuestionBackgroundTracker;
   }) {
     this.projectRepository = projectRepository;
     this.metadataService = metadataService;
     this.mdlService = mdlService;
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.projectRecommendQuestionBackgroundTracker =
+      projectRecommendQuestionBackgroundTracker ??
       new ProjectRecommendQuestionBackgroundTracker({
         projectRepository,
         telemetry,
         wrenAIAdaptor,
       });
+  }
+
+  public dispose(): void {
+    this.projectRecommendQuestionBackgroundTracker.stop();
   }
   public async updateProject(
     projectId: number,
@@ -140,7 +147,8 @@ export class ProjectService implements IProjectService {
       return this.projectRecommendationJob;
     }
 
-    this.projectRecommendationJob = this.doGenerateProjectRecommendationQuestions();
+    this.projectRecommendationJob =
+      this.doGenerateProjectRecommendationQuestions();
     try {
       return await this.projectRecommendationJob;
     } finally {
