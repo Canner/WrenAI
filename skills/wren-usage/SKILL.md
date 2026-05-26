@@ -4,7 +4,7 @@ description: "Wren Engine CLI workflow guide for AI agents. Answer data question
 license: Apache-2.0
 metadata:
   author: wrenai
-  version: "2.3"
+  version: "2.4"
 ---
 
 # Wren Engine CLI — Agent Workflow Guide
@@ -55,7 +55,7 @@ Run `wren --version`. If the command is not found or errors:
 
    **Ask the user:** If no project is detected or no datasource can be
    inferred, ask the user which database they plan to connect to. Valid
-   extras: `postgres`, `mysql`, `bigquery`, `snowflake`, `clickhouse`,
+   extras: `postgres` (for Aurora Postgres), `mysql` (for Aurora MySQL), `bigquery`, `snowflake`, `clickhouse`,
    `trino`, `mssql`, `databricks`, `redshift`, `spark`, `athena`, `oracle`.
    DuckDB is included by default — no extra needed.
 
@@ -216,7 +216,7 @@ after execution, the query was classified as exploratory.
 1. Check active profile: `wren profile debug`
 2. Verify datasource and connection fields are correct
 3. Test: `wren --sql "SELECT 1"`
-4. Valid datasource values: `postgres`, `mysql`, `bigquery`, `snowflake`, `clickhouse`, `trino`, `mssql`, `databricks`, `redshift`, `spark`, `athena`, `oracle`, `duckdb`
+4. Valid datasource values: `postgres` (for Aurora Postgres), `mysql` (for Aurora MySQL), `bigquery`, `snowflake`, `clickhouse`, `trino`, `mssql`, `databricks`, `redshift`, `spark`, `athena`, `oracle`, `duckdb`
 5. If no profile exists, create one: `wren profile add --ui` (or `--interactive` / `--from-file`)
 
 ### SQL syntax / planning error (enhanced)

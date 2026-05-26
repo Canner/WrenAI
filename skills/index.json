@@ -7,7 +7,7 @@
   "skills": [
     {
       "name": "wren-onboarding",
-      "version": "2.1",
+      "version": "2.2",
       "description": "Onboard a user to Wren Engine end-to-end. Walks the user through environment checks, .env configuration, connection profile creation, project scaffolding, binding the profile to the project, and first query. Defers procedural details, per-datasource notes, and the troubleshooting playbook to docs/core/guides/connect.md so the skill stays focused on agent-side rules and routing. Use when the user wants to install Wren Engine, set up a new data source connection, or bootstrap a new project from scratch.",
       "tags": [
         "wren",
@@ -46,7 +46,7 @@
     },
     {
       "name": "wren-generate-mdl",
-      "version": "2.2",
+      "version": "2.3",
       "description": "Generate a Wren MDL project by exploring a database with available tools (SQLAlchemy, database drivers, MCP connectors, or raw SQL). Guides agents through schema discovery, type normalization, and MDL YAML generation using the wren CLI.",
       "tags": [
         "wren",
@@ -65,7 +65,7 @@
     },
     {
       "name": "wren-usage",
-      "version": "2.3",
+      "version": "2.4",
       "description": "Wren Engine CLI workflow guide for AI agents. Triggers on data questions, reports, metrics, revenue, trends, 'how many', 'show me', 'top N', 'compare', 'breakdown'. Answer data questions end-to-end using the wren CLI.",
       "tags": [
         "wren",

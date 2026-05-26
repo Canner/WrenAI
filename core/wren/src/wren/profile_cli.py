@@ -170,6 +170,80 @@ def add(
     _post_add(name, validate=not no_validate, minimal=minimal)
 
 
+@profile_app.command("import")
+def import_cmd(
+    source: Annotated[str, typer.Argument(help="Import source (currently: dbt)")],
+    project_dir: Annotated[
+        str,
+        typer.Option(
+            "--project-dir",
+            help="dbt project directory containing dbt_project.yml.",
+        ),
+    ] = ".",
+    profiles_path: Annotated[
+        Optional[str],
+        typer.Option("--profiles-path", help="Path to dbt profiles.yml."),
+    ] = None,
+    profile_name: Annotated[
+        Optional[str],
+        typer.Option("--profile", help="dbt profile name override."),
+    ] = None,
+    target_name: Annotated[
+        Optional[str],
+        typer.Option("--target", help="dbt target name override."),
+    ] = None,
+    name: Annotated[
+        Optional[str],
+        typer.Option("--name", help="Destination Wren profile name."),
+    ] = None,
+    activate: Annotated[
+        bool,
+        typer.Option("--activate/--no-activate", help="Set as active profile."),
+    ] = True,
+) -> None:
+    """Import a connection profile from an external source."""
+    if source != "dbt":
+        typer.echo(
+            f"Error: unsupported import source '{source}'. Only 'dbt' is supported.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    from wren.dbt import (  # noqa: PLC0415
+        DbtLoadError,
+        convert_dbt_target_to_wren_profile,
+        default_wren_profile_name,
+        resolve_dbt_target,
+    )
+    from wren.model.data_source import DataSource  # noqa: PLC0415
+    from wren.profile import add_profile  # noqa: PLC0415
+
+    try:
+        dbt_target = resolve_dbt_target(
+            project_dir,
+            profiles_path=profiles_path,
+            profile_name=profile_name,
+            target_name=target_name,
+        )
+        profile_data = convert_dbt_target_to_wren_profile(dbt_target)
+        datasource = DataSource(profile_data["datasource"])
+        datasource.get_connection_info(
+            {k: v for k, v in profile_data.items() if k != "datasource"}
+        )
+        dest_name = name or default_wren_profile_name(dbt_target)
+        add_profile(dest_name, profile_data, activate=activate)
+    except (DbtLoadError, ValueError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1)
+
+    typer.echo(
+        f"Imported dbt target '{dbt_target.profile_name}.{dbt_target.target_name}' "
+        f"into Wren profile '{dest_name}' ({profile_data['datasource']})."
+    )
+    if activate:
+        typer.echo(f"  Profile '{dest_name}' is now active.")
+
+
 def _flatten_connection_envelope(raw: dict) -> dict:
     """Accept the few shapes users/agents actually produce and emit a flat dict.
 

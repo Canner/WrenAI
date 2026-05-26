@@ -6,10 +6,39 @@ manifest and does not use any denied functions.
 
 from __future__ import annotations
 
+from typing import Iterable
+
 from sqlglot import exp
 
 from wren.config import WrenConfig
 from wren.model.error import ErrorCode, ErrorPhase, WrenError
+
+
+def resolve_model_name(
+    name: str,
+    quoted: bool,
+    model_names: Iterable[str],
+) -> str | None:
+    """Resolve a SQL table identifier to a manifest model name.
+
+    Follows the SQL convention used across Wren's CTE rewriter, policy check,
+    and manifest extractor: a quoted identifier must match a model name
+    case-sensitively; an unquoted identifier prefers an exact case match but
+    falls back to a case-insensitive scan. Returns ``None`` if no model
+    matches.
+    """
+    model_set = (
+        model_names if isinstance(model_names, (set, frozenset)) else set(model_names)
+    )
+    if name in model_set:
+        return name
+    if quoted:
+        return None
+    name_lower = name.lower()
+    for candidate in model_set:
+        if candidate.lower() == name_lower:
+            return candidate
+    return None
 
 
 def validate_sql_policy(
@@ -59,8 +88,6 @@ def _check_tables(
     ast: exp.Expression,
     model_names: set[str],
 ) -> None:
-    model_names_lower = {n.lower() for n in model_names}
-
     for table in ast.find_all(exp.Table):
         name = table.name
         if not name:
@@ -75,10 +102,12 @@ def _check_tables(
                     phase=ErrorPhase.SQL_POLICY_CHECK,
                 )
             continue
-        name_lower = name.lower()
-        if name_lower in model_names_lower:
+        quoted = (
+            bool(table.this.quoted) if isinstance(table.this, exp.Identifier) else False
+        )
+        if resolve_model_name(name, quoted, model_names) is not None:
             continue
-        if name_lower in _visible_cte_names(table):
+        if name.lower() in _visible_cte_names(table):
             continue
         raise WrenError(
             ErrorCode.MODEL_NOT_FOUND,

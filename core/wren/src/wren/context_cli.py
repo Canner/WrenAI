@@ -58,6 +58,97 @@ SemanticModelOpt = Annotated[
 ]
 
 
+@context_app.command("import")
+def import_cmd(
+    source: Annotated[str, typer.Argument(help="Import source (currently: dbt)")],
+    path: ProjectPathOpt = None,
+    project_dir: Annotated[
+        Optional[str],
+        typer.Option(
+            "--project-dir",
+            help="dbt project directory containing dbt_project.yml.",
+        ),
+    ] = None,
+    profiles_path: Annotated[
+        Optional[str],
+        typer.Option("--profiles-path", help="Path to dbt profiles.yml."),
+    ] = None,
+    profile_name: Annotated[
+        Optional[str],
+        typer.Option("--profile", help="dbt profile name override."),
+    ] = None,
+    target_name: Annotated[
+        Optional[str],
+        typer.Option("--target", help="dbt target name override."),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Preview generated files without writing."),
+    ] = False,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Overwrite generated Wren project files."),
+    ] = False,
+) -> None:
+    """Import a Wren project from an external source."""
+    if source != "dbt":
+        typer.echo(
+            f"Error: unsupported import source '{source}'. Only 'dbt' is supported.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    from wren.context import write_project_files  # noqa: PLC0415
+    from wren.dbt import (  # noqa: PLC0415
+        DbtLoadError,
+        convert_dbt_project_to_wren_project,
+    )
+
+    dbt_project_dir = project_dir or "."
+    output_path = Path(path).expanduser() if path else Path.cwd()
+
+    try:
+        imported = convert_dbt_project_to_wren_project(
+            dbt_project_dir,
+            output_dir=output_path,
+            profiles_path=profiles_path,
+            profile_name=profile_name,
+            target_name=target_name,
+        )
+    except DbtLoadError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1)
+
+    if dry_run:
+        typer.echo("Dry run — files that would be written:")
+        for project_file in imported.files:
+            typer.echo(f"  {project_file.relative_path}")
+    else:
+        try:
+            write_project_files(imported.files, output_path, force=force)
+        except SystemExit as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(1)
+        typer.echo(f"Imported dbt project to Wren project at {output_path}/")
+
+    typer.echo(
+        f"  {imported.model_count} dbt models, {imported.source_count} sources, "
+        f"{imported.relationship_count} relationships"
+    )
+    if imported.skipped_ephemeral:
+        typer.echo(f"  skipped {imported.skipped_ephemeral} ephemeral model(s)")
+    if imported.skipped_without_columns:
+        typer.echo(
+            f"  skipped {imported.skipped_without_columns} node(s) without catalog columns"
+        )
+    if dry_run:
+        return
+
+    typer.echo("\nNext steps:")
+    typer.echo(f"  wren context validate --path {output_path}")
+    typer.echo(f"  wren context build --path {output_path}")
+
+
 @context_app.command()
 def init(
     path: ProjectPathOpt = None,

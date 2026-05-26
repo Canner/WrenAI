@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+from pathlib import Path
 
 import pytest
 import typer
@@ -54,7 +55,7 @@ def test_list_marks_active_only():
     runner.invoke(profile_app, ["add", "duck", "--datasource", "duckdb"])
     result = runner.invoke(profile_app, ["list"])
     lines = result.output.splitlines()
-    active_lines = [l for l in lines if "*" in l]
+    active_lines = [line for line in lines if "*" in line]
     assert len(active_lines) == 1
     assert "pg" in active_lines[0]
 
@@ -140,12 +141,13 @@ def test_add_from_file_rejects_config_envelope(tmp_path):
 def test_add_from_file_rejects_unknown_nested_keys(tmp_path):
     """Unknown nested dicts are rejected rather than silently saved."""
     conn_file = tmp_path / "conn.yml"
-    conn_file.write_text(
-        "datasource: mysql\nmystery:\n  host: db.local\n"
-    )
+    conn_file.write_text("datasource: mysql\nmystery:\n  host: db.local\n")
     result = runner.invoke(profile_app, ["add", "my", "--from-file", str(conn_file)])
     assert result.exit_code == 1
-    assert "mystery" in result.output.lower() or "unexpected nested" in result.output.lower()
+    assert (
+        "mystery" in result.output.lower()
+        or "unexpected nested" in result.output.lower()
+    )
 
 
 def test_add_from_file_allows_kwargs_nested(tmp_path):
@@ -185,6 +187,173 @@ def test_add_with_activate_flag():
     assert profile_mod.get_active_name() == "second"
 
 
+# ── import dbt ────────────────────────────────────────────────────────────────
+
+
+def _write_dbt_project(tmp_path: Path) -> tuple[Path, Path]:
+    project_dir = tmp_path / "jaffle_shop"
+    project_dir.mkdir()
+    (project_dir / "dbt_project.yml").write_text(
+        "name: jaffle_shop\nprofile: jaffle_shop\n"
+    )
+    profiles_path = tmp_path / "profiles.yml"
+    profiles_path.write_text(
+        "jaffle_shop:\n"
+        "  target: dev\n"
+        "  outputs:\n"
+        "    dev:\n"
+        "      type: duckdb\n"
+        "      path: /tmp/jaffle.duckdb\n"
+    )
+    return project_dir, profiles_path
+
+
+def test_import_dbt_duckdb_profile(tmp_path, monkeypatch):
+    project_dir, profiles_path = _write_dbt_project(tmp_path)
+    profiles_path.write_text(
+        "jaffle_shop:\n"
+        "  target: dev\n"
+        "  outputs:\n"
+        "    dev:\n"
+        "      type: duckdb\n"
+        "      path: \"{{ env_var('JAFFLE_DUCKDB_PATH') }}\"\n"
+    )
+    monkeypatch.setenv("JAFFLE_DUCKDB_PATH", "/tmp/jaffle.duckdb")
+
+    result = runner.invoke(
+        profile_app,
+        [
+            "import",
+            "dbt",
+            "--project-dir",
+            str(project_dir),
+            "--profiles-path",
+            str(profiles_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    profiles = profile_mod.list_profiles()
+    assert "jaffle-shop-dev" in profiles
+    assert profiles["jaffle-shop-dev"]["datasource"] == "duckdb"
+    assert profiles["jaffle-shop-dev"]["url"] == "/tmp"
+    assert profiles["jaffle-shop-dev"]["format"] == "duckdb"
+    assert profile_mod.get_active_name() == "jaffle-shop-dev"
+
+
+def test_import_dbt_duckdb_relative_path_uses_project_dir(tmp_path):
+    project_dir, profiles_path = _write_dbt_project(tmp_path)
+    profiles_path.write_text(
+        "jaffle_shop:\n"
+        "  target: dev\n"
+        "  outputs:\n"
+        "    dev:\n"
+        "      type: duckdb\n"
+        "      path: warehouse/jaffle.duckdb\n"
+    )
+
+    result = runner.invoke(
+        profile_app,
+        [
+            "import",
+            "dbt",
+            "--project-dir",
+            str(project_dir),
+            "--profiles-path",
+            str(profiles_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    profiles = profile_mod.list_profiles()
+    assert profiles["jaffle-shop-dev"]["url"] == str(project_dir / "warehouse")
+
+
+def test_import_dbt_postgres_profile_custom_name_no_activate(tmp_path):
+    project_dir, profiles_path = _write_dbt_project(tmp_path)
+    profiles_path.write_text(
+        "jaffle_shop:\n"
+        "  target: dev\n"
+        "  outputs:\n"
+        "    dev:\n"
+        "      type: postgres\n"
+        "      host: localhost\n"
+        "      port: 5432\n"
+        "      dbname: analytics\n"
+        "      user: postgres\n"
+        "      password: secret\n"
+    )
+    runner.invoke(profile_app, ["add", "existing", "--datasource", "duckdb"])
+
+    result = runner.invoke(
+        profile_app,
+        [
+            "import",
+            "dbt",
+            "--project-dir",
+            str(project_dir),
+            "--profiles-path",
+            str(profiles_path),
+            "--name",
+            "pg-from-dbt",
+            "--no-activate",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    profiles = profile_mod.list_profiles()
+    assert profiles["pg-from-dbt"]["datasource"] == "postgres"
+    assert profiles["pg-from-dbt"]["database"] == "analytics"
+    assert profile_mod.get_active_name() == "existing"
+
+
+def test_import_dbt_unsupported_source(tmp_path):
+    project_dir, profiles_path = _write_dbt_project(tmp_path)
+    profiles_path.write_text("{}\n")
+
+    result = runner.invoke(
+        profile_app,
+        [
+            "import",
+            "airbyte",
+            "--project-dir",
+            str(project_dir),
+            "--profiles-path",
+            str(profiles_path),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Only 'dbt' is supported" in result.output
+
+
+def test_import_dbt_validation_error(tmp_path):
+    project_dir, profiles_path = _write_dbt_project(tmp_path)
+    profiles_path.write_text(
+        "jaffle_shop:\n"
+        "  target: dev\n"
+        "  outputs:\n"
+        "    dev:\n"
+        "      type: postgres\n"
+        "      host: localhost\n"
+    )
+
+    result = runner.invoke(
+        profile_app,
+        [
+            "import",
+            "dbt",
+            "--project-dir",
+            str(project_dir),
+            "--profiles-path",
+            str(profiles_path),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "missing required field" in result.output
+
+
 # ── switch ────────────────────────────────────────────────────────────────────
 
 
@@ -199,7 +368,7 @@ def test_switch_updates_active():
     # list should show * on duck
     list_result = runner.invoke(profile_app, ["list"])
     lines = list_result.output.splitlines()
-    duck_line = next(l for l in lines if "duck" in l)
+    duck_line = next(line for line in lines if "duck" in line)
     assert "*" in duck_line
 
 
@@ -391,9 +560,7 @@ def test_validate_failure_prints_warning(monkeypatch):
     def failing_get_connector(ds, info):
         raise RuntimeError("connection refused")
 
-    monkeypatch.setattr(
-        "wren.connector.factory.get_connector", failing_get_connector
-    )
+    monkeypatch.setattr("wren.connector.factory.get_connector", failing_get_connector)
 
     buf = _capture_typer_echo(monkeypatch)
     profile_cli._validate_connection("pg")
@@ -422,9 +589,7 @@ def test_validate_invalid_connection_info(monkeypatch):
     def should_not_be_called(ds, info):
         raise AssertionError("get_connector called despite invalid profile")
 
-    monkeypatch.setattr(
-        "wren.connector.factory.get_connector", should_not_be_called
-    )
+    monkeypatch.setattr("wren.connector.factory.get_connector", should_not_be_called)
 
     buf = _capture_typer_echo(monkeypatch)
     profile_cli._validate_connection("pg")
