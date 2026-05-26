@@ -435,24 +435,24 @@ def convert_dbt_target_to_wren_profile(target: DbtTarget) -> dict[str, Any]:
         if not db_path.is_absolute():
             db_path = (target.project_dir / db_path).resolve()
         url = db_path if not db_path.suffix else db_path.parent
-        return {"datasource": "duckdb", "url": str(url), "format": "duckdb"}
+        return _build_wren_profile("duckdb", {"url": str(url), "format": "duckdb"})
 
     if datasource == "postgres":
-        return _filter_none(
+        return _build_wren_profile(
+            "postgres",
             {
-                "datasource": "postgres",
                 "host": str(_require_output_field(output, "host")),
                 "port": str(output.get("port", "5432")),
                 "database": str(_require_output_field(output, "dbname", "database")),
                 "user": str(_require_output_field(output, "user")),
                 "password": str(output["password"]) if output.get("password") else None,
-            }
+            },
         )
 
     if datasource in {"mysql", "redshift", "mssql", "clickhouse"}:
-        return _filter_none(
+        return _build_wren_profile(
+            datasource,
             {
-                "datasource": datasource,
                 "host": str(_require_output_field(output, "host")),
                 "port": str(_require_output_field(output, "port")),
                 "database": str(
@@ -460,26 +460,26 @@ def convert_dbt_target_to_wren_profile(target: DbtTarget) -> dict[str, Any]:
                 ),
                 "user": str(_require_output_field(output, "user")),
                 "password": str(output["password"]) if output.get("password") else None,
-            }
+            },
         )
 
     if datasource == "snowflake":
-        return _filter_none(
+        return _build_wren_profile(
+            "snowflake",
             {
-                "datasource": "snowflake",
                 "account": str(_require_output_field(output, "account")),
                 "user": str(_require_output_field(output, "user")),
                 "password": str(output["password"]) if output.get("password") else None,
                 "database": str(_require_output_field(output, "database")),
                 "schema": str(_require_output_field(output, "schema")),
                 "warehouse": output.get("warehouse"),
-            }
+            },
         )
 
     if datasource == "trino":
-        return _filter_none(
+        return _build_wren_profile(
+            "trino",
             {
-                "datasource": "trino",
                 "host": str(_require_output_field(output, "host")),
                 "port": str(output.get("port", "8080")),
                 "catalog": str(_require_output_field(output, "database", "catalog")),
@@ -488,13 +488,13 @@ def convert_dbt_target_to_wren_profile(target: DbtTarget) -> dict[str, Any]:
                 "password": (
                     str(output["password"]) if output.get("password") else None
                 ),
-            }
+            },
         )
 
     if datasource == "athena":
-        return _filter_none(
+        return _build_wren_profile(
+            "athena",
             {
-                "datasource": "athena",
                 "s3_staging_dir": str(
                     _require_output_field(output, "s3_staging_dir", "s3_data_dir")
                 ),
@@ -505,45 +505,88 @@ def convert_dbt_target_to_wren_profile(target: DbtTarget) -> dict[str, Any]:
                 "aws_session_token": output.get("aws_session_token"),
                 "role_arn": output.get("role_arn"),
                 "role_session_name": output.get("role_session_name"),
-            }
+            },
         )
 
     if datasource == "spark":
-        return {
-            "datasource": "spark",
-            "host": str(_require_output_field(output, "host")),
-            "port": str(output.get("port", "15002")),
-        }
+        return _build_wren_profile(
+            "spark",
+            {
+                "host": str(_require_output_field(output, "host")),
+                "port": str(output.get("port", "15002")),
+            },
+        )
 
     if datasource == "databricks":
-        return {
-            "datasource": "databricks",
-            "databricks_type": "token",
-            "server_hostname": str(
-                _require_output_field(output, "server_hostname", "host")
-            ),
-            "http_path": str(_require_output_field(output, "http_path", "httpPath")),
-            "access_token": str(
-                _require_output_field(output, "token", "access_token", "accessToken")
-            ),
-        }
+        return _build_wren_profile(
+            "databricks",
+            {
+                "databricks_type": "token",
+                "server_hostname": str(
+                    _require_output_field(output, "server_hostname", "host")
+                ),
+                "http_path": str(
+                    _require_output_field(output, "http_path", "httpPath")
+                ),
+                "access_token": str(
+                    _require_output_field(
+                        output, "token", "access_token", "accessToken"
+                    )
+                ),
+            },
+        )
 
     if datasource == "bigquery":
         credentials = _bigquery_credentials_base64(output)
-        return _filter_none(
+        return _build_wren_profile(
+            "bigquery",
             {
-                "datasource": "bigquery",
                 "bigquery_type": "dataset",
                 "project_id": str(_require_output_field(output, "project")),
                 "dataset_id": str(_require_output_field(output, "dataset")),
                 "credentials": credentials,
-            }
+            },
         )
 
     raise DbtLoadError(
         f"dbt adapter '{target.adapter_type}' maps to datasource '{datasource}', "
         "but profile conversion has not been implemented yet."
     )
+
+
+def _build_wren_profile(datasource: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Validate a profile payload with Wren's connection-info model."""
+    from pydantic import ValidationError  # noqa: PLC0415
+
+    from wren.model.data_source import DataSource  # noqa: PLC0415
+
+    cleaned = _filter_none(payload)
+    try:
+        info = DataSource(datasource)._build_connection_info(cleaned)
+    except ValidationError as exc:
+        raise DbtLoadError(
+            f"Invalid dbt target for Wren datasource {datasource!r}: {exc}"
+        ) from exc
+
+    explicit_fields = {
+        name
+        for name, field in type(info).model_fields.items()
+        if name in cleaned or field.alias in cleaned
+    }
+    dumped = info.model_dump(exclude_none=True, include=explicit_fields)
+    profile = _serialize_profile_value(dumped)
+    return {"datasource": datasource, **profile}
+
+
+def _serialize_profile_value(value: Any) -> Any:
+    """Convert Pydantic connection-info values back to profile YAML scalars."""
+    if hasattr(value, "get_secret_value"):
+        return value.get_secret_value()
+    if isinstance(value, dict):
+        return {k: _serialize_profile_value(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_serialize_profile_value(v) for v in value]
+    return value
 
 
 def _load_yaml_file(path: Path, *, label: str) -> Any:
