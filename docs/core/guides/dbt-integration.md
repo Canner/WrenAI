@@ -2,6 +2,39 @@
 
 Import a dbt project into Wren AI to query dbt models through the Wren semantic layer.
 
+## What Wren Imports
+
+dbt already contains the context an agent needs to query modeled data safely:
+model and column descriptions, refs, source definitions, test metadata,
+compiled SQL, adapter profile settings, and the physical column list in
+`catalog.json`. Wren imports that context so agents do not have to infer model
+purpose, join paths, or trusted constraints from table and column names alone.
+
+Wren stores imported dbt context in regular Wren project files:
+
+| dbt input | Wren output | Why it matters |
+|-----------|-------------|----------------|
+| Active dbt target | Wren connection profile | Reuses the same warehouse connection target dbt uses |
+| Model and source nodes | `models/*/metadata.yml` | Preserves model names, table references, descriptions, layers, and columns |
+| `relationships` tests | `relationships.yml` | Turns tested dbt refs into explicit Wren join paths |
+| `not_null`, `unique`, `accepted_values` tests | Model and column metadata | Gives agents verified constraints and useful filter values |
+| Test results | `instructions.md` | Surfaces verified constraints and warnings for agent workflows |
+| Model graph and metadata | `queries.yml` | Seeds memory with dbt-aware example questions and SQL |
+
+The generated `wren_project.yml` also keeps a `dbt` binding:
+
+```yaml
+dbt:
+  project_dir: ../your-dbt-project
+  profile: your_dbt_profile
+  target: dev
+```
+
+`project_dir` points back to the imported dbt project, while `profile` and
+`target` record the dbt profile target used for the import. This makes the
+Wren project traceable to its dbt source and gives future tooling enough
+context to refresh or inspect the original dbt artifacts.
+
 ## Prerequisites
 
 - A dbt project with `dbt_project.yml`
