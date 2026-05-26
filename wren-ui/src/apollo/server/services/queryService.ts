@@ -58,13 +58,15 @@ export interface ValidateResponse {
 }
 
 const rewriteMssqlDatepartAliasReferences = (sql: string): string => {
+  sql = sql.replace(/\\"/g, '"');
+
   const aliases: Record<string, string> = {};
   const aliasPattern =
-    /\b(DATEPART\(\s*(YEAR|MONTH|DAY)\s*,\s*((?:[^()]|\([^()]*\))+?)\s*\))\s+AS\s+(?:"([^"]+)"|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))/gi;
+    /\b(DATEPART\(\s*(YEAR|MONTH|DAY)\s*,\s*((?:[^()]|\([^()]*\))+?)\s*\))\s+AS\s+(?:"([^"]+)"|\\+"([^"]+)\\+"|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))/gi;
 
   for (const match of sql.matchAll(aliasPattern)) {
     const expression = match[1];
-    const alias = match[4] || match[5] || match[6];
+    const alias = match[4] || match[5] || match[6] || match[7];
     aliases[alias.toLowerCase()] = expression;
   }
 
@@ -85,6 +87,7 @@ const rewriteMssqlDatepartAliasReferences = (sql: string): string => {
       const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
       body = body.replace(new RegExp(`"${escapedAlias}"`, 'gi'), placeholder);
+      body = body.replace(new RegExp(`\\\\+"${escapedAlias}\\\\+"`, 'gi'), placeholder);
       body = body.replace(new RegExp(`\\[${escapedAlias}\\]`, 'gi'), placeholder);
       body = body.replace(new RegExp(`\\b${escapedAlias}\\b`, 'gi'), placeholder);
     });

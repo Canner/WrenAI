@@ -164,6 +164,56 @@ const dataSourceUrlMap: Record<SupportedDataSource, string> = {
   [SupportedDataSource.DATABRICKS]: 'databricks',
 };
 
+const rewriteMssqlDatepartAliasReferences = (
+  sql: string,
+  dataSource: DataSourceName,
+): string => {
+  if (dataSource !== DataSourceName.MSSQL) {
+    return sql;
+  }
+
+  sql = sql.replace(/\\"/g, '"');
+
+  const aliases: Record<string, string> = {};
+  const aliasPattern =
+    /\b(DATEPART\(\s*(YEAR|MONTH|DAY)\s*,\s*((?:[^()]|\([^()]*\))+?)\s*\))\s+AS\s+(?:"([^"]+)"|\\+"([^"]+)\\+"|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))/gi;
+
+  for (const match of sql.matchAll(aliasPattern)) {
+    const expression = match[1];
+    const alias = match[4] || match[5] || match[6] || match[7];
+    aliases[alias.toLowerCase()] = expression;
+  }
+
+  if (!Object.keys(aliases).length) {
+    return sql;
+  }
+
+  const clausePattern =
+    /\b(GROUP\s+BY|ORDER\s+BY|HAVING)\b(?<body>.*?)(?=\b(?:ORDER\s+BY|GROUP\s+BY|HAVING|LIMIT|OFFSET|FETCH|UNION|WHERE)\b|$)/gis;
+
+  return sql.replace(clausePattern, (match, clause, _body, _offset, _source, groups) => {
+    let body = groups?.body || '';
+    const placeholders: Record<string, string> = {};
+
+    Object.entries(aliases).forEach(([alias, expression]) => {
+      const placeholder = `__WREN_MSSQL_DATEPART_ALIAS_${Object.keys(placeholders).length}__`;
+      placeholders[placeholder] = expression;
+      const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+      body = body.replace(new RegExp(`"${escapedAlias}"`, 'gi'), placeholder);
+      body = body.replace(new RegExp(`\\\\+"${escapedAlias}\\\\+"`, 'gi'), placeholder);
+      body = body.replace(new RegExp(`\\[${escapedAlias}\\]`, 'gi'), placeholder);
+      body = body.replace(new RegExp(`\\b${escapedAlias}\\b`, 'gi'), placeholder);
+    });
+
+    Object.entries(placeholders).forEach(([placeholder, expression]) => {
+      body = body.replaceAll(placeholder, expression);
+    });
+
+    return `${clause}${body}`;
+  });
+};
+
 export interface TableResponse {
   tables: CompactTable[];
 }
@@ -270,7 +320,7 @@ export class IbisAdaptor implements IIbisAdaptor {
   public async getNativeSql(options: IbisDryPlanOptions): Promise<string> {
     const { dataSource, mdl, sql } = options;
     const body = {
-      sql,
+      sql: rewriteMssqlDatepartAliasReferences(sql, dataSource),
       manifestStr: Buffer.from(JSON.stringify(mdl)).toString('base64'),
     };
     try {
@@ -294,6 +344,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     options: IbisQueryOptions,
   ): Promise<IbisQueryResponse> {
     const { dataSource, mdl } = options;
+    query = rewriteMssqlDatepartAliasReferences(query, dataSource);
     const connectionInfo = this.updateConnectionInfo(options.connectionInfo);
     const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
     const queryString = this.buildQueryString(options);
@@ -338,6 +389,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     options: IbisQueryOptions,
   ): Promise<DryRunResponse> {
     const { dataSource, mdl } = options;
+    query = rewriteMssqlDatepartAliasReferences(query, dataSource);
     const connectionInfo = this.updateConnectionInfo(options.connectionInfo);
     const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
     const body = {
