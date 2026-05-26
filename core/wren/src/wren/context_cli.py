@@ -23,6 +23,40 @@ ProjectPathOpt = Annotated[
     ),
 ]
 
+FromOsiOpt = Annotated[
+    Optional[str],
+    typer.Option(
+        "--from-osi",
+        help=(
+            "Use an Open Semantic Interchange (OSI) YAML file as the source "
+            "of truth instead of a wren YAML project. The OSI file is read "
+            "as-is; --data-source must be supplied separately."
+        ),
+    ),
+]
+
+DataSourceOpt = Annotated[
+    Optional[str],
+    typer.Option(
+        "--data-source",
+        help=(
+            "Target data source (postgres, snowflake, bigquery, ...). "
+            "Required when --from-osi is used."
+        ),
+    ),
+]
+
+SemanticModelOpt = Annotated[
+    Optional[str],
+    typer.Option(
+        "--semantic-model",
+        help=(
+            "Name of the semantic_model to convert when --from-osi is used "
+            "and the OSI file contains more than one."
+        ),
+    ),
+]
+
 
 @context_app.command("import")
 def import_cmd(
@@ -122,6 +156,20 @@ def init(
         Optional[str],
         typer.Option("--from-mdl", help="Import from MDL JSON file (camelCase)."),
     ] = None,
+    from_osi: Annotated[
+        Optional[str],
+        typer.Option(
+            "--from-osi",
+            help=(
+                "Migrate from an Open Semantic Interchange (OSI) YAML file. "
+                "One-way conversion: produces a native wren project; the "
+                "OSI file is no longer referenced afterwards. Requires "
+                "--data-source."
+            ),
+        ),
+    ] = None,
+    data_source: DataSourceOpt = None,
+    semantic_model: SemanticModelOpt = None,
     force: Annotated[
         bool,
         typer.Option("--force", help="Overwrite existing project files."),
@@ -140,12 +188,34 @@ def init(
 ) -> None:
     """Initialize a new Wren project.
 
-    Without --from-mdl: scaffolds the project.  Pass ``--empty`` to leave
-    ``models/`` and ``views/`` untouched (no placeholder example).
-    With --from-mdl: imports an existing MDL JSON and produces a complete
-    YAML project, ready for `wren context validate/build`.
+    Without --from-mdl / --from-osi: scaffolds the project. Pass ``--empty``
+    to leave ``models/`` and ``views/`` untouched (no placeholder example).
+
+    With --from-mdl: imports an existing MDL JSON.
+
+    With --from-osi: migrates from an OSI semantic_model file. Use this when
+    you want to leave the OSI flow and own the YAML going forward; for
+    keeping OSI as the source of truth, use ``wren context build --from-osi``
+    instead.
     """
+    if from_mdl and from_osi:
+        typer.echo(
+            "Error: --from-mdl and --from-osi are mutually exclusive.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
     project_path = Path(path).expanduser() if path else Path.cwd()
+
+    if from_osi:
+        _init_from_osi(
+            from_osi=from_osi,
+            data_source=data_source,
+            semantic_model=semantic_model,
+            project_path=project_path,
+            force=force,
+        )
+        return
 
     if from_mdl:
         # ── Import from MDL JSON ──────────────────────────────
@@ -325,6 +395,9 @@ _WARNING_SUMMARY_THRESHOLD = 10
 @context_app.command()
 def validate(
     path: ProjectPathOpt = None,
+    from_osi: FromOsiOpt = None,
+    data_source: DataSourceOpt = None,
+    semantic_model: SemanticModelOpt = None,
     strict: Annotated[
         bool,
         typer.Option("--strict", help="Treat warnings as errors."),
@@ -348,7 +421,20 @@ def validate(
         ),
     ] = False,
 ) -> None:
-    """Validate MDL project: YAML structure + view SQL dry-plan + description checks."""
+    """Validate MDL project: YAML structure + view SQL dry-plan + description checks.
+
+    With --from-osi: lint the OSI file's conversion path. Requires --data-source.
+    """
+    if from_osi:
+        _validate_from_osi(
+            from_osi=from_osi,
+            data_source=data_source,
+            semantic_model=semantic_model,
+            strict=strict,
+            verbose=verbose,
+        )
+        return
+
     import base64 as _b64  # noqa: PLC0415
 
     from wren.context import (  # noqa: PLC0415
@@ -496,6 +582,9 @@ def _print_warnings(warnings: list[str], *, verbose: bool) -> None:
 @context_app.command()
 def build(
     path: ProjectPathOpt = None,
+    from_osi: FromOsiOpt = None,
+    data_source: DataSourceOpt = None,
+    semantic_model: SemanticModelOpt = None,
     output: Annotated[
         Optional[str],
         typer.Option(
@@ -509,12 +598,25 @@ def build(
         ),
     ] = True,
 ) -> None:
-    """Build YAML project into target/mdl.json for the engine.
+    """Build into target/mdl.json for the engine.
 
-    Reads wren_project.yml, models/*/metadata.yml (+ref_sql.sql),
+    Default mode: reads wren_project.yml, models/*/metadata.yml (+ref_sql.sql),
     views/*/metadata.yml (+sql.yml), relationships.yml, and instructions.md.
-    Converts snake_case YAML keys to camelCase JSON and writes target/mdl.json.
+
+    With --from-osi: reads an Open Semantic Interchange YAML file and emits
+    MDL JSON directly. The OSI file stays as the single source of truth; no
+    intermediate wren project is created. Requires --data-source.
     """
+    if from_osi:
+        _build_from_osi(
+            from_osi=from_osi,
+            data_source=data_source,
+            semantic_model=semantic_model,
+            output=output,
+            validate_first=validate_first,
+        )
+        return
+
     from wren.context import (  # noqa: PLC0415
         build_json,
         discover_project_path,
@@ -564,12 +666,27 @@ def build(
 @context_app.command()
 def show(
     path: ProjectPathOpt = None,
+    from_osi: FromOsiOpt = None,
+    data_source: DataSourceOpt = None,
+    semantic_model: SemanticModelOpt = None,
     output: Annotated[
         str,
         typer.Option("--output", "-o", help="Output format: json|yaml|summary"),
     ] = "summary",
 ) -> None:
-    """Show the current project context (models, views, relationships)."""
+    """Show the current project context (models, views, relationships).
+
+    With --from-osi: show what the OSI file would produce. Requires --data-source.
+    """
+    if from_osi:
+        _show_from_osi(
+            from_osi=from_osi,
+            data_source=data_source,
+            semantic_model=semantic_model,
+            output=output,
+        )
+        return
+
     import yaml as _yaml  # noqa: PLC0415
 
     from wren.context import (  # noqa: PLC0415
@@ -831,3 +948,236 @@ def upgrade(
         )
 
     typer.echo("\nUpgrade complete. Run `wren context validate` to check the result.")
+
+
+# ── OSI source helpers ────────────────────────────────────────────────────
+
+
+def _resolve_osi_path(from_osi: str) -> Path:
+    p = Path(from_osi).expanduser()
+    if not p.exists():
+        typer.echo(f"Error: OSI file not found: {p}", err=True)
+        raise typer.Exit(1)
+    return p
+
+
+def _require_data_source(data_source: Optional[str]) -> str:
+    if not data_source:
+        typer.echo(
+            "Error: --data-source is required when using --from-osi.\n"
+            "  Pass one of: postgres, snowflake, bigquery, mysql, duckdb, ...",
+            err=True,
+        )
+        raise typer.Exit(1)
+    return data_source
+
+
+def _init_from_osi(
+    *,
+    from_osi: str,
+    data_source: Optional[str],
+    semantic_model: Optional[str],
+    project_path: Path,
+    force: bool,
+) -> None:
+    """Migrate an OSI file to a native wren project (one-way).
+
+    Reuses ``build_json_from_osi`` to produce the MDL, then
+    ``convert_mdl_to_project`` + ``write_project_files`` to scaffold the
+    full wren YAML layout. The OSI file is read once and never referenced
+    again after this command — the wren project becomes the source of truth.
+    """
+    from wren.context import (  # noqa: PLC0415
+        convert_mdl_to_project,
+        write_project_files,
+    )
+    from wren.osi import build_json_from_osi  # noqa: PLC0415
+
+    osi_path = _resolve_osi_path(from_osi)
+    ds = _require_data_source(data_source)
+
+    mdl_json, errors = build_json_from_osi(
+        osi_path,
+        data_source=ds,
+        semantic_model=semantic_model,
+    )
+
+    hard_errors = [e for e in errors if e.level == "error"]
+    if hard_errors:
+        for e in hard_errors:
+            typer.echo(str(e), err=True)
+        typer.echo("\nMigration aborted due to OSI errors.", err=True)
+        raise typer.Exit(1)
+
+    warnings = [str(e) for e in errors if e.level == "warning"]
+
+    files = convert_mdl_to_project(mdl_json)
+    try:
+        write_project_files(files, project_path, force=force)
+    except SystemExit as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1)
+
+    model_count = len(mdl_json.get("models", []))
+    rel_count = len(mdl_json.get("relationships", []))
+
+    typer.echo(f"Migrated OSI → wren project at {project_path}/")
+    typer.echo(f"  {model_count} models, {rel_count} relationships")
+
+    if warnings:
+        typer.echo("")
+        _print_warnings(warnings, verbose=False)
+        typer.echo(
+            "  Review the generated YAML — items above were defaulted "
+            "or omitted and may need manual fixes."
+        )
+
+    typer.echo("\nNext steps:")
+    typer.echo(f"  wren context validate --path {project_path}")
+    typer.echo(f"  wren context build --path {project_path}")
+
+
+def _build_from_osi(
+    *,
+    from_osi: str,
+    data_source: Optional[str],
+    semantic_model: Optional[str],
+    output: Optional[str],
+    validate_first: bool,
+) -> None:
+    """Build target/mdl.json directly from an OSI file."""
+    from wren.osi import build_json_from_osi  # noqa: PLC0415
+
+    osi_path = _resolve_osi_path(from_osi)
+    ds = _require_data_source(data_source)
+
+    manifest_json, errors = build_json_from_osi(
+        osi_path,
+        data_source=ds,
+        semantic_model=semantic_model,
+    )
+
+    hard_errors = [e for e in errors if e.level == "error"]
+    if hard_errors:
+        for e in hard_errors:
+            typer.echo(str(e), err=True)
+        typer.echo("\nBuild aborted due to OSI errors.", err=True)
+        raise typer.Exit(1)
+
+    warnings = [str(e) for e in errors if e.level == "warning"]
+    if validate_first and warnings:
+        _print_warnings(warnings, verbose=False)
+
+    # No project dir to anchor on — default to cwd/target/mdl.json.
+    if output:
+        out_path = Path(output).expanduser()
+    else:
+        out_path = Path.cwd() / "target" / "mdl.json"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(manifest_json, indent=2, ensure_ascii=False))
+
+    n_models = len(manifest_json.get("models", []))
+    n_rels = len(manifest_json.get("relationships", []))
+    typer.echo(
+        f"Built from OSI: {n_models} models, {n_rels} relationships → {out_path}"
+    )
+
+
+def _validate_from_osi(
+    *,
+    from_osi: str,
+    data_source: Optional[str],
+    semantic_model: Optional[str],
+    strict: bool,
+    verbose: bool,
+) -> None:
+    """Lint an OSI file against the WREN conversion rules."""
+    from wren.osi import lint_osi_file  # noqa: PLC0415
+
+    osi_path = _resolve_osi_path(from_osi)
+    ds = _require_data_source(data_source)
+
+    errors = lint_osi_file(
+        osi_path,
+        data_source=ds,
+        semantic_model=semantic_model,
+    )
+    hard = [e for e in errors if e.level == "error"]
+    warns = [str(e) for e in errors if e.level == "warning"]
+
+    if hard:
+        typer.echo("OSI errors:")
+        for e in hard:
+            typer.echo(f"  ✗ {e}", err=True)
+
+    _print_warnings(warns, verbose=verbose)
+
+    if hard or (strict and warns):
+        raise typer.Exit(1)
+
+    if not errors:
+        typer.echo(f"Valid — {osi_path.name} converts cleanly.")
+
+
+def _show_from_osi(
+    *,
+    from_osi: str,
+    data_source: Optional[str],
+    semantic_model: Optional[str],
+    output: str,
+) -> None:
+    """Print the manifest the OSI file would produce."""
+    import yaml as _yaml  # noqa: PLC0415
+
+    from wren.osi import build_manifest_from_osi  # noqa: PLC0415
+
+    osi_path = _resolve_osi_path(from_osi)
+    ds = _require_data_source(data_source)
+
+    manifest, errors = build_manifest_from_osi(
+        osi_path,
+        data_source=ds,
+        semantic_model=semantic_model,
+    )
+    hard = [e for e in errors if e.level == "error"]
+    if hard:
+        for e in hard:
+            typer.echo(str(e), err=True)
+        raise typer.Exit(1)
+
+    if output == "json":
+        from wren.context import _convert_keys  # noqa: PLC0415
+
+        # Mirror build_json_from_osi: shield `_instructions` from the
+        # snake→camel pass so downstream tooling sees the exact key.
+        instructions = manifest.pop("_instructions", None)
+        manifest_json = _convert_keys(manifest)
+        manifest_json["layoutVersion"] = 2
+        if instructions:
+            manifest_json["_instructions"] = instructions
+        typer.echo(json.dumps(manifest_json, indent=2, ensure_ascii=False))
+        return
+    if output == "yaml":
+        typer.echo(_yaml.dump(manifest, default_flow_style=False, sort_keys=False))
+        return
+
+    # Summary
+    models = manifest.get("models", [])
+    rels = manifest.get("relationships", [])
+    typer.echo(f"OSI file: {osi_path}")
+    typer.echo(f"Data source: {ds}")
+    typer.echo(f"Catalog/schema: {manifest.get('catalog')}/{manifest.get('schema')}\n")
+    if models:
+        typer.echo(f"Models ({len(models)}):")
+        for m in models:
+            n_cols = len(m.get("columns", []))
+            pk = m.get("primary_key", "—")
+            source = "ref_sql" if m.get("ref_sql") else "table"
+            typer.echo(f"  {m['name']}  ({source}, {n_cols} columns, pk={pk})")
+    if rels:
+        typer.echo(f"\nRelationships ({len(rels)}):")
+        for r in rels:
+            models_str = " ↔ ".join(r.get("models", []))
+            typer.echo(f"  {r.get('name', '?')}  ({models_str}, MANY_TO_ONE)")
+    if manifest.get("_instructions"):
+        typer.echo("\nInstructions: present (from OSI ai_context + metrics)")

@@ -1,0 +1,24 @@
+version: "0.2.0"
+semantic_model:
+  - name: model_a
+    datasets:
+      - name: t1
+        source: a.public.t1
+        primary_key: [id]
+        custom_extensions:
+          - vendor_name: WREN
+            data: '{"column_types": {"id": "INTEGER"}}'
+        fields:
+          - name: id
+            expression: id
+  - name: model_b
+    datasets:
+      - name: t2
+        source: b.public.t2
+        primary_key: [id]
+        custom_extensions:
+          - vendor_name: WREN
+            data: '{"column_types": {"id": "INTEGER"}}'
+        fields:
+          - name: id
+            expression: id
