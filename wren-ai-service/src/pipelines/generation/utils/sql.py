@@ -288,6 +288,16 @@ def _rewrite_mssql_timestamp_casts(sql: str) -> str:
     return rewritten
 
 
+def _rewrite_mssql_to_unixtime(sql: str) -> str:
+    expression_pattern = r"((?:[^(),]|\([^()]*\))+?)"
+    to_unixtime_pattern = re.compile(
+        rf"\bTO_UNIXTIME\(\s*{expression_pattern}\s*\)",
+        re.IGNORECASE,
+    )
+
+    return to_unixtime_pattern.sub(lambda m: m.group(1), sql)
+
+
 def _rewrite_mssql_datepart_alias_references(sql: str) -> str:
     datepart_alias_pattern = re.compile(
         r"\b(DATEPART\(\s*(YEAR|MONTH|DAY)\s*,\s*((?:[^()]|\([^()]*\))+?)\s*\))\s+AS\s+\"([^\"]+)\"",
@@ -337,6 +347,7 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
             flags=re.IGNORECASE,
         )
         normalized = _replace_relative_getdate_calls(normalized, now)
+        normalized = _rewrite_mssql_to_unixtime(normalized)
         normalized = _rewrite_mssql_timestamp_casts(normalized)
         normalized = _rewrite_mssql_bucket_functions(normalized)
         normalized = _rewrite_temporal_bucket_functions(normalized)
@@ -568,8 +579,9 @@ _MSSQL_TEXT_TO_SQL_RULES = """
 ### MSSQL-SPECIFIC RULES ###
 - The target database is MSSQL.
 - Prefer native T-SQL date bucket syntax such as DATEPART(YEAR, "created_at") and DATEPART(MONTH, "created_at").
-- DO NOT use PostgreSQL-style or Trino-style date syntax such as DATE_TRUNC, DATETRUNC, INTERVAL, CURRENT_DATE, TIMESTAMP WITH TIME ZONE, TO_CHAR, TO_TIMESTAMP, TO_TIMESTAMP_MILLIS, TO_TIMESTAMP_SECONDS, TO_TIMESTAMP_MICROS, TO_TIMESTAMP_NANOS, or :: casts.
+- DO NOT use PostgreSQL-style or Trino-style date syntax such as DATE_TRUNC, DATETRUNC, INTERVAL, CURRENT_DATE, TIMESTAMP WITH TIME ZONE, TO_CHAR, TO_UNIXTIME, TO_TIMESTAMP, TO_TIMESTAMP_MILLIS, TO_TIMESTAMP_SECONDS, TO_TIMESTAMP_MICROS, TO_TIMESTAMP_NANOS, or :: casts.
 - DO NOT use DATEADD, DATEDIFF, DATETIME2, or DATETIMEOFFSET unless the SQL FUNCTIONS section explicitly proves they are supported by the target runtime.
+- Do not calculate duration with DATEDIFF/date_diff/datediff. If a duration or turnaround column exists in the schema, select that column directly. If only start/end timestamps exist and the SQL FUNCTIONS section does not list a duration function, return the timestamps separately instead of inventing a duration function.
 - Resolve relative time phrases such as "last 12 months", "last month", or "this year" into absolute ISO timestamp boundaries using the current time context. Prefer closed-open literal ranges over runtime date arithmetic.
 - For month bucketing, prefer separate year/month fields:
     - DATEPART(YEAR, <timestamp_expression>) AS "year"
