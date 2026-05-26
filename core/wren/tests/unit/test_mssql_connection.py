@@ -80,6 +80,52 @@ def test_mssql_url_decodes_user_database_and_password() -> None:
     assert parts["app name"] == "wren"
 
 
+def test_mssql_url_preserves_literal_plus_in_user_and_password() -> None:
+    """``+`` is form-encoded only in query strings; in userinfo it is literal.
+
+    ``unquote_plus`` would corrupt a service-account name like ``svc+etl`` into
+    ``svc etl``. Use ``unquote`` instead so ``+`` survives.
+    """
+    fake = _FakePyodbc()
+    with patch("wren.connector.mssql.pyodbc", fake):
+        _connect_mssql_from_url("mssql://svc+etl:p+wd@host:1433/db")
+
+    parts = _parse_conn_str(fake.connect.call_args)
+    assert parts["UID"] == "svc+etl"
+    assert parts["PWD"] == "p+wd"
+
+
+def test_mssql_url_without_credentials_uses_trusted_connection() -> None:
+    """A URL with no userinfo should route through Trusted_Connection=yes
+    rather than failing the URL validator."""
+    fake = _FakePyodbc()
+    with patch("wren.connector.mssql.pyodbc", fake):
+        _connect_mssql_from_url("mssql://host:1433/db?TrustServerCertificate=yes")
+
+    parts = _parse_conn_str(fake.connect.call_args)
+    assert parts.get("Trusted_Connection") == "yes"
+    assert "UID" not in parts
+    assert "PWD" not in parts
+
+
+def test_mssql_url_without_host_raises() -> None:
+    fake = _FakePyodbc()
+    with patch("wren.connector.mssql.pyodbc", fake):
+        with pytest.raises(WrenError) as exc:
+            _connect_mssql_from_url("mssql:///db")
+    assert exc.value.error_code == ErrorCode.INVALID_CONNECTION_INFO
+    fake.connect.assert_not_called()
+
+
+def test_mssql_url_without_database_raises() -> None:
+    fake = _FakePyodbc()
+    with patch("wren.connector.mssql.pyodbc", fake):
+        with pytest.raises(WrenError) as exc:
+            _connect_mssql_from_url("mssql://user:pw@host:1433")
+    assert exc.value.error_code == ErrorCode.INVALID_CONNECTION_INFO
+    fake.connect.assert_not_called()
+
+
 # ---------------------------------------------------------------------------
 # 2. Auth combination validation
 # ---------------------------------------------------------------------------

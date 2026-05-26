@@ -7,7 +7,7 @@ import uuid
 from contextlib import closing
 from decimal import Decimal as PyDecimal
 from typing import Any
-from urllib.parse import unquote_plus, urlparse
+from urllib.parse import unquote, urlparse
 
 import pyarrow as pa
 import sqlglot.expressions as sge
@@ -349,25 +349,31 @@ def _connect_mssql_from_url(
             "Invalid connection URL for MSSQL",
         )
 
-    if not parsed.hostname or not parsed.path or not parsed.username:
+    if not parsed.hostname or not parsed.path:
         raise WrenError(
             ErrorCode.INVALID_CONNECTION_INFO,
-            "MSSQL connection URL must include user, host and database",
+            "MSSQL connection URL must include host and database",
         )
 
     kwargs = dict(base_kwargs) if base_kwargs else {}
-    # parse_qsl already URL-decodes values, but we re-apply unquote_plus
-    # below only to components urlparse leaves encoded (user, path, password).
+    # parse_qsl already URL-decodes values, but we re-apply unquote below only
+    # to components urlparse leaves encoded (user, path, password). We use
+    # ``unquote`` (not ``unquote_plus``) so a literal ``+`` in a credential —
+    # e.g. ``svc+etl`` — is preserved instead of being turned into a space:
+    # ``+`` only has form-encoded semantics in query strings, not in userinfo
+    # or the path.
     for key, value in urllib.parse.parse_qsl(parsed.query):
         kwargs[key] = value
     driver = kwargs.pop("driver", "ODBC Driver 18 for SQL Server")
 
+    # No username → integrated auth (Trusted_Connection=yes). The shared
+    # _connect_mssql_pyodbc validator owns the user/password symmetry check.
     return _connect_mssql_pyodbc(
         host=parsed.hostname,
         port=str(parsed.port or 1433),
-        database=unquote_plus(parsed.path.lstrip("/")),
-        user=unquote_plus(parsed.username),
-        password=unquote_plus(parsed.password) if parsed.password else None,
+        database=unquote(parsed.path.lstrip("/")),
+        user=unquote(parsed.username) if parsed.username else None,
+        password=unquote(parsed.password) if parsed.password else None,
         driver=driver,
         kwargs=kwargs,
     )
