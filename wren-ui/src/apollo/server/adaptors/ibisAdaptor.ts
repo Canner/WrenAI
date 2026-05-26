@@ -175,14 +175,34 @@ const rewriteMssqlDatepartAliasReferences = (
   sql = sql.replace(/\\"/g, '"');
 
   const aliases: Record<string, string> = {};
-  const aliasPattern =
-    /\b(DATEPART\(\s*(YEAR|MONTH|DAY)\s*,\s*((?:[^()]|\([^()]*\))+?)\s*\))\s+AS\s+(?:"([^"]+)"|\\+"([^"]+)\\+"|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))/gi;
+  const aliasTargetPattern =
+    String.raw`(?:"([^"]+)"|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))`;
+  const aliasPatterns = [
+    new RegExp(
+      String.raw`\b(DATEPART\(\s*(?:YEAR|MONTH|DAY)\s*,\s*((?:[^()]|\([^()]*\))+?)\s*\))\s+AS\s+${aliasTargetPattern}`,
+      'gi',
+    ),
+    new RegExp(
+      String.raw`\b((?:YEAR|MONTH|DAY)\(\s*((?:[^()]|\([^()]*\))+?)\s*\))\s+AS\s+${aliasTargetPattern}`,
+      'gi',
+    ),
+    new RegExp(
+      String.raw`\b(DATE_PART\(\s*'?\s*(?:YEAR|MONTH|DAY)\s*'?\s*,\s*((?:[^()]|\([^()]*\))+?)\s*\))\s+AS\s+${aliasTargetPattern}`,
+      'gi',
+    ),
+    new RegExp(
+      String.raw`\b(EXTRACT\(\s*(?:YEAR|MONTH|DAY)\s+FROM\s+((?:[^()]|\([^()]*\))+?)\s*\))\s+AS\s+${aliasTargetPattern}`,
+      'gi',
+    ),
+  ];
 
-  for (const match of sql.matchAll(aliasPattern)) {
-    const expression = match[1];
-    const alias = match[4] || match[5] || match[6] || match[7];
-    aliases[alias.toLowerCase()] = expression;
-  }
+  aliasPatterns.forEach((aliasPattern) => {
+    for (const match of sql.matchAll(aliasPattern)) {
+      const expression = match[1];
+      const alias = match[3] || match[4] || match[5];
+      aliases[alias.toLowerCase()] = expression;
+    }
+  });
 
   if (!Object.keys(aliases).length) {
     return sql;
