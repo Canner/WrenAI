@@ -4,88 +4,97 @@ sidebar_label: How does Wren AI keep agents from hallucinating?
 
 # How does Wren AI keep agents from hallucinating?
 
-> Hallucination on business data is rarely a model problem. It is a missing-context problem. Wren AI exposes correctness as a system of primitives the agent composes — not a single feature you switch on.
+Hallucinations on business data are rarely a "model is bad at SQL" problem. They are a missing-context problem — the agent writes a confident-looking query against data it does not actually understand.
 
-## Why "trust the model" is not enough
+Wren AI's architecture is designed to **give the agent the context it needs at every step**, and to **fail loudly when the agent guesses**. Here is how the pieces fit.
 
-The temptation is to treat correctness like a setting: add metadata, add examples, swap to a bigger model. That does not work.
+## The shape of the system
 
-We have seen projects ship 100+ examples and still watch the agent pick the wrong table, hallucinate column names, or invent joins. Examples help one of six pillars. Miss any of the other five and the agent fails in that exact gap.
-
-Reliable text-to-SQL needs **six primitives working together**.
-
-## The six correctness pillars
-
-| Pillar | What the agent needs to do | How Wren AI helps |
-|---|---|---|
-| **Schema linking** | Know which models, columns, and relationships matter for the question | MDL + `wren memory fetch` retrieves only the relevant slice |
-| **Value profiling** | Know what values actually appear in the data (`status = 4` means refunded) | Connector introspection + `instructions.md` indexed into memory |
-| **Ambiguity detection** | Know when the question needs clarification before any SQL is written | Skill orchestration — the agent stops to ask |
-| **Generation trace** | Show what context, examples, model, and join path produced the answer | `wren dry-plan` expands SQL deterministically; the trace lives in the agent's reasoning |
-| **Retry and repair** | Distinguish an MDL bug from a DB bug from a prompt bug | Structured errors at every layer; `wren dry-run` validates without executing |
-| **Eval** | Detect regressions when MDL, instructions, or schema change | Golden NL-SQL eval workflows in active development |
-
-Drop any one and the agent will eventually fail in that gap.
-
-## Primitives, not a closed product
-
-Other systems hide correctness inside a managed text-to-SQL service and ask you to trust the dashboard. Wren AI takes the opposite stance: every primitive is exposed as a CLI command or SDK tool the agent can call directly.
-
-```bash
-wren memory fetch -q "..."     # retrieve relevant schema for the question
-wren memory recall -q "..."    # find similar past NL-SQL pairs
-wren dry-plan --sql "..."      # expand SQL and show the planned query
-wren dry-run  --sql "..."      # validate against the live DB without returning rows
-wren --sql "..."               # execute through the modeled layer
-wren memory store --nl --sql   # persist the confirmed pair
+```mermaid
+flowchart TD
+  user["User / Agent"] --> skills["Skills<br/>workflow rules"]
+  skills --> cli["Wren CLI"]
+  cli --> mdl["MDL<br/>the canonical surface"]
+  cli --> memory["Memory<br/>targeted context"]
+  mdl --> planner["Plan + validate<br/>before any DB round-trip"]
+  memory --> planner
+  planner --> data["Data source"]
 ```
 
-The agent decides when to fetch, when to dry-plan, when to repair, when to ask. The trace stays inside the agent's reasoning loop, where you already review its work.
+Five layers sit between the agent's question and the database:
 
-## Pre-aggregation as a concrete primitive
+| Layer | What it does | How it prevents hallucination |
+|---|---|---|
+| **Skills** | Encode the workflow the agent must follow | The agent cannot skip "check memory" or "validate before execute" |
+| **MDL** | Declare every table, column, and relationship the agent is allowed to use | The agent can only name modeled objects — undeclared columns and legacy tables are invisible |
+| **Memory** | Index MDL + instructions + past NL-SQL pairs; retrieve only what matters per question | The agent reads the relevant slice, not a generic schema dump |
+| **Plan + validate** | Expand modeled SQL into the exact SQL that will run, before any DB call | Bad references fail at plan time with a clear error, not silently in production |
+| **Connectors** | Execute the planned SQL against the source | Type, dialect, and permission checks happen here |
 
-Pre-aggregation cubes are the clearest example of "remove the failure mode entirely."
+## What each layer blocks
 
-Small models routinely break on hand-written `GROUP BY` + `DATE_TRUNC` + filter SQL — joins go wrong, time grain gets misread, measures double-count. Wren AI cubes let you declare a business metric once with measures, dimensions, time grains, and hierarchies. The agent queries the cube with **structured input** instead of inventing SQL.
+### MDL: the agent cannot name what is not modeled
 
-For small or local models, this is the difference between a 30% error rate and a working production agent. See [Pre-aggregate with cubes](/oss/guides/cubes) for the recipe.
+Raw warehouses give the agent ambiguous joins, near-duplicate tables (`customers` vs `customers_v3` vs `loyalty_v3`), and columns that overlap across schemas. MDL collapses those problems into one canonical surface.
 
-## Schema linking through MDL
+If `email` is not in the `customers` model, the agent cannot query it — it does not exist in Wren AI's view of your data. If the canonical join between `orders` and `customers` is declared once in MDL, the agent does not have to invent it.
 
-The same logic applies one level up. Raw warehouses give the agent ambiguous joins, near-duplicate tables (`customers` vs `customers_v3` vs `loyalty_v3`), and column names that overlap across schemas. MDL collapses that to one canonical surface.
+### Memory: targeted retrieval beats dumping the schema
 
-When the agent asks "top customers by revenue":
+Two common failure modes:
 
-1. Memory retrieves the `customers`, `orders`, and `revenue` models — not the legacy tables.
-2. MDL exposes the approved `orders_customers` relationship — the agent does not invent a join.
-3. If `revenue` is a calculated field on `customers`, the agent uses it instead of hand-writing `SUM(amount) - SUM(refunds)`.
+- **Dump the whole schema** into the prompt → the model gets confused by irrelevant tables.
+- **Let the model guess** which tables are relevant → it picks the wrong one.
 
-Schema linking is not a model capability — it is a context structure that lets the model link correctly.
+Memory does neither. It indexes MDL + `instructions.md` + confirmed NL-SQL pairs, and retrieves only the slice that matches the question. The agent reads `customers`, `orders`, and the approved revenue calculation — not 500 tables.
 
-## Error recovery has a layer
+### Plan + validate: errors fail visibly
 
-When a query fails, the agent runs two diagnoses in order:
+`wren dry-plan` takes the agent's modeled SQL and expands it into the exact SQL that will run against the database. The agent — and you — see:
 
-| Layer | Tool | Symptom | Likely fix |
-|---|---|---|---|
-| **MDL** | `wren dry-plan` fails | Wrong model/column reference, missing relationship, malformed CTE | Update MDL or fix the agent's SQL against MDL |
-| **Database** | `dry-plan` succeeds but execution fails | Type mismatch, permission error, dialect issue | Profile/connection fix, not an MDL issue |
+- Catalog and schema resolution
+- Relationship joins inlined as CTEs
+- Policy filters from `instructions.md` injected
+- Column-level access enforced
 
-This split is small but decisive. Without it, every failure looks the same and the agent retries blindly.
+If a column name is wrong, dry-plan returns the available columns. If a relationship is missing, it says so. The agent retries with the right info instead of running broken SQL and reporting a wrong number.
 
-## What "correctness as a system" means in practice
+### Skills: the workflow is not the agent's to invent
 
-A correctness system is a stance, not a checkbox. Wren AI takes it seriously by:
+Skills are Markdown workflow guides. They tell the agent the order of operations: check memory first, then write SQL against MDL, then dry-plan, then execute, then store the confirmed pair. The agent does not get to skip steps.
 
-- Storing context as **explicit artifacts** (MDL, instructions, queries, memory) — reviewable, versionable, Git-friendly
-- Exposing every step as a **primitive** the agent can compose
-- Keeping the **trace inside the agent's reasoning**, not in another product UI
-- Refusing to ship a single "trust me" feature in place of the six pillars
+This matters because the most common failure mode is "model is fine, but the workflow around it is missing." Skills ship that workflow.
 
-You compose the correctness system your business needs. Wren AI ships the parts.
+## What the agent sees
+
+For a question like "top 5 customers by lifetime value this quarter", the loop runs:
+
+```text
+1. wren memory recall  -q "top customers by revenue"
+   → returns 2 similar past NL-SQL pairs
+
+2. wren memory fetch    -q "customer lifetime value"
+   → returns customers model + customer_lifetime_value column + active-customer instruction
+
+3. agent writes SQL against MDL:
+   SELECT first_name, customer_lifetime_value
+   FROM customers
+   ORDER BY 2 DESC LIMIT 5;
+
+4. wren dry-plan
+   → expands to planned SQL with the active-customer filter injected
+
+5. wren --sql ...
+   → executes against the database
+
+6. wren memory store --nl "..." --sql "..."
+   → next similar question gets this as a recall
+```
+
+Every step is a primitive the agent calls. The trace stays in the agent's reasoning where you review its work — there is no separate "correctness dashboard" you have to trust.
 
 ## See also
 
-- [Architecture](/oss/reference/architecture) — how the pieces fit together under the hood
-- [Pre-aggregate with cubes](/oss/guides/cubes) — the recipe for the cube primitive
-- [Refine answer quality](/oss/guides/refine) — the recipe for closing the loop with memory and instructions
+- [Architecture](/oss/reference/architecture) — the full technical breakdown
+- [How does the agent learn from your context?](/oss/concepts/agent_learning) — the memory + skills loop
+- [What does MDL do for the agent?](/oss/concepts/what_is_mdl) — why MDL is the canonical surface
