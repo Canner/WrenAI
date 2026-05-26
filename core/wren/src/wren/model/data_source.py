@@ -1,15 +1,10 @@
 from __future__ import annotations
 
-import base64
 import datetime as dtlib
 import urllib
 from enum import Enum, StrEnum, auto
-from json import loads
 from typing import TYPE_CHECKING, Any, Union
 from urllib.parse import unquote_plus, urlparse
-
-import ibis
-from ibis import BaseBackend
 
 try:
     import pyodbc
@@ -49,13 +44,19 @@ if TYPE_CHECKING:
     import MySQLdb
     import psycopg
     from pyathena.connection import Connection as PyAthenaConnection
+    from trino.dbapi import Connection as TrinoDbApiConnection
 
-# get_connection() may return either an ibis BaseBackend (for connectors still
-# routed through ibis) or a native driver connection for connectors that have
-# dropped the ibis dependency (Athena via pyathena, MySQL/Doris via MySQLdb,
-# Postgres/Canner via psycopg).
+# ``get_connection()`` returns a native driver connection. Each entry below
+# corresponds to one of the ``get_<name>_connection`` static methods on
+# :class:`DataSourceExtension`. Data sources whose native connectors build
+# their connections directly (BigQuery, Oracle, Databricks, Snowflake,
+# ClickHouse, Athena's spark variant, etc.) are not returned through
+# ``get_connection`` — those route through ``wren.connector.factory``.
 BackendOrConnection = Union[
-    BaseBackend, "PyAthenaConnection", "MySQLdb.Connection", "psycopg.Connection"
+    "PyAthenaConnection",
+    "MySQLdb.Connection",
+    "psycopg.Connection",
+    "TrinoDbApiConnection",
 ]
 
 X_WREN_DB_STATEMENT_TIMEOUT = "x-wren-db-statement_timeout"
@@ -278,10 +279,29 @@ class DataSourceExtension(Enum):
                     return self.get_mssql_connection_from_url(
                         info.connection_url.get_secret_value(), kwargs
                     )
-                return ibis.connect(info.connection_url.get_secret_value(), **kwargs)
-            if self.name in {"local_file", "redshift", "spark", "duckdb", "datafusion"}:
                 raise NotImplementedError(
-                    f"{self.name} connection is not implemented to get ibis backend"
+                    f"connection_url is not supported for {self.name}; "
+                    "use a typed ConnectionInfo instead"
+                )
+            # Data sources whose native connectors construct connections
+            # directly (BigQuery via google-cloud-bigquery, Oracle via oracledb,
+            # Databricks via databricks-sql) and the ones that have no shared
+            # ``get_<name>_connection`` shortcut. Calling
+            # ``DataSource.<name>.get_connection`` for these is unsupported —
+            # construct the typed connector via ``get_connector()`` instead.
+            if self.name in {
+                "bigquery",
+                "databricks",
+                "datafusion",
+                "duckdb",
+                "local_file",
+                "oracle",
+                "redshift",
+                "spark",
+            }:
+                raise NotImplementedError(
+                    f"{self.name}.get_connection() is not supported; "
+                    "use wren.connector.factory.get_connector() instead"
                 )
             return getattr(self, f"get_{self.name}_connection")(info)
         except KeyError:
@@ -306,30 +326,6 @@ class DataSourceExtension(Enum):
         from wren.connector.athena import _build_connect_kwargs  # noqa: PLC0415
 
         return connect(**_build_connect_kwargs(info))
-
-    @staticmethod
-    def get_bigquery_connection(info: BigQueryDatasetConnectionInfo) -> BaseBackend:
-        import ibis  # noqa: PLC0415
-        from google.cloud import bigquery  # noqa: PLC0415
-        from google.oauth2 import service_account  # noqa: PLC0415
-
-        credits_json = loads(
-            base64.b64decode(info.credentials.get_secret_value()).decode("utf-8")
-        )
-        credentials = service_account.Credentials.from_service_account_info(
-            credits_json
-        )
-        credentials = credentials.with_scopes(
-            [
-                "https://www.googleapis.com/auth/drive",
-                "https://www.googleapis.com/auth/cloud-platform",
-            ]
-        )
-        bq_client = bigquery.Client(project=info.project_id, credentials=credentials)
-        job_config = bigquery.QueryJobConfig()
-        job_config.job_timeout_ms = info.job_timeout_ms
-        bq_client.default_query_job_config = job_config
-        return ibis.bigquery.connect(client=bq_client, credentials=credentials)
 
     @staticmethod
     def get_canner_connection(info: CannerConnectionInfo):
@@ -566,24 +562,6 @@ class DataSourceExtension(Enum):
         )
 
     @staticmethod
-    def get_oracle_connection(info: OracleConnectionInfo) -> BaseBackend:
-        import ibis  # noqa: PLC0415
-
-        if hasattr(info, "dsn") and info.dsn:
-            return ibis.oracle.connect(
-                dsn=info.dsn.get_secret_value(),
-                user=info.user,
-                password=(info.password and info.password.get_secret_value()),
-            )
-        return ibis.oracle.connect(
-            host=info.host,
-            port=int(info.port),
-            database=info.database,
-            user=info.user,
-            password=(info.password and info.password.get_secret_value()),
-        )
-
-    @staticmethod
     def get_snowflake_connection(info: SnowflakeConnectionInfo):
         from wren.connector.snowflake import make_snowflake_connection  # noqa: PLC0415
 
@@ -618,13 +596,3 @@ class DataSourceExtension(Enum):
             connect_kwargs["http_scheme"] = "https"
         connect_kwargs.update(kwargs)
         return trino_connect(**connect_kwargs)
-
-    @staticmethod
-    def get_databricks_connection(info: DatabricksTokenConnectionInfo) -> BaseBackend:
-        import ibis  # noqa: PLC0415
-
-        return ibis.databricks.connect(
-            server_hostname=info.server_hostname,
-            http_path=info.http_path,
-            access_token=info.access_token.get_secret_value(),
-        )
