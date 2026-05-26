@@ -9,10 +9,10 @@ use crate::logical_plan::utils::{
 use crate::mdl::context::SessionPropertiesRef;
 use crate::mdl::lineage::DatasetLink;
 use crate::mdl::manifest::JoinType;
-use crate::mdl::utils::{qualify_name_from_column_name, quoted};
+use crate::mdl::utils::{collect_join_keys, qualify_name_from_column_name, quoted};
 use crate::mdl::Dataset;
 use crate::mdl::{AnalyzedWrenMDL, SessionStateRef};
-use crate::{mdl, DataFusionError};
+use crate::DataFusionError;
 use datafusion::common::alias::AliasGenerator;
 use datafusion::common::{internal_err, plan_err, DFSchema, DFSchemaRef, Result};
 use datafusion::common::{plan_datafusion_err, TableReference};
@@ -148,31 +148,39 @@ impl RelationChain {
                     return plan_err!("Nil relation chain");
                 };
 
-                let join_keys: Vec<Expr> = mdl::utils::collect_identifiers(condition)?
-                    .iter()
-                    .map(|c| col(qualify_name_from_column_name(c)))
-                    .collect();
-
-                // The right key should be rebased if the right table has a generated alias
-                let join_keys = join_keys
-                    .into_iter()
-                    .map(|expr| match expr {
-                        Expr::Column(c) => {
-                            if c.relation
-                                .clone()
-                                .map(|r| r.table() != left_alias)
-                                .unwrap_or(false)
-                            {
-                                if let Some(right_alias) = &right_alias {
-                                    return rebase_column(&Expr::Column(c), right_alias);
-                                }
+                // Parse the relationship condition as a conjunction of column equalities.
+                // Composite keys (e.g. `a.x = b.x AND a.y = b.y`) produce one pair per
+                // equality; we rebase each column to the right alias when needed and AND
+                // the equalities back together to form the final join predicate.
+                let key_pairs = collect_join_keys(condition)?;
+                let right_alias_ref = right_alias.as_deref();
+                let rebase_key = |column: &datafusion::common::Column| -> Result<Expr> {
+                    let expr = col(qualify_name_from_column_name(column));
+                    if let Expr::Column(c) = &expr {
+                        let needs_rebase = c
+                            .relation
+                            .as_ref()
+                            .map(|r| r.table() != left_alias)
+                            .unwrap_or(false);
+                        if needs_rebase {
+                            if let Some(right_alias) = right_alias_ref {
+                                return rebase_column(&expr, right_alias);
                             }
-                            Ok::<_, DataFusionError>(Expr::Column(c))
                         }
-                        _ => Ok::<_, DataFusionError>(expr),
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-                let join_condition = join_keys[0].clone().eq(join_keys[1].clone());
+                    }
+                    Ok::<_, DataFusionError>(expr)
+                };
+                let join_condition = key_pairs
+                    .iter()
+                    .map(|(l, r)| Ok(rebase_key(l)?.eq(rebase_key(r)?)))
+                    .collect::<Result<Vec<_>>>()?
+                    .into_iter()
+                    .reduce(|acc, eq| acc.and(eq))
+                    .ok_or_else(|| {
+                        plan_datafusion_err!(
+                            "Join condition `{condition}` produced no equality predicates"
+                        )
+                    })?;
                 let mut required_exprs = BTreeSet::new();
                 // collect the output calculated fields
                 match plan {

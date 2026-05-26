@@ -63,6 +63,85 @@ pub fn collect_identifiers(expr: &str) -> Result<BTreeSet<Column>> {
     Ok(visited)
 }
 
+/// Parse a relationship join condition into a list of `(left, right)` column pairs in AST
+/// order. The condition must be a conjunction (`AND`) of equality (`=`) predicates over
+/// column references — for example `a.x = b.x AND a.y = b.y`. Each equality contributes one
+/// pair; pairs are preserved in source order so that callers can build a structurally
+/// correct multi-key join condition.
+///
+/// Returns an error if the condition contains non-equality predicates, disjunctions, or
+/// non-column operands.
+pub fn collect_join_keys(expr: &str) -> Result<Vec<(Column, Column)>> {
+    let parsed = match Parser::new(&GenericDialect {}).try_with_sql(expr) {
+        Ok(p) => p,
+        Err(e) => return plan_err!("Error parsing join condition `{expr}`: {e}"),
+    }
+    .parse_expr();
+    let parsed = match parsed {
+        Ok(e) => e,
+        Err(e) => return plan_err!("Error parsing join condition `{expr}`: {e}"),
+    };
+
+    let mut pairs = Vec::new();
+    collect_join_keys_inner(&parsed, &mut pairs)?;
+    if pairs.is_empty() {
+        return plan_err!(
+            "Join condition `{expr}` must contain at least one equality predicate"
+        );
+    }
+    Ok(pairs)
+}
+
+fn collect_join_keys_inner(
+    expr: &datafusion::sql::sqlparser::ast::Expr,
+    out: &mut Vec<(Column, Column)>,
+) -> Result<()> {
+    use datafusion::sql::sqlparser::ast::{BinaryOperator, Expr as SqlExpr};
+    match expr {
+        SqlExpr::Nested(inner) => collect_join_keys_inner(inner, out),
+        SqlExpr::BinaryOp {
+            left,
+            op: BinaryOperator::And,
+            right,
+        } => {
+            collect_join_keys_inner(left, out)?;
+            collect_join_keys_inner(right, out)
+        }
+        SqlExpr::BinaryOp {
+            left,
+            op: BinaryOperator::Eq,
+            right,
+        } => {
+            let l = column_from_sql_expr(left)?;
+            let r = column_from_sql_expr(right)?;
+            out.push((l, r));
+            Ok(())
+        }
+        other => plan_err!(
+            "Join condition must be a conjunction of column equalities, got: {other}"
+        ),
+    }
+}
+
+fn column_from_sql_expr(expr: &datafusion::sql::sqlparser::ast::Expr) -> Result<Column> {
+    use datafusion::sql::sqlparser::ast::Expr as SqlExpr;
+    match expr {
+        SqlExpr::Identifier(id) => Ok(Column::new_unqualified(id.value.clone())),
+        SqlExpr::CompoundIdentifier(ids) => {
+            let name = ids
+                .iter()
+                .map(|id| id.value.clone())
+                .collect::<Vec<String>>()
+                .join(".");
+            Ok(Column::new_unqualified(name))
+        }
+        SqlExpr::Nested(inner) => column_from_sql_expr(inner),
+        other => {
+            plan_err!("Expected column reference in join condition, got: {other}")
+        }
+    }
+}
+
 /// Provide a qualified name from a [Column] name.
 ///
 /// Example: if a column name is `"orders.customer.name"`, the qualified name would be `"orders"."customer"."name"`.
@@ -360,6 +439,79 @@ mod tests {
         assert!(result.contains(&super::Column::new_unqualified("City")));
         assert!(result.contains(&super::Column::new_unqualified("State")));
         Ok(())
+    }
+
+    #[test]
+    fn test_collect_join_keys_single() -> Result<()> {
+        let pairs = super::collect_join_keys("a.x = b.x")?;
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(pairs[0].0, super::Column::new_unqualified("a.x"));
+        assert_eq!(pairs[0].1, super::Column::new_unqualified("b.x"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_collect_join_keys_composite() -> Result<()> {
+        let pairs = super::collect_join_keys("a.x = b.x AND a.y = b.y")?;
+        assert_eq!(pairs.len(), 2);
+        assert_eq!(pairs[0].0, super::Column::new_unqualified("a.x"));
+        assert_eq!(pairs[0].1, super::Column::new_unqualified("b.x"));
+        assert_eq!(pairs[1].0, super::Column::new_unqualified("a.y"));
+        assert_eq!(pairs[1].1, super::Column::new_unqualified("b.y"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_collect_join_keys_composite_three() -> Result<()> {
+        let pairs = super::collect_join_keys("a.x = b.x AND a.y = b.y AND a.z = b.z")?;
+        assert_eq!(pairs.len(), 3);
+        assert_eq!(pairs[2].0, super::Column::new_unqualified("a.z"));
+        assert_eq!(pairs[2].1, super::Column::new_unqualified("b.z"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_collect_join_keys_parenthesized() -> Result<()> {
+        let pairs = super::collect_join_keys("(a.x = b.x) AND (a.y = b.y)")?;
+        assert_eq!(pairs.len(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn test_collect_join_keys_quoted() -> Result<()> {
+        let pairs =
+            super::collect_join_keys(r#""a"."X" = "b"."X" AND "a"."Y" = "b"."Y""#)?;
+        assert_eq!(pairs.len(), 2);
+        assert_eq!(pairs[0].0, super::Column::new_unqualified("a.X"));
+        assert_eq!(pairs[0].1, super::Column::new_unqualified("b.X"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_collect_join_keys_rejects_non_eq() {
+        let err = super::collect_join_keys("a.x > b.x").unwrap_err();
+        assert!(
+            err.to_string().contains("conjunction of column equalities"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_collect_join_keys_rejects_disjunction() {
+        let err = super::collect_join_keys("a.x = b.x OR a.y = b.y").unwrap_err();
+        assert!(
+            err.to_string().contains("conjunction of column equalities"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_collect_join_keys_rejects_literal() {
+        let err = super::collect_join_keys("a.x = 1").unwrap_err();
+        assert!(
+            err.to_string().contains("Expected column reference"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
