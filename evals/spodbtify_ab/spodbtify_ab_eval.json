@@ -1,0 +1,161 @@
+{
+  "id": "spodbtify_ab",
+  "name": "Spodbtify A/B Eval",
+  "version": 1,
+  "description": "Compare schema-only Wren context against dbt-imported Wren context for analytical Spotify playlist questions.",
+  "dataset": {
+    "name": "Spodbtify",
+    "description": "Spotify Million Playlist Dataset materialized in DuckDB.",
+    "duckdb_path": "$SPODBTIFY_DUCKDB_PATH",
+    "dbt_project_dir": "$SPODBTIFY_DBT_PROJECT_DIR",
+    "tables": [
+      {"name": "Playlists", "layer": "staging", "rows": 1000000},
+      {"name": "Tracks", "layer": "staging", "rows": 66346428},
+      {"name": "Tracks_Deduplicated", "layer": "staging", "rows": 2262292},
+      {"name": "Artists", "layer": "staging", "rows": 295860},
+      {"name": "Albums", "layer": "staging", "rows": 849766},
+      {"name": "Playlist_Artist_Summary", "layer": "intermediate", "rows": 38088211},
+      {"name": "Playlist_Diversity", "layer": "intermediate", "rows": 1000000},
+      {"name": "Artist_Pairs", "layer": "intermediate", "rows": 6640712},
+      {"name": "Track_Pairs", "layer": "intermediate", "rows": 3012196},
+      {"name": "Artist_Collaborators", "layer": "mart", "rows": 253153},
+      {"name": "Artist_Loyalty", "layer": "mart", "rows": 39241},
+      {"name": "Genre_Proxy_Clusters", "layer": "mart", "rows": 19869},
+      {"name": "Playlist_Freshness", "layer": "mart", "rows": 90},
+      {"name": "Playlist_Length_Distribution", "layer": "mart", "rows": 6},
+      {"name": "Top_Artists", "layer": "mart", "rows": 1000},
+      {"name": "Top_Tracks", "layer": "mart", "rows": 1000},
+      {"name": "Top_Albums", "layer": "mart", "rows": 1000},
+      {"name": "Posty", "layer": "mart", "rows": 1},
+      {"name": "Swifties", "layer": "mart", "rows": 1}
+    ]
+  },
+  "controls": [
+    "Use the same DuckDB file for both workflows.",
+    "Use the same dbt build state for both workflows.",
+    "Use the same agent model for both workflows.",
+    "Ask the same 20 questions in fixed order.",
+    "Use a fresh agent session per workflow.",
+    "Do not leak dbt metadata, answers, or prior workflow context into the schema-only workflow."
+  ],
+  "workflows": [
+    {
+      "id": "schema_only",
+      "name": "Project A - schema-only agent",
+      "description": "The agent sees only physical DuckDB schema metadata: table names and column names/types. It does not inspect dbt models, dbt docs, lineage, or layer metadata.",
+      "setup_steps": [
+        "Configure a Wren DuckDB profile against the directory containing spodbtify.duckdb.",
+        "Run `wren context init --empty` in a fresh Wren project directory.",
+        "Use `wren-generate-mdl` or an equivalent schema introspection workflow to generate MDL from DuckDB schema only.",
+        "Run `wren context build`.",
+        "Run `wren memory index` if memory is enabled."
+      ],
+      "allowed_context": [
+        "DuckDB table names",
+        "DuckDB column names",
+        "DuckDB column types",
+        "Wren generated MDL from raw schema"
+      ],
+      "forbidden_context": [
+        "dbt model descriptions",
+        "dbt column descriptions",
+        "dbt refs or lineage graph",
+        "dbt layer classifications",
+        "dbt tests",
+        "dbt compiled SQL",
+        "prior answers from another workflow",
+        "previous eval answer files or scored result files"
+      ]
+    },
+    {
+      "id": "dbt_integrated",
+      "name": "Project B - dbt-integrated agent",
+      "description": "The agent gets dbt project metadata imported into Wren: model descriptions, column descriptions, dbt refs, layer classification, tests, and compiled SQL where available.",
+      "setup_steps": [
+        "Run `wren profile import dbt --project-dir $SPODBTIFY_DBT_PROJECT_DIR --profiles-path $SPODBTIFY_DBT_PROJECT_DIR/profiles.yml`.",
+        "Run `wren context import dbt --project-dir $SPODBTIFY_DBT_PROJECT_DIR --profiles-path $SPODBTIFY_DBT_PROJECT_DIR/profiles.yml --path <fresh-project-dir>`.",
+        "Confirm compiled SQL enrichment is present from dbt target artifacts where available.",
+        "Run `wren context build --path <fresh-project-dir>`.",
+        "Run `wren memory index --path <fresh-project-dir>` if memory is enabled."
+      ],
+      "allowed_context": [
+        "DuckDB schema metadata",
+        "dbt model descriptions",
+        "dbt column descriptions",
+        "dbt refs and lineage",
+        "dbt layer classifications",
+        "dbt test metadata",
+        "dbt compiled SQL",
+        "Wren generated MDL from dbt import"
+      ],
+      "forbidden_context": [
+        "prior answers from another workflow",
+        "previous eval answer files or scored result files"
+      ]
+    }
+  ],
+  "questions": [
+    {"id": 1, "text": "For the top 5 artists by playlist count, who are their top 3 collaborators and how many playlists do they share?"},
+    {"id": 2, "text": "Compare Post Malone vs Taylor Swift: playlist penetration rate, unique track count, and top 3 collaborators each."},
+    {"id": 3, "text": "Which 10 playlists have the most diverse artist mix (lowest HHI)? Show playlist name, unique artists, total tracks, and concentration score."},
+    {"id": 4, "text": "What is the distribution of artist concentration (HHI) across playlists? Bucket into low (<0.1), medium (0.1-0.3), high (>0.3) and show count and percentage."},
+    {"id": 5, "text": "Which 10 artists have the highest loyalty score - most playlists where they make up >50% of tracks? Show the artist, loyal playlist count, and an example playlist name."},
+    {"id": 6, "text": "Show the top 10 consecutive track pairs (back-to-back in playlists). For each pair, also show how many playlists each track appears in individually."},
+    {"id": 7, "text": "Which artists appear in >10,000 playlists but have fewer than 20 unique tracks? For each, show their top collaborator."},
+    {"id": 8, "text": "What is the average, median, and 90th percentile of track duration across all unique tracks?"},
+    {"id": 9, "text": "For playlists with >200 tracks, what is the average HHI concentration vs playlists with <10 tracks?"},
+    {"id": 10, "text": "Show the monthly trend of playlist modifications. For each month, also show the month-over-month growth rate in playlist count."},
+    {"id": 11, "text": "Which artist pairs are asymmetric collaborators - artist A's top collaborator is artist B, but artist B's top collaborator is NOT artist A?"},
+    {"id": 12, "text": "For the top 10 most-playlisted albums, show the album, artist, playlist count, and what percentage of that artist's total playlist appearances come from that single album."},
+    {"id": 13, "text": "Which 10 artists have the widest genre reach - appearing in the most diverse set of co-occurring artist clusters?"},
+    {"id": 14, "text": "Show playlists that contain tracks from both Drake and Taylor Swift. How many such crossover playlists exist, and what is their average track count?"},
+    {"id": 15, "text": "For each playlist size bucket (1-10, 11-25, etc.), what is the average HHI concentration, average follower count, and average number of edits?"},
+    {"id": 16, "text": "Which tracks appear in >30,000 playlists but whose artist appears in fewer than 80,000 playlists? Breakout hits from mid-tier artists."},
+    {"id": 17, "text": "Show the top 10 artists by playlist dominance ratio - the ratio of playlists where they are the dominant artist (>50%) to their total playlist appearances."},
+    {"id": 18, "text": "For the top 3 most-playlisted tracks, show every artist that frequently co-occurs via track pairs with each track."},
+    {"id": 19, "text": "Which 10 playlists have the highest follower count, and for each, show the most-represented artist and what percentage of tracks they contribute?"},
+    {"id": 20, "text": "Compare the top 5 artists: for each, show playlist count, unique tracks, album count, average tracks per album, loyal playlist count, and top collaborator - all in one result set."}
+  ],
+  "scoring": {
+    "max_score_per_question": 6,
+    "max_total": 120,
+    "dimensions": [
+      {
+        "id": "correct_table",
+        "name": "Correct table",
+        "scores": {
+          "0": "Wrong table or invented table.",
+          "1": "Partially correct, such as using raw/intermediate when a mart is optimal.",
+          "2": "Used the optimal table or model."
+        }
+      },
+      {
+        "id": "correct_sql",
+        "name": "Correct SQL",
+        "scores": {
+          "0": "SQL errors or wrong logic.",
+          "1": "Runs but is suboptimal, slow, or slightly off.",
+          "2": "Correct and efficient."
+        }
+      },
+      {
+        "id": "correct_answer",
+        "name": "Correct answer",
+        "scores": {
+          "0": "Wrong answer or no answer.",
+          "1": "Partially correct shape but wrong numbers, duplicates, or omissions.",
+          "2": "Matches expected result."
+        }
+      }
+    ]
+  },
+  "agent_output_schema": {
+    "question_id": "integer",
+    "workflow": "schema_only | dbt_integrated",
+    "agent": "string",
+    "selected_tables": ["string"],
+    "sql": "string",
+    "answer": "string",
+    "notes": "string"
+  }
+}

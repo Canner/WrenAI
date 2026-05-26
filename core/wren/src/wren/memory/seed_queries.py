@@ -5,6 +5,8 @@ Pure functions — no LanceDB or embedding dependency.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 _NUMERIC_TYPES = {
     "int",
     "integer",
@@ -25,12 +27,18 @@ SEED_TAG = "source:seed"
 def generate_seed_queries(manifest: dict) -> list[dict]:
     """Return a list of {"nl": ..., "sql": ...} seed pairs."""
     pairs: list[dict] = []
+    model_layers = {
+        model["name"]: _prop_value(model, "dbtLayer", "dbt_layer")
+        for model in manifest.get("models", [])
+    }
 
     for model in manifest.get("models", []):
+        if model_layers.get(model["name"]) == "raw":
+            continue
         pairs.extend(_model_seeds(model))
 
     for rel in manifest.get("relationships", []):
-        pair = _relationship_seed(rel)
+        pair = _relationship_seed(rel, model_layers)
         if pair:
             pairs.append(pair)
 
@@ -91,10 +99,23 @@ def _model_seeds(model: dict) -> list[dict]:
             }
         )
 
+    for col in columns:
+        accepted_values = _prop_raw(col, "acceptedValues", "accepted_values")
+        first_value = _first_accepted_value(accepted_values)
+        if not first_value:
+            continue
+        quoted = first_value.replace("'", "''")
+        pairs.append(
+            {
+                "nl": f"Show {name} where {col['name']} is {first_value}",
+                "sql": f"SELECT * FROM {name} WHERE {col['name']} = '{quoted}' LIMIT 100",
+            }
+        )
+
     return pairs
 
 
-def _relationship_seed(rel: dict) -> dict | None:
+def _relationship_seed(rel: dict, model_layers: dict[str, str]) -> dict | None:
     models = rel.get("models", [])
     condition = rel.get("condition", "").strip()
 
@@ -102,8 +123,39 @@ def _relationship_seed(rel: dict) -> dict | None:
         return None
 
     left, right = models[0], models[1]
+    if model_layers.get(left) == "raw" or model_layers.get(right) == "raw":
+        return None
 
     return {
         "nl": f"{left} with {right} details",
         "sql": f"SELECT * FROM {left} JOIN {right} ON {condition} LIMIT 100",
     }
+
+
+def _prop_value(obj: dict, *keys: str) -> str:
+    props = obj.get("properties") or {}
+    if not isinstance(props, dict):
+        return ""
+    for key in keys:
+        value = props.get(key)
+        if value not in (None, ""):
+            return str(value)
+    return ""
+
+
+def _prop_raw(obj: dict, *keys: str):
+    props = obj.get("properties") or {}
+    if not isinstance(props, dict):
+        return None
+    for key in keys:
+        if key in props:
+            return props[key]
+    return None
+
+
+def _first_accepted_value(value) -> str | None:
+    if isinstance(value, str):
+        return next((part.strip() for part in value.split(",") if part.strip()), None)
+    if isinstance(value, Sequence) and not isinstance(value, bytes):
+        return next((str(part).strip() for part in value if str(part).strip()), None)
+    return None
