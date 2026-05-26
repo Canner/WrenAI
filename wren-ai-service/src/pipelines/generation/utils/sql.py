@@ -298,6 +298,27 @@ def _rewrite_mssql_to_unixtime(sql: str) -> str:
     return to_unixtime_pattern.sub(lambda m: m.group(1), sql)
 
 
+def _rewrite_mssql_timestamp_subtraction(sql: str) -> str:
+    expression_pattern = r"((?:[^(),+\-]|\([^()]*\))+?)"
+    timestamp_subtraction_pattern = re.compile(
+        rf"{expression_pattern}\s*-\s*{expression_pattern}\s+AS\s+(\"[^\"]+\")",
+        re.IGNORECASE,
+    )
+
+    def replace_subtraction(match: re.Match[str]) -> str:
+        left = match.group(1).strip()
+        right = match.group(2).strip()
+        alias = match.group(3)
+        alias_text = alias.strip('"').lower()
+
+        if not any(token in alias_text for token in ("duration", "turnaround")):
+            return match.group(0)
+
+        return f"DATEDIFF('second', {right}, {left}) AS {alias}"
+
+    return timestamp_subtraction_pattern.sub(replace_subtraction, sql)
+
+
 def _rewrite_mssql_datepart_alias_references(sql: str) -> str:
     datepart_alias_pattern = re.compile(
         r"\b(DATEPART\(\s*(YEAR|MONTH|DAY)\s*,\s*((?:[^()]|\([^()]*\))+?)\s*\))\s+AS\s+\"([^\"]+)\"",
@@ -348,6 +369,7 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
         )
         normalized = _replace_relative_getdate_calls(normalized, now)
         normalized = _rewrite_mssql_to_unixtime(normalized)
+        normalized = _rewrite_mssql_timestamp_subtraction(normalized)
         normalized = _rewrite_mssql_timestamp_casts(normalized)
         normalized = _rewrite_mssql_bucket_functions(normalized)
         normalized = _rewrite_temporal_bucket_functions(normalized)
@@ -581,7 +603,7 @@ _MSSQL_TEXT_TO_SQL_RULES = """
 - Prefer native T-SQL date bucket syntax such as DATEPART(YEAR, "created_at") and DATEPART(MONTH, "created_at").
 - DO NOT use PostgreSQL-style or Trino-style date syntax such as DATE_TRUNC, DATETRUNC, INTERVAL, CURRENT_DATE, TIMESTAMP WITH TIME ZONE, TO_CHAR, TO_UNIXTIME, TO_TIMESTAMP, TO_TIMESTAMP_MILLIS, TO_TIMESTAMP_SECONDS, TO_TIMESTAMP_MICROS, TO_TIMESTAMP_NANOS, or :: casts.
 - DO NOT use DATEADD, DATEDIFF, DATETIME2, or DATETIMEOFFSET unless the SQL FUNCTIONS section explicitly proves they are supported by the target runtime.
-- Do not calculate duration with DATEDIFF/date_diff/datediff. If a duration or turnaround column exists in the schema, select that column directly. If only start/end timestamps exist and the SQL FUNCTIONS section does not list a duration function, return the timestamps separately instead of inventing a duration function.
+- Do not subtract timestamp/date columns directly. If a duration or turnaround column exists in the schema, select that column directly. If only start/end timestamps exist and the SQL FUNCTIONS section lists DATEDIFF, use DATEDIFF('second', <start_timestamp>, <end_timestamp>) for duration in seconds.
 - Resolve relative time phrases such as "last 12 months", "last month", or "this year" into absolute ISO timestamp boundaries using the current time context. Prefer closed-open literal ranges over runtime date arithmetic.
 - For month bucketing, prefer separate year/month fields:
     - DATEPART(YEAR, <timestamp_expression>) AS "year"
