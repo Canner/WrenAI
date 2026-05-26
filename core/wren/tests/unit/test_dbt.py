@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 
 import pytest
+import yaml
 
 from wren.dbt import (
     DbtLoadError,
+    convert_dbt_project_to_wren_project,
     convert_dbt_target_to_wren_profile,
     default_wren_profile_name,
     load_compiled_sql,
@@ -296,6 +298,30 @@ class TestConvertDbtTargetToWrenProfile:
 
 @pytest.mark.unit
 class TestLoadDbtArtifacts:
+    def test_import_normalizes_column_types_with_dbt_adapter(
+        self, tmp_path, monkeypatch
+    ):
+        project_dir, profiles_path = _write_basic_dbt_project(tmp_path)
+        monkeypatch.setenv("JAFFLE_DUCKDB_PATH", "warehouse/jaffle.duckdb")
+        catalog_path = project_dir / "build" / "catalog.json"
+        catalog = json.loads(catalog_path.read_text())
+        catalog["nodes"]["model.jaffle_shop.orders"]["columns"]["id"][
+            "type"
+        ] = "character varying(255)"
+        catalog_path.write_text(json.dumps(catalog))
+
+        imported = convert_dbt_project_to_wren_project(
+            project_dir, profiles_path=profiles_path
+        )
+
+        model_file = next(
+            file
+            for file in imported.files
+            if file.relative_path == "models/orders/metadata.yml"
+        )
+        metadata = yaml.safe_load(model_file.content)
+        assert metadata["columns"][0]["type"] == "VARCHAR(255)"
+
     def test_load_artifacts(self, tmp_path):
         project_dir, _profiles_path = _write_basic_dbt_project(tmp_path)
 

@@ -38,7 +38,7 @@ def parse_type(type_str: str, dialect: str) -> str:
         return type_str
     try:
         return sqlglot.parse_one(type_str, into=DataType, dialect=dialect).sql()
-    except sqlglot.errors.ParseError:
+    except (sqlglot.errors.ParseError, ValueError):
         return type_str
 
 

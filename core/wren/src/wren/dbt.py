@@ -12,6 +12,8 @@ from typing import Any
 
 import yaml
 
+from wren.type_mapping import parse_type
+
 _DEFAULT_DBT_TARGET_PATH = "target"
 _COMPILED_DIR = "compiled"
 _DBT_PROJECT_FILE = "dbt_project.yml"
@@ -669,6 +671,7 @@ def _build_imported_models(
     manifest = artifacts.manifest
     catalog_nodes = artifacts.catalog.get("nodes", {})
     catalog_sources = artifacts.catalog.get("sources", {})
+    type_dialect = _dbt_type_dialect(manifest)
 
     imported_models: list[dict[str, Any]] = []
     used_names: set[str] = set()
@@ -689,6 +692,7 @@ def _build_imported_models(
             catalog_entry=catalog_nodes.get(unique_id, {}),
             wren_name=str(node.get("alias") or node.get("name") or ""),
             dbt_resource_type="model",
+            type_dialect=type_dialect,
         )
         if model is None:
             skipped_without_columns += 1
@@ -705,6 +709,7 @@ def _build_imported_models(
             catalog_entry=catalog_sources.get(unique_id, {}),
             wren_name=source_name,
             dbt_resource_type="source",
+            type_dialect=type_dialect,
         )
         if model is None:
             skipped_without_columns += 1
@@ -808,8 +813,9 @@ def _build_model_metadata(
     catalog_entry: dict[str, Any],
     wren_name: str,
     dbt_resource_type: str,
+    type_dialect: str,
 ) -> dict[str, Any] | None:
-    columns = _extract_columns(node, catalog_entry)
+    columns = _extract_columns(node, catalog_entry, type_dialect)
     if not columns:
         return None
 
@@ -844,7 +850,9 @@ def _build_model_metadata(
     }
 
 
-def _extract_columns(node: dict[str, Any], catalog_entry: dict[str, Any]) -> list[dict]:
+def _extract_columns(
+    node: dict[str, Any], catalog_entry: dict[str, Any], type_dialect: str
+) -> list[dict]:
     manifest_columns = node.get("columns", {}) or {}
     catalog_columns = catalog_entry.get("columns", {}) or {}
 
@@ -866,13 +874,21 @@ def _extract_columns(node: dict[str, Any], catalog_entry: dict[str, Any]) -> lis
         )
         column = {
             "name": name,
-            "type": str(data_type).upper(),
+            "type": parse_type(str(data_type), type_dialect),
             "is_calculated": False,
             "not_null": False,
             "properties": _filter_none({"description": description}),
         }
         columns.append(column)
     return columns
+
+
+def _dbt_type_dialect(manifest: dict[str, Any]) -> str:
+    adapter_type = str(manifest.get("metadata", {}).get("adapter_type") or "").lower()
+    return {
+        "doris": "mysql",
+        "sqlserver": "tsql",
+    }.get(adapter_type, adapter_type)
 
 
 def infer_dbt_layer(node: dict[str, Any]) -> str:
