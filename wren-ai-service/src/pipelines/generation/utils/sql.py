@@ -321,14 +321,14 @@ def _rewrite_mssql_timestamp_subtraction(sql: str) -> str:
 
 def _rewrite_mssql_datepart_alias_references(sql: str) -> str:
     datepart_alias_pattern = re.compile(
-        r"\b(DATEPART\(\s*(YEAR|MONTH|DAY)\s*,\s*((?:[^()]|\([^()]*\))+?)\s*\))\s+AS\s+\"([^\"]+)\"",
+        r"\b(DATEPART\(\s*(YEAR|MONTH|DAY)\s*,\s*((?:[^()]|\([^()]*\))+?)\s*\))\s+AS\s+(?:\"([^\"]+)\"|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))",
         re.IGNORECASE,
     )
     aliases: dict[str, str] = {}
 
     for match in datepart_alias_pattern.finditer(sql):
         expression = match.group(1)
-        alias = match.group(4)
+        alias = match.group(4) or match.group(5) or match.group(6)
         aliases[alias.lower()] = expression
 
     if not aliases:
@@ -341,13 +341,30 @@ def _rewrite_mssql_datepart_alias_references(sql: str) -> str:
 
     def replace_clause(match: re.Match) -> str:
         body = match.group("body")
+        placeholders: dict[str, str] = {}
         for alias, expression in aliases.items():
+            placeholder = f"__WREN_MSSQL_DATEPART_ALIAS_{len(placeholders)}__"
+            placeholders[placeholder] = expression
             body = re.sub(
                 rf'"{re.escape(alias)}"',
-                expression,
+                placeholder,
                 body,
                 flags=re.IGNORECASE,
             )
+            body = re.sub(
+                rf"\[{re.escape(alias)}\]",
+                placeholder,
+                body,
+                flags=re.IGNORECASE,
+            )
+            body = re.sub(
+                rf"\b{re.escape(alias)}\b",
+                placeholder,
+                body,
+                flags=re.IGNORECASE,
+            )
+        for placeholder, expression in placeholders.items():
+            body = body.replace(placeholder, expression)
         return f"{match.group(1)}{body}"
 
     return clause_pattern.sub(replace_clause, sql)
