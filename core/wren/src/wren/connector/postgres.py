@@ -21,7 +21,6 @@ import pyarrow as pa
 from loguru import logger
 
 from wren.connector.base import ConnectorABC
-from wren.model.data_source import DataSource
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 
 # Map of well-known PostgreSQL OIDs to Arrow types. OIDs that we have not
@@ -225,7 +224,28 @@ class PostgresConnector(ConnectorABC):
     """Native psycopg3 implementation of the Wren postgres connector."""
 
     def __init__(self, connection_info):
-        self.connection = DataSource.postgres.get_connection(connection_info)
+        if (
+            hasattr(connection_info, "connection_url")
+            and connection_info.connection_url
+        ):
+            raise WrenError(
+                ErrorCode.INVALID_CONNECTION_INFO,
+                "connection_url is not supported for postgres; "
+                "use PostgresConnectionInfo instead",
+            )
+        kwargs = dict(connection_info.kwargs) if connection_info.kwargs else {}
+        self.connection = psycopg.connect(
+            host=connection_info.host,
+            port=int(connection_info.port),
+            dbname=connection_info.database,
+            user=connection_info.user,
+            password=(
+                connection_info.password.get_secret_value()
+                if connection_info.password
+                else None
+            ),
+            **kwargs,
+        )
         self._closed = False
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:

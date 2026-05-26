@@ -19,7 +19,6 @@ import pyarrow as pa
 from loguru import logger
 
 from wren.connector.base import ConnectorABC
-from wren.model.data_source import DataSource
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 
 # Postgres OID → Arrow type. Canner publishes Trino-style values over the
@@ -237,7 +236,25 @@ def _build_arrow_table(cursor) -> pa.Table:
 
 class CannerConnector(ConnectorABC):
     def __init__(self, connection_info):
-        self.connection = DataSource.canner.get_connection(connection_info)
+        import psycopg  # noqa: PLC0415
+
+        if (
+            hasattr(connection_info, "connection_url")
+            and connection_info.connection_url
+        ):
+            raise WrenError(
+                ErrorCode.INVALID_CONNECTION_INFO,
+                "connection_url is not supported for canner; "
+                "use CannerConnectionInfo instead",
+            )
+        self.connection = psycopg.connect(
+            host=connection_info.host,
+            port=int(connection_info.port),
+            dbname=connection_info.workspace,
+            user=connection_info.user,
+            password=connection_info.pat.get_secret_value(),
+            autocommit=True,
+        )
         self._closed = False
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:

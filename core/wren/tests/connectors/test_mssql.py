@@ -294,8 +294,10 @@ def test_url_connection(mssql_container: SqlServerContainer) -> None:
     )
     info = {"connectionUrl": url}
 
+    from wren.connector.mssql import _build_mssql_connection  # noqa: PLC0415
+
     parsed = DataSource.mssql.get_connection_info(info)
-    conn = DataSource.mssql.get_connection(parsed)
+    conn = _build_mssql_connection(parsed)
     try:
         cur = conn.cursor()
         cur.execute("SELECT 1 AS x")

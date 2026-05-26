@@ -20,8 +20,12 @@ from unittest.mock import MagicMock, patch
 import pyarrow as pa
 import pytest
 
-from wren.connector.mssql import MSSqlConnector
-from wren.model.data_source import DataSourceExtension
+from wren.connector.mssql import (
+    MSSqlConnector,
+    _connect_mssql_from_url,
+    _connect_mssql_pyodbc,
+    _decode_mssql_datetimeoffset,
+)
 from wren.model.error import ErrorCode, WrenError
 
 pytestmark = pytest.mark.unit
@@ -62,8 +66,8 @@ def test_mssql_url_decodes_user_database_and_password() -> None:
         "my%20db?TrustServerCertificate=yes&app%20name=wren"
     )
 
-    with patch("wren.model.data_source.pyodbc", fake):
-        DataSourceExtension.get_mssql_connection_from_url(url)
+    with patch("wren.connector.mssql.pyodbc", fake):
+        _connect_mssql_from_url(url)
 
     fake.connect.assert_called_once()
     parts = _parse_conn_str(fake.connect.call_args)
@@ -83,9 +87,9 @@ def test_mssql_url_decodes_user_database_and_password() -> None:
 
 def test_mssql_user_without_password_raises() -> None:
     fake = _FakePyodbc()
-    with patch("wren.model.data_source.pyodbc", fake):
+    with patch("wren.connector.mssql.pyodbc", fake):
         with pytest.raises(WrenError) as exc:
-            DataSourceExtension._connect_mssql_pyodbc(
+            _connect_mssql_pyodbc(
                 host="h",
                 port="1433",
                 database="db",
@@ -99,9 +103,9 @@ def test_mssql_user_without_password_raises() -> None:
 
 def test_mssql_password_without_user_raises() -> None:
     fake = _FakePyodbc()
-    with patch("wren.model.data_source.pyodbc", fake):
+    with patch("wren.connector.mssql.pyodbc", fake):
         with pytest.raises(WrenError) as exc:
-            DataSourceExtension._connect_mssql_pyodbc(
+            _connect_mssql_pyodbc(
                 host="h",
                 port="1433",
                 database="db",
@@ -115,8 +119,8 @@ def test_mssql_password_without_user_raises() -> None:
 
 def test_mssql_no_credentials_uses_trusted_connection() -> None:
     fake = _FakePyodbc()
-    with patch("wren.model.data_source.pyodbc", fake):
-        DataSourceExtension._connect_mssql_pyodbc(
+    with patch("wren.connector.mssql.pyodbc", fake):
+        _connect_mssql_pyodbc(
             host="h",
             port="1433",
             database="db",
@@ -133,8 +137,8 @@ def test_mssql_no_credentials_uses_trusted_connection() -> None:
 
 def test_mssql_both_credentials_emits_uid_and_pwd() -> None:
     fake = _FakePyodbc()
-    with patch("wren.model.data_source.pyodbc", fake):
-        DataSourceExtension._connect_mssql_pyodbc(
+    with patch("wren.connector.mssql.pyodbc", fake):
+        _connect_mssql_pyodbc(
             host="h",
             port="1433",
             database="db",
@@ -156,9 +160,9 @@ def test_mssql_both_credentials_emits_uid_and_pwd() -> None:
 
 def test_mssql_invalid_statement_timeout_does_not_leak_connection() -> None:
     fake = _FakePyodbc()
-    with patch("wren.model.data_source.pyodbc", fake):
+    with patch("wren.connector.mssql.pyodbc", fake):
         with pytest.raises(WrenError) as exc:
-            DataSourceExtension._connect_mssql_pyodbc(
+            _connect_mssql_pyodbc(
                 host="h",
                 port="1433",
                 database="db",
@@ -180,8 +184,8 @@ def test_mssql_valid_statement_timeout_is_applied() -> None:
     conn.timeout = 0
     fake.connect.return_value = conn
 
-    with patch("wren.model.data_source.pyodbc", fake):
-        result = DataSourceExtension._connect_mssql_pyodbc(
+    with patch("wren.connector.mssql.pyodbc", fake):
+        result = _connect_mssql_pyodbc(
             host="h",
             port="1433",
             database="db",
@@ -233,7 +237,7 @@ def test_mssql_decode_datetimeoffset_rejects_truncated_payload() -> None:
     cryptic ``month must be in 1..12`` that bubbles up from datetime()."""
     truncated = b"\x00" * 10
     with pytest.raises(ValueError) as exc:
-        DataSourceExtension._decode_mssql_datetimeoffset(truncated)
+        _decode_mssql_datetimeoffset(truncated)
     msg = str(exc.value)
     assert "datetimeoffset" in msg.lower()
     assert "20" in msg
@@ -242,7 +246,7 @@ def test_mssql_decode_datetimeoffset_rejects_truncated_payload() -> None:
 
 def test_mssql_decode_datetimeoffset_accepts_none() -> None:
     """``None`` continues to pass through (NULL values from pyodbc)."""
-    assert DataSourceExtension._decode_mssql_datetimeoffset(None) is None
+    assert _decode_mssql_datetimeoffset(None) is None
 
 
 # ---------------------------------------------------------------------------
