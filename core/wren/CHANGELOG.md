@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.8.0](https://github.com/Canner/WrenAI/compare/wren-v0.7.0...wren-v0.8.0) (2026-05-26)
+
+
+### Features
+
+* **wren:** add dbt import workflow ([#2279](https://github.com/Canner/WrenAI/issues/2279)) ([0bd16b8](https://github.com/Canner/WrenAI/commit/0bd16b8a95c7f599488177f9a56e232c17760e25))
+* **wren:** build MDL manifests from OSI semantic models ([#2322](https://github.com/Canner/WrenAI/issues/2322)) ([983cf8b](https://github.com/Canner/WrenAI/commit/983cf8bff589b5028b611bcb1ef89834990f9517))
+
+
+### Bug Fixes
+
+* **wren:** honor SQL identifier case across policy, extract, and CTE rewriter ([#2310](https://github.com/Canner/WrenAI/issues/2310)) ([9b5fe22](https://github.com/Canner/WrenAI/commit/9b5fe22ee35209ec23ec3bd4fe2b04133407a8bc))
+
 ## [0.7.0](https://github.com/Canner/WrenAI/compare/wren-v0.6.0...wren-v0.7.0) (2026-05-22)
 
 
