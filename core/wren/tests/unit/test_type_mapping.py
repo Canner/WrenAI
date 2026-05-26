@@ -10,7 +10,6 @@ import pytest
 
 from wren.type_mapping import parse_type, parse_types
 
-
 # ── parse_type unit tests ──────────────────────────────────────────────────
 
 
@@ -26,6 +25,7 @@ from wren.type_mapping import parse_type, parse_types
         ("DECIMAL(10,2)", "mysql", "DECIMAL(10, 2)"),
         # graceful fallback for unknown types
         ("my_custom_type", "postgres", "my_custom_type"),
+        ("my_custom_type", "unknown_dialect", "my_custom_type"),
         # empty string passthrough
         ("", "postgres", ""),
     ],

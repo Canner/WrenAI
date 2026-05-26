@@ -30,6 +30,7 @@ Changes merged to `main` are automatically synced to the doc website via GitHub 
 - [Views](guides/modeling/view.md)
 - [Memory](guides/memory.md)
 - [Profiles](guides/profiles.md)
+- [dbt Integration](guides/dbt-integration.md)
 
 ## Reference
 
