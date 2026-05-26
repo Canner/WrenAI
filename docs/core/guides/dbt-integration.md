@@ -35,6 +35,9 @@ dbt:
 Wren project traceable to its dbt source and gives future tooling enough
 context to refresh or inspect the original dbt artifacts.
 
+The `dbt` binding stores only project metadata. Credentials stay in Wren
+profiles and any environment variables referenced by those profiles.
+
 ## Prerequisites
 
 - A dbt project with `dbt_project.yml`
