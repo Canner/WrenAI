@@ -32,7 +32,7 @@ Without the `memory` extra, the memory commands below will not be available.
 
 ## The flow today
 
-The day-to-day refinement loop runs entirely on the `wren-usage` skill plus a few `wren memory` and `instructions.md` edits. Nothing requires a separate enrichment skill — that is on the roadmap (see [Coming soon](#coming-soon-wren-enrich-context) below).
+The day-to-day refinement loop runs on the `wren-usage` skill plus a few `wren memory` and `instructions.md` edits. When you need to go deeper than incremental edits — backfilling enum meanings, units, default filters, synonyms, or named metrics across a whole project — reach for the [`wren-enrich-context`](#wren-enrich-context) skill described below.
 
 ### 1. Capture business rules in `instructions.md`
 
@@ -108,14 +108,16 @@ Three commands to keep memory tidy:
 
 See the [CLI reference](/oss/reference/cli) for the full memory command surface.
 
-## Coming soon: `wren-enrich-context`
+## `wren-enrich-context`
 
-A dedicated `wren-enrich-context` skill is in **active development**. It will surface two structured modes for going deeper than `instructions.md` edits:
+The `wren-enrich-context` skill goes deeper than incremental `instructions.md` edits. It reads everything you drop into `<project>/raw/` (PDFs, glossaries, handbooks, analyst SQL, data dictionaries), compares it against the current MDL / `instructions.md` / `queries.yml` / memory, and fills the gaps — writing back only to reviewable, version-controlled artifacts. It works from a ten-category gap catalog: enum value meanings, units, NULL semantics, magic sentinels, default filters, synonyms, time conventions, cross-system identifiers, currency rules, and canonical-table preferences. Named aggregation metrics (ARR, churn, DAU) are proposed as cubes.
 
-- **Grill mode** — the agent walks the MDL one piece at a time and asks focused questions ("Which of `customers`, `customers_v3`, `loyalty_v3` is canonical?", "What does `status = 4` mean?"). You answer in plain language; the agent patches MDL, `instructions.md`, `queries.yml`, or memory based on the answer category.
-- **Auto-pilot mode** — drop docs, glossaries, SQL history, or a metric handbook into `<project>/raw/` and the agent reads them, proposes context changes with evidence, and surfaces a diff for review. Nothing writes to production context without your approval.
+Pick one of two modes at session start:
 
-Until that ships, the flow above (manual `instructions.md` edits + `wren-usage` loop + `queries.yml` curation) covers the same ground. Watch the [WrenAI repo](https://github.com/Canner/WrenAI) for updates.
+- **Grill mode** — the agent walks each gap one question at a time and asks focused questions ("Which of `customers`, `customers_v3`, `loyalty_v3` is canonical?", "What does `status = 4` mean?"). You answer in plain language; the agent drafts the change and patches MDL, `instructions.md`, `queries.yml`, or memory based on the answer category. With your OK, it can also sample low-cardinality columns from the live DB to discover enum and sentinel values.
+- **Auto-pilot mode** — drop docs, glossaries, SQL history, or a metric handbook into `<project>/raw/` and the agent reads them, applies its best inferences directly, and escalates to grill only on raw-vs-MDL conflicts and high-blast-radius additions (new cubes / views / relationships). It hands you a confidence-tagged audit at the end.
+
+Both modes only **add** — they never modify an existing field; contradictions are surfaced on a "please fix manually" list. Install it with the other skills (`npx skills add Canner/WrenAI --skill wren-enrich-context`) and trigger it by saying "enrich context" or "grill me on this project". See the [skills reference](/oss/reference/skills#wren-enrich-context) for the full breakdown.
 
 ## See also
 

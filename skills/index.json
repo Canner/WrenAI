@@ -83,6 +83,28 @@
         "wren-generate-mdl"
       ],
       "repository": "https://github.com/Canner/WrenAI/tree/main/skills/wren-usage"
+    },
+    {
+      "name": "wren-enrich-context",
+      "version": "1.0",
+      "description": "Augment a Wren project with business context that DB schema cannot carry — enum value meanings, units (USD vs cents, ms vs sec), NULL semantics, magic sentinels, soft-delete default filters, business synonyms, time-grain / TZ conventions, cross-system identifiers, currency rules, canonical-table preferences, and named aggregation metrics (ARR, churn, DAU) proposed as cubes. Two modes: `grill` (one question at a time) or `auto-pilot` (agent infers and applies, escalates on conflicts and high-blast-radius additions like new cubes / views / relationships). Reads raw/ (PDFs, glossaries, handbooks, code, data dictionaries) and optionally samples low-cardinality columns from the live DB (grill mode), compares against MDL / cubes / instructions.md / queries.yml / memory pairs, fills gaps via a ten-category gap catalog and a cube proposal flow. Only adds, never modifies existing fields.",
+      "tags": [
+        "wren",
+        "context",
+        "mdl",
+        "enrich",
+        "grill",
+        "auto-pilot",
+        "business-rules",
+        "instructions",
+        "queries",
+        "memory",
+        "semantic-layer"
+      ],
+      "dependencies": [
+        "wren-generate-mdl"
+      ],
+      "repository": "https://github.com/Canner/WrenAI/tree/main/skills/wren-enrich-context"
     }
   ]
 }

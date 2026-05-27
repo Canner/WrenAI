@@ -9,6 +9,7 @@ Wren AI provides **skills** — reusable AI agent workflow guides that teach Cla
 | **wren-onboarding** | Entry point: environment checks, project scaffolding, profile setup, first query |
 | **wren-generate-mdl** | One-time setup: explore database schema, normalize types, scaffold MDL YAML project |
 | **wren-usage** | Day-to-day workflow: gather schema context, recall past queries, write SQL, execute, store results |
+| **wren-enrich-context** | Deepen business context the schema can't carry: enum/unit/null semantics, default filters, synonyms, currency rules, and named aggregation metrics as cubes — via grill or auto-pilot mode |
 | **wren-dlt-connector** | Connect SaaS APIs (HubSpot, Stripe, Salesforce, GitHub, Slack, …) into DuckDB via dlt, then auto-generate a Wren project |
 
 ## Installation
@@ -158,6 +159,47 @@ The skill includes two reference documents loaded on demand:
 
 ---
 
+## wren-enrich-context
+
+The "enrich deep" companion to `wren-usage`. A schema-generated MDL only carries what the database can describe about itself — column names and types. The business meaning (what `status = 'A'` means, whether `amount` is in cents, which table is canonical, how the team defines ARR) lives in handbooks, glossaries, and analyst SQL. This skill brings that meaning into the project's reviewable context.
+
+### Two modes (chosen at session start)
+
+| Mode | Behavior | Best for |
+|------|----------|----------|
+| **Grill** | Walks each gap one question at a time, proposes a concrete draft, waits for accept / edit / skip. May sample low-cardinality columns from the live DB (with your OK) to discover enum and sentinel values. | Sensitive data, or when you want to review every change |
+| **Auto-pilot** | Reads `raw/` + current context, applies its best inferences directly, escalates to grill only on raw-vs-MDL conflicts and high-blast-radius additions (new cubes / views / relationships). Hands you a confidence-tagged audit at the end. | Bulk backfill from a large doc set |
+
+Both modes only **add** — they never modify an existing field. Contradictions are surfaced on a "please fix manually" list.
+
+### What it fills
+
+The skill works from a ten-category gap catalog covering the business semantics a schema can't express:
+
+| Sink | Categories |
+|------|-----------|
+| Column `properties.description` (prose + `[tag]` line) | enum value meanings, units (USD vs cents), NULL semantics, magic sentinels, time-grain / TZ conventions |
+| `instructions.md` (fixed `##` sections) | soft-delete default filters, business synonyms, cross-system identifiers, currency rules, canonical-table preferences |
+| `cubes/<name>/metadata.yml` | named aggregation metrics (ARR, churn, DAU) — proposed as cubes, the preferred aggregation primitive |
+| `queries.yml` / `wren memory store` | canonical and ad-hoc NL→SQL pairs |
+
+### When to trigger
+
+The skill activates on phrases like:
+
+- "enrich context" / "augment my project" / "grill me on this project"
+- "the agent doesn't understand our docs / enum values / units"
+- "what does `status = A` mean" / "is this amount in USD or cents"
+- "we keep getting wrong aggregations" / "add cubes for ARR / DAU / churn"
+- "we have a handbook / glossary / data dictionary the agent should know"
+
+### Reference files
+
+- **gap_catalog.md** — the ten gap categories with triggers, default sinks, and the prose-first `[tag]` write format.
+- **cube_proposals.md** — the decision tree for proposing a cube vs view vs calculated column, the cube YAML template, naming policy, duplication guard, and validation flow.
+
+---
+
 ## wren-generate-mdl
 
 A one-time setup skill that walks the agent through creating an MDL project from a live database.
@@ -257,6 +299,11 @@ Skills are installed to `~/.claude/skills/` with this layout:
 │   └── references/
 │       ├── memory.md          # Memory command decision logic
 │       └── wren-sql.md        # CTE rewrite pipeline reference
+├── wren-enrich-context/
+│   ├── SKILL.md              # Two-mode (grill / auto-pilot) context enrichment
+│   └── references/
+│       ├── gap_catalog.md     # Ten business-semantic gap categories
+│       └── cube_proposals.md  # When/how to propose cubes for aggregation metrics
 └── wren-dlt-connector/
     ├── SKILL.md              # SaaS-via-dlt → DuckDB → Wren project
     ├── references/
