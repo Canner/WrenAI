@@ -14,6 +14,7 @@ from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQLGenPostProcessor,
     construct_instructions,
+    construct_valid_table_names,
     get_calculated_field_instructions,
     get_json_field_instructions,
     get_metric_instructions,
@@ -34,6 +35,13 @@ sql_generation_user_prompt_template = """
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
+{% endfor %}
+
+### VALID TABLE NAMES ###
+Only use these exact table names from the schema. Do not invent, rename, singularize,
+pluralize, or add catalog/schema prefixes unless the table name is shown that way here.
+{% for table_name in valid_table_names %}
+- {{ table_name }}
 {% endfor %}
 
 {% if calculated_field_instructions %}
@@ -104,6 +112,7 @@ def prompt(
         query=query,
         data_source=data_source,
         documents=documents,
+        valid_table_names=construct_valid_table_names(documents),
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,

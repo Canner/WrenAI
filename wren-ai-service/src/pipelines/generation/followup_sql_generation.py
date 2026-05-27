@@ -15,6 +15,7 @@ from src.pipelines.generation.utils.sql import (
     SQLGenPostProcessor,
     construct_ask_history_messages,
     construct_instructions,
+    construct_valid_table_names,
     get_calculated_field_instructions,
     get_json_field_instructions,
     get_metric_instructions,
@@ -40,6 +41,13 @@ generate one SQL query to best answer user's question.
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
+{% endfor %}
+
+### VALID TABLE NAMES ###
+Only use these exact table names from the schema. Do not invent, rename, singularize,
+pluralize, or add catalog/schema prefixes unless the table name is shown that way here.
+{% for table_name in valid_table_names %}
+- {{ table_name }}
 {% endfor %}
 
 {% if calculated_field_instructions %}
@@ -108,6 +116,7 @@ def prompt(
         query=query,
         data_source=data_source,
         documents=documents,
+        valid_table_names=construct_valid_table_names(documents),
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,

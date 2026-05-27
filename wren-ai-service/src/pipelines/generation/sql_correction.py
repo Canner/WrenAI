@@ -15,6 +15,7 @@ from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQLGenPostProcessor,
     construct_instructions,
+    construct_valid_table_names,
     get_sql_generation_model_kwargs,
     get_text_to_sql_rules,
 )
@@ -68,6 +69,17 @@ sql_correction_user_prompt_template = """
 {% endfor %}
 {% endif %}
 
+{% if valid_table_names %}
+### VALID TABLE NAMES ###
+Only use these exact table names from the schema. If the invalid SQL references a
+table not listed here, replace it with the closest listed table only when the schema
+clearly supports the user's request. Do not invent, rename, singularize, pluralize,
+or add catalog/schema prefixes unless the table name is shown that way here.
+{% for table_name in valid_table_names %}
+- {{ table_name }}
+{% endfor %}
+{% endif %}
+
 {% if sql_functions %}
 ### SQL FUNCTIONS ###
 {% for function in sql_functions %}
@@ -106,6 +118,7 @@ def prompt(
     _prompt = prompt_builder.run(
         data_source=data_source,
         documents=documents,
+        valid_table_names=construct_valid_table_names(documents),
         invalid_generation_result=invalid_generation_result,
         instructions=construct_instructions(
             instructions=instructions,

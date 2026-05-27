@@ -1091,6 +1091,23 @@ def construct_instructions(
     return _instructions
 
 
+def construct_valid_table_names(documents: list[Any] | None = None) -> list[str]:
+    table_names = []
+    for document in documents or []:
+        content = getattr(document, "content", document)
+        if not isinstance(content, str):
+            continue
+
+        for match in re.finditer(
+            r"\bCREATE\s+TABLE\s+([`\"\[]?)([A-Za-z_][A-Za-z0-9_.$]*)\1",
+            content,
+            flags=re.IGNORECASE,
+        ):
+            table_names.append(match.group(2))
+
+    return sorted(set(table_names))
+
+
 def construct_ask_history_messages(
     histories: list[AskHistory] | list[dict],
 ) -> list[ChatMessage]:
