@@ -20,6 +20,93 @@ from src.web.v1.services.ask import AskHistory
 logger = logging.getLogger("wren-ai-service")
 
 
+def _parse_sql_json_payload(payload: str) -> str | None:
+    try:
+        parsed_payload = orjson.loads(payload)
+    except orjson.JSONDecodeError:
+        return None
+
+    if isinstance(parsed_payload, dict) and isinstance(parsed_payload.get("sql"), str):
+        return parsed_payload["sql"]
+
+    return None
+
+
+def _extract_json_object_with_sql(result: str) -> str | None:
+    sql_key_match = re.search(r'"sql"\s*:', result, flags=re.IGNORECASE)
+    if not sql_key_match:
+        return None
+
+    start = result.rfind("{", 0, sql_key_match.start())
+    if start == -1:
+        return None
+
+    depth = 0
+    in_string = False
+    escape_next = False
+    for index, char in enumerate(result[start:], start=start):
+        if escape_next:
+            escape_next = False
+            continue
+        if char == "\\" and in_string:
+            escape_next = True
+            continue
+        if char == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return result[start : index + 1]
+
+    return None
+
+
+def _extract_select_statement(result: str) -> str | None:
+    sql_match = re.search(r"\b(?:WITH|SELECT)\b", result, flags=re.IGNORECASE)
+    if not sql_match:
+        return None
+
+    statement = result[sql_match.start() :].strip()
+    semicolon_index = statement.find(";")
+    if semicolon_index >= 0:
+        statement = statement[:semicolon_index]
+
+    return statement
+
+
+def extract_sql_generation_result(result: str) -> str:
+    fenced_blocks = re.findall(
+        r"```(?:json|sql)?\s*(.*?)```", result, flags=re.IGNORECASE | re.DOTALL
+    )
+    for block in fenced_blocks:
+        if sql := _parse_sql_json_payload(block.strip()):
+            return clean_generation_result(sql)
+        if sql := _extract_select_statement(block):
+            return clean_generation_result(sql)
+
+    cleaned_result = clean_generation_result(result)
+    if sql := _parse_sql_json_payload(cleaned_result):
+        return clean_generation_result(sql)
+
+    if json_payload := _extract_json_object_with_sql(result):
+        if sql := _parse_sql_json_payload(json_payload):
+            return clean_generation_result(sql)
+
+    if sql := _extract_select_statement(result):
+        return clean_generation_result(sql)
+
+    return cleaned_result
+
+
+def is_select_statement(sql: str) -> bool:
+    return bool(re.match(r"^\s*(?:WITH|SELECT)\b", sql, flags=re.IGNORECASE))
+
+
 def normalize_data_source(data_source: str | None) -> str:
     normalized = (data_source or "").strip().upper().replace("-", "_").replace(
         " ", "_"
@@ -414,17 +501,23 @@ class SQLGenPostProcessor:
         allow_data_preview: bool = False,
     ) -> dict:
         try:
-            cleaned_generation_result = clean_generation_result(replies[0])
-
-            # test if cleaned_generation_result in string format is actually a dictionary with key 'sql'
-            if cleaned_generation_result.startswith("{"):
-                cleaned_generation_result = orjson.loads(cleaned_generation_result)[
-                    "sql"
-                ]
+            cleaned_generation_result = extract_sql_generation_result(replies[0])
 
             cleaned_generation_result = normalize_generation_result_sql(
                 cleaned_generation_result, data_source=data_source
             )
+
+            if not is_select_statement(cleaned_generation_result):
+                return {
+                    "valid_generation_result": {},
+                    "invalid_generation_result": {
+                        "sql": cleaned_generation_result,
+                        "original_sql": cleaned_generation_result,
+                        "type": "DRY_RUN",
+                        "error": "Generated response did not contain a SQL SELECT statement.",
+                        "correlation_id": "",
+                    },
+                }
 
             (
                 valid_generation_result,
