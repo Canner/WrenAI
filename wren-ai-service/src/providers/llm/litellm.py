@@ -19,6 +19,12 @@ from src.providers.loader import provider
 from src.utils import extract_braces_content, remove_trailing_slash
 
 
+def normalize_litellm_model_name(model: str, api_base: Optional[str] = None) -> str:
+    if api_base and "/" not in model:
+        return f"openai/{model}"
+    return model
+
+
 @provider("litellm_llm")
 class LitellmLLMProvider(LLMProvider):
     def __init__(
@@ -36,7 +42,7 @@ class LitellmLLMProvider(LLMProvider):
         fallback_testing: bool = False,
         **_,
     ):
-        self._model = model
+        self._model = normalize_litellm_model_name(model, api_base)
         # TODO: remove _api_key, _api_base, _api_version in the future, as it is not used in litellm
         self._api_key = os.getenv(api_key_name) if api_key_name else None
         self._api_base = remove_trailing_slash(api_base) if api_base else None
