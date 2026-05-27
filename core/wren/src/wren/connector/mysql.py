@@ -56,8 +56,12 @@ class MySqlConnector(ConnectorABC):
     """Native MySQLdb connector that bypasses ibis-project."""
 
     def __init__(self, connection_info):
+        import MySQLdb  # noqa: PLC0415
+
         self._closed = False
-        self.connection = DataSource.mysql.get_connection(connection_info)
+        self.connection = MySQLdb.connect(
+            **_build_mysql_connect_kwargs(connection_info)
+        )
         # Append ANSI_QUOTES to the server-configured sql_mode so identifiers
         # quoted as "name" (the MDL convention) are accepted. CONCAT preserves
         # the server defaults (ONLY_FULL_GROUP_BY, STRICT_TRANS_TABLES, …) —
@@ -115,10 +119,14 @@ class DorisConnector(MySqlConnector):
     """Doris connector. Speaks MySQL protocol; routes through Doris connection."""
 
     def __init__(self, connection_info):
+        import MySQLdb  # noqa: PLC0415
+
         # Skip MySqlConnector.__init__ — Doris does not accept the ANSI_QUOTES
-        # init command and the connection is created via Doris routing.
+        # init command.
         self._closed = False
-        self.connection = DataSource.doris.get_connection(connection_info)
+        self.connection = MySQLdb.connect(
+            **_build_doris_connect_kwargs(connection_info)
+        )
 
 
 def create_connector(data_source: DataSource, connection_info) -> MySqlConnector:

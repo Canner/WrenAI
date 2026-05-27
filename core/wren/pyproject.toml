@@ -21,7 +21,6 @@ classifiers = [
 ]
 dependencies = [
   "wren-core-py>=0.1",
-  "ibis-framework>=10",
   "duckdb>=1.0",
   "sqlglot>=27",
   "typer>=0.12",
@@ -45,7 +44,7 @@ dependencies = [
 [project.optional-dependencies]
 postgres = ["psycopg[binary]>=3"]
 mysql = ["mysqlclient>=2.2"]
-bigquery = ["ibis-framework[bigquery]", "google-auth"]
+bigquery = ["google-cloud-bigquery>=3.40,<4", "google-auth"]
 snowflake = ["snowflake-connector-python[pandas]>=3.10"]
 clickhouse = ["clickhouse-connect>=0.8"]
 trino = ["trino>=0.333,<1"]

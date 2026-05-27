@@ -2,18 +2,31 @@ from __future__ import annotations
 
 import datetime as dtlib
 import json
+import urllib.parse
 import uuid
 from contextlib import closing
 from decimal import Decimal as PyDecimal
+from typing import Any
+from urllib.parse import unquote, urlparse
 
 import pyarrow as pa
 import sqlglot.expressions as sge
 from loguru import logger
 from sqlglot import exp, parse_one
 
+try:
+    import pyodbc
+except ImportError:  # pragma: no cover
+    pyodbc = None
+
 from wren.connector.base import ConnectorABC
-from wren.model.data_source import DataSource
+from wren.model import MSSqlConnectionInfo
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
+
+# Custom SQL Server type code for DATETIMEOFFSET — exposed by pyodbc on
+# cursor.description so we can register an output converter that decodes the
+# raw 20-byte payload into a timezone-aware datetime.
+MSSQL_DATETIMEOFFSET_TYPE_CODE = -155
 
 
 class MSSqlConnector(ConnectorABC):
@@ -26,8 +39,7 @@ class MSSqlConnector(ConnectorABC):
     """
 
     def __init__(self, connection_info):
-        self.data_source = DataSource.mssql
-        self.connection = self.data_source.get_connection(connection_info)
+        self.connection = _build_mssql_connection(connection_info)
         self._closed = False
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
@@ -291,3 +303,174 @@ class MSSqlConnector(ConnectorABC):
 
 def create_connector(connection_info) -> MSSqlConnector:
     return MSSqlConnector(connection_info)
+
+
+# ---------------------------------------------------------------------------
+# Connection construction
+# ---------------------------------------------------------------------------
+
+
+def _build_mssql_connection(connection_info):
+    """Open a pyodbc connection from either a ``ConnectionUrl`` or a typed
+    :class:`MSSqlConnectionInfo`.
+
+    Centralises the URL vs. typed branching so :class:`MSSqlConnector` only
+    has to call this helper from its ``__init__``.
+    """
+    if hasattr(connection_info, "connection_url") and connection_info.connection_url:
+        return _connect_mssql_from_url(
+            connection_info.connection_url.get_secret_value(),
+            dict(connection_info.kwargs) if connection_info.kwargs else None,
+        )
+    info: MSSqlConnectionInfo = connection_info
+    return _connect_mssql_pyodbc(
+        host=info.host,
+        port=info.port,
+        database=info.database,
+        user=info.user,
+        password=info.password.get_secret_value() if info.password else None,
+        driver=info.driver,
+        kwargs={
+            "TDS_Version": info.tds_version,
+            **(info.kwargs if info.kwargs else {}),
+        },
+    )
+
+
+def _connect_mssql_from_url(
+    connection_url: str, base_kwargs: dict[str, Any] | None = None
+):
+    """Parse a ``mssql://user:pass@host:port/database`` URL and open a
+    pyodbc connection using the same code path as the typed-info builder."""
+    parsed = urlparse(connection_url)
+    if parsed.scheme != "mssql":
+        raise WrenError(
+            ErrorCode.INVALID_CONNECTION_INFO,
+            "Invalid connection URL for MSSQL",
+        )
+
+    if not parsed.hostname or not parsed.path:
+        raise WrenError(
+            ErrorCode.INVALID_CONNECTION_INFO,
+            "MSSQL connection URL must include host and database",
+        )
+
+    kwargs = dict(base_kwargs) if base_kwargs else {}
+    # parse_qsl already URL-decodes values, but we re-apply unquote below only
+    # to components urlparse leaves encoded (user, path, password). We use
+    # ``unquote`` (not ``unquote_plus``) so a literal ``+`` in a credential —
+    # e.g. ``svc+etl`` — is preserved instead of being turned into a space:
+    # ``+`` only has form-encoded semantics in query strings, not in userinfo
+    # or the path.
+    for key, value in urllib.parse.parse_qsl(parsed.query):
+        kwargs[key] = value
+    driver = kwargs.pop("driver", "ODBC Driver 18 for SQL Server")
+
+    # No username → integrated auth (Trusted_Connection=yes). The shared
+    # _connect_mssql_pyodbc validator owns the user/password symmetry check.
+    return _connect_mssql_pyodbc(
+        host=parsed.hostname,
+        port=str(parsed.port or 1433),
+        database=unquote(parsed.path.lstrip("/")),
+        user=unquote(parsed.username) if parsed.username else None,
+        password=unquote(parsed.password) if parsed.password else None,
+        driver=driver,
+        kwargs=kwargs,
+    )
+
+
+def _connect_mssql_pyodbc(
+    host: str,
+    port: str,
+    database: str,
+    user: str | None,
+    password: str | None,
+    driver: str,
+    kwargs: dict[str, Any] | None = None,
+):
+    if pyodbc is None:  # pragma: no cover
+        raise WrenError(ErrorCode.GET_CONNECTION_ERROR, "pyodbc is required for MSSQL")
+
+    connect_kwargs = dict(kwargs) if kwargs else {}
+    statement_timeout = connect_kwargs.pop("statement_timeout", None)
+    # Validate statement_timeout before opening the connection so a bad
+    # value can't leak the pyodbc connection we'd otherwise open first.
+    if statement_timeout is not None:
+        try:
+            statement_timeout = int(statement_timeout)
+        except (TypeError, ValueError) as exc:
+            raise WrenError(
+                ErrorCode.INVALID_CONNECTION_INFO,
+                f"Invalid statement_timeout for MSSQL: {statement_timeout!r}",
+            ) from exc
+
+    connection_parts = [
+        f"DRIVER={_escape_odbc_value(driver)}",
+        f"SERVER={host},{port}",
+        f"DATABASE={_escape_odbc_value(database)}",
+    ]
+    if user is None and password is None:
+        connection_parts.append("Trusted_Connection=yes")
+    elif user is None or password is None:
+        raise WrenError(
+            ErrorCode.INVALID_CONNECTION_INFO,
+            "MSSQL connection requires both user and password, "
+            "or neither (for Trusted_Connection)",
+        )
+    else:
+        connection_parts.append(f"UID={_escape_odbc_value(user)}")
+        connection_parts.append(f"PWD={_escape_odbc_value(password)}")
+
+    for key, value in connect_kwargs.items():
+        connection_parts.append(f"{key}={_escape_odbc_value(str(value))}")
+
+    connection = pyodbc.connect(";".join(connection_parts))
+    _register_mssql_output_converters(connection)
+
+    if statement_timeout is not None:
+        connection.timeout = statement_timeout
+
+    return connection
+
+
+def _escape_odbc_value(value: str) -> str:
+    return "{" + value.replace("}", "}}") + "}"
+
+
+def _register_mssql_output_converters(connection) -> None:
+    connection.add_output_converter(
+        MSSQL_DATETIMEOFFSET_TYPE_CODE,
+        _decode_mssql_datetimeoffset,
+    )
+
+
+def _decode_mssql_datetimeoffset(value: bytes | None) -> dtlib.datetime | None:
+    if value is None:
+        return None
+    if len(value) != 20:
+        raise ValueError(
+            "unexpected mssql datetimeoffset payload length: "
+            f"expected 20, got {len(value)}"
+        )
+
+    year = int.from_bytes(value[0:2], "little")
+    month = int.from_bytes(value[2:4], "little")
+    day = int.from_bytes(value[4:6], "little")
+    hour = int.from_bytes(value[6:8], "little")
+    minute = int.from_bytes(value[8:10], "little")
+    second = int.from_bytes(value[10:12], "little")
+    nanoseconds = int.from_bytes(value[12:16], "little")
+    offset_hours = int.from_bytes(value[16:18], "little", signed=True)
+    offset_minutes = int.from_bytes(value[18:20], "little", signed=True)
+
+    tzinfo = dtlib.timezone(dtlib.timedelta(hours=offset_hours, minutes=offset_minutes))
+    return dtlib.datetime(
+        year=year,
+        month=month,
+        day=day,
+        hour=hour,
+        minute=minute,
+        second=second,
+        microsecond=nanoseconds // 1000,
+        tzinfo=tzinfo,
+    )
