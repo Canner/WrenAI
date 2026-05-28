@@ -634,11 +634,13 @@ def docs_connection_info(
 app.add_typer(docs_app)
 
 from wren.cube_cli import cube_app  # noqa: E402, PLC0415
+from wren.skills_cli import skills_app  # noqa: E402, PLC0415
 from wren.utils_cli import utils_app  # noqa: E402, PLC0415
 
 app.add_typer(context_app)
 app.add_typer(cube_app)
 app.add_typer(utils_app)
+app.add_typer(skills_app)
 
 try:
     import lancedb  # noqa: PLC0415, F401

@@ -79,7 +79,10 @@ Issues = "https://github.com/Canner/WrenAI/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/wren"]
-artifacts = ["src/wren/templates/*.html"]
+artifacts = [
+    "src/wren/templates/*.html",
+    "src/wren/skills_content/**/*.md",
+]
 
 [tool.ruff]
 line-length = 88
