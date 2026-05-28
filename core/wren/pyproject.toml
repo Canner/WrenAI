@@ -39,6 +39,8 @@ dependencies = [
   "requests>=2.33.0",
   "pyasn1>=0.6.3",
   "pyopenssl>=26.0.0",
+  "urllib3>=2.7.0",
+  "lxml>=6.1.0",
 ]
 
 [project.optional-dependencies]
