@@ -1,48 +1,89 @@
 # Skills
 
-Wren AI provides **skills** — reusable AI agent workflow guides that teach Claude Code (or other AI coding agents) how to use the Wren CLI effectively. Skills are not plugins or extensions; they are structured prompts with decision trees that guide an agent through multi-step tasks.
+Wren AI ships **skills** — reusable AI agent workflow guides that teach
+Claude Code (or other AI coding agents) how to use the Wren CLI for
+multi-step tasks. A skill is a structured markdown guide with a decision
+tree, agent-side rules, and references to deeper documentation.
+
+## The new delivery model
+
+Earlier versions of Wren shipped each skill as a separate folder of
+markdown installed into the agent's skill directory (`~/.claude/skills/`,
+Cursor `rules/`, etc.). That model had two recurring problems: the bundled
+markdown drifted from the installed CLI version, and the agent loaded all
+the content up-front whether it was needed or not.
+
+Since Wren `0.8`, skill content **lives inside the `wren` CLI** and is
+served on demand:
+
+- One ~50-line **discovery stub** is installed into your agent
+  (`skills/wren/SKILL.md`). It teaches the agent that workflow guides,
+  reference docs, and shaped prompts are all fetched from the CLI.
+- The actual workflow guides live in the `wrenai` Python package and are
+  printed to stdout by `wren skills get <name>`.
+- Reference docs (a mirror of `docs/core/`) and prompt templates are
+  served the same way: `wren docs get <name>`, `wren ask "<q>" --guided|--direct`.
+
+Because the content travels with the wheel, the version the agent reads
+always matches the installed CLI.
 
 ## Available skills
 
-| Skill | Purpose |
-|-------|---------|
-| **wren-onboarding** | Entry point: environment checks, project scaffolding, profile setup, first query |
-| **wren-generate-mdl** | One-time setup: explore database schema, normalize types, scaffold MDL YAML project |
-| **wren-usage** | Day-to-day workflow: gather schema context, recall past queries, write SQL, execute, store results |
-| **wren-enrich-context** | Deepen business context the schema can't carry: enum/unit/null semantics, default filters, synonyms, currency rules, and named aggregation metrics as cubes — via grill or auto-pilot mode |
-| **wren-dlt-connector** | Connect SaaS APIs (HubSpot, Stripe, Salesforce, GitHub, Slack, …) into DuckDB via dlt, then auto-generate a Wren project |
+| Skill | Fetch with | Purpose |
+|-------|-----------|---------|
+| **onboarding** | `wren skills get onboarding` | Entry point: environment checks, project scaffolding, profile setup, first query |
+| **usage** | `wren skills get usage` | Day-to-day workflow: gather schema context, recall past queries, write SQL, execute, store results |
+| **generate-mdl** | `wren skills get generate-mdl` | One-time setup: explore database schema, normalize types, scaffold MDL YAML project |
+| **enrich-context** | `wren skills get enrich-context` | Deepen business context the schema can't carry: enum/unit/null semantics, default filters, synonyms, currency rules, and named aggregation metrics as cubes — via grill or auto-pilot mode |
+| **dlt-connector** | `wren skills get dlt-connector` | Connect SaaS APIs (HubSpot, Stripe, Salesforce, GitHub, Slack, …) into DuckDB via dlt, then auto-generate a Wren project |
+
+List them with `wren skills list`.
 
 ## Installation
 
-The installer supports every major AI coding agent (Claude Code, Openclaw, Hermes, Codex, etc.) and auto-detects which one you're using:
-
 ```bash
-# All skills at once
-npx skills add Canner/WrenAI --skill '*'
-
-# Or via install script
-curl -fsSL https://raw.githubusercontent.com/Canner/WrenAI/main/skills/install.sh | bash
+pip install wrenai                       # core CLI (DuckDB included)
+npx skills add Canner/WrenAI             # one-line discovery stub for your agent
 ```
 
-After installation, **start a new agent session** — skills are loaded at session start.
+The installer auto-detects Claude Code, Cursor, Cline, Codex, and similar
+clients. After installing, start a new agent session — the stub is loaded
+at session start; from then on it pulls workflow guides on demand.
 
-### Update skills
+## How content is delivered
 
-Skills check for updates automatically and notify the agent when a newer version is available. To force-update:
+The agent fetches guides using `wren skills get <name>`. The first call
+returns the SKILL.md body — a focused workflow guide. When the agent
+needs more depth it can ask for:
 
 ```bash
-# All skills
-curl -fsSL https://raw.githubusercontent.com/Canner/WrenAI/main/skills/install.sh | bash -s -- --force
-
-# Single skill
-curl -fsSL https://raw.githubusercontent.com/Canner/WrenAI/main/skills/install.sh | bash -s -- --force wren-generate-mdl
+wren skills get <name> --full             # include the skill's references/ inline
+wren skills get <name> --script <stem>    # print a bundled script's source
 ```
+
+Reference docs and prompt templates are served the same way:
+
+```bash
+wren docs list
+wren docs get <reference>                 # e.g. connect, mdl, cubes, quickstart
+wren ask "<question>" --guided            # for weaker LLMs
+wren ask "<question>" --direct            # for stronger LLMs
+```
+
+A bundled CI guard (`tests/unit/test_served_content_guard.py`) scans every
+`wren <cmd>` invocation in served skill content, reference docs, and ask
+templates against the real CLI command tree — so a guide can't tell an
+agent to run a command or flag that doesn't exist.
 
 ---
 
-## wren-onboarding
+## onboarding
 
-The entry-point skill. It walks the agent through the full setup flow — environment checks, project scaffolding, connection configuration, MDL generation, and a first query — by routing to docs and other skills at each step. The skill itself stays focused on agent-side rules (one step per turn, never ask for credentials in chat).
+The entry-point skill. It walks the agent through the full setup flow —
+environment checks, project scaffolding, connection configuration, MDL
+generation, and a first query — by routing to docs and other skills at
+each step. The skill itself stays focused on agent-side rules (one step
+per turn, never ask for credentials in chat).
 
 ### Workflow
 
@@ -53,7 +94,7 @@ User says "install wren" / "set up wren"
   │     Python 3.11+, virtualenv, wren CLI, working dir
   │
   ├── Branch: bundled demo or own database?
-  │     demo → quickstart.md, stop
+  │     demo → wren docs get quickstart, stop
   │     own DB → continue
   │
   ├── Step 1. Project name + database type
@@ -70,7 +111,7 @@ User says "install wren" / "set up wren"
   │     wren profile debug
   │
   ├── Step 5. Generate MDL
-  │     dispatch → wren-generate-mdl skill
+  │     wren skills get generate-mdl
   │
   └── Step 6. First query
         wren --sql "SELECT 1" (sanity)
@@ -88,25 +129,25 @@ User says "install wren" / "set up wren"
 
 ### When to trigger
 
-The skill activates on phrases like:
+The discovery stub routes the agent here on phrases like:
 
 - "install wren"
 - "set up wren engine"
 - "connect a new database"
 - "I want to start a Wren project"
-- `/wren-onboarding`
 
-### Reference docs (skill points to these, never duplicates)
+### Reference docs (the skill points to these, never duplicates)
 
-- [Installation](../get_started/installation.md)
-- [Connect your database](/oss/guides/connect)
-- [Quickstart with sample data](../get_started/quickstart.md)
+- `wren docs get installation`
+- `wren docs get connect`
+- `wren docs get quickstart`
 
 ---
 
-## wren-usage
+## usage
 
-The primary skill for day-to-day querying. It guides the agent through a complete query lifecycle.
+The primary skill for day-to-day querying. It guides the agent through a
+complete query lifecycle.
 
 ### Query workflow
 
@@ -141,7 +182,8 @@ The skill includes a two-layer error diagnosis strategy:
 | **MDL-level** | `wren dry-plan` fails | Wrong model/column names, missing relationships |
 | **DB-level** | `wren dry-plan` succeeds but execution fails | Type mismatch, permissions, dialect issues |
 
-The agent checks `dry-plan` output first to isolate whether the error is in the semantic layer or the database.
+The agent checks `dry-plan` output first to isolate whether the error is
+in the semantic layer or the database.
 
 ### Additional workflows
 
@@ -152,16 +194,25 @@ The agent checks `dry-plan` output first to isolate whether the error is in the 
 
 ### Reference files
 
-The skill includes two reference documents loaded on demand:
+`wren skills get usage --full` inlines two reference documents:
 
-- **memory.md** — Decision logic for when to `index`, `fetch`, `store`, and `recall`. Covers the hybrid retrieval strategy, store-by-default policy, and full lifecycle examples.
-- **wren-sql.md** — How the CTE-based rewrite pipeline works. Explains how the engine injects model CTEs, what SQL features are supported, and how to use `dry-plan` to diagnose errors layer by layer.
+- **memory.md** — decision logic for when to `index`, `fetch`, `store`,
+  and `recall`. Covers the hybrid retrieval strategy, store-by-default
+  policy, and full lifecycle examples.
+- **wren-sql.md** — how the CTE-based rewrite pipeline works. Explains
+  how the engine injects model CTEs, what SQL features are supported,
+  and how to use `dry-plan` to diagnose errors layer by layer.
 
 ---
 
-## wren-enrich-context
+## enrich-context
 
-The "enrich deep" companion to `wren-usage`. A schema-generated MDL only carries what the database can describe about itself — column names and types. The business meaning (what `status = 'A'` means, whether `amount` is in cents, which table is canonical, how the team defines ARR) lives in handbooks, glossaries, and analyst SQL. This skill brings that meaning into the project's reviewable context.
+The "enrich deep" companion to `usage`. A schema-generated MDL only
+carries what the database can describe about itself — column names and
+types. The business meaning (what `status = 'A'` means, whether `amount`
+is in cents, which table is canonical, how the team defines ARR) lives in
+handbooks, glossaries, and analyst SQL. This skill brings that meaning
+into the project's reviewable context.
 
 ### Two modes (chosen at session start)
 
@@ -170,11 +221,13 @@ The "enrich deep" companion to `wren-usage`. A schema-generated MDL only carries
 | **Grill** | Walks each gap one question at a time, proposes a concrete draft, waits for accept / edit / skip. May sample low-cardinality columns from the live DB (with your OK) to discover enum and sentinel values. | Sensitive data, or when you want to review every change |
 | **Auto-pilot** | Reads `raw/` + current context, applies its best inferences directly, escalates to grill only on raw-vs-MDL conflicts and high-blast-radius additions (new cubes / views / relationships). Hands you a confidence-tagged audit at the end. | Bulk backfill from a large doc set |
 
-Both modes only **add** — they never modify an existing field. Contradictions are surfaced on a "please fix manually" list.
+Both modes only **add** — they never modify an existing field.
+Contradictions are surfaced on a "please fix manually" list.
 
 ### What it fills
 
-The skill works from a ten-category gap catalog covering the business semantics a schema can't express:
+The skill works from a ten-category gap catalog covering the business
+semantics a schema can't express:
 
 | Sink | Categories |
 |------|-----------|
@@ -185,7 +238,7 @@ The skill works from a ten-category gap catalog covering the business semantics 
 
 ### When to trigger
 
-The skill activates on phrases like:
+The discovery stub routes the agent here on phrases like:
 
 - "enrich context" / "augment my project" / "grill me on this project"
 - "the agent doesn't understand our docs / enum values / units"
@@ -195,14 +248,20 @@ The skill activates on phrases like:
 
 ### Reference files
 
-- **gap_catalog.md** — the ten gap categories with triggers, default sinks, and the prose-first `[tag]` write format.
-- **cube_proposals.md** — the decision tree for proposing a cube vs view vs calculated column, the cube YAML template, naming policy, duplication guard, and validation flow.
+`wren skills get enrich-context --full` inlines:
+
+- **gap_catalog.md** — the ten gap categories with triggers, default
+  sinks, and the prose-first `[tag]` write format.
+- **cube_proposals.md** — the decision tree for proposing a cube vs view
+  vs calculated column, the cube YAML template, naming policy,
+  duplication guard, and validation flow.
 
 ---
 
-## wren-generate-mdl
+## generate-mdl
 
-A one-time setup skill that walks the agent through creating an MDL project from a live database.
+A one-time setup skill that walks the agent through creating an MDL
+project from a live database.
 
 ### Seven-phase workflow
 
@@ -248,29 +307,47 @@ normalized = parse_type("character varying(255)", "postgres")  # → "VARCHAR(25
 
 ---
 
-## wren-dlt-connector
+## dlt-connector
 
-A specialized skill for users who want to query SaaS data (HubSpot, Stripe, Salesforce, GitHub, Slack, …) with SQL. It chains a [dlt](https://dlthub.com) extraction pipeline into DuckDB with auto-generation of a Wren project on top.
+A specialized skill for users who want to query SaaS data (HubSpot,
+Stripe, Salesforce, GitHub, Slack, …) with SQL. It chains a
+[dlt](https://dlthub.com) extraction pipeline into DuckDB with
+auto-generation of a Wren project on top.
 
 ### Four-phase workflow
 
 | Phase | Goal | Key actions |
 |-------|------|-------------|
 | **1. Extract** | Pull SaaS data into local DuckDB | `pip install "dlt[duckdb]"`, write a small `pipeline.py`, set source credentials, run `pipeline.run(source)` |
-| **2. Model** | Auto-generate a Wren project | Run `introspect_dlt.py` to scan DuckDB, normalize types via `wren.type_mapping.parse_type()`, write models, relationships, profile |
+| **2. Model** | Auto-generate a Wren project | Run the bundled `introspect_dlt` script to scan DuckDB, normalize types via `wren.type_mapping.parse_type()`, write models, relationships, profile |
 | **3. Build & Verify** | Confirm queries work end-to-end | `wren context build`, `wren memory index`, run sample SQL through the engine — not just file generation |
 | **4. Handoff** | Show first results | Run a couple of representative queries and surface them to the user |
 
-The user can enter at any phase. If they already have a `.duckdb` file from a prior dlt run, the skill can start from Phase 2.
+The user can enter at any phase. If they already have a `.duckdb` file
+from a prior dlt run, the skill can start from Phase 2.
+
+The introspection script is fetched separately rather than inlined:
+
+```bash
+wren skills get dlt-connector --script introspect_dlt > introspect_dlt.py
+python introspect_dlt.py --duckdb-path ./pipeline.duckdb --output-dir ./project
+```
 
 ### Two non-negotiable invariants
 
-1. **DuckDB catalog naming** — when Wren AI `ATTACH`es a `.duckdb` file, it uses the filename stem as the catalog alias. So every model's `table_reference.catalog` **must equal the filename stem**. `stripe_data.duckdb` → catalog `stripe_data`. The `introspect_dlt.py` script handles this automatically — never override.
-2. **Type normalization through wren SDK** — column types must go through `wren.type_mapping.parse_type()` (sqlglot-based). Don't hardcode mappings; DuckDB-specific types like `HUGEINT` or `TIMESTAMP WITH TIME ZONE` need canonical conversion.
+1. **DuckDB catalog naming** — when Wren AI `ATTACH`es a `.duckdb` file,
+   it uses the filename stem as the catalog alias. So every model's
+   `table_reference.catalog` **must equal the filename stem**.
+   `stripe_data.duckdb` → catalog `stripe_data`. The bundled
+   `introspect_dlt` script handles this automatically — never override.
+2. **Type normalization through wren SDK** — column types must go through
+   `wren.type_mapping.parse_type()` (sqlglot-based). Don't hardcode
+   mappings; DuckDB-specific types like `HUGEINT` or `TIMESTAMP WITH
+   TIME ZONE` need canonical conversion.
 
 ### When to trigger
 
-The skill activates on phrases like:
+The discovery stub routes the agent here on phrases like:
 
 - "connect HubSpot / Stripe / Salesforce / GitHub / Slack data"
 - "load data from a SaaS API"
@@ -280,36 +357,45 @@ The skill activates on phrases like:
 
 ### Source coverage
 
-The skill ships a reference list of common dlt-verified sources with auth patterns. For sources not on the list, the agent checks [dlthub.com/docs/dlt-ecosystem/verified-sources](https://dlthub.com/docs/dlt-ecosystem/verified-sources) before improvising.
+The skill ships a reference list of common dlt-verified sources with auth
+patterns. For sources not on the list, the agent checks
+[dlthub.com/docs/dlt-ecosystem/verified-sources](https://dlthub.com/docs/dlt-ecosystem/verified-sources)
+before improvising.
 
 ---
 
-## Skill structure
+## Skill bundle layout
 
-Skills are installed to `~/.claude/skills/` with this layout:
+Inside the wheel, each skill is a directory under
+`src/wren/skills_content/`:
 
 ```text
-~/.claude/skills/
-├── wren-onboarding/
-│   └── SKILL.md              # Setup workflow (routes to docs and other skills)
-├── wren-generate-mdl/
-│   └── SKILL.md              # MDL generation workflow
-├── wren-usage/
-│   ├── SKILL.md              # Day-to-day query workflow
+src/wren/skills_content/
+├── onboarding/
+│   └── SKILL.md
+├── usage/
+│   ├── SKILL.md
 │   └── references/
-│       ├── memory.md          # Memory command decision logic
-│       └── wren-sql.md        # CTE rewrite pipeline reference
-├── wren-enrich-context/
-│   ├── SKILL.md              # Two-mode (grill / auto-pilot) context enrichment
+│       ├── memory.md
+│       └── wren-sql.md
+├── generate-mdl/
+│   └── SKILL.md
+├── enrich-context/
+│   ├── SKILL.md
 │   └── references/
-│       ├── gap_catalog.md     # Ten business-semantic gap categories
-│       └── cube_proposals.md  # When/how to propose cubes for aggregation metrics
-└── wren-dlt-connector/
-    ├── SKILL.md              # SaaS-via-dlt → DuckDB → Wren project
+│       ├── gap_catalog.md
+│       └── cube_proposals.md
+└── dlt-connector/
+    ├── SKILL.md
     ├── references/
-    │   └── dlt_sources.md     # Per-source dlt templates and auth patterns
+    │   └── dlt_sources.md
     └── scripts/
-        └── introspect_dlt.py  # Auto-generates a Wren project from a .duckdb file
+        └── introspect_dlt.py
 ```
 
-Each `SKILL.md` has YAML frontmatter with name, description, version, and license. The agent loads the main SKILL.md when triggered, and loads reference files or scripts on demand when deeper context is needed.
+Each `SKILL.md` has YAML frontmatter with name, description, and license.
+`wren skills get <name>` prints `SKILL.md`; `--full` appends every
+`references/*.md` in sorted order; `--script <stem>` prints a single file
+from `scripts/`. The skill bundle is shipped inside the `wrenai` wheel
+via Hatchling's `[tool.hatch.build.targets.wheel] artifacts` glob, so a
+fresh `pip install wrenai` always carries matching skill content.
