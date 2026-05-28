@@ -1,19 +1,27 @@
 #!/usr/bin/env bash
-# Install Wren Engine CLI skills into your local AI agent skills directory.
+# Install the Wren AI agent skill discovery stub into your local AI client.
+#
+# As of this release the actual skill content lives inside the `wren` CLI
+# itself (`pip install wrenai`). This script installs the discovery
+# stub (`wren`) that points an AI client at the CLI. During the deprecation
+# window the five previously-published fat skills are also installed as
+# ~10-line redirect stubs so existing `npx skills add ... --skill '*'`
+# users still see them — those redirects just tell the agent to run
+# `wren skills get <name>` instead.
 #
 # Usage:
-#   ./install.sh                     # install all skills
-#   ./install.sh wren-usage          # install specific skills
-#   ./install.sh --force wren-usage  # overwrite without prompt
+#   ./install.sh                     # install all stubs (wren + 5 redirects)
+#   ./install.sh wren                # install just the new discovery stub
+#   ./install.sh --force wren        # overwrite without prompt
 #   curl -fsSL https://raw.githubusercontent.com/Canner/WrenAI/main/skills/install.sh | bash
-#   curl -fsSL .../install.sh | bash -s -- wren-generate-mdl
 
 set -euo pipefail
 
 REPO="Canner/WrenAI"
 BRANCH="${WREN_SKILLS_BRANCH:-main}"
 DEST="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
-ALL_SKILLS=(wren-dlt-connector wren-enrich-context wren-generate-mdl wren-onboarding wren-usage)
+# New canonical discovery stub first; the rest are deprecation-window redirects.
+ALL_SKILLS=(wren wren-dlt-connector wren-enrich-context wren-generate-mdl wren-onboarding wren-usage)
 
 # Parse --force flag and skill list from arguments
 FORCE=false
