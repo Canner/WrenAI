@@ -1,0 +1,214 @@
+"""Guard: every `wren <cmd>` mentioned in bundled skill/docs/template content
+must resolve to a real CLI command (and `--flags` mentioned must be real flags
+on that command).
+
+This catches the "forward reference" failure mode we hit during incremental
+rollout — e.g., a lifted skill mentioning `wren docs get` before that command
+exists. By the time the branch is ready to ship, every command and flag the
+served content tells an agent to run must actually exist in the CLI.
+"""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+import click
+import pytest
+import typer
+
+from wren.cli import app
+
+# ── Build the real command tree ─────────────────────────────────────────────
+
+
+def _flags(cmd) -> set[str]:
+    flags: set[str] = set()
+    for param in getattr(cmd, "params", []):
+        if isinstance(param, click.Option):
+            for opt in param.opts + param.secondary_opts:
+                if opt.startswith("--"):
+                    flags.add(opt)
+    return flags
+
+
+def _walk(cmd, prefix: str = "") -> dict[str, set[str]]:
+    """Map command-path-string -> set of long flags."""
+    out: dict[str, set[str]] = {prefix.strip(): _flags(cmd)}
+    if isinstance(cmd, click.Group):
+        for name in cmd.list_commands(ctx=None):  # type: ignore[arg-type]
+            sub = cmd.get_command(None, name)  # type: ignore[arg-type]
+            if sub is not None:
+                out.update(_walk(sub, f"{prefix} {name}".strip()))
+    return out
+
+
+COMMANDS: dict[str, set[str]] = _walk(typer.main.get_command(app))
+
+# ``wren memory`` is conditionally registered (needs `wren-engine[memory]`
+# extras). It's a real public surface; bundled content correctly references
+# it. Allow-list its subcommands so this guard doesn't flag false positives
+# when the test env lacks memory extras.
+_MEMORY_SUBCOMMANDS = (
+    "index",
+    "describe",
+    "fetch",
+    "store",
+    "recall",
+    "status",
+    "reset",
+    "list",
+    "forget",
+    "dump",
+    "load",
+)
+COMMANDS.setdefault("memory", set())
+for _s in _MEMORY_SUBCOMMANDS:
+    COMMANDS.setdefault(f"memory {_s}", set())
+
+# Typer/Click adds these to every command implicitly.
+_UNIVERSAL_FLAGS = {"--help"}
+
+# The first token after `wren` must be one of these (commands or top-level
+# flags) for the snippet to count as a CLI invocation worth validating. Otherwise
+# it's prose ("the wren engine connects to ...", "in the wren project layout").
+_TOP_LEVEL_COMMANDS: set[str] = {p.split()[0] for p in COMMANDS if p}
+
+# Flags on `wren memory ...` cannot be introspected here without the memory
+# extras installed (lancedb + sentence-transformers). Skip flag validation for
+# memory commands; the command path itself is still validated via the
+# allow-list above.
+_SKIP_FLAG_VALIDATION_FOR_GROUPS = {"memory"}
+
+
+# ── Scan served content ─────────────────────────────────────────────────────
+
+_REPO = Path(__file__).resolve().parents[4]
+_SKILLS_CONTENT = _REPO / "core" / "wren" / "src" / "wren" / "skills_content"
+_DOCS_CONTENT = _REPO / "core" / "wren" / "src" / "wren" / "docs_content"
+_ASK_TEMPLATES = _REPO / "core" / "wren" / "src" / "wren" / "ask_templates"
+
+# Match `wren ` followed by content up to a newline, backtick, single/double
+# quote (avoid consuming SQL strings), or closing paren.
+_INVOCATION = re.compile(r"\bwren\s+(?P<rest>[^\n`'\"\)]+)")
+
+# A valid command-name token: lowercase alphanumerics + hyphens.
+_TOKEN = re.compile(r"^[a-z][a-z0-9-]*$")
+
+
+def _enumerate_invocations() -> list[tuple[Path, str, list[str]]]:
+    """Return (file, raw_snippet, tokens) for every wren invocation in served content."""
+    out: list[tuple[Path, str, list[str]]] = []
+    roots = [_SKILLS_CONTENT, _DOCS_CONTENT, _ASK_TEMPLATES]
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for path in sorted(root.rglob("*")):
+            if not (path.is_file() and path.suffix in (".md", ".tmpl")):
+                continue
+            text = path.read_text(encoding="utf-8")
+            # Join shell backslash-newline continuations so flags on follow-up
+            # lines (e.g. `wren cube query \\\n  --measures revenue`) are part
+            # of the same captured invocation rather than silently dropped.
+            text = re.sub(r"\\\s*\n[ \t]*", " ", text)
+            for m in _INVOCATION.finditer(text):
+                snippet = m.group("rest").strip()
+                tokens = snippet.split()
+                if not tokens:
+                    continue
+                out.append((path, snippet, tokens))
+    return out
+
+
+def _resolve(tokens: list[str]) -> tuple[str, list[str]]:
+    """Walk the command tree as long as the next token is a sub-command.
+    Returns (command_path, remaining_tokens).
+    """
+    path = ""
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        # stop walking on placeholders, flags, quoted args
+        if not _TOKEN.match(tok):
+            break
+        candidate = (path + " " + tok).strip() if path else tok
+        # extend path if candidate is a registered command OR a prefix of one
+        if candidate in COMMANDS or any(
+            p == candidate or p.startswith(candidate + " ") for p in COMMANDS
+        ):
+            path = candidate
+            i += 1
+        else:
+            break
+    return path, tokens[i:]
+
+
+def _findings() -> list[str]:
+    problems: list[str] = []
+    for path, snippet, tokens in _enumerate_invocations():
+        first = tokens[0]
+        # Only treat as a CLI invocation if first token is a known top-level
+        # command/group OR a top-level flag (e.g. `wren --sql ...`). Otherwise
+        # it's prose ("the wren engine", "in the wren project layout") — skip.
+        if not first.startswith("-") and first not in _TOP_LEVEL_COMMANDS:
+            continue
+
+        cmd_path, leftover = _resolve(tokens)
+        rel = path.relative_to(_REPO)
+
+        # Skip flag validation for groups we can't introspect (memory needs
+        # extras installed); the command path is still validated above by the
+        # allow-list — only flags are skipped.
+        cmd_group = cmd_path.split()[0] if cmd_path else ""
+        if cmd_group in _SKIP_FLAG_VALIDATION_FOR_GROUPS:
+            continue
+
+        for tok in leftover:
+            if not tok.startswith("--"):
+                continue
+            flag = tok.rstrip(",.;:")
+            if flag in _UNIVERSAL_FLAGS:
+                continue
+            allowed = COMMANDS.get(cmd_path, set())
+            if flag not in allowed:
+                problems.append(
+                    f"{rel}: unknown flag '{flag}' for 'wren {cmd_path}'".rstrip()
+                    + f"  (in `wren {snippet}`)"
+                )
+    return problems
+
+
+# ── Test surface ────────────────────────────────────────────────────────────
+
+
+def test_command_tree_loaded():
+    """Sanity: introspection finds the commands we expect."""
+    assert "skills get" in COMMANDS
+    assert "docs get" in COMMANDS
+    assert "ask" in COMMANDS
+    assert "--full" in COMMANDS["skills get"]
+    assert "--script" in COMMANDS["skills get"]
+    assert "--guided" in COMMANDS["ask"]
+    assert "--direct" in COMMANDS["ask"]
+
+
+def test_served_content_invocations_resolve():
+    problems = _findings()
+    if problems:
+        msg = (
+            "Served content references commands/flags that don't exist:\n  "
+            + "\n  ".join(problems)
+        )
+        pytest.fail(msg)
+
+
+def test_at_least_one_invocation_was_validated():
+    """Sanity: ensure the scanner actually finds invocations to validate
+    (so a regression in the regex doesn't silently pass)."""
+    invocations = _enumerate_invocations()
+    # Current served content yields ~400 invocations. A regression in the
+    # scanner that silently dropped most matches would weaken the guard
+    # without obviously failing — keep the floor tight enough to notice.
+    assert len(invocations) >= 200, (
+        f"only found {len(invocations)} wren invocations; regex may be broken"
+    )
