@@ -17,36 +17,6 @@
         "semantic-layer"
       ],
       "repository": "https://github.com/Canner/WrenAI/tree/main/skills/wren"
-    },
-    {
-      "name": "wren-onboarding",
-      "description": "DEPRECATED redirect — fetch the current guide with `wren skills get onboarding`. Onboard a user to Wren Engine end-to-end. Triggers: 'install wren', 'set up wren engine', 'wren onboarding', 'connect new database to wren'.",
-      "tags": ["wren", "redirect", "deprecated", "onboarding"],
-      "repository": "https://github.com/Canner/WrenAI/tree/main/skills/wren-onboarding"
-    },
-    {
-      "name": "wren-usage",
-      "description": "DEPRECATED redirect — fetch the current guide with `wren skills get usage`. Day-to-day querying through the MDL semantic layer. Triggers on data questions, reports, metrics, revenue, trends, 'how many', 'show me', 'top N', 'compare', 'breakdown'.",
-      "tags": ["wren", "redirect", "deprecated", "usage"],
-      "repository": "https://github.com/Canner/WrenAI/tree/main/skills/wren-usage"
-    },
-    {
-      "name": "wren-generate-mdl",
-      "description": "DEPRECATED redirect — fetch the current guide with `wren skills get generate-mdl`. Generate a Wren MDL project from a live database schema.",
-      "tags": ["wren", "redirect", "deprecated", "mdl", "introspection"],
-      "repository": "https://github.com/Canner/WrenAI/tree/main/skills/wren-generate-mdl"
-    },
-    {
-      "name": "wren-dlt-connector",
-      "description": "DEPRECATED redirect — fetch the current guide with `wren skills get dlt-connector`. Connect SaaS data (HubSpot, Stripe, Salesforce, GitHub, Slack, etc.) via dlt into DuckDB.",
-      "tags": ["wren", "redirect", "deprecated", "dlt", "saas"],
-      "repository": "https://github.com/Canner/WrenAI/tree/main/skills/wren-dlt-connector"
-    },
-    {
-      "name": "wren-enrich-context",
-      "description": "DEPRECATED redirect — fetch the current guide with `wren skills get enrich-context`. Augment a Wren project with business context (enum meanings, units, NULL semantics, cubes for ARR / DAU / churn).",
-      "tags": ["wren", "redirect", "deprecated", "context", "enrich"],
-      "repository": "https://github.com/Canner/WrenAI/tree/main/skills/wren-enrich-context"
     }
   ]
 }

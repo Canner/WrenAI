@@ -37,8 +37,7 @@ The installer auto-detects your AI client. To target a specific one, add
 #### Option 3 — local install script
 
 ```bash
-bash skills/install.sh                 # install the discovery stub (+ deprecated redirects)
-bash skills/install.sh wren            # install just the new discovery stub
+bash skills/install.sh                 # install the discovery stub
 bash skills/install.sh --force         # overwrite existing
 ```
 
@@ -52,13 +51,6 @@ wren skills get onboarding              # fetch a guide (one of 5 names)
 wren docs list / wren docs get <ref>    # fetch a reference doc
 wren ask "<question>" --guided|--direct # wrap a prompt for an agent
 ```
-
-## Deprecation window
-
-The five previously-shipped fat skills (`wren-onboarding`, `wren-usage`,
-`wren-generate-mdl`, `wren-dlt-connector`, `wren-enrich-context`) are kept
-for one release as ~10-line redirect stubs that tell the agent to call
-`wren skills get <name>` instead. They will be removed in the release after.
 
 ## Requirements
 

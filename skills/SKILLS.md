@@ -35,15 +35,6 @@ Or via Claude Code's plugin marketplace:
 /plugin install wren@wren
 ```
 
-## Deprecation window (legacy `wren-onboarding` / `wren-usage` / …)
-
-The five previously-shipped fat skills (`wren-onboarding`, `wren-usage`,
-`wren-generate-mdl`, `wren-dlt-connector`, `wren-enrich-context`) are kept
-as **redirect stubs** for one release so anyone who previously ran
-`npx skills add Canner/WrenAI --skill '*'` still sees them — the stubs just
-tell the agent to run `wren skills get <name>` instead. They will be removed
-in the release after that.
-
 ## Writing a new skill
 
 New skill guides ship as Python package data in
