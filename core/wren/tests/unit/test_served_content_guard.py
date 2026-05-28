@@ -11,6 +11,7 @@ served content tells an agent to run must actually exist in the CLI.
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 import click
@@ -154,7 +155,29 @@ def _findings() -> list[str]:
             continue
 
         cmd_path, leftover = _resolve(tokens)
-        rel = path.relative_to(_REPO)
+        try:
+            rel = path.relative_to(_REPO)
+        except ValueError:
+            rel = path
+
+        # Unknown-subcommand check. If `cmd_path` resolved to a group node
+        # (has at least one child registered in COMMANDS) and the first
+        # leftover token is a plain word, that word is an unknown
+        # subcommand the user typo'd — `wren docs typo`, `wren memory typo`.
+        # On a leaf command (`skills get`, `docs get`) leftover words are
+        # positional args, not typos, so the children gate skips them.
+        # Runs before _SKIP_FLAG_VALIDATION_FOR_GROUPS so typos under
+        # `memory` are caught even though we can't introspect memory flags.
+        if (
+            leftover
+            and _TOKEN.match(leftover[0])
+            and any(p.startswith(f"{cmd_path} ") for p in COMMANDS if cmd_path)
+        ):
+            problems.append(
+                f"{rel}: unknown subcommand '{leftover[0]}' for 'wren {cmd_path}'"
+                + f"  (in `wren {snippet}`)"
+            )
+            continue
 
         # Skip flag validation for groups we can't introspect (memory needs
         # extras installed); the command path is still validated above by the
@@ -212,3 +235,30 @@ def test_at_least_one_invocation_was_validated():
     assert len(invocations) >= 200, (
         f"only found {len(invocations)} wren invocations; regex may be broken"
     )
+
+
+def test_unknown_subcommand_is_flagged(tmp_path, monkeypatch):
+    """An unknown subcommand under a known group (`wren docs typo`) must
+    be reported. Leaf commands taking positional args (`wren skills get
+    usage`) must NOT be flagged. Typos under `memory` must also be caught
+    even though flag validation is skipped for memory.
+    """
+    fake_skill = tmp_path / "skill.md"
+    fake_skill.write_text(
+        "Run `wren docs typo` to break stuff.\n"
+        "Also `wren skills get usage` — this is legit (positional, not typo).\n"
+        "And `wren memory typo` — should also be flagged.\n",
+        encoding="utf-8",
+    )
+
+    module = sys.modules[__name__]
+    monkeypatch.setattr(module, "_SKILLS_CONTENT", tmp_path)
+    monkeypatch.setattr(module, "_DOCS_CONTENT", tmp_path / "_empty_docs")
+    monkeypatch.setattr(module, "_ASK_TEMPLATES", tmp_path / "_empty_ask")
+
+    problems = _findings()
+    joined = "\n".join(problems)
+    assert "unknown subcommand 'typo' for 'wren docs'" in joined, problems
+    assert "unknown subcommand 'typo' for 'wren memory'" in joined, problems
+    # leaf + positional should NOT appear
+    assert "'usage'" not in joined, problems

@@ -19,7 +19,7 @@ For memory and query workflows after setup, run `wren skills get usage`.
 
 - `wren` CLI installed (`pip install "wrenai[<datasource>]"`)
 - A working database connection (credentials available to the agent)
-- A wren profile configured (`wren profile add`) or connection info ready
+- A connection profile (set up via `wren profile add`) or connection info ready
 
 ## Phase 0 — Detect existing project
 
