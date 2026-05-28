@@ -151,6 +151,60 @@ def expand_business_terms_for_retrieval(query: str) -> str:
     )
 
 
+def candidate_pcb_table_names(query: str) -> list[str]:
+    normalized = (query or "").lower()
+    if not any(
+        term in normalized
+        for term in [
+            "pcb",
+            "repair",
+            "debug",
+            "turnaround",
+            "failure",
+            "resolved",
+            "trend",
+            "volume",
+            "count",
+            "average",
+            "chart",
+        ]
+    ):
+        return []
+
+    names = [
+        "dbo.DebugEntries",
+        "DebugEntries",
+        "dbo.DebugFixLogs",
+        "DebugFixLogs",
+        "dbo.failure_patterns",
+        "failure_patterns",
+        "dbo.pcb_tags",
+        "pcb_tags",
+        "dbo.batch_records",
+        "batch_records",
+        "dbo.risk_scores",
+        "risk_scores",
+    ]
+
+    if "failure" in normalized:
+        names = [
+            "dbo.failure_patterns",
+            "failure_patterns",
+            "dbo.pcb_tags",
+            "pcb_tags",
+        ] + names
+
+    if "turnaround" in normalized or "debug" in normalized or "resolved" in normalized:
+        names = [
+            "dbo.DebugEntries",
+            "DebugEntries",
+            "dbo.DebugFixLogs",
+            "DebugFixLogs",
+        ] + names
+
+    return list(dict.fromkeys(names))
+
+
 @observe(capture_input=False, capture_output=False)
 async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> dict:
     if query:
@@ -226,7 +280,7 @@ async def table_retrieval(
 
 @observe(capture_input=False)
 async def dbschema_retrieval(
-    table_retrieval: dict, project_id: str, dbschema_retriever: Any
+    query: str, table_retrieval: dict, project_id: str, dbschema_retriever: Any
 ) -> list[Document]:
     tables = table_retrieval.get("documents", [])
     table_names = []
@@ -269,20 +323,32 @@ async def dbschema_retrieval(
         )
         return fallback_results["documents"]
 
+    candidate_names = candidate_pcb_table_names(query)
     filters = {
         "operator": "AND",
         "conditions": [
             {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
         ],
     }
+    if candidate_names:
+        filters["conditions"].append(
+            {
+                "operator": "OR",
+                "conditions": [
+                    {"field": "name", "operator": "==", "value": table_name}
+                    for table_name in candidate_names
+                ],
+            }
+        )
     if project_id:
         filters["conditions"].append(
             {"field": "project_id", "operator": "==", "value": project_id}
         )
 
     logger.info(
-        "No table-description matches found; falling back to deployed schema for project_id %s",
+        "No table-description matches found; falling back to deployed schema for project_id %s with candidate tables: %s",
         project_id,
+        candidate_names,
     )
     results = await dbschema_retriever.run(query_embedding=[], filters=filters)
     if results.get("documents") or not project_id:
