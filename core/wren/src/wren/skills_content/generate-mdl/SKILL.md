@@ -166,8 +166,8 @@ project/
 > **When to define cubes:** If the user asks aggregation questions like
 > "revenue by month" or "top customers", define cubes alongside models —
 > they give agents a structured query API instead of forcing them to
-> hand-write `GROUP BY` / `DATE_TRUNC` SQL. See the
-> the `modeling/cube` reference (`wren docs get modeling/cube`).
+> hand-write `GROUP BY` / `DATE_TRUNC` SQL. See the `cubes` reference
+> (`wren docs get cubes`).
 
 > **IMPORTANT: `catalog` and `schema` in `wren_project.yml`**
 >

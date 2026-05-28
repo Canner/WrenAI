@@ -82,6 +82,7 @@ packages = ["src/wren"]
 artifacts = [
     "src/wren/templates/*.html",
     "src/wren/skills_content/**/*.md",
+    "src/wren/docs_content/**/*.md",
 ]
 
 [tool.ruff]
