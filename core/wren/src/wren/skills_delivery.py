@@ -20,6 +20,10 @@ class SkillNotFoundError(Exception):
     """Raised when a requested skill name has no bundled content."""
 
 
+class ScriptNotFoundError(Exception):
+    """Raised when a requested script is not bundled with the skill."""
+
+
 @dataclass
 class SkillInfo:
     name: str
@@ -41,9 +45,38 @@ def _skill_dir(name: str):
     return skill
 
 
-def get_skill(name: str) -> str:
-    """Return the ``SKILL.md`` main guide for ``name``."""
-    return (_skill_dir(name) / "SKILL.md").read_text(encoding="utf-8")
+def get_skill(name: str, full: bool = False) -> str:
+    """Return the ``SKILL.md`` main guide for ``name``.
+
+    With ``full=True``, append every ``references/*.md`` (sorted by filename)
+    after the main guide, each under a separator heading. Skills with no
+    references return the main guide unchanged.
+    """
+    skill = _skill_dir(name)
+    content = (skill / "SKILL.md").read_text(encoding="utf-8")
+    if not full:
+        return content
+    refs_dir = skill / "references"
+    if not refs_dir.is_dir():
+        return content
+    parts = [content.rstrip()]
+    for ref in sorted(
+        (p for p in refs_dir.iterdir() if p.name.endswith(".md")),
+        key=lambda p: p.name,
+    ):
+        body = ref.read_text(encoding="utf-8").strip()
+        parts.append(f"# Reference: {ref.name[:-3]}\n\n{body}")
+    return "\n\n---\n\n".join(parts) + "\n"
+
+
+def get_script(name: str, script: str) -> str:
+    """Return the source of a script bundled under ``<skill>/scripts/``."""
+    scripts_dir = _skill_dir(name) / "scripts"
+    if scripts_dir.is_dir():
+        for path in scripts_dir.iterdir():
+            if path.is_file() and path.name.rsplit(".", 1)[0] == script:
+                return path.read_text(encoding="utf-8")
+    raise ScriptNotFoundError(f"{name}/{script}")
 
 
 def list_skills() -> list[SkillInfo]:
@@ -64,12 +97,18 @@ def list_skills() -> list[SkillInfo]:
     return out
 
 
+_SUMMARY_MAX = 100
+
+
 def _summary(skill_md_text: str) -> str:
-    """First sentence of the frontmatter ``description``."""
+    """A short one-line summary from the frontmatter ``description``."""
     desc = _frontmatter_field(skill_md_text, "description")
     if not desc:
         return ""
-    return desc.split(". ", 1)[0].rstrip(".")
+    summary = desc.split(". ", 1)[0].rstrip(".")
+    if len(summary) > _SUMMARY_MAX:
+        summary = summary[: _SUMMARY_MAX - 1].rstrip() + "…"
+    return summary
 
 
 def _frontmatter_field(text: str, key: str) -> str | None:

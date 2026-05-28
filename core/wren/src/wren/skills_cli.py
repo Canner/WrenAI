@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 import typer
 
 from wren import skills_delivery
@@ -34,14 +36,30 @@ def list_cmd() -> None:
 @skills_app.command()
 def get(
     name: str = typer.Argument(..., help="Skill name (see `wren skills list`)."),
+    full: bool = typer.Option(
+        False, "--full", help="Include the skill's reference docs."
+    ),
+    script: Optional[str] = typer.Option(
+        None, "--script", help="Print a bundled script instead of the guide."
+    ),
 ) -> None:
-    """Print a skill's main guide to stdout."""
+    """Print a skill's main guide (or a bundled script) to stdout."""
     try:
-        content = skills_delivery.get_skill(name)
+        if script is not None:
+            content = skills_delivery.get_script(name, script)
+        else:
+            content = skills_delivery.get_skill(name, full=full)
     except skills_delivery.SkillNotFoundError:
         typer.echo(
             f"Error: unknown skill '{name}'. "
             "Run `wren skills list` for available names.",
+            err=True,
+        )
+        raise typer.Exit(1)
+    except skills_delivery.ScriptNotFoundError:
+        typer.echo(
+            f"Error: skill '{name}' has no script '{script}'. "
+            "Run `wren skills list` to see available scripts.",
             err=True,
         )
         raise typer.Exit(1)
