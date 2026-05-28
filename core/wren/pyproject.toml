@@ -83,6 +83,7 @@ artifacts = [
     "src/wren/templates/*.html",
     "src/wren/skills_content/**/*.md",
     "src/wren/docs_content/**/*.md",
+    "src/wren/ask_templates/*.tmpl",
 ]
 
 [tool.ruff]

@@ -595,9 +595,12 @@ from wren.docs_cli import docs_app  # noqa: E402, PLC0415
 
 app.add_typer(docs_app)
 
+from wren.ask_cli import ask as _ask_command  # noqa: E402, PLC0415
 from wren.cube_cli import cube_app  # noqa: E402, PLC0415
 from wren.skills_cli import skills_app  # noqa: E402, PLC0415
 from wren.utils_cli import utils_app  # noqa: E402, PLC0415
+
+app.command(name="ask")(_ask_command)
 
 app.add_typer(context_app)
 app.add_typer(cube_app)
