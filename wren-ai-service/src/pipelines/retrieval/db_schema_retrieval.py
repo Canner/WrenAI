@@ -122,6 +122,35 @@ def _build_view_ddl(content: dict) -> str:
 
 
 ## Start of Pipeline
+def expand_business_terms_for_retrieval(query: str) -> str:
+    normalized = (query or "").lower()
+    pcb_terms = {
+        "pcb",
+        "repair",
+        "debug",
+        "turnaround",
+        "failure",
+        "resolved",
+        "trend",
+        "volume",
+        "count",
+        "average",
+        "chart",
+    }
+    if not any(term in normalized for term in pcb_terms):
+        return query
+
+    return "\n".join(
+        [
+            query,
+            "PCB repair debug analytics aliases:",
+            "repair trends repair volume repair counts debug entries debug fixes",
+            "average debug hours turnaround time resolved entries failure category failure code",
+            "monthly trend quarter grouped by month bar chart line chart",
+        ]
+    )
+
+
 @observe(capture_input=False, capture_output=False)
 async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> dict:
     if query:
@@ -131,6 +160,7 @@ async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> d
             previous_query_summaries = []
 
         query = "\n".join(previous_query_summaries) + "\n" + query
+        query = expand_business_terms_for_retrieval(query)
 
         return await embedder.run(query)
     else:
@@ -239,7 +269,35 @@ async def dbschema_retrieval(
         )
         return fallback_results["documents"]
 
-    return []
+    filters = {
+        "operator": "AND",
+        "conditions": [
+            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+        ],
+    }
+    if project_id:
+        filters["conditions"].append(
+            {"field": "project_id", "operator": "==", "value": project_id}
+        )
+
+    logger.info(
+        "No table-description matches found; falling back to deployed schema for project_id %s",
+        project_id,
+    )
+    results = await dbschema_retriever.run(query_embedding=[], filters=filters)
+    if results.get("documents") or not project_id:
+        return results.get("documents", [])
+
+    fallback_results = await dbschema_retriever.run(
+        query_embedding=[],
+        filters={
+            "operator": "AND",
+            "conditions": [
+                {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+            ],
+        },
+    )
+    return fallback_results.get("documents", [])
 
 
 @observe()

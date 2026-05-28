@@ -157,6 +157,33 @@ class AskService:
         }
         return normalized in greeting_patterns
 
+    def _is_data_analysis_query(self, query: str) -> bool:
+        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized:
+            return False
+
+        analysis_terms = {
+            "average",
+            "avg",
+            "bar chart",
+            "chart",
+            "compare",
+            "count",
+            "debug",
+            "failure",
+            "group",
+            "grouped",
+            "monthly",
+            "pcb",
+            "quarter",
+            "repair",
+            "resolved",
+            "trend",
+            "turnaround",
+            "volume",
+        }
+        return any(term in normalized for term in analysis_terms)
+
     async def _run_with_timeout(self, label: str, coroutine):
         try:
             return await asyncio.wait_for(
@@ -338,6 +365,17 @@ class AskService:
                         )
                         intent_reasoning = intent_classification_result.get("reasoning")
 
+                        if intent in {"GENERAL", "MISLEADING_QUERY"} and (
+                            self._is_data_analysis_query(user_query)
+                            or self._is_data_analysis_query(rephrased_question or "")
+                        ):
+                            logger.info(
+                                "Overriding intent %s to TEXT_TO_SQL for analytics query: %s",
+                                intent,
+                                user_query,
+                            )
+                            intent = "TEXT_TO_SQL"
+
                         if rephrased_question:
                             user_query = rephrased_question
 
@@ -461,6 +499,9 @@ class AskService:
                 documents = _retrieval_result.get("retrieval_results", [])
                 table_names = [document.get("table_name") for document in documents]
                 table_ddls = [document.get("table_ddl") for document in documents]
+                logger.info(
+                    "Retrieved tables for query_id %s: %s", query_id, table_names
+                )
 
                 if not documents:
                     logger.exception(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
