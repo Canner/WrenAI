@@ -23,9 +23,6 @@ use datafusion::logical_expr::{Expr, LogicalPlan, LogicalPlanBuilder};
 use datafusion::optimizer::analyzer::AnalyzerRule;
 use datafusion::physical_plan::internal_err;
 use datafusion::sql::TableReference;
-use wren_core_base::mdl::RowLevelAccessControl;
-
-use super::access_control::{build_filter_expression, validate_rule};
 
 pub const SOURCE_ALIAS: &str = "__source";
 
@@ -85,31 +82,10 @@ impl ModelGenerationRule {
                         return plan_err!("Failed to generate source plan");
                     };
 
-                    let filters: Vec<Option<Expr>> = model_plan
-                        .model
-                        .row_level_access_controls()
-                        .iter()
-                        .map(|rule| {
-                            self.generate_row_level_access_control_filter(
-                                Arc::clone(&model_plan.model),
-                                rule,
-                            )
-                        })
-                        .collect::<Result<_>>()?;
-                    let rls_filter = filters
-                        .into_iter()
-                        .reduce(|acc, filter| {
-                            if let Some(acc) = acc {
-                                if let Some(filter) = filter {
-                                    Some(acc.and(filter))
-                                } else {
-                                    Some(acc)
-                                }
-                            } else {
-                                filter
-                            }
-                        })
-                        .flatten();
+                    // RLAC condition parsing has already happened during ModelAnalyzeRule —
+                    // the combined filter (with subqueries already rewritten into
+                    // ModelPlanNodes) lives on `ModelPlanNode::rlac_filter`.
+                    let rls_filter = model_plan.rlac_filter.clone();
 
                     if !model_plan.required_exprs.is_empty() {
                         builder = builder.project(projections)?
@@ -288,24 +264,6 @@ impl ModelGenerationRule {
                 }
             }
             _ => Ok(Transformed::yes(plan.recompute_schema()?)),
-        }
-    }
-
-    fn generate_row_level_access_control_filter(
-        &self,
-        model: Arc<Model>,
-        rule: &RowLevelAccessControl,
-    ) -> Result<Option<Expr>> {
-        if validate_rule(&rule.name, &rule.required_properties, &self.properties)? {
-            let filter = build_filter_expression(
-                &self.session_state,
-                model,
-                &self.properties,
-                rule,
-            )?;
-            Ok(Some(filter))
-        } else {
-            Ok(None)
         }
     }
 }

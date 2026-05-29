@@ -3433,6 +3433,211 @@ mod test {
         Ok(())
     }
 
+    /// RLAC condition references another model in a subquery. The subquery's TableScan
+    /// should be rewritten into a ModelPlanNode so the inner model's own RLAC/CLAC and
+    /// remote table reference apply transitively.
+    #[tokio::test]
+    async fn test_rlac_with_cross_model_subquery() -> Result<()> {
+        let ctx = create_wren_ctx(None, None);
+        let manifest = ManifestBuilder::new()
+            .catalog("wren")
+            .schema("test")
+            .model(
+                ModelBuilder::new("customer")
+                    .table_reference("customer_remote")
+                    .column(ColumnBuilder::new("c_custkey", "int").build())
+                    .column(ColumnBuilder::new("c_name", "string").build())
+                    .add_row_level_access_control(
+                        "allowed_customers",
+                        vec![SessionProperty::new_required("session_user")],
+                        "c_custkey IN (SELECT allowed_id FROM allowed WHERE allowed_user = @session_user)",
+                    )
+                    .build(),
+            )
+            .model(
+                ModelBuilder::new("allowed")
+                    .table_reference("allowed_remote")
+                    .column(ColumnBuilder::new("allowed_id", "int").build())
+                    .column(ColumnBuilder::new("allowed_user", "string").build())
+                    .build(),
+            )
+            .build();
+        let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+            manifest,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        )?);
+        let sql = "SELECT c_custkey FROM customer";
+        let headers = Arc::new(build_headers(&[(
+            "session_user".to_string(),
+            Some("'alice'".to_string()),
+        )]));
+        // The subquery's `allowed` reference must unparse to the remote table
+        // `allowed_remote`, proving ModelAnalyzeRule recursed into the RLAC subquery
+        // and rewrote its TableScan into a ModelPlanNode.
+        assert_snapshot!(
+            transform_sql_with_ctx(&ctx, Arc::clone(&analyzed_mdl), &[], headers, sql).await?,
+            @"SELECT customer.c_custkey FROM (SELECT customer.c_custkey FROM (SELECT customer.c_custkey FROM (SELECT __source.c_custkey AS c_custkey FROM customer_remote AS __source) AS customer) AS customer WHERE customer.c_custkey IN (SELECT allowed.allowed_id FROM (SELECT allowed.allowed_id, allowed.allowed_user FROM (SELECT __source.allowed_id AS allowed_id, __source.allowed_user AS allowed_user FROM allowed_remote AS __source) AS allowed) AS allowed WHERE allowed.allowed_user = 'alice')) AS customer"
+        );
+        Ok(())
+    }
+
+    /// When an RLAC subquery selects from a model that also has its own RLAC, that
+    /// inner model's RLAC must apply too — proving the rewritten ModelPlanNode inside
+    /// the subquery is processed by the same pipeline as the outer model.
+    #[tokio::test]
+    async fn test_rlac_subquery_applies_inner_rlac() -> Result<()> {
+        let ctx = create_wren_ctx(None, None);
+        let manifest = ManifestBuilder::new()
+            .catalog("wren")
+            .schema("test")
+            .model(
+                ModelBuilder::new("customer")
+                    .table_reference("customer_remote")
+                    .column(ColumnBuilder::new("c_custkey", "int").build())
+                    .add_row_level_access_control(
+                        "by_allowed",
+                        vec![SessionProperty::new_required("session_user")],
+                        "c_custkey IN (SELECT allowed_id FROM allowed)",
+                    )
+                    .build(),
+            )
+            .model(
+                ModelBuilder::new("allowed")
+                    .table_reference("allowed_remote")
+                    .column(ColumnBuilder::new("allowed_id", "int").build())
+                    .column(ColumnBuilder::new("allowed_user", "string").build())
+                    .add_row_level_access_control(
+                        "by_user",
+                        vec![SessionProperty::new_required("session_user")],
+                        "allowed_user = @session_user",
+                    )
+                    .build(),
+            )
+            .build();
+        let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+            manifest,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        )?);
+        let sql = "SELECT c_custkey FROM customer";
+        let headers = Arc::new(build_headers(&[(
+            "session_user".to_string(),
+            Some("'alice'".to_string()),
+        )]));
+        // The inner `allowed` model has its own RLAC filtering by `allowed_user =
+        // @session_user`; that filter must appear in the unparsed SQL because the
+        // subquery's TableScan was rewritten into a ModelPlanNode that goes through
+        // ModelGenerationRule's RLAC-application path.
+        assert_snapshot!(
+            transform_sql_with_ctx(&ctx, Arc::clone(&analyzed_mdl), &[], headers, sql).await?,
+            @"SELECT customer.c_custkey FROM (SELECT customer.c_custkey FROM (SELECT customer.c_custkey FROM (SELECT __source.c_custkey AS c_custkey FROM customer_remote AS __source) AS customer) AS customer WHERE customer.c_custkey IN (SELECT allowed.allowed_id FROM (SELECT allowed.allowed_id, allowed.allowed_user FROM (SELECT allowed.allowed_id, allowed.allowed_user FROM (SELECT __source.allowed_id AS allowed_id, __source.allowed_user AS allowed_user FROM allowed_remote AS __source) AS allowed) AS allowed WHERE allowed.allowed_user = 'alice') AS allowed)) AS customer"
+        );
+        Ok(())
+    }
+
+    /// Two models reference each other in their RLAC conditions. The analyzer must
+    /// detect the cycle and surface a planning error rather than recurse infinitely.
+    #[tokio::test]
+    async fn test_rlac_subquery_cycle_detected() -> Result<()> {
+        let ctx = create_wren_ctx(None, None);
+        let manifest = ManifestBuilder::new()
+            .catalog("wren")
+            .schema("test")
+            .model(
+                ModelBuilder::new("a")
+                    .table_reference("a_remote")
+                    .column(ColumnBuilder::new("id", "int").build())
+                    .add_row_level_access_control(
+                        "via_b",
+                        vec![SessionProperty::new_required("session_x")],
+                        "id IN (SELECT id FROM b)",
+                    )
+                    .build(),
+            )
+            .model(
+                ModelBuilder::new("b")
+                    .table_reference("b_remote")
+                    .column(ColumnBuilder::new("id", "int").build())
+                    .add_row_level_access_control(
+                        "via_a",
+                        vec![SessionProperty::new_required("session_x")],
+                        "id IN (SELECT id FROM a)",
+                    )
+                    .build(),
+            )
+            .build();
+        let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+            manifest,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        )?);
+        let sql = "SELECT id FROM a";
+        let headers = Arc::new(build_headers(&[(
+            "session_x".to_string(),
+            Some("1".to_string()),
+        )]));
+        let result =
+            transform_sql_with_ctx(&ctx, Arc::clone(&analyzed_mdl), &[], headers, sql)
+                .await;
+        match result {
+            Err(e) => {
+                let msg = e.to_string();
+                assert!(
+                    msg.contains("cycle in row level access control"),
+                    "expected cycle detection error, got: {msg}"
+                );
+            }
+            Ok(plan) => panic!("expected cycle error, got plan: {plan}"),
+        }
+        Ok(())
+    }
+
+    /// A self-referential RLAC condition (subquery selecting from the same model)
+    /// must be rejected as a cycle rather than looping infinitely.
+    #[tokio::test]
+    async fn test_rlac_self_reference_is_cycle() -> Result<()> {
+        let ctx = create_wren_ctx(None, None);
+        let manifest = ManifestBuilder::new()
+            .catalog("wren")
+            .schema("test")
+            .model(
+                ModelBuilder::new("customer")
+                    .table_reference("customer_remote")
+                    .column(ColumnBuilder::new("id", "int").build())
+                    .add_row_level_access_control(
+                        "self_ref",
+                        vec![SessionProperty::new_required("session_x")],
+                        "id IN (SELECT id FROM customer)",
+                    )
+                    .build(),
+            )
+            .build();
+        let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+            manifest,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        )?);
+        let sql = "SELECT id FROM customer";
+        let headers = Arc::new(build_headers(&[(
+            "session_x".to_string(),
+            Some("1".to_string()),
+        )]));
+        match transform_sql_with_ctx(&ctx, Arc::clone(&analyzed_mdl), &[], headers, sql)
+            .await
+        {
+            Err(e) => {
+                let msg = e.to_string();
+                assert!(
+                    msg.contains("cycle in row level access control"),
+                    "expected cycle detection error, got: {msg}"
+                );
+            }
+            Ok(plan) => panic!("expected cycle error, got plan: {plan}"),
+        }
+        Ok(())
+    }
+
     #[tokio::test]
     async fn test_disable_eliminate_limit() -> Result<()> {
         let ctx = create_wren_ctx(None, None);
