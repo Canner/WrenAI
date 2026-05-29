@@ -10,14 +10,16 @@ from langfuse.decorators import observe
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
+from src.pipelines.generation.utils.sql import normalize_generation_result_sql
 
 logger = logging.getLogger("wren-ai-service")
 
 
 @component
 class DataFetcher:
-    def __init__(self, engine: Engine):
+    def __init__(self, engine: Engine, data_source: str | None = None):
         self._engine = engine
+        self._data_source = data_source
 
     @component.output_types(
         results=Optional[Dict[str, Any]],
@@ -28,6 +30,7 @@ class DataFetcher:
         project_id: str | None = None,
         limit: int = 500,
     ):
+        sql = normalize_generation_result_sql(sql, data_source=self._data_source)
         async with aiohttp.ClientSession() as session:
             _, data, addition = await self._engine.execute_sql(
                 sql,
@@ -64,10 +67,11 @@ class SQLExecutor(BasicPipeline):
     def __init__(
         self,
         engine: Engine,
+        data_source: str | None = None,
         **kwargs,
     ):
         self._components = {
-            "data_fetcher": DataFetcher(engine=engine),
+            "data_fetcher": DataFetcher(engine=engine, data_source=data_source),
         }
 
         super().__init__(

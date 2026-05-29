@@ -15,7 +15,6 @@ from src.core.engine import (
 )
 from src.core.provider import LLMProvider
 from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
-from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -408,7 +407,7 @@ def _rewrite_mssql_timestamp_subtraction(sql: str) -> str:
 
 def _infer_mssql_timestamp_expression(sql: str) -> str | None:
     timestamp_column_pattern = re.compile(
-        r'(?:(?:"[^"]+"\.)?"(?:created_at|updated_at|opened_at|closed_at|completed_at|resolved_at)")',
+        r'(?:(?:"[^"]+"\.)?"(?:created_at|updated_at|generated_at|opened_at|closed_at|completed_at|resolved_at)")',
         re.IGNORECASE,
     )
     if match := timestamp_column_pattern.search(sql):
@@ -420,6 +419,9 @@ def _infer_mssql_timestamp_expression(sql: str) -> str | None:
     )
     if match := table_pattern.search(sql):
         table_name = match.group(1)
+        normalized_table_name = table_name.strip('"[]').lower()
+        if "report" in normalized_table_name:
+            return f'{table_name}."generated_at"'
         if any(
             token in table_name.strip('"[]').lower()
             for token in ("repair", "ticket", "debug", "event", "log")
@@ -1206,7 +1208,7 @@ def construct_valid_table_names(documents: list[Any] | None = None) -> list[str]
 
 
 def construct_ask_history_messages(
-    histories: list[AskHistory] | list[dict],
+    histories: list[Any] | list[dict],
 ) -> list[ChatMessage]:
     messages = []
     for history in histories:
