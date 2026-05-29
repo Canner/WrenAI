@@ -10,7 +10,7 @@ from langfuse.decorators import observe
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
-from src.pipelines.generation.utils.sql import normalize_generation_result_sql
+from src.pipelines.sql_normalizer import normalize_generation_result_sql
 
 logger = logging.getLogger("wren-ai-service")
 
