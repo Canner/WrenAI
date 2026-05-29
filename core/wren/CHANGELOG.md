@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/Canner/WrenAI/compare/wren-v0.8.0...wren-v0.8.1) (2026-05-28)
+
+
+### Dependencies
+
+* clear 5 high-severity Dependabot alerts on main ([#2330](https://github.com/Canner/WrenAI/issues/2330)) ([cee71e6](https://github.com/Canner/WrenAI/commit/cee71e6444025599d0949b8761e9fdf23abf2c04))
+
 ## [0.8.0](https://github.com/Canner/WrenAI/compare/wren-v0.7.0...wren-v0.8.0) (2026-05-26)
 
 
