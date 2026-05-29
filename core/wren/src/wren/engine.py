@@ -173,12 +173,17 @@ class WrenEngine:
 
             manifest_json = json.loads(base64.b64decode(self.manifest_str))
             model_names = {m["name"] for m in manifest_json.get("models", [])}
+            view_names = {v["name"] for v in manifest_json.get("views", [])}
+            # Views are MDL-defined objects too. Strict mode gates access to
+            # objects *outside* the manifest, so a view reference is allowed;
+            # ``extract_by`` scopes the view (and the models it joins) in.
+            queryable_names = model_names | view_names
 
             # Policy validation: check tables and functions before execution.
             if self._config.strict_mode or self._config.denied_functions:
-                validate_sql_policy(ast, model_names, self._config)
+                validate_sql_policy(ast, queryable_names, self._config)
 
-            # Resolve table refs to canonical manifest model names so that
+            # Resolve table refs to canonical manifest names so that
             # ``extract_by`` (case-sensitive in Rust) finds them under SQL's
             # case-sensitivity rules: quoted identifiers match exactly,
             # unquoted fall back to a case-insensitive scan.
@@ -189,7 +194,7 @@ class WrenEngine:
                 quoted = (
                     bool(t.this.quoted) if isinstance(t.this, exp.Identifier) else False
                 )
-                resolved = resolve_model_name(t.name, quoted, model_names)
+                resolved = resolve_model_name(t.name, quoted, queryable_names)
                 tables.append(resolved if resolved is not None else t.name)
 
             extractor = get_manifest_extractor(self.manifest_str)
