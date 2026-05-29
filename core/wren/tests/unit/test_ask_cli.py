@@ -8,6 +8,8 @@ from typer.testing import CliRunner
 from wren import ask as ask_mod
 from wren.cli import app
 
+pytestmark = pytest.mark.unit
+
 runner = CliRunner()
 
 

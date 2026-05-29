@@ -13,6 +13,8 @@ from typer.testing import CliRunner
 from wren import docs_delivery
 from wren.cli import app
 
+pytestmark = pytest.mark.unit
+
 runner = CliRunner()
 
 _REPO = Path(__file__).resolve().parents[4]

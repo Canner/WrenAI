@@ -20,6 +20,8 @@ import typer
 
 from wren.cli import app
 
+pytestmark = pytest.mark.unit
+
 # ── Build the real command tree ─────────────────────────────────────────────
 
 
@@ -34,13 +36,17 @@ def _flags(cmd) -> set[str]:
 
 
 def _walk(cmd, prefix: str = "") -> dict[str, set[str]]:
-    """Map command-path-string -> set of long flags."""
+    """Map command-path-string -> set of long flags.
+
+    Uses ``cmd.commands`` directly rather than ``cmd.list_commands(ctx=None)``
+    because the latter passes a ``None`` context — Click 8.4+ tightened that
+    path and started returning ``[]``, which would silently collapse this
+    map to the root command and neuter the guard.
+    """
     out: dict[str, set[str]] = {prefix.strip(): _flags(cmd)}
     if isinstance(cmd, click.Group):
-        for name in cmd.list_commands(ctx=None):  # type: ignore[arg-type]
-            sub = cmd.get_command(None, name)  # type: ignore[arg-type]
-            if sub is not None:
-                out.update(_walk(sub, f"{prefix} {name}".strip()))
+        for name, sub in cmd.commands.items():
+            out.update(_walk(sub, f"{prefix} {name}".strip()))
     return out
 
 
@@ -88,6 +94,9 @@ _REPO = Path(__file__).resolve().parents[4]
 _SKILLS_CONTENT = _REPO / "core" / "wren" / "src" / "wren" / "skills_content"
 _DOCS_CONTENT = _REPO / "core" / "wren" / "src" / "wren" / "docs_content"
 _ASK_TEMPLATES = _REPO / "core" / "wren" / "src" / "wren" / "ask_templates"
+# The discovery stub ships to users' local skill dirs via `npx skills add`,
+# so any `wren <cmd>` it references must resolve to a real CLI command too.
+_DISCOVERY_STUB = _REPO / "skills" / "wren" / "SKILL.md"
 
 # Match `wren ` followed by content up to a newline, backtick, single/double
 # quote (avoid consuming SQL strings), or closing paren.
@@ -97,27 +106,40 @@ _INVOCATION = re.compile(r"\bwren\s+(?P<rest>[^\n`'\"\)]+)")
 _TOKEN = re.compile(r"^[a-z][a-z0-9-]*$")
 
 
-def _enumerate_invocations() -> list[tuple[Path, str, list[str]]]:
-    """Return (file, raw_snippet, tokens) for every wren invocation in served content."""
-    out: list[tuple[Path, str, list[str]]] = []
-    roots = [_SKILLS_CONTENT, _DOCS_CONTENT, _ASK_TEMPLATES]
-    for root in roots:
+def _iter_content_files() -> list[Path]:
+    """Yield every served-content file the guard must validate.
+
+    Covers the three package-data roots (`skills_content`, `docs_content`,
+    `ask_templates`) plus the standalone discovery stub at `skills/wren/`
+    that's distributed to users via `npx skills add`.
+    """
+    files: list[Path] = []
+    for root in (_SKILLS_CONTENT, _DOCS_CONTENT, _ASK_TEMPLATES):
         if not root.is_dir():
             continue
         for path in sorted(root.rglob("*")):
-            if not (path.is_file() and path.suffix in (".md", ".tmpl")):
+            if path.is_file() and path.suffix in (".md", ".tmpl"):
+                files.append(path)
+    if _DISCOVERY_STUB.is_file():
+        files.append(_DISCOVERY_STUB)
+    return files
+
+
+def _enumerate_invocations() -> list[tuple[Path, str, list[str]]]:
+    """Return (file, raw_snippet, tokens) for every wren invocation in served content."""
+    out: list[tuple[Path, str, list[str]]] = []
+    for path in _iter_content_files():
+        text = path.read_text(encoding="utf-8")
+        # Join shell backslash-newline continuations so flags on follow-up
+        # lines (e.g. `wren cube query \\\n  --measures revenue`) are part
+        # of the same captured invocation rather than silently dropped.
+        text = re.sub(r"\\\s*\n[ \t]*", " ", text)
+        for m in _INVOCATION.finditer(text):
+            snippet = m.group("rest").strip()
+            tokens = snippet.split()
+            if not tokens:
                 continue
-            text = path.read_text(encoding="utf-8")
-            # Join shell backslash-newline continuations so flags on follow-up
-            # lines (e.g. `wren cube query \\\n  --measures revenue`) are part
-            # of the same captured invocation rather than silently dropped.
-            text = re.sub(r"\\\s*\n[ \t]*", " ", text)
-            for m in _INVOCATION.finditer(text):
-                snippet = m.group("rest").strip()
-                tokens = snippet.split()
-                if not tokens:
-                    continue
-                out.append((path, snippet, tokens))
+            out.append((path, snippet, tokens))
     return out
 
 
@@ -255,6 +277,7 @@ def test_unknown_subcommand_is_flagged(tmp_path, monkeypatch):
     monkeypatch.setattr(module, "_SKILLS_CONTENT", tmp_path)
     monkeypatch.setattr(module, "_DOCS_CONTENT", tmp_path / "_empty_docs")
     monkeypatch.setattr(module, "_ASK_TEMPLATES", tmp_path / "_empty_ask")
+    monkeypatch.setattr(module, "_DISCOVERY_STUB", tmp_path / "_no_stub.md")
 
     problems = _findings()
     joined = "\n".join(problems)

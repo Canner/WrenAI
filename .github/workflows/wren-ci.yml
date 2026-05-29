@@ -10,6 +10,8 @@ on:
       - 'core/wren-core/**'
       - 'core/wren-core-py/**'
       - 'core/wren-core-base/**'
+      # Touched so the docs-mirror drift check below fires when source docs change.
+      - 'docs/core/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.number }}
@@ -30,6 +32,17 @@ jobs:
         run: |
           uvx ruff format --check src/
           uvx ruff check src/
+
+  docs-sync-check:
+    name: docs mirror drift check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Verify docs/core mirrors match src/wren/docs_content
+        run: python core/wren/scripts/sync_docs_content.py --check
 
   test-unit:
     name: unit tests
