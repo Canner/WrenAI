@@ -11,6 +11,7 @@ in CI with ``--check`` to fail if the mirror has drifted.
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from pathlib import Path
 
@@ -20,8 +21,20 @@ _REPO = _WREN.parent.parent  # repo root
 _DOCS_CORE = _REPO / "docs" / "core"
 _DEST = _WREN / "src" / "wren" / "docs_content" / "refs"
 
-sys.path.insert(0, str(_WREN / "src"))
-from wren.docs_delivery import REFERENCE_SOURCES  # noqa: E402
+# Load REFERENCE_SOURCES standalone — going through ``wren.docs_delivery``
+# triggers ``wren/__init__.py``, which pulls pyarrow + the whole engine
+# stack. The CI drift gate runs in a bare Python env without that, so we
+# skip the package import and load the module file directly. The module
+# must land in ``sys.modules`` before ``exec_module`` so its ``@dataclass``
+# can resolve its own ``cls.__module__`` (required on Python 3.14+).
+_DD_NAME = "_wren_docs_delivery_standalone"
+_DD_SPEC = importlib.util.spec_from_file_location(
+    _DD_NAME, _WREN / "src" / "wren" / "docs_delivery.py"
+)
+_dd = importlib.util.module_from_spec(_DD_SPEC)
+sys.modules[_DD_NAME] = _dd
+_DD_SPEC.loader.exec_module(_dd)
+REFERENCE_SOURCES = _dd.REFERENCE_SOURCES
 
 
 def _pairs() -> list[tuple[str, Path, Path]]:
