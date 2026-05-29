@@ -406,6 +406,93 @@ def _rewrite_mssql_timestamp_subtraction(sql: str) -> str:
     return timestamp_subtraction_pattern.sub(replace_subtraction, sql)
 
 
+def _infer_mssql_timestamp_expression(sql: str) -> str | None:
+    timestamp_column_pattern = re.compile(
+        r'(?:(?:"[^"]+"\.)?"(?:created_at|updated_at|opened_at|closed_at|completed_at|resolved_at)")',
+        re.IGNORECASE,
+    )
+    if match := timestamp_column_pattern.search(sql):
+        return match.group(0)
+
+    table_pattern = re.compile(
+        r'\bFROM\s+("[^"]+"|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)',
+        re.IGNORECASE,
+    )
+    if match := table_pattern.search(sql):
+        table_name = match.group(1)
+        if any(
+            token in table_name.strip('"[]').lower()
+            for token in ("repair", "ticket", "debug", "event", "log")
+        ):
+            return f'{table_name}."created_at"'
+
+    return None
+
+
+def _rewrite_mssql_invented_date_identifiers(sql: str) -> str:
+    timestamp_expression = _infer_mssql_timestamp_expression(sql)
+    if not timestamp_expression:
+        return sql
+
+    invented_date_identifier_pattern = re.compile(
+        r'(?<!\.)"(?:RepairDate|repair_date|repairDate|date|month_date|event_date)"',
+        re.IGNORECASE,
+    )
+    return invented_date_identifier_pattern.sub(timestamp_expression, sql)
+
+
+def _rewrite_mssql_bare_time_bucket_identifiers(sql: str) -> str:
+    timestamp_expression = _infer_mssql_timestamp_expression(sql)
+    if not timestamp_expression:
+        return sql
+
+    bucket_expressions = {
+        "year": f"DATEPART(YEAR, {timestamp_expression})",
+        "month": f"DATEPART(MONTH, {timestamp_expression})",
+        "day": f"DATEPART(DAY, {timestamp_expression})",
+    }
+    rewritten = sql
+
+    for bucket, expression in bucket_expressions.items():
+        select_identifier_pattern = re.compile(
+            rf'(?P<prefix>\bSELECT\s+|,\s*)"{bucket}"(?P<suffix>\s*(?:,|\bFROM\b))',
+            re.IGNORECASE,
+        )
+
+        def replace_select_identifier(match: re.Match[str]) -> str:
+            prefix = match.group("prefix")
+            suffix = match.group("suffix")
+            return f'{prefix}{expression} AS "{bucket}"{suffix}'
+
+        rewritten = select_identifier_pattern.sub(
+            replace_select_identifier, rewritten
+        )
+
+    clause_pattern = re.compile(
+        r"\b(GROUP\s+BY|ORDER\s+BY|HAVING)\b(?P<body>.*?)(?=\b(?:ORDER\s+BY|GROUP\s+BY|HAVING|LIMIT|OFFSET|FETCH|UNION|WHERE)\b|$)",
+        re.IGNORECASE | re.DOTALL,
+    )
+
+    def replace_clause(match: re.Match[str]) -> str:
+        body = match.group("body")
+        for bucket, expression in bucket_expressions.items():
+            body = re.sub(
+                rf'"{bucket}"',
+                expression,
+                body,
+                flags=re.IGNORECASE,
+            )
+            body = re.sub(
+                rf"\[{bucket}\]",
+                expression,
+                body,
+                flags=re.IGNORECASE,
+            )
+        return f"{match.group(1)}{body}"
+
+    return clause_pattern.sub(replace_clause, rewritten)
+
+
 def _rewrite_mssql_datepart_alias_references(sql: str) -> str:
     datepart_alias_pattern = re.compile(
         r"\b(DATEPART\(\s*(YEAR|MONTH|DAY)\s*,\s*((?:[^()]|\([^()]*\))+?)\s*\))\s+AS\s+(?:\"([^\"]+)\"|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))",
@@ -445,7 +532,7 @@ def _rewrite_mssql_datepart_alias_references(sql: str) -> str:
                 flags=re.IGNORECASE,
             )
             body = re.sub(
-                rf"\b{re.escape(alias)}\b",
+                rf"(?<!DATEPART\()\b{re.escape(alias)}\b",
                 placeholder,
                 body,
                 flags=re.IGNORECASE,
@@ -475,6 +562,8 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
         normalized = _rewrite_mssql_to_unixtime(normalized)
         normalized = _rewrite_mssql_timestamp_subtraction(normalized)
         normalized = _rewrite_mssql_timestamp_casts(normalized)
+        normalized = _rewrite_mssql_invented_date_identifiers(normalized)
+        normalized = _rewrite_mssql_bare_time_bucket_identifiers(normalized)
         normalized = _rewrite_mssql_bucket_functions(normalized)
         normalized = _rewrite_temporal_bucket_functions(normalized)
         normalized = _rewrite_mssql_datepart_alias_references(normalized)
@@ -712,6 +801,10 @@ _MSSQL_TEXT_TO_SQL_RULES = """
 - The target database is MSSQL.
 - Prefer native T-SQL date bucket syntax such as DATEPART(YEAR, "created_at") and DATEPART(MONTH, "created_at").
 - DO NOT use PostgreSQL-style or Trino-style date syntax such as DATE_TRUNC, DATETRUNC, INTERVAL, CURRENT_DATE, TIMESTAMP WITH TIME ZONE, TO_CHAR, TO_UNIXTIME, TO_TIMESTAMP, TO_TIMESTAMP_MILLIS, TO_TIMESTAMP_SECONDS, TO_TIMESTAMP_MICROS, TO_TIMESTAMP_NANOS, or :: casts.
+- DO NOT use JSON extraction functions or operators such as JSON_VALUE, JSON_QUERY, JSON_EXTRACT, JSON_EXTRACT_SCALAR, JSON_EXTRACT_ARRAY, json_value, json_extract, ->, or ->>. The MSSQL Wren/Ibis runtime does not support them.
+- If a table has a generic JSON/text column such as "data", do not assume keys inside it are queryable. Only use fields that are exposed as first-class columns in the DATABASE SCHEMA.
+- Never invent JSON-derived columns such as "repair_date", "repair_status", or "failure_code" unless they are explicitly listed as columns in the DATABASE SCHEMA.
+- For repair trend or repair volume questions, prefer explicit timestamp columns such as "created_at", "updated_at", "opened_at", or "closed_at" only when those exact columns appear in the selected table schema.
 - DO NOT use DATEADD, DATEDIFF, DATETIME2, or DATETIMEOFFSET unless the SQL FUNCTIONS section explicitly proves they are supported by the target runtime.
 - Do not subtract timestamp/date columns directly. If a duration or turnaround column exists in the schema, select that column directly. If only start/end timestamps exist and the SQL FUNCTIONS section lists DATEDIFF, use DATEDIFF('second', <start_timestamp>, <end_timestamp>) for duration in seconds.
 - Resolve relative time phrases such as "last 12 months", "last month", or "this year" into absolute ISO timestamp boundaries using the current time context. Prefer closed-open literal ranges over runtime date arithmetic.
@@ -1042,6 +1135,10 @@ Given user's question, database schema, etc., you should think deeply and carefu
 3. YOU MUST REFER to the sql samples and learn the usage of the schema structures and how SQL is written based on them if the section of SQL SAMPLES is available in user's input.
 4. YOU MUST FOLLOW the reasoning plan step by step strictly to generate the SQL query if the section of REASONING PLAN is available in user's input.
 5. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
+6. YOU MUST ONLY use table names and column names that are explicitly present in the DATABASE SCHEMA or VALID TABLE NAMES sections.
+7. NEVER invent generic table names such as repair_logs, repair_log, sales_data, orders, users, tickets, events, or transactions unless that exact table name is present in the DATABASE SCHEMA or VALID TABLE NAMES sections.
+8. If the user asks about a business concept such as repairs, PCB, cost, turnaround time, or volume, map it to the closest explicit table and column names from the provided schema. Do not create a new table name from the business concept.
+9. Do not prefix table names with catalog or schema names unless the DATABASE SCHEMA or VALID TABLE NAMES section shows the table name with that exact prefix.
 
 {text_to_sql_rules}
 
