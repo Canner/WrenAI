@@ -794,8 +794,10 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - DON'T USE "TO_CHAR" function in the generated SQL query.
 - Aggregate functions are not allowed in the WHERE clause. Instead, they belong in the HAVING clause, which is used to filter after aggregation.
 - You can only add "ORDER BY" and "LIMIT" to the final "UNION" result.
-- For the ranking problem, you must use the ranking function, `DENSE_RANK()` to rank the results and then use `WHERE` clause to filter the results.
-- For the ranking problem, you must add the ranking column to the final SELECT clause.
+- For top/bottom N questions, return exactly the business columns needed to answer the question. For example, "top 10 common failures" should return the failure field and the failure count.
+- For top/bottom N questions, prefer ORDER BY on the metric plus a row limit instead of adding ranking helper columns.
+- Do not include helper ranking columns such as "rank", "row_number", or "dense_rank" in the final SELECT unless the user explicitly asks to see ranks.
+- If a ranking helper is required internally, compute it in a subquery/CTE and filter on it, but omit it from the final SELECT unless explicitly requested.
 """
 
 _MSSQL_TEXT_TO_SQL_RULES = """
@@ -816,6 +818,7 @@ _MSSQL_TEXT_TO_SQL_RULES = """
   Then GROUP BY and ORDER BY the same year/month expressions.
 - Do not GROUP BY or ORDER BY quoted year/month aliases such as "YEAR" or "MONTH"; repeat the DATEPART(...) expression instead.
 - For year bucketing, prefer DATEPART(YEAR, <timestamp_expression>).
+- For top/bottom N questions in MSSQL, prefer SELECT TOP (N) with ORDER BY over DENSE_RANK/ROW_NUMBER when the user did not explicitly request ranks.
 - For filtering a specific year such as 2025, prefer a closed-open range:
     - <timestamp_expression> >= '2025-01-01 00:00:00'
     - AND <timestamp_expression> < '2026-01-01 00:00:00'
@@ -1026,8 +1029,8 @@ You are a helpful data analyst who is great at thinking deeply and reasoning abo
 2. Explicitly state the following information in the reasoning plan:
 if the user puts any specific timeframe(e.g. YYYY-MM-DD) in the user's question(excluding the value of the current time), you will put the absolute time frame in the SQL query;
 if the user uses a relative timeframe and Current Time is provided in the input, you will resolve it into an absolute time frame in the SQL query using exact dates rather than relative date arithmetic.
-3. For the ranking problem(e.g. "top x", "bottom x", "first x", "last x"), you must use the ranking function, `DENSE_RANK()` to rank the results and then use `WHERE` clause to filter the results.
-4. For the ranking problem(e.g. "top x", "bottom x", "first x", "last x"), you must add the ranking column to the final SELECT clause.
+3. For top/bottom N questions, plan to order by the relevant metric and limit the result to N rows. Do not add a rank column unless the user explicitly asks to see ranks.
+4. For questions like "top 10 common failures", the final table should contain the grouped business field and its count/metric, not helper ranking columns.
 5. If USER INSTRUCTIONS section is provided, make sure to consider them in the reasoning plan.
 6. If SQL SAMPLES section is provided, make sure to consider them in the reasoning plan.
 7. Give a step by step reasoning plan in order to answer user's question.
