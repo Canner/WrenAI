@@ -11,6 +11,7 @@
     "test:e2e": "npx playwright install chromium && npx playwright test",
     "check-types": "tsc --noEmit",
     "migrate": "yarn knex migrate:latest",
+    "migrate:sqlite-to-mssql": "node -e \"process.env.MIGRATE_SQLITE_TO_MSSQL='true'; require('./tools/knex.js')\"",
     "rollback": "yarn knex migrate:rollback",
     "generate-gql": "yarn graphql-codegen --config codegen.yaml"
   },
@@ -34,6 +35,7 @@
     "pg-cursor": "^2.7.4",
     "posthog-node": "^4.3.2",
     "sql-formatter": "^15.3.0",
+    "tedious": "^18.6.1",
     "uuid": "^11.1.0"
   },
   "devDependencies": {

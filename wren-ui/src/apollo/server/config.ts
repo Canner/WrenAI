@@ -9,6 +9,15 @@ export interface IConfig {
   // pg
   pgUrl?: string;
   debug?: boolean;
+  // mssql
+  mssqlUrl?: string;
+  mssqlHost?: string;
+  mssqlPort?: number;
+  mssqlDatabase?: string;
+  mssqlUser?: string;
+  mssqlPassword?: string;
+  mssqlEncrypt?: boolean;
+  mssqlTrustServerCertificate?: boolean;
   // sqlite
   sqliteFile?: string;
 
@@ -59,6 +68,13 @@ const defaultConfig = {
   pgUrl: 'postgres://postgres:postgres@localhost:5432/admin_ui',
   debug: false,
 
+  // mssql
+  mssqlHost: 'localhost',
+  mssqlPort: 1433,
+  mssqlDatabase: 'wren_ui',
+  mssqlEncrypt: false,
+  mssqlTrustServerCertificate: true,
+
   // sqlite
   sqliteFile: './db.sqlite3',
 
@@ -88,6 +104,21 @@ const config = {
   // pg
   pgUrl: process.env.PG_URL,
   debug: process.env.DEBUG === 'true',
+  // mssql
+  mssqlUrl: process.env.MSSQL_URL,
+  mssqlHost: process.env.MSSQL_HOST,
+  mssqlPort: process.env.MSSQL_PORT
+    ? parseInt(process.env.MSSQL_PORT)
+    : undefined,
+  mssqlDatabase: process.env.MSSQL_DATABASE,
+  mssqlUser: process.env.MSSQL_USER,
+  mssqlPassword: process.env.MSSQL_PASSWORD,
+  mssqlEncrypt: process.env.MSSQL_ENCRYPT
+    ? process.env.MSSQL_ENCRYPT === 'true'
+    : undefined,
+  mssqlTrustServerCertificate: process.env.MSSQL_TRUST_SERVER_CERTIFICATE
+    ? process.env.MSSQL_TRUST_SERVER_CERTIFICATE === 'true'
+    : undefined,
   // sqlite
   sqliteFile: process.env.SQLITE_FILE,
 

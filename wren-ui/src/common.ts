@@ -119,6 +119,14 @@ export const initComponents = () => {
     dbType: serverConfig.dbType,
     pgUrl: serverConfig.pgUrl,
     debug: serverConfig.debug,
+    mssqlUrl: serverConfig.mssqlUrl,
+    mssqlHost: serverConfig.mssqlHost,
+    mssqlPort: serverConfig.mssqlPort,
+    mssqlDatabase: serverConfig.mssqlDatabase,
+    mssqlUser: serverConfig.mssqlUser,
+    mssqlPassword: serverConfig.mssqlPassword,
+    mssqlEncrypt: serverConfig.mssqlEncrypt,
+    mssqlTrustServerCertificate: serverConfig.mssqlTrustServerCertificate,
     sqliteFile: serverConfig.sqliteFile,
   });
 
