@@ -1,3 +1,4 @@
+import inspect
 import logging
 import os
 from typing import Any, Dict, List, Optional
@@ -177,6 +178,70 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
         self.client.create_payload_index(
             collection_name=index, field_name="project_id", field_schema="keyword"
         )
+
+    def recreate_collection(
+        self,
+        collection_name: str,
+        distance,
+        embedding_dim: int,
+        on_disk: Optional[bool] = None,
+        use_sparse_embeddings: Optional[bool] = None,
+        sparse_idf: bool = False,
+    ):
+        if on_disk is None:
+            on_disk = self.on_disk
+
+        if use_sparse_embeddings is None:
+            use_sparse_embeddings = self.use_sparse_embeddings
+
+        vectors_config = rest.VectorParams(
+            size=embedding_dim,
+            on_disk=on_disk,
+            distance=distance,
+        )
+        sparse_vectors_config = None
+
+        if use_sparse_embeddings:
+            vectors_config = {DENSE_VECTORS_NAME: vectors_config}
+            sparse_vectors_config = {
+                SPARSE_VECTORS_NAME: rest.SparseVectorParams(
+                    index=rest.SparseIndexParams(on_disk=on_disk),
+                    modifier=rest.Modifier.IDF if sparse_idf else None,
+                ),
+            }
+
+        if self.client.collection_exists(collection_name):
+            self.client.delete_collection(collection_name)
+
+        create_collection_kwargs = {
+            "collection_name": collection_name,
+            "vectors_config": vectors_config,
+            "sparse_vectors_config": sparse_vectors_config
+            if use_sparse_embeddings
+            else None,
+            "shard_number": self.shard_number,
+            "replication_factor": self.replication_factor,
+            "write_consistency_factor": self.write_consistency_factor,
+            "on_disk_payload": self.on_disk_payload,
+            "hnsw_config": self.hnsw_config,
+            "optimizers_config": self.optimizers_config,
+            "wal_config": self.wal_config,
+            "quantization_config": self.quantization_config,
+        }
+        if self.init_from is not None:
+            create_collection_signature = inspect.signature(
+                self.client.create_collection
+            )
+            if "init_from" in create_collection_signature.parameters:
+                create_collection_kwargs["init_from"] = self.init_from
+            else:
+                logger.warning(
+                    "Ignoring init_from for collection %s because the installed "
+                    "qdrant-client does not support that argument",
+                    collection_name,
+                )
+
+        self.client.create_collection(**create_collection_kwargs)
 
     async def _query_by_embedding(
         self,
