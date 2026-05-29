@@ -199,7 +199,7 @@ impl WrenMDL {
     pub fn new(manifest: Manifest) -> Self {
         let mut qualifed_references = HashMap::new();
         manifest.models.iter().for_each(|model| {
-            model.get_visible_columns().for_each(|column| {
+            model.columns.iter().for_each(|column| {
                 qualifed_references.insert(
                     from_qualified_name_str(
                         &manifest.catalog,
@@ -209,7 +209,7 @@ impl WrenMDL {
                     ),
                     ColumnReference::new(
                         Dataset::Model(Arc::clone(model)),
-                        Arc::clone(&column),
+                        Arc::clone(column),
                     ),
                 );
             });
@@ -1978,6 +1978,64 @@ mod test {
         Ok(())
     }
 
+    /// Test the calculated column with to-many relationship. The join condtion of the to-many relationship is based on a normal column (not the primary key column).
+    #[tokio::test]
+    async fn test_to_many_calculate_join_with_normal_column() -> Result<()> {
+        let ctx = create_wren_ctx(None, None);
+        let manifest = ManifestBuilder::new()
+            .catalog("wren")
+            .schema("test")
+            .model(
+                ModelBuilder::new("customer")
+                    .table_reference("customer")
+                    .column(ColumnBuilder::new("c_custkey", "int").build())
+                    .column(ColumnBuilder::new("mock_id", "int").build())
+                    .column(
+                        ColumnBuilder::new_relationship(
+                            "whitelist",
+                            "whitelist",
+                            "customer_whitelist",
+                        )
+                        .build(),
+                    )
+                    .column(
+                        ColumnBuilder::new_calculated("whitelist_name", "array<string>")
+                            .expression("array_agg(whitelist.allow_name)")
+                            .build(),
+                    )
+                    .primary_key("c_custkey")
+                    .build(),
+            )
+            .model(
+                ModelBuilder::new("whitelist")
+                    .table_reference("whitelist")
+                    .column(ColumnBuilder::new("allow_name", "string").build())
+                    .column(ColumnBuilder::new("mock_id", "int").build())
+                    .build(),
+            )
+            .relationship(
+                RelationshipBuilder::new("customer_whitelist")
+                    .model("customer")
+                    .model("whitelist")
+                    .join_type(JoinType::OneToMany)
+                    .condition("customer.mock_id = whitelist.mock_id")
+                    .build(),
+            )
+            .build();
+        let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+            manifest,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        )?);
+
+        let sql = "SELECT c_custkey, whitelist_name FROM customer";
+        assert_snapshot!(
+            transform_sql_with_ctx(&ctx, Arc::clone(&analyzed_mdl), &[], Arc::new(HashMap::new()), sql).await?,
+            @"SELECT customer.c_custkey, customer.whitelist_name FROM (SELECT __relation__1.c_custkey, __relation__1.whitelist_name FROM (SELECT whitelist_name.c_custkey, whitelist_name.whitelist_name FROM (SELECT __relation__1.c_custkey AS c_custkey, array_agg(__relation__1.allow_name) AS whitelist_name FROM (SELECT whitelist.allow_name, customer.c_custkey, whitelist.mock_id FROM (SELECT whitelist.allow_name, whitelist.mock_id FROM (SELECT whitelist.allow_name, whitelist.mock_id FROM (SELECT __source.allow_name AS allow_name, __source.mock_id AS mock_id FROM whitelist AS __source) AS whitelist) AS whitelist) AS whitelist RIGHT OUTER JOIN (SELECT __source.c_custkey AS c_custkey, __source.mock_id AS mock_id FROM customer AS __source) AS customer ON whitelist.mock_id = customer.mock_id) AS __relation__1 GROUP BY __relation__1.c_custkey) AS whitelist_name RIGHT OUTER JOIN (SELECT __source.c_custkey AS c_custkey FROM customer AS __source) AS customer ON whitelist_name.c_custkey = customer.c_custkey) AS __relation__1) AS customer"
+        );
+        Ok(())
+    }
+
     #[tokio::test]
     async fn test_rlac_with_requried_properties() -> Result<()> {
         let ctx = create_wren_ctx(None, None);
@@ -2549,6 +2607,168 @@ mod test {
             transform_sql_with_ctx(&ctx, Arc::clone(&analyzed_mdl), &[], headers, sql).await?,
             @"SELECT c.totalprice FROM (SELECT __relation__1.totalprice FROM (SELECT totalprice.c_custkey, totalprice.totalprice FROM (SELECT __relation__1.c_custkey AS c_custkey, sum(CAST(__relation__1.o_totalprice AS BIGINT)) AS totalprice FROM (SELECT customer.c_custkey, orders.o_custkey, orders.o_totalprice FROM (SELECT orders.o_custkey, orders.o_totalprice FROM (SELECT orders.o_custkey, orders.o_totalprice FROM (SELECT orders.o_custkey, orders.o_totalprice FROM (SELECT __source.o_custkey AS o_custkey, __source.o_totalprice AS o_totalprice FROM orders AS __source) AS orders) AS orders WHERE orders.o_custkey = 1) AS orders) AS orders RIGHT OUTER JOIN (SELECT __source.c_custkey AS c_custkey FROM customer AS __source) AS customer ON orders.o_custkey = customer.c_custkey) AS __relation__1 GROUP BY __relation__1.c_custkey) AS totalprice RIGHT OUTER JOIN (SELECT __source.c_custkey AS c_custkey FROM customer AS __source) AS customer ON totalprice.c_custkey = customer.c_custkey) AS __relation__1) AS c",
         );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_rlac_on_to_many_calculated_field() -> Result<()> {
+        let ctx = create_wren_ctx(None, None);
+        let manifest = ManifestBuilder::new()
+            .catalog("wren")
+            .schema("test")
+            .model(
+                ModelBuilder::new("customer")
+                    .table_reference("customer")
+                    .column(ColumnBuilder::new("c_custkey", "int").build())
+                    .column(ColumnBuilder::new("c_nationkey", "int").build())
+                    .column(ColumnBuilder::new("c_name", "string").build())
+                    .column(ColumnBuilder::new("mock_id", "int").build())
+                    .column(
+                        ColumnBuilder::new_relationship(
+                            "whitelist",
+                            "whitelist",
+                            "customer_whitelist",
+                        )
+                        .build(),
+                    )
+                    .column(
+                        ColumnBuilder::new_calculated("whitelist_name", "array<string>")
+                            .expression("array_agg(whitelist.allow_name)")
+                            .build(),
+                    )
+                    .add_row_level_access_control(
+                        "allow_user_name",
+                        vec![SessionProperty::new_required("session_user")],
+                        "array_contains(whitelist_name, @session_user)",
+                    )
+                    .primary_key("c_custkey")
+                    .build(),
+            )
+            .model(
+                ModelBuilder::new("whitelist")
+                    .table_reference("whitelist")
+                    .column(ColumnBuilder::new("allow_name", "string").build())
+                    .column(ColumnBuilder::new("mock_id", "int").build())
+                    .primary_key("mock_id")
+                    .build(),
+            )
+            .relationship(
+                RelationshipBuilder::new("customer_whitelist")
+                    .model("customer")
+                    .model("whitelist")
+                    .join_type(JoinType::OneToMany)
+                    .condition("customer.mock_id = whitelist.mock_id")
+                    .build(),
+            )
+            .build();
+        let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+            manifest,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        )?);
+        let headers = Arc::new(build_headers(&[(
+            "session_user".to_string(),
+            Some("'Gura'".to_string()),
+        )]));
+        let sql = "SELECT c_custkey FROM customer";
+        assert_snapshot!(
+            transform_sql_with_ctx(&ctx, Arc::clone(&analyzed_mdl), &[], headers.clone(), sql).await?,
+            @"SELECT customer.c_custkey FROM (SELECT customer.c_custkey, customer.whitelist_name FROM (SELECT __relation__1.c_custkey, __relation__1.whitelist_name FROM (SELECT whitelist_name.c_custkey, whitelist_name.whitelist_name FROM (SELECT __relation__1.c_custkey AS c_custkey, array_agg(__relation__1.allow_name) AS whitelist_name FROM (SELECT whitelist.allow_name, customer.c_custkey, whitelist.mock_id FROM (SELECT whitelist.allow_name, whitelist.mock_id FROM (SELECT whitelist.allow_name, whitelist.mock_id FROM (SELECT __source.allow_name AS allow_name, __source.mock_id AS mock_id FROM whitelist AS __source) AS whitelist) AS whitelist) AS whitelist RIGHT OUTER JOIN (SELECT __source.c_custkey AS c_custkey, __source.mock_id AS mock_id FROM customer AS __source) AS customer ON whitelist.mock_id = customer.mock_id) AS __relation__1 GROUP BY __relation__1.c_custkey) AS whitelist_name RIGHT OUTER JOIN (SELECT __source.c_custkey AS c_custkey FROM customer AS __source) AS customer ON whitelist_name.c_custkey = customer.c_custkey) AS __relation__1) AS customer WHERE array_has(customer.whitelist_name, 'Gura')) AS customer"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_rlac_on_to_many_hidden_calculated_field() -> Result<()> {
+        let ctx = create_wren_ctx(None, None);
+        let manifest = ManifestBuilder::new()
+            .catalog("wren")
+            .schema("test")
+            .model(
+                ModelBuilder::new("customer")
+                    .table_reference("customer")
+                    .column(ColumnBuilder::new("c_custkey", "int").build())
+                    .column(ColumnBuilder::new("mock_id", "int").build())
+                    .column(
+                        ColumnBuilder::new_relationship(
+                            "whitelist",
+                            "whitelist",
+                            "customer_whitelist",
+                        )
+                        .build(),
+                    )
+                    .column(
+                        ColumnBuilder::new_calculated("whitelist_name", "array<string>")
+                            .expression("array_agg(whitelist.allow_name)")
+                            .hidden(true)
+                            .build(),
+                    )
+                    .add_row_level_access_control(
+                        "allow_user_name",
+                        vec![SessionProperty::new_required("session_user")],
+                        "array_contains(whitelist_name, @session_user)",
+                    )
+                    .primary_key("c_custkey")
+                    .build(),
+            )
+            .model(
+                ModelBuilder::new("whitelist")
+                    .table_reference("whitelist")
+                    .column(ColumnBuilder::new("allow_name", "string").build())
+                    .column(ColumnBuilder::new("mock_id", "int").build())
+                    .primary_key("mock_id")
+                    .build(),
+            )
+            .relationship(
+                RelationshipBuilder::new("customer_whitelist")
+                    .model("customer")
+                    .model("whitelist")
+                    .join_type(JoinType::OneToMany)
+                    .condition("customer.mock_id = whitelist.mock_id")
+                    .build(),
+            )
+            .build();
+        let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+            manifest,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        )?);
+        let headers = Arc::new(build_headers(&[(
+            "session_user".to_string(),
+            Some("'Gura'".to_string()),
+        )]));
+
+        let sql = "SELECT * FROM customer";
+        assert_snapshot!(
+            transform_sql_with_ctx(&ctx, Arc::clone(&analyzed_mdl), &[], headers.clone(), sql).await?,
+            @"SELECT customer.c_custkey, customer.mock_id FROM (SELECT customer.c_custkey, customer.mock_id, customer.whitelist_name FROM (SELECT __relation__1.c_custkey, __relation__1.mock_id, __relation__1.whitelist_name FROM (SELECT whitelist_name.c_custkey, customer.mock_id, whitelist_name.whitelist_name FROM (SELECT __relation__1.c_custkey AS c_custkey, array_agg(__relation__1.allow_name) AS whitelist_name FROM (SELECT whitelist.allow_name, customer.c_custkey, whitelist.mock_id FROM (SELECT whitelist.allow_name, whitelist.mock_id FROM (SELECT whitelist.allow_name, whitelist.mock_id FROM (SELECT __source.allow_name AS allow_name, __source.mock_id AS mock_id FROM whitelist AS __source) AS whitelist) AS whitelist) AS whitelist RIGHT OUTER JOIN (SELECT __source.c_custkey AS c_custkey, __source.mock_id AS mock_id FROM customer AS __source) AS customer ON whitelist.mock_id = customer.mock_id) AS __relation__1 GROUP BY __relation__1.c_custkey) AS whitelist_name RIGHT OUTER JOIN (SELECT __source.c_custkey AS c_custkey, __source.mock_id AS mock_id FROM customer AS __source) AS customer ON whitelist_name.c_custkey = customer.c_custkey) AS __relation__1) AS customer WHERE array_has(customer.whitelist_name, 'Gura')) AS customer"
+        );
+
+        let sql = "SELECT c_custkey FROM customer";
+        assert_snapshot!(
+            transform_sql_with_ctx(&ctx, Arc::clone(&analyzed_mdl), &[], headers.clone(), sql).await?,
+            @"SELECT customer.c_custkey FROM (SELECT customer.c_custkey, customer.whitelist_name FROM (SELECT __relation__1.c_custkey, __relation__1.whitelist_name FROM (SELECT whitelist_name.c_custkey, whitelist_name.whitelist_name FROM (SELECT __relation__1.c_custkey AS c_custkey, array_agg(__relation__1.allow_name) AS whitelist_name FROM (SELECT whitelist.allow_name, customer.c_custkey, whitelist.mock_id FROM (SELECT whitelist.allow_name, whitelist.mock_id FROM (SELECT whitelist.allow_name, whitelist.mock_id FROM (SELECT __source.allow_name AS allow_name, __source.mock_id AS mock_id FROM whitelist AS __source) AS whitelist) AS whitelist) AS whitelist RIGHT OUTER JOIN (SELECT __source.c_custkey AS c_custkey, __source.mock_id AS mock_id FROM customer AS __source) AS customer ON whitelist.mock_id = customer.mock_id) AS __relation__1 GROUP BY __relation__1.c_custkey) AS whitelist_name RIGHT OUTER JOIN (SELECT __source.c_custkey AS c_custkey FROM customer AS __source) AS customer ON whitelist_name.c_custkey = customer.c_custkey) AS __relation__1) AS customer WHERE array_has(customer.whitelist_name, 'Gura')) AS customer"
+        );
+
+        let sql = "SELECT whitelist_name FROM customer";
+        match transform_sql_with_ctx(
+            &ctx,
+            Arc::clone(&analyzed_mdl),
+            &[],
+            headers.clone(),
+            sql,
+        )
+        .await
+        {
+            Ok(_) => {
+                panic!("whitelist_name is hidden, it should not be selected directly")
+            }
+            Err(e) => {
+                assert_snapshot!(e.to_string(), @"Schema error: No field named whitelist_name. Valid fields are customer.c_custkey, customer.mock_id.")
+            }
+        }
+
         Ok(())
     }
 

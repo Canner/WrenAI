@@ -506,6 +506,31 @@ impl ModelPlanNodeBuilder {
             &mut partial_model_required_fields,
         )?;
 
+        // Default use the primary key of the model as the required field for the partial model if there is no any required field. It's always used when the `TO_MANY` calculation is used,
+        // because the result of `TO_MANY` calculation is always grouped by the primary key of the source model.
+        let Some(model) = self
+            .analyzed_wren_mdl
+            .wren_mdl()
+            .get_model(model_ref.table())
+        else {
+            return plan_err!("Model not found for {}", model_ref);
+        };
+
+        let primary_key_column = model.primary_key().and_then(|pk| model.get_column(pk));
+
+        if let Some(primary_key_column) = primary_key_column {
+            let expr = create_wren_expr_for_model(
+                &primary_key_column.name,
+                Arc::clone(&model),
+                Arc::clone(&self.session_state),
+            )?;
+
+            partial_model_required_fields
+                .entry(model_ref.clone())
+                .or_default()
+                .insert(OrdExpr::with_column(expr, Arc::clone(&column)));
+        }
+
         let mut iter = column_graph.node_indices();
 
         let start = iter.next().unwrap();
