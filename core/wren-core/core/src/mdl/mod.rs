@@ -492,6 +492,9 @@ pub async fn transform_sql_with_ctx(
         register_remote_function(ctx, remote_function)?;
         Ok::<_, DataFusionError>(())
     })?;
+    // Note: unknown functions referenced in the manifest's expressions are
+    // auto-registered as inferred bypass UDFs inside `apply_wren_on_ctx`, which is
+    // the choke point shared by every planning path (transform, load, dry-run).
     let ctx = apply_wren_on_ctx(
         ctx,
         Arc::clone(&analyzed_mdl),
@@ -627,6 +630,109 @@ fn register_remote_function(
             ),
         )),
     };
+    Ok(())
+}
+
+/// Scan all free-form SQL expressions in the manifest — calculated column
+/// expressions, row-level access control conditions, cube
+/// measure/dimension/time-dimension expressions, and relationship conditions —
+/// for function calls that are not registered in the context, and register each
+/// unknown function as a bypass UDF whose return type is inferred from the
+/// argument types at planning time.
+///
+/// This lets MDL authors reference data-source-native functions that wren-core
+/// does not know about (and pass them through to the unparser) without declaring
+/// every one in the remote-functions list. Functions already registered — built
+/// ins, dialect functions, and explicitly declared remote functions — are left
+/// untouched, so explicit declarations always win.
+///
+/// Aggregate functions cannot be reliably distinguished from scalar functions by
+/// syntax alone, so unknown functions are registered as scalar UDFs unless they
+/// carry an `OVER (...)` clause (registered as window UDFs). Unknown aggregates
+/// still need an explicit remote-function declaration.
+pub(crate) fn register_inferred_bypass_for_manifest(
+    ctx: &SessionContext,
+    manifest: &Manifest,
+) -> Result<()> {
+    use datafusion::sql::parser::DFParserBuilder;
+    use datafusion::sql::sqlparser::ast::{self, visit_expressions};
+    use datafusion::sql::sqlparser::dialect::GenericDialect;
+    use std::collections::HashSet;
+    use std::ops::ControlFlow;
+
+    // Collect every free-form expression string in the manifest.
+    let mut expressions: Vec<&str> = vec![];
+    for model in &manifest.models {
+        for column in &model.columns {
+            if let Some(expr) = column.expression.as_deref() {
+                if !expr.is_empty() {
+                    expressions.push(expr);
+                }
+            }
+        }
+        for rule in &model.row_level_access_controls {
+            expressions.push(rule.condition.as_str());
+        }
+    }
+    for cube in &manifest.cubes {
+        for measure in &cube.measures {
+            expressions.push(measure.expression.as_str());
+        }
+        for dimension in &cube.dimensions {
+            expressions.push(dimension.expression.as_str());
+        }
+        for time_dimension in &cube.time_dimensions {
+            expressions.push(time_dimension.expression.as_str());
+        }
+    }
+    for relationship in &manifest.relationships {
+        expressions.push(relationship.condition.as_str());
+    }
+
+    // A function is "known" if it is registered as a scalar, aggregate, or window
+    // function. Registry keys are lowercase, matching DataFusion's name resolution.
+    let state = ctx.state();
+    let is_known = |name: &str| {
+        state.scalar_functions().contains_key(name)
+            || state.aggregate_functions().contains_key(name)
+            || state.window_functions().contains_key(name)
+    };
+
+    let dialect = GenericDialect {};
+    let mut registered: HashSet<String> = HashSet::new();
+    for expr_sql in expressions {
+        // Skip expressions that don't parse; the analyzer reports those with a
+        // clearer error than we could here.
+        let Ok(mut parser) = DFParserBuilder::new(expr_sql)
+            .with_dialect(&dialect)
+            .build()
+        else {
+            continue;
+        };
+        let Ok(expr) = parser.parse_expr() else {
+            continue;
+        };
+        let _ = visit_expressions(&expr, |node| {
+            if let ast::Expr::Function(func) = node {
+                if let Some(ident) = func.name.0.last().and_then(|p| p.as_ident()) {
+                    let original = ident.value.as_str();
+                    let normalized = original.to_lowercase();
+                    if !is_known(&normalized) && registered.insert(normalized.clone()) {
+                        if func.over.is_some() {
+                            ctx.register_udwf(WindowUDF::new_from_impl(
+                                ByPassWindowFunction::new_inferred(&normalized),
+                            ));
+                        } else {
+                            ctx.register_udf(ScalarUDF::new_from_impl(
+                                ByPassScalarUDF::new_inferred(original),
+                            ));
+                        }
+                    }
+                }
+            }
+            ControlFlow::<()>::Continue(())
+        });
+    }
     Ok(())
 }
 
@@ -919,6 +1025,49 @@ mod test {
         // ).await?;
         // assert_eq!(actual, "");
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_inferred_bypass_unknown_function_in_expression() -> Result<()> {
+        // A column expression references `custom_mask`, a function wren-core does
+        // not know about and that is NOT declared as a remote function. It should
+        // be auto-registered as an inferred bypass UDF and passed through to the
+        // unparsed SQL with its original casing preserved.
+        let manifest = ManifestBuilder::new()
+            .catalog("CTest")
+            .schema("STest")
+            .model(
+                ModelBuilder::new("Customer")
+                    .table_reference("datafusion.public.customer")
+                    .column(ColumnBuilder::new("Custkey", "int").build())
+                    .column(ColumnBuilder::new("Name", "string").build())
+                    .column(
+                        ColumnBuilder::new("Masked", "string")
+                            .expression(r#"custom_mask("Name")"#)
+                            .build(),
+                    )
+                    .build(),
+            )
+            .build();
+        let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+            manifest,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        )?);
+        let ctx = create_wren_ctx(None, analyzed_mdl.wren_mdl().data_source().as_ref());
+        let actual = transform_sql_with_ctx(
+            &ctx,
+            Arc::clone(&analyzed_mdl),
+            &[],
+            Arc::new(HashMap::new()),
+            r#"select "Masked" from "CTest"."STest"."Customer""#,
+        )
+        .await?;
+        assert!(
+            actual.contains("custom_mask"),
+            "expected unknown function to be passed through, got: {actual}"
+        );
         Ok(())
     }
 

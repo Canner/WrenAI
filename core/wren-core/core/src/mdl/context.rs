@@ -47,6 +47,19 @@ pub async fn apply_wren_on_ctx(
     properties: SessionPropertiesRef,
     mode: Mode,
 ) -> Result<SessionContext> {
+    // Auto-register any function referenced in the manifest's expressions that is
+    // still unknown (after built-ins, dialect, and explicit remote functions) as
+    // an inferred bypass UDF. Done here, on the input `ctx`, so the registration
+    // is captured by the state snapshot the `ModelAnalyzeRule` resolves functions
+    // against. `apply_wren_on_ctx` is the choke point shared by every planning
+    // path — transform, Python session load (`ctx`/`exec_ctx`), dry-run,
+    // permission analysis — so MDL authors can reference data-source-native
+    // functions without declaring each one.
+    crate::mdl::register_inferred_bypass_for_manifest(
+        ctx,
+        &analyzed_mdl.wren_mdl.manifest,
+    )?;
+
     let session_timezone = properties
         .get("x-wren-timezone")
         .map(|v| v.as_ref().map(|s| s.as_str()).unwrap_or("UTC").to_string());
