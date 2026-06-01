@@ -407,7 +407,7 @@ def _rewrite_mssql_timestamp_subtraction(sql: str) -> str:
 
 def _infer_mssql_timestamp_expression(sql: str) -> str | None:
     timestamp_column_pattern = re.compile(
-        r'(?:(?:"[^"]+"\.)?"(?:created_at|updated_at|generated_at|opened_at|closed_at|completed_at|resolved_at)")',
+        r'(?:(?:"[^"]+"\.)?"(?:created_at|updated_at|generated_at|opened_at|closed_at|completed_at|resolved_at|DateIn|DateOut|FailedAt)")',
         re.IGNORECASE,
     )
     if match := timestamp_column_pattern.search(sql):
@@ -419,12 +419,16 @@ def _infer_mssql_timestamp_expression(sql: str) -> str | None:
     )
     if match := table_pattern.search(sql):
         table_name = match.group(1)
-        normalized_table_name = table_name.strip('"[]').lower()
+        raw_table_name = table_name.strip('"[]')
+        normalized_table_name = raw_table_name.lower()
+        quoted_table_name = f'"{raw_table_name}"'
+        if normalized_table_name == "dbo_debugentries":
+            return f'{quoted_table_name}."DateIn"'
         if "report" in normalized_table_name:
             return f'{table_name}."generated_at"'
         if any(
             token in normalized_table_name
-            for token in ("repair", "ticket", "debug", "event", "log")
+            for token in ("repair", "ticket", "event", "log")
         ):
             return f'{table_name}."created_at"'
 
@@ -452,17 +456,104 @@ def _rewrite_mssql_invented_date_identifiers(sql: str) -> str:
 
 
 def _rewrite_mssql_invented_repair_relationship_identifiers(sql: str) -> str:
-    if not re.search(r"\bdbo_repair_logs\b", sql, flags=re.IGNORECASE):
-        return sql
+    rewritten = sql
 
-    invented_failure_pattern_id_pattern = re.compile(
-        r'(?:"dbo_repair_logs"|\[dbo_repair_logs\]|dbo_repair_logs)\s*\.\s*(?:"FailurePatternID"|"FailurePatternId"|\[FailurePatternID\]|\[FailurePatternId\]|FailurePatternID|FailurePatternId)',
-        re.IGNORECASE,
+    if re.search(r"\bdbo_repair_logs\b", rewritten, flags=re.IGNORECASE):
+        invented_failure_pattern_id_pattern = re.compile(
+            r'(?:"dbo_repair_logs"|\[dbo_repair_logs\]|dbo_repair_logs)\s*\.\s*(?:"FailurePatternID"|"FailurePatternId"|\[FailurePatternID\]|\[FailurePatternId\]|FailurePatternID|FailurePatternId)',
+            re.IGNORECASE,
+        )
+        rewritten = invented_failure_pattern_id_pattern.sub(
+            '"dbo_repair_logs"."failure_code"', rewritten
+        )
+
+    if re.search(r"\bdbo_DebugEntries\b", rewritten, flags=re.IGNORECASE) and re.search(
+        r"\bdbo_failure_patterns\b", rewritten, flags=re.IGNORECASE
+    ):
+        invented_debug_failure_pattern_pattern = re.compile(
+            r'(?:"dbo_DebugEntries"|\[dbo_DebugEntries\]|dbo_DebugEntries)\s*\.\s*(?:"FailurePatternID"|"FailurePatternId"|\[FailurePatternID\]|\[FailurePatternId\]|FailurePatternID|FailurePatternId)',
+            re.IGNORECASE,
+        )
+        rewritten = invented_debug_failure_pattern_pattern.sub(
+            '"dbo_DebugEntries"."FailureSys"', rewritten
+        )
+
+        debug_id_identifier = (
+            r'(?:"dbo_DebugEntries"|\[dbo_DebugEntries\]|dbo_DebugEntries)'
+            r'\s*\.\s*(?:"DebugEntryId"|\[DebugEntryId\]|DebugEntryId)'
+        )
+        failure_pattern_id_identifier = (
+            r'(?:"dbo_failure_patterns"|\[dbo_failure_patterns\]|dbo_failure_patterns)'
+            r'\s*\.\s*(?:"id"|\[id\]|id)'
+        )
+        debug_id_to_failure_pattern_pattern = re.compile(
+            rf"{debug_id_identifier}\s*=\s*{failure_pattern_id_identifier}",
+            re.IGNORECASE,
+        )
+        failure_pattern_to_debug_id_pattern = re.compile(
+            rf"{failure_pattern_id_identifier}\s*=\s*{debug_id_identifier}",
+            re.IGNORECASE,
+        )
+        rewritten = debug_id_to_failure_pattern_pattern.sub(
+            '"dbo_DebugEntries"."FailureSys" = "dbo_failure_patterns"."id"',
+            rewritten,
+        )
+        rewritten = failure_pattern_to_debug_id_pattern.sub(
+            '"dbo_failure_patterns"."id" = "dbo_DebugEntries"."FailureSys"',
+            rewritten,
+        )
+
+    return rewritten
+
+
+def _rewrite_mssql_invented_pcb_throughput_identifiers(sql: str) -> str:
+    rewritten = sql
+    manufacturing_unit_pattern = (
+        r'(?:"ManufacturingUnit"|"Manufacturing_Unit"|"manufacturing_unit"|'
+        r'\[ManufacturingUnit\]|\[Manufacturing_Unit\]|\[manufacturing_unit\]|'
+        r'ManufacturingUnit|Manufacturing_Unit|manufacturing_unit)'
     )
 
-    return invented_failure_pattern_id_pattern.sub(
-        '"dbo_repair_logs"."failure_code"', sql
-    )
+    if re.search(r"\bdbo_DebugEntries\b", rewritten, flags=re.IGNORECASE):
+        debug_table_pattern = (
+            r'(?:"dbo_DebugEntries"|\[dbo_DebugEntries\]|dbo_DebugEntries)\s*\.\s*'
+        )
+        rewritten = re.sub(
+            rf"{debug_table_pattern}{manufacturing_unit_pattern}",
+            '"dbo_DebugEntries"."BusinessUnit"',
+            rewritten,
+            flags=re.IGNORECASE,
+        )
+
+    if re.search(r"\bdbo_repair_logs\b", rewritten, flags=re.IGNORECASE) and re.search(
+        manufacturing_unit_pattern, rewritten, flags=re.IGNORECASE
+    ):
+        rewritten = re.sub(
+            r'(?:"dbo_repair_logs"|\[dbo_repair_logs\]|dbo_repair_logs)',
+            '"dbo_DebugEntries"',
+            rewritten,
+            flags=re.IGNORECASE,
+        )
+        rewritten = re.sub(
+            rf'"dbo_DebugEntries"\s*\.\s*{manufacturing_unit_pattern}',
+            '"dbo_DebugEntries"."BusinessUnit"',
+            rewritten,
+            flags=re.IGNORECASE,
+        )
+        rewritten = re.sub(
+            r'"dbo_DebugEntries"\s*\.\s*(?:"id"|\[id\]|id)',
+            '"dbo_DebugEntries"."DebugEntryId"',
+            rewritten,
+            flags=re.IGNORECASE,
+        )
+        rewritten = re.sub(
+            r'"dbo_DebugEntries"\s*\.\s*(?:"created_at"|"updated_at"|\[created_at\]|\[updated_at\]|created_at|updated_at)',
+            '"dbo_DebugEntries"."DateIn"',
+            rewritten,
+            flags=re.IGNORECASE,
+        )
+
+    return rewritten
 
 
 def contains_unsupported_mssql_json_access(sql: str) -> bool:
@@ -627,6 +718,7 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
         normalized = _rewrite_mssql_invented_repair_relationship_identifiers(
             normalized
         )
+        normalized = _rewrite_mssql_invented_pcb_throughput_identifiers(normalized)
         normalized = _rewrite_mssql_bare_time_bucket_identifiers(normalized)
         normalized = _rewrite_mssql_bucket_functions(normalized)
         normalized = _rewrite_temporal_bucket_functions(normalized)
@@ -895,6 +987,14 @@ _MSSQL_TEXT_TO_SQL_RULES = """
 - Never invent JSON-derived columns such as "repair_date", "repair_status", or "failure_code" unless they are explicitly listed as columns in the DATABASE SCHEMA.
 - For repair trend or repair volume questions, prefer explicit timestamp columns such as "created_at", "updated_at", "opened_at", or "closed_at" only when those exact columns appear in the selected table schema.
 - For repair counts grouped by failure category, use explicit exposed fields such as "dbo_repair_logs"."failure_code" when present. Do not invent "dbo_repair_logs"."FailurePatternID"; only join to "dbo_failure_patterns" when an explicit join key or relationship exists in the DATABASE SCHEMA.
+- For PCB/debug-entry failure charts, do not join "dbo_DebugEntries"."DebugEntryId" to "dbo_failure_patterns"."id"; those fields have incompatible types. If both "dbo_DebugEntries"."FailureSys" and "dbo_failure_patterns"."id" exist, join "dbo_DebugEntries"."FailureSys" = "dbo_failure_patterns"."id".
+- For PCB synced database questions:
+    - Use "dbo_DebugEntries" for debug/PCB event records when the schema contains it.
+    - Use columns such as "Material", "WorkOrder", "SerialNumber", "FailedAt", "DateIn", "DateOut", "Hours", "Priority", "Actions", "Notes", and "FailureSys" only when they appear in the schema.
+    - Use "dbo_failure_patterns" for failure names, categories, severity, trend, occurrence counts, daily pattern summaries, and cost impact when those columns appear in the schema.
+    - For throughput trends across manufacturing/business units, use "dbo_DebugEntries"."BusinessUnit" as the unit dimension and a real debug-entry timestamp such as "dbo_DebugEntries"."DateIn" or "dbo_DebugEntries"."FailedAt" for the trend bucket. Do not use "dbo_repair_logs"."ManufacturingUnit", "dbo_repair_logs"."MONTH", or invented manufacturing/date fields.
+    - For top/common PCB failure questions, prefer grouping by "dbo_failure_patterns"."name" or "dbo_failure_patterns"."category" and counting "dbo_DebugEntries"."DebugEntryId" after joining "dbo_DebugEntries"."FailureSys" = "dbo_failure_patterns"."id".
+    - If a useful aggregate already exists in "dbo_failure_patterns" such as "occurrences", it can be used directly for top failure pattern questions without joining event rows.
 - DO NOT use DATEADD, DATEDIFF, DATETIME2, or DATETIMEOFFSET unless the SQL FUNCTIONS section explicitly proves they are supported by the target runtime.
 - Do not subtract timestamp/date columns directly. If a duration or turnaround column exists in the schema, select that column directly. If only start/end timestamps exist and the SQL FUNCTIONS section lists DATEDIFF, use DATEDIFF('second', <start_timestamp>, <end_timestamp>) for duration in seconds.
 - Resolve relative time phrases such as "last 12 months", "last month", or "this year" into absolute ISO timestamp boundaries using the current time context. Prefer closed-open literal ranges over runtime date arithmetic.

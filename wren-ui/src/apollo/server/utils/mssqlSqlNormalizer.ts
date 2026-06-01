@@ -4,7 +4,7 @@ const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$
 
 const inferMssqlTimestampExpression = (sql: string): string => {
   const qualifiedTimestamp = sql.match(
-    /"([^"]+)"\."(created_at|updated_at|generated_at|created_date|date)"/i,
+    /"([^"]+)"\."(created_at|updated_at|generated_at|created_date|date|DateIn|DateOut|FailedAt)"/i,
   );
   if (qualifiedTimestamp) {
     return qualifiedTimestamp[0];
@@ -12,11 +12,17 @@ const inferMssqlTimestampExpression = (sql: string): string => {
 
   const fromTable = sql.match(/\bFROM\s+"([^"]+)"/i);
   if (fromTable) {
+    if (fromTable[1].toLowerCase() === 'dbo_debugentries') {
+      return `"${fromTable[1]}"."DateIn"`;
+    }
     return `"${fromTable[1]}"."created_at"`;
   }
 
   const bracketedFromTable = sql.match(/\bFROM\s+\[([^\]]+)\]/i);
   if (bracketedFromTable) {
+    if (bracketedFromTable[1].toLowerCase() === 'dbo_debugentries') {
+      return `"${bracketedFromTable[1]}"."DateIn"`;
+    }
     return `"${bracketedFromTable[1]}"."created_at"`;
   }
 
@@ -97,6 +103,74 @@ const replaceInventedTimeBuckets = (sql: string): string => {
   return sql;
 };
 
+const replaceBadFailurePatternJoins = (sql: string): string => {
+  if (
+    !/\bdbo_DebugEntries\b/i.test(sql) ||
+    !/\bdbo_failure_patterns\b/i.test(sql)
+  ) {
+    return sql;
+  }
+
+  const debugTable = String.raw`(?:"dbo_DebugEntries"|\[dbo_DebugEntries\]|dbo_DebugEntries)`;
+  const failurePatternTable = String.raw`(?:"dbo_failure_patterns"|\[dbo_failure_patterns\]|dbo_failure_patterns)`;
+  const debugEntryId = String.raw`${debugTable}\s*\.\s*(?:"DebugEntryId"|\[DebugEntryId\]|DebugEntryId)`;
+  const debugFailureSys = '"dbo_DebugEntries"."FailureSys"';
+  const failurePatternId = String.raw`${failurePatternTable}\s*\.\s*(?:"id"|\[id\]|id)`;
+  const normalizedFailurePatternId = '"dbo_failure_patterns"."id"';
+
+  sql = sql.replace(
+    new RegExp(String.raw`${debugEntryId}\s*=\s*${failurePatternId}`, 'gi'),
+    `${debugFailureSys} = ${normalizedFailurePatternId}`,
+  );
+  sql = sql.replace(
+    new RegExp(String.raw`${failurePatternId}\s*=\s*${debugEntryId}`, 'gi'),
+    `${normalizedFailurePatternId} = ${debugFailureSys}`,
+  );
+  sql = sql.replace(
+    new RegExp(
+      String.raw`${debugTable}\s*\.\s*(?:"FailurePatternID"|"FailurePatternId"|\[FailurePatternID\]|\[FailurePatternId\]|FailurePatternID|FailurePatternId)`,
+      'gi',
+    ),
+    debugFailureSys,
+  );
+
+  return sql;
+};
+
+const replacePcbThroughputFields = (sql: string): string => {
+  const manufacturingUnitField =
+    String.raw`(?:"ManufacturingUnit"|"Manufacturing_Unit"|"manufacturing_unit"|\[ManufacturingUnit\]|\[Manufacturing_Unit\]|\[manufacturing_unit\]|ManufacturingUnit|Manufacturing_Unit|manufacturing_unit)`;
+
+  if (/\bdbo_DebugEntries\b/i.test(sql)) {
+    const debugTable = String.raw`(?:"dbo_DebugEntries"|\[dbo_DebugEntries\]|dbo_DebugEntries)`;
+    sql = sql.replace(
+      new RegExp(String.raw`${debugTable}\s*\.\s*${manufacturingUnitField}`, 'gi'),
+      '"dbo_DebugEntries"."BusinessUnit"',
+    );
+  }
+
+  if (/\bdbo_repair_logs\b/i.test(sql) && new RegExp(manufacturingUnitField, 'i').test(sql)) {
+    sql = sql.replace(
+      /(?:"dbo_repair_logs"|\[dbo_repair_logs\]|dbo_repair_logs)/gi,
+      '"dbo_DebugEntries"',
+    );
+    sql = sql.replace(
+      new RegExp(String.raw`"dbo_DebugEntries"\s*\.\s*${manufacturingUnitField}`, 'gi'),
+      '"dbo_DebugEntries"."BusinessUnit"',
+    );
+    sql = sql.replace(
+      /"dbo_DebugEntries"\s*\.\s*(?:"id"|\[id\]|id)/gi,
+      '"dbo_DebugEntries"."DebugEntryId"',
+    );
+    sql = sql.replace(
+      /"dbo_DebugEntries"\s*\.\s*(?:"created_at"|"updated_at"|\[created_at\]|\[updated_at\]|created_at|updated_at)/gi,
+      '"dbo_DebugEntries"."DateIn"',
+    );
+  }
+
+  return sql;
+};
+
 export const normalizeMssqlGeneratedSqlFields = (
   sql: string,
   dataSource: DataSourceName,
@@ -107,7 +181,9 @@ export const normalizeMssqlGeneratedSqlFields = (
 
   sql = sql.replace(/\\"/g, '"');
   sql = replaceInventedDateFields(sql);
+  sql = replacePcbThroughputFields(sql);
   sql = replaceInventedTimeBuckets(sql);
+  sql = replaceBadFailurePatternJoins(sql);
   return sql;
 };
 
