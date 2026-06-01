@@ -47,19 +47,6 @@ pub async fn apply_wren_on_ctx(
     properties: SessionPropertiesRef,
     mode: Mode,
 ) -> Result<SessionContext> {
-    // Auto-register any function referenced in the manifest's expressions that is
-    // still unknown (after built-ins, dialect, and explicit remote functions) as
-    // an inferred bypass UDF. Done here, on the input `ctx`, so the registration
-    // is captured by the state snapshot the `ModelAnalyzeRule` resolves functions
-    // against. `apply_wren_on_ctx` is the choke point shared by every planning
-    // path — transform, Python session load (`ctx`/`exec_ctx`), dry-run,
-    // permission analysis — so MDL authors can reference data-source-native
-    // functions without declaring each one.
-    crate::mdl::register_inferred_bypass_for_manifest(
-        ctx,
-        &analyzed_mdl.wren_mdl.manifest,
-    )?;
-
     let session_timezone = properties
         .get("x-wren-timezone")
         .map(|v| v.as_ref().map(|s| s.as_str()).unwrap_or("UTC").to_string());
@@ -88,12 +75,24 @@ pub async fn apply_wren_on_ctx(
     }
 
     let type_planner = Arc::new(WrenTypePlanner::default());
-    let reset_default_catalog_schema = Arc::new(RwLock::new(
-        SessionStateBuilder::new_from_existing(ctx.state())
-            .with_config(config.clone())
-            .with_type_planner(type_planner)
-            .build(),
-    ));
+    let mut base_state = SessionStateBuilder::new_from_existing(ctx.state())
+        .with_config(config.clone())
+        .with_type_planner(type_planner)
+        .build();
+    // Auto-register any function referenced in the manifest's expressions that is
+    // still unknown (after built-ins, dialect, and explicit remote functions) as
+    // an inferred bypass UDF. Registered into this locally-derived state — not the
+    // shared input `ctx` — so the registration is captured by the state snapshot
+    // the `ModelAnalyzeRule` resolves functions against without leaking into a
+    // context that may be reused across manifests. `apply_wren_on_ctx` is the
+    // choke point shared by every planning path (transform, Python session load,
+    // dry-run, permission analysis), so MDL authors can reference data-source-
+    // native functions without declaring each one.
+    crate::mdl::register_inferred_bypass_for_manifest(
+        &mut base_state,
+        &analyzed_mdl.wren_mdl.manifest,
+    )?;
+    let reset_default_catalog_schema = Arc::new(RwLock::new(base_state));
 
     let new_state = SessionStateBuilder::new_from_existing(
         reset_default_catalog_schema.clone().read().deref().clone(),

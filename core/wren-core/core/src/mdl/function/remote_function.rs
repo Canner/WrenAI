@@ -471,6 +471,9 @@ impl AggregateUDFImpl for ByPassAggregateUDF {
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct ByPassWindowFunction {
     name: String,
+    /// Aliases for the function, including the lowercase name used for parsing
+    /// when it differs from the original (case-sensitive) name.
+    aliases: Vec<String>,
     return_type: ReturnType,
     signature: Signature,
     doc: Option<Documentation>,
@@ -485,6 +488,7 @@ impl ByPassWindowFunction {
     ) -> Self {
         Self {
             name: name.to_string(),
+            aliases: vec![],
             return_type,
             signature,
             doc,
@@ -494,6 +498,7 @@ impl ByPassWindowFunction {
     pub fn new_with_return_type(name: &str, return_type: DataType) -> Self {
         Self {
             name: name.to_string(),
+            aliases: vec![],
             return_type: ReturnType::Specific(return_type),
             signature: Signature::one_of(
                 vec![TypeSignature::VariadicAny, TypeSignature::Nullary],
@@ -505,9 +510,19 @@ impl ByPassWindowFunction {
 
     /// A bypass window UDF whose return type is inferred from the argument types
     /// at planning time. See [`ByPassScalarUDF::new_inferred`].
+    ///
+    /// The original (case-sensitive) name is kept for SQL generation while a
+    /// lowercase alias is added for DataFusion's name resolution during parsing.
     pub fn new_inferred(name: &str) -> Self {
+        let normalized = name.to_lowercase();
+        let aliases = if name != normalized {
+            vec![normalized]
+        } else {
+            vec![]
+        };
         Self {
             name: name.to_string(),
+            aliases,
             return_type: ReturnType::Inferred,
             signature: bypass_any_signature(),
             doc: None,
@@ -524,6 +539,7 @@ impl From<RemoteFunction> for ByPassWindowFunction {
             signature: func.get_signature(),
             doc: Some(build_document(&func)),
             name: func.name,
+            aliases: vec![],
         }
     }
 }
@@ -531,6 +547,10 @@ impl From<RemoteFunction> for ByPassWindowFunction {
 impl WindowUDFImpl for ByPassWindowFunction {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn aliases(&self) -> &[String] {
+        &self.aliases
     }
 
     fn name(&self) -> &str {
@@ -602,6 +622,27 @@ mod test {
             udf.return_type(&[DataType::Float64]).unwrap(),
             DataType::Float64
         );
+    }
+
+    #[test]
+    fn test_inferred_bypass_preserves_casing() {
+        use crate::mdl::function::ByPassWindowFunction;
+        use datafusion::logical_expr::WindowUDFImpl;
+
+        // Mixed-case names keep their original spelling for SQL generation and add
+        // a lowercase alias for DataFusion's name resolution during parsing.
+        let scalar = ByPassScalarUDF::new_inferred("toYear");
+        assert_eq!(scalar.name(), "toYear");
+        assert_eq!(scalar.aliases(), ["toyear".to_string()]);
+
+        let window = ByPassWindowFunction::new_inferred("MyWinFn");
+        assert_eq!(window.name(), "MyWinFn");
+        assert_eq!(window.aliases(), ["mywinfn".to_string()]);
+
+        // Already-lowercase names need no alias.
+        let lower = ByPassWindowFunction::new_inferred("rank_fn");
+        assert_eq!(lower.name(), "rank_fn");
+        assert!(lower.aliases().is_empty());
     }
 
     #[tokio::test]

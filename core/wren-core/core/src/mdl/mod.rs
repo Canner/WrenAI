@@ -650,10 +650,15 @@ fn register_remote_function(
 /// syntax alone, so unknown functions are registered as scalar UDFs unless they
 /// carry an `OVER (...)` clause (registered as window UDFs). Unknown aggregates
 /// still need an explicit remote-function declaration.
+///
+/// Registers into the given [`SessionState`] (rather than a shared
+/// [`SessionContext`]) so the caller can seed a derived state without leaking
+/// inferred functions back into a context that may be reused across manifests.
 pub(crate) fn register_inferred_bypass_for_manifest(
-    ctx: &SessionContext,
+    state: &mut SessionState,
     manifest: &Manifest,
 ) -> Result<()> {
+    use datafusion::execution::FunctionRegistry;
     use datafusion::sql::parser::DFParserBuilder;
     use datafusion::sql::sqlparser::ast::{self, visit_expressions};
     use datafusion::sql::sqlparser::dialect::GenericDialect;
@@ -689,17 +694,23 @@ pub(crate) fn register_inferred_bypass_for_manifest(
         expressions.push(relationship.condition.as_str());
     }
 
-    // A function is "known" if it is registered as a scalar, aggregate, or window
-    // function. Registry keys are lowercase, matching DataFusion's name resolution.
-    let state = ctx.state();
-    let is_known = |name: &str| {
-        state.scalar_functions().contains_key(name)
-            || state.aggregate_functions().contains_key(name)
-            || state.window_functions().contains_key(name)
-    };
+    // Names already registered as scalar, aggregate, or window functions
+    // (built-ins, dialect functions, explicit remote functions). Registry keys are
+    // lowercase, matching DataFusion's name resolution. Snapshot them up front so
+    // the read does not borrow `state` while we later register into it.
+    let mut preexisting: HashSet<String> = HashSet::new();
+    preexisting.extend(state.scalar_functions().keys().cloned());
+    preexisting.extend(state.aggregate_functions().keys().cloned());
+    preexisting.extend(state.window_functions().keys().cloned());
 
+    // Scalar and window auto-registrations are tracked separately so discovering
+    // `foo(...)` as a scalar does not mask a later `foo(...) OVER (...)` window
+    // occurrence (and vice versa). Original casing is kept for SQL generation.
     let dialect = GenericDialect {};
-    let mut registered: HashSet<String> = HashSet::new();
+    let mut scalar_to_add: Vec<String> = vec![];
+    let mut window_to_add: Vec<String> = vec![];
+    let mut seen_scalar: HashSet<String> = HashSet::new();
+    let mut seen_window: HashSet<String> = HashSet::new();
     for expr_sql in expressions {
         // Skip expressions that don't parse; the analyzer reports those with a
         // clearer error than we could here.
@@ -717,21 +728,30 @@ pub(crate) fn register_inferred_bypass_for_manifest(
                 if let Some(ident) = func.name.0.last().and_then(|p| p.as_ident()) {
                     let original = ident.value.as_str();
                     let normalized = original.to_lowercase();
-                    if !is_known(&normalized) && registered.insert(normalized.clone()) {
+                    if !preexisting.contains(&normalized) {
                         if func.over.is_some() {
-                            ctx.register_udwf(WindowUDF::new_from_impl(
-                                ByPassWindowFunction::new_inferred(&normalized),
-                            ));
-                        } else {
-                            ctx.register_udf(ScalarUDF::new_from_impl(
-                                ByPassScalarUDF::new_inferred(original),
-                            ));
+                            if seen_window.insert(normalized.clone()) {
+                                window_to_add.push(original.to_string());
+                            }
+                        } else if seen_scalar.insert(normalized.clone()) {
+                            scalar_to_add.push(original.to_string());
                         }
                     }
                 }
             }
             ControlFlow::<()>::Continue(())
         });
+    }
+
+    for name in scalar_to_add {
+        state.register_udf(Arc::new(ScalarUDF::new_from_impl(
+            ByPassScalarUDF::new_inferred(&name),
+        )))?;
+    }
+    for name in window_to_add {
+        state.register_udwf(Arc::new(WindowUDF::new_from_impl(
+            ByPassWindowFunction::new_inferred(&name),
+        )))?;
     }
     Ok(())
 }
@@ -1067,6 +1087,45 @@ mod test {
         assert!(
             actual.contains("custom_mask"),
             "expected unknown function to be passed through, got: {actual}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_inferred_bypass_registers_scalar_and_window_independently() -> Result<()> {
+        // The same name appears as a plain call and as a window call. Both the
+        // scalar and the window bypass UDF must be registered — neither should
+        // mask the other.
+        let manifest = ManifestBuilder::new()
+            .catalog("CTest")
+            .schema("STest")
+            .model(
+                ModelBuilder::new("Customer")
+                    .table_reference("datafusion.public.customer")
+                    .column(ColumnBuilder::new("Custkey", "int").build())
+                    .column(ColumnBuilder::new("Name", "string").build())
+                    .column(
+                        ColumnBuilder::new("Scalar", "string")
+                            .expression(r#"foo("Name")"#)
+                            .build(),
+                    )
+                    .column(
+                        ColumnBuilder::new("Windowed", "string")
+                            .expression(r#"foo("Custkey") OVER (PARTITION BY "Name")"#)
+                            .build(),
+                    )
+                    .build(),
+            )
+            .build();
+        let mut state = create_wren_ctx(None, None).state();
+        super::register_inferred_bypass_for_manifest(&mut state, &manifest)?;
+        assert!(
+            state.scalar_functions().contains_key("foo"),
+            "scalar bypass should be registered"
+        );
+        assert!(
+            state.window_functions().contains_key("foo"),
+            "window bypass should be registered"
         );
         Ok(())
     }
