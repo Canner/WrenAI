@@ -436,11 +436,52 @@ def _rewrite_mssql_invented_date_identifiers(sql: str) -> str:
     if not timestamp_expression:
         return sql
 
+    qualified_invented_date_identifier_pattern = re.compile(
+        r'(?:(?:"[^"]+"|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\s*\.\s*)'
+        r'(?:"(?:RepairDate|repair_date|repairDate|date|month_date|event_date)"|\[(?:RepairDate|repair_date|repairDate|date|month_date|event_date)\]|(?:RepairDate|repair_date|repairDate|month_date|event_date))',
+        re.IGNORECASE,
+    )
     invented_date_identifier_pattern = re.compile(
         r'(?<!\.)"(?:RepairDate|repair_date|repairDate|date|month_date|event_date)"',
         re.IGNORECASE,
     )
-    return invented_date_identifier_pattern.sub(timestamp_expression, sql)
+    rewritten = qualified_invented_date_identifier_pattern.sub(
+        timestamp_expression, sql
+    )
+    return invented_date_identifier_pattern.sub(timestamp_expression, rewritten)
+
+
+def _rewrite_mssql_invented_repair_relationship_identifiers(sql: str) -> str:
+    if not re.search(r"\bdbo_repair_logs\b", sql, flags=re.IGNORECASE):
+        return sql
+
+    invented_failure_pattern_id_pattern = re.compile(
+        r'(?:"dbo_repair_logs"|\[dbo_repair_logs\]|dbo_repair_logs)\s*\.\s*(?:"FailurePatternID"|"FailurePatternId"|\[FailurePatternID\]|\[FailurePatternId\]|FailurePatternID|FailurePatternId)',
+        re.IGNORECASE,
+    )
+
+    return invented_failure_pattern_id_pattern.sub(
+        '"dbo_repair_logs"."failure_code"', sql
+    )
+
+
+def contains_unsupported_mssql_json_access(sql: str) -> bool:
+    if re.search(r"(?:->>|->)", sql):
+        return True
+
+    unsupported_json_functions = (
+        "JSON_VALUE",
+        "JSON_QUERY",
+        "JSON_EXTRACT",
+        "JSON_EXTRACT_SCALAR",
+        "JSON_EXTRACT_ARRAY",
+        "LAX_BOOL",
+        "LAX_FLOAT64",
+        "LAX_INT64",
+        "LAX_STRING",
+    )
+    function_pattern = r"\b(?:{})\s*\(".format("|".join(unsupported_json_functions))
+    return bool(re.search(function_pattern, sql, flags=re.IGNORECASE))
 
 
 def _rewrite_mssql_bare_time_bucket_identifiers(sql: str) -> str:
@@ -456,8 +497,17 @@ def _rewrite_mssql_bare_time_bucket_identifiers(sql: str) -> str:
     rewritten = sql
 
     for bucket, expression in bucket_expressions.items():
+        qualified_bucket_pattern = re.compile(
+            rf'(?:(?:"[^"]+"|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\s*\.\s*)'
+            rf'(?:"{bucket}"|\[{bucket}\])',
+            re.IGNORECASE,
+        )
         select_identifier_pattern = re.compile(
             rf'(?P<prefix>\bSELECT\s+|,\s*)"{bucket}"(?P<suffix>\s*(?:,|\bFROM\b))',
+            re.IGNORECASE,
+        )
+        select_qualified_identifier_pattern = re.compile(
+            rf'(?P<prefix>\bSELECT\s+|,\s*){qualified_bucket_pattern.pattern}(?P<suffix>\s*(?:,|\bFROM\b))',
             re.IGNORECASE,
         )
 
@@ -466,6 +516,9 @@ def _rewrite_mssql_bare_time_bucket_identifiers(sql: str) -> str:
             suffix = match.group("suffix")
             return f'{prefix}{expression} AS "{bucket}"{suffix}'
 
+        rewritten = select_qualified_identifier_pattern.sub(
+            replace_select_identifier, rewritten
+        )
         rewritten = select_identifier_pattern.sub(
             replace_select_identifier, rewritten
         )
@@ -478,6 +531,12 @@ def _rewrite_mssql_bare_time_bucket_identifiers(sql: str) -> str:
     def replace_clause(match: re.Match[str]) -> str:
         body = match.group("body")
         for bucket, expression in bucket_expressions.items():
+            qualified_bucket_pattern = re.compile(
+                rf'(?:(?:"[^"]+"|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\s*\.\s*)'
+                rf'(?:"{bucket}"|\[{bucket}\])',
+                re.IGNORECASE,
+            )
+            body = qualified_bucket_pattern.sub(expression, body)
             body = re.sub(
                 rf'"{bucket}"',
                 expression,
@@ -565,6 +624,9 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
         normalized = _rewrite_mssql_timestamp_subtraction(normalized)
         normalized = _rewrite_mssql_timestamp_casts(normalized)
         normalized = _rewrite_mssql_invented_date_identifiers(normalized)
+        normalized = _rewrite_mssql_invented_repair_relationship_identifiers(
+            normalized
+        )
         normalized = _rewrite_mssql_bare_time_bucket_identifiers(normalized)
         normalized = _rewrite_mssql_bucket_functions(normalized)
         normalized = _rewrite_temporal_bucket_functions(normalized)
@@ -606,6 +668,27 @@ class SQLGenPostProcessor:
                         "original_sql": cleaned_generation_result,
                         "type": "DRY_RUN",
                         "error": "Generated response did not contain a SQL SELECT statement.",
+                        "correlation_id": "",
+                    },
+                }
+
+            if normalize_data_source(
+                data_source
+            ) == "MSSQL" and contains_unsupported_mssql_json_access(
+                cleaned_generation_result
+            ):
+                return {
+                    "valid_generation_result": {},
+                    "invalid_generation_result": {
+                        "sql": cleaned_generation_result,
+                        "original_sql": cleaned_generation_result,
+                        "type": "UNSUPPORTED_SQL",
+                        "error": (
+                            "Generated SQL uses JSON extraction, but the MSSQL "
+                            "Wren/Ibis runtime does not support JSON operators "
+                            "or JSON extraction functions. Use only first-class "
+                            "columns exposed in the schema."
+                        ),
                         "correlation_id": "",
                     },
                 }
@@ -794,6 +877,7 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - DON'T USE "TO_CHAR" function in the generated SQL query.
 - Aggregate functions are not allowed in the WHERE clause. Instead, they belong in the HAVING clause, which is used to filter after aggregation.
 - You can only add "ORDER BY" and "LIMIT" to the final "UNION" result.
+- Never invent foreign key columns or relationship fields such as "FailurePatternID", "FailurePatternId", "TicketID", or "<Table>ID" unless that exact column appears in the DATABASE SCHEMA. Join only on explicit schema columns or explicit relationships.
 - For top/bottom N questions, return exactly the business columns needed to answer the question. For example, "top 10 common failures" should return the failure field and the failure count.
 - For top/bottom N questions, prefer ORDER BY on the metric plus a row limit instead of adding ranking helper columns.
 - Do not include helper ranking columns such as "rank", "row_number", or "dense_rank" in the final SELECT unless the user explicitly asks to see ranks.
@@ -807,8 +891,10 @@ _MSSQL_TEXT_TO_SQL_RULES = """
 - DO NOT use PostgreSQL-style or Trino-style date syntax such as DATE_TRUNC, DATETRUNC, INTERVAL, CURRENT_DATE, TIMESTAMP WITH TIME ZONE, TO_CHAR, TO_UNIXTIME, TO_TIMESTAMP, TO_TIMESTAMP_MILLIS, TO_TIMESTAMP_SECONDS, TO_TIMESTAMP_MICROS, TO_TIMESTAMP_NANOS, or :: casts.
 - DO NOT use JSON extraction functions or operators such as JSON_VALUE, JSON_QUERY, JSON_EXTRACT, JSON_EXTRACT_SCALAR, JSON_EXTRACT_ARRAY, json_value, json_extract, ->, or ->>. The MSSQL Wren/Ibis runtime does not support them.
 - If a table has a generic JSON/text column such as "data", do not assume keys inside it are queryable. Only use fields that are exposed as first-class columns in the DATABASE SCHEMA.
+- If a requested metric such as debug hours, risk score, repair cost, or turnaround time is only present inside a JSON/text column and is not exposed as a first-class column or calculated field, do not generate SQL that extracts it from JSON.
 - Never invent JSON-derived columns such as "repair_date", "repair_status", or "failure_code" unless they are explicitly listed as columns in the DATABASE SCHEMA.
 - For repair trend or repair volume questions, prefer explicit timestamp columns such as "created_at", "updated_at", "opened_at", or "closed_at" only when those exact columns appear in the selected table schema.
+- For repair counts grouped by failure category, use explicit exposed fields such as "dbo_repair_logs"."failure_code" when present. Do not invent "dbo_repair_logs"."FailurePatternID"; only join to "dbo_failure_patterns" when an explicit join key or relationship exists in the DATABASE SCHEMA.
 - DO NOT use DATEADD, DATEDIFF, DATETIME2, or DATETIMEOFFSET unless the SQL FUNCTIONS section explicitly proves they are supported by the target runtime.
 - Do not subtract timestamp/date columns directly. If a duration or turnaround column exists in the schema, select that column directly. If only start/end timestamps exist and the SQL FUNCTIONS section lists DATEDIFF, use DATEDIFF('second', <start_timestamp>, <end_timestamp>) for duration in seconds.
 - Resolve relative time phrases such as "last 12 months", "last month", or "this year" into absolute ISO timestamp boundaries using the current time context. Prefer closed-open literal ranges over runtime date arithmetic.
@@ -1110,7 +1196,24 @@ def get_metric_instructions(
     return instructions
 
 
-def get_json_field_instructions(sql_knowledge: SqlKnowledge | None = None) -> str:
+_MSSQL_JSON_FIELD_INSTRUCTIONS = """
+#### MSSQL JSON Field Instructions ####
+- The target runtime cannot execute JSON extraction from generic JSON/text columns.
+- Do not use JSON operators or functions such as ->, ->>, JSON_VALUE, JSON_QUERY,
+  JSON_EXTRACT, JSON_EXTRACT_SCALAR, LAX_STRING, LAX_INT64, LAX_FLOAT64, or LAX_BOOL.
+- If the requested value is only inside a generic JSON/text column such as "data",
+  do not infer or extract it. Use only first-class columns and calculated fields
+  that are explicitly exposed in the DATABASE SCHEMA.
+"""
+
+
+def get_json_field_instructions(
+    sql_knowledge: SqlKnowledge | None = None,
+    data_source: str | None = None,
+) -> str:
+    if normalize_data_source(data_source) == "MSSQL":
+        return _MSSQL_JSON_FIELD_INSTRUCTIONS
+
     if sql_knowledge is not None:
         return _extract_from_sql_knowledge(
             sql_knowledge, "json_field_instructions", _DEFAULT_JSON_FIELD_INSTRUCTIONS
