@@ -9,6 +9,7 @@ import {
   IbisResponse,
 } from '../adaptors/ibisAdaptor';
 import { getLogger } from '@server/utils';
+import { normalizeMssqlSqlForIbis } from '@server/utils/mssqlSqlNormalizer';
 import { Project } from '../repositories';
 import { PostHogTelemetry, TelemetryEvent } from '../telemetry/telemetry';
 
@@ -57,69 +58,6 @@ export interface ValidateResponse {
   message?: string;
 }
 
-const rewriteMssqlDatepartAliasReferences = (sql: string): string => {
-  sql = sql.replace(/\\"/g, '"');
-
-  const aliases: Record<string, string> = {};
-  const aliasTargetPattern =
-    String.raw`(?:"([^"]+)"|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))`;
-  const aliasPatterns = [
-    new RegExp(
-      String.raw`\b(DATEPART\(\s*(?:YEAR|MONTH|DAY)\s*,\s*((?:[^()]|\([^()]*\))+?)\s*\))\s+AS\s+${aliasTargetPattern}`,
-      'gi',
-    ),
-    new RegExp(
-      String.raw`\b((?:YEAR|MONTH|DAY)\(\s*((?:[^()]|\([^()]*\))+?)\s*\))\s+AS\s+${aliasTargetPattern}`,
-      'gi',
-    ),
-    new RegExp(
-      String.raw`\b(DATE_PART\(\s*'?\s*(?:YEAR|MONTH|DAY)\s*'?\s*,\s*((?:[^()]|\([^()]*\))+?)\s*\))\s+AS\s+${aliasTargetPattern}`,
-      'gi',
-    ),
-    new RegExp(
-      String.raw`\b(EXTRACT\(\s*(?:YEAR|MONTH|DAY)\s+FROM\s+((?:[^()]|\([^()]*\))+?)\s*\))\s+AS\s+${aliasTargetPattern}`,
-      'gi',
-    ),
-  ];
-
-  aliasPatterns.forEach((aliasPattern) => {
-    for (const match of sql.matchAll(aliasPattern)) {
-      const expression = match[1];
-      const alias = match[3] || match[4] || match[5];
-      aliases[alias.toLowerCase()] = expression;
-    }
-  });
-
-  if (!Object.keys(aliases).length) {
-    return sql;
-  }
-
-  const clausePattern =
-    /\b(GROUP\s+BY|ORDER\s+BY|HAVING)\b(?<body>.*?)(?=\b(?:ORDER\s+BY|GROUP\s+BY|HAVING|LIMIT|OFFSET|FETCH|UNION|WHERE)\b|$)/gis;
-
-  return sql.replace(clausePattern, (match, clause, _body, _offset, _source, groups) => {
-    let body = groups?.body || '';
-    const placeholders: Record<string, string> = {};
-
-    Object.entries(aliases).forEach(([alias, expression]) => {
-      const placeholder = `__WREN_MSSQL_DATEPART_ALIAS_${Object.keys(placeholders).length}__`;
-      placeholders[placeholder] = expression;
-      const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-      body = body.replace(new RegExp(`"${escapedAlias}"`, 'gi'), placeholder);
-      body = body.replace(new RegExp(`\\\\+"${escapedAlias}\\\\+"`, 'gi'), placeholder);
-      body = body.replace(new RegExp(`\\[${escapedAlias}\\]`, 'gi'), placeholder);
-      body = body.replace(new RegExp(`\\b${escapedAlias}\\b`, 'gi'), placeholder);
-    });
-
-    Object.entries(placeholders).forEach(([placeholder, expression]) => {
-      body = body.replaceAll(placeholder, expression);
-    });
-
-    return `${clause}${body}`;
-  });
-};
-
 export interface IQueryService {
   preview(
     sql: string,
@@ -148,7 +86,7 @@ const normalizePreviewSqlForIbis = (
     return { sql, limit };
   }
 
-  sql = rewriteMssqlDatepartAliasReferences(sql);
+  sql = normalizeMssqlSqlForIbis(sql, dataSource);
 
   const topMatch = sql.match(/^\s*SELECT\s+(DISTINCT\s+)?TOP\s*\(?\s*(\d+)\s*\)?\s+/i);
   if (!topMatch) {
