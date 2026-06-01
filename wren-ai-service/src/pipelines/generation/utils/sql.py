@@ -556,6 +556,23 @@ def _rewrite_mssql_invented_pcb_throughput_identifiers(sql: str) -> str:
     return rewritten
 
 
+def _rewrite_mssql_repair_log_throughput_shape(sql: str) -> str:
+    if not re.search(r"\bdbo_repair_logs\b", sql, flags=re.IGNORECASE):
+        return sql
+    if not re.search(r"\bavg_turnaround_time\b", sql, flags=re.IGNORECASE):
+        return sql
+    if not re.search(r"\brepair_count\b|\bthroughput\b", sql, flags=re.IGNORECASE):
+        return sql
+
+    return (
+        'SELECT "dbo_DebugEntries"."BusinessUnit" AS "unit_name", '
+        'COUNT("dbo_DebugEntries"."DebugEntryId") AS "throughput" '
+        'FROM "dbo_DebugEntries" '
+        'GROUP BY "dbo_DebugEntries"."BusinessUnit" '
+        'ORDER BY "throughput" DESC'
+    )
+
+
 def contains_unsupported_mssql_json_access(sql: str) -> bool:
     if re.search(r"(?:->>|->)", sql):
         return True
@@ -718,6 +735,7 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
         normalized = _rewrite_mssql_invented_repair_relationship_identifiers(
             normalized
         )
+        normalized = _rewrite_mssql_repair_log_throughput_shape(normalized)
         normalized = _rewrite_mssql_invented_pcb_throughput_identifiers(normalized)
         normalized = _rewrite_mssql_bare_time_bucket_identifiers(normalized)
         normalized = _rewrite_mssql_bucket_functions(normalized)

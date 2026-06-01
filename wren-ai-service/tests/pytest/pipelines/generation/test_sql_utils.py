@@ -380,6 +380,29 @@ def test_normalize_generation_result_sql_rewrites_pcb_throughput_repair_log_fiel
     assert 'ORDER BY DATEPART(MONTH, "dbo_DebugEntries"."DateIn") ASC' in normalized
 
 
+def test_normalize_generation_result_sql_rewrites_repair_log_turnaround_throughput_shape_for_mssql():
+    sql = """
+    SELECT
+      board_model AS unit_name,
+      COUNT(*) AS repair_count,
+      AVG((DATEPART(DAY, updated_at) - DATEPART(DAY, created_at))) AS avg_turnaround_time
+    FROM dbo_repair_logs
+    GROUP BY board_model
+    """
+
+    normalized = normalize_generation_result_sql(sql, data_source="MSSQL")
+
+    assert "DATEPART(DAY" not in normalized
+    assert "avg_turnaround_time" not in normalized
+    assert "dbo_repair_logs" not in normalized
+    assert (
+        'SELECT "dbo_DebugEntries"."BusinessUnit" AS "unit_name", '
+        'COUNT("dbo_DebugEntries"."DebugEntryId") AS "throughput"'
+        in normalized
+    )
+    assert 'FROM "dbo_DebugEntries"' in normalized
+
+
 def test_normalize_generation_result_sql_rewrites_bare_month_field_for_mssql():
     sql = """
     SELECT

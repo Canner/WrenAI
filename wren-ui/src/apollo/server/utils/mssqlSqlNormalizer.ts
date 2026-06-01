@@ -175,6 +175,24 @@ const replacePcbThroughputFields = (sql: string): string => {
   return sql;
 };
 
+const replaceRepairLogThroughputShape = (sql: string): string => {
+  if (
+    !/\bdbo_repair_logs\b/i.test(sql) ||
+    !/\bavg_turnaround_time\b/i.test(sql) ||
+    !/\b(?:repair_count|throughput)\b/i.test(sql)
+  ) {
+    return sql;
+  }
+
+  return [
+    'SELECT "dbo_DebugEntries"."BusinessUnit" AS "unit_name",',
+    'COUNT("dbo_DebugEntries"."DebugEntryId") AS "throughput"',
+    'FROM "dbo_DebugEntries"',
+    'GROUP BY "dbo_DebugEntries"."BusinessUnit"',
+    'ORDER BY "throughput" DESC',
+  ].join(' ');
+};
+
 export const normalizeMssqlGeneratedSqlFields = (
   sql: string,
   dataSource: DataSourceName,
@@ -185,6 +203,7 @@ export const normalizeMssqlGeneratedSqlFields = (
 
   sql = sql.replace(/\\"/g, '"');
   sql = replaceInventedDateFields(sql);
+  sql = replaceRepairLogThroughputShape(sql);
   sql = replacePcbThroughputFields(sql);
   sql = replaceInventedTimeBuckets(sql);
   sql = replaceBadFailurePatternJoins(sql);
