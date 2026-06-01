@@ -184,6 +184,49 @@ class AskService:
         }
         return any(term in normalized for term in analysis_terms)
 
+    def _get_unqueryable_metric_message(
+        self, query: str, table_ddls: list[str]
+    ) -> str | None:
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        normalized_schema = re.sub(r"\s+", " ", " ".join(table_ddls).lower())
+
+        if not normalized_query:
+            return None
+
+        first_pass_yield_terms = (
+            "first pass yield",
+            "first-pass yield",
+            "first_pass_yield",
+            "fpy",
+        )
+        if not any(term in normalized_query for term in first_pass_yield_terms):
+            return None
+
+        required_field_patterns = (
+            r"\bfirst[_ ]?pass[_ ]?yield\b",
+            r"\bfpy\b",
+            r"\battempt\b",
+            r"\battempt[_ ]?number\b",
+            r"\bfirst[_ ]?attempt\b",
+            r"\bpass[_ ]?fail\b",
+            r"\byield\b",
+        )
+        has_required_field = any(
+            re.search(pattern, normalized_schema)
+            for pattern in required_field_patterns
+        )
+
+        if has_required_field:
+            return None
+
+        return (
+            "The schema does not expose first-pass yield, attempt number, "
+            "first-attempt result, or pass/fail fields as queryable columns. "
+            "I cannot calculate First Pass Yield from only generic JSON/text "
+            "fields such as data. Add those fields as first-class columns or "
+            "calculated fields, then ask again."
+        )
+
     async def _run_with_timeout(self, label: str, coroutine):
         try:
             return await asyncio.wait_for(
@@ -321,6 +364,7 @@ class AskService:
                     ]
                     sql_generation_reasoning = ""
                 else:
+                    original_user_query = user_query
                     # Run both pipeline operations concurrently
                     sql_samples_task, instructions_task = await self._run_with_timeout(
                         "SQL pair and instruction retrieval",
@@ -364,9 +408,12 @@ class AskService:
                             "rephrased_question"
                         )
                         intent_reasoning = intent_classification_result.get("reasoning")
+                        is_original_analytics_query = self._is_data_analysis_query(
+                            original_user_query
+                        )
 
                         if intent in {"GENERAL", "MISLEADING_QUERY"} and (
-                            self._is_data_analysis_query(user_query)
+                            is_original_analytics_query
                             or self._is_data_analysis_query(rephrased_question or "")
                         ):
                             logger.info(
@@ -376,7 +423,16 @@ class AskService:
                             )
                             intent = "TEXT_TO_SQL"
 
-                        if rephrased_question:
+                        if is_original_analytics_query:
+                            if rephrased_question and rephrased_question != user_query:
+                                logger.info(
+                                    "Ignoring rephrased analytics query from intent classification. original=%s rephrased=%s",
+                                    original_user_query,
+                                    rephrased_question,
+                                )
+                            user_query = original_user_query
+                            rephrased_question = original_user_query
+                        elif rephrased_question:
                             user_query = rephrased_question
 
                         if intent == "MISLEADING_QUERY":
@@ -498,10 +554,38 @@ class AskService:
                 )
                 documents = _retrieval_result.get("retrieval_results", [])
                 table_names = [document.get("table_name") for document in documents]
-                table_ddls = [document.get("table_ddl") for document in documents]
+                table_ddls = [
+                    document.get("table_ddl", "") or "" for document in documents
+                ]
                 logger.info(
                     "Retrieved tables for query_id %s: %s", query_id, table_names
                 )
+
+                if unqueryable_metric_message := self._get_unqueryable_metric_message(
+                    user_query, table_ddls
+                ):
+                    logger.info(
+                        "ask pipeline - NO_RELEVANT_SQL due to unqueryable metric: %s",
+                        user_query,
+                    )
+                    if not self._is_stopped(query_id, self._ask_results):
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="failed",
+                            type="TEXT_TO_SQL",
+                            error=AskError(
+                                code="NO_RELEVANT_SQL",
+                                message=unqueryable_metric_message,
+                            ),
+                            rephrased_question=rephrased_question,
+                            intent_reasoning=intent_reasoning,
+                            retrieved_tables=table_names,
+                            trace_id=trace_id,
+                            is_followup=True if histories else False,
+                        )
+                    results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
+                    results["metadata"]["error_message"] = unqueryable_metric_message
+                    results["metadata"]["type"] = "TEXT_TO_SQL"
+                    return results
 
                 if not documents:
                     logger.exception(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
@@ -689,7 +773,14 @@ class AskService:
                     "post_process"
                 ]["invalid_generation_result"]:
                     while current_sql_correction_retries < max_sql_correction_retries:
-                        if failed_dry_run_result["type"] == "TIME_OUT":
+                        if failed_dry_run_result["type"] in {
+                            "TIME_OUT",
+                            "UNSUPPORTED_SQL",
+                        }:
+                            invalid_sql = failed_dry_run_result.get("sql", invalid_sql)
+                            error_message = failed_dry_run_result.get(
+                                "error", error_message
+                            )
                             break
 
                         original_sql = failed_dry_run_result["original_sql"]
