@@ -69,7 +69,7 @@ const replaceInventedTimeBuckets = (sql: string): string => {
       const alias = bucket.toLowerCase();
       body = body.replace(
         new RegExp(
-          String.raw`(^|,)\s*(?:(?:"[^"]+"\.)"${bucket}"|(?:\[[^\]]+\]\.)\[${bucket}\]|"${bucket}"|\[${bucket}\])(?=\s*(?:,|$))`,
+          String.raw`(^|,)\s*(?:(?:"[^"]+"\.)"?${bucket}"?|(?:\[[^\]]+\]\.)(?:\[${bucket}\]|${bucket})|\b[A-Za-z_][A-Za-z0-9_]*\.${bucket}\b|"${bucket}"|\[${bucket}\])(?=\s*(?:,|$))`,
           'gi',
         ),
         `$1 ${expression} AS "${alias}"`,
@@ -80,11 +80,15 @@ const replaceInventedTimeBuckets = (sql: string): string => {
 
   Object.entries(bucketExpressions).forEach(([bucket, expression]) => {
     sql = sql.replace(
-      new RegExp(String.raw`(?:"[^"]+"\.)"${bucket}"`, 'gi'),
+      new RegExp(String.raw`(?:"[^"]+"\.)"?${bucket}"?`, 'gi'),
       expression,
     );
     sql = sql.replace(
-      new RegExp(String.raw`(?:\[[^\]]+\]\.)\[${bucket}\]`, 'gi'),
+      new RegExp(String.raw`(?:\[[^\]]+\]\.)(?:\[${bucket}\]|${bucket})`, 'gi'),
+      expression,
+    );
+    sql = sql.replace(
+      new RegExp(String.raw`\b[A-Za-z_][A-Za-z0-9_]*\.${bucket}\b`, 'gi'),
       expression,
     );
   });

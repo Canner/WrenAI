@@ -425,6 +425,27 @@ def test_normalize_generation_result_sql_rewrites_qualified_month_field_for_mssq
     assert 'ORDER BY DATEPART(MONTH, "dbo_repair_logs"."created_at") ASC' in normalized
 
 
+def test_normalize_generation_result_sql_rewrites_unquoted_qualified_month_field_for_mssql():
+    sql = """
+    SELECT
+      dbo_repair_logs.MONTH,
+      COUNT(dbo_repair_logs.id) AS "repair_count"
+    FROM dbo_repair_logs
+    GROUP BY dbo_repair_logs.MONTH
+    ORDER BY dbo_repair_logs.MONTH ASC
+    """
+
+    normalized = normalize_generation_result_sql(sql, data_source="MSSQL")
+
+    assert "dbo_repair_logs.MONTH" not in normalized
+    assert (
+        'DATEPART(MONTH, dbo_repair_logs."created_at") AS "month"'
+        in normalized
+    )
+    assert 'GROUP BY DATEPART(MONTH, dbo_repair_logs."created_at")' in normalized
+    assert 'ORDER BY DATEPART(MONTH, dbo_repair_logs."created_at") ASC' in normalized
+
+
 def test_normalize_generation_result_sql_rewrites_bare_year_for_report_charts():
     sql = """
     SELECT

@@ -590,7 +590,7 @@ def _rewrite_mssql_bare_time_bucket_identifiers(sql: str) -> str:
     for bucket, expression in bucket_expressions.items():
         qualified_bucket_pattern = re.compile(
             rf'(?:(?:"[^"]+"|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\s*\.\s*)'
-            rf'(?:"{bucket}"|\[{bucket}\])',
+            rf'(?:"{bucket}"|\[{bucket}\]|{bucket})',
             re.IGNORECASE,
         )
         select_identifier_pattern = re.compile(
@@ -624,7 +624,7 @@ def _rewrite_mssql_bare_time_bucket_identifiers(sql: str) -> str:
         for bucket, expression in bucket_expressions.items():
             qualified_bucket_pattern = re.compile(
                 rf'(?:(?:"[^"]+"|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\s*\.\s*)'
-                rf'(?:"{bucket}"|\[{bucket}\])',
+                rf'(?:"{bucket}"|\[{bucket}\]|{bucket})',
                 re.IGNORECASE,
             )
             body = qualified_bucket_pattern.sub(expression, body)
