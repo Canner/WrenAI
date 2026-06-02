@@ -115,6 +115,15 @@ def normalize_data_source(data_source: str | None) -> str:
     return normalized
 
 
+def _is_local_sql_data_source(data_source: str | None) -> bool:
+    return normalize_data_source(data_source) in {
+        "DUCKDB",
+        "LOCAL_FILE",
+        "SQLITE",
+        "SQLITE3",
+    }
+
+
 def _format_timestamp_literal(value: datetime) -> str:
     return value.strftime("'%Y-%m-%d %H:%M:%S'")
 
@@ -661,6 +670,29 @@ def _rewrite_mssql_repair_log_throughput_shape(sql: str) -> str:
     )
 
 
+def _rewrite_mssql_repair_log_turnaround_trend_shape(sql: str) -> str:
+    if not re.search(r"\bdbo_repair_logs\b", sql, flags=re.IGNORECASE):
+        return sql
+    if not re.search(r"\bavg_turnaround_time\b|\bturnaround\b", sql, flags=re.IGNORECASE):
+        return sql
+    if not re.search(r"\bMONTH\b|DATEPART\(\s*MONTH", sql, flags=re.IGNORECASE):
+        return sql
+
+    return (
+        'SELECT DATEPART(YEAR, "dbo_repair_logs"."created_at") AS "year", '
+        'DATEPART(MONTH, "dbo_repair_logs"."created_at") AS "month", '
+        'AVG(DATEDIFF(\'second\', "dbo_repair_logs"."created_at", '
+        '"dbo_repair_logs"."updated_at")) AS "avg_turnaround_seconds" '
+        'FROM "dbo_repair_logs" '
+        'WHERE "dbo_repair_logs"."created_at" IS NOT NULL '
+        'AND "dbo_repair_logs"."updated_at" IS NOT NULL '
+        'GROUP BY DATEPART(YEAR, "dbo_repair_logs"."created_at"), '
+        'DATEPART(MONTH, "dbo_repair_logs"."created_at") '
+        'ORDER BY DATEPART(YEAR, "dbo_repair_logs"."created_at") ASC, '
+        'DATEPART(MONTH, "dbo_repair_logs"."created_at") ASC'
+    )
+
+
 def _rewrite_mssql_invented_failure_category(sql: str) -> str:
     if not re.search(r"\bdbo_repair_logs\b", sql, flags=re.IGNORECASE):
         return sql
@@ -959,10 +991,38 @@ def _rewrite_mssql_temporal_bucket_alias_references(sql: str) -> str:
     return clause_pattern.sub(replace_clause, sql)
 
 
+def _references_known_hallucination_prone_schema(sql: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(?:dbo_repair_logs|dbo_DebugEntries|dbo_reports)\b",
+            sql,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _rewrite_known_schema_hallucinations(sql: str, now: datetime) -> str:
+    normalized = _replace_relative_current_date_calls(sql, now)
+    normalized = _rewrite_mssql_to_date_buckets(normalized)
+    normalized = _rewrite_mssql_invented_date_identifiers(normalized)
+    normalized = _rewrite_mssql_invented_repair_relationship_identifiers(normalized)
+    normalized = _rewrite_mssql_repair_log_turnaround_trend_shape(normalized)
+    normalized = _rewrite_mssql_repair_log_throughput_shape(normalized)
+    normalized = _rewrite_mssql_invented_pcb_throughput_identifiers(normalized)
+    normalized = _rewrite_mssql_invented_failure_category(normalized)
+    normalized = _rewrite_mssql_invented_report_fields(normalized)
+    normalized = _rewrite_mssql_bare_time_bucket_identifiers(normalized)
+    normalized = _rewrite_temporal_bucket_functions(normalized)
+    normalized = _rewrite_mssql_datepart_alias_references(normalized)
+    normalized = _rewrite_mssql_temporal_bucket_alias_references(normalized)
+    return normalized
+
+
 def normalize_generation_result_sql(sql: str, data_source: str | None = None) -> str:
     normalized = sql
+    normalized_data_source = normalize_data_source(data_source)
 
-    if normalize_data_source(data_source) == "MSSQL":
+    if normalized_data_source == "MSSQL":
         now = datetime.now()
         normalized = re.sub(
             r"\s+NULLS\s+(?:LAST|FIRST)\b", "", normalized, flags=re.IGNORECASE
@@ -983,6 +1043,7 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
         normalized = _rewrite_mssql_invented_repair_relationship_identifiers(
             normalized
         )
+        normalized = _rewrite_mssql_repair_log_turnaround_trend_shape(normalized)
         normalized = _rewrite_mssql_repair_log_throughput_shape(normalized)
         normalized = _rewrite_mssql_invented_pcb_throughput_identifiers(normalized)
         normalized = _rewrite_mssql_invented_failure_category(normalized)
@@ -992,6 +1053,10 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
         normalized = _rewrite_temporal_bucket_functions(normalized)
         normalized = _rewrite_mssql_datepart_alias_references(normalized)
         normalized = _rewrite_mssql_temporal_bucket_alias_references(normalized)
+    elif _is_local_sql_data_source(
+        normalized_data_source
+    ) and _references_known_hallucination_prone_schema(normalized):
+        normalized = _rewrite_known_schema_hallucinations(normalized, datetime.now())
 
     return re.sub(r"\s+", " ", normalized).strip()
 

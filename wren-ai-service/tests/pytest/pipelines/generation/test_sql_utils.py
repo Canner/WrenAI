@@ -403,6 +403,29 @@ def test_normalize_generation_result_sql_rewrites_repair_log_turnaround_throughp
     assert 'FROM "dbo_DebugEntries"' in normalized
 
 
+def test_normalize_generation_result_sql_rewrites_repair_log_turnaround_month_trend_shape_for_mssql():
+    sql = """
+    SELECT
+      MONTH,
+      AVG(avg_turnaround_time) AS avg_turnaround_time
+    FROM dbo_repair_logs
+    GROUP BY MONTH
+    ORDER BY MONTH ASC
+    """
+
+    normalized = normalize_generation_result_sql(sql, data_source="MSSQL")
+
+    assert "avg_turnaround_time" not in normalized
+    assert "GROUP BY MONTH" not in normalized
+    assert 'DATEPART(YEAR, "dbo_repair_logs"."created_at") AS "year"' in normalized
+    assert 'DATEPART(MONTH, "dbo_repair_logs"."created_at") AS "month"' in normalized
+    assert (
+        'AVG(DATEDIFF(\'second\', "dbo_repair_logs"."created_at", '
+        '"dbo_repair_logs"."updated_at")) AS "avg_turnaround_seconds"'
+        in normalized
+    )
+
+
 def test_normalize_generation_result_sql_rewrites_bare_month_field_for_mssql():
     sql = """
     SELECT
@@ -490,6 +513,50 @@ def test_normalize_generation_result_sql_rewrites_bare_unquoted_month_field_for_
     )
     assert 'GROUP BY DATEPART(MONTH, "dbo_repair_logs"."created_at")' in normalized
     assert 'ORDER BY DATEPART(MONTH, "dbo_repair_logs"."created_at") ASC' in normalized
+
+
+def test_normalize_generation_result_sql_rewrites_bare_month_field_for_local_file():
+    sql = """
+    SELECT
+      MONTH,
+      COUNT(*) AS repair_volume
+    FROM dbo_repair_logs
+    GROUP BY MONTH
+    ORDER BY MONTH ASC
+    """
+
+    normalized = normalize_generation_result_sql(sql, data_source="local_file")
+
+    assert "SELECT MONTH" not in normalized
+    assert "GROUP BY MONTH" not in normalized
+    assert "ORDER BY MONTH" not in normalized
+    assert (
+        'DATEPART(MONTH, "dbo_repair_logs"."created_at") AS "month"'
+        in normalized
+    )
+    assert 'GROUP BY DATEPART(MONTH, "dbo_repair_logs"."created_at")' in normalized
+    assert 'ORDER BY DATEPART(MONTH, "dbo_repair_logs"."created_at") ASC' in normalized
+
+
+def test_normalize_generation_result_sql_rewrites_bare_month_field_for_sqlite():
+    sql = """
+    SELECT
+      "MONTH",
+      COUNT("dbo_repair_logs"."id") AS "repair_count"
+    FROM "dbo_repair_logs"
+    GROUP BY "MONTH"
+    ORDER BY "MONTH" ASC
+    """
+
+    normalized = normalize_generation_result_sql(sql, data_source="sqlite")
+
+    assert 'SELECT "MONTH"' not in normalized
+    assert 'GROUP BY "MONTH"' not in normalized
+    assert 'ORDER BY "MONTH"' not in normalized
+    assert (
+        'DATEPART(MONTH, "dbo_repair_logs"."created_at") AS "month"'
+        in normalized
+    )
 
 
 def test_normalize_generation_result_sql_rewrites_bare_year_for_report_charts():
