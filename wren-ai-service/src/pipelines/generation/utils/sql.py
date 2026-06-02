@@ -513,12 +513,12 @@ def _infer_mssql_timestamp_expression(sql: str) -> str | None:
         if normalized_table_name == "dbo_debugentries":
             return f'{quoted_table_name}."DateIn"'
         if "report" in normalized_table_name:
-            return f'{table_name}."generated_at"'
+            return f'{quoted_table_name}."generated_at"'
         if any(
             token in normalized_table_name
             for token in ("repair", "ticket", "event", "log")
         ):
-            return f'{table_name}."created_at"'
+            return f'{quoted_table_name}."created_at"'
 
     return None
 
@@ -753,6 +753,10 @@ def _rewrite_mssql_bare_time_bucket_identifiers(sql: str) -> str:
             rf'(?P<prefix>\bSELECT\s+|,\s*)"{bucket}"(?P<suffix>\s*(?:,|\bFROM\b))',
             re.IGNORECASE,
         )
+        select_bare_identifier_pattern = re.compile(
+            rf"(?P<prefix>\bSELECT\s+|,\s*){bucket}(?P<suffix>\s*(?:,|\bFROM\b))",
+            re.IGNORECASE,
+        )
         select_qualified_identifier_pattern = re.compile(
             rf'(?P<prefix>\bSELECT\s+|,\s*){qualified_bucket_pattern.pattern}(?P<suffix>\s*(?:,|\bFROM\b))',
             re.IGNORECASE,
@@ -767,6 +771,9 @@ def _rewrite_mssql_bare_time_bucket_identifiers(sql: str) -> str:
             replace_select_identifier, rewritten
         )
         rewritten = select_identifier_pattern.sub(
+            replace_select_identifier, rewritten
+        )
+        rewritten = select_bare_identifier_pattern.sub(
             replace_select_identifier, rewritten
         )
 
@@ -792,6 +799,12 @@ def _rewrite_mssql_bare_time_bucket_identifiers(sql: str) -> str:
             )
             body = re.sub(
                 rf"\[{bucket}\]",
+                expression,
+                body,
+                flags=re.IGNORECASE,
+            )
+            body = re.sub(
+                rf"(?<!DATEPART\()\b{bucket}\b",
                 expression,
                 body,
                 flags=re.IGNORECASE,
