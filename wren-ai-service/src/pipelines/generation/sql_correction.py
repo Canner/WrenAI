@@ -95,6 +95,9 @@ or add catalog/schema prefixes unless the table name is shown that way here.
 {% endif %}
 
 ### QUESTION ###
+{% if query %}
+User's Question: {{ query }}
+{% endif %}
 {% if invalid_generation_result.original_sql %}
 Original SQL: {{ invalid_generation_result.original_sql }}
 {% endif %}
@@ -112,10 +115,12 @@ def prompt(
     invalid_generation_result: Dict,
     prompt_builder: PromptBuilder,
     data_source: str,
+    query: str | None = None,
     instructions: list[dict] | None = None,
     sql_functions: list[SqlFunction] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
+        query=query,
         data_source=data_source,
         documents=documents,
         valid_table_names=construct_valid_table_names(documents),
@@ -206,6 +211,7 @@ class SQLCorrection(BasicPipeline):
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
         sql_knowledge: SqlKnowledge | None = None,
+        query: str | None = None,
     ):
         logger.info("SQLCorrection pipeline is running...")
 
@@ -216,6 +222,7 @@ class SQLCorrection(BasicPipeline):
             inputs={
                 "invalid_generation_result": invalid_generation_result,
                 "documents": contexts,
+                "query": query,
                 "instructions": instructions,
                 "sql_functions": sql_functions,
                 "project_id": project_id,

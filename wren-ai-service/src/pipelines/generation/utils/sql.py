@@ -354,6 +354,50 @@ def _rewrite_temporal_bucket_functions(sql: str) -> str:
     return rewritten
 
 
+def _qualify_mssql_temporal_expression(expression: str, sql: str) -> str:
+    expression = expression.strip()
+    if "." in expression or expression.startswith(('"', "[")):
+        return expression
+
+    if re.search(r"\bdbo_DebugEntries\b", sql, flags=re.IGNORECASE) and re.fullmatch(
+        r"(?:DateIn|DateOut|FailedAt)", expression, flags=re.IGNORECASE
+    ):
+        canonical_columns = {
+            "datein": "DateIn",
+            "dateout": "DateOut",
+            "failedat": "FailedAt",
+        }
+        return f'"dbo_DebugEntries"."{canonical_columns[expression.lower()]}"'
+
+    return f'"{expression}"'
+
+
+def _rewrite_mssql_to_date_buckets(sql: str) -> str:
+    expression_pattern = r"((?:[^(),]|\([^()]*\))+?)"
+
+    def make_day_bucket(expression: str) -> str:
+        timestamp_expression = _qualify_mssql_temporal_expression(expression, sql)
+        return (
+            f"(DATEPART(YEAR, {timestamp_expression}) * 10000 + "
+            f"DATEPART(MONTH, {timestamp_expression}) * 100 + "
+            f"DATEPART(DAY, {timestamp_expression}))"
+        )
+
+    rewritten = re.sub(
+        rf"\bTO_DATE\(\s*{expression_pattern}\s*,\s*'YYYY-MM-DD'\s*\)",
+        lambda match: make_day_bucket(match.group(1)),
+        sql,
+        flags=re.IGNORECASE,
+    )
+    rewritten = re.sub(
+        rf"\bDATE\(\s*{expression_pattern}\s*\)",
+        lambda match: make_day_bucket(match.group(1)),
+        rewritten,
+        flags=re.IGNORECASE,
+    )
+    return rewritten
+
+
 def _rewrite_mssql_timestamp_casts(sql: str) -> str:
     expression_pattern = r"((?:[^(),]|\([^()]*\))+?)"
     timestamp_function_pattern = re.compile(
@@ -713,6 +757,100 @@ def _rewrite_mssql_datepart_alias_references(sql: str) -> str:
     return clause_pattern.sub(replace_clause, sql)
 
 
+def _split_top_level_select_items(select_body: str) -> list[str]:
+    items: list[str] = []
+    current: list[str] = []
+    depth = 0
+    in_single_quote = False
+    in_double_quote = False
+
+    for char in select_body:
+        if char == "'" and not in_double_quote:
+            in_single_quote = not in_single_quote
+        elif char == '"' and not in_single_quote:
+            in_double_quote = not in_double_quote
+        elif not in_single_quote and not in_double_quote:
+            if char == "(":
+                depth += 1
+            elif char == ")" and depth > 0:
+                depth -= 1
+            elif char == "," and depth == 0:
+                items.append("".join(current).strip())
+                current = []
+                continue
+        current.append(char)
+
+    if current:
+        items.append("".join(current).strip())
+
+    return items
+
+
+def _rewrite_mssql_temporal_bucket_alias_references(sql: str) -> str:
+    select_match = re.search(
+        r"\bSELECT\b(?P<body>.*?)(?=\bFROM\b)",
+        sql,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if not select_match:
+        return sql
+
+    aliases: dict[str, str] = {}
+    for item in _split_top_level_select_items(select_match.group("body")):
+        if not re.search(r"\bDATEPART\s*\(", item, flags=re.IGNORECASE):
+            continue
+
+        alias_match = re.search(
+            r"\s+(?:AS\s+)?(?:\"([^\"]+)\"|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))\s*$",
+            item,
+            flags=re.IGNORECASE,
+        )
+        if not alias_match:
+            continue
+
+        alias = alias_match.group(1) or alias_match.group(2) or alias_match.group(3)
+        expression = item[: alias_match.start()].strip()
+        aliases[alias.lower()] = expression
+
+    if not aliases:
+        return sql
+
+    clause_pattern = re.compile(
+        r"\b(GROUP\s+BY|ORDER\s+BY|HAVING)\b(?P<body>.*?)(?=\b(?:ORDER\s+BY|GROUP\s+BY|HAVING|LIMIT|OFFSET|FETCH|UNION|WHERE)\b|$)",
+        re.IGNORECASE | re.DOTALL,
+    )
+
+    def replace_clause(match: re.Match[str]) -> str:
+        body = match.group("body")
+        placeholders: dict[str, str] = {}
+        for alias, expression in aliases.items():
+            placeholder = f"__WREN_MSSQL_TEMPORAL_BUCKET_ALIAS_{len(placeholders)}__"
+            placeholders[placeholder] = expression
+            body = re.sub(
+                rf'"{re.escape(alias)}"',
+                placeholder,
+                body,
+                flags=re.IGNORECASE,
+            )
+            body = re.sub(
+                rf"\[{re.escape(alias)}\]",
+                placeholder,
+                body,
+                flags=re.IGNORECASE,
+            )
+            body = re.sub(
+                rf"(?<!DATEPART\()\b{re.escape(alias)}\b",
+                placeholder,
+                body,
+                flags=re.IGNORECASE,
+            )
+        for placeholder, expression in placeholders.items():
+            body = body.replace(placeholder, expression)
+        return f"{match.group(1)}{body}"
+
+    return clause_pattern.sub(replace_clause, sql)
+
+
 def normalize_generation_result_sql(sql: str, data_source: str | None = None) -> str:
     normalized = sql
 
@@ -730,6 +868,7 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
         normalized = _replace_relative_getdate_calls(normalized, now)
         normalized = _rewrite_mssql_to_unixtime(normalized)
         normalized = _rewrite_mssql_timestamp_subtraction(normalized)
+        normalized = _rewrite_mssql_to_date_buckets(normalized)
         normalized = _rewrite_mssql_timestamp_casts(normalized)
         normalized = _rewrite_mssql_invented_date_identifiers(normalized)
         normalized = _rewrite_mssql_invented_repair_relationship_identifiers(
@@ -741,6 +880,7 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
         normalized = _rewrite_mssql_bucket_functions(normalized)
         normalized = _rewrite_temporal_bucket_functions(normalized)
         normalized = _rewrite_mssql_datepart_alias_references(normalized)
+        normalized = _rewrite_mssql_temporal_bucket_alias_references(normalized)
 
     return re.sub(r"\s+", " ", normalized).strip()
 

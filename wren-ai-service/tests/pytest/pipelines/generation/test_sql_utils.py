@@ -503,6 +503,44 @@ def test_normalize_generation_result_sql_rewrites_timestamp_casts_for_mssql():
     assert "CAST('2026-01-01 00:00:00' AS DATETIME)" in normalized
 
 
+def test_normalize_generation_result_sql_rewrites_to_date_bucket_for_mssql():
+    sql = """
+    SELECT
+      TO_DATE(DateIn, 'YYYY-MM-DD') EntryDate,
+      COUNT(*) Throughput
+    FROM dbo_DebugEntries
+    GROUP BY EntryDate
+    ORDER BY EntryDate ASC NULLS LAST
+    """
+
+    normalized = normalize_generation_result_sql(sql, data_source="MSSQL")
+
+    assert "TO_DATE(" not in normalized
+    assert "NULLS LAST" not in normalized
+    assert "GROUP BY EntryDate" not in normalized
+    assert "ORDER BY EntryDate" not in normalized
+    assert 'DATEPART(YEAR, "dbo_DebugEntries"."DateIn")' in normalized
+    assert 'DATEPART(MONTH, "dbo_DebugEntries"."DateIn")' in normalized
+    assert 'DATEPART(DAY, "dbo_DebugEntries"."DateIn")' in normalized
+
+
+def test_normalize_generation_result_sql_rewrites_date_function_for_mssql():
+    sql = """
+    SELECT
+      DATE(DateIn) AS EntryDate,
+      COUNT(*) AS Throughput
+    FROM dbo_DebugEntries
+    GROUP BY EntryDate
+    ORDER BY EntryDate ASC
+    """
+
+    normalized = normalize_generation_result_sql(sql, data_source="MSSQL")
+
+    assert "DATE(DateIn)" not in normalized
+    assert "GROUP BY EntryDate" not in normalized
+    assert 'DATEPART(DAY, "dbo_DebugEntries"."DateIn")' in normalized
+
+
 def test_normalize_generation_result_sql_strips_to_unixtime_for_mssql():
     sql = """
     SELECT

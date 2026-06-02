@@ -836,6 +836,7 @@ class AskService:
                                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                                 sql_functions=sql_functions,
                                 sql_knowledge=sql_knowledge,
+                                query=user_query,
                             ),
                         )
 
