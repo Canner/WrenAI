@@ -8,6 +8,7 @@ import { DashboardResolver } from './resolvers/dashboardResolver';
 import { SqlPairResolver } from './resolvers/sqlPairResolver';
 import { InstructionResolver } from './resolvers/instructionResolver';
 import { ApiHistoryResolver } from './resolvers/apiHistoryResolver';
+import { RbacResolver } from './resolvers/rbacResolver';
 import { convertColumnType } from '@server/utils';
 import { DialectSQLScalar } from './scalars';
 
@@ -20,6 +21,7 @@ const dashboardResolver = new DashboardResolver();
 const sqlPairResolver = new SqlPairResolver();
 const instructionResolver = new InstructionResolver();
 const apiHistoryResolver = new ApiHistoryResolver();
+const rbacResolver = new RbacResolver();
 const resolvers = {
   JSON: GraphQLJSON,
   DialectSQL: DialectSQLScalar,
@@ -75,6 +77,11 @@ const resolvers = {
 
     // API History
     apiHistory: apiHistoryResolver.getApiHistory,
+
+    // Administration / RBAC
+    roles: rbacResolver.listRoles,
+    users: rbacResolver.listUsers,
+    userRoleMappings: rbacResolver.listUserRoleMappings,
   },
   Mutation: {
     deploy: modelResolver.deploy,
@@ -177,6 +184,15 @@ const resolvers = {
     createInstruction: instructionResolver.createInstruction,
     updateInstruction: instructionResolver.updateInstruction,
     deleteInstruction: instructionResolver.deleteInstruction,
+
+    // Administration / RBAC
+    createRole: rbacResolver.createRole,
+    updateRole: rbacResolver.updateRole,
+    createUser: rbacResolver.createUser,
+    updateUser: rbacResolver.updateUser,
+    assignRoleToUser: rbacResolver.assignRoleToUser,
+    updateUserRoles: rbacResolver.updateUserRoles,
+    removeRoleFromUser: rbacResolver.removeRoleFromUser,
   },
   ThreadResponse: askingResolver.getThreadResponseNestedResolver(),
   DetailStep: askingResolver.getDetailStepNestedResolver(),
@@ -196,6 +212,9 @@ const resolvers = {
 
   // Add ApiHistoryResponse nested resolvers
   ApiHistoryResponse: apiHistoryResolver.getApiHistoryNestedResolver(),
+
+  Role: rbacResolver.getRoleNestedResolver(),
+  User: rbacResolver.getUserNestedResolver(),
 };
 
 export default resolvers;

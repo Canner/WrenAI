@@ -9,6 +9,7 @@ import Home, { Props as HomeSidebarProps } from './Home';
 import Modeling, { Props as ModelingSidebarProps } from './Modeling';
 import Knowledge from './Knowledge';
 import APIManagement from './APIManagement';
+import Administration from './Administration';
 import LearningSection from '@/components/learning';
 
 const Layout = styled.div`
@@ -66,6 +67,10 @@ const DynamicSidebar = (
 
     if (pathname.startsWith(Path.APIManagement)) {
       return <APIManagement />;
+    }
+
+    if (pathname.startsWith(Path.Administration)) {
+      return <Administration />;
     }
 
     return null;

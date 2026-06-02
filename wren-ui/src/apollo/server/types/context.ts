@@ -20,6 +20,9 @@ import {
   IInstructionRepository,
   IApiHistoryRepository,
   IDashboardItemRefreshJobRepository,
+  IRoleRepository,
+  IUserRepository,
+  IUserRoleRepository,
 } from '@server/repositories';
 import {
   IQueryService,
@@ -30,6 +33,7 @@ import {
   IProjectService,
   IDashboardService,
   IInstructionService,
+  IRbacService,
 } from '@server/services';
 import { ITelemetry } from '@server/telemetry/telemetry';
 import {
@@ -59,6 +63,7 @@ export interface IContext {
   dashboardService: IDashboardService;
   sqlPairService: ISqlPairService;
   instructionService: IInstructionService;
+  rbacService: IRbacService;
 
   // repository
   projectRepository: IProjectRepository;
@@ -76,6 +81,9 @@ export interface IContext {
   instructionRepository: IInstructionRepository;
   apiHistoryRepository: IApiHistoryRepository;
   dashboardItemRefreshJobRepository: IDashboardItemRefreshJobRepository;
+  roleRepository: IRoleRepository;
+  userRepository: IUserRepository;
+  userRoleRepository: IUserRoleRepository;
 
   // background trackers
   projectRecommendQuestionBackgroundTracker: ProjectRecommendQuestionBackgroundTracker;

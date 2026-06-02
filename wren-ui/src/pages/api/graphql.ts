@@ -47,6 +47,9 @@ const bootstrapServer = async () => {
     instructionRepository,
     apiHistoryRepository,
     dashboardItemRefreshJobRepository,
+    roleRepository,
+    userRepository,
+    userRoleRepository,
     // adaptors
     wrenEngineAdaptor,
     ibisAdaptor,
@@ -62,6 +65,7 @@ const bootstrapServer = async () => {
     sqlPairService,
 
     instructionService,
+    rbacService,
     // background trackers
     projectRecommendQuestionBackgroundTracker,
     threadRecommendQuestionBackgroundTracker,
@@ -142,6 +146,7 @@ const bootstrapServer = async () => {
       dashboardService,
       sqlPairService,
       instructionService,
+      rbacService,
       // repository
       projectRepository,
       modelRepository,
@@ -158,6 +163,9 @@ const bootstrapServer = async () => {
       instructionRepository,
       apiHistoryRepository,
       dashboardItemRefreshJobRepository,
+      roleRepository,
+      userRepository,
+      userRoleRepository,
       // background trackers
       projectRecommendQuestionBackgroundTracker,
       threadRecommendQuestionBackgroundTracker,

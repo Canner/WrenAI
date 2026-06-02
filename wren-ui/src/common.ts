@@ -19,6 +19,9 @@ import {
   InstructionRepository,
   ApiHistoryRepository,
   DashboardItemRefreshJobRepository,
+  RoleRepository,
+  UserRepository,
+  UserRoleRepository,
 } from '@server/repositories';
 import {
   WrenEngineAdaptor,
@@ -35,6 +38,7 @@ import {
   DashboardService,
   AskingTaskTracker,
   InstructionService,
+  RbacService,
 } from '@server/services';
 import { PostHogTelemetry } from './apollo/server/telemetry/telemetry';
 import {
@@ -150,6 +154,9 @@ export const initComponents = () => {
   const apiHistoryRepository = new ApiHistoryRepository(knex);
   const dashboardItemRefreshJobRepository =
     new DashboardItemRefreshJobRepository(knex);
+  const roleRepository = new RoleRepository(knex);
+  const userRepository = new UserRepository(knex);
+  const userRoleRepository = new UserRoleRepository(knex);
 
   // adaptors
   const wrenEngineAdaptor = new WrenEngineAdaptor({
@@ -255,6 +262,11 @@ export const initComponents = () => {
     instructionRepository,
     wrenAIAdaptor,
   });
+  const rbacService = new RbacService({
+    roleRepository,
+    userRepository,
+    userRoleRepository,
+  });
 
   const dashboardCacheBackgroundTracker = new DashboardCacheBackgroundTracker({
     dashboardRepository,
@@ -288,6 +300,9 @@ export const initComponents = () => {
     apiHistoryRepository,
     instructionRepository,
     dashboardItemRefreshJobRepository,
+    roleRepository,
+    userRepository,
+    userRoleRepository,
 
     // adaptors
     wrenEngineAdaptor,
@@ -304,6 +319,7 @@ export const initComponents = () => {
     dashboardService,
     sqlPairService,
     instructionService,
+    rbacService,
     askingTaskTracker,
 
     // background trackers

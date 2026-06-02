@@ -3,4 +3,7 @@ export enum MENU_KEY {
   INSTRUCTIONS = 'instructions',
   API_HISTORY = 'api-history',
   API_REFERENCE = 'api-reference',
+  ADMIN_USERS = 'admin-users',
+  ADMIN_ROLES = 'admin-roles',
+  ADMIN_ASSIGNMENTS = 'admin-assignments',
 }

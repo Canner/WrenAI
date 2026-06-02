@@ -1110,6 +1110,90 @@ export const typeDefs = gql`
     id: Int!
   }
 
+  type Role {
+    id: Int!
+    name: String!
+    description: String
+    users: [User!]!
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  type User {
+    id: Int!
+    name: String!
+    email: String!
+    externalId: String
+    identityProvider: String
+    isActive: Boolean!
+    roles: [Role!]!
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  type UserRole {
+    id: Int!
+    userId: Int!
+    roleId: Int!
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  type UserRoleMapping {
+    id: Int!
+    userId: Int!
+    roleId: Int!
+    user: User!
+    role: Role!
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  input RoleWhereInput {
+    id: Int!
+  }
+
+  input UserWhereInput {
+    id: Int!
+  }
+
+  input CreateRoleInput {
+    name: String!
+    description: String
+  }
+
+  input UpdateRoleInput {
+    name: String
+    description: String
+  }
+
+  input CreateUserInput {
+    name: String!
+    email: String!
+    externalId: String
+    identityProvider: String
+    isActive: Boolean
+    roleIds: [Int!]
+  }
+
+  input UpdateUserInput {
+    name: String
+    email: String
+    externalId: String
+    identityProvider: String
+    isActive: Boolean
+  }
+
+  input UserRoleInput {
+    userId: Int!
+    roleId: Int!
+  }
+
+  input UpdateUserRolesInput {
+    userId: Int!
+    roleIds: [Int!]!
+  }
+
   # Query and Mutation
   type Query {
     # On Boarding Steps
@@ -1167,6 +1251,11 @@ export const typeDefs = gql`
       filter: ApiHistoryFilterInput
       pagination: ApiHistoryPaginationInput!
     ): ApiHistoryPaginatedResponse!
+
+    # Administration / RBAC
+    roles: [Role!]!
+    users: [User!]!
+    userRoleMappings: [UserRoleMapping!]!
   }
 
   type Mutation {
@@ -1312,5 +1401,14 @@ export const typeDefs = gql`
       data: UpdateInstructionInput!
     ): Instruction!
     deleteInstruction(where: InstructionWhereInput!): Boolean!
+
+    # Administration / RBAC
+    createRole(data: CreateRoleInput!): Role!
+    updateRole(where: RoleWhereInput!, data: UpdateRoleInput!): Role!
+    createUser(data: CreateUserInput!): User!
+    updateUser(where: UserWhereInput!, data: UpdateUserInput!): User!
+    assignRoleToUser(data: UserRoleInput!): UserRole!
+    updateUserRoles(data: UpdateUserRolesInput!): User!
+    removeRoleFromUser(data: UserRoleInput!): Boolean!
   }
 `;
