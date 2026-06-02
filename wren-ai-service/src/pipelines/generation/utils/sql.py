@@ -115,15 +115,6 @@ def normalize_data_source(data_source: str | None) -> str:
     return normalized
 
 
-def _is_local_sql_data_source(data_source: str | None) -> bool:
-    return normalize_data_source(data_source) in {
-        "DUCKDB",
-        "LOCAL_FILE",
-        "SQLITE",
-        "SQLITE3",
-    }
-
-
 def _format_timestamp_literal(value: datetime) -> str:
     return value.strftime("'%Y-%m-%d %H:%M:%S'")
 
@@ -1053,9 +1044,7 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
         normalized = _rewrite_temporal_bucket_functions(normalized)
         normalized = _rewrite_mssql_datepart_alias_references(normalized)
         normalized = _rewrite_mssql_temporal_bucket_alias_references(normalized)
-    elif _is_local_sql_data_source(
-        normalized_data_source
-    ) and _references_known_hallucination_prone_schema(normalized):
+    elif _references_known_hallucination_prone_schema(normalized):
         normalized = _rewrite_known_schema_hallucinations(normalized, datetime.now())
 
     return re.sub(r"\s+", " ", normalized).strip()
@@ -1304,6 +1293,9 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - Aggregate functions are not allowed in the WHERE clause. Instead, they belong in the HAVING clause, which is used to filter after aggregation.
 - You can only add "ORDER BY" and "LIMIT" to the final "UNION" result.
 - Never invent foreign key columns or relationship fields such as "FailurePatternID", "FailurePatternId", "TicketID", or "<Table>ID" unless that exact column appears in the DATABASE SCHEMA. Join only on explicit schema columns or explicit relationships.
+- Never invent time bucket columns such as "MONTH", "YEAR", "DAY", "month", "year", or "date" unless that exact column appears in the DATABASE SCHEMA. For monthly, yearly, or daily trends, apply a supported date/time bucket function from SQL FUNCTIONS to a real timestamp column from the selected table.
+- For synced repair-log schemas, if "dbo_repair_logs" contains "created_at" and the user asks for monthly repair volume or repair trends, count repair rows and bucket "dbo_repair_logs"."created_at". Do not select, group by, or order by "dbo_repair_logs"."MONTH" or bare "MONTH" unless the schema explicitly contains that column.
+- For repair counts grouped by failure category in synced repair-log schemas, use "dbo_repair_logs"."failure_code" when that column appears in the schema. Do not invent "failure_category" unless it appears in the DATABASE SCHEMA.
 - For top/bottom N questions, return exactly the business columns needed to answer the question. For example, "top 10 common failures" should return the failure field and the failure count.
 - For top/bottom N questions, prefer ORDER BY on the metric plus a row limit instead of adding ranking helper columns.
 - Do not include helper ranking columns such as "rank", "row_number", or "dense_rank" in the final SELECT unless the user explicitly asks to see ranks.
