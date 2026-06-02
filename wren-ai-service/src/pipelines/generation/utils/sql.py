@@ -198,6 +198,50 @@ def _replace_relative_getdate_calls(sql: str, now: datetime) -> str:
     return sql
 
 
+def _replace_relative_current_date_calls(sql: str, now: datetime) -> str:
+    def replace_date_sub_interval(match: re.Match[str]) -> str:
+        amount = int(match.group("amount"))
+        unit = match.group("unit").lower()
+        if unit.startswith("month"):
+            return _format_timestamp_literal(_add_months(now, -amount))
+        if unit.startswith("year"):
+            return _format_timestamp_literal(_add_months(now, -amount * 12))
+        if unit.startswith("day"):
+            return _format_timestamp_literal(now - timedelta(days=amount))
+        return match.group(0)
+
+    def replace_date_sub_unit_amount(match: re.Match[str]) -> str:
+        unit = match.group("unit").lower()
+        amount = int(match.group("amount"))
+        if unit.startswith("month"):
+            return _format_timestamp_literal(_add_months(now, -amount))
+        if unit.startswith("year"):
+            return _format_timestamp_literal(_add_months(now, -amount * 12))
+        if unit.startswith("day"):
+            return _format_timestamp_literal(now - timedelta(days=amount))
+        return match.group(0)
+
+    sql = re.sub(
+        r"\bDATE_SUB\(\s*CURRENT_DATE(?:\(\))?\s*,\s*INTERVAL\s+(?P<amount>\d+)\s+(?P<unit>YEAR|MONTH|DAY)S?\s*\)",
+        replace_date_sub_interval,
+        sql,
+        flags=re.IGNORECASE,
+    )
+    sql = re.sub(
+        r"\bDATE_SUB\(\s*'?(?P<unit>YEAR|MONTH|DAY)'?\s*,\s*(?P<amount>\d+)\s*,\s*CURRENT_DATE(?:\(\))?\s*\)",
+        replace_date_sub_unit_amount,
+        sql,
+        flags=re.IGNORECASE,
+    )
+    sql = re.sub(
+        r"\bCURRENT_DATE(?:\(\))?\b",
+        _format_timestamp_literal(now),
+        sql,
+        flags=re.IGNORECASE,
+    )
+    return sql
+
+
 def _rewrite_mssql_bucket_functions(sql: str) -> str:
     expression_pattern = r"((?:[^(),]|\([^()]*\))+?)"
 
@@ -617,6 +661,57 @@ def _rewrite_mssql_repair_log_throughput_shape(sql: str) -> str:
     )
 
 
+def _rewrite_mssql_invented_failure_category(sql: str) -> str:
+    if not re.search(r"\bdbo_repair_logs\b", sql, flags=re.IGNORECASE):
+        return sql
+    if not re.search(r"\bfailure_category\b", sql, flags=re.IGNORECASE):
+        return sql
+
+    failure_code_expression = '"dbo_repair_logs"."failure_code"'
+    rewritten = re.sub(
+        r'(?P<prefix>\bSELECT\s+|,\s*)(?:(?:"dbo_repair_logs"|\[dbo_repair_logs\]|dbo_repair_logs)\s*\.\s*)?(?:"failure_category"|\[failure_category\]|failure_category)(?P<suffix>\s*(?:,|\bFROM\b))',
+        rf'\g<prefix>{failure_code_expression} AS "failure_category"\g<suffix>',
+        sql,
+        flags=re.IGNORECASE,
+    )
+
+    clause_pattern = re.compile(
+        r"\b(GROUP\s+BY|ORDER\s+BY|HAVING)\b(?P<body>.*?)(?=\b(?:ORDER\s+BY|GROUP\s+BY|HAVING|LIMIT|OFFSET|FETCH|UNION|WHERE)\b|$)",
+        re.IGNORECASE | re.DOTALL,
+    )
+
+    def replace_clause(match: re.Match[str]) -> str:
+        body = re.sub(
+            r'(?:(?:"dbo_repair_logs"|\[dbo_repair_logs\]|dbo_repair_logs)\s*\.\s*)?(?:"failure_category"|\[failure_category\]|failure_category)',
+            failure_code_expression,
+            match.group("body"),
+            flags=re.IGNORECASE,
+        )
+        return f"{match.group(1)}{body}"
+
+    return clause_pattern.sub(replace_clause, rewritten)
+
+
+def _rewrite_mssql_invented_report_fields(sql: str) -> str:
+    if not re.search(r"\bdbo_reports\b", sql, flags=re.IGNORECASE):
+        return sql
+
+    report_table = r'(?:"dbo_reports"|\[dbo_reports\]|dbo_reports)'
+    rewritten = re.sub(
+        rf"(?:(?:{report_table})\s*\.\s*)?(?:\"filters\"|\[filters\]|\bfilters\b)",
+        '"dbo_reports"."data"',
+        sql,
+        flags=re.IGNORECASE,
+    )
+    rewritten = re.sub(
+        rf"(?:(?:{report_table})\s*\.\s*)?(?:\"report_size\"|\"file_size\"|\[report_size\]|\[file_size\]|\breport_size\b|\bfile_size\b)",
+        '"dbo_reports"."size_bytes"',
+        rewritten,
+        flags=re.IGNORECASE,
+    )
+    return rewritten
+
+
 def contains_unsupported_mssql_json_access(sql: str) -> bool:
     if re.search(r"(?:->>|->)", sql):
         return True
@@ -866,6 +961,7 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
             flags=re.IGNORECASE,
         )
         normalized = _replace_relative_getdate_calls(normalized, now)
+        normalized = _replace_relative_current_date_calls(normalized, now)
         normalized = _rewrite_mssql_to_unixtime(normalized)
         normalized = _rewrite_mssql_timestamp_subtraction(normalized)
         normalized = _rewrite_mssql_to_date_buckets(normalized)
@@ -876,6 +972,8 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
         )
         normalized = _rewrite_mssql_repair_log_throughput_shape(normalized)
         normalized = _rewrite_mssql_invented_pcb_throughput_identifiers(normalized)
+        normalized = _rewrite_mssql_invented_failure_category(normalized)
+        normalized = _rewrite_mssql_invented_report_fields(normalized)
         normalized = _rewrite_mssql_bare_time_bucket_identifiers(normalized)
         normalized = _rewrite_mssql_bucket_functions(normalized)
         normalized = _rewrite_temporal_bucket_functions(normalized)

@@ -2,6 +2,46 @@ import { DataSourceName } from '@server/types';
 
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+const formatTimestampLiteral = (date: Date) => {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `'${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}'`;
+};
+
+const addMonths = (date: Date, months: number) => {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + months);
+  return next;
+};
+
+const replaceRelativeCurrentDateCalls = (sql: string): string => {
+  const now = new Date();
+  const relativeLiteral = (unit: string, amount: number) => {
+    const normalizedUnit = unit.toLowerCase();
+    if (normalizedUnit.startsWith('month')) {
+      return formatTimestampLiteral(addMonths(now, -amount));
+    }
+    if (normalizedUnit.startsWith('year')) {
+      return formatTimestampLiteral(addMonths(now, -amount * 12));
+    }
+    if (normalizedUnit.startsWith('day')) {
+      const next = new Date(now);
+      next.setDate(next.getDate() - amount);
+      return formatTimestampLiteral(next);
+    }
+    return null;
+  };
+
+  sql = sql.replace(
+    /\bDATE_SUB\(\s*CURRENT_DATE(?:\(\))?\s*,\s*INTERVAL\s+(\d+)\s+(YEAR|MONTH|DAY)S?\s*\)/gi,
+    (match, amount, unit) => relativeLiteral(unit, Number(amount)) || match,
+  );
+  sql = sql.replace(
+    /\bDATE_SUB\(\s*'?(YEAR|MONTH|DAY)'?\s*,\s*(\d+)\s*,\s*CURRENT_DATE(?:\(\))?\s*\)/gi,
+    (match, unit, amount) => relativeLiteral(unit, Number(amount)) || match,
+  );
+  return sql.replace(/\bCURRENT_DATE(?:\(\))?\b/gi, formatTimestampLiteral(now));
+};
+
 const inferMssqlTimestampExpression = (sql: string): string => {
   const qualifiedTimestamp = sql.match(
     /"([^"]+)"\."(created_at|updated_at|generated_at|created_date|date|DateIn|DateOut|FailedAt)"/i,
@@ -10,20 +50,19 @@ const inferMssqlTimestampExpression = (sql: string): string => {
     return qualifiedTimestamp[0];
   }
 
-  const fromTable = sql.match(/\bFROM\s+"([^"]+)"/i);
+  const fromTable = sql.match(/\bFROM\s+(?:"([^"]+)"|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))/i);
   if (fromTable) {
-    if (fromTable[1].toLowerCase() === 'dbo_debugentries') {
-      return `"${fromTable[1]}"."DateIn"`;
+    const tableName = fromTable[1] || fromTable[2] || fromTable[3];
+    if (tableName.toLowerCase() === 'dbo_debugentries') {
+      return `"${tableName}"."DateIn"`;
     }
-    return `"${fromTable[1]}"."created_at"`;
-  }
-
-  const bracketedFromTable = sql.match(/\bFROM\s+\[([^\]]+)\]/i);
-  if (bracketedFromTable) {
-    if (bracketedFromTable[1].toLowerCase() === 'dbo_debugentries') {
-      return `"${bracketedFromTable[1]}"."DateIn"`;
+    if (tableName.toLowerCase() === 'dbo_reports') {
+      return `"${tableName}"."generated_at"`;
     }
-    return `"${bracketedFromTable[1]}"."created_at"`;
+    if (tableName.toLowerCase() === 'dbo_repair_logs') {
+      return `"${tableName}"."created_at"`;
+    }
+    return `"${tableName}"."created_at"`;
   }
 
   return '"created_at"';
@@ -193,6 +232,55 @@ const replaceRepairLogThroughputShape = (sql: string): string => {
   ].join(' ');
 };
 
+const replaceInventedFailureCategory = (sql: string): string => {
+  if (!/\bdbo_repair_logs\b/i.test(sql) || !/\bfailure_category\b/i.test(sql)) {
+    return sql;
+  }
+
+  const failureCodeExpression = '"dbo_repair_logs"."failure_code"';
+  sql = sql.replace(
+    /\bSELECT\b(?<body>.*?)(?=\bFROM\b)/is,
+    (match, _body, _offset, _source, groups) => {
+      let body = groups?.body || '';
+      body = body.replace(
+        /(^|,)\s*(?:(?:"dbo_repair_logs"|\[dbo_repair_logs\]|dbo_repair_logs)\s*\.\s*)?(?:"failure_category"|\[failure_category\]|failure_category)(?=\s*(?:,|$))/gi,
+        `$1 ${failureCodeExpression} AS "failure_category"`,
+      );
+      return `SELECT${body}`;
+    },
+  );
+
+  const clausePattern =
+    /\b(GROUP\s+BY|ORDER\s+BY|HAVING)\b(?<body>.*?)(?=\b(?:ORDER\s+BY|GROUP\s+BY|HAVING|LIMIT|OFFSET|FETCH|UNION|WHERE)\b|$)/gis;
+  return sql.replace(clausePattern, (match, clause, _body, _offset, _source, groups) => {
+    const body = (groups?.body || '').replace(
+      /(?:(?:"dbo_repair_logs"|\[dbo_repair_logs\]|dbo_repair_logs)\s*\.\s*)?(?:"failure_category"|\[failure_category\]|failure_category)/gi,
+      failureCodeExpression,
+    );
+    return `${clause}${body}`;
+  });
+};
+
+const replaceInventedReportFields = (sql: string): string => {
+  if (!/\bdbo_reports\b/i.test(sql)) {
+    return sql;
+  }
+
+  const reportTable = String.raw`(?:"dbo_reports"|\[dbo_reports\]|dbo_reports)`;
+  sql = sql.replace(
+    new RegExp(String.raw`(?:(?:${reportTable})\s*\.\s*)?(?:"filters"|\[filters\]|\bfilters\b)`, 'gi'),
+    '"dbo_reports"."data"',
+  );
+  sql = sql.replace(
+    new RegExp(
+      String.raw`(?:(?:${reportTable})\s*\.\s*)?(?:"report_size"|"file_size"|\[report_size\]|\[file_size\]|\breport_size\b|\bfile_size\b)`,
+      'gi',
+    ),
+    '"dbo_reports"."size_bytes"',
+  );
+  return sql;
+};
+
 export const normalizeMssqlGeneratedSqlFields = (
   sql: string,
   dataSource: DataSourceName,
@@ -202,9 +290,12 @@ export const normalizeMssqlGeneratedSqlFields = (
   }
 
   sql = sql.replace(/\\"/g, '"');
+  sql = replaceRelativeCurrentDateCalls(sql);
   sql = replaceInventedDateFields(sql);
   sql = replaceRepairLogThroughputShape(sql);
   sql = replacePcbThroughputFields(sql);
+  sql = replaceInventedFailureCategory(sql);
+  sql = replaceInventedReportFields(sql);
   sql = replaceInventedTimeBuckets(sql);
   sql = replaceBadFailurePatternJoins(sql);
   return sql;

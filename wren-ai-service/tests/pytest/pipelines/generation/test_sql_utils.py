@@ -541,6 +541,59 @@ def test_normalize_generation_result_sql_rewrites_date_function_for_mssql():
     assert 'DATEPART(DAY, "dbo_DebugEntries"."DateIn")' in normalized
 
 
+def test_normalize_generation_result_sql_rewrites_date_sub_for_mssql():
+    sql = """
+    SELECT
+      DATEPART(MONTH, "dbo_repair_logs"."created_at") AS "MONTH",
+      COUNT(*) AS "repair_volume"
+    FROM "dbo_repair_logs"
+    WHERE "dbo_repair_logs"."created_at" >= DATE_SUB(CURRENT_DATE, INTERVAL 12 MONTH)
+    GROUP BY DATEPART(MONTH, "dbo_repair_logs"."created_at")
+    ORDER BY "MONTH" ASC
+    """
+
+    normalized = normalize_generation_result_sql(sql, data_source="MSSQL")
+
+    assert "DATE_SUB(" not in normalized
+    assert "CURRENT_DATE" not in normalized
+    assert 'DATEPART(MONTH, "dbo_repair_logs"."created_at")' in normalized
+
+
+def test_normalize_generation_result_sql_rewrites_repair_log_failure_category_for_mssql():
+    sql = """
+    SELECT
+      failure_category,
+      COUNT(*) AS repair_count
+    FROM dbo_repair_logs
+    GROUP BY failure_category
+    ORDER BY repair_count DESC
+    """
+
+    normalized = normalize_generation_result_sql(sql, data_source="MSSQL")
+
+    assert "failure_category," not in normalized
+    assert "GROUP BY failure_category" not in normalized
+    assert '"dbo_repair_logs"."failure_code" AS "failure_category"' in normalized
+    assert 'GROUP BY "dbo_repair_logs"."failure_code"' in normalized
+
+
+def test_normalize_generation_result_sql_rewrites_report_hallucinated_fields_for_mssql():
+    sql = """
+    SELECT
+      COUNT(*) total_reports,
+      SUM(CASE WHEN (filters LIKE '%raw%data%file%') THEN 1 ELSE 0 END) raw_data_files_included,
+      AVG((CASE WHEN (filters LIKE '%raw%data%file%') THEN file_size ELSE null END)) avg_file_size_with_raw_data
+    FROM dbo_reports
+    """
+
+    normalized = normalize_generation_result_sql(sql, data_source="MSSQL")
+
+    assert "filters" not in normalized
+    assert "THEN file_size" not in normalized
+    assert '"dbo_reports"."data" LIKE' in normalized
+    assert '"dbo_reports"."size_bytes"' in normalized
+
+
 def test_normalize_generation_result_sql_strips_to_unixtime_for_mssql():
     sql = """
     SELECT
