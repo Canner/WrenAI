@@ -45,10 +45,9 @@ The `config.minimax.yaml` file provides an example configuration for using [Mini
 
 | Model | Context Window | Description |
 |-------|---------------|-------------|
-| `MiniMax-M2.7` (default) | 204,800 tokens | Latest flagship model with enhanced reasoning and coding |
+| `MiniMax-M3` (default) | 524,288 tokens | Latest flagship model — 512K context, up to 128K output, supports image input |
+| `MiniMax-M2.7` | 204,800 tokens | Previous flagship with enhanced reasoning and coding |
 | `MiniMax-M2.7-highspeed` | 204,800 tokens | High-speed version of M2.7 for low-latency scenarios |
-| `MiniMax-M2.5` | 204,800 tokens | Peak Performance. Ultimate Value. Master the Complex |
-| `MiniMax-M2.5-highspeed` | 204,800 tokens | Same performance, faster and more agile |
 
 ### Key Notes
 
