@@ -52,7 +52,7 @@ const MembersCard = styled.div`
 
 const MembersHeaderRow = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 180px;
+  grid-template-columns: minmax(0, 1fr) 180px 120px;
   gap: 16px;
   padding: 14px 20px;
   border-bottom: 1px solid var(--gray-4);
@@ -62,7 +62,7 @@ const MembersHeaderRow = styled.div`
 
 const MembersRow = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 180px;
+  grid-template-columns: minmax(0, 1fr) 180px 120px;
   gap: 16px;
   padding: 16px 20px;
   align-items: center;
@@ -122,6 +122,13 @@ const ModalLabel = styled.div`
   margin-bottom: 8px;
   font-weight: 500;
   color: var(--gray-8);
+`;
+
+const HelperText = styled.p`
+  margin: 8px 0 16px;
+  color: var(--gray-7);
+  font-size: 13px;
+  line-height: 1.5;
 `;
 
 const NameCell = styled.div`
@@ -215,7 +222,9 @@ export default function OrganizationMembersPage() {
     if (!visible) return;
     if (organizationRole === 'Admin') {
       setProjectSelections(buildProjectSelectionMap(projects, organizationRole));
+      return;
     }
+    setProjectSelections({});
   }, [organizationRole, visible, projects]);
 
   const openInviteModal = () => {
@@ -327,6 +336,30 @@ export default function OrganizationMembersPage() {
     }
   };
 
+  const removeMember = async (memberId: number, memberName: string) => {
+    const confirmed = window.confirm(
+      `Remove ${memberName} from this organization?`,
+    );
+    if (!confirmed) return;
+
+    try {
+      setUpdatingMemberId(memberId);
+      const response = await fetch(`/api/v1/organizations/members/${memberId}`, {
+        method: 'DELETE',
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || 'Failed to remove member');
+      }
+      setMembers((prev) => prev.filter((member) => member.id !== memberId));
+      message.success('Member removed successfully.');
+    } catch (error: any) {
+      message.error(error.message || 'Failed to remove member');
+    } finally {
+      setUpdatingMemberId(null);
+    }
+  };
+
   return (
     <OrganizationSettingsLayout
       section="members"
@@ -344,6 +377,7 @@ export default function OrganizationMembersPage() {
             <MembersHeaderRow>
               <div>Name</div>
               <div>Role</div>
+              <div>Actions</div>
             </MembersHeaderRow>
             {members.map((member) => (
               <MembersRow key={member.id}>
@@ -370,6 +404,14 @@ export default function OrganizationMembersPage() {
                     </option>
                   ))}
                 </NativeSelect>
+                <Button
+                  danger
+                  type="text"
+                  disabled={updatingMemberId === member.id}
+                  onClick={() => void removeMember(member.id, member.name)}
+                >
+                  Remove
+                </Button>
               </MembersRow>
             ))}
           </MembersCard>
@@ -394,6 +436,11 @@ export default function OrganizationMembersPage() {
         width={720}
       >
         <Form form={form} layout="vertical">
+          <HelperText>
+            Invite a user to this organization and assign an organization role.
+            Organization admins get access to all projects in the organization.
+          </HelperText>
+
           <Form.Item
             label="Email"
             name="email"
@@ -444,6 +491,7 @@ export default function OrganizationMembersPage() {
                     <ProjectCheckbox
                       type="checkbox"
                       checked={checked}
+                      disabled={organizationRole === 'Admin'}
                       onChange={(event) =>
                         toggleProject(project.id, event.target.checked)
                       }
@@ -451,7 +499,7 @@ export default function OrganizationMembersPage() {
                     <div>{project.displayName}</div>
                     <NativeSelect
                       value={permission}
-                      disabled={!checked}
+                      disabled={!checked || organizationRole === 'Admin'}
                       onChange={(event) =>
                         updateProjectPermission(
                           project.id,
