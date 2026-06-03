@@ -12,8 +12,12 @@ import {
 } from '@/apollo/server/models/adaptor';
 
 const getComponentGraph = () => {
-  const { components, initComponents } = require('@/common');
-  return components ?? initComponents();
+  const { components } = require('@/common');
+  const componentGraph = components ?? globalThis.__wrenComponents;
+  if (!componentGraph) {
+    throw new Error('Components are not initialized');
+  }
+  return componentGraph;
 };
 
 const getApiHistoryRepository = () => {

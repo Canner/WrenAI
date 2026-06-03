@@ -2,8 +2,11 @@ import { NextApiRequest } from 'next';
 import { ApiError } from '../utils/apiUtils';
 
 const getProjectService = () => {
-  const { components, initComponents } = require('@/common');
-  const componentGraph = components ?? initComponents();
+  const { components } = require('@/common');
+  const componentGraph = components ?? globalThis.__wrenComponents;
+  if (!componentGraph) {
+    throw new Error('Components are not initialized');
+  }
   return componentGraph.projectService;
 };
 
