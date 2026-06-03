@@ -7,6 +7,7 @@ import {
 import { getLogger } from '@server/utils';
 import {
   assertAllowedMethods,
+  getCurrentProjectContext,
   getCurrentProjectName,
 } from '@/apollo/server/middlewares/organizationApi';
 
@@ -38,6 +39,8 @@ export default async function handler(
   try {
     assertAllowedMethods(req, ['GET', 'POST']);
     const organizationService = getOrganizationService();
+    const projectContext = await getCurrentProjectContext();
+    const projectId = projectContext.id ?? 0;
 
     if (req.method === 'GET') {
       const organizations = await organizationService.listOrganizations();
@@ -48,7 +51,7 @@ export default async function handler(
           organizations: organizations.map(serializeOrganization),
           currentProjectName: await getCurrentProjectName(),
         },
-        projectId: 0,
+        projectId,
         apiType: ApiType.GET_ORGANIZATIONS,
         startTime,
         requestPayload: {},
@@ -62,7 +65,7 @@ export default async function handler(
       res,
       statusCode: 201,
       responsePayload: serializeOrganization(organization),
-      projectId: 0,
+      projectId,
       apiType: ApiType.CREATE_ORGANIZATION,
       startTime,
       requestPayload: req.body,
@@ -72,7 +75,7 @@ export default async function handler(
     await handleApiError({
       error,
       res,
-      projectId: 0,
+      projectId: (await getCurrentProjectContext()).id ?? 0,
       apiType:
         req.method === 'GET'
           ? ApiType.GET_ORGANIZATIONS

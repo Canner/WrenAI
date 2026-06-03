@@ -7,6 +7,22 @@ const getProjectService = () => {
   return componentGraph.projectService;
 };
 
+export const getCurrentProjectContext = async () => {
+  try {
+    const projectService = getProjectService();
+    const project = await projectService.getCurrentProject();
+    return {
+      id: project?.id ?? null,
+      displayName: project?.displayName || 'Default Project',
+    };
+  } catch {
+    return {
+      id: null,
+      displayName: 'Default Project',
+    };
+  }
+};
+
 export const assertAllowedMethods = (
   req: NextApiRequest,
   methods: string[],
@@ -26,11 +42,6 @@ export const parseOrganizationId = (value: string | string[] | undefined) => {
 };
 
 export const getCurrentProjectName = async () => {
-  try {
-    const projectService = getProjectService();
-    const project = await projectService.getCurrentProject();
-    return project?.displayName || 'Default Project';
-  } catch {
-    return 'Default Project';
-  }
+  const project = await getCurrentProjectContext();
+  return project.displayName;
 };

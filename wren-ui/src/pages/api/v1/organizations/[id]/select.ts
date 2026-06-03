@@ -7,6 +7,7 @@ import {
 import { getLogger } from '@server/utils';
 import {
   assertAllowedMethods,
+  getCurrentProjectContext,
   parseOrganizationId,
 } from '@/apollo/server/middlewares/organizationApi';
 
@@ -28,6 +29,8 @@ export default async function handler(
   try {
     assertAllowedMethods(req, ['POST']);
     const organizationService = getOrganizationService();
+    const projectContext = await getCurrentProjectContext();
+    const projectId = projectContext.id ?? 0;
     const organizationId = parseOrganizationId(req.query.id);
     const organization =
       await organizationService.selectCurrentOrganization(organizationId);
@@ -44,7 +47,7 @@ export default async function handler(
         createdAt: organization.createdAt,
         updatedAt: organization.updatedAt,
       },
-      projectId: 0,
+      projectId,
       apiType: ApiType.SELECT_ORGANIZATION,
       startTime,
       requestPayload: { id: organizationId },
@@ -54,7 +57,7 @@ export default async function handler(
     await handleApiError({
       error,
       res,
-      projectId: 0,
+      projectId: (await getCurrentProjectContext()).id ?? 0,
       apiType: ApiType.SELECT_ORGANIZATION,
       requestPayload: { id: req.query.id },
       headers: req.headers as Record<string, string>,

@@ -24,6 +24,14 @@ const getApiHistoryRepository = () => {
   return repository;
 };
 
+const persistApiHistory = async (payload: Record<string, any>) => {
+  try {
+    await getApiHistoryRepository().createOne(payload);
+  } catch (error) {
+    console.error('Failed to persist API history:', error);
+  }
+};
+
 export const MAX_WAIT_TIME = 1000 * 60 * 3; // 3 minutes
 
 export const isAskResultFinished = (result: AskResult) => {
@@ -205,7 +213,7 @@ export const respondWith = async ({
 }) => {
   const durationMs = startTime ? Date.now() - startTime : undefined;
   const responseId = uuidv4();
-  await getApiHistoryRepository().createOne({
+  await persistApiHistory({
     id: responseId,
     projectId,
     apiType,
@@ -248,7 +256,7 @@ export const respondWithSimple = async ({
 }) => {
   const durationMs = startTime ? Date.now() - startTime : undefined;
   const responseId = uuidv4();
-  await getApiHistoryRepository().createOne({
+  await persistApiHistory({
     id: responseId,
     projectId,
     apiType,
