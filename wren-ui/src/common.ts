@@ -19,13 +19,10 @@ import {
   InstructionRepository,
   ApiHistoryRepository,
   DashboardItemRefreshJobRepository,
-<<<<<<< HEAD
   RoleRepository,
   UserRepository,
   UserRoleRepository,
-=======
   OrganizationRepository,
->>>>>>> 52a339fb5 (Add organization management feature)
 } from '@server/repositories';
 import {
   WrenEngineAdaptor,
@@ -42,11 +39,8 @@ import {
   DashboardService,
   AskingTaskTracker,
   InstructionService,
-<<<<<<< HEAD
   RbacService,
-=======
   OrganizationService,
->>>>>>> 52a339fb5 (Add organization management feature)
 } from '@server/services';
 import { PostHogTelemetry } from './apollo/server/telemetry/telemetry';
 import {
@@ -162,13 +156,10 @@ export const initComponents = () => {
   const apiHistoryRepository = new ApiHistoryRepository(knex);
   const dashboardItemRefreshJobRepository =
     new DashboardItemRefreshJobRepository(knex);
-<<<<<<< HEAD
   const roleRepository = new RoleRepository(knex);
   const userRepository = new UserRepository(knex);
   const userRoleRepository = new UserRoleRepository(knex);
-=======
   const organizationRepository = new OrganizationRepository(knex);
->>>>>>> 52a339fb5 (Add organization management feature)
 
   // adaptors
   const wrenEngineAdaptor = new WrenEngineAdaptor({
@@ -274,15 +265,12 @@ export const initComponents = () => {
     instructionRepository,
     wrenAIAdaptor,
   });
-<<<<<<< HEAD
   const rbacService = new RbacService({
     roleRepository,
     userRepository,
     userRoleRepository,
-=======
   const organizationService = new OrganizationService({
     organizationRepository,
->>>>>>> 52a339fb5 (Add organization management feature)
   });
 
   const dashboardCacheBackgroundTracker = new DashboardCacheBackgroundTracker({
@@ -317,13 +305,10 @@ export const initComponents = () => {
     apiHistoryRepository,
     instructionRepository,
     dashboardItemRefreshJobRepository,
-<<<<<<< HEAD
     roleRepository,
     userRepository,
     userRoleRepository,
-=======
     organizationRepository,
->>>>>>> 52a339fb5 (Add organization management feature)
 
     // adaptors
     wrenEngineAdaptor,
@@ -340,11 +325,8 @@ export const initComponents = () => {
     dashboardService,
     sqlPairService,
     instructionService,
-<<<<<<< HEAD
     rbacService,
-=======
     organizationService,
->>>>>>> 52a339fb5 (Add organization management feature)
     askingTaskTracker,
 
     // background trackers
