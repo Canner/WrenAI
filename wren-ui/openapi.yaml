@@ -288,6 +288,106 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /organizations:
+    get:
+      summary: List organizations
+      description: Returns all organizations stored in the local WrenAI workspace
+      responses:
+        '200':
+          description: Organization list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  organizations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Organization'
+                  currentProjectName:
+                    type: string
+    post:
+      summary: Create organization
+      description: Creates a new organization in the local WrenAI workspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                identifier:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '201':
+          description: Organization created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          description: Invalid payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Duplicate organization identifier
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /organizations/current:
+    get:
+      summary: Get current organization
+      description: Returns the current organization, the organization list, and the current project label
+      responses:
+        '200':
+          description: Current organization payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  currentOrganization:
+                    allOf:
+                      - $ref: '#/components/schemas/Organization'
+                    nullable: true
+                  organizations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Organization'
+                  currentProjectName:
+                    type: string
+  /organizations/{id}/select:
+    post:
+      summary: Select current organization
+      description: Marks the specified organization as the current active organization
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Selected organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '404':
+          description: Organization not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /stream_explanation:
     get:
       summary: Stream an explanation
@@ -356,3 +456,21 @@ components:
         properties:
           type: object
           description: Additional column properties
+    Organization:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        identifier:
+          type: string
+        description:
+          type: string
+          nullable: true
+        isCurrent:
+          type: boolean
+        createdAt:
+          type: string
+        updatedAt:
+          type: string

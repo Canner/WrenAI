@@ -20,9 +20,13 @@ import {
   IInstructionRepository,
   IApiHistoryRepository,
   IDashboardItemRefreshJobRepository,
+<<<<<<< HEAD
   IRoleRepository,
   IUserRepository,
   IUserRoleRepository,
+=======
+  IOrganizationRepository,
+>>>>>>> 52a339fb5 (Add organization management feature)
 } from '@server/repositories';
 import {
   IQueryService,
@@ -33,7 +37,11 @@ import {
   IProjectService,
   IDashboardService,
   IInstructionService,
+<<<<<<< HEAD
   IRbacService,
+=======
+  IOrganizationService,
+>>>>>>> 52a339fb5 (Add organization management feature)
 } from '@server/services';
 import { ITelemetry } from '@server/telemetry/telemetry';
 import {
@@ -63,7 +71,11 @@ export interface IContext {
   dashboardService: IDashboardService;
   sqlPairService: ISqlPairService;
   instructionService: IInstructionService;
+<<<<<<< HEAD
   rbacService: IRbacService;
+=======
+  organizationService: IOrganizationService;
+>>>>>>> 52a339fb5 (Add organization management feature)
 
   // repository
   projectRepository: IProjectRepository;
@@ -81,9 +93,13 @@ export interface IContext {
   instructionRepository: IInstructionRepository;
   apiHistoryRepository: IApiHistoryRepository;
   dashboardItemRefreshJobRepository: IDashboardItemRefreshJobRepository;
+<<<<<<< HEAD
   roleRepository: IRoleRepository;
   userRepository: IUserRepository;
   userRoleRepository: IUserRoleRepository;
+=======
+  organizationRepository: IOrganizationRepository;
+>>>>>>> 52a339fb5 (Add organization management feature)
 
   // background trackers
   projectRecommendQuestionBackgroundTracker: ProjectRecommendQuestionBackgroundTracker;

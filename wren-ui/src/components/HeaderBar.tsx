@@ -4,6 +4,7 @@ import styled from 'styled-components';
 import LogoBar from '@/components/LogoBar';
 import { Path } from '@/utils/enum';
 import Deploy from '@/components/deploy/Deploy';
+import OrganizationSwitcher from '@/components/OrganizationSwitcher';
 
 const { Header } = Layout;
 
@@ -90,11 +91,12 @@ export default function HeaderBar() {
             </Space>
           )}
         </Space>
-        {isModeling && (
-          <Space size={[16, 0]}>
+        <Space size={[16, 0]}>
+          <OrganizationSwitcher />
+          {isModeling && (
             <Deploy />
-          </Space>
-        )}
+          )}
+        </Space>
       </div>
     </StyledHeader>
   );

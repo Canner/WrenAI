@@ -21,6 +21,10 @@ export const typeDefs = gql`
     GET_MODELS
     STREAM_ASK
     STREAM_GENERATE_SQL
+    GET_ORGANIZATIONS
+    GET_CURRENT_ORGANIZATION
+    CREATE_ORGANIZATION
+    SELECT_ORGANIZATION
   }
 
   input ApiHistoryFilterInput {

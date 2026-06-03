@@ -8,4 +8,8 @@ export * from './metadataService';
 export * from './dashboardService';
 export * from './askingTaskTracker';
 export * from './instructionService';
+<<<<<<< HEAD
 export * from './rbacService';
+=======
+export * from './organizationService';
+>>>>>>> 52a339fb5 (Add organization management feature)
