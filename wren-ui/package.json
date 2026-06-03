@@ -10,10 +10,10 @@
     "test": "jest",
     "test:e2e": "npx playwright install chromium && npx playwright test",
     "check-types": "tsc --noEmit",
-    "migrate": "yarn knex migrate:latest",
+    "migrate": "knex migrate:latest",
     "migrate:sqlite-to-mssql": "node -e \"process.env.MIGRATE_SQLITE_TO_MSSQL='true'; require('./tools/knex.js')\"",
-    "rollback": "yarn knex migrate:rollback",
-    "generate-gql": "yarn graphql-codegen --config codegen.yaml"
+    "rollback": "knex migrate:rollback",
+    "generate-gql": "graphql-codegen --config codegen.yaml"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^6.0.3",
