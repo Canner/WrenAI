@@ -1,9 +1,14 @@
 """CTE-based SQL rewriter.
 
 Parses user SQL with sqlglot, uses ``qualify_columns`` to fully resolve
-all column references, then calls wren-core
-``transform_sql`` once per model with a simple ``SELECT col1, col2 FROM
-model`` and injects each expanded result as a CTE into the original query.
+all column references, then calls wren-core ``transform_sql`` once per model
+with a simple ``SELECT col1, col2 FROM model`` and injects each expanded
+result as a CTE into the original query.
+
+A referenced view is handled differently: its ``statement`` is native SQL
+that references models, so it is injected as a CTE **verbatim** (never sent
+to wren-core), and the models it references are emitted as model CTEs before
+it. This keeps the view as the executable SQL it was authored as.
 """
 
 from __future__ import annotations
@@ -100,11 +105,24 @@ class CTERewriter:
             self.schema.add_table(schema_name, cols, dialect=self.dialect)
             self._col_orig_name[name] = orig
 
+        # A view's ``statement`` is native-dialect SQL that references models.
+        # It is NOT expanded by wren-core — it becomes a CTE kept verbatim,
+        # preceded by model CTEs for the models it references. view_dict maps
+        # name → the view object so the statement can be emitted as-is.
+        self.view_dict: dict[str, dict] = {
+            view["name"]: view for view in self.manifest.get("views", [])
+        }
+        self.view_names: set[str] = set(self.view_dict)
+
     def rewrite(self, sql: str) -> str:
-        """Rewrite *sql* by injecting model CTEs.
+        """Rewrite *sql* by injecting model and view CTEs.
+
+        Models are expanded by wren-core. A referenced view is emitted as a
+        CTE holding its native-SQL ``statement`` verbatim; the models that
+        statement references are expanded as model CTEs placed before it.
 
         Returns the transformed SQL string in the target sqlglot dialect.
-        If no model references are found, falls back to
+        If no model or view references are found, falls back to
         ``session_context.transform_sql(sql)`` directly (when ``fallback``
         is ``True``); otherwise raises ``ValueError``.
         """
@@ -112,17 +130,23 @@ class CTERewriter:
 
         user_cte_names = self._collect_user_cte_names(ast)
         used_columns, user_table_refs = self._collect_model_columns(ast, user_cte_names)
+        view_refs = self._collect_view_refs(ast, user_cte_names)
 
-        # No model references detected — either fall back to the legacy
-        # whole-query transform, or raise so tests can catch the miss.
-        if not used_columns:
+        # A view's native-SQL statement references models; collect those so
+        # they get model CTEs placed before the (verbatim) view CTEs.
+        self._collect_view_model_usage(view_refs, used_columns, user_table_refs)
+
+        # No model or view references detected — either fall back to the
+        # legacy whole-query transform, or raise so tests can catch the miss.
+        if not used_columns and not view_refs:
             if self.fallback:
                 wren_sql = self.session_context.transform_sql(sql)
                 return sqlglot.transpile(wren_sql, read="wren", write=self.dialect)[0]
-            raise ValueError(f"No model references found in SQL: {sql}")
+            raise ValueError(f"No model or view references found in SQL: {sql}")
 
         model_ctes = self._build_model_ctes(used_columns, user_table_refs)
-        self._inject_ctes(ast, model_ctes)
+        view_ctes = self._build_view_ctes(view_refs)
+        self._inject_ctes(ast, model_ctes + view_ctes)
         # Oracle uppercases unquoted identifiers. Without forcing quoting
         # on output, the user's ``SELECT o_orderkey FROM orders`` would
         # land as ``SELECT O_ORDERKEY FROM ORDERS`` — both the table
@@ -241,6 +265,39 @@ class CTERewriter:
             user_table_refs.setdefault(model_name, (name, quoted))
         return alias_to_model, user_table_refs
 
+    def _collect_view_refs(
+        self, ast: exp.Expression, user_cte_names: set[str]
+    ) -> dict[str, tuple[str, bool]]:
+        """Map each referenced MDL view to the user-written ``(name, quoted)``.
+
+        Resolves table references against view names with the same
+        quoted/unquoted rules as models. The recorded identifier is used as
+        the injected CTE alias so dialects with case-folding bind the user's
+        ``FROM <view>`` to the CTE. Unlike ``_build_alias_map`` it does not
+        track SQL aliases, since a view is always expanded whole.
+        """
+        view_refs: dict[str, tuple[str, bool]] = {}
+        qualified = qualify_tables(ast.copy(), dialect=self.dialect)
+        for table in qualified.find_all(exp.Table):
+            name = table.name
+            if not name or name.lower() in user_cte_names:
+                continue
+            quoted = (
+                bool(table.this.quoted)
+                if isinstance(table.this, exp.Identifier)
+                else False
+            )
+            view_name = resolve_model_name(name, quoted, self.view_names)
+            if view_name is None:
+                continue
+            # A name defined as both a model and a view (malformed MDL) would
+            # otherwise emit two CTEs with the same name — invalid SQL. The
+            # model CTE wins; skip the view so output stays valid.
+            if resolve_model_name(name, quoted, self.model_dict) is not None:
+                continue
+            view_refs.setdefault(view_name, (name, quoted))
+        return view_refs
+
     # ------------------------------------------------------------------
     # CTE generation
     # ------------------------------------------------------------------
@@ -293,6 +350,70 @@ class CTERewriter:
             cte_name, cte_quoted = user_table_refs.get(model_name, (model_name, True))
             cte = exp.CTE(
                 this=expanded_ast,
+                alias=exp.TableAlias(
+                    this=exp.to_identifier(cte_name, quoted=cte_quoted)
+                ),
+            )
+            ctes.append(cte)
+        return ctes
+
+    def _collect_view_model_usage(
+        self,
+        view_refs: dict[str, tuple[str, bool]],
+        used_columns: dict[str, list[str] | None],
+        user_table_refs: dict[str, tuple[str, bool]],
+    ) -> None:
+        """Merge the models each referenced view's statement uses into
+        *used_columns* / *user_table_refs*, so those models get CTEs.
+
+        A view's statement is native SQL referencing models by name. Parsing
+        it through the same model-collection path captures which model columns
+        it needs. (Views referencing other views are not supported — the
+        manifest extractor does not scope nested views in, so they fail
+        earlier with a "table not found" planning error.)
+        """
+        for view_name in view_refs:
+            view_ast = parse_one(
+                self.view_dict[view_name]["statement"], dialect=self.dialect
+            )
+            view_cte_names = self._collect_user_cte_names(view_ast)
+            v_cols, v_refs = self._collect_model_columns(view_ast, view_cte_names)
+            self._merge_used_columns(used_columns, v_cols)
+            for model_name, ref in v_refs.items():
+                user_table_refs.setdefault(model_name, ref)
+
+    @staticmethod
+    def _merge_used_columns(
+        base: dict[str, list[str] | None], extra: dict[str, list[str] | None]
+    ) -> None:
+        """Merge *extra* model→columns into *base* in place.
+
+        ``None`` means ``SELECT *`` and wins over a specific column list;
+        otherwise column lists are unioned, preserving order.
+        """
+        for model, cols in extra.items():
+            if model not in base:
+                base[model] = cols
+            elif base[model] is None or cols is None:
+                base[model] = None
+            else:
+                seen = set(base[model])
+                base[model] = base[model] + [c for c in cols if c not in seen]
+
+    def _build_view_ctes(self, view_refs: dict[str, tuple[str, bool]]) -> list[exp.CTE]:
+        """Generate one CTE per view, holding the native-SQL statement as-is.
+
+        The statement is parsed/emitted with the target dialect (it is native
+        SQL) and references models by name, which resolve to the model CTEs
+        injected before it. wren-core is never asked to expand the view.
+        """
+        ctes: list[exp.CTE] = []
+        for view_name, (cte_name, cte_quoted) in view_refs.items():
+            body = parse_one(
+                self.view_dict[view_name]["statement"], dialect=self.dialect
+            )
+            cte = exp.CTE(
+                this=body,
                 alias=exp.TableAlias(
                     this=exp.to_identifier(cte_name, quoted=cte_quoted)
                 ),
