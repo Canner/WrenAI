@@ -121,3 +121,51 @@ def test_open_unregistered_app_errors(tmp_path: Path) -> None:
 
     assert result.exit_code != 0
     assert "not registered" in result.output
+
+
+def test_verify_live_app_does_not_require_data_asset(tmp_path: Path) -> None:
+    project = _make_project_with_app(tmp_path, data_mode="live", data_asset=False)
+
+    result = runner.invoke(app, ["genbi", "verify", "myapp", "-p", str(project)])
+
+    assert result.exit_code == 0, result.output
+    assert _status(project) == "built"
+
+
+def test_verify_fails_on_inlined_connection_credentials(tmp_path: Path) -> None:
+    project = _make_project_with_app(tmp_path, data_mode="live", data_asset=False)
+    (project / "apps" / "myapp" / "config.js").write_text(
+        'const DB = "postgres://admin:s3cretpw@db.internal:5432/prod";'
+    )
+
+    result = runner.invoke(app, ["genbi", "verify", "myapp", "-p", str(project)])
+
+    assert result.exit_code != 0
+    assert "secret" in result.output.lower() or "credential" in result.output.lower()
+    assert "config.js" in result.output
+    assert _status(project) == "scaffolded"
+
+
+def test_verify_fails_on_inlined_password_assignment(tmp_path: Path) -> None:
+    project = _make_project_with_app(tmp_path, data_mode="live", data_asset=False)
+    (project / "apps" / "myapp" / "settings.json").write_text(
+        '{"host": "db.internal", "password": "hunter2hunter2"}'
+    )
+
+    result = runner.invoke(app, ["genbi", "verify", "myapp", "-p", str(project)])
+
+    assert result.exit_code != 0
+    assert "settings.json" in result.output
+    assert _status(project) == "scaffolded"
+
+
+def test_verify_snapshot_app_with_secret_also_fails(tmp_path: Path) -> None:
+    project = _make_project_with_app(tmp_path)  # snapshot, complete
+    (project / "apps" / "myapp" / "index.html").write_text(
+        '<script>const k = "AKIAIOSFODNN7EXAMPLE";</script>'
+    )
+
+    result = runner.invoke(app, ["genbi", "verify", "myapp", "-p", str(project)])
+
+    assert result.exit_code != 0
+    assert "index.html" in result.output

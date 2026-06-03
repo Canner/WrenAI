@@ -219,6 +219,41 @@ else
 fi
 assert_contains "$WORK/cf2.err" "CLOUDFLARE_ACCOUNT_ID" "error names CLOUDFLARE_ACCOUNT_ID"
 
+# ════════════════════════════════════════════════════════════════════════════
+# Slice 06 — live data mode + secret-leak security gate
+# ════════════════════════════════════════════════════════════════════════════
+echo "── slice 06: live mode + secret gate"
+
+OUT="$WORK/live.out"
+$WREN genbi build liveapp --prompt "live dashboard" --data-mode live -p "$PROJECT" > "$OUT"
+assert_contains "$OUT" "CORS" "live instruction surfaces CORS"
+assert_contains "$OUT" "MUST NEVER" "live instruction carries the hard rule"
+
+# live app without data asset passes verify…
+mkdir -p "$PROJECT/apps/liveapp"
+echo "<html><body>live</body></html>" > "$PROJECT/apps/liveapp/index.html"
+cp "$PROJECT/target/mdl.json" "$PROJECT/apps/liveapp/mdl.json"
+$WREN genbi register liveapp --data-mode live -p "$PROJECT" > /dev/null
+$WREN genbi verify liveapp -p "$PROJECT" > "$WORK/live-verify.out"
+assert_contains "$WORK/live-verify.out" "Verify passed" "clean live app passes verify"
+
+# …but an inlined credential is caught by the gate
+echo 'const DB = "postgres://admin:s3cretpw@db.internal:5432/prod";' > "$PROJECT/apps/liveapp/config.js"
+if $WREN genbi verify liveapp -p "$PROJECT" 2> "$WORK/live-secret.err"; then
+  fail "verify blocks an inlined credential"
+else
+  ok "verify blocks an inlined credential"
+fi
+assert_contains "$WORK/live-secret.err" "config.js" "failure names the offending file"
+assert_contains "$WORK/live-secret.err" "secret" "failure explains the secret risk"
+
+# and deploy refuses to ship it even with a token present
+if VERCEL_TOKEN=fake $WREN genbi deploy liveapp --provider vercel -p "$PROJECT" 2> "$WORK/live-deploy.err"; then
+  fail "deploy refuses a secret-leaking app"
+else
+  ok "deploy refuses a secret-leaking app"
+fi
+
 # ── Summary ─────────────────────────────────────────────────────────────────
 echo
 echo "passed: $PASS, failed: $FAIL"

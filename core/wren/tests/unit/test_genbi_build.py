@@ -217,3 +217,33 @@ def test_build_compiles_mdl_when_missing(tmp_path: Path) -> None:
     # mdl was compiled implicitly and the instruction still points at it
     assert (project / "target" / "mdl.json").exists()
     assert str(project / "target" / "mdl.json") in result.output
+
+
+def test_build_live_mode_gives_connection_guidance_and_hard_rule(
+    tmp_path: Path,
+) -> None:
+    project = _make_project(tmp_path)
+
+    result = runner.invoke(
+        app,
+        [
+            "genbi",
+            "build",
+            "myapp",
+            "--prompt",
+            "x",
+            "--data-mode",
+            "live",
+            "-p",
+            str(project),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    out = result.output
+    # live: connect back to the user's warehouse/API + CORS requirement
+    assert "CORS" in out
+    assert "connection" in out.lower()
+    # hard rule: never inline warehouse credentials into the public app
+    assert "credentials" in out.lower()
+    assert "never" in out.lower() or "must not" in out.lower()

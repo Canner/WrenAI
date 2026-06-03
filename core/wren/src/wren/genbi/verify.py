@@ -8,10 +8,55 @@ query is a possible future hardening; deploy gates on this verifier.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 _DATA_ASSET_SUFFIXES = {".parquet", ".duckdb"}
+
+# Text files worth scanning for inlined credentials.
+_SCANNABLE_SUFFIXES = {".html", ".htm", ".js", ".mjs", ".json", ".css", ".txt", ".md"}
+
+# A public static app must never ship credentials — anyone who opens the
+# URL can read every file. Patterns kept narrow to avoid false positives.
+_SECRET_PATTERNS: tuple[tuple[str, re.Pattern], ...] = (
+    (
+        "connection string with password",
+        re.compile(r"\b\w+://[^/\s:@]+:[^/\s@]+@[^/\s]+"),
+    ),
+    (
+        "AWS access key id",
+        re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    ),
+    (
+        "password/secret/token assignment",
+        re.compile(
+            r"""["']?(password|passwd|secret|api[_-]?key|access[_-]?token)["']?"""
+            r"""\s*[:=]\s*["'][^"']{8,}["']""",
+            re.IGNORECASE,
+        ),
+    ),
+)
+
+
+def _scan_for_secrets(app_dir: Path) -> list[str]:
+    """Return failure messages for files that appear to inline credentials."""
+    failures = []
+    for path in sorted(app_dir.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in _SCANNABLE_SUFFIXES:
+            continue
+        try:
+            text = path.read_text(errors="ignore")
+        except OSError:
+            continue
+        for label, pattern in _SECRET_PATTERNS:
+            if pattern.search(text):
+                failures.append(
+                    f"possible inlined secret in {path.relative_to(app_dir)} "
+                    f"({label}) — a public static app must never ship credentials"
+                )
+                break
+    return failures
 
 
 @dataclass
@@ -52,5 +97,8 @@ def verify_app(app_dir: Path, *, data_mode: str) -> VerifyResult:
                 "snapshot app has no data asset (*.parquet / *.duckdb) — "
                 "bundle the data with the app"
             )
+
+    # Security gate for every mode: the app ships to a public static host.
+    failures.extend(_scan_for_secrets(app_dir))
 
     return VerifyResult(not failures, failures)

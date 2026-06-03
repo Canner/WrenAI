@@ -16,6 +16,20 @@ WREN_CORE_WASM_VERSION = "0.4.1"
 
 DATA_MODES = ("snapshot", "live")
 
+_LIVE_GUIDANCE = """\
+**Live mode** — the deployed app connects back to the user's own
+warehouse/API at query time:
+
+1. Write a connection config (endpoint URL only) into the app so it knows
+   where to reach the data.
+2. HARD RULE: warehouse credentials MUST NEVER be inlined into the app.
+   The app is a public static site — anyone who opens the URL can read
+   every file. Use a proxy/API with its own auth, or browser-side auth.
+   `wren genbi verify` fails the app if it detects inlined credentials.
+3. The endpoint the app queries must allow the deployed origin via CORS —
+   surface this requirement to the user; it is configured on their side.
+"""
+
 _SNAPSHOT_GUIDANCE = """\
 **Snapshot mode** — fully serverless; data ships with the app:
 
@@ -31,7 +45,7 @@ def _data_mode_guidance(data_mode: str) -> str:
     if data_mode == "snapshot":
         return _SNAPSHOT_GUIDANCE
     if data_mode == "live":
-        return "**Live mode** — the app connects back to the user's warehouse/API."
+        return _LIVE_GUIDANCE
     raise ValueError(f"unknown data-mode {data_mode!r}; expected one of {DATA_MODES}")
 
 
