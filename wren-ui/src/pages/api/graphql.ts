@@ -51,6 +51,7 @@ const bootstrapServer = async () => {
     roleRepository,
     userRepository,
     userRoleRepository,
+    organizationRepository,
     // adaptors
     wrenEngineAdaptor,
     ibisAdaptor,
@@ -67,6 +68,7 @@ const bootstrapServer = async () => {
 
     instructionService,
     rbacService,
+    organizationService,
     // background trackers
     projectRecommendQuestionBackgroundTracker,
     threadRecommendQuestionBackgroundTracker,
@@ -148,6 +150,7 @@ const bootstrapServer = async () => {
         sqlPairService,
         instructionService,
         rbacService,
+        organizationService,
         // repository
         projectRepository,
         modelRepository,
@@ -167,6 +170,7 @@ const bootstrapServer = async () => {
         roleRepository,
         userRepository,
         userRoleRepository,
+        organizationRepository,
         // background trackers
         projectRecommendQuestionBackgroundTracker,
         threadRecommendQuestionBackgroundTracker,

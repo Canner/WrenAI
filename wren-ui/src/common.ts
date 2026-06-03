@@ -269,6 +269,7 @@ export const initComponents = () => {
     roleRepository,
     userRepository,
     userRoleRepository,
+  });
   const organizationService = new OrganizationService({
     organizationRepository,
   });
