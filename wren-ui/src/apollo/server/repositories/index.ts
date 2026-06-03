@@ -21,3 +21,4 @@ export * from './apiHistoryRepository';
 export * from './dashboardItemRefreshJobRepository';
 export * from './rbacRepository';
 export * from './organizationRepository';
+export * from './organizationMemberRepository';

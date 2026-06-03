@@ -18,4 +18,5 @@ export enum Path {
   AdministrationAssignments = '/administration/assignments',
   Organization = '/organization',
   OrganizationGeneral = '/organization/general',
+  OrganizationMembers = '/organization/members',
 }

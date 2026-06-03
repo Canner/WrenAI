@@ -23,6 +23,8 @@ import {
   UserRepository,
   UserRoleRepository,
   OrganizationRepository,
+  OrganizationMemberRepository,
+  OrganizationMemberProjectRepository,
 } from '@server/repositories';
 import {
   WrenEngineAdaptor,
@@ -41,6 +43,7 @@ import {
   InstructionService,
   RbacService,
   OrganizationService,
+  OrganizationMemberService,
 } from '@server/services';
 import { PostHogTelemetry } from './apollo/server/telemetry/telemetry';
 import {
@@ -160,6 +163,9 @@ export const initComponents = () => {
   const userRepository = new UserRepository(knex);
   const userRoleRepository = new UserRoleRepository(knex);
   const organizationRepository = new OrganizationRepository(knex);
+  const organizationMemberRepository = new OrganizationMemberRepository(knex);
+  const organizationMemberProjectRepository =
+    new OrganizationMemberProjectRepository(knex);
 
   // adaptors
   const wrenEngineAdaptor = new WrenEngineAdaptor({
@@ -273,6 +279,13 @@ export const initComponents = () => {
   const organizationService = new OrganizationService({
     organizationRepository,
   });
+  const organizationMemberService = new OrganizationMemberService(
+    organizationRepository,
+    organizationMemberRepository,
+    organizationMemberProjectRepository,
+    userRepository,
+    projectRepository,
+  );
 
   const dashboardCacheBackgroundTracker = new DashboardCacheBackgroundTracker({
     dashboardRepository,
@@ -310,6 +323,8 @@ export const initComponents = () => {
     userRepository,
     userRoleRepository,
     organizationRepository,
+    organizationMemberRepository,
+    organizationMemberProjectRepository,
 
     // adaptors
     wrenEngineAdaptor,
@@ -328,6 +343,7 @@ export const initComponents = () => {
     instructionService,
     rbacService,
     organizationService,
+    organizationMemberService,
     askingTaskTracker,
 
     // background trackers

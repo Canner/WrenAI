@@ -1,19 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import {
-  Button,
-  Form,
-  Input,
-  Layout,
-  Typography,
-  message,
-} from 'antd';
+import { Button, Form, Input, Typography, message } from 'antd';
 import styled from 'styled-components';
-import SimpleLayout from '@/components/layouts/SimpleLayout';
+import OrganizationSettingsLayout from '@/components/organization/SettingsLayout';
 import { LoadingWrapper } from '@/components/PageLoading';
-import { Path } from '@/utils/enum';
-
-const { Sider, Content } = Layout;
 
 interface OrganizationRecord {
   id: number;
@@ -29,44 +18,6 @@ interface OrganizationResponse {
   currentProjectName: string;
   error?: string;
 }
-
-const linkStyle = { color: 'inherit', transition: 'none' };
-
-const StyledSider = styled(Sider)`
-  height: calc(100vh - 48px);
-  background: var(--gray-2);
-  border-right: 1px solid var(--gray-4);
-  overflow-y: auto;
-`;
-
-const StyledContent = styled(Content)`
-  height: calc(100vh - 48px);
-  overflow-y: auto;
-  background: white;
-`;
-
-const SidebarSection = styled.div`
-  padding: 14px 16px 8px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--gray-7);
-`;
-
-const SidebarItem = styled.div<{ $active?: boolean; $disabled?: boolean }>`
-  padding: 6px 20px;
-  color: ${(props) =>
-    props.$active
-      ? 'var(--gray-10)'
-      : props.$disabled
-        ? 'var(--gray-7)'
-        : 'var(--gray-8)'};
-  background: ${(props) => (props.$active ? 'var(--gray-4)' : 'transparent')};
-  font-weight: ${(props) => (props.$active ? 600 : 400)};
-`;
-
-const PageBody = styled.div`
-  padding: 24px 48px;
-`;
 
 const SettingsCard = styled.div`
   margin-top: 16px;
@@ -99,10 +50,6 @@ const Actions = styled.div`
   display: flex;
   gap: 8px;
 `;
-
-const PlaceholderItem = ({ children }: { children: React.ReactNode }) => (
-  <SidebarItem $disabled>{children}</SidebarItem>
-);
 
 export default function OrganizationGeneralPage() {
   const [form] = Form.useForm();
@@ -175,95 +122,67 @@ export default function OrganizationGeneralPage() {
   };
 
   return (
-    <SimpleLayout loading={false}>
-      <Layout>
-        <StyledSider width={252}>
-          <SidebarSection>Project</SidebarSection>
-          <PlaceholderItem>General</PlaceholderItem>
-          <PlaceholderItem>Access control</PlaceholderItem>
-          <PlaceholderItem>Data source</PlaceholderItem>
-          <PlaceholderItem>Danger zone</PlaceholderItem>
+    <OrganizationSettingsLayout section="general" title="General">
+      <LoadingWrapper loading={loading}>
+        <div>
+          <Typography.Title level={4} className="mt-4 mb-0 gray-8">
+            Organization name
+          </Typography.Title>
 
-          <SidebarSection>Organization</SidebarSection>
-          <SidebarItem $active>
-            <Link style={linkStyle} href={Path.OrganizationGeneral}>
-              General
-            </Link>
-          </SidebarItem>
-          <PlaceholderItem>Members</PlaceholderItem>
-          <PlaceholderItem>Billing</PlaceholderItem>
-          <PlaceholderItem>Danger zone</PlaceholderItem>
-
-          <SidebarSection>User</SidebarSection>
-          <PlaceholderItem>Profile</PlaceholderItem>
-          <PlaceholderItem>Danger zone</PlaceholderItem>
-        </StyledSider>
-        <StyledContent>
-          <LoadingWrapper loading={loading}>
-            <PageBody>
-              <Typography.Title level={3} className="mb-0 gray-8">
-                General
-              </Typography.Title>
-              <Typography.Title level={4} className="mt-4 mb-0 gray-8">
-                Organization name
-              </Typography.Title>
-
-              <SettingsCard>
-                {!hasOrganization && (
-                  <Typography.Text className="gray-7 d-block mb-3">
-                    Create an organization from the header before editing
-                    organization settings.
-                  </Typography.Text>
-                )}
-                <InlineRow>
-                  <LabelCell>Organization name</LabelCell>
-                  <FieldCell>
-                    <Form form={form} layout="vertical">
-                      <Form.Item
-                        name="name"
-                        className="mb-0"
-                        rules={[
-                          {
-                            required: true,
-                            whitespace: true,
-                            message: 'Organization name is required',
-                          },
-                          {
-                            max: 64,
-                            message:
-                              'Organization name must be 64 characters or fewer',
-                          },
-                        ]}
-                      >
-                        <Input
-                          placeholder="Organization name"
-                          disabled={!hasOrganization}
-                        />
-                      </Form.Item>
-                    </Form>
-                  </FieldCell>
-                </InlineRow>
-                <Actions>
-                  <Button
-                    onClick={resetChanges}
-                    disabled={!hasOrganization || !hasChanges || saving}
+          <SettingsCard>
+            {!hasOrganization && (
+              <Typography.Text className="gray-7 d-block mb-3">
+                Create an organization from the header before editing
+                organization settings.
+              </Typography.Text>
+            )}
+            <InlineRow>
+              <LabelCell>Organization name</LabelCell>
+              <FieldCell>
+                <Form form={form} layout="vertical">
+                  <Form.Item
+                    name="name"
+                    className="mb-0"
+                    rules={[
+                      {
+                        required: true,
+                        whitespace: true,
+                        message: 'Organization name is required',
+                      },
+                      {
+                        max: 64,
+                        message:
+                          'Organization name must be 64 characters or fewer',
+                      },
+                    ]}
                   >
-                    Discard changes
-                  </Button>
-                  <Button
-                    type="primary"
-                    onClick={() => void saveChanges()}
-                    loading={saving}
-                    disabled={!hasOrganization || !hasChanges}
-                  >
-                    Save
-                  </Button>
-                </Actions>
-              </SettingsCard>
-            </PageBody>
-          </LoadingWrapper>
-        </StyledContent>
-      </Layout>
-    </SimpleLayout>
+                    <Input
+                      placeholder="Organization name"
+                      disabled={!hasOrganization}
+                    />
+                  </Form.Item>
+                </Form>
+              </FieldCell>
+            </InlineRow>
+            <Actions>
+              <Button
+                onClick={resetChanges}
+                disabled={!hasOrganization || !hasChanges || saving}
+              >
+                Discard changes
+              </Button>
+              <Button
+                type="primary"
+                onClick={() => void saveChanges()}
+                loading={saving}
+                disabled={!hasOrganization || !hasChanges}
+              >
+                Save
+              </Button>
+            </Actions>
+          </SettingsCard>
+        </div>
+      </LoadingWrapper>
+    </OrganizationSettingsLayout>
   );
 }

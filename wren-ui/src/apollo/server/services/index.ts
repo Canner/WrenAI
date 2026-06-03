@@ -10,3 +10,4 @@ export * from './askingTaskTracker';
 export * from './instructionService';
 export * from './rbacService';
 export * from './organizationService';
+export * from './organizationMemberService';
