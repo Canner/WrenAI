@@ -266,3 +266,81 @@ def open_app(
             httpd.serve_forever()
         except KeyboardInterrupt:
             typer.echo("\nStopped.")
+
+
+@genbi_app.command()
+def deploy(
+    name: Annotated[str, typer.Argument(help="Registered app name.")],
+    provider: Annotated[
+        str,
+        typer.Option("--provider", help="Deploy target: vercel or cloudflare."),
+    ] = "vercel",
+    prod: Annotated[
+        bool,
+        typer.Option("--prod", help="Deploy to production (default: preview)."),
+    ] = False,
+    path: ProjectPathOpt = None,
+) -> None:
+    """Verify, then ship a registered app to the user's provider account."""
+    from datetime import date  # noqa: PLC0415
+
+    from wren.genbi.index import update_app  # noqa: PLC0415
+    from wren.genbi.providers import get_provider  # noqa: PLC0415
+    from wren.genbi.providers.base import DeployError  # noqa: PLC0415
+    from wren.genbi.tokens import resolve_token  # noqa: PLC0415
+    from wren.genbi.verify import verify_app  # noqa: PLC0415
+
+    project_path = _discover(path)
+    entry = _require_registered(project_path, name)
+
+    try:
+        adapter = get_provider(provider)
+    except KeyError as e:
+        typer.echo(f"Error: {e.args[0]}", err=True)
+        raise typer.Exit(1)
+
+    # Preflight — a broken app never reaches a public URL.
+    result = verify_app(
+        project_path / "apps" / name,
+        data_mode=entry.get("data_mode", "snapshot"),
+    )
+    if not result.passed:
+        typer.echo(f"Deploy aborted — verify failed for {name}:", err=True)
+        for failure in result.failures:
+            typer.echo(f"  - {failure}", err=True)
+        raise typer.Exit(1)
+
+    token = resolve_token(adapter.env_token_var, project_path)
+    if not token:
+        typer.echo(
+            f"Error: no {adapter.env_token_var} found.\n"
+            f"  Export it (`export {adapter.env_token_var}=...`) or add it to "
+            "your project's .env file.\n"
+            "  Never pass tokens as CLI flags — they leak into shell history.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    try:
+        deployment = adapter.deploy(
+            project_path / "apps" / name,
+            app_name=name,
+            token=token,
+            prod=prod,
+            link=entry.get("deploy"),
+        )
+    except DeployError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+    deploy_state = {
+        "provider": adapter.name,
+        "project_id": deployment.project_id,
+        "org_id": deployment.org_id,
+        "account_id": deployment.account_id,
+        "last_url": deployment.url,
+        "last_deployed_at": date.today().isoformat(),
+        "environment": deployment.environment,
+    }
+    update_app(project_path, name, status="deployed", deploy=deploy_state)
+    typer.echo(f"Deployed {name} ({deployment.environment}): {deployment.url}")

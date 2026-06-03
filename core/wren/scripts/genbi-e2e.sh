@@ -169,6 +169,37 @@ else
 fi
 kill "$OPEN_PID" 2>/dev/null || true
 
+# ════════════════════════════════════════════════════════════════════════════
+# Slice 04 — deploy → Vercel (error paths only; upload is mocked in pytest)
+# ════════════════════════════════════════════════════════════════════════════
+echo "── slice 04: deploy (vercel)"
+
+# without a token: actionable error naming the env var, no crash
+if env -u VERCEL_TOKEN uv run wren genbi deploy myapp --provider vercel -p "$PROJECT" 2> "$WORK/deploy1.err"; then
+  fail "deploy without token errors"
+else
+  ok "deploy without token errors"
+fi
+assert_contains "$WORK/deploy1.err" "VERCEL_TOKEN" "error names VERCEL_TOKEN"
+assert_contains "$WORK/deploy1.err" "shell history" "error warns against --token flags"
+
+# unknown provider is rejected
+if $WREN genbi deploy myapp --provider bogus -p "$PROJECT" 2> "$WORK/deploy2.err"; then
+  fail "unknown provider rejected"
+else
+  ok "unknown provider rejected"
+fi
+
+# a broken app is blocked by the verify preflight even with a token present
+rm "$PROJECT/apps/myapp/mdl.json"
+if VERCEL_TOKEN=fake $WREN genbi deploy myapp --provider vercel -p "$PROJECT" 2> "$WORK/deploy3.err"; then
+  fail "deploy aborts when verify fails"
+else
+  ok "deploy aborts when verify fails"
+fi
+assert_contains "$WORK/deploy3.err" "verify failed" "abort message mentions verify"
+cp "$PROJECT/target/mdl.json" "$PROJECT/apps/myapp/mdl.json"
+
 # ── Summary ─────────────────────────────────────────────────────────────────
 echo
 echo "passed: $PASS, failed: $FAIL"
