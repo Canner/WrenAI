@@ -652,8 +652,10 @@ except ImportError:
     # until then the subcommand group simply isn't registered.
     pass
 
+from wren.genbi.cli import genbi_app  # noqa: PLC0415, E402
 from wren.profile_cli import profile_app  # noqa: PLC0415, E402
 
+app.add_typer(genbi_app)
 app.add_typer(profile_app)
 
 
