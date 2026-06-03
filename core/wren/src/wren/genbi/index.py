@@ -64,3 +64,17 @@ def remove_app(project_path: Path, name: str) -> bool:
     del index["apps"][name]
     save_index(project_path, index)
     return True
+
+
+def get_app(project_path: Path, name: str) -> dict | None:
+    """Return the entry for ``name`` or None if not registered."""
+    return load_index(project_path)["apps"].get(name)
+
+
+def update_app(project_path: Path, name: str, **fields) -> dict:
+    """Merge ``fields`` into the entry for ``name`` and persist."""
+    index = load_index(project_path)
+    entry = index["apps"][name]
+    entry.update(fields)
+    save_index(project_path, index)
+    return entry

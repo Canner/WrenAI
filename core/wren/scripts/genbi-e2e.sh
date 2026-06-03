@@ -135,6 +135,40 @@ assert_contains "$OUT" "No apps" "remove cleared the index"
 # re-register for later slices
 $WREN genbi register myapp --data-mode snapshot -p "$PROJECT" > /dev/null
 
+# ════════════════════════════════════════════════════════════════════════════
+# Slice 03 — verify (preflight) / open (local preview)
+# ════════════════════════════════════════════════════════════════════════════
+echo "── slice 03: verify / open"
+
+# incomplete app (no mdl.json, no data asset) must fail verify
+if $WREN genbi verify myapp -p "$PROJECT" 2> "$WORK/verify1.err"; then
+  fail "verify fails an incomplete app"
+else
+  ok "verify fails an incomplete app"
+fi
+assert_contains "$WORK/verify1.err" "mdl.json" "failure reason names mdl.json"
+
+# complete the app per the build instruction's conventions
+cp "$PROJECT/target/mdl.json" "$PROJECT/apps/myapp/mdl.json"
+mkdir -p "$PROJECT/apps/myapp/data"
+printf 'PAR1fake' > "$PROJECT/apps/myapp/data/orders.parquet"
+
+$WREN genbi verify myapp -p "$PROJECT" > "$WORK/verify2.out"
+assert_contains "$WORK/verify2.out" "Verify passed" "verify passes a complete app"
+assert_contains "$PROJECT/.wren/apps.yml" "built" "status flipped to built"
+
+# open: serve in background, curl the page, kill
+$WREN genbi open myapp --port 0 -p "$PROJECT" > "$WORK/open.out" 2>&1 &
+OPEN_PID=$!
+sleep 2
+URL="$(grep -oE 'http://127\.0\.0\.1:[0-9]+/' "$WORK/open.out" | head -1 || true)"
+if [ -n "$URL" ] && curl -sf "$URL" | grep -q "html"; then
+  ok "open serves the app locally ($URL)"
+else
+  fail "open serves the app locally"
+fi
+kill "$OPEN_PID" 2>/dev/null || true
+
 # ── Summary ─────────────────────────────────────────────────────────────────
 echo
 echo "passed: $PASS, failed: $FAIL"

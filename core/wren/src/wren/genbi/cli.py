@@ -198,3 +198,71 @@ def remove(
         typer.echo(f"Error: app {name!r} is not registered.", err=True)
         raise typer.Exit(1)
     typer.echo(f"Removed {name} from the index (files under apps/{name}/ kept).")
+
+
+def _require_registered(project_path, name: str) -> dict:
+    from wren.genbi.index import get_app  # noqa: PLC0415
+
+    entry = get_app(project_path, name)
+    if entry is None:
+        typer.echo(
+            f"Error: app {name!r} is not registered.\n"
+            f"  Run `wren genbi register {name}` first.",
+            err=True,
+        )
+        raise typer.Exit(1)
+    return entry
+
+
+@genbi_app.command()
+def verify(
+    name: Annotated[str, typer.Argument(help="Registered app name.")],
+    path: ProjectPathOpt = None,
+) -> None:
+    """Preflight an app: required files, parseable MDL, bundled data."""
+    from wren.genbi.index import update_app  # noqa: PLC0415
+    from wren.genbi.verify import verify_app  # noqa: PLC0415
+
+    project_path = _discover(path)
+    entry = _require_registered(project_path, name)
+
+    result = verify_app(
+        project_path / "apps" / name,
+        data_mode=entry.get("data_mode", "snapshot"),
+    )
+    if not result.passed:
+        typer.echo(f"Verify failed for {name}:", err=True)
+        for failure in result.failures:
+            typer.echo(f"  - {failure}", err=True)
+        raise typer.Exit(1)
+
+    if entry.get("status") == "scaffolded":
+        update_app(project_path, name, status="built")
+    typer.echo(f"Verify passed for {name}.")
+
+
+@genbi_app.command(name="open")
+def open_app(
+    name: Annotated[str, typer.Argument(help="Registered app name.")],
+    port: Annotated[
+        int, typer.Option("--port", help="Local port (0 = auto-pick).")
+    ] = 0,
+    path: ProjectPathOpt = None,
+) -> None:
+    """Serve a built app locally for preview."""
+    import http.server  # noqa: PLC0415
+    import socketserver  # noqa: PLC0415
+    from functools import partial  # noqa: PLC0415
+
+    project_path = _discover(path)
+    _require_registered(project_path, name)
+    app_dir = project_path / "apps" / name
+
+    handler = partial(http.server.SimpleHTTPRequestHandler, directory=str(app_dir))
+    with socketserver.TCPServer(("127.0.0.1", port), handler) as httpd:
+        actual_port = httpd.server_address[1]
+        typer.echo(f"Serving {name} at http://127.0.0.1:{actual_port}/ (Ctrl-C stops)")
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            typer.echo("\nStopped.")
