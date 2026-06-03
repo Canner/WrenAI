@@ -254,6 +254,35 @@ else
   ok "deploy refuses a secret-leaking app"
 fi
 
+# ════════════════════════════════════════════════════════════════════════════
+# Slice 07 — companion skill walkthrough (the documented agent workflow)
+# ════════════════════════════════════════════════════════════════════════════
+echo "── slice 07: skill walkthrough"
+
+SKILL_MD="$(cd ../.. && pwd)/skills/wren-genbi-app/SKILL.md"
+if [ -f "$SKILL_MD" ]; then ok "SKILL.md exists"; else fail "SKILL.md exists"; fi
+
+# every command in the skill's quick reference exists in the real CLI
+HELP="$WORK/genbi-help.out"
+$WREN genbi --help > "$HELP" 2>&1
+for cmd in build register verify open deploy list remove; do
+  assert_contains "$HELP" "$cmd" "CLI exposes '$cmd' (skill quick-ref valid)"
+done
+
+# the full documented workflow, start to finish, for a fresh app:
+# build → author (per instruction conventions) → register → verify
+WALK="walkthrough"
+$WREN genbi build "$WALK" --prompt "orders dashboard" -p "$PROJECT" > "$WORK/walk-build.out"
+mkdir -p "$PROJECT/apps/$WALK/data"
+echo "<html><body>walkthrough</body></html>" > "$PROJECT/apps/$WALK/index.html"
+cp "$PROJECT/target/mdl.json" "$PROJECT/apps/$WALK/mdl.json"
+printf 'PAR1fake' > "$PROJECT/apps/$WALK/data/orders.parquet"
+$WREN genbi register "$WALK" --data-mode snapshot -p "$PROJECT" > /dev/null
+$WREN genbi verify "$WALK" -p "$PROJECT" > "$WORK/walk-verify.out"
+assert_contains "$WORK/walk-verify.out" "Verify passed" "full walkthrough reaches verified state"
+$WREN genbi list -p "$PROJECT" > "$WORK/walk-list.out"
+assert_contains "$WORK/walk-list.out" "$WALK" "walkthrough app visible in list"
+
 # ── Summary ─────────────────────────────────────────────────────────────────
 echo
 echo "passed: $PASS, failed: $FAIL"
