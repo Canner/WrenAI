@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Avatar,
   Button,
-  Checkbox,
   Form,
   Input,
   Modal,
@@ -79,6 +78,12 @@ const ProjectRow = styled.div`
 const ProjectHeader = styled(ProjectRow)`
   background: var(--gray-3);
   font-weight: 600;
+`;
+
+const ProjectCheckbox = styled.input`
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
 `;
 
 const NameCell = styled.div`
@@ -394,7 +399,8 @@ export default function OrganizationMembersPage() {
                 const permission = projectSelections[project.id] || 'Owner';
                 return (
                   <ProjectRow key={project.id}>
-                    <Checkbox
+                    <ProjectCheckbox
+                      type="checkbox"
                       checked={checked}
                       onChange={(event) =>
                         toggleProject(project.id, event.target.checked)
