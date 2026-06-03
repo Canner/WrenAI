@@ -9,6 +9,7 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
+import wren.genbi.providers.cloudflare as cloudflare
 import wren.genbi.providers.vercel as vercel
 from wren.cli import app
 from wren.genbi.tokens import resolve_token
@@ -182,3 +183,51 @@ def test_deploy_unknown_provider_errors(tmp_path) -> None:
 
     assert result.exit_code != 0
     assert "provider" in result.output.lower()
+
+
+# ── Cloudflare deploy ──────────────────────────────────────────────────────
+
+
+def test_deploy_cloudflare_uploads_and_persists_state(tmp_path, monkeypatch) -> None:
+    project = _make_deployable_project(tmp_path)
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "cf-tok")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct-42")
+    fake = _FakeTransport(
+        {"result": {"url": "https://abc123.myapp.pages.dev", "id": "dep_1"}}
+    )
+    monkeypatch.setattr(cloudflare, "_request", fake)
+
+    result = runner.invoke(
+        app,
+        ["genbi", "deploy", "myapp", "--provider", "cloudflare", "-p", str(project)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "https://abc123.myapp.pages.dev" in result.output
+    # request construction: account-scoped Pages endpoint + bearer token
+    urls = [c["url"] for c in fake.calls]
+    assert any("accounts/acct-42/pages/projects" in u for u in urls)
+    for call in fake.calls:
+        assert call["headers"]["Authorization"] == "Bearer cf-tok"
+    # deploy state persisted with the account id
+    index = yaml.safe_load((project / ".wren" / "apps.yml").read_text())
+    entry = index["apps"]["myapp"]
+    assert entry["status"] == "deployed"
+    assert entry["deploy"]["provider"] == "cloudflare"
+    assert entry["deploy"]["account_id"] == "acct-42"
+    assert entry["deploy"]["last_url"] == "https://abc123.myapp.pages.dev"
+    assert "cf-tok" not in (project / ".wren" / "apps.yml").read_text()
+
+
+def test_deploy_cloudflare_requires_account_id(tmp_path, monkeypatch) -> None:
+    project = _make_deployable_project(tmp_path)
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "cf-tok")
+    monkeypatch.delenv("CLOUDFLARE_ACCOUNT_ID", raising=False)
+
+    result = runner.invoke(
+        app,
+        ["genbi", "deploy", "myapp", "--provider", "cloudflare", "-p", str(project)],
+    )
+
+    assert result.exit_code != 0
+    assert "CLOUDFLARE_ACCOUNT_ID" in result.output

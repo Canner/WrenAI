@@ -200,6 +200,25 @@ fi
 assert_contains "$WORK/deploy3.err" "verify failed" "abort message mentions verify"
 cp "$PROJECT/target/mdl.json" "$PROJECT/apps/myapp/mdl.json"
 
+# ════════════════════════════════════════════════════════════════════════════
+# Slice 05 — deploy → Cloudflare (error paths only; upload mocked in pytest)
+# ════════════════════════════════════════════════════════════════════════════
+echo "── slice 05: deploy (cloudflare)"
+
+if env -u CLOUDFLARE_API_TOKEN uv run wren genbi deploy myapp --provider cloudflare -p "$PROJECT" 2> "$WORK/cf1.err"; then
+  fail "cloudflare deploy without token errors"
+else
+  ok "cloudflare deploy without token errors"
+fi
+assert_contains "$WORK/cf1.err" "CLOUDFLARE_API_TOKEN" "error names CLOUDFLARE_API_TOKEN"
+
+if env -u CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN=fake uv run wren genbi deploy myapp --provider cloudflare -p "$PROJECT" 2> "$WORK/cf2.err"; then
+  fail "cloudflare deploy without account id errors"
+else
+  ok "cloudflare deploy without account id errors"
+fi
+assert_contains "$WORK/cf2.err" "CLOUDFLARE_ACCOUNT_ID" "error names CLOUDFLARE_ACCOUNT_ID"
+
 # ── Summary ─────────────────────────────────────────────────────────────────
 echo
 echo "passed: $PASS, failed: $FAIL"
