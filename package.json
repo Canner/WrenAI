@@ -1,0 +1,5 @@
+{
+  "devDependencies": {
+    "@apollo/client": "^3.6.9"
+  }
+}
