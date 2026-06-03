@@ -1,18 +1,16 @@
 # RBAC Foundation
 
-This document describes the application-level organization and member RBAC foundation in Wren UI. It establishes durable organization, user, member, invitation, session, and role primitives for future governance work.
+This document describes the application-level RBAC foundation in Wren UI. It does not enforce permissions yet; it establishes durable role, user, and user-role assignment primitives for future governance work.
 
 ## Scope
 
 Implemented:
 
 - Roles: `Admin`, `Manager`, `Analyst`, `Viewer`, plus custom roles.
-- Organizations with active members.
-- Users with local identity metadata and password hashes for local login.
-- Organization-member role assignments.
-- Member invitations and local auth sessions.
-- GraphQL APIs for role, member, invitation, and assignment management.
-- Administration UI for member management, role management, and role assignment.
+- Users with local identity metadata.
+- User-role assignments.
+- GraphQL APIs for role, user, and assignment management.
+- Administration UI for user management, role management, and role assignment.
 
 Deferred:
 
@@ -45,39 +43,6 @@ Tables:
   - `user_id`
   - `role_id`
   - timestamps
-- `organizations`
-  - `id`
-  - `name`
-  - `slug`
-  - external identity fields
-  - `is_active`
-  - timestamps
-- `organization_members`
-  - `id`
-  - `organization_id`
-  - `user_id`
-  - `role_id`
-  - `status`
-  - `joined_at`
-  - timestamps
-- `member_invitations`
-  - `id`
-  - `organization_id`
-  - `role_id`
-  - `email`
-  - `token`
-  - `status`
-  - `expires_at`
-  - timestamps
-- `auth_sessions`
-  - `id`
-  - `user_id`
-  - `organization_member_id`
-  - `token`
-  - `expires_at`
-  - `revoked_at`
-  - timestamps
-
 `external_id` and `identity_provider` are intentionally present now so Teams, LDAP, and Azure AD integrations can later attach external identities without replacing the RBAC tables.
 
 ## Backend Layers
@@ -98,11 +63,6 @@ Queries:
 - `roles`
 - `users`
 - `userRoleMappings`
-- `organizations`
-- `organizationMembers`
-- `memberInvitations`
-- `currentSession`
-- `bootstrapStatus`
 
 Mutations:
 
@@ -113,16 +73,6 @@ Mutations:
 - `assignRoleToUser`
 - `updateUserRoles`
 - `removeRoleFromUser`
-- `inviteMember`
-- `updateMember`
-- `updateMemberRole`
-
-Admin-only behavior:
-
-- Inviting members.
-- Creating and editing roles.
-- Editing members and updating member roles.
-- Legacy user-role mutation paths are also guarded for Admin members.
 
 ## UI
 
@@ -133,18 +83,11 @@ Navigation:
 
 Screens:
 
-- `/administration/users` (Member Management)
+- `/administration/users`
 - `/administration/roles`
 - `/administration/assignments`
 
 The UI uses the existing Next.js, Apollo Client, Ant Design, and `SiderLayout`/`PageLayout` patterns.
-
-Authentication routes:
-
-- `/login`
-- `/accept-invitation?token=...`
-
-The first Admin can bootstrap the first organization when no active Admin member exists.
 
 ## Future Permission Model
 

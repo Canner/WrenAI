@@ -23,10 +23,6 @@ import {
   IRoleRepository,
   IUserRepository,
   IUserRoleRepository,
-  IOrganizationRepository,
-  IOrganizationMemberRepository,
-  IMemberInvitationRepository,
-  IAuthSessionRepository,
 } from '@server/repositories';
 import {
   IQueryService,
@@ -38,7 +34,6 @@ import {
   IDashboardService,
   IInstructionService,
   IRbacService,
-  AuthActor,
 } from '@server/services';
 import { ITelemetry } from '@server/telemetry/telemetry';
 import {
@@ -69,7 +64,6 @@ export interface IContext {
   sqlPairService: ISqlPairService;
   instructionService: IInstructionService;
   rbacService: IRbacService;
-  currentUser?: AuthActor | null;
 
   // repository
   projectRepository: IProjectRepository;
@@ -90,10 +84,6 @@ export interface IContext {
   roleRepository: IRoleRepository;
   userRepository: IUserRepository;
   userRoleRepository: IUserRoleRepository;
-  organizationRepository: IOrganizationRepository;
-  organizationMemberRepository: IOrganizationMemberRepository;
-  memberInvitationRepository: IMemberInvitationRepository;
-  authSessionRepository: IAuthSessionRepository;
 
   // background trackers
   projectRecommendQuestionBackgroundTracker: ProjectRecommendQuestionBackgroundTracker;

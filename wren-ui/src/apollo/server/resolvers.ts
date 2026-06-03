@@ -79,11 +79,6 @@ const resolvers = {
     apiHistory: apiHistoryResolver.getApiHistory,
 
     // Administration / RBAC
-    bootstrapStatus: rbacResolver.bootstrapStatus,
-    currentSession: rbacResolver.currentSession,
-    organizations: rbacResolver.listOrganizations,
-    organizationMembers: rbacResolver.listMembers,
-    memberInvitations: rbacResolver.listInvitations,
     roles: rbacResolver.listRoles,
     users: rbacResolver.listUsers,
     userRoleMappings: rbacResolver.listUserRoleMappings,
@@ -198,9 +193,6 @@ const resolvers = {
     assignRoleToUser: rbacResolver.assignRoleToUser,
     updateUserRoles: rbacResolver.updateUserRoles,
     removeRoleFromUser: rbacResolver.removeRoleFromUser,
-    inviteMember: rbacResolver.inviteMember,
-    updateMember: rbacResolver.updateMember,
-    updateMemberRole: rbacResolver.updateMemberRole,
   },
   ThreadResponse: askingResolver.getThreadResponseNestedResolver(),
   DetailStep: askingResolver.getDetailStepNestedResolver(),

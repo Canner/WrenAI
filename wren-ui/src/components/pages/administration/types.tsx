@@ -21,45 +21,6 @@ export interface User {
   updatedAt: string;
 }
 
-export interface Organization {
-  id: number;
-  name: string;
-  slug: string;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface OrganizationMember {
-  id: number;
-  organizationId: number;
-  userId: number;
-  roleId: number;
-  status: string;
-  joinedAt?: string | null;
-  user: User;
-  role: Role;
-  organization: Organization;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface MemberInvitation {
-  id: number;
-  organizationId: number;
-  roleId: number;
-  email: string;
-  name?: string | null;
-  token: string;
-  status: string;
-  expiresAt: string;
-  acceptedAt?: string | null;
-  role: Role;
-  organization: Organization;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface UserRoleMapping {
   id: number;
   userId: number;

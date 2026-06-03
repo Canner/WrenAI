@@ -4,6 +4,7 @@ import {
   Button,
   Form,
   Modal,
+  Popconfirm,
   Select,
   Table,
   TableColumnsType,
@@ -12,128 +13,200 @@ import {
 } from 'antd';
 import SafetyCertificateOutlined from '@ant-design/icons/SafetyCertificateOutlined';
 import EditOutlined from '@ant-design/icons/EditOutlined';
+import DeleteOutlined from '@ant-design/icons/DeleteOutlined';
 import SiderLayout from '@/components/layouts/SiderLayout';
 import PageLayout from '@/components/layouts/PageLayout';
 import {
+  ASSIGN_ROLE_TO_USER,
   LIST_USER_ROLE_MAPPINGS,
-  UPDATE_MEMBER_ROLE,
+  REMOVE_ROLE_FROM_USER,
+  UPDATE_USER_ROLES,
 } from '@/apollo/client/graphql/rbac';
 import {
-  OrganizationMember,
   Role,
   RoleTags,
+  User,
+  UserRoleMapping,
 } from '@/components/pages/administration/types';
 import { getAbsoluteTime } from '@/utils/time';
 
 const { Text } = Typography;
 
+type AssignmentModalState = {
+  visible: boolean;
+  user?: User;
+};
+
 const AssignmentModal = ({
-  member,
+  users,
   roles,
+  state,
   loading,
   onClose,
   onSubmit,
 }: {
-  member?: OrganizationMember;
+  users: User[];
   roles: Role[];
+  state: AssignmentModalState;
   loading: boolean;
   onClose: () => void;
-  onSubmit: (roleId: number, member: OrganizationMember) => Promise<void>;
+  onSubmit: (values: any, user?: User) => Promise<void>;
 }) => {
   const [form] = Form.useForm();
+  const isUpdate = !!state.user;
 
   useEffect(() => {
-    if (!member) return;
-    form.setFieldsValue({ roleId: member.roleId });
-  }, [form, member]);
+    if (!state.visible) return;
+    form.setFieldsValue({
+      userId: state.user?.id,
+      roleId: undefined,
+      roleIds: state.user?.roles?.map((role) => role.id) || [],
+    });
+  }, [form, state.visible, state.user]);
 
   const submit = async () => {
-    if (!member) return;
     const values = await form.validateFields();
-    await onSubmit(values.roleId, member);
+    await onSubmit(values, state.user);
     form.resetFields();
     onClose();
   };
 
   return (
     <Modal
-      title="Update member role"
-      visible={!!member}
+      title={isUpdate ? 'Update user roles' : 'Assign role to user'}
+      visible={state.visible}
       centered
       destroyOnClose
+      maskClosable={false}
       confirmLoading={loading}
       onCancel={onClose}
       onOk={submit}
-      okText="Update role"
+      okText={isUpdate ? 'Update assignment' : 'Assign role'}
       afterClose={() => form.resetFields()}
     >
       <Form form={form} layout="vertical" preserve={false}>
-        <Form.Item label="Member">
-          <div>
-            <div className="text-medium">{member?.user.name}</div>
-            <Text className="gray-7">{member?.user.email}</Text>
-          </div>
-        </Form.Item>
         <Form.Item
-          label="Role"
-          name="roleId"
-          rules={[{ required: true, message: 'Select a role.' }]}
+          label="User"
+          name="userId"
+          rules={[{ required: true, message: 'Select a user.' }]}
         >
           <Select
-            options={roles.map((role) => ({
-              label: role.name,
-              value: role.id,
+            disabled={isUpdate}
+            placeholder="Select user"
+            options={users.map((user) => ({
+              label: `${user.name} (${user.email})`,
+              value: user.id,
             }))}
           />
         </Form.Item>
+        {isUpdate ? (
+          <Form.Item
+            label="Roles"
+            name="roleIds"
+            rules={[{ required: true, message: 'Select at least one role.' }]}
+          >
+            <Select
+              mode="multiple"
+              placeholder="Select roles"
+              options={roles.map((role) => ({
+                label: role.name,
+                value: role.id,
+              }))}
+            />
+          </Form.Item>
+        ) : (
+          <Form.Item
+            label="Role"
+            name="roleId"
+            rules={[{ required: true, message: 'Select a role.' }]}
+          >
+            <Select
+              placeholder="Select role"
+              options={roles.map((role) => ({
+                label: role.name,
+                value: role.id,
+              }))}
+            />
+          </Form.Item>
+        )}
       </Form>
     </Modal>
   );
 };
 
 export default function UserRoleAssignment() {
-  const [editingMember, setEditingMember] = useState<OrganizationMember>();
+  const [modalState, setModalState] = useState<AssignmentModalState>({
+    visible: false,
+  });
   const { data, loading, refetch } = useQuery(LIST_USER_ROLE_MAPPINGS, {
     fetchPolicy: 'cache-and-network',
   });
-  const members: OrganizationMember[] = data?.organizationMembers || [];
+  const mappings: UserRoleMapping[] = data?.userRoleMappings || [];
+  const users: User[] = data?.users || [];
   const roles: Role[] = data?.roles || [];
 
-  const [updateMemberRole, updateState] = useMutation(UPDATE_MEMBER_ROLE, {
+  const mutationOptions = {
     onError: (error) => message.error(error.message),
-  });
+  };
+  const [assignRole, assignRoleState] = useMutation(
+    ASSIGN_ROLE_TO_USER,
+    mutationOptions,
+  );
+  const [updateUserRoles, updateUserRolesState] = useMutation(
+    UPDATE_USER_ROLES,
+    mutationOptions,
+  );
+  const [removeRole, removeRoleState] = useMutation(
+    REMOVE_ROLE_FROM_USER,
+    mutationOptions,
+  );
 
-  const submitAssignment = async (
-    roleId: number,
-    member: OrganizationMember,
-  ) => {
-    await updateMemberRole({
-      variables: { data: { memberId: member.id, roleId } },
-    });
-    message.success('Role assignment updated.');
+  const closeModal = () => setModalState({ visible: false });
+
+  const submitAssignment = async (values: any, user?: User) => {
+    if (user) {
+      await updateUserRoles({
+        variables: { data: { userId: user.id, roleIds: values.roleIds || [] } },
+      });
+      message.success('Successfully updated role assignment.');
+    } else {
+      await assignRole({
+        variables: {
+          data: { userId: values.userId, roleId: values.roleId },
+        },
+      });
+      message.success('Successfully assigned role.');
+    }
     await refetch();
   };
 
-  const columns: TableColumnsType<OrganizationMember> = [
+  const removeAssignment = async (mapping: UserRoleMapping) => {
+    await removeRole({
+      variables: { data: { userId: mapping.userId, roleId: mapping.roleId } },
+    });
+    message.success('Successfully removed role assignment.');
+    await refetch();
+  };
+
+  const columns: TableColumnsType<UserRoleMapping> = [
     {
-      title: 'Member',
+      title: 'User',
       dataIndex: 'user',
-      render: (_, record) => (
+      render: (user: User) => (
         <div>
-          <div className="text-medium">{record.user.name}</div>
-          <Text className="gray-7">{record.user.email}</Text>
+          <div className="text-medium">{user.name}</div>
+          <Text className="gray-7">{user.email}</Text>
         </div>
       ),
     },
     {
       title: 'Role',
       dataIndex: 'role',
-      width: 180,
       render: (role: Role) => <RoleTags roles={[role]} />,
     },
     {
-      title: 'Updated',
-      dataIndex: 'updatedAt',
+      title: 'Assigned',
+      dataIndex: 'createdAt',
       width: 180,
       render: (value) => (
         <span className="gray-7">{getAbsoluteTime(value)}</span>
@@ -141,16 +214,28 @@ export default function UserRoleAssignment() {
     },
     {
       title: 'Actions',
-      width: 160,
+      width: 220,
       align: 'center',
       render: (_, record) => (
-        <Button
-          type="text"
-          size="small"
-          onClick={() => setEditingMember(record)}
-        >
-          <EditOutlined /> Update role
-        </Button>
+        <>
+          <Button
+            type="text"
+            size="small"
+            onClick={() => setModalState({ visible: true, user: record.user })}
+          >
+            <EditOutlined /> Update user roles
+          </Button>
+          <Popconfirm
+            title="Remove this role assignment?"
+            okText="Remove"
+            okButtonProps={{ danger: true }}
+            onConfirm={() => removeAssignment(record)}
+          >
+            <Button type="text" size="small" danger>
+              <DeleteOutlined /> Remove
+            </Button>
+          </Popconfirm>
+        </>
       ),
     },
   ];
@@ -164,21 +249,30 @@ export default function UserRoleAssignment() {
             User Role Assignment
           </>
         }
-        description="Assign each organization member to one foundation role."
+        description="Assign roles to users and maintain role mappings for the RBAC foundation."
+        titleExtra={
+          <Button
+            type="primary"
+            onClick={() => setModalState({ visible: true })}
+          >
+            Assign role
+          </Button>
+        }
       >
         <Table
           className="ant-table-has-header"
-          dataSource={members}
+          dataSource={mappings}
           columns={columns}
-          loading={loading}
+          loading={loading || removeRoleState.loading}
           rowKey="id"
           pagination={{ pageSize: 10, hideOnSinglePage: true, size: 'small' }}
         />
         <AssignmentModal
-          member={editingMember}
+          users={users}
           roles={roles}
-          loading={updateState.loading}
-          onClose={() => setEditingMember(undefined)}
+          state={modalState}
+          loading={assignRoleState.loading || updateUserRolesState.loading}
+          onClose={closeModal}
           onSubmit={submitAssignment}
         />
       </PageLayout>

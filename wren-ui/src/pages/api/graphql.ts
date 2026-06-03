@@ -5,7 +5,7 @@ import { typeDefs } from '@server';
 import resolvers from '@server/resolvers';
 import { IContext } from '@server/types';
 import { GraphQLError } from 'graphql';
-import { AUTH_COOKIE_NAME, getCookie, getLogger } from '@server/utils';
+import { getLogger } from '@server/utils';
 import { getConfig } from '@server/config';
 import { ModelService } from '@server/services/modelService';
 import {
@@ -50,10 +50,6 @@ const bootstrapServer = async () => {
     roleRepository,
     userRepository,
     userRoleRepository,
-    organizationRepository,
-    organizationMemberRepository,
-    memberInvitationRepository,
-    authSessionRepository,
     // adaptors
     wrenEngineAdaptor,
     ibisAdaptor,
@@ -133,10 +129,7 @@ const bootstrapServer = async () => {
       return defaultApolloErrorHandler(error);
     },
     introspection: process.env.NODE_ENV !== 'production',
-    context: async ({ req }): Promise<IContext> => {
-      const token = getCookie(req, AUTH_COOKIE_NAME);
-      const currentUser = await rbacService.getSession(token);
-      return {
+    context: (): IContext => ({
         config: serverConfig,
         telemetry,
         // adaptor
@@ -154,7 +147,6 @@ const bootstrapServer = async () => {
         sqlPairService,
         instructionService,
         rbacService,
-        currentUser,
         // repository
         projectRepository,
         modelRepository,
@@ -174,16 +166,11 @@ const bootstrapServer = async () => {
         roleRepository,
         userRepository,
         userRoleRepository,
-        organizationRepository,
-        organizationMemberRepository,
-        memberInvitationRepository,
-        authSessionRepository,
         // background trackers
         projectRecommendQuestionBackgroundTracker,
         threadRecommendQuestionBackgroundTracker,
         dashboardCacheBackgroundTracker,
-      };
-    },
+    }),
   });
   await apolloServer.start();
   return apolloServer;

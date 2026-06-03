@@ -1,7 +1,5 @@
 export enum Path {
   Home = '/home',
-  Login = '/login',
-  AcceptInvitation = '/accept-invitation',
   HomeDashboard = '/home/dashboard',
   Thread = '/home/[id]',
   Modeling = '/modeling',

@@ -33,7 +33,7 @@ export default function Administration() {
     {
       label: (
         <Link style={linkStyle} href={Path.AdministrationUsers}>
-          Member Management
+          User Management
         </Link>
       ),
       icon: <TeamOutlined />,

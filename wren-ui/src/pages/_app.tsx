@@ -7,7 +7,6 @@ import { GlobalConfigProvider } from '@/hooks/useGlobalConfig';
 import { PostHogProvider } from 'posthog-js/react';
 import { ApolloProvider } from '@apollo/client';
 import { defaultIndicator } from '@/components/PageLoading';
-import { AuthGate, AuthProvider } from '@/hooks/useAuth';
 
 require('../styles/index.less');
 
@@ -22,15 +21,11 @@ function App({ Component, pageProps }: AppProps) {
       </Head>
       <GlobalConfigProvider>
         <ApolloProvider client={apolloClient}>
-          <AuthProvider>
-            <PostHogProvider client={posthog}>
-              <AuthGate>
-                <main className="app">
-                  <Component {...pageProps} />
-                </main>
-              </AuthGate>
-            </PostHogProvider>
-          </AuthProvider>
+          <PostHogProvider client={posthog}>
+            <main className="app">
+              <Component {...pageProps} />
+            </main>
+          </PostHogProvider>
         </ApolloProvider>
       </GlobalConfigProvider>
     </>

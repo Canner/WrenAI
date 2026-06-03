@@ -23,68 +23,13 @@ export const USER_FIELDS = gql`
   }
 `;
 
-export const ORGANIZATION_FIELDS = gql`
-  fragment OrganizationFields on Organization {
-    id
-    name
-    slug
-    isActive
-    createdAt
-    updatedAt
-  }
-`;
-
-export const MEMBER_FIELDS = gql`
-  fragment MemberFields on OrganizationMember {
-    id
-    organizationId
-    userId
-    roleId
-    status
-    joinedAt
-    createdAt
-    updatedAt
-    user {
-      ...UserFields
-    }
-    role {
-      ...RoleFields
-    }
-    organization {
-      ...OrganizationFields
-    }
-  }
-`;
-
-export const INVITATION_FIELDS = gql`
-  fragment InvitationFields on MemberInvitation {
-    id
-    organizationId
-    roleId
-    email
-    name
-    token
-    status
-    expiresAt
-    acceptedAt
-    createdAt
-    updatedAt
-    role {
-      ...RoleFields
-    }
-    organization {
-      ...OrganizationFields
-    }
-  }
-`;
-
 export const LIST_RBAC_USERS = gql`
   query RbacUsers {
-    organizationMembers {
-      ...MemberFields
-    }
-    memberInvitations {
-      ...InvitationFields
+    users {
+      ...UserFields
+      roles {
+        ...RoleFields
+      }
     }
     roles {
       ...RoleFields
@@ -93,34 +38,48 @@ export const LIST_RBAC_USERS = gql`
 
   ${USER_FIELDS}
   ${ROLE_FIELDS}
-  ${ORGANIZATION_FIELDS}
-  ${MEMBER_FIELDS}
-  ${INVITATION_FIELDS}
 `;
 
 export const LIST_RBAC_ROLES = gql`
   query RbacRoles {
     roles {
       ...RoleFields
+      users {
+        ...UserFields
+      }
     }
-    organizationMembers {
-      ...MemberFields
+    users {
+      ...UserFields
     }
   }
 
   ${ROLE_FIELDS}
   ${USER_FIELDS}
-  ${ORGANIZATION_FIELDS}
-  ${MEMBER_FIELDS}
 `;
 
 export const LIST_USER_ROLE_MAPPINGS = gql`
   query UserRoleMappings {
-    organizationMembers {
-      ...MemberFields
+    userRoleMappings {
+      id
+      userId
+      roleId
+      createdAt
+      updatedAt
+      user {
+        ...UserFields
+        roles {
+          ...RoleFields
+        }
+      }
+      role {
+        ...RoleFields
+      }
     }
-    memberInvitations {
-      ...InvitationFields
+    users {
+      ...UserFields
+      roles {
+        ...RoleFields
+      }
     }
     roles {
       ...RoleFields
@@ -129,9 +88,6 @@ export const LIST_USER_ROLE_MAPPINGS = gql`
 
   ${USER_FIELDS}
   ${ROLE_FIELDS}
-  ${ORGANIZATION_FIELDS}
-  ${MEMBER_FIELDS}
-  ${INVITATION_FIELDS}
 `;
 
 export const CREATE_ROLE = gql`
@@ -210,42 +166,4 @@ export const REMOVE_ROLE_FROM_USER = gql`
   mutation RemoveRoleFromUser($data: UserRoleInput!) {
     removeRoleFromUser(data: $data)
   }
-`;
-
-export const INVITE_MEMBER = gql`
-  mutation InviteMember($data: InviteMemberInput!) {
-    inviteMember(data: $data) {
-      ...InvitationFields
-    }
-  }
-
-  ${ROLE_FIELDS}
-  ${ORGANIZATION_FIELDS}
-  ${INVITATION_FIELDS}
-`;
-
-export const UPDATE_MEMBER = gql`
-  mutation UpdateMember($data: UpdateMemberInput!) {
-    updateMember(data: $data) {
-      ...MemberFields
-    }
-  }
-
-  ${USER_FIELDS}
-  ${ROLE_FIELDS}
-  ${ORGANIZATION_FIELDS}
-  ${MEMBER_FIELDS}
-`;
-
-export const UPDATE_MEMBER_ROLE = gql`
-  mutation UpdateMemberRole($data: UpdateMemberRoleInput!) {
-    updateMemberRole(data: $data) {
-      ...MemberFields
-    }
-  }
-
-  ${USER_FIELDS}
-  ${ROLE_FIELDS}
-  ${ORGANIZATION_FIELDS}
-  ${MEMBER_FIELDS}
 `;
