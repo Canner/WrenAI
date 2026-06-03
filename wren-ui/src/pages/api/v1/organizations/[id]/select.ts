@@ -15,8 +15,11 @@ const logger = getLogger('API_SELECT_ORGANIZATION');
 logger.level = 'debug';
 
 const getOrganizationService = () => {
-  const { components, initComponents } = require('@/common');
-  const componentGraph = components ?? initComponents();
+  const { components } = require('@/common');
+  const componentGraph = components ?? globalThis.__wrenComponents;
+  if (!componentGraph) {
+    throw new Error('Components are not initialized');
+  }
   return componentGraph.organizationService;
 };
 
