@@ -32,6 +32,27 @@ const StyledHeader = styled(Header)`
   padding: 10px 16px;
 `;
 
+const HeaderLeft = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 48px;
+`;
+
+const HeaderCenter = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-width: 0;
+`;
+
+const HeaderRight = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 120px;
+`;
+
 export default function HeaderBar() {
   const router = useRouter();
   const { pathname } = router;
@@ -44,7 +65,7 @@ export default function HeaderBar() {
         className="d-flex justify-space-between align-center"
         style={{ marginTop: -2 }}
       >
-        <Space size={[48, 0]}>
+        <HeaderLeft>
           <LogoBar />
           {showNav && (
             <Space size={[16, 0]}>
@@ -90,13 +111,9 @@ export default function HeaderBar() {
               </StyledButton>
             </Space>
           )}
-        </Space>
-        <Space size={[16, 0]}>
-          <OrganizationSwitcher />
-          {isModeling && (
-            <Deploy />
-          )}
-        </Space>
+        </HeaderLeft>
+        <HeaderCenter>{showNav && <OrganizationSwitcher />}</HeaderCenter>
+        <HeaderRight>{isModeling && <Deploy />}</HeaderRight>
       </div>
     </StyledHeader>
   );
