@@ -22,6 +22,10 @@ import {
   RoleRepository,
   UserRepository,
   UserRoleRepository,
+  OrganizationRepository,
+  OrganizationMemberRepository,
+  MemberInvitationRepository,
+  AuthSessionRepository,
 } from '@server/repositories';
 import {
   WrenEngineAdaptor,
@@ -157,6 +161,10 @@ export const initComponents = () => {
   const roleRepository = new RoleRepository(knex);
   const userRepository = new UserRepository(knex);
   const userRoleRepository = new UserRoleRepository(knex);
+  const organizationRepository = new OrganizationRepository(knex);
+  const organizationMemberRepository = new OrganizationMemberRepository(knex);
+  const memberInvitationRepository = new MemberInvitationRepository(knex);
+  const authSessionRepository = new AuthSessionRepository(knex);
 
   // adaptors
   const wrenEngineAdaptor = new WrenEngineAdaptor({
@@ -266,6 +274,10 @@ export const initComponents = () => {
     roleRepository,
     userRepository,
     userRoleRepository,
+    organizationRepository,
+    organizationMemberRepository,
+    memberInvitationRepository,
+    authSessionRepository,
   });
 
   const dashboardCacheBackgroundTracker = new DashboardCacheBackgroundTracker({
@@ -303,6 +315,10 @@ export const initComponents = () => {
     roleRepository,
     userRepository,
     userRoleRepository,
+    organizationRepository,
+    organizationMemberRepository,
+    memberInvitationRepository,
+    authSessionRepository,
 
     // adaptors
     wrenEngineAdaptor,

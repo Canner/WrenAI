@@ -1126,6 +1126,7 @@ export const typeDefs = gql`
     externalId: String
     identityProvider: String
     isActive: Boolean!
+    lastLoginAt: String
     roles: [Role!]!
     createdAt: String!
     updatedAt: String!
@@ -1149,6 +1150,56 @@ export const typeDefs = gql`
     updatedAt: String!
   }
 
+  type Organization {
+    id: Int!
+    name: String!
+    slug: String!
+    externalId: String
+    identityProvider: String
+    isActive: Boolean!
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  type OrganizationMember {
+    id: Int!
+    organizationId: Int!
+    userId: Int!
+    roleId: Int!
+    status: String!
+    invitedByMemberId: Int
+    joinedAt: String
+    organization: Organization!
+    user: User!
+    role: Role!
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  type MemberInvitation {
+    id: Int!
+    organizationId: Int!
+    roleId: Int!
+    email: String!
+    name: String
+    token: String!
+    status: String!
+    invitedByMemberId: Int
+    expiresAt: String!
+    acceptedAt: String
+    organization: Organization!
+    role: Role!
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  type CurrentSession {
+    user: User!
+    member: OrganizationMember!
+    organization: Organization!
+    role: Role!
+  }
+
   input RoleWhereInput {
     id: Int!
   }
@@ -1170,6 +1221,7 @@ export const typeDefs = gql`
   input CreateUserInput {
     name: String!
     email: String!
+    password: String
     externalId: String
     identityProvider: String
     isActive: Boolean
@@ -1192,6 +1244,25 @@ export const typeDefs = gql`
   input UpdateUserRolesInput {
     userId: Int!
     roleIds: [Int!]!
+  }
+
+  input InviteMemberInput {
+    organizationId: Int
+    email: String!
+    name: String
+    roleId: Int!
+  }
+
+  input UpdateMemberInput {
+    id: Int!
+    name: String
+    roleId: Int
+    status: String
+  }
+
+  input UpdateMemberRoleInput {
+    memberId: Int!
+    roleId: Int!
   }
 
   # Query and Mutation
@@ -1253,6 +1324,11 @@ export const typeDefs = gql`
     ): ApiHistoryPaginatedResponse!
 
     # Administration / RBAC
+    bootstrapStatus: JSON!
+    currentSession: CurrentSession
+    organizations: [Organization!]!
+    organizationMembers: [OrganizationMember!]!
+    memberInvitations: [MemberInvitation!]!
     roles: [Role!]!
     users: [User!]!
     userRoleMappings: [UserRoleMapping!]!
@@ -1410,5 +1486,8 @@ export const typeDefs = gql`
     assignRoleToUser(data: UserRoleInput!): UserRole!
     updateUserRoles(data: UpdateUserRolesInput!): User!
     removeRoleFromUser(data: UserRoleInput!): Boolean!
+    inviteMember(data: InviteMemberInput!): MemberInvitation!
+    updateMember(data: UpdateMemberInput!): OrganizationMember!
+    updateMemberRole(data: UpdateMemberRoleInput!): OrganizationMember!
   }
 `;

@@ -5,7 +5,7 @@ import { typeDefs } from '@server';
 import resolvers from '@server/resolvers';
 import { IContext } from '@server/types';
 import { GraphQLError } from 'graphql';
-import { getLogger } from '@server/utils';
+import { AUTH_COOKIE_NAME, getCookie, getLogger } from '@server/utils';
 import { getConfig } from '@server/config';
 import { ModelService } from '@server/services/modelService';
 import {
@@ -50,6 +50,10 @@ const bootstrapServer = async () => {
     roleRepository,
     userRepository,
     userRoleRepository,
+    organizationRepository,
+    organizationMemberRepository,
+    memberInvitationRepository,
+    authSessionRepository,
     // adaptors
     wrenEngineAdaptor,
     ibisAdaptor,
@@ -129,48 +133,57 @@ const bootstrapServer = async () => {
       return defaultApolloErrorHandler(error);
     },
     introspection: process.env.NODE_ENV !== 'production',
-    context: (): IContext => ({
-      config: serverConfig,
-      telemetry,
-      // adaptor
-      wrenEngineAdaptor,
-      ibisServerAdaptor: ibisAdaptor,
-      wrenAIAdaptor,
-      // services
-      projectService,
-      modelService,
-      mdlService,
-      deployService,
-      askingService,
-      queryService,
-      dashboardService,
-      sqlPairService,
-      instructionService,
-      rbacService,
-      // repository
-      projectRepository,
-      modelRepository,
-      modelColumnRepository,
-      modelNestedColumnRepository,
-      relationRepository,
-      viewRepository,
-      deployRepository: deployLogRepository,
-      schemaChangeRepository,
-      learningRepository,
-      dashboardRepository,
-      dashboardItemRepository,
-      sqlPairRepository,
-      instructionRepository,
-      apiHistoryRepository,
-      dashboardItemRefreshJobRepository,
-      roleRepository,
-      userRepository,
-      userRoleRepository,
-      // background trackers
-      projectRecommendQuestionBackgroundTracker,
-      threadRecommendQuestionBackgroundTracker,
-      dashboardCacheBackgroundTracker,
-    }),
+    context: async ({ req }): Promise<IContext> => {
+      const token = getCookie(req, AUTH_COOKIE_NAME);
+      const currentUser = await rbacService.getSession(token);
+      return {
+        config: serverConfig,
+        telemetry,
+        // adaptor
+        wrenEngineAdaptor,
+        ibisServerAdaptor: ibisAdaptor,
+        wrenAIAdaptor,
+        // services
+        projectService,
+        modelService,
+        mdlService,
+        deployService,
+        askingService,
+        queryService,
+        dashboardService,
+        sqlPairService,
+        instructionService,
+        rbacService,
+        currentUser,
+        // repository
+        projectRepository,
+        modelRepository,
+        modelColumnRepository,
+        modelNestedColumnRepository,
+        relationRepository,
+        viewRepository,
+        deployRepository: deployLogRepository,
+        schemaChangeRepository,
+        learningRepository,
+        dashboardRepository,
+        dashboardItemRepository,
+        sqlPairRepository,
+        instructionRepository,
+        apiHistoryRepository,
+        dashboardItemRefreshJobRepository,
+        roleRepository,
+        userRepository,
+        userRoleRepository,
+        organizationRepository,
+        organizationMemberRepository,
+        memberInvitationRepository,
+        authSessionRepository,
+        // background trackers
+        projectRecommendQuestionBackgroundTracker,
+        threadRecommendQuestionBackgroundTracker,
+        dashboardCacheBackgroundTracker,
+      };
+    },
   });
   await apolloServer.start();
   return apolloServer;

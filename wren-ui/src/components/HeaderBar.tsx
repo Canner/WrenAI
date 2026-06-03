@@ -1,9 +1,10 @@
 import { useRouter } from 'next/router';
-import { Button, Layout, Space } from 'antd';
+import { Button, Dropdown, Layout, Menu, Space } from 'antd';
 import styled from 'styled-components';
 import LogoBar from '@/components/LogoBar';
 import { Path } from '@/utils/enum';
 import Deploy from '@/components/deploy/Deploy';
+import { useAuth } from '@/hooks/useAuth';
 
 const { Header } = Layout;
 
@@ -33,9 +34,17 @@ const StyledHeader = styled(Header)`
 
 export default function HeaderBar() {
   const router = useRouter();
+  const auth = useAuth();
   const { pathname } = router;
   const showNav = !pathname.startsWith(Path.Onboarding);
   const isModeling = pathname.startsWith(Path.Modeling);
+  const roleName = auth.role?.name;
+  const isAdmin = roleName === 'Admin';
+  const isManager = roleName === 'Manager';
+  const isAnalyst = roleName === 'Analyst';
+  const canModel = isAdmin || isManager;
+  const canUseKnowledge = isAdmin || isManager || isAnalyst;
+  const canUseApi = isAdmin || isManager;
 
   return (
     <StyledHeader>
@@ -60,6 +69,7 @@ export default function HeaderBar() {
                 size="small"
                 $isHighlight={pathname.startsWith(Path.Modeling)}
                 onClick={() => router.push(Path.Modeling)}
+                style={{ display: canModel ? undefined : 'none' }}
               >
                 Modeling
               </StyledButton>
@@ -68,6 +78,7 @@ export default function HeaderBar() {
                 size="small"
                 $isHighlight={pathname.startsWith(Path.Knowledge)}
                 onClick={() => router.push(Path.KnowledgeQuestionSQLPairs)}
+                style={{ display: canUseKnowledge ? undefined : 'none' }}
               >
                 Knowledge
               </StyledButton>
@@ -76,6 +87,7 @@ export default function HeaderBar() {
                 size="small"
                 $isHighlight={pathname.startsWith(Path.APIManagement)}
                 onClick={() => router.push(Path.APIManagementHistory)}
+                style={{ display: canUseApi ? undefined : 'none' }}
               >
                 API
               </StyledButton>
@@ -84,17 +96,35 @@ export default function HeaderBar() {
                 size="small"
                 $isHighlight={pathname.startsWith(Path.Administration)}
                 onClick={() => router.push(Path.AdministrationUsers)}
+                style={{ display: isAdmin ? undefined : 'none' }}
               >
                 Admin
               </StyledButton>
             </Space>
           )}
         </Space>
-        {isModeling && (
-          <Space size={[16, 0]}>
-            <Deploy />
-          </Space>
-        )}
+        <Space size={[16, 0]}>
+          {isModeling && canModel && <Deploy />}
+          {auth.authenticated && (
+            <Dropdown
+              overlay={
+                <Menu>
+                  <Menu.Item key="role" disabled>
+                    {auth.user?.email} - {roleName}
+                  </Menu.Item>
+                  <Menu.Item key="logout" onClick={() => auth.logout()}>
+                    Sign out
+                  </Menu.Item>
+                </Menu>
+              }
+              trigger={['click']}
+            >
+              <Button shape="round" size="small">
+                {auth.user?.name || auth.user?.email}
+              </Button>
+            </Dropdown>
+          )}
+        </Space>
       </div>
     </StyledHeader>
   );
