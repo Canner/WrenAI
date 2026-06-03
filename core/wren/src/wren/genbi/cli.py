@@ -117,3 +117,84 @@ def build(
         data_source=config.get("data_source", "unknown"),
     )
     typer.echo(instruction)
+
+
+def _discover(path: str | None):
+    from wren.context import discover_project_path  # noqa: PLC0415
+
+    try:
+        return discover_project_path(path)
+    except SystemExit as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1)
+
+
+@genbi_app.command()
+def register(
+    name: Annotated[str, typer.Argument(help="App name under apps/<name>/.")],
+    data_mode: Annotated[
+        str,
+        typer.Option("--data-mode", help="snapshot (bundled data) or live."),
+    ] = "snapshot",
+    path: ProjectPathOpt = None,
+) -> None:
+    """Record an agent-authored app in the project index (.wren/apps.yml)."""
+    from wren.genbi.composer import DATA_MODES  # noqa: PLC0415
+    from wren.genbi.index import register_app  # noqa: PLC0415
+
+    project_path = _discover(path)
+
+    if data_mode not in DATA_MODES:
+        typer.echo(
+            f"Error: invalid --data-mode {data_mode!r}. Expected one of: "
+            f"{', '.join(DATA_MODES)}.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    app_dir = project_path / "apps" / name
+    if not app_dir.is_dir():
+        typer.echo(
+            f"Error: no app found at {app_dir}.\n"
+            "  Write the app there first (see `wren genbi build`).",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    entry = register_app(project_path, name, data_mode=data_mode)
+    typer.echo(f"Registered {name} ({entry['data_mode']}, {entry['status']}).")
+
+
+@genbi_app.command(name="list")
+def list_apps(path: ProjectPathOpt = None) -> None:
+    """List registered apps with data mode, status, and deploy state."""
+    from wren.genbi.index import load_index  # noqa: PLC0415
+
+    project_path = _discover(path)
+    apps = load_index(project_path)["apps"]
+    if not apps:
+        typer.echo("No apps registered. See `wren genbi build` to create one.")
+        return
+
+    for name, entry in apps.items():
+        deploy = entry.get("deploy") or {}
+        suffix = f" → {deploy['last_url']}" if deploy.get("last_url") else ""
+        typer.echo(
+            f"{name}  [{entry.get('data_mode', '?')}, {entry.get('status', '?')}]"
+            f"{suffix}"
+        )
+
+
+@genbi_app.command()
+def remove(
+    name: Annotated[str, typer.Argument(help="Registered app name.")],
+    path: ProjectPathOpt = None,
+) -> None:
+    """Remove an app's entry from the project index."""
+    from wren.genbi.index import remove_app  # noqa: PLC0415
+
+    project_path = _discover(path)
+    if not remove_app(project_path, name):
+        typer.echo(f"Error: app {name!r} is not registered.", err=True)
+        raise typer.Exit(1)
+    typer.echo(f"Removed {name} from the index (files under apps/{name}/ kept).")

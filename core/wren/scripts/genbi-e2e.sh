@@ -103,6 +103,38 @@ OUT2="$WORK/build-stdin.out"
 echo "stdin prompt body" | $WREN genbi build myapp --prompt - -p "$PROJECT" > "$OUT2"
 assert_contains "$OUT2" "stdin prompt body" "prompt readable from stdin"
 
+# ════════════════════════════════════════════════════════════════════════════
+# Slice 02 — register / list / remove (.wren/apps.yml index)
+# ════════════════════════════════════════════════════════════════════════════
+echo "── slice 02: register / list / remove"
+
+mkdir -p "$PROJECT/apps/myapp"
+echo "<html></html>" > "$PROJECT/apps/myapp/index.html"
+
+$WREN genbi register myapp --data-mode snapshot -p "$PROJECT" > "$WORK/reg.out"
+if [ -f "$PROJECT/.wren/apps.yml" ]; then ok "register wrote .wren/apps.yml"; else fail "register wrote .wren/apps.yml"; fi
+assert_contains "$PROJECT/.wren/apps.yml" "myapp" "index contains the app"
+assert_contains "$PROJECT/.wren/apps.yml" "scaffolded" "status starts as scaffolded"
+
+OUT="$WORK/list.out"
+$WREN genbi list -p "$PROJECT" > "$OUT"
+assert_contains "$OUT" "myapp" "list shows the app"
+assert_contains "$OUT" "snapshot" "list shows the data mode"
+
+if $WREN genbi register ghost -p "$PROJECT" 2> "$WORK/ghost.err"; then
+  fail "register rejects a missing app dir"
+else
+  ok "register rejects a missing app dir"
+fi
+
+$WREN genbi remove myapp -p "$PROJECT" > /dev/null
+OUT="$WORK/list2.out"
+$WREN genbi list -p "$PROJECT" > "$OUT"
+assert_contains "$OUT" "No apps" "remove cleared the index"
+
+# re-register for later slices
+$WREN genbi register myapp --data-mode snapshot -p "$PROJECT" > /dev/null
+
 # ── Summary ─────────────────────────────────────────────────────────────────
 echo
 echo "passed: $PASS, failed: $FAIL"
