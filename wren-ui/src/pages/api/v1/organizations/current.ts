@@ -43,10 +43,28 @@ export default async function handler(
   const startTime = Date.now();
 
   try {
-    assertAllowedMethods(req, ['GET']);
+    assertAllowedMethods(req, ['GET', 'PUT']);
     const organizationService = getOrganizationService();
     const projectContext = await getCurrentProjectContext();
     const projectId = projectContext.id ?? 0;
+
+    if (req.method === 'PUT') {
+      const organization = await organizationService.updateCurrentOrganization(
+        req.body,
+      );
+      await respondWithSimple({
+        res,
+        statusCode: 200,
+        responsePayload: serializeOrganization(organization),
+        projectId,
+        apiType: ApiType.UPDATE_CURRENT_ORGANIZATION,
+        startTime,
+        requestPayload: req.body,
+        headers: req.headers as Record<string, string>,
+      });
+      return;
+    }
+
     const [currentOrganization, organizations, currentProjectName] =
       await Promise.all([
         organizationService.getCurrentOrganization(),
@@ -73,8 +91,11 @@ export default async function handler(
       error,
       res,
       projectId: (await getCurrentProjectContext()).id ?? 0,
-      apiType: ApiType.GET_CURRENT_ORGANIZATION,
-      requestPayload: {},
+      apiType:
+        req.method === 'PUT'
+          ? ApiType.UPDATE_CURRENT_ORGANIZATION
+          : ApiType.GET_CURRENT_ORGANIZATION,
+      requestPayload: req.method === 'PUT' ? req.body : {},
       headers: req.headers as Record<string, string>,
       startTime,
       logger,

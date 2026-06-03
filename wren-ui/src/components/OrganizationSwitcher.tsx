@@ -15,6 +15,9 @@ import {
 import styled from 'styled-components';
 import PlusOutlined from '@ant-design/icons/PlusOutlined';
 import DownOutlined from '@ant-design/icons/DownOutlined';
+import SettingOutlined from '@ant-design/icons/SettingOutlined';
+import { useRouter } from 'next/router';
+import { Path } from '@/utils/enum';
 
 interface OrganizationRecord {
   id: number;
@@ -90,6 +93,11 @@ const OverlayMenu = styled(Menu)`
   }
 `;
 
+const OverlayFooter = styled.div`
+  border-top: 1px solid var(--gray-4);
+  padding: 8px;
+`;
+
 const MenuRow = styled.button<{ $active?: boolean }>`
   width: 100%;
   display: flex;
@@ -116,6 +124,7 @@ const getBadgeText = (name?: string) =>
     .toUpperCase();
 
 export default function OrganizationSwitcher() {
+  const router = useRouter();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -175,6 +184,7 @@ export default function OrganizationSwitcher() {
       setVisible(false);
       form.resetFields();
       await loadOrganizations();
+      await router.push(Path.OrganizationGeneral);
     } catch (error: any) {
       if (error?.errorFields) {
         return;
@@ -238,6 +248,18 @@ export default function OrganizationSwitcher() {
           </Menu.Item>
         ))}
       </OverlayMenu>
+      {currentOrganization && (
+        <OverlayFooter>
+          <Button
+            type="text"
+            block
+            icon={<SettingOutlined />}
+            onClick={() => void router.push(Path.OrganizationGeneral)}
+          >
+            Organization settings
+          </Button>
+        </OverlayFooter>
+      )}
     </Overlay>
   );
 

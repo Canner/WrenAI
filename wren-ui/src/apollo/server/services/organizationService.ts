@@ -10,11 +10,16 @@ export interface CreateOrganizationData {
   description?: string;
 }
 
+export interface UpdateOrganizationData {
+  name: string;
+}
+
 export interface IOrganizationService {
   listOrganizations: () => Promise<Organization[]>;
   getCurrentOrganization: () => Promise<Organization | null>;
   createOrganization: (data: CreateOrganizationData) => Promise<Organization>;
   selectCurrentOrganization: (id: number) => Promise<Organization>;
+  updateCurrentOrganization: (data: UpdateOrganizationData) => Promise<Organization>;
 }
 
 const NAME_MAX_LENGTH = 64;
@@ -79,6 +84,24 @@ export const validateOrganizationPayload = (
   };
 };
 
+export const validateOrganizationUpdatePayload = (
+  data: UpdateOrganizationData,
+): UpdateOrganizationData => {
+  const name = normalizeOrganizationName(data.name || '');
+
+  if (!name) {
+    throw new ApiError('Organization name is required', 400);
+  }
+  if (name.length > NAME_MAX_LENGTH) {
+    throw new ApiError(
+      `Organization name is too long (max ${NAME_MAX_LENGTH} characters)`,
+      400,
+    );
+  }
+
+  return { name };
+};
+
 export class OrganizationService implements IOrganizationService {
   private organizationRepository: IOrganizationRepository;
 
@@ -138,5 +161,18 @@ export class OrganizationService implements IOrganizationService {
     }
 
     return await this.organizationRepository.setCurrentOrganization(id);
+  }
+
+  public async updateCurrentOrganization(data: UpdateOrganizationData) {
+    const currentOrganization =
+      await this.organizationRepository.getCurrentOrganization();
+    if (!currentOrganization) {
+      throw new ApiError('Current organization not found', 404);
+    }
+
+    const payload = validateOrganizationUpdatePayload(data);
+    return await this.organizationRepository.updateOne(currentOrganization.id, {
+      name: payload.name,
+    });
   }
 }
