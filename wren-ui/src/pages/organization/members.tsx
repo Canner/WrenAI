@@ -1,14 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Avatar,
   Button,
   Form,
   Input,
   Modal,
-  Select,
-  Table,
-  TableColumnsType,
-  Typography,
   message,
 } from 'antd';
 import styled from 'styled-components';
@@ -55,6 +50,28 @@ const MembersCard = styled.div`
   overflow: hidden;
 `;
 
+const MembersHeaderRow = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 16px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--gray-4);
+  font-weight: 600;
+  color: var(--gray-8);
+`;
+
+const MembersRow = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 16px;
+  padding: 16px 20px;
+  align-items: center;
+
+  &:not(:last-child) {
+    border-bottom: 1px solid var(--gray-4);
+  }
+`;
+
 const ProjectsBox = styled.div`
   border: 1px solid var(--gray-4);
   border-radius: 4px;
@@ -86,15 +103,52 @@ const ProjectCheckbox = styled.input`
   cursor: pointer;
 `;
 
+const NativeSelect = styled.select`
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--gray-4);
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: white;
+
+  &:disabled {
+    background: var(--gray-3);
+    color: var(--gray-6);
+    cursor: not-allowed;
+  }
+`;
+
+const ModalLabel = styled.div`
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--gray-8);
+`;
+
 const NameCell = styled.div`
   display: flex;
   align-items: center;
   gap: 12px;
 `;
 
+const InitialsBadge = styled.div`
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #c27ba0;
+  color: white;
+  font-weight: 600;
+`;
+
 const MemberName = styled.div`
   display: flex;
   flex-direction: column;
+`;
+
+const MemberEmail = styled.span`
+  color: var(--gray-7);
 `;
 
 const getInitials = (name: string) =>
@@ -273,42 +327,6 @@ export default function OrganizationMembersPage() {
     }
   };
 
-  const columns: TableColumnsType<MemberRecord> = [
-    {
-      title: 'Name',
-      dataIndex: 'name',
-      render: (_value, record: MemberRecord) => (
-        <NameCell>
-          <Avatar style={{ backgroundColor: '#c27ba0' }}>
-            {getInitials(record.name)}
-          </Avatar>
-          <MemberName>
-            <span className="text-medium">{record.name}</span>
-            <Typography.Text className="gray-7">
-              {record.email}
-            </Typography.Text>
-          </MemberName>
-        </NameCell>
-      ),
-    },
-    {
-      title: 'Role',
-      dataIndex: 'organizationRole',
-      width: 220,
-      render: (value: OrganizationRole, record: MemberRecord) => (
-        <Select
-          value={value}
-          style={{ width: 140 }}
-          loading={updatingMemberId === record.id}
-          options={ROLE_OPTIONS.map((role) => ({ label: role, value: role }))}
-          onChange={(nextValue) =>
-            void updateMemberRole(record.id, nextValue as OrganizationRole)
-          }
-        />
-      ),
-    },
-  ];
-
   return (
     <OrganizationSettingsLayout
       section="members"
@@ -321,16 +339,39 @@ export default function OrganizationMembersPage() {
     >
       <LoadingWrapper loading={loading}>
         <div>
-          <Typography.Title level={4} className="mt-4 mb-0 gray-8">
-            Organization members
-          </Typography.Title>
+          <h4 className="mt-4 mb-0 gray-8">Organization members</h4>
           <MembersCard>
-            <Table
-              rowKey="id"
-              columns={columns}
-              dataSource={members}
-              pagination={false}
-            />
+            <MembersHeaderRow>
+              <div>Name</div>
+              <div>Role</div>
+            </MembersHeaderRow>
+            {members.map((member) => (
+              <MembersRow key={member.id}>
+                <NameCell>
+                  <InitialsBadge>{getInitials(member.name)}</InitialsBadge>
+                  <MemberName>
+                    <span className="text-medium">{member.name}</span>
+                    <MemberEmail>{member.email}</MemberEmail>
+                  </MemberName>
+                </NameCell>
+                <NativeSelect
+                  value={member.organizationRole}
+                  disabled={updatingMemberId === member.id}
+                  onChange={(event) =>
+                    void updateMemberRole(
+                      member.id,
+                      event.target.value as OrganizationRole,
+                    )
+                  }
+                >
+                  {ROLE_OPTIONS.map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </MembersRow>
+            ))}
           </MembersCard>
         </div>
       </LoadingWrapper>
@@ -369,20 +410,21 @@ export default function OrganizationMembersPage() {
             name="organizationRole"
             rules={[{ required: true, message: 'Organization role is required' }]}
           >
-            <Select
-              options={ROLE_OPTIONS.map((role) => ({
-                label: role,
-                value: role,
-              }))}
-            />
+            <NativeSelect>
+              {ROLE_OPTIONS.map((role) => (
+                <option key={role} value={role}>
+                  {role}
+                </option>
+              ))}
+            </NativeSelect>
           </Form.Item>
 
           <Form.Item label="Select projects" required>
             <ProjectsBox>
               <ProjectsToolbar>
-                <Typography.Text className="gray-8">
+                <ModalLabel>
                   {Object.keys(projectSelections).length}/{projects.length} project(s)
-                </Typography.Text>
+                </ModalLabel>
                 <Form.Item name="projectSearch" className="mt-2 mb-3">
                   <Input placeholder="Search here" />
                 </Form.Item>
@@ -407,20 +449,22 @@ export default function OrganizationMembersPage() {
                       }
                     />
                     <div>{project.displayName}</div>
-                    <Select
+                    <NativeSelect
                       value={permission}
                       disabled={!checked}
-                      options={PROJECT_PERMISSION_OPTIONS.map((role) => ({
-                        label: role,
-                        value: role,
-                      }))}
-                      onChange={(value) =>
+                      onChange={(event) =>
                         updateProjectPermission(
                           project.id,
-                          value as ProjectPermissionRole,
+                          event.target.value as ProjectPermissionRole,
                         )
                       }
-                    />
+                    >
+                      {PROJECT_PERMISSION_OPTIONS.map((role) => (
+                        <option key={role} value={role}>
+                          {role}
+                        </option>
+                      ))}
+                    </NativeSelect>
                   </ProjectRow>
                 );
               })}
