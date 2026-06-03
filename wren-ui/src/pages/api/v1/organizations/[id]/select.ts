@@ -1,5 +1,4 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { components } from '@/common';
 import { ApiType } from '@server/repositories/apiHistoryRepository';
 import {
   handleApiError,
@@ -14,7 +13,11 @@ import {
 const logger = getLogger('API_SELECT_ORGANIZATION');
 logger.level = 'debug';
 
-const { organizationService } = components;
+const getOrganizationService = () => {
+  const { components, initComponents } = require('@/common');
+  const componentGraph = components ?? initComponents();
+  return componentGraph.organizationService;
+};
 
 export default async function handler(
   req: NextApiRequest,
@@ -24,6 +27,7 @@ export default async function handler(
 
   try {
     assertAllowedMethods(req, ['POST']);
+    const organizationService = getOrganizationService();
     const organizationId = parseOrganizationId(req.query.id);
     const organization =
       await organizationService.selectCurrentOrganization(organizationId);

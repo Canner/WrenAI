@@ -2,7 +2,6 @@ import { NextApiResponse } from 'next';
 import { v4 as uuidv4 } from 'uuid';
 import { ApiType, ApiHistory } from '@server/repositories/apiHistoryRepository';
 import * as Errors from '@server/utils/error';
-import { components } from '@/common';
 import {
   AskResult,
   AskResultStatus,
@@ -12,8 +11,13 @@ import {
   TextBasedAnswerStatus,
 } from '@/apollo/server/models/adaptor';
 
+const getComponentGraph = () => {
+  const { components, initComponents } = require('@/common');
+  return components ?? initComponents();
+};
+
 const getApiHistoryRepository = () => {
-  const repository = components?.apiHistoryRepository;
+  const repository = getComponentGraph().apiHistoryRepository;
   if (!repository) {
     throw new Error('API history repository is not initialized');
   }

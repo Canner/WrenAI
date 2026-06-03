@@ -1,8 +1,11 @@
 import { NextApiRequest } from 'next';
 import { ApiError } from '../utils/apiUtils';
-import { components } from '@/common';
 
-const { projectService } = components;
+const getProjectService = () => {
+  const { components, initComponents } = require('@/common');
+  const componentGraph = components ?? initComponents();
+  return componentGraph.projectService;
+};
 
 export const assertAllowedMethods = (
   req: NextApiRequest,
@@ -24,6 +27,7 @@ export const parseOrganizationId = (value: string | string[] | undefined) => {
 
 export const getCurrentProjectName = async () => {
   try {
+    const projectService = getProjectService();
     const project = await projectService.getCurrentProject();
     return project?.displayName || 'Default Project';
   } catch {

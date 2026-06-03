@@ -1,5 +1,4 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { components } from '@/common';
 import { ApiType } from '@server/repositories/apiHistoryRepository';
 import {
   handleApiError,
@@ -14,7 +13,11 @@ import {
 const logger = getLogger('API_CURRENT_ORGANIZATION');
 logger.level = 'debug';
 
-const { organizationService } = components;
+const getOrganizationService = () => {
+  const { components, initComponents } = require('@/common');
+  const componentGraph = components ?? initComponents();
+  return componentGraph.organizationService;
+};
 
 const serializeOrganization = (organization) =>
   organization
@@ -37,6 +40,7 @@ export default async function handler(
 
   try {
     assertAllowedMethods(req, ['GET']);
+    const organizationService = getOrganizationService();
     const [currentOrganization, organizations, currentProjectName] =
       await Promise.all([
         organizationService.getCurrentOrganization(),
