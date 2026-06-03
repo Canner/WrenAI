@@ -13,7 +13,7 @@ import {
   GeneralErrorCodes,
 } from '@/apollo/server/utils/error';
 import { TelemetryEvent } from '@/apollo/server/telemetry/telemetry';
-import { components } from '@/common';
+import { components, initComponents } from '@/common';
 
 const serverConfig = getConfig();
 const logger = getLogger('APOLLO');
@@ -28,6 +28,7 @@ export const config: PageConfig = {
 };
 
 const bootstrapServer = async () => {
+  const componentGraph = components ?? initComponents();
   const {
     telemetry,
 
@@ -70,7 +71,7 @@ const bootstrapServer = async () => {
     projectRecommendQuestionBackgroundTracker,
     threadRecommendQuestionBackgroundTracker,
     dashboardCacheBackgroundTracker,
-  } = components;
+  } = componentGraph;
 
   const modelService = new ModelService({
     projectService,
