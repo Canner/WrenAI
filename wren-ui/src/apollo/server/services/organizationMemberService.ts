@@ -107,12 +107,16 @@ export class OrganizationMemberService implements IOrganizationMemberService {
 
   public async listCurrentOrganizationMembers() {
     const organization = await this.getCurrentOrganizationOrThrow();
-    const [members, projects] = await Promise.all([
+    const [members, listedProjects] = await Promise.all([
       this.organizationMemberRepository.findMappingsByOrganizationId(
         organization.id,
       ),
       this.projectRepository.findAll({ order: 'id' }),
     ]);
+    const projects =
+      listedProjects.length > 0
+        ? listedProjects
+        : await this.getFallbackProjects();
     const invitations = await this.organizationInvitationRepository.findByOrganizationId(
       organization.id,
     );
@@ -578,6 +582,15 @@ export class OrganizationMemberService implements IOrganizationMemberService {
     const currentUserId = await this.getCurrentUserId(organizationId);
     if (currentUserId && currentUserId === userId) {
       throw new ApiError('You cannot modify your own organization role', 400);
+    }
+  }
+
+  private async getFallbackProjects() {
+    try {
+      const currentProject = await this.projectRepository.getCurrentProject();
+      return currentProject ? [currentProject] : [];
+    } catch {
+      return [];
     }
   }
 }

@@ -114,6 +114,12 @@ const ProjectHeader = styled(ProjectRow)`
   font-weight: 600;
 `;
 
+const EmptyProjectsRow = styled.div`
+  padding: 16px 12px;
+  border-top: 1px solid var(--gray-4);
+  color: var(--gray-7);
+`;
+
 const ProjectCheckbox = styled.input`
   width: 16px;
   height: 16px;
@@ -740,6 +746,13 @@ export default function OrganizationMembersPage() {
                   </ProjectRow>
                 );
               })}
+              {!filteredProjects.length && (
+                <EmptyProjectsRow>
+                  {projects.length
+                    ? 'No projects match your search.'
+                    : 'No projects are available for this organization yet.'}
+                </EmptyProjectsRow>
+              )}
             </ProjectsBox>
           </Form.Item>
         </Form>
