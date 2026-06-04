@@ -208,6 +208,7 @@ class DatabricksTokenConnectionInfo(BaseConnectionInfo):
         alias="serverHostname", examples=["dbc-xxx.cloud.databricks.com"]
     )
     http_path: str = Field(alias="httpPath", examples=["/sql/1.0/warehouses/xxx"])
+    catalog: str | None = Field(default=None, examples=["main"])
     access_token: SecretStr = Field(alias="accessToken", examples=["dapi..."])
 
 
@@ -215,6 +216,7 @@ class DatabricksServicePrincipalConnectionInfo(BaseConnectionInfo):
     databricks_type: Literal["service_principal"] = "service_principal"
     server_hostname: str = Field(alias="serverHostname")
     http_path: str = Field(alias="httpPath")
+    catalog: str | None = Field(default=None, examples=["main"])
     client_id: SecretStr = Field(alias="clientId")
     client_secret: SecretStr = Field(alias="clientSecret")
     azure_tenant_id: str | None = Field(alias="azureTenantId", default=None)
