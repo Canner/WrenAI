@@ -50,8 +50,8 @@ _EXCLUDED_SCHEMAS = frozenset({"information_schema", "pg_catalog"})
 @dataclass
 class Column:
     name: str
-    raw_type: str      # original DuckDB type
-    wren_type: str     # normalized via parse_type
+    raw_type: str  # original DuckDB type
+    wren_type: str  # normalized via parse_type
     is_nullable: bool
 
 
@@ -208,7 +208,10 @@ def detect_relationships(tables: list[Table]) -> list[Relationship]:
 
         for i in range(len(parts) - 1, 0, -1):
             candidate = "__".join(parts[:i])
-            if candidate in tables_by_schema.get(t.schema, set()) and candidate != t.name:
+            if (
+                candidate in tables_by_schema.get(t.schema, set())
+                and candidate != t.name
+            ):
                 parent_name = candidate
                 child_suffix = "__".join(parts[i:])
                 break
@@ -264,7 +267,11 @@ def generate_project_files(
         name_counts[t.name] = name_counts.get(t.name, 0) + 1
 
     def resolve_name(schema: str, table_name: str) -> str:
-        return f"{schema}__{table_name}" if name_counts.get(table_name, 0) > 1 else table_name
+        return (
+            f"{schema}__{table_name}"
+            if name_counts.get(table_name, 0) > 1
+            else table_name
+        )
 
     # -- wren_project.yml --
     project_config = {
@@ -376,9 +383,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Generate a Wren project from a dlt DuckDB file."
     )
-    parser.add_argument(
-        "--duckdb-path", required=True, help="Path to the .duckdb file"
-    )
+    parser.add_argument("--duckdb-path", required=True, help="Path to the .duckdb file")
     parser.add_argument(
         "--output-dir",
         default=".",
@@ -435,10 +440,10 @@ def main():
         write_project(files, output_dir, force=args.force)
         print(f"\nWren project written to {output_dir}/")
         print(f"  {len(tables)} models, {len(relationships)} relationships")
-        print(f"\nNext steps:")
+        print("\nNext steps:")
         print(f"  cd {output_dir}")
-        print(f"  wren context validate")
-        print(f"  wren context build")
+        print("  wren context validate")
+        print("  wren context build")
 
     finally:
         con.close()

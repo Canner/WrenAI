@@ -96,7 +96,9 @@ Requires `target/manifest.json` and `target/catalog.json`; run `dbt build` and `
 
 ---
 
-## `wren docs` — Connection Info Reference
+## `wren docs` — Connection Info
+
+### `wren docs connection-info <datasource>`
 
 Print the required and optional connection fields for a data source.
 
@@ -295,3 +297,74 @@ cat query.json | wren cube query --from -
 
 See the [Cube guide](../guides/cubes.md) for YAML structure and
 validation rules.
+
+---
+
+## `wren skills` — Agent Workflow Guides
+
+The CLI ships its own agent skill content. Use this on any AI client (the
+content is the same — content travels with the wheel, not the agent cache).
+
+### `wren skills list`
+
+List the available workflow guides.
+
+```bash
+wren skills list
+```
+
+### `wren skills get <name>`
+
+Print a skill's main guide to stdout. Five names ship today:
+`onboarding`, `usage`, `generate-mdl`, `dlt-connector`, `enrich-context`.
+
+```bash
+wren skills get onboarding              # set up Wren end-to-end
+wren skills get usage                   # day-to-day querying
+wren skills get generate-mdl            # MDL from a database schema
+wren skills get dlt-connector           # connect SaaS sources via dlt
+wren skills get enrich-context          # add business context (units, enums, cubes)
+```
+
+### `wren skills get <name> --full`
+
+Include the skill's reference docs inline (sorted, separated). For skills
+that have no `references/`, the output is identical to the non-`--full` form.
+
+### `wren skills get <name> --script <s>`
+
+Print a bundled script's source to stdout. Currently:
+
+```bash
+wren skills get dlt-connector --script introspect_dlt > introspect_dlt.py
+python introspect_dlt.py --duckdb-path ./pipeline.duckdb --output-dir ./project
+```
+
+---
+
+## `wren ask` — Prompt Shaping
+
+Wrap a natural-language question in one of two bundled templates and print
+the rendered prompt to stdout. **Does not execute any query** — it
+produces a prompt for an agent to consume.
+
+You must explicitly pick one mode (no default — silently changing a
+default would alter agent behavior across an upgrade).
+
+### `wren ask "<question>" --guided`
+
+For weaker LLMs. Prepends a strict task flow (`wren context show` →
+`wren memory recall` → write SQL → `wren dry-plan` → `wren query`).
+
+```bash
+wren ask "top 5 customers by revenue" --guided
+```
+
+### `wren ask "<question>" --direct`
+
+For stronger LLMs. Minimal wrapping; the agent decides which wren commands
+to run.
+
+```bash
+wren ask "monthly orders trend" --direct
+```
