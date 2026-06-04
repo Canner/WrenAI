@@ -26,7 +26,7 @@ const withInviteLinks = (
   baseUrl: string,
 ) => ({
   ...payload,
-  invitations: payload.invitations.map((invitation) => ({
+  invitations: (payload?.invitations || []).map((invitation) => ({
     ...invitation,
     inviteLink: `${baseUrl}/organization/invitations/${invitation.token}`,
   })),
