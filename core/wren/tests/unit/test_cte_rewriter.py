@@ -80,6 +80,23 @@ _MULTI_MODEL_MANIFEST = {
 }
 
 
+_VIEW_MANIFEST = {
+    "catalog": "wren",
+    "schema": "public",
+    "models": _MULTI_MODEL_MANIFEST["models"],
+    "relationships": _MULTI_MODEL_MANIFEST["relationships"],
+    "views": [
+        {
+            "name": "orders_with_customer",
+            "statement": (
+                "SELECT o.o_orderkey, o.o_orderstatus, c.c_name "
+                'FROM "orders" o JOIN "customer" c ON o.o_custkey = c.c_custkey'
+            ),
+        }
+    ],
+}
+
+
 def _b64(manifest: dict) -> str:
     return base64.b64encode(orjson.dumps(manifest)).decode()
 
@@ -264,9 +281,7 @@ class TestCTEEdgeCases:
         ast = sqlglot.parse_one(result, dialect="duckdb")
         with_clause = ast.args.get("with_")
         if with_clause:
-            cte_names = [
-                cte.args["alias"].this.name for cte in with_clause.expressions
-            ]
+            cte_names = [cte.args["alias"].this.name for cte in with_clause.expressions]
             orders_count = sum(1 for n in cte_names if n.lower() == "orders")
             assert orders_count <= 1, f"Duplicate 'orders' CTE: {result}"
 
@@ -325,6 +340,78 @@ class TestCorrelatedSubquery:
         )
         assert _has_cte(result, "orders")
         assert _has_cte(result, "customer")
+
+
+# ---------------------------------------------------------------------------
+# Tests: MDL views
+# ---------------------------------------------------------------------------
+
+
+class TestView:
+    def test_view_only_query(self):
+        """A view-only query expands the view as a verbatim CTE, plus the
+        model CTEs the view statement references."""
+        rw = _make_rewriter(_VIEW_MANIFEST)
+        result = rw.rewrite('SELECT o_orderkey FROM "orders_with_customer"')
+        assert _has_cte(result, "orders_with_customer")
+        assert _has_cte(result, "orders")
+        assert _has_cte(result, "customer")
+
+    def test_model_ctes_precede_view_cte(self):
+        """The models a view references must be defined before the view CTE."""
+        rw = _make_rewriter(_VIEW_MANIFEST)
+        result = rw.rewrite('SELECT c_name FROM "orders_with_customer"')
+        ast = sqlglot.parse_one(result, dialect="duckdb")
+        cte_names = [
+            cte.args["alias"].this.name for cte in ast.args["with_"].expressions
+        ]
+        view_idx = cte_names.index("orders_with_customer")
+        assert cte_names.index("orders") < view_idx
+        assert cte_names.index("customer") < view_idx
+
+    def test_view_body_kept_verbatim(self):
+        """The view CTE body is the native-SQL statement, not a wren-core
+        expansion — it still references the models by name and keeps the join."""
+        rw = _make_rewriter(_VIEW_MANIFEST)
+        result = rw.rewrite('SELECT c_name FROM "orders_with_customer"')
+        body = _cte_body_sql(result, "orders_with_customer")
+        assert body is not None
+        body_lower = body.lower()
+        assert "orders" in body_lower
+        assert "customer" in body_lower
+        assert "join" in body_lower
+
+    def test_view_select_star(self):
+        rw = _make_rewriter(_VIEW_MANIFEST)
+        result = rw.rewrite('SELECT * FROM "orders_with_customer"')
+        assert _has_cte(result, "orders_with_customer")
+        assert _has_cte(result, "orders")
+        assert _has_cte(result, "customer")
+
+    def test_view_join_model(self):
+        rw = _make_rewriter(_VIEW_MANIFEST)
+        result = rw.rewrite(
+            "SELECT v.c_name, o.o_orderstatus "
+            'FROM "orders_with_customer" v '
+            'JOIN "orders" o ON v.o_orderkey = o.o_orderkey'
+        )
+        assert _has_cte(result, "orders_with_customer")
+        assert _has_cte(result, "orders")
+        assert _has_cte(result, "customer")
+
+    def test_user_cte_references_view_and_model(self):
+        rw = _make_rewriter(_VIEW_MANIFEST)
+        result = rw.rewrite(
+            "WITH summary AS ("
+            "  SELECT v.c_name, o.o_orderkey "
+            '  FROM "orders_with_customer" v '
+            '  JOIN "orders" o ON v.o_orderkey = o.o_orderkey'
+            ") SELECT * FROM summary"
+        )
+        assert _has_cte(result, "orders_with_customer")
+        assert _has_cte(result, "orders")
+        assert _has_cte(result, "customer")
+        assert _has_cte(result, "summary")
 
 
 # ---------------------------------------------------------------------------
