@@ -14,7 +14,28 @@ interface KnexOptions {
 }
 
 const normalizeDbType = (dbType?: string) =>
-  (dbType || 'sqlite').trim().toLowerCase().replace(/[-_ ]/g, '');
+  (dbType || 'mssql').trim().toLowerCase().replace(/[-_ ]/g, '');
+
+const ensureMssqlConfig = (options: KnexOptions) => {
+  if (options.mssqlUrl) {
+    return;
+  }
+
+  const missingFields = [
+    ['MSSQL_HOST', options.mssqlHost],
+    ['MSSQL_DATABASE', options.mssqlDatabase],
+    ['MSSQL_USER', options.mssqlUser],
+    ['MSSQL_PASSWORD', options.mssqlPassword],
+  ].filter(([, value]) => !value);
+
+  if (missingFields.length > 0) {
+    throw new Error(
+      `MSSQL is the required Wren UI application database. Missing configuration: ${missingFields
+        .map(([key]) => key)
+        .join(', ')}`,
+    );
+  }
+};
 
 const parseBooleanUrlParam = (
   searchParams: URLSearchParams,
@@ -76,6 +97,7 @@ export const bootstrapKnex = (options: KnexOptions) => {
 
   if (dbType === 'mssql' || dbType === 'sqlserver') {
     console.log('using mssql');
+    ensureMssqlConfig(options);
     /* eslint-disable @typescript-eslint/no-var-requires */
     return require('knex')({
       client: 'mssql',
@@ -85,13 +107,7 @@ export const bootstrapKnex = (options: KnexOptions) => {
     });
   }
 
-  console.log('using sqlite');
-  /* eslint-disable @typescript-eslint/no-var-requires */
-  return require('knex')({
-    client: 'better-sqlite3',
-    connection: {
-      filename: options.sqliteFile,
-    },
-    useNullAsDefault: true,
-  });
+  throw new Error(
+    `Unsupported DB_TYPE "${options.dbType}". Wren UI application storage now requires MSSQL.`,
+  );
 };

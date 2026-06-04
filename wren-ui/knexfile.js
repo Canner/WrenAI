@@ -1,7 +1,28 @@
 // Update with your config settings.
 
 const normalizeDbType = (dbType) =>
-  (dbType || 'sqlite').trim().toLowerCase().replace(/[-_ ]/g, '');
+  (dbType || 'mssql').trim().toLowerCase().replace(/[-_ ]/g, '');
+
+const ensureMssqlConfig = () => {
+  if (process.env.MSSQL_URL) {
+    return;
+  }
+
+  const missingFields = [
+    ['MSSQL_HOST', process.env.MSSQL_HOST],
+    ['MSSQL_DATABASE', process.env.MSSQL_DATABASE],
+    ['MSSQL_USER', process.env.MSSQL_USER],
+    ['MSSQL_PASSWORD', process.env.MSSQL_PASSWORD],
+  ].filter(([, value]) => !value);
+
+  if (missingFields.length > 0) {
+    throw new Error(
+      `MSSQL is the required Wren UI application database. Missing configuration: ${missingFields
+        .map(([key]) => key)
+        .join(', ')}`,
+    );
+  }
+};
 
 const parseBooleanUrlParam = (searchParams, key, fallback) => {
   const value = searchParams.get(key);
@@ -56,16 +77,14 @@ if (dbType === 'pg' || dbType === 'postgres' || dbType === 'postgresql') {
   };
 } else if (dbType === 'mssql' || dbType === 'sqlserver') {
   console.log('Using MSSQL');
+  ensureMssqlConfig();
   module.exports = {
     client: 'mssql',
     connection: getMssqlConnection(),
     pool: { min: 2, max: 10 },
   };
 } else {
-  console.log('Using SQLite');
-  module.exports = {
-    client: 'better-sqlite3',
-    connection: process.env.SQLITE_FILE || './db.sqlite3',
-    useNullAsDefault: true,
-  };
+  throw new Error(
+    `Unsupported DB_TYPE "${process.env.DB_TYPE || ''}". Wren UI application storage now requires MSSQL.`,
+  );
 }

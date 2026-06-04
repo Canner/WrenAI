@@ -62,7 +62,7 @@ const defaultConfig = {
   otherServiceUsingDocker: false,
 
   // database
-  dbType: 'sqlite',
+  dbType: 'mssql',
 
   // pg
   pgUrl: 'postgres://postgres:postgres@localhost:5432/admin_ui',
