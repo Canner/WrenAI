@@ -27,6 +27,9 @@ export const typeDefs = gql`
     SELECT_ORGANIZATION
     LEAVE_ORGANIZATION
     DELETE_CURRENT_ORGANIZATION
+    GET_PROJECTS
+    GET_CURRENT_PROJECT
+    SELECT_PROJECT
   }
 
   input ApiHistoryFilterInput {
@@ -116,6 +119,11 @@ export const typeDefs = gql`
     MUSIC
   }
 
+  enum WorkspaceProjectType {
+    AGENTIC
+    CLASSIC
+  }
+
   enum SyncStatus {
     IN_PROGRESS
     SYNCRONIZED
@@ -161,6 +169,7 @@ export const typeDefs = gql`
   input DataSourceInput {
     type: DataSourceName!
     properties: JSON!
+    projectType: WorkspaceProjectType
   }
 
   input SampleDatasetInput {

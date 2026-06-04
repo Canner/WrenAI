@@ -4,9 +4,9 @@ import {
   Dropdown,
   Form,
   Input,
-  Menu,
   message,
   Modal,
+  Radio,
   Space,
   Spin,
   Tooltip,
@@ -16,8 +16,10 @@ import styled from 'styled-components';
 import PlusOutlined from '@ant-design/icons/PlusOutlined';
 import DownOutlined from '@ant-design/icons/DownOutlined';
 import SettingOutlined from '@ant-design/icons/SettingOutlined';
+import SearchOutlined from '@ant-design/icons/SearchOutlined';
 import { useRouter } from 'next/router';
 import { Path } from '@/utils/enum';
+import { WorkspaceProjectType } from '@/apollo/client/graphql/__types__';
 
 interface OrganizationRecord {
   id: number;
@@ -31,6 +33,19 @@ interface OrganizationResponse {
   organizations: OrganizationRecord[];
   currentOrganization: OrganizationRecord | null;
   currentProjectName: string;
+}
+
+interface ProjectRecord {
+  id: number;
+  displayName: string;
+  projectType: WorkspaceProjectType;
+  isCurrent: boolean;
+  hasDataSource: boolean;
+}
+
+interface ProjectResponse {
+  projects: ProjectRecord[];
+  currentProject: ProjectRecord | null;
 }
 
 const TriggerButton = styled(Button)`
@@ -83,14 +98,8 @@ const OverlayLabel = styled.div`
   text-transform: uppercase;
 `;
 
-const OverlayMenu = styled(Menu)`
-  border-right: none;
-  box-shadow: none;
-
-  .ant-dropdown-menu-item,
-  .ant-dropdown-menu-submenu-title {
-    padding: 0;
-  }
+const OverlayBody = styled.div`
+  padding: 0 8px 8px;
 `;
 
 const OverlayFooter = styled.div`
@@ -114,6 +123,40 @@ const MenuRow = styled.button<{ $active?: boolean }>`
   }
 `;
 
+const SectionLabel = styled.div`
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--gray-6);
+  text-transform: uppercase;
+  margin: 12px 8px 8px;
+`;
+
+const SearchBox = styled(Input)`
+  margin-bottom: 10px;
+`;
+
+const ProjectTypeTag = styled.span`
+  font-size: 12px;
+  color: var(--gray-6);
+`;
+
+const ProjectCard = styled.button<{ $selected?: boolean }>`
+  width: 100%;
+  text-align: left;
+  border: 1px solid ${(props) => (props.$selected ? '#3b59e6' : 'var(--gray-4)')};
+  border-radius: 12px;
+  padding: 16px;
+  background: ${(props) => (props.$selected ? 'rgba(59, 89, 230, 0.04)' : '#fff')};
+  cursor: pointer;
+`;
+
+const ProjectOptionRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+`;
+
 const getBadgeText = (name?: string) =>
   (name || 'O')
     .trim()
@@ -129,24 +172,45 @@ export default function OrganizationSwitcher() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [visible, setVisible] = useState(false);
+  const [projectModalVisible, setProjectModalVisible] = useState(false);
+  const [projectSearch, setProjectSearch] = useState('');
+  const [selectedProjectType, setSelectedProjectType] =
+    useState<WorkspaceProjectType>(WorkspaceProjectType.AGENTIC);
   const [currentProjectName, setCurrentProjectName] = useState('Default Project');
   const [organizations, setOrganizations] = useState<OrganizationRecord[]>([]);
   const [currentOrganization, setCurrentOrganization] =
     useState<OrganizationRecord | null>(null);
+  const [projects, setProjects] = useState<ProjectRecord[]>([]);
 
   const loadOrganizations = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/v1/organizations/current');
-      const payload = (await response.json()) as OrganizationResponse & {
+      const [organizationResponse, projectResponse] = await Promise.all([
+        fetch('/api/v1/organizations/current'),
+        fetch('/api/v1/projects/current'),
+      ]);
+      const organizationPayload = (await organizationResponse.json()) as OrganizationResponse & {
         error?: string;
       };
-      if (!response.ok) {
-        throw new Error(payload.error || 'Failed to load organizations');
+      const projectPayload = (await projectResponse.json()) as ProjectResponse & {
+        error?: string;
+      };
+      if (!organizationResponse.ok) {
+        throw new Error(
+          organizationPayload.error || 'Failed to load organizations',
+        );
       }
-      setOrganizations(payload.organizations || []);
-      setCurrentOrganization(payload.currentOrganization || null);
-      setCurrentProjectName(payload.currentProjectName || 'Default Project');
+      if (!projectResponse.ok && projectResponse.status !== 500) {
+        throw new Error(projectPayload.error || 'Failed to load projects');
+      }
+      setOrganizations(organizationPayload.organizations || []);
+      setCurrentOrganization(organizationPayload.currentOrganization || null);
+      setCurrentProjectName(
+        projectPayload.currentProject?.displayName ||
+          organizationPayload.currentProjectName ||
+          'Default Project',
+      );
+      setProjects(projectPayload.projects || []);
     } catch (error: any) {
       message.error(error.message || 'Failed to load organizations');
     } finally {
@@ -164,6 +228,15 @@ export default function OrganizationSwitcher() {
     () => currentProjectName || 'Default Project',
     [currentProjectName],
   );
+  const filteredProjects = useMemo(() => {
+    const keyword = projectSearch.trim().toLowerCase();
+    if (!keyword) {
+      return projects;
+    }
+    return projects.filter((project) =>
+      project.displayName.toLowerCase().includes(keyword),
+    );
+  }, [projectSearch, projects]);
 
   const createOrganization = async () => {
     try {
@@ -214,22 +287,85 @@ export default function OrganizationSwitcher() {
     }
   };
 
+  const selectProject = async (projectId: number) => {
+    try {
+      const response = await fetch(`/api/v1/projects/${projectId}/select`, {
+        method: 'POST',
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || 'Failed to switch project');
+      }
+      message.success('Project switched successfully.');
+      await loadOrganizations();
+      await router.push(Path.Home);
+    } catch (error: any) {
+      message.error(error.message || 'Failed to switch project');
+    }
+  };
+
+  const startNewProjectFlow = async () => {
+    setProjectModalVisible(false);
+    await router.push({
+      pathname: Path.OnboardingConnection,
+      query: {
+        newProject: '1',
+        projectType: selectedProjectType,
+      },
+    });
+  };
+
   const overlay = (
     <Overlay>
       <OverlayHeader>
-        <OverlayLabel>Organizations</OverlayLabel>
-        <Tooltip title="Create new organization">
+        <OverlayLabel>Projects</OverlayLabel>
+        <Tooltip title="Create new project">
           <Button
             type="text"
             size="small"
             icon={<PlusOutlined />}
-            onClick={() => setVisible(true)}
+            onClick={() => setProjectModalVisible(true)}
           />
         </Tooltip>
       </OverlayHeader>
-      <OverlayMenu selectable={false}>
+      <OverlayBody>
+        <SearchBox
+          allowClear
+          placeholder="Search projects..."
+          prefix={<SearchOutlined />}
+          value={projectSearch}
+          onChange={(event) => setProjectSearch(event.target.value)}
+        />
+        <Button
+          block
+          icon={<PlusOutlined />}
+          size="large"
+          style={{ marginBottom: 12 }}
+          onClick={() => setProjectModalVisible(true)}
+        >
+          New project
+        </Button>
+        {filteredProjects.map((project) => (
+          <MenuRow
+            key={project.id}
+            type="button"
+            $active={project.isCurrent}
+            onClick={() => void selectProject(project.id)}
+          >
+            <div className="d-flex flex-column">
+              <div className="gray-8 text-medium">{project.displayName}</div>
+              <ProjectTypeTag>
+                {project.projectType === WorkspaceProjectType.AGENTIC
+                  ? 'Agentic'
+                  : 'Classic'}
+              </ProjectTypeTag>
+            </div>
+            {project.isCurrent && <ProjectTypeTag>Current</ProjectTypeTag>}
+          </MenuRow>
+        ))}
+        <SectionLabel>Organizations</SectionLabel>
         {organizations.map((organization) => (
-          <Menu.Item key={organization.id}>
+          <div key={organization.id}>
             <MenuRow
               type="button"
               $active={organization.isCurrent}
@@ -245,9 +381,9 @@ export default function OrganizationSwitcher() {
                 </Typography.Text>
               </div>
             </MenuRow>
-          </Menu.Item>
+          </div>
         ))}
-      </OverlayMenu>
+      </OverlayBody>
       {currentOrganization && (
         <OverlayFooter>
           <Button
@@ -339,6 +475,60 @@ export default function OrganizationSwitcher() {
             />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title="Create project"
+        visible={projectModalVisible}
+        footer={[
+          <Button key="cancel" onClick={() => setProjectModalVisible(false)}>
+            Cancel
+          </Button>,
+          <Button key="next" type="primary" onClick={() => void startNewProjectFlow()}>
+            Next
+          </Button>,
+        ]}
+        onCancel={() => setProjectModalVisible(false)}
+        destroyOnClose
+      >
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <ProjectCard
+            type="button"
+            $selected={selectedProjectType === WorkspaceProjectType.AGENTIC}
+            onClick={() => setSelectedProjectType(WorkspaceProjectType.AGENTIC)}
+          >
+            <ProjectOptionRow>
+              <div>
+                <div className="gray-8 text-medium">
+                  Agentic project{' '}
+                  <Typography.Text className="text-xs blue-5">
+                    RECOMMENDED
+                  </Typography.Text>
+                </div>
+                <Typography.Paragraph className="gray-6 text-sm mb-0 mt-2">
+                  Agentic mode, Knowledge, Skills, Memory, and artifacts for
+                  charts, dashboards, and reports.
+                </Typography.Paragraph>
+              </div>
+              <Radio checked={selectedProjectType === WorkspaceProjectType.AGENTIC} />
+            </ProjectOptionRow>
+          </ProjectCard>
+          <ProjectCard
+            type="button"
+            $selected={selectedProjectType === WorkspaceProjectType.CLASSIC}
+            onClick={() => setSelectedProjectType(WorkspaceProjectType.CLASSIC)}
+          >
+            <ProjectOptionRow>
+              <div>
+                <div className="gray-8 text-medium">Classic project</div>
+                <Typography.Paragraph className="gray-6 text-sm mb-0 mt-2">
+                  Dashboards, spreadsheets, and the classic BI workflow.
+                </Typography.Paragraph>
+              </div>
+              <Radio checked={selectedProjectType === WorkspaceProjectType.CLASSIC} />
+            </ProjectOptionRow>
+          </ProjectCard>
+        </Space>
       </Modal>
     </>
   );

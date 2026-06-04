@@ -6,7 +6,10 @@ import {
   DATABRICKS_AUTH_METHOD,
 } from '@/utils/enum';
 import { useSaveDataSourceMutation } from '@/apollo/client/graphql/dataSource.generated';
-import { DataSourceName } from '@/apollo/client/graphql/__types__';
+import {
+  DataSourceName,
+  WorkspaceProjectType,
+} from '@/apollo/client/graphql/__types__';
 
 const PASSWORD_PLACEHOLDER = '************';
 
@@ -30,16 +33,25 @@ export default function useSetupConnectionDataSource() {
 
   const saveDataSource = useCallback(
     async (properties?: Record<string, any>) => {
+      const requestedProjectType =
+        typeof router.query.projectType === 'string'
+          ? router.query.projectType
+          : WorkspaceProjectType.CLASSIC;
+
       await saveDataSourceMutation({
         variables: {
           data: {
             type: selected,
             properties: transformFormToProperties(properties, selected),
+            projectType:
+              requestedProjectType === WorkspaceProjectType.AGENTIC
+                ? WorkspaceProjectType.AGENTIC
+                : WorkspaceProjectType.CLASSIC,
           },
         },
       });
     },
-    [selected, saveDataSourceMutation],
+    [router.query.projectType, saveDataSourceMutation, selected],
   );
 
   const completedDataSourceSave = useCallback(async () => {

@@ -20,6 +20,7 @@ import {
   Model,
   ModelColumn,
   Project,
+  WorkspaceProjectType,
 } from '../repositories';
 import {
   SampleDatasetName,
@@ -258,19 +259,17 @@ export class ProjectResolver {
   public async saveDataSource(
     _root: any,
     args: {
-      data: DataSource;
+      data: DataSource & { projectType?: WorkspaceProjectType };
     },
     ctx: IContext,
   ) {
     const { type, properties } = args.data;
-    // Currently only can create one project
-    await this.resetCurrentProject(_root, args, ctx);
-
     const { displayName, ...connectionInfo } = properties;
     const project = await ctx.projectService.createProject({
       displayName,
       type,
       connectionInfo,
+      projectType: args.data.projectType || WorkspaceProjectType.CLASSIC,
     } as ProjectData);
     logger.debug(`Project created.`);
 

@@ -6,7 +6,7 @@ import { Path } from '@/utils/enum';
 
 const redirectRoute = {
   [OnboardingStatus.DATASOURCE_SAVED]: Path.OnboardingModels,
-  [OnboardingStatus.NOT_STARTED]: Path.OnboardingConnection,
+  [OnboardingStatus.NOT_STARTED]: Path.ProjectCreate,
   [OnboardingStatus.ONBOARDING_FINISHED]: Path.Modeling,
   [OnboardingStatus.WITH_SAMPLE_DATASET]: Path.Modeling,
 };
@@ -21,9 +21,14 @@ export const useWithOnboarding = () => {
     if (onboardingStatus) {
       const newPath = redirectRoute[onboardingStatus];
       const pathname = router.pathname;
+      const isNewProjectFlow = router.query.newProject === '1';
 
       // redirect to new path if onboarding is not completed
       if (newPath && newPath !== Path.Modeling) {
+        if (pathname.startsWith(Path.Onboarding) && isNewProjectFlow) {
+          return;
+        }
+
         // do not redirect if the new path and router pathname are the same
         if (newPath === pathname) {
           return;
@@ -64,11 +69,14 @@ export const useWithOnboarding = () => {
           pathname as Path,
         )
       ) {
+        if (isNewProjectFlow) {
+          return;
+        }
         router.push(newPath);
         return;
       }
     }
-  }, [onboardingStatus, router.pathname]);
+  }, [onboardingStatus, router.pathname, router.query.newProject]);
 
   return {
     loading,

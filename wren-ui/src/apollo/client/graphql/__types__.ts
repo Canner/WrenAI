@@ -90,9 +90,12 @@ export enum ApiType {
   GET_INSTRUCTIONS = 'GET_INSTRUCTIONS',
   GET_MODELS = 'GET_MODELS',
   GET_ORGANIZATIONS = 'GET_ORGANIZATIONS',
+  GET_CURRENT_PROJECT = 'GET_CURRENT_PROJECT',
+  GET_PROJECTS = 'GET_PROJECTS',
   GET_SQL_PAIRS = 'GET_SQL_PAIRS',
   RUN_SQL = 'RUN_SQL',
   SELECT_ORGANIZATION = 'SELECT_ORGANIZATION',
+  SELECT_PROJECT = 'SELECT_PROJECT',
   STREAM_ASK = 'STREAM_ASK',
   STREAM_GENERATE_SQL = 'STREAM_GENERATE_SQL',
   UPDATE_INSTRUCTION = 'UPDATE_INSTRUCTION',
@@ -327,6 +330,7 @@ export type DataSource = {
 
 export type DataSourceInput = {
   properties: Scalars['JSON'];
+  projectType?: InputMaybe<WorkspaceProjectType>;
   type: DataSourceName;
 };
 
@@ -1320,6 +1324,11 @@ export enum SampleDatasetName {
   HR = 'HR',
   MUSIC = 'MUSIC',
   NBA = 'NBA'
+}
+
+export enum WorkspaceProjectType {
+  AGENTIC = 'AGENTIC',
+  CLASSIC = 'CLASSIC'
 }
 
 export type SaveLearningRecordInput = {

@@ -2,7 +2,11 @@ import crypto from 'crypto';
 import * as fs from 'fs';
 import path from 'path';
 import { getLogger } from '@server/utils';
-import { IProjectRepository, WREN_AI_CONNECTION_INFO } from '../repositories';
+import {
+  IProjectRepository,
+  WREN_AI_CONNECTION_INFO,
+  WorkspaceProjectType,
+} from '../repositories';
 import { Project } from '../repositories';
 import {
   CompactTable,
@@ -42,6 +46,7 @@ export interface ProjectData {
   displayName: string;
   type: DataSourceName;
   connectionInfo: WREN_AI_CONNECTION_INFO;
+  projectType?: WorkspaceProjectType;
 }
 
 export type ProjectRecommendationQuestionsResult = {
@@ -70,6 +75,8 @@ export interface IProjectService {
   ) => Promise<RecommendConstraint[]>;
 
   getCurrentProject: () => Promise<Project>;
+  listProjects: () => Promise<Project[]>;
+  selectProject: (projectId: number) => Promise<Project>;
   getProjectById: (projectId: number) => Promise<Project>;
   writeCredentialFile: (
     credentials: JSON,
@@ -211,6 +218,14 @@ export class ProjectService implements IProjectService {
     return await this.projectRepository.getCurrentProject();
   }
 
+  public async listProjects() {
+    return await this.projectRepository.listProjects();
+  }
+
+  public async selectProject(projectId: number) {
+    return await this.projectRepository.setCurrentProject(projectId);
+  }
+
   public async getProjectById(projectId: number) {
     return await this.projectRepository.findOneBy({ id: projectId });
   }
@@ -245,6 +260,8 @@ export class ProjectService implements IProjectService {
       type: projectData.type,
       catalog: 'wrenai',
       schema: 'public',
+      projectType: projectData.projectType || WorkspaceProjectType.CLASSIC,
+      isCurrent: false,
       connectionInfo: encryptConnectionInfo(
         projectData.type,
         projectData.connectionInfo,
@@ -252,7 +269,7 @@ export class ProjectService implements IProjectService {
     };
     logger.debug('Creating project...');
     const project = await this.projectRepository.createOne(projectValue);
-    return project;
+    return await this.projectRepository.setCurrentProject(project.id);
   }
 
   public writeCredentialFile(credentials: JSON, persistCredentialDir: string) {

@@ -164,6 +164,11 @@ export interface RecommendationQuestionResult {
   sql: string; // validated sql for this question, can be used in generateAskDetail
 }
 
+export enum WorkspaceProjectType {
+  AGENTIC = 'AGENTIC',
+  CLASSIC = 'CLASSIC',
+}
+
 export interface Project {
   id: number; // ID
   type: DataSourceName; // Project datasource type. ex: bigquery, mysql, postgresql, mongodb, etc
@@ -180,10 +185,15 @@ export interface Project {
   questions?: RecommendationQuestionResult[];
   questionsStatus?: string;
   questionsError?: object;
+  projectType?: WorkspaceProjectType;
+  isCurrent?: boolean;
 }
 
 export interface IProjectRepository extends IBasicRepository<Project> {
   getCurrentProject: () => Promise<Project>;
+  listProjects: () => Promise<Project[]>;
+  findCurrentProject: () => Promise<Project | null>;
+  setCurrentProject: (projectId: number) => Promise<Project>;
 }
 
 export class ProjectRepository
@@ -197,6 +207,11 @@ export class ProjectRepository
   }
 
   public async getCurrentProject() {
+    const currentProject = await this.findCurrentProject();
+    if (currentProject) {
+      return currentProject;
+    }
+
     const projects = await this.findAll({
       order: 'id',
       limit: 1,
@@ -205,6 +220,37 @@ export class ProjectRepository
       throw new Error('No project found');
     }
     return projects[0];
+  }
+
+  public async listProjects() {
+    return await this.findAll({
+      order: 'id',
+    });
+  }
+
+  public async findCurrentProject() {
+    return await this.findOneBy({
+      isCurrent: true,
+    } as Partial<Project>);
+  }
+
+  public async setCurrentProject(projectId: number) {
+    const tx = await this.transaction();
+    try {
+      await tx(this.tableName).update({ is_current: false });
+      await tx(this.tableName).where({ id: projectId }).update({ is_current: true });
+      const project = await this.findOneBy({ id: projectId } as Partial<Project>, {
+        tx,
+      });
+      if (!project) {
+        throw new Error(`Project ${projectId} not found`);
+      }
+      await this.commit(tx);
+      return project;
+    } catch (error) {
+      await this.rollback(tx);
+      throw error;
+    }
   }
 
   public override transformFromDBData: (data: any) => Project = (data: any) => {
@@ -218,6 +264,9 @@ export class ProjectRepository
       }
       if (key === 'type') {
         return DataSourceName[value];
+      }
+      if (key === 'project_type' && value) {
+        return WorkspaceProjectType[value];
       }
       return value;
     });
