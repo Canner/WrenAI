@@ -96,7 +96,7 @@ Requires `target/manifest.json` and `target/catalog.json`; run `dbt build` and `
 
 ---
 
-## `wren docs` — Reference Docs & Connection Info
+## `wren docs` — Connection Info
 
 ### `wren docs connection-info <datasource>`
 
@@ -109,25 +109,6 @@ wren docs connection-info snowflake
 ```
 
 Use this to check which fields are needed before creating a profile.
-
-### `wren docs list`
-
-List the available reference docs (mirrored from `docs/core/`).
-
-### `wren docs get <reference>`
-
-Print a reference doc to stdout. Examples:
-
-```bash
-wren docs get connect           # connection setup, troubleshooting
-wren docs get mdl               # MDL field reference
-wren docs get cubes             # cubes (named-metric) reference
-wren docs get installation      # pip install paths
-wren docs get quickstart        # bundled jaffle_shop walkthrough
-```
-
-Reference content is a synced mirror of `docs/core/` shipped inside the
-wheel, so the version an agent reads always matches the installed CLI.
 
 ---
 

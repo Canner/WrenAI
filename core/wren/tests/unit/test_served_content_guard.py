@@ -109,9 +109,10 @@ _TOKEN = re.compile(r"^[a-z][a-z0-9-]*$")
 def _iter_content_files() -> list[Path]:
     """Yield every served-content file the guard must validate.
 
-    Covers the three package-data roots (`skills_content`, `docs_content`,
-    `ask_templates`) plus the standalone discovery stub at `skills/wren/`
-    that's distributed to users via `npx skills add`.
+    Covers the package-data roots (`skills_content`, `ask_templates`) plus
+    the standalone discovery stub at `skills/wren/` that's distributed to
+    users via `npx skills add`. (`docs_content` is kept in the scan list as
+    a no-op — the dir no longer ships, so it's skipped when absent.)
     """
     files: list[Path] = []
     for root in (_SKILLS_CONTENT, _DOCS_CONTENT, _ASK_TEMPLATES):
@@ -229,7 +230,7 @@ def _findings() -> list[str]:
 def test_command_tree_loaded():
     """Sanity: introspection finds the commands we expect."""
     assert "skills get" in COMMANDS
-    assert "docs get" in COMMANDS
+    assert "docs connection-info" in COMMANDS
     assert "ask" in COMMANDS
     assert "--full" in COMMANDS["skills get"]
     assert "--script" in COMMANDS["skills get"]

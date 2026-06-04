@@ -74,7 +74,7 @@ The CLI reads the active profile for connection info and datasource. Use `wren p
 
 For memory-specific decisions, see the `memory` reference (run `wren skills get usage --full`).
 For SQL syntax, CTE-based modeling, and error diagnosis, see the `wren-sql` reference (run `wren skills get usage --full`).
-For project structure, MDL field definitions, and CLI workflow details, run `wren docs list` and `wren docs get <reference>` (e.g. `wren docs get mdl`).
+For project structure, MDL field definitions, and CLI workflow details, see the [documentation](https://github.com/Canner/WrenAI/tree/main/docs/core).
 
 ---
 

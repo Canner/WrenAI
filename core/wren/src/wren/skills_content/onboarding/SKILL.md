@@ -11,9 +11,9 @@ metadata:
 This skill walks the agent through onboarding — environment checks, project scaffolding, profile creation, MDL generation, and first query. **Procedural details, per-datasource setup notes, and the troubleshooting playbook live in the docs**, not here. The skill's job is to enforce the agent-side rules (one step per turn, never ask for credentials in chat) and to dispatch the agent to the right doc / sibling skill at each step.
 
 Reference docs (the skill points to these — never duplicate their content):
-- the `installation` reference (`wren docs get installation`) — CLI install + skill install
-- the `connect` reference (`wren docs get connect`) — full connection procedure, **per-datasource setup notes, complete troubleshooting playbook**
-- the `quickstart` reference (`wren docs get quickstart`) — bundled `jaffle_shop` demo
+- [`docs/core/get_started/installation.md`](https://github.com/Canner/WrenAI/blob/main/docs/core/get_started/installation.md) — CLI install + skill install
+- [`docs/core/guides/connect.md`](https://github.com/Canner/WrenAI/blob/main/docs/core/guides/connect.md) — full connection procedure, **per-datasource setup notes, complete troubleshooting playbook**
+- [`docs/core/get_started/quickstart.md`](https://github.com/Canner/WrenAI/blob/main/docs/core/get_started/quickstart.md) — bundled `jaffle_shop` demo
 
 ## Mode of operation — READ THIS FIRST
 
@@ -41,7 +41,7 @@ Report findings as a 4-bullet list, then continue.
 
 > "Try the bundled `jaffle_shop` demo first (~30s, no DB needed), or connect your own database?"
 
-- **demo** → point at the `quickstart` reference (`wren docs get quickstart`) and stop this skill.
+- **demo** → point at [`quickstart.md`](https://github.com/Canner/WrenAI/blob/main/docs/core/get_started/quickstart.md) and stop this skill.
 - **own DB** → continue.
 
 ## Step 1 — Collect project name + database type
@@ -61,7 +61,7 @@ Side effects: creates `~/<project>/`, installs `wrenai[<ds>,main]`, generates an
 Run as a batch — report each command briefly, then end with one "please fill `.env`" ask:
 
 1. `mkdir -p ~/<project> && cd ~/<project>`.
-2. `pip install "wrenai[<ds>,main]"`. For datasource-specific install gotchas (macOS mysql, etc.), see the `connect` reference (`wren docs get connect`).
+2. `pip install "wrenai[<ds>,main]"`. For datasource-specific install gotchas (macOS mysql, etc.), see [`connect.md#per-datasource-setup-notes`](https://github.com/Canner/WrenAI/blob/main/docs/core/guides/connect.md).
 3. **Generate the `.env` template by introspecting the connector**:
 
    ```bash
@@ -78,7 +78,7 @@ Run as a batch — report each command briefly, then end with one "please fill `
    POSTGRES_PASSWORD=
    ```
 
-   Special encodings (BigQuery base64, Snowflake account format, Athena AWS creds, etc.) are documented in the `connect` reference (`wren docs get connect`). Surface the relevant section to the user verbatim — don't paraphrase.
+   Special encodings (BigQuery base64, Snowflake account format, Athena AWS creds, etc.) are documented in [`connect.md#per-datasource-setup-notes`](https://github.com/Canner/WrenAI/blob/main/docs/core/guides/connect.md). Surface the relevant section to the user verbatim — don't paraphrase.
 
 4. Add `.env` to `.gitignore` if the project is a git repo. Suggest `chmod 600 .env`.
 5. Tell the user: `.env` is at `<path>`, please fill every value and reply **"done"**.
@@ -105,7 +105,7 @@ wren profile add <project> --from-file /tmp/conn.yml
 Validation runs automatically. The CLI overwrites profiles silently — there is no `--force` flag.
 
 - ✓ **Success** → continue to Step 3.5.
-- ⚠ **Any warning** → consult the `connect` reference (`wren docs get connect`) for the exact symptom (missing secret, driver auth failure, ValidationError, unreachable host, …) and tell the user what to fix.
+- ⚠ **Any warning** → consult [`connect.md#troubleshooting`](https://github.com/Canner/WrenAI/blob/main/docs/core/guides/connect.md) for the exact symptom (missing secret, driver auth failure, ValidationError, unreachable host, …) and tell the user what to fix.
 
 ## Step 3.5 — Scaffold the project
 
@@ -155,7 +155,7 @@ Suggest 2–3 NL questions based on the discovered tables (e.g. for an orders sc
 
 ## On error
 
-Don't carry an error playbook here — surface the `connect` reference (`wren docs get connect`) sections to the user. The doc covers:
+Don't carry an error playbook here — surface [`connect.md#troubleshooting`](https://github.com/Canner/WrenAI/blob/main/docs/core/guides/connect.md) sections to the user. The doc covers:
 
 - `wren: command not found`
 - `pip install … externally-managed-environment`

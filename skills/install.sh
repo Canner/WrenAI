@@ -4,7 +4,7 @@
 # The actual skill content lives inside the `wren` CLI itself
 # (`pip install wrenai`). This script installs the discovery stub (`wren`)
 # that points an AI client at the CLI; from then on the agent fetches
-# everything else via `wren skills get` / `wren docs get` / `wren ask`.
+# everything else via `wren skills get` / `wren ask`.
 #
 # Usage:
 #   ./install.sh                # install the discovery stub

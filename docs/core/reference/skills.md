@@ -17,12 +17,13 @@ Since Wren `0.8`, skill content **lives inside the `wren` CLI** and is
 served on demand:
 
 - One ~50-line **discovery stub** is installed into your agent
-  (`skills/wren/SKILL.md`). It teaches the agent that workflow guides,
-  reference docs, and shaped prompts are all fetched from the CLI.
+  (`skills/wren/SKILL.md`). It teaches the agent that workflow guides and
+  shaped prompts are fetched from the CLI.
 - The actual workflow guides live in the `wrenai` Python package and are
   printed to stdout by `wren skills get <name>`.
-- Reference docs (a mirror of `docs/core/`) and prompt templates are
-  served the same way: `wren docs get <name>`, `wren ask "<q>" --guided|--direct`.
+- Prompt templates are served the same way: `wren ask "<q>" --guided|--direct`.
+  Reference docs live on the web under
+  [`docs/core/`](https://github.com/Canner/WrenAI/tree/main/docs/core).
 
 Because the content travels with the wheel, the version the agent reads
 always matches the installed CLI.
@@ -61,14 +62,15 @@ wren skills get <name> --full             # include the skill's references/ inli
 wren skills get <name> --script <stem>    # print a bundled script's source
 ```
 
-Reference docs and prompt templates are served the same way:
+Shaped prompts are served the same way:
 
 ```bash
-wren docs list
-wren docs get <reference>                 # e.g. connect, mdl, cubes, quickstart
 wren ask "<question>" --guided            # for weaker LLMs
 wren ask "<question>" --direct            # for stronger LLMs
 ```
+
+Reference docs live on the web under
+[`docs/core/`](https://github.com/Canner/WrenAI/tree/main/docs/core).
 
 A bundled CI guard (`tests/unit/test_served_content_guard.py`) scans every
 `wren <cmd>` invocation in served skill content, reference docs, and ask
@@ -94,7 +96,7 @@ User says "install wren" / "set up wren"
   │     Python 3.11+, virtualenv, wren CLI, working dir
   │
   ├── Branch: bundled demo or own database?
-  │     demo → wren docs get quickstart, stop
+  │     demo → quickstart guide, stop
   │     own DB → continue
   │
   ├── Step 1. Project name + database type
@@ -138,9 +140,9 @@ The discovery stub routes the agent here on phrases like:
 
 ### Reference docs (the skill points to these, never duplicates)
 
-- `wren docs get installation`
-- `wren docs get connect`
-- `wren docs get quickstart`
+- [`docs/core/get_started/installation.md`](https://github.com/Canner/WrenAI/blob/main/docs/core/get_started/installation.md)
+- [`docs/core/guides/connect.md`](https://github.com/Canner/WrenAI/blob/main/docs/core/guides/connect.md)
+- [`docs/core/get_started/quickstart.md`](https://github.com/Canner/WrenAI/blob/main/docs/core/get_started/quickstart.md)
 
 ---
 

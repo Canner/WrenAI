@@ -85,7 +85,6 @@ artifacts = [
     "src/wren/templates/*.html",
     "src/wren/skills_content/**/*.md",
     "src/wren/skills_content/**/*.py",
-    "src/wren/docs_content/**/*.md",
     "src/wren/ask_templates/*.tmpl",
 ]
 

@@ -5,7 +5,7 @@
     "email": "dev@cannerdata.com"
   },
   "metadata": {
-    "description": "Wren Engine — discovery stub for AI agents. Actual workflow guides, reference docs and prompt helpers ship inside the wren CLI (pip install wrenai) and are served by `wren skills get` / `wren docs get` / `wren ask`."
+    "description": "Wren Engine — discovery stub for AI agents. Actual workflow guides and prompt helpers ship inside the wren CLI (pip install wrenai) and are served by `wren skills get` / `wren ask`."
   },
   "plugins": [
     {

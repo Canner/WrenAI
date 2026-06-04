@@ -7,9 +7,9 @@ allowed-tools: Bash(wren:*)
 
 # Wren CLI
 
-This is a discovery stub. The actual workflow guides, reference docs and
-prompt helpers live inside the `wren` CLI itself, so they always match the
-installed wren-engine version (no skill cache, no version drift).
+This is a discovery stub. The actual workflow guides and prompt helpers
+live inside the `wren` CLI itself, so they always match the installed
+wren-engine version (no skill cache, no version drift).
 
 Install: `pip install wrenai`.
 
@@ -28,9 +28,10 @@ wren skills get enrich-context          # add business context (units, enums, cu
 
 ## Reference docs
 
+Full reference docs live on the web: <https://github.com/Canner/WrenAI/tree/main/docs/core>
+
 ```bash
-wren docs list                          # all available reference docs
-wren docs get <reference>               # fetch a reference doc (connect, mdl, cubes, …)
+wren docs connection-info <ds>          # required + optional connection fields for a data source
 ```
 
 ## Prompt enhancement (wraps a user question for an agent)

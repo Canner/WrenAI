@@ -83,9 +83,8 @@ npx skills add Canner/WrenAI            # auto-detects Claude Code, Cursor, Clin
 ```
 
 The stub is ~50 lines. It teaches your agent to fetch workflow guides via
-`wren skills get <name>`, reference docs via `wren docs get <reference>`,
-and shaped prompts via `wren ask "<question>" --guided|--direct` —
-everything else lives in the CLI.
+`wren skills get <name>` and shaped prompts via
+`wren ask "<question>" --guided|--direct` — everything else lives in the CLI.
 
 ### 3. Ask your agent to set things up
 

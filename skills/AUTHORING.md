@@ -88,7 +88,7 @@ For day-to-day querying after setup, run `wren skills get usage`.
 
 Cross-link to a general doc:
 ```markdown
-For troubleshooting, see the `connect` reference (`wren docs get connect`).
+For troubleshooting, see [`connect.md`](https://github.com/Canner/WrenAI/blob/main/docs/core/guides/connect.md).
 ```
 
 ---

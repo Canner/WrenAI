@@ -33,9 +33,9 @@ def test_discovery_stub_exists():
     text = stub.read_text()
     assert text.startswith("---")
     assert "allowed-tools:" in text
-    # discovery stub points at the four CLI surfaces
+    # discovery stub points at the CLI surfaces
     assert "wren skills list" in text
-    assert "wren docs list" in text
+    assert "wren docs connection-info" in text
     assert "wren ask" in text
 
 

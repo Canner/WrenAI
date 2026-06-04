@@ -14,8 +14,7 @@ wren skills get <name>                  # fetch a guide
 wren skills get <name> --full           # include the guide's reference docs
 wren skills get <name> --script <s>     # fetch a bundled script
 
-wren docs list                          # all available reference docs
-wren docs get <reference>               # fetch a reference doc
+wren docs connection-info <ds>          # connection fields for a data source
 
 wren ask "<question>" --guided          # wrap a question for a weaker LLM
 wren ask "<question>" --direct          # wrap a question for a stronger LLM

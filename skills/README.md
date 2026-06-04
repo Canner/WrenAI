@@ -48,7 +48,7 @@ Once installed, the agent reads `wren/SKILL.md` and learns to call:
 ```bash
 wren skills list                        # discover workflow guides
 wren skills get onboarding              # fetch a guide (one of 5 names)
-wren docs list / wren docs get <ref>    # fetch a reference doc
+wren docs connection-info <ds>          # connection fields for a data source
 wren ask "<question>" --guided|--direct # wrap a prompt for an agent
 ```
 

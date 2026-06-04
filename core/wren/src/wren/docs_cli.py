@@ -1,12 +1,10 @@
-"""``wren docs`` — connection-info generation + reference doc delivery."""
+"""``wren docs`` — connection-info generation."""
 
 from __future__ import annotations
 
 from typing import Annotated, Optional
 
 import typer
-
-from wren import docs_delivery
 
 docs_app = typer.Typer(name="docs", help="Generate documentation for Wren Engine")
 
@@ -46,30 +44,3 @@ def docs_connection_info(
     except ValueError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
-
-
-@docs_app.command(name="list")
-def list_cmd() -> None:
-    """List the available reference docs."""
-    refs = docs_delivery.list_references()
-    typer.echo("Available references (run `wren docs get <reference>`):")
-    width = max(len(name) for name, _ in refs)
-    for name, summary in refs:
-        typer.echo(f"  {name.ljust(width)}  {summary}")
-
-
-@docs_app.command()
-def get(
-    reference: str = typer.Argument(..., help="Reference name (see `wren docs list`)."),
-) -> None:
-    """Print a reference doc to stdout."""
-    try:
-        content = docs_delivery.get_reference(reference)
-    except docs_delivery.ReferenceNotFoundError:
-        typer.echo(
-            f"Error: unknown reference '{reference}'. "
-            "Run `wren docs list` for available references.",
-            err=True,
-        )
-        raise typer.Exit(1)
-    typer.echo(content)
