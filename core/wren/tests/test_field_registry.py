@@ -181,6 +181,19 @@ def test_hidden_discriminator_fields():
     assert db_fields["databricks_type"].default == "token"
 
 
+def test_databricks_catalog_field_is_optional():
+    """Databricks catalog should be available without making old configs invalid."""
+    token_fields = {f.name: f for f in get_fields("databricks", variant="token")}
+    assert token_fields["catalog"].required is False
+    assert token_fields["catalog"].label == "Catalog"
+
+    sp_fields = {
+        f.name: f for f in get_fields("databricks", variant="service_principal")
+    }
+    assert sp_fields["catalog"].required is False
+    assert sp_fields["catalog"].label == "Catalog"
+
+
 def test_fields_match_mcp_web_ui_postgres():
     """Regression: generated postgres fields cover all fields in old DATASOURCE_FIELDS."""
     expected_names = {"host", "port", "database", "user", "password"}
