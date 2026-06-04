@@ -43,6 +43,17 @@ export interface UpdateOrganizationMemberInput {
   organizationRole: OrganizationMemberRole;
 }
 
+export interface UpdateCurrentUserProfileInput {
+  name: string;
+}
+
+export interface CurrentUserProfile {
+  id: number;
+  name: string;
+  email: string;
+  isActive: boolean;
+}
+
 export interface OrganizationMemberSummary {
   id: number;
   userId: number;
@@ -91,6 +102,10 @@ export interface IOrganizationMemberService {
   acceptInvitation(token: string): Promise<OrganizationMemberSummary>;
   leaveCurrentOrganization(): Promise<boolean>;
   deleteCurrentOrganization(): Promise<boolean>;
+  getCurrentUserProfile(): Promise<CurrentUserProfile>;
+  updateCurrentUserProfile(
+    input: UpdateCurrentUserProfileInput,
+  ): Promise<CurrentUserProfile>;
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -321,6 +336,43 @@ export class OrganizationMemberService implements IOrganizationMemberService {
       await tx.rollback();
       throw error;
     }
+  }
+
+  public async getCurrentUserProfile(): Promise<CurrentUserProfile> {
+    const organization = await this.getCurrentOrganizationOrThrow();
+    const currentUserId = await this.getCurrentUserId(organization.id);
+    if (!currentUserId) {
+      throw new ApiError('Current user not found', 404);
+    }
+    const user = await this.userRepository.findOneBy({ id: currentUserId });
+    if (!user) {
+      throw new ApiError('Current user not found', 404);
+    }
+    return this.serializeCurrentUserProfile(user);
+  }
+
+  public async updateCurrentUserProfile(
+    input: UpdateCurrentUserProfileInput,
+  ): Promise<CurrentUserProfile> {
+    const organization = await this.getCurrentOrganizationOrThrow();
+    const currentUserId = await this.getCurrentUserId(organization.id);
+    if (!currentUserId) {
+      throw new ApiError('Current user not found', 404);
+    }
+
+    const name = `${input.name || ''}`.trim();
+    if (!name) {
+      throw new ApiError('Name is required', 400);
+    }
+    if (name.length > 160) {
+      throw new ApiError('Name must be 160 characters or fewer', 400);
+    }
+
+    const user = await this.userRepository.updateOne(currentUserId, {
+      name,
+      updatedAt: new Date().toISOString(),
+    });
+    return this.serializeCurrentUserProfile(user);
   }
 
   public async acceptInvitation(
@@ -641,6 +693,15 @@ export class OrganizationMemberService implements IOrganizationMemberService {
     if (currentUserId && currentUserId === userId) {
       throw new ApiError('You cannot modify your own organization role', 400);
     }
+  }
+
+  private serializeCurrentUserProfile(user: RbacUser): CurrentUserProfile {
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      isActive: Boolean(user.isActive),
+    };
   }
 
   private async assertCurrentUserAdmin(organizationId: number) {

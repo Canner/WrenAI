@@ -55,7 +55,7 @@ export default function OrganizationSettingsLayout({
   titleExtra,
   children,
 }: {
-  section: 'general' | 'members' | 'danger-zone';
+  section: 'general' | 'members' | 'danger-zone' | 'user-profile';
   title: ReactNode;
   titleExtra?: ReactNode;
   children: ReactNode;
@@ -89,7 +89,11 @@ export default function OrganizationSettingsLayout({
           </SidebarItem>
 
           <SidebarSection>User</SidebarSection>
-          <PlaceholderItem>Profile</PlaceholderItem>
+          <SidebarItem $active={section === 'user-profile'}>
+            <Link style={linkStyle} href={Path.UserProfile}>
+              Profile
+            </Link>
+          </SidebarItem>
           <PlaceholderItem>Danger zone</PlaceholderItem>
         </StyledSider>
         <StyledContent>

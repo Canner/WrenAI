@@ -30,6 +30,8 @@ export const typeDefs = gql`
     GET_PROJECTS
     GET_CURRENT_PROJECT
     SELECT_PROJECT
+    GET_CURRENT_USER
+    UPDATE_CURRENT_USER
   }
 
   input ApiHistoryFilterInput {
