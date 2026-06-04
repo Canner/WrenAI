@@ -22,3 +22,4 @@ export * from './dashboardItemRefreshJobRepository';
 export * from './rbacRepository';
 export * from './organizationRepository';
 export * from './organizationMemberRepository';
+export * from './organizationInvitationRepository';

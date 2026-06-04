@@ -25,6 +25,8 @@ import {
   OrganizationRepository,
   OrganizationMemberRepository,
   OrganizationMemberProjectRepository,
+  OrganizationInvitationRepository,
+  OrganizationInvitationProjectRepository,
 } from '@server/repositories';
 import {
   WrenEngineAdaptor,
@@ -166,6 +168,10 @@ export const initComponents = () => {
   const organizationMemberRepository = new OrganizationMemberRepository(knex);
   const organizationMemberProjectRepository =
     new OrganizationMemberProjectRepository(knex);
+  const organizationInvitationRepository =
+    new OrganizationInvitationRepository(knex);
+  const organizationInvitationProjectRepository =
+    new OrganizationInvitationProjectRepository(knex);
 
   // adaptors
   const wrenEngineAdaptor = new WrenEngineAdaptor({
@@ -283,6 +289,8 @@ export const initComponents = () => {
     organizationRepository,
     organizationMemberRepository,
     organizationMemberProjectRepository,
+    organizationInvitationRepository,
+    organizationInvitationProjectRepository,
     userRepository,
     projectRepository,
   );
@@ -325,6 +333,8 @@ export const initComponents = () => {
     organizationRepository,
     organizationMemberRepository,
     organizationMemberProjectRepository,
+    organizationInvitationRepository,
+    organizationInvitationProjectRepository,
 
     // adaptors
     wrenEngineAdaptor,

@@ -13,6 +13,30 @@ import {
 const logger = getLogger('API_ORGANIZATION_MEMBERS');
 logger.level = 'debug';
 
+const getBaseUrl = (req: NextApiRequest) => {
+  const protocol =
+    (req.headers['x-forwarded-proto'] as string | undefined) || 'http';
+  const host =
+    (req.headers['x-forwarded-host'] as string | undefined) || req.headers.host;
+  return `${protocol}://${host}`;
+};
+
+const withInviteLinks = (
+  payload: any,
+  baseUrl: string,
+) => ({
+  ...payload,
+  invitations: payload.invitations.map((invitation) => ({
+    ...invitation,
+    inviteLink: `${baseUrl}/organization/invitations/${invitation.token}`,
+  })),
+});
+
+const withInviteLink = <T extends { token: string }>(payload: T, baseUrl: string) => ({
+  ...payload,
+  inviteLink: `${baseUrl}/organization/invitations/${payload.token}`,
+});
+
 const getOrganizationMemberService = () => {
   const { components } = require('@/common');
   const componentGraph = components ?? globalThis.__wrenComponents;
@@ -40,7 +64,7 @@ export default async function handler(
       await respondWithSimple({
         res,
         statusCode: 200,
-        responsePayload: payload,
+        responsePayload: withInviteLinks(payload, getBaseUrl(req)),
         projectId,
         apiType: ApiType.GET_ORGANIZATION_MEMBERS,
         startTime,
@@ -54,7 +78,7 @@ export default async function handler(
     await respondWithSimple({
       res,
       statusCode: 201,
-      responsePayload: member,
+      responsePayload: withInviteLink(member, getBaseUrl(req)),
       projectId,
       apiType: ApiType.INVITE_ORGANIZATION_MEMBER,
       startTime,
