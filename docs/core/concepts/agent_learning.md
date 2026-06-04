@@ -16,9 +16,9 @@ The difference is that an agent forgets between sessions unless your tooling sto
 
 Wren AI runs the agent through two beats whenever you set up a new project.
 
-**Beat 1 — Scaffold fast.** The `wren-generate-mdl` skill drives the agent through schema discovery, type normalization, and an initial MDL project. The agent can already query through that modeled layer in a few minutes. The MDL is rough but functional — it covers what the database can tell you about itself.
+**Beat 1 — Scaffold fast.** The `generate-mdl` guide drives the agent through schema discovery, type normalization, and an initial MDL project. The agent can already query through that modeled layer in a few minutes. The MDL is rough but functional — it covers what the database can tell you about itself.
 
-**Beat 2 — Enrich deep.** Structure is only the start. The hard business meaning lives in docs, decks, Slack threads, and analyst SQL. The `wren-enrich-context` workflow brings that meaning in through two modes:
+**Beat 2 — Enrich deep.** Structure is only the start. The hard business meaning lives in docs, decks, Slack threads, and analyst SQL. The `enrich-context` workflow brings that meaning in through two modes:
 
 - **Grill mode** — the agent asks one focused question at a time ("which is the canonical `orders` table?", "what does `status = 4` mean?", "should `active customer` exclude internal users?"). You answer; the agent patches MDL, `instructions.md`, `queries.yml`, or memory.
 - **Auto-pilot mode** — drop PDFs, glossaries, handbooks, and SQL history into `<project>/raw/`. The agent reads them, proposes context changes with evidence, and waits for review.
@@ -40,7 +40,7 @@ The agent reads from all four when it gathers context for a new question. The fi
 
 ## The query workflow in practice
 
-The `wren-usage` skill orchestrates the day-to-day pattern:
+The `usage` guide orchestrates the day-to-day pattern:
 
 ```text
 User asks a business question

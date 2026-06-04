@@ -9,12 +9,12 @@ Wren AI talks to your database through a **profile** — credentials and connect
 The flow is the same regardless of which database you use:
 
 1. **Install the connector extra** for your data source.
-2. **Create a profile** with `wren profile add` (or let the `wren-onboarding` skill do it).
+2. **Create a profile** with `wren profile add` (or let the `onboarding` guide do it).
 3. **Bind the profile** to your project with `wren context set-profile`.
-4. **Generate the MDL** with the `wren-generate-mdl` skill (or manually).
+4. **Generate the MDL** with the `generate-mdl` guide (or manually).
 5. **Start querying.**
 
-If you have an AI coding agent installed, the `wren-onboarding` skill drives the whole thing — see [Installation](/oss/get_started/installation).
+If you have an AI coding agent installed, the `/wren` skill drives the whole thing — see [Installation](/oss/get_started/installation).
 
 ## Supported data sources
 

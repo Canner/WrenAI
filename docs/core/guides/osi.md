@@ -16,7 +16,7 @@ wren context build --from-osi semantic_model.yaml --data-source postgres
 |  | Wren project (native) | OSI project, kept as source | OSI project, migrated once |
 |---|---|---|---|
 | **Source files** | `wren_project.yml` + `models/<name>/metadata.yml` + `views/` + `relationships.yml` | A single `*.yaml` OSI file | After migration: wren project layout |
-| **Author** | You (or `wren-generate-mdl` agent skill) | OSI tooling / vendor / external team | You take ownership after `init` |
+| **Author** | You (or the `generate-mdl` agent guide) | OSI tooling / vendor / external team | You take ownership after `init` |
 | **Wren commands** | `wren context init` → edit → `build` | `wren context build --from-osi <file>` | `wren context init --from-osi <file>` → edit → `build` |
 | **Editable inside Wren?** | Yes — that's the point | No — Wren reads the file as-is | Yes after migration |
 | **Where wren-specific hints live** | Each model's YAML | OSI's `custom_extensions[vendor_name=WREN]` block | Each model's YAML (lifted from OSI at migration time) |

@@ -14,7 +14,7 @@ Trae (China region).
 ## Install Wren skills
 
 ```bash
-npx skills add Canner/WrenAI --skill '*' --agent trae-cn
+npx skills add Canner/WrenAI --agent trae-cn
 ```
 
 ## Run onboarding
@@ -24,7 +24,7 @@ Open your project folder in Trae CN IDE (`File → Open Folder...`), then open t
 Then ask:
 
 ```text
-Use the /wren-onboarding skill to install and set up Wren AI.
+Use the /wren skill to install and set up Wren AI.
 ```
 
 The skill walks the agent through environment checks, profile creation, project scaffolding, and a first query.
