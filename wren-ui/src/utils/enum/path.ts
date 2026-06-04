@@ -19,4 +19,5 @@ export enum Path {
   Organization = '/organization',
   OrganizationGeneral = '/organization/general',
   OrganizationMembers = '/organization/members',
+  OrganizationDangerZone = '/organization/danger-zone',
 }

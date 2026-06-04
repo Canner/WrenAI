@@ -14,13 +14,21 @@ import {
 const logger = getLogger('API_CURRENT_ORGANIZATION');
 logger.level = 'debug';
 
-const getOrganizationService = () => {
+const getComponentGraph = () => {
   const { components } = require('@/common');
   const componentGraph = components ?? globalThis.__wrenComponents;
   if (!componentGraph) {
     throw new Error('Components are not initialized');
   }
-  return componentGraph.organizationService;
+  return componentGraph;
+};
+
+const getOrganizationService = () => {
+  return getComponentGraph().organizationService;
+};
+
+const getOrganizationMemberService = () => {
+  return getComponentGraph().organizationMemberService;
 };
 
 const serializeOrganization = (organization) =>
@@ -43,8 +51,9 @@ export default async function handler(
   const startTime = Date.now();
 
   try {
-    assertAllowedMethods(req, ['GET', 'PUT']);
+    assertAllowedMethods(req, ['GET', 'PUT', 'DELETE']);
     const organizationService = getOrganizationService();
+    const organizationMemberService = getOrganizationMemberService();
     const projectContext = await getCurrentProjectContext();
     const projectId = projectContext.id ?? 0;
 
@@ -60,6 +69,21 @@ export default async function handler(
         apiType: ApiType.UPDATE_CURRENT_ORGANIZATION,
         startTime,
         requestPayload: req.body,
+        headers: req.headers as Record<string, string>,
+      });
+      return;
+    }
+
+    if (req.method === 'DELETE') {
+      await organizationMemberService.deleteCurrentOrganization();
+      await respondWithSimple({
+        res,
+        statusCode: 200,
+        responsePayload: { success: true },
+        projectId,
+        apiType: ApiType.DELETE_CURRENT_ORGANIZATION,
+        startTime,
+        requestPayload: {},
         headers: req.headers as Record<string, string>,
       });
       return;
@@ -94,6 +118,8 @@ export default async function handler(
       apiType:
         req.method === 'PUT'
           ? ApiType.UPDATE_CURRENT_ORGANIZATION
+          : req.method === 'DELETE'
+            ? ApiType.DELETE_CURRENT_ORGANIZATION
           : ApiType.GET_CURRENT_ORGANIZATION,
       requestPayload: req.method === 'PUT' ? req.body : {},
       headers: req.headers as Record<string, string>,

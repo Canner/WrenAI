@@ -55,7 +55,7 @@ export default function OrganizationSettingsLayout({
   titleExtra,
   children,
 }: {
-  section: 'general' | 'members';
+  section: 'general' | 'members' | 'danger-zone';
   title: ReactNode;
   titleExtra?: ReactNode;
   children: ReactNode;
@@ -82,7 +82,11 @@ export default function OrganizationSettingsLayout({
             </Link>
           </SidebarItem>
           <PlaceholderItem>Billing</PlaceholderItem>
-          <PlaceholderItem>Danger zone</PlaceholderItem>
+          <SidebarItem $active={section === 'danger-zone'}>
+            <Link style={linkStyle} href={Path.OrganizationDangerZone}>
+              Danger zone
+            </Link>
+          </SidebarItem>
 
           <SidebarSection>User</SidebarSection>
           <PlaceholderItem>Profile</PlaceholderItem>

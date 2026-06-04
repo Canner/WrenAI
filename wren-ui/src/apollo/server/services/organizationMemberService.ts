@@ -89,6 +89,8 @@ export interface IOrganizationMemberService {
   removeMember(id: number): Promise<boolean>;
   removeInvitation(id: number): Promise<boolean>;
   acceptInvitation(token: string): Promise<OrganizationMemberSummary>;
+  leaveCurrentOrganization(): Promise<boolean>;
+  deleteCurrentOrganization(): Promise<boolean>;
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -263,6 +265,62 @@ export class OrganizationMemberService implements IOrganizationMemberService {
 
     await this.organizationInvitationRepository.deleteOne(invitation.id);
     return true;
+  }
+
+  public async leaveCurrentOrganization(): Promise<boolean> {
+    const organization = await this.getCurrentOrganizationOrThrow();
+    const members =
+      await this.organizationMemberRepository.findMappingsByOrganizationId(
+        organization.id,
+      );
+    const currentUserId = await this.getCurrentUserId(organization.id);
+    const currentMember = members.find(
+      (member) => member.userId === currentUserId,
+    );
+
+    if (!currentMember) {
+      throw new ApiError('Current organization member not found', 404);
+    }
+
+    if (currentMember.organizationRole === 'Admin') {
+      const adminCount = members.filter(
+        (member) => member.organizationRole === 'Admin',
+      ).length;
+      if (adminCount <= 1) {
+        throw new ApiError(
+          'If you are the last Organization admin, you cannot leave the organization. You will need to delete the organization to remove yourself from it.',
+          400,
+        );
+      }
+    }
+
+    await this.organizationMemberRepository.deleteOne(currentMember.id);
+    return true;
+  }
+
+  public async deleteCurrentOrganization(): Promise<boolean> {
+    const organization = await this.getCurrentOrganizationOrThrow();
+    await this.assertCurrentUserAdmin(organization.id);
+
+    const tx = await this.organizationRepository.transaction();
+    try {
+      await this.organizationRepository.deleteOne(organization.id, { tx });
+      const remainingOrganizations = await this.organizationRepository.findAll({
+        order: 'id',
+        tx,
+      });
+      if (remainingOrganizations.length > 0) {
+        await this.organizationRepository.setCurrentOrganization(
+          remainingOrganizations[0].id,
+          { tx },
+        );
+      }
+      await tx.commit();
+      return true;
+    } catch (error) {
+      await tx.rollback();
+      throw error;
+    }
   }
 
   public async acceptInvitation(
@@ -582,6 +640,23 @@ export class OrganizationMemberService implements IOrganizationMemberService {
     const currentUserId = await this.getCurrentUserId(organizationId);
     if (currentUserId && currentUserId === userId) {
       throw new ApiError('You cannot modify your own organization role', 400);
+    }
+  }
+
+  private async assertCurrentUserAdmin(organizationId: number) {
+    const currentUserId = await this.getCurrentUserId(organizationId);
+    const members =
+      await this.organizationMemberRepository.findMappingsByOrganizationId(
+        organizationId,
+      );
+    const currentMember = members.find(
+      (member) => member.userId === currentUserId,
+    );
+    if (!currentMember || currentMember.organizationRole !== 'Admin') {
+      throw new ApiError(
+        'Only Organization admins can delete the organization',
+        403,
+      );
     }
   }
 

@@ -25,6 +25,8 @@ export const typeDefs = gql`
     GET_CURRENT_ORGANIZATION
     CREATE_ORGANIZATION
     SELECT_ORGANIZATION
+    LEAVE_ORGANIZATION
+    DELETE_CURRENT_ORGANIZATION
   }
 
   input ApiHistoryFilterInput {
