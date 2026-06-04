@@ -13,7 +13,7 @@ Dexto coding agent.
 ## Install Wren skills
 
 ```bash
-npx skills add Canner/WrenAI --skill '*' --agent dexto
+npx skills add Canner/WrenAI --agent dexto
 ```
 
 ## Run onboarding
@@ -23,7 +23,7 @@ Open your project folder in Dexto, then start a new chat session.
 Then ask:
 
 ```text
-Use the /wren-onboarding skill to install and set up Wren AI.
+Use the /wren skill to install and set up Wren AI.
 ```
 
 The skill walks the agent through environment checks, profile creation, project scaffolding, and a first query.

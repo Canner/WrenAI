@@ -14,7 +14,7 @@ Factory AI Droid CLI.
 ## Install Wren skills
 
 ```bash
-npx skills add Canner/WrenAI --skill '*' --agent droid
+npx skills add Canner/WrenAI --agent droid
 ```
 
 ## Run onboarding
@@ -26,7 +26,7 @@ droid
 Then ask:
 
 ```text
-Use the /wren-onboarding skill to install and set up Wren AI.
+Use the /wren skill to install and set up Wren AI.
 ```
 
 The skill walks the agent through environment checks, profile creation, project scaffolding, and a first query.

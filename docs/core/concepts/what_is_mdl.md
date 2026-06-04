@@ -89,7 +89,7 @@ See [Manage project](/oss/guides/manage_project) for the project structure and l
 
 ## From raw schema to trusted context
 
-MDL usually starts with scaffolding. The `wren-generate-mdl` skill can inspect a database, normalize types, detect structure, and generate an initial project so the agent can query through a modeled layer quickly.
+MDL usually starts with scaffolding. The `generate-mdl` guide can inspect a database, normalize types, detect structure, and generate an initial project so the agent can query through a modeled layer quickly.
 
 That first pass is useful, but it is only the beginning. The deeper value comes when your team enriches the model:
 

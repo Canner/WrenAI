@@ -14,7 +14,7 @@ Google's official Gemini CLI.
 ## Install Wren skills
 
 ```bash
-npx skills add Canner/WrenAI --skill '*' --agent gemini-cli
+npx skills add Canner/WrenAI --agent gemini-cli
 ```
 
 ## Run onboarding
@@ -26,7 +26,7 @@ gemini
 Then ask:
 
 ```text
-Use the /wren-onboarding skill to install and set up Wren AI.
+Use the /wren skill to install and set up Wren AI.
 ```
 
 The skill walks the agent through environment checks, profile creation, project scaffolding, and a first query.

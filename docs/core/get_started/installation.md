@@ -6,18 +6,18 @@ sidebar_label: Installation
 
 Get Wren AI running. Your AI coding agent does the rest.
 
-## 1. Install the skill bundle
+## 1. Install the skill
 
-Skills are workflow guides that teach AI coding agents (Claude Code, Openclaw, Hermes, Codex, etc.) how to drive the Wren CLI for you:
+This installs a single **discovery stub** (`wren`) that teaches AI coding agents (Claude Code, Openclaw, Hermes, Codex, etc.) how to drive the Wren CLI for you:
 
 ```bash
-npx skills add Canner/WrenAI --skill '*'
+npx skills add Canner/WrenAI
 ```
 
-Have multiple AI coding agents installed and want the skills available in all of them? Pass `--agent '*'`:
+Have multiple AI coding agents installed and want the stub available in all of them? Pass `--agent '*'`:
 
 ```bash
-npx skills add Canner/WrenAI --skill '*' --agent '*'
+npx skills add Canner/WrenAI --agent '*'
 ```
 
 Or via the install script:
@@ -26,13 +26,13 @@ Or via the install script:
 curl -fsSL https://raw.githubusercontent.com/Canner/WrenAI/main/skills/install.sh | bash
 ```
 
-> See the [Skills reference](/oss/reference/skills) for the full list of skills installed and what each one does.
+> **Only one skill is installed** — `wren` (at `~/.claude/skills/wren/SKILL.md` for Claude Code). This is expected. Since Wren `0.8`, the workflow guides (`onboarding`, `usage`, `generate-mdl`, `dlt-connector`, `enrich-context`) no longer install as separate skills; they live inside the `wren` CLI and the stub fetches them on demand with `wren skills get <name>`. See the [Skills reference](/oss/reference/skills) for the full delivery model and what each guide does.
 
 ## 2. Ask your agent to set things up
 
 **Start a new agent session** (skills load at session start), open your project directory, and ask:
 
-Use the `/wren-onboarding` skill to install and set up Wren AI.
+Use the `/wren` skill to install and set up Wren AI.
 
 The agent will check your environment, install Python dependencies, create a connection profile for your data source, scaffold the project, and run a first query — all in one flow.
 
