@@ -80,11 +80,10 @@ const DynamicSidebar = (
 };
 
 export default function Sidebar(props: Props) {
-  const { onOpenSettings } = props;
   const router = useRouter();
 
   const onSettingsClick = (event) => {
-    onOpenSettings && onOpenSettings();
+    router.push(Path.OrganizationGeneral);
     event.target.blur();
   };
 
