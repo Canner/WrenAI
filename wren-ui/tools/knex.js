@@ -161,6 +161,16 @@ const getTargetColumns = async (targetDb, tableName) => {
   return rows.map((row) => row.COLUMN_NAME);
 };
 
+const getTargetIdentityColumns = async (targetDb, tableName) => {
+  const rows = await targetDb('INFORMATION_SCHEMA.COLUMNS')
+    .select('COLUMN_NAME')
+    .where({ TABLE_SCHEMA: 'dbo', TABLE_NAME: tableName })
+    .whereRaw(
+      "COLUMNPROPERTY(OBJECT_ID(TABLE_SCHEMA + '.' + TABLE_NAME), COLUMN_NAME, 'IsIdentity') = 1",
+    );
+  return rows.map((row) => row.COLUMN_NAME);
+};
+
 const parseCount = (row) => Number(row.count || row.Count || row[''] || 0);
 
 const getTableCount = async (db, tableName) => {
@@ -246,10 +256,12 @@ const copyTable = async (sourceDb, targetDb, tableName) => {
     1,
     Math.floor(1800 / Math.max(commonColumns.length, 1)),
   );
-  const hasId = commonColumns.includes('id');
+  const identityColumns = await getTargetIdentityColumns(targetDb, tableName);
+  const hasIdentityId =
+    commonColumns.includes('id') && identityColumns.includes('id');
 
-  if (hasId) {
-    await targetDb.raw(`SET IDENTITY_INSERT [${tableName}] ON`);
+  if (hasIdentityId) {
+    await targetDb.raw(`SET IDENTITY_INSERT [dbo].[${tableName}] ON`);
   }
 
   try {
@@ -257,8 +269,8 @@ const copyTable = async (sourceDb, targetDb, tableName) => {
       await targetDb(tableName).insert(rows.slice(index, index + chunkSize));
     }
   } finally {
-    if (hasId) {
-      await targetDb.raw(`SET IDENTITY_INSERT [${tableName}] OFF`);
+    if (hasIdentityId) {
+      await targetDb.raw(`SET IDENTITY_INSERT [dbo].[${tableName}] OFF`);
     }
   }
 
