@@ -1,6 +1,10 @@
 import { NextApiResponse } from 'next';
 import { v4 as uuidv4 } from 'uuid';
-import { ApiType, ApiHistory } from '@server/repositories/apiHistoryRepository';
+import {
+  ApiType,
+  ApiHistory,
+  shouldPersistApiHistory,
+} from '@server/repositories/apiHistoryRepository';
 import * as Errors from '@server/utils/error';
 import {
   AskResult,
@@ -29,6 +33,10 @@ const getApiHistoryRepository = () => {
 };
 
 const persistApiHistory = async (payload: Record<string, any>) => {
+  if (!shouldPersistApiHistory(payload.apiType)) {
+    return;
+  }
+
   try {
     await getApiHistoryRepository().createOne(payload);
   } catch (error) {

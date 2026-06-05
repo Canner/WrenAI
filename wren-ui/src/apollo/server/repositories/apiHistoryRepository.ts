@@ -49,6 +49,30 @@ export enum ApiType {
   UPDATE_CURRENT_USER = 'UPDATE_CURRENT_USER',
 }
 
+export const INTERNAL_API_HISTORY_TYPES = [
+  ApiType.GET_ORGANIZATIONS,
+  ApiType.GET_CURRENT_ORGANIZATION,
+  ApiType.CREATE_ORGANIZATION,
+  ApiType.UPDATE_CURRENT_ORGANIZATION,
+  ApiType.SELECT_ORGANIZATION,
+  ApiType.GET_ORGANIZATION_MEMBERS,
+  ApiType.INVITE_ORGANIZATION_MEMBER,
+  ApiType.UPDATE_ORGANIZATION_MEMBER,
+  ApiType.REMOVE_ORGANIZATION_MEMBER,
+  ApiType.REMOVE_ORGANIZATION_INVITATION,
+  ApiType.ACCEPT_ORGANIZATION_INVITATION,
+  ApiType.LEAVE_ORGANIZATION,
+  ApiType.DELETE_CURRENT_ORGANIZATION,
+  ApiType.GET_PROJECTS,
+  ApiType.GET_CURRENT_PROJECT,
+  ApiType.SELECT_PROJECT,
+  ApiType.GET_CURRENT_USER,
+  ApiType.UPDATE_CURRENT_USER,
+];
+
+export const shouldPersistApiHistory = (apiType?: ApiType) =>
+  Boolean(apiType && !INTERNAL_API_HISTORY_TYPES.includes(apiType));
+
 export interface ApiHistory {
   id?: string;
   projectId: number;
@@ -117,6 +141,7 @@ export class ApiHistoryRepository
     dateFilter?: { startDate?: Date; endDate?: Date },
   ): Promise<number> {
     let query = this.knex(this.tableName).count('id as count');
+    query = this.excludeInternalApiTypes(query);
 
     if (filter) {
       query = query.where(this.transformToDBData(filter));
@@ -145,6 +170,7 @@ export class ApiHistoryRepository
     pagination?: PaginationOptions,
   ): Promise<ApiHistory[]> {
     let query = this.knex(this.tableName).select('*');
+    query = this.excludeInternalApiTypes(query);
 
     if (filter) {
       query = query.where(this.transformToDBData(filter));
@@ -230,5 +256,9 @@ export class ApiHistoryRepository
    */
   private camelToSnakeCase(str: string): string {
     return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+  }
+
+  private excludeInternalApiTypes(query: Knex.QueryBuilder) {
+    return query.whereNotIn('api_type', INTERNAL_API_HISTORY_TYPES);
   }
 }
