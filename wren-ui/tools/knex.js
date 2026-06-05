@@ -8,6 +8,14 @@ const SQLITE_FILE = process.env.SQLITE_FILE; // export SQLITE_FILE=./db.sqlite3
 
 const APP_TABLE_ORDER = [
   'project',
+  'roles',
+  'users',
+  'user_roles',
+  'organization',
+  'organization_members',
+  'organization_member_projects',
+  'organization_invitations',
+  'organization_invitation_projects',
   'model',
   'model_column',
   'model_nested_column',
