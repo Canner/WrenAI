@@ -188,11 +188,14 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     return mapKeys(data, (_value, key) => snakeCase(key));
   };
 
-  protected transformFromDBData = (data: any): T => {
+  protected defaultTransformFromDBData(data: any): T {
     if (!isPlainObject(data)) {
       throw new Error('Unexpected dbdata');
     }
     const camelCaseData = mapKeys(data, (_value, key) => camelCase(key));
     return camelCaseData as T;
-  };
+  }
+
+  protected transformFromDBData = (data: any): T =>
+    this.defaultTransformFromDBData(data);
 }

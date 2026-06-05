@@ -72,7 +72,7 @@ export class UserRepository
   }
 
   protected override transformFromDBData = (data: any): RbacUser => {
-    const user = super.transformFromDBData(data) as RbacUser;
+    const user = this.defaultTransformFromDBData(data) as RbacUser;
     return {
       ...user,
       isActive: coerceBoolean(user.isActive),

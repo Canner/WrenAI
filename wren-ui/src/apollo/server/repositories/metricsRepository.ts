@@ -30,7 +30,7 @@ export class MetricRepository
   }
 
   protected override transformFromDBData = (data: any): Metric => {
-    const metric = super.transformFromDBData(data) as Metric;
+    const metric = this.defaultTransformFromDBData(data) as Metric;
     return {
       ...metric,
       cached: coerceBoolean(metric.cached),

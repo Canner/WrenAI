@@ -28,7 +28,7 @@ export class DashboardRepository
   }
 
   protected override transformFromDBData = (data: any): Dashboard => {
-    const dashboard = super.transformFromDBData(data) as Dashboard;
+    const dashboard = this.defaultTransformFromDBData(data) as Dashboard;
     return {
       ...dashboard,
       cacheEnabled: coerceBoolean(dashboard.cacheEnabled),

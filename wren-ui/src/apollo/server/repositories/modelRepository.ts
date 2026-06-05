@@ -35,7 +35,7 @@ export class ModelRepository
   }
 
   protected override transformFromDBData = (data: any): Model => {
-    const model = super.transformFromDBData(data) as Model;
+    const model = this.defaultTransformFromDBData(data) as Model;
     return {
       ...model,
       cached: coerceBoolean(model.cached),

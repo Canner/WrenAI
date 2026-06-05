@@ -35,7 +35,7 @@ export class OrganizationRepository
   }
 
   protected override transformFromDBData = (data: any): Organization => {
-    const organization = super.transformFromDBData(data) as Organization;
+    const organization = this.defaultTransformFromDBData(data) as Organization;
     return {
       ...organization,
       isCurrent: coerceBoolean(organization.isCurrent),

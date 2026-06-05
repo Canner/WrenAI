@@ -26,7 +26,7 @@ export class ViewRepository
   }
 
   protected override transformFromDBData = (data: any): View => {
-    const view = super.transformFromDBData(data) as View;
+    const view = this.defaultTransformFromDBData(data) as View;
     return {
       ...view,
       cached: coerceBoolean(view.cached),

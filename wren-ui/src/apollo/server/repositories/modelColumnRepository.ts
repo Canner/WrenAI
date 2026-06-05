@@ -57,7 +57,7 @@ export class ModelColumnRepository
   }
 
   protected override transformFromDBData = (data: any): ModelColumn => {
-    const column = super.transformFromDBData(data) as ModelColumn;
+    const column = this.defaultTransformFromDBData(data) as ModelColumn;
     return {
       ...column,
       isCalculated: coerceBoolean(column.isCalculated),
