@@ -22,6 +22,11 @@ interface OrganizationMembersResponse {
   error?: string;
 }
 
+const readJsonResponse = async <T,>(response: Response): Promise<T> => {
+  const text = await response.text();
+  return (text ? JSON.parse(text) : {}) as T;
+};
+
 const IntroText = styled(Typography.Text)`
   display: block;
   margin-top: 12px;
@@ -78,8 +83,14 @@ export default function OrganizationDangerZonePage() {
   const loadMembers = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/v1/organizations/members');
-      const payload = (await response.json()) as OrganizationMembersResponse;
+      const response = await fetch('/api/v1/organizations/members', {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      });
+      const payload =
+        await readJsonResponse<OrganizationMembersResponse>(response);
       if (!response.ok) {
         throw new Error(payload.error || 'Failed to load organization members');
       }
@@ -115,7 +126,7 @@ export default function OrganizationDangerZonePage() {
       const response = await fetch('/api/v1/organizations/members/current', {
         method: 'DELETE',
       });
-      const payload = await response.json();
+      const payload = await readJsonResponse<{ error?: string }>(response);
       if (!response.ok) {
         throw new Error(payload.error || 'Failed to leave organization');
       }
@@ -134,7 +145,7 @@ export default function OrganizationDangerZonePage() {
       const response = await fetch('/api/v1/organizations/current', {
         method: 'DELETE',
       });
-      const payload = await response.json();
+      const payload = await readJsonResponse<{ error?: string }>(response);
       if (!response.ok) {
         throw new Error(payload.error || 'Failed to delete organization');
       }
