@@ -5,7 +5,11 @@ import {
   mapValues,
   snakeCase,
 } from 'lodash';
-import { BaseRepository, IBasicRepository } from './baseRepository';
+import {
+  BaseRepository,
+  IBasicRepository,
+  IQueryOptions,
+} from './baseRepository';
 import { Knex } from 'knex';
 
 export enum ApiType {
@@ -89,6 +93,20 @@ export class ApiHistoryRepository
 
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'api_history' });
+  }
+
+  public override async createOne(
+    data: Partial<ApiHistory>,
+    queryOptions?: IQueryOptions,
+  ): Promise<ApiHistory> {
+    return super.createOne(this.withTimestamps(data), queryOptions);
+  }
+
+  public override async createMany(
+    data: Partial<ApiHistory>[],
+    queryOptions?: IQueryOptions,
+  ): Promise<ApiHistory[]> {
+    return super.createMany(data.map(this.withTimestamps), queryOptions);
   }
 
   /**
@@ -182,6 +200,15 @@ export class ApiHistoryRepository
       return value;
     }) as ApiHistory;
     return formattedData;
+  };
+
+  private withTimestamps = (data: Partial<ApiHistory>): Partial<ApiHistory> => {
+    const now = new Date().toISOString();
+    return {
+      ...data,
+      createdAt: data.createdAt ?? now,
+      updatedAt: data.updatedAt ?? now,
+    };
   };
 
   protected override transformToDBData = (data: any) => {
