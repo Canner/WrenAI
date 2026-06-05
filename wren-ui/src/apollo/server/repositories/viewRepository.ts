@@ -1,5 +1,9 @@
 import { Knex } from 'knex';
-import { BaseRepository, IBasicRepository } from './baseRepository';
+import {
+  BaseRepository,
+  IBasicRepository,
+  coerceBoolean,
+} from './baseRepository';
 
 export interface View {
   id: number; // ID
@@ -20,4 +24,12 @@ export class ViewRepository
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'view' });
   }
+
+  protected override transformFromDBData = (data: any): View => {
+    const view = super.transformFromDBData(data) as View;
+    return {
+      ...view,
+      cached: coerceBoolean(view.cached),
+    };
+  };
 }

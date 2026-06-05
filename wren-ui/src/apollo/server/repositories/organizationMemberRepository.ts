@@ -3,6 +3,7 @@ import {
   BaseRepository,
   IBasicRepository,
   IQueryOptions,
+  coerceBoolean,
 } from './baseRepository';
 import { Project } from './projectRepository';
 import { DataSourceName } from '@server/types';
@@ -96,7 +97,7 @@ export class OrganizationMemberRepository
         email: row.user__email,
         externalId: row.user__external_id,
         identityProvider: row.user__identity_provider,
-        isActive: row.user__is_active,
+        isActive: coerceBoolean(row.user__is_active),
         createdAt: row.user__created_at,
         updatedAt: row.user__updated_at,
       },

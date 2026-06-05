@@ -1,5 +1,9 @@
 import { Knex } from 'knex';
-import { BaseRepository, IBasicRepository } from './baseRepository';
+import {
+  BaseRepository,
+  IBasicRepository,
+  coerceBoolean,
+} from './baseRepository';
 import { ScheduleFrequencyEnum } from '@server/models/dashboard';
 
 export interface Dashboard {
@@ -22,4 +26,12 @@ export class DashboardRepository
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'dashboard' });
   }
+
+  protected override transformFromDBData = (data: any): Dashboard => {
+    const dashboard = super.transformFromDBData(data) as Dashboard;
+    return {
+      ...dashboard,
+      cacheEnabled: coerceBoolean(dashboard.cacheEnabled),
+    };
+  };
 }

@@ -3,6 +3,7 @@ import {
   BaseRepository,
   IBasicRepository,
   IQueryOptions,
+  coerceBoolean,
 } from './baseRepository';
 
 export interface Role {
@@ -69,6 +70,14 @@ export class UserRepository
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'users' });
   }
+
+  protected override transformFromDBData = (data: any): RbacUser => {
+    const user = super.transformFromDBData(data) as RbacUser;
+    return {
+      ...user,
+      isActive: coerceBoolean(user.isActive),
+    };
+  };
 }
 
 export class UserRoleRepository
@@ -144,7 +153,7 @@ export class UserRoleRepository
         email: row.user__email,
         externalId: row.user__external_id,
         identityProvider: row.user__identity_provider,
-        isActive: row.user__is_active,
+        isActive: coerceBoolean(row.user__is_active),
         createdAt: row.user__created_at,
         updatedAt: row.user__updated_at,
       },

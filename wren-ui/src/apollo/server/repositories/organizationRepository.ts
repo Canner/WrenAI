@@ -1,5 +1,10 @@
 import { Knex } from 'knex';
-import { BaseRepository, IBasicRepository, IQueryOptions } from './baseRepository';
+import {
+  BaseRepository,
+  IBasicRepository,
+  IQueryOptions,
+  coerceBoolean,
+} from './baseRepository';
 
 export interface Organization {
   id: number;
@@ -28,6 +33,14 @@ export class OrganizationRepository
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'organization' });
   }
+
+  protected override transformFromDBData = (data: any): Organization => {
+    const organization = super.transformFromDBData(data) as Organization;
+    return {
+      ...organization,
+      isCurrent: coerceBoolean(organization.isCurrent),
+    };
+  };
 
   public async getCurrentOrganization(queryOptions?: IQueryOptions) {
     return await this.findOneBy({ isCurrent: true }, queryOptions);

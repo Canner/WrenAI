@@ -1,5 +1,9 @@
 import { Knex } from 'knex';
-import { BaseRepository, IBasicRepository } from './baseRepository';
+import {
+  BaseRepository,
+  IBasicRepository,
+  coerceBoolean,
+} from './baseRepository';
 import {
   camelCase,
   isPlainObject,
@@ -273,6 +277,9 @@ export class ProjectRepository
     const camelCaseData = mapKeys(formattedData, (_value, key) =>
       camelCase(key),
     );
+    if (Object.prototype.hasOwnProperty.call(camelCaseData, 'isCurrent')) {
+      camelCaseData.isCurrent = coerceBoolean(camelCaseData.isCurrent);
+    }
     return camelCaseData as Project;
   };
 

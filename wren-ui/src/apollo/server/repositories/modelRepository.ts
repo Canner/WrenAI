@@ -3,6 +3,7 @@ import {
   BaseRepository,
   IBasicRepository,
   IQueryOptions,
+  coerceBoolean,
 } from './baseRepository';
 
 export interface Model {
@@ -32,6 +33,15 @@ export class ModelRepository
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'model' });
   }
+
+  protected override transformFromDBData = (data: any): Model => {
+    const model = super.transformFromDBData(data) as Model;
+    return {
+      ...model,
+      cached: coerceBoolean(model.cached),
+    };
+  };
+
   public async findAllByIds(ids: number[]) {
     const res = await this.knex<Model>(this.tableName).whereIn('id', ids);
     return res.map((r) => this.transformFromDBData(r));

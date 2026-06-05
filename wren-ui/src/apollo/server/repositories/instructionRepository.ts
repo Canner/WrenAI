@@ -1,5 +1,9 @@
 import { Knex } from 'knex';
-import { BaseRepository, IBasicRepository } from './baseRepository';
+import {
+  BaseRepository,
+  IBasicRepository,
+  coerceBoolean,
+} from './baseRepository';
 import {
   camelCase,
   isPlainObject,
@@ -42,6 +46,9 @@ export class InstructionRepository
         } else {
           return value;
         }
+      }
+      if (key === 'isDefault') {
+        return coerceBoolean(value);
       }
       return value;
     });

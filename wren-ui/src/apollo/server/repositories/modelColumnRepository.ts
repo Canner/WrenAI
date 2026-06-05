@@ -3,6 +3,7 @@ import {
   BaseRepository,
   IBasicRepository,
   IQueryOptions,
+  coerceBoolean,
 } from './baseRepository';
 
 export interface ModelColumn {
@@ -54,6 +55,16 @@ export class ModelColumnRepository
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'model_column' });
   }
+
+  protected override transformFromDBData = (data: any): ModelColumn => {
+    const column = super.transformFromDBData(data) as ModelColumn;
+    return {
+      ...column,
+      isCalculated: coerceBoolean(column.isCalculated),
+      notNull: coerceBoolean(column.notNull),
+      isPk: coerceBoolean(column.isPk),
+    };
+  };
 
   public async findColumnsByModelIds(modelIds, queryOptions?: IQueryOptions) {
     if (queryOptions && queryOptions.tx) {

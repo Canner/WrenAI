@@ -41,6 +41,19 @@ export interface IBasicRepository<T> {
   ) => Promise<number>;
 }
 
+export const coerceBoolean = (value: unknown): boolean => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    return value === 1;
+  }
+  if (typeof value === 'string') {
+    return ['1', 'true'].includes(value.toLowerCase());
+  }
+  return Boolean(value);
+};
+
 export class BaseRepository<T> implements IBasicRepository<T> {
   protected knex: Knex;
   protected tableName: string;

@@ -1,5 +1,9 @@
 import { Knex } from 'knex';
-import { BaseRepository, IBasicRepository } from './baseRepository';
+import {
+  BaseRepository,
+  IBasicRepository,
+  coerceBoolean,
+} from './baseRepository';
 
 export interface Metric {
   id: number; // ID
@@ -24,4 +28,12 @@ export class MetricRepository
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'metric' });
   }
+
+  protected override transformFromDBData = (data: any): Metric => {
+    const metric = super.transformFromDBData(data) as Metric;
+    return {
+      ...metric,
+      cached: coerceBoolean(metric.cached),
+    };
+  };
 }
