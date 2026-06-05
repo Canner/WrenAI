@@ -82,6 +82,7 @@ pub fn migrate_manifest(
     for version in current..target_version {
         match version {
             1 => migrate_v1_to_v2(&mut value),
+            2 => migrate_v2_to_v3(&mut value),
             _ => {
                 return Err(MigrationError::UnsupportedTargetVersion {
                     target: target_version,
@@ -102,6 +103,14 @@ fn migrate_v1_to_v2(_value: &mut Value) {
     // so existing manifests deserialize correctly without changes.
 }
 
+/// v2→v3: No data transformation needed.
+/// `primaryKey` accepts a composite array in addition to a single string;
+/// existing single-string primary keys remain valid.
+fn migrate_v2_to_v3(_value: &mut Value) {
+    // No-op: `primaryKey` is an untagged `string | array` enum, so existing
+    // single-column manifests deserialize correctly without changes.
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -112,6 +121,26 @@ mod tests {
         let result = migrate_manifest(v1_json, 2).unwrap();
         let value: Value = serde_json::from_str(&result).unwrap();
         assert_eq!(value["layoutVersion"], 2);
+    }
+
+    #[test]
+    fn test_migrate_v2_to_v3() {
+        let v2_json = r#"{"layoutVersion":2,"catalog":"wren","schema":"public","models":[]}"#;
+        let result = migrate_manifest(v2_json, 3).unwrap();
+        let value: Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(value["layoutVersion"], 3);
+    }
+
+    #[test]
+    fn test_migrate_v1_to_v3_preserves_composite_pk() {
+        let v1_json = r#"{"catalog":"wren","schema":"public","models":[{"name":"partsupp","columns":[],"primaryKey":["ps_partkey","ps_suppkey"]}]}"#;
+        let result = migrate_manifest(v1_json, 3).unwrap();
+        let value: Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(value["layoutVersion"], 3);
+        assert_eq!(
+            value["models"][0]["primaryKey"],
+            serde_json::json!(["ps_partkey", "ps_suppkey"])
+        );
     }
 
     #[test]

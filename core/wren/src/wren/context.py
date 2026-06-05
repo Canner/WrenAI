@@ -151,9 +151,9 @@ def convert_mdl_to_project(mdl_json: dict) -> list[ProjectFile]:
     # ── wren_project.yml ──────────────────────────────────────
     # Map layoutVersion back to schema_version
     layout_version = mdl_json.get("layoutVersion", 1)
-    _LAYOUT_TO_SCHEMA = {1: 2, 2: 3}
+    _LAYOUT_TO_SCHEMA = {1: 2, 2: 3, 3: 4}
     schema_version = _LAYOUT_TO_SCHEMA.get(
-        layout_version, 3 if layout_version >= 2 else 2
+        layout_version, 4 if layout_version >= 3 else (3 if layout_version >= 2 else 2)
     )
     project_config: dict[str, Any] = {"schema_version": schema_version}
     if "name" in mdl_json:
@@ -419,10 +419,10 @@ def save_project_config(project_path: Path, config: dict) -> None:
     )
 
 
-_SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3}
+_SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4}
 
 # schema_version → layoutVersion mapping for the engine
-_LAYOUT_VERSION_MAP = {1: 1, 2: 1, 3: 2}
+_LAYOUT_VERSION_MAP = {1: 1, 2: 1, 3: 2, 4: 3}
 
 # Valid dialect values (matches Rust DataSource enum)
 _VALID_DIALECTS = {
@@ -875,6 +875,17 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                     )
                 )
 
+        # Composite (list-form) primary_key is a layoutVersion 3 / schema_version 4
+        # wire format that older engines cannot deserialize.
+        if isinstance(pk, list) and sv < 4:
+            errors.append(
+                ValidationError(
+                    "warning",
+                    f"{src_path} > {name}",
+                    f"composite primary_key requires schema_version >= 4 (current: {sv})",
+                )
+            )
+
         # Validate dialect (if present)
         model_dialect = model.get("dialect")
         if model_dialect is not None:
@@ -1121,7 +1132,8 @@ def plan_upgrade(
             created, deleted = _plan_v1_to_v2(project_path)
             files_created.extend(created)
             files_deleted.extend(deleted)
-        # v2→v3: no file layout changes needed
+        # v2→v3 (dialect) and v3→v4 (composite primary_key): no file layout
+        # changes needed — only wren_project.yml is restamped.
 
     return UpgradeResult(
         from_version=current,
