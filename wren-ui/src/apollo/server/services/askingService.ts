@@ -16,6 +16,7 @@ import { IThreadRepository, Thread } from '../repositories/threadRepository';
 import {
   IThreadResponseRepository,
   ThreadResponse,
+  ThreadResponseAnswerDetail,
   ThreadResponseAdjustmentType,
 } from '../repositories/threadResponseRepository';
 import { getLogger } from '@server/utils';
@@ -69,6 +70,7 @@ export interface AskingDetailTaskInput {
   question?: string;
   sql?: string;
   trackedAskingResult?: TrackedAskingResult;
+  answerDetail?: ThreadResponseAnswerDetail;
 }
 
 export interface AskingDetailTaskUpdateInput {
@@ -767,6 +769,7 @@ export class AskingService implements IAskingService {
       question: input.question,
       sql: input.sql,
       askingTaskId: input.trackedAskingResult?.taskId,
+      answerDetail: input.answerDetail,
     });
 
     // if queryId is provided, update asking task
@@ -823,6 +826,7 @@ export class AskingService implements IAskingService {
       question: input.question,
       sql: input.sql,
       askingTaskId: input.trackedAskingResult?.taskId,
+      answerDetail: input.answerDetail,
     });
 
     // if queryId is provided, update asking task

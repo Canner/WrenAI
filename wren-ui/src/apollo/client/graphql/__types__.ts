@@ -248,12 +248,22 @@ export type CreateSqlPairInput = {
 };
 
 export type CreateThreadInput = {
+  answerContent?: InputMaybe<Scalars['String']>;
+  answerErrorCode?: InputMaybe<Scalars['String']>;
+  answerErrorMessage?: InputMaybe<Scalars['String']>;
+  answerErrorShortMessage?: InputMaybe<Scalars['String']>;
+  answerStatus?: InputMaybe<ThreadResponseAnswerStatus>;
   question?: InputMaybe<Scalars['String']>;
   sql?: InputMaybe<Scalars['String']>;
   taskId?: InputMaybe<Scalars['String']>;
 };
 
 export type CreateThreadResponseInput = {
+  answerContent?: InputMaybe<Scalars['String']>;
+  answerErrorCode?: InputMaybe<Scalars['String']>;
+  answerErrorMessage?: InputMaybe<Scalars['String']>;
+  answerErrorShortMessage?: InputMaybe<Scalars['String']>;
+  answerStatus?: InputMaybe<ThreadResponseAnswerStatus>;
   question?: InputMaybe<Scalars['String']>;
   sql?: InputMaybe<Scalars['String']>;
   taskId?: InputMaybe<Scalars['String']>;

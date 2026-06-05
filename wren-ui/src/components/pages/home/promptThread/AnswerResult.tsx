@@ -240,12 +240,18 @@ export default function AnswerResult(props: Props) {
     showRecommendedQuestions,
   );
 
-  const isAnswerPrepared = !!answerDetail?.queryId || !!answerDetail?.status;
   const isBreakdownOnly = useMemo(() => {
     // we support rendering different types of answers now, so we need to check if it's old data.
     // existing thread response's answerDetail is null.
     return answerDetail === null && !isEmpty(breakdownDetail);
   }, [answerDetail, breakdownDetail]);
+  const isAnswerPrepared = !!answerDetail?.queryId || !!answerDetail?.status;
+  const showTextOnlyAnswer =
+    isAnswerPrepared &&
+    !sql &&
+    !view &&
+    !isBreakdownOnly &&
+    !threadResponse.chartDetail;
 
   // initialize generate answer
   useEffect(() => {
@@ -300,9 +306,10 @@ export default function AnswerResult(props: Props) {
   };
 
   const showAnswerTabs =
-    askingTask?.status === AskingTaskStatus.FINISHED ||
-    isAnswerPrepared ||
-    isBreakdownOnly;
+    !showTextOnlyAnswer &&
+    (askingTask?.status === AskingTaskStatus.FINISHED ||
+      isAnswerPrepared ||
+      isBreakdownOnly);
 
   const rephrasedQuestion =
     threadResponse?.askingTask?.rephrasedQuestion || question;
@@ -325,6 +332,18 @@ export default function AnswerResult(props: Props) {
         data={threadResponse}
         minimized={isAnswerPrepared}
       />
+      {showTextOnlyAnswer && (
+        <>
+          <div className="border border-gray-4 rounded">
+            <TextBasedAnswer {...props} />
+          </div>
+          {renderRecommendedQuestions(
+            isLastThreadResponse,
+            recommendedQuestionProps,
+            onSelectRecommendedQuestion,
+          )}
+        </>
+      )}
       {showAnswerTabs && (
         <>
           <StyledTabs type="card" size="small" onTabClick={onTabClick}>

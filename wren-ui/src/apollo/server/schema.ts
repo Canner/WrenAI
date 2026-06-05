@@ -722,12 +722,22 @@ export const typeDefs = gql`
     question: String
     sql: String
     taskId: String
+    answerContent: String
+    answerStatus: ThreadResponseAnswerStatus
+    answerErrorCode: String
+    answerErrorShortMessage: String
+    answerErrorMessage: String
   }
 
   input CreateThreadResponseInput {
     question: String
     sql: String
     taskId: String
+    answerContent: String
+    answerStatus: ThreadResponseAnswerStatus
+    answerErrorCode: String
+    answerErrorShortMessage: String
+    answerErrorMessage: String
   }
 
   input ThreadUniqueWhereInput {

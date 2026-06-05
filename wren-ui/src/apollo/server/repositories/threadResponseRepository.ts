@@ -4,7 +4,7 @@ import {
   IBasicRepository,
   IQueryOptions,
 } from './baseRepository';
-import { camelCase, isPlainObject, mapKeys, mapValues } from 'lodash';
+import { camelCase, isPlainObject, mapKeys, mapValues, snakeCase } from 'lodash';
 import { AskResultStatus } from '@server/models/adaptor';
 
 export interface DetailStep {
@@ -194,5 +194,18 @@ export class ThreadResponseRepository
       return value;
     }) as ThreadResponse;
     return formattedData;
+  };
+
+  protected override transformToDBData = (data: Partial<ThreadResponse>) => {
+    if (!isPlainObject(data)) {
+      throw new Error('Unexpected dbdata');
+    }
+    const transformedData = mapValues(data, (value, key) => {
+      if (this.jsonbColumns.includes(key)) {
+        return value ? JSON.stringify(value) : value;
+      }
+      return value;
+    });
+    return mapKeys(transformedData, (_value, key) => snakeCase(key));
   };
 }
