@@ -195,20 +195,25 @@ export default function OrganizationDangerZonePage() {
             <DangerCopy>
               <DangerTitle>Delete organization</DangerTitle>
               <DangerDescription>
-                Please be aware that deleting the organization will permanently
-                delete organization membership and associations. This cannot be
-                undone.
+                Only organization admins can delete the organization. This
+                action can not be reversed; be careful when performing this
+                action.
               </DangerDescription>
+              <LastAdminNotice>
+                Once the organization is deleted, its projects will no longer be
+                available to all the organization's users.
+              </LastAdminNotice>
             </DangerCopy>
             <Button
               danger
+              type={canDeleteOrganization ? 'primary' : 'default'}
               loading={deleting}
               disabled={!canDeleteOrganization || leaving}
               onClick={() =>
                 Modal.confirm({
                   title: 'Delete organization?',
                   content:
-                    'This permanently removes the organization, its members, invitations, and organization associations.',
+                    "This permanently deletes the organization and makes its projects unavailable to all the organization's users.",
                   okText: 'Delete organization',
                   okButtonProps: { danger: true },
                   onOk: deleteOrganization,
