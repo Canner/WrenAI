@@ -241,6 +241,12 @@ export class MDLBuilder implements IMDLBuilder {
         const relatedModel = this.relatedModels.find(
           (model: any) => model.id === column.modelId,
         );
+        if (!relatedModel) {
+          logger.debug(
+            `Build MDL Column Error: can not find related model, modelId "${column.modelId}", columnId: "${column.id}"`,
+          );
+          return;
+        }
         const model = this.manifest.models.find(
           (model: any) => model.name === relatedModel.referenceName,
         );
@@ -251,6 +257,12 @@ export class MDLBuilder implements IMDLBuilder {
           return;
         }
         const expression = this.getColumnExpression(column, model);
+        if (expression === null) {
+          logger.debug(
+            `Build MDL Column Error: invalid calculated field metadata, modelId "${column.modelId}", columnId: "${column.id}"`,
+          );
+          return;
+        }
         const columnValue = {
           name: column.referenceName,
           type: column.type,
@@ -283,6 +295,12 @@ export class MDLBuilder implements IMDLBuilder {
       return;
     }
     const expression = this.getColumnExpression(calculatedField, model);
+    if (expression === null) {
+      logger.debug(
+        `Can not add calculated field "${calculatedField.referenceName}" because its metadata is invalid`,
+      );
+      return;
+    }
     const columnValue = {
       name: calculatedField.referenceName,
       type: calculatedField.type,
@@ -379,7 +397,7 @@ export class MDLBuilder implements IMDLBuilder {
   protected getColumnExpression(
     column: ModelColumn,
     currentModel?: Partial<ModelMDL>,
-  ): string {
+  ): string | null {
     if (!column.isCalculated) {
       // columns existed in the data source.
       // Provide original column name in expression to MDL if referenceName has converted.
@@ -389,40 +407,52 @@ export class MDLBuilder implements IMDLBuilder {
       return '';
     }
     // calculated field
-    const lineage = JSON.parse(column.lineage) as number[];
+    const lineage = this.parseLineage(column.lineage);
+    if (isEmpty(lineage) || !column.aggregation) {
+      return null;
+    }
     // lineage = [relationId1, relationId2, ..., columnId]
-    const fieldExpression = Object.entries<number>(lineage).reduce(
-      (acc, [index, id]) => {
-        const isLast = parseInt(index) == lineage.length - 1;
-        if (isLast) {
-          // id is columnId
-          const columnReferenceName = this.relatedColumns.find(
-            (relatedColumn) => relatedColumn.id === id,
-          )?.referenceName;
-          acc.push(`\"${columnReferenceName}\"`);
+    const fieldExpression = lineage.reduce<string[]>((acc, id, index) => {
+      const isLast = index === lineage.length - 1;
+      if (isLast) {
+        // id is columnId
+        const columnReferenceName = this.relatedColumns.find(
+          (relatedColumn) => relatedColumn.id === id,
+        )?.referenceName;
+        if (!columnReferenceName) {
           return acc;
         }
-        // id is relationId
-        const usedRelation = this.relatedRelations.find(
-          (relatedRelation) => relatedRelation.id === id,
-        );
-        const relationColumnName = currentModel!.columns.find(
-          (c) => c.relationship === usedRelation.name,
-        ).name;
-        // move to next model
-        const nextModelName =
-          currentModel.name === usedRelation.fromModelName
-            ? usedRelation.toModelName
-            : usedRelation.fromModelName;
-        const nextModel = this.manifest.models.find(
-          (model) => model.name === nextModelName,
-        );
-        currentModel = nextModel;
-        acc.push(relationColumnName);
+        acc.push(`\"${columnReferenceName}\"`);
         return acc;
-      },
-      [],
-    );
+      }
+      // id is relationId
+      const usedRelation = this.relatedRelations.find(
+        (relatedRelation) => relatedRelation.id === id,
+      );
+      if (!usedRelation || !currentModel?.columns) {
+        return acc;
+      }
+      const relationColumnName = currentModel.columns.find(
+        (c) => c.relationship === usedRelation.name,
+      )?.name;
+      if (!relationColumnName) {
+        return acc;
+      }
+      // move to next model
+      const nextModelName =
+        currentModel.name === usedRelation.fromModelName
+          ? usedRelation.toModelName
+          : usedRelation.fromModelName;
+      const nextModel = this.manifest.models.find(
+        (model) => model.name === nextModelName,
+      );
+      currentModel = nextModel;
+      acc.push(relationColumnName);
+      return acc;
+    }, []);
+    if (fieldExpression.length !== lineage.length) {
+      return null;
+    }
     return `${column.aggregation}(${fieldExpression.join('.')})`;
   }
 
@@ -446,6 +476,18 @@ export class MDLBuilder implements IMDLBuilder {
       schema: modelProps.schema || null,
       table: modelProps.table,
     };
+  }
+  private parseLineage(lineage?: string): number[] {
+    if (!lineage) {
+      return [];
+    }
+    try {
+      const parsedLineage = JSON.parse(lineage);
+      return Array.isArray(parsedLineage) ? parsedLineage : [];
+    } catch (error) {
+      logger.debug(`Can not parse calculated field lineage "${lineage}"`);
+      return [];
+    }
   }
   private postProcessManifest() {
     if (this.useRustWrenEngine()) {
