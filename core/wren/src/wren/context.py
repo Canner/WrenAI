@@ -864,14 +864,16 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                 )
 
         pk = model.get("primary_key")
-        if pk and pk not in col_names:
-            errors.append(
-                ValidationError(
-                    "error",
-                    f"{src_path} > {name}",
-                    f"primary_key '{pk}' not found in columns",
+        pk_cols = [pk] if isinstance(pk, str) else (pk or [])
+        for pk_col in pk_cols:
+            if pk_col not in col_names:
+                errors.append(
+                    ValidationError(
+                        "error",
+                        f"{src_path} > {name}",
+                        f"primary_key '{pk_col}' not found in columns",
+                    )
                 )
-            )
 
         # Validate dialect (if present)
         model_dialect = model.get("dialect")

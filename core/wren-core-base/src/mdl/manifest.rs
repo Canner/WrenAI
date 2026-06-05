@@ -25,6 +25,7 @@ use std::sync::Arc;
 mod manifest_impl {
     use crate::mdl::manifest::bool_from_int;
     use crate::mdl::manifest::table_reference;
+    use crate::mdl::manifest::PrimaryKey;
     use manifest_macro::{
         column, column_level_access_control, column_level_operator, cube, cube_dimension,
         data_source, join_type, manifest, measure, model, normalized_expr, normalized_expr_type,
@@ -59,6 +60,7 @@ mod manifest_impl {
 mod manifest_impl {
     use crate::mdl::manifest::bool_from_int;
     use crate::mdl::manifest::table_reference;
+    use crate::mdl::manifest::PrimaryKey;
     use manifest_macro::{
         column, column_level_access_control, column_level_operator, cube, cube_dimension,
         data_source, join_type, manifest, measure, model, normalized_expr, normalized_expr_type,
@@ -92,6 +94,27 @@ mod manifest_impl {
 }
 
 pub use crate::mdl::manifest::manifest_impl::*;
+
+/// The primary key of a [Model]. A model may declare either a single column
+/// (`"primaryKey": "id"`) or a composite key (`"primaryKey": ["a", "b"]`).
+/// The `#[serde(untagged)]` representation keeps the legacy single-string form
+/// fully backward compatible.
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
+#[serde(untagged)]
+pub enum PrimaryKey {
+    Single(String),
+    Composite(Vec<String>),
+}
+
+impl PrimaryKey {
+    /// All primary key columns in declaration order.
+    pub fn columns(&self) -> Vec<&str> {
+        match self {
+            PrimaryKey::Single(s) => vec![s.as_str()],
+            PrimaryKey::Composite(v) => v.iter().map(String::as_str).collect(),
+        }
+    }
+}
 
 pub const MAX_SUPPORTED_LAYOUT_VERSION: u32 = 2;
 
@@ -377,9 +400,21 @@ impl Model {
             .map(Arc::clone)
     }
 
-    /// Return the primary key of the model
+    /// Return the first primary key column of the model.
+    /// For a composite key this is the first declared column; use
+    /// [`Model::primary_keys`] to get every column.
     pub fn primary_key(&self) -> Option<&str> {
-        self.primary_key.as_deref()
+        self.primary_key
+            .as_ref()
+            .and_then(|pk| pk.columns().into_iter().next())
+    }
+
+    /// Return all primary key columns of the model (empty if none declared).
+    pub fn primary_keys(&self) -> Vec<&str> {
+        self.primary_key
+            .as_ref()
+            .map(PrimaryKey::columns)
+            .unwrap_or_default()
     }
 
     /// Return the table reference of the model
@@ -556,5 +591,55 @@ mod tests {
         // neither defined → Invalid
         model = ModelBuilder::new("empty_model").build();
         assert!(matches!(model.source(), ModelSource::Invalid(_)));
+    }
+
+    #[test]
+    fn test_primary_key_serde() {
+        use crate::mdl::manifest::{Model, PrimaryKey};
+
+        // Legacy single-column form deserializes to Single and serializes back to a string.
+        let single: Model =
+            serde_json::from_str(r#"{"name":"customer","columns":[],"primaryKey":"c_custkey"}"#)
+                .unwrap();
+        assert_eq!(
+            single.primary_key,
+            Some(PrimaryKey::Single("c_custkey".into()))
+        );
+        assert_eq!(single.primary_key(), Some("c_custkey"));
+        assert_eq!(single.primary_keys(), vec!["c_custkey"]);
+        assert_eq!(
+            serde_json::to_value(&single.primary_key).unwrap(),
+            serde_json::json!("c_custkey")
+        );
+
+        // Composite form deserializes to Composite and serializes back to an array.
+        let composite: Model = serde_json::from_str(
+            r#"{"name":"partsupp","columns":[],"primaryKey":["ps_partkey","ps_suppkey"]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            composite.primary_key,
+            Some(PrimaryKey::Composite(vec![
+                "ps_partkey".into(),
+                "ps_suppkey".into()
+            ]))
+        );
+        assert_eq!(composite.primary_key(), Some("ps_partkey"));
+        assert_eq!(composite.primary_keys(), vec!["ps_partkey", "ps_suppkey"]);
+        assert_eq!(
+            serde_json::to_value(&composite.primary_key).unwrap(),
+            serde_json::json!(["ps_partkey", "ps_suppkey"])
+        );
+
+        // Absent primary key.
+        let none: Model = serde_json::from_str(r#"{"name":"m","columns":[]}"#).unwrap();
+        assert_eq!(none.primary_key(), None);
+        assert!(none.primary_keys().is_empty());
+
+        // Builder produces the composite form.
+        let model = ModelBuilder::new("partsupp")
+            .primary_keys(&["ps_partkey", "ps_suppkey"])
+            .build();
+        assert_eq!(model.primary_keys(), vec!["ps_partkey", "ps_suppkey"]);
     }
 }

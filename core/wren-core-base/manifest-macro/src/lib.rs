@@ -153,7 +153,7 @@ pub fn model(python_binding: proc_macro::TokenStream) -> proc_macro::TokenStream
             pub table_reference: Option<String>,
             pub columns: Vec<Arc<Column>>,
             #[serde(default)]
-            pub primary_key: Option<String>,
+            pub primary_key: Option<PrimaryKey>,
             #[serde(default, with = "bool_from_int")]
             pub cached: bool,
             #[serde(default)]

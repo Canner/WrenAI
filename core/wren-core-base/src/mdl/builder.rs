@@ -20,8 +20,8 @@
 #![allow(dead_code)]
 
 use crate::mdl::manifest::{
-    Column, Cube, CubeDimension, DataSource, JoinType, Manifest, Measure, Model, Relationship,
-    TimeDimension, View,
+    Column, Cube, CubeDimension, DataSource, JoinType, Manifest, Measure, Model, PrimaryKey,
+    Relationship, TimeDimension, View,
 };
 use crate::mdl::{ColumnLevelOperator, NormalizedExpr, RowLevelAccessControl, SessionProperty};
 use std::collections::BTreeMap;
@@ -144,7 +144,15 @@ impl ModelBuilder {
     }
 
     pub fn primary_key(mut self, primary_key: &str) -> Self {
-        self.model.primary_key = Some(primary_key.to_string());
+        self.model.primary_key = Some(PrimaryKey::Single(primary_key.to_string()));
+        self
+    }
+
+    /// Set a composite primary key spanning multiple columns.
+    pub fn primary_keys(mut self, primary_keys: &[&str]) -> Self {
+        self.model.primary_key = Some(PrimaryKey::Composite(
+            primary_keys.iter().map(|s| s.to_string()).collect(),
+        ));
         self
     }
 
