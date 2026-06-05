@@ -483,6 +483,21 @@ def test_validate_pk_not_in_columns(tmp_path):
     assert any("not found in columns" in e.message for e in errors)
 
 
+def test_validate_pk_invalid_type(tmp_path):
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: orders\n"
+        "table_reference:\n  table: orders\n"
+        "columns:\n  - name: id\n    type: INTEGER\n"
+        "primary_key: 123\n"
+    )
+    # Must not raise (no TypeError) and must flag the malformed shape.
+    errors = validate_project(tmp_path)
+    assert any("must be a non-empty string or list" in e.message for e in errors)
+
+
 def test_validate_composite_pk_missing_col(tmp_path):
     _make_v2_project(tmp_path)
     d = tmp_path / "models" / "orders"

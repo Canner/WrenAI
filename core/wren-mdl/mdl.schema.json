@@ -311,15 +311,17 @@
             }
           },
           "primaryKey": {
-            "description": "the primary key of the model. A single column (string) or a composite key (array of columns). It's required if the model is the one side of any OEN_TO_MANY or MANY_TO_ONE relationship",
+            "description": "the primary key of the model. A single column (string) or a composite key (array of columns). It's required if the model is the one side of any ONE_TO_MANY or MANY_TO_ONE relationship",
             "oneOf": [
               {
-                "type": "string"
+                "type": "string",
+                "minLength": 1
               },
               {
                 "type": "array",
                 "items": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 1
                 },
                 "minItems": 1
               }

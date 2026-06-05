@@ -864,7 +864,21 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                 )
 
         pk = model.get("primary_key")
-        pk_cols = [pk] if isinstance(pk, str) else (pk or [])
+        if pk is None:
+            pk_cols = []
+        elif isinstance(pk, str):
+            pk_cols = [pk]
+        elif isinstance(pk, list) and all(isinstance(c, str) and c for c in pk) and pk:
+            pk_cols = pk
+        else:
+            errors.append(
+                ValidationError(
+                    "error",
+                    f"{src_path} > {name}",
+                    "primary_key must be a non-empty string or list of non-empty strings",
+                )
+            )
+            pk_cols = []
         for pk_col in pk_cols:
             if pk_col not in col_names:
                 errors.append(

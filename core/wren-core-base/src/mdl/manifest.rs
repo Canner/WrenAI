@@ -641,5 +641,26 @@ mod tests {
             .primary_keys(&["ps_partkey", "ps_suppkey"])
             .build();
         assert_eq!(model.primary_keys(), vec!["ps_partkey", "ps_suppkey"]);
+
+        // A single-column `primary_keys` collapses to `Single` (serializes to a string).
+        let model = ModelBuilder::new("customer")
+            .primary_keys(&["c_custkey"])
+            .build();
+        assert_eq!(
+            model.primary_key,
+            Some(PrimaryKey::Single("c_custkey".into()))
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "non-empty")]
+    fn test_builder_rejects_empty_primary_key() {
+        ModelBuilder::new("m").primary_key("  ").build();
+    }
+
+    #[test]
+    #[should_panic(expected = "at least one")]
+    fn test_builder_rejects_empty_primary_keys() {
+        ModelBuilder::new("m").primary_keys(&[]).build();
     }
 }
