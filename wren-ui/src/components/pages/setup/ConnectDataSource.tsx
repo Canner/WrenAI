@@ -1,9 +1,11 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { Alert, Typography, Form, Row, Col, Button } from 'antd';
 import styled from 'styled-components';
 import { DATA_SOURCES } from '@/utils/enum/dataSources';
 import { getDataSource, getPostgresErrorMessage } from './utils';
+import { useEffect } from 'react';
 
 const StyledForm = styled(Form)`
   border: 1px var(--gray-4) solid;
@@ -26,7 +28,14 @@ interface Props {
 export default function ConnectDataSource(props: Props) {
   const { connectError, dataSource, submitting, onNext, onBack } = props;
   const [form] = Form.useForm();
+  const router = useRouter();
   const current = getDataSource(dataSource);
+
+  useEffect(() => {
+    if (typeof router.query.projectName === 'string') {
+      form.setFieldValue('displayName', router.query.projectName);
+    }
+  }, [form, router.query.projectName]);
 
   const submit = () => {
     form

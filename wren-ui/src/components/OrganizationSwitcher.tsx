@@ -169,10 +169,13 @@ const getBadgeText = (name?: string) =>
 export default function OrganizationSwitcher() {
   const router = useRouter();
   const [form] = Form.useForm();
+  const [classicProjectForm] = Form.useForm();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [visible, setVisible] = useState(false);
   const [projectModalVisible, setProjectModalVisible] = useState(false);
+  const [classicProjectModalVisible, setClassicProjectModalVisible] =
+    useState(false);
   const [projectSearch, setProjectSearch] = useState('');
   const [selectedProjectType, setSelectedProjectType] =
     useState<WorkspaceProjectType>(WorkspaceProjectType.AGENTIC);
@@ -306,6 +309,11 @@ export default function OrganizationSwitcher() {
 
   const startNewProjectFlow = async () => {
     setProjectModalVisible(false);
+    if (selectedProjectType === WorkspaceProjectType.CLASSIC) {
+      classicProjectForm.resetFields();
+      setClassicProjectModalVisible(true);
+      return;
+    }
     await router.push({
       pathname: Path.OnboardingConnection,
       query: {
@@ -313,6 +321,26 @@ export default function OrganizationSwitcher() {
         projectType: selectedProjectType,
       },
     });
+  };
+
+  const startClassicProjectFlow = async () => {
+    try {
+      const values = await classicProjectForm.validateFields();
+      setClassicProjectModalVisible(false);
+      await router.push({
+        pathname: Path.OnboardingConnection,
+        query: {
+          newProject: '1',
+          projectType: WorkspaceProjectType.CLASSIC,
+          projectName: values.projectName,
+        },
+      });
+    } catch (error: any) {
+      if (error?.errorFields) {
+        return;
+      }
+      message.error(error.message || 'Failed to start project setup');
+    }
   };
 
   const overlay = (
@@ -529,6 +557,50 @@ export default function OrganizationSwitcher() {
             </ProjectOptionRow>
           </ProjectCard>
         </Space>
+      </Modal>
+
+      <Modal
+        title="Create a new project"
+        visible={classicProjectModalVisible}
+        footer={[
+          <Button
+            key="cancel"
+            onClick={() => {
+              setClassicProjectModalVisible(false);
+              classicProjectForm.resetFields();
+            }}
+          >
+            Cancel
+          </Button>,
+          <Button
+            key="submit"
+            type="primary"
+            onClick={() => void startClassicProjectFlow()}
+          >
+            Submit
+          </Button>,
+        ]}
+        onCancel={() => {
+          setClassicProjectModalVisible(false);
+          classicProjectForm.resetFields();
+        }}
+        destroyOnClose
+      >
+        <Form form={classicProjectForm} layout="vertical">
+          <Form.Item
+            name="projectName"
+            label="Project name"
+            rules={[
+              { required: true, message: 'Project name is required' },
+              {
+                max: 64,
+                message: 'Project name must be 64 characters or fewer',
+              },
+            ]}
+          >
+            <Input placeholder="test_project" />
+          </Form.Item>
+        </Form>
       </Modal>
     </>
   );
