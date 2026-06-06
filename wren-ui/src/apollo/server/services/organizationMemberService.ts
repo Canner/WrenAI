@@ -67,6 +67,35 @@ export interface OrganizationMemberSummary {
   }>;
 }
 
+export interface ProjectAccessMemberSummary {
+  id: number;
+  userId: number;
+  name: string;
+  email: string;
+  organizationRole: OrganizationMemberRole;
+  permission: 'Owner' | 'Contributor' | 'Viewer';
+  isCurrentUser: boolean;
+  canEditPermission: boolean;
+  canRemove: boolean;
+}
+
+export interface ProjectAccessAvailableMember {
+  id: number;
+  userId: number;
+  name: string;
+  email: string;
+  organizationRole: OrganizationMemberRole;
+}
+
+export interface AddProjectMemberInput {
+  organizationMemberId: number;
+  permission: 'Owner' | 'Contributor' | 'Viewer';
+}
+
+export interface UpdateProjectMemberPermissionInput {
+  permission: 'Owner' | 'Contributor' | 'Viewer';
+}
+
 export interface OrganizationInvitationSummary {
   id: number;
   email: string;
@@ -106,6 +135,20 @@ export interface IOrganizationMemberService {
   updateCurrentUserProfile(
     input: UpdateCurrentUserProfileInput,
   ): Promise<CurrentUserProfile>;
+  listCurrentProjectAccess(): Promise<{
+    members: ProjectAccessMemberSummary[];
+    availableMembers: ProjectAccessAvailableMember[];
+    currentUserId: number | null;
+    canManageAccess: boolean;
+  }>;
+  addProjectMember(
+    input: AddProjectMemberInput,
+  ): Promise<ProjectAccessMemberSummary>;
+  updateProjectMemberPermission(
+    id: number,
+    input: UpdateProjectMemberPermissionInput,
+  ): Promise<ProjectAccessMemberSummary>;
+  removeProjectMember(id: number): Promise<boolean>;
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -373,6 +416,177 @@ export class OrganizationMemberService implements IOrganizationMemberService {
       updatedAt: new Date().toISOString(),
     });
     return this.serializeCurrentUserProfile(user);
+  }
+
+  public async listCurrentProjectAccess() {
+    const organization = await this.getCurrentOrganizationOrThrow();
+    const project = await this.projectRepository.getCurrentProject();
+    const currentUserId = await this.getCurrentUserId(organization.id);
+    const members =
+      await this.organizationMemberRepository.findMappingsByOrganizationId(
+        organization.id,
+      );
+
+    const serializedMembers = await Promise.all(
+      members.map(async (member) => {
+        const projects =
+          await this.organizationMemberProjectRepository.findByOrganizationMemberId(
+            member.id,
+          );
+        const assignment = projects.find(
+          (mappedProject) => mappedProject.projectId === project.id,
+        );
+        const isOrganizationAdmin = member.organizationRole === 'Admin';
+        const isCurrentUser = member.userId === currentUserId;
+        const permission = isOrganizationAdmin
+          ? 'Owner'
+          : assignment
+            ? this.presentProjectPermission(assignment.permission)
+            : null;
+
+        return permission
+          ? {
+              id: member.id,
+              userId: member.userId,
+              name: member.user.name,
+              email: member.user.email,
+              organizationRole:
+                member.organizationRole as OrganizationMemberRole,
+              permission,
+              isCurrentUser,
+              canEditPermission: !isOrganizationAdmin && !isCurrentUser,
+              canRemove: !isOrganizationAdmin && !isCurrentUser,
+            }
+          : null;
+      }),
+    );
+
+    const availableMembers = members
+      .filter(
+        (member) =>
+          member.organizationRole !== 'Admin' &&
+          !serializedMembers.some(
+            (serializedMember) => serializedMember?.id === member.id,
+          ),
+      )
+      .map((member) => ({
+        id: member.id,
+        userId: member.userId,
+        name: member.user.name,
+        email: member.user.email,
+        organizationRole: member.organizationRole as OrganizationMemberRole,
+      }));
+
+    const currentUserMember = serializedMembers.find(
+      (member) => member?.userId === currentUserId,
+    );
+    return {
+      members: serializedMembers.filter(Boolean),
+      availableMembers,
+      currentUserId,
+      canManageAccess:
+        currentUserMember?.permission === 'Owner' ||
+        currentUserMember?.organizationRole === 'Admin',
+    };
+  }
+
+  public async addProjectMember(input: AddProjectMemberInput) {
+    const organization = await this.getCurrentOrganizationOrThrow();
+    const project = await this.projectRepository.getCurrentProject();
+    await this.assertCanManageCurrentProject(organization.id, project.id);
+
+    const member = await this.organizationMemberRepository.findOneBy({
+      id: input.organizationMemberId,
+    });
+    if (!member || member.organizationId !== organization.id) {
+      throw new ApiError('Member not found', 404);
+    }
+    if (member.organizationRole === 'Admin') {
+      throw new ApiError(
+        'Organization admins are owners of all projects by default',
+        400,
+      );
+    }
+
+    const existingAssignment = await this.findProjectAssignment(member.id, project.id);
+    if (existingAssignment) {
+      throw new ApiError('Member already has access to this project', 409);
+    }
+
+    const now = new Date().toISOString();
+    await this.organizationMemberProjectRepository.createOne({
+      organizationMemberId: member.id,
+      projectId: project.id,
+      permission: this.storeProjectPermission(input.permission),
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    return this.serializeProjectAccessMember(member.id, project.id, organization.id);
+  }
+
+  public async updateProjectMemberPermission(
+    id: number,
+    input: UpdateProjectMemberPermissionInput,
+  ) {
+    const organization = await this.getCurrentOrganizationOrThrow();
+    const project = await this.projectRepository.getCurrentProject();
+    const currentUserId = await this.getCurrentUserId(organization.id);
+    await this.assertCanManageCurrentProject(organization.id, project.id);
+
+    const member = await this.organizationMemberRepository.findOneBy({ id });
+    if (!member || member.organizationId !== organization.id) {
+      throw new ApiError('Member not found', 404);
+    }
+    if (member.userId === currentUserId) {
+      throw new ApiError('You cannot modify your own role', 400);
+    }
+    if (member.organizationRole === 'Admin') {
+      throw new ApiError(
+        'You cannot change the role of the organization admin',
+        400,
+      );
+    }
+
+    const assignment = await this.findProjectAssignment(member.id, project.id);
+    if (!assignment) {
+      throw new ApiError('Project member not found', 404);
+    }
+
+    await this.organizationMemberProjectRepository.updateOne(assignment.id, {
+      permission: this.storeProjectPermission(input.permission),
+      updatedAt: new Date().toISOString(),
+    });
+
+    return this.serializeProjectAccessMember(member.id, project.id, organization.id);
+  }
+
+  public async removeProjectMember(id: number) {
+    const organization = await this.getCurrentOrganizationOrThrow();
+    const project = await this.projectRepository.getCurrentProject();
+    const currentUserId = await this.getCurrentUserId(organization.id);
+    await this.assertCanManageCurrentProject(organization.id, project.id);
+
+    const member = await this.organizationMemberRepository.findOneBy({ id });
+    if (!member || member.organizationId !== organization.id) {
+      throw new ApiError('Member not found', 404);
+    }
+    if (member.userId === currentUserId) {
+      throw new ApiError('You cannot remove yourself from the project', 400);
+    }
+    if (member.organizationRole === 'Admin') {
+      throw new ApiError(
+        'You cannot remove the organization admin from the project',
+        400,
+      );
+    }
+
+    const assignment = await this.findProjectAssignment(member.id, project.id);
+    if (!assignment) {
+      throw new ApiError('Project member not found', 404);
+    }
+    await this.organizationMemberProjectRepository.deleteOne(assignment.id);
+    return true;
   }
 
   public async acceptInvitation(
@@ -728,5 +942,119 @@ export class OrganizationMemberService implements IOrganizationMemberService {
     } catch {
       return [];
     }
+  }
+
+  private async serializeProjectAccessMember(
+    organizationMemberId: number,
+    projectId: number,
+    organizationId: number,
+  ): Promise<ProjectAccessMemberSummary> {
+    const members =
+      await this.organizationMemberRepository.findMappingsByOrganizationId(
+        organizationId,
+      );
+    const member = members.find((item) => item.id === organizationMemberId);
+    if (!member) {
+      throw new ApiError('Member not found', 404);
+    }
+    const currentUserId = await this.getCurrentUserId(organizationId);
+    const assignment =
+      await this.organizationMemberProjectRepository.findByOrganizationMemberId(
+        organizationMemberId,
+      );
+    const projectAssignment = assignment.find(
+      (item) => item.projectId === projectId,
+    );
+    const isOrganizationAdmin = member.organizationRole === 'Admin';
+    const permission = isOrganizationAdmin
+      ? 'Owner'
+      : projectAssignment
+        ? this.presentProjectPermission(projectAssignment.permission)
+        : null;
+
+    if (!permission) {
+      throw new ApiError('Project member not found', 404);
+    }
+
+    return {
+      id: member.id,
+      userId: member.userId,
+      name: member.user.name,
+      email: member.user.email,
+      organizationRole: member.organizationRole as OrganizationMemberRole,
+      permission,
+      isCurrentUser: member.userId === currentUserId,
+      canEditPermission: !isOrganizationAdmin && member.userId !== currentUserId,
+      canRemove: !isOrganizationAdmin && member.userId !== currentUserId,
+    };
+  }
+
+  private async assertCanManageCurrentProject(
+    organizationId: number,
+    projectId: number,
+  ) {
+    const currentUserId = await this.getCurrentUserId(organizationId);
+    const members =
+      await this.organizationMemberRepository.findMappingsByOrganizationId(
+        organizationId,
+      );
+    const currentMember = members.find(
+      (member) => member.userId === currentUserId,
+    );
+    if (!currentMember) {
+      throw new ApiError('Current user not found', 404);
+    }
+    if (currentMember.organizationRole === 'Admin') {
+      return;
+    }
+
+    const assignments =
+      await this.organizationMemberProjectRepository.findByOrganizationMemberId(
+        currentMember.id,
+      );
+    const currentProjectAssignment = assignments.find(
+      (assignment) => assignment.projectId === projectId,
+    );
+    const currentPermission = currentProjectAssignment
+      ? this.presentProjectPermission(currentProjectAssignment.permission)
+      : null;
+
+    if (currentPermission !== 'Owner') {
+      throw new ApiError(
+        'Only project owners can manage project access',
+        403,
+      );
+    }
+  }
+
+  private async findProjectAssignment(
+    organizationMemberId: number,
+    projectId: number,
+  ) {
+    const assignments =
+      await this.organizationMemberProjectRepository.findByOrganizationMemberId(
+        organizationMemberId,
+      );
+    return assignments.find((assignment) => assignment.projectId === projectId);
+  }
+
+  private presentProjectPermission(permission: string):
+    | 'Owner'
+    | 'Contributor'
+    | 'Viewer' {
+    if (permission === 'Editor') {
+      return 'Contributor';
+    }
+    if (permission === 'Owner' || permission === 'Viewer') {
+      return permission;
+    }
+    return 'Contributor';
+  }
+
+  private storeProjectPermission(permission: string): ProjectPermissionRole {
+    if (permission === 'Contributor') {
+      return 'Editor';
+    }
+    return this.validateProjectPermission(permission);
   }
 }

@@ -21,6 +21,7 @@ export enum Path {
   OrganizationMembers = '/organization/members',
   OrganizationDangerZone = '/organization/danger-zone',
   ProjectGeneral = '/project/general',
+  ProjectAccessControl = '/project/access-control',
   ProjectCreate = '/projects/create',
   UserProfile = '/user/profile',
 }
