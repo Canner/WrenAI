@@ -83,7 +83,7 @@ export default function Sidebar(props: Props) {
   const router = useRouter();
 
   const onSettingsClick = (event) => {
-    router.push(Path.OrganizationGeneral);
+    router.push(Path.ProjectGeneral);
     event.target.blur();
   };
 

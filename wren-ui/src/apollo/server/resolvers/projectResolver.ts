@@ -98,14 +98,20 @@ export class ProjectResolver {
 
   public async updateCurrentProject(
     _root: any,
-    arg: { data: { language: string } },
+    arg: { data: { language: string; displayName?: string } },
     ctx: IContext,
   ) {
-    const { language } = arg.data;
+    const { language, displayName } = arg.data;
     const project = await ctx.projectService.getCurrentProject();
-    await ctx.projectRepository.updateOne(project.id, {
+    const changes: Record<string, any> = {
       language,
-    });
+    };
+
+    if (typeof displayName === 'string' && trim(displayName)) {
+      changes.displayName = trim(displayName);
+    }
+
+    await ctx.projectRepository.updateOne(project.id, changes);
 
     // only generating for user's data source
     if (project.sampleDataset === null) {

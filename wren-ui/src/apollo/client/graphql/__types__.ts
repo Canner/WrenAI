@@ -1557,6 +1557,7 @@ export type UpdateColumnMetadataInput = {
 };
 
 export type UpdateCurrentProjectInput = {
+  displayName?: InputMaybe<Scalars['String']>;
   language: ProjectLanguage;
 };
 

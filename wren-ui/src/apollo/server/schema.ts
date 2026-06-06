@@ -883,6 +883,7 @@ export const typeDefs = gql`
 
   input UpdateCurrentProjectInput {
     language: ProjectLanguage!
+    displayName: String
   }
 
   type Settings {

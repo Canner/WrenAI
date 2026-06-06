@@ -55,7 +55,12 @@ export default function OrganizationSettingsLayout({
   titleExtra,
   children,
 }: {
-  section: 'general' | 'members' | 'danger-zone' | 'user-profile';
+  section:
+    | 'project-general'
+    | 'general'
+    | 'members'
+    | 'danger-zone'
+    | 'user-profile';
   title: ReactNode;
   titleExtra?: ReactNode;
   children: ReactNode;
@@ -65,9 +70,13 @@ export default function OrganizationSettingsLayout({
       <Layout>
         <StyledSider width={252}>
           <SidebarSection>Project</SidebarSection>
-          <PlaceholderItem>General</PlaceholderItem>
+          <SidebarItem $active={section === 'project-general'}>
+            <Link style={linkStyle} href={Path.ProjectGeneral}>
+              General
+            </Link>
+          </SidebarItem>
           <PlaceholderItem>Access control</PlaceholderItem>
-          <PlaceholderItem>Data source</PlaceholderItem>
+          <PlaceholderItem>Data connection</PlaceholderItem>
           <PlaceholderItem>Danger zone</PlaceholderItem>
 
           <SidebarSection>Organization</SidebarSection>
