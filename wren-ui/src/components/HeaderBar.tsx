@@ -1,5 +1,6 @@
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
-import { Button, Layout, Space } from 'antd';
+import { Avatar, Button, Dropdown, Layout, Menu, Space } from 'antd';
 import styled from 'styled-components';
 import LogoBar from '@/components/LogoBar';
 import { Path } from '@/utils/enum';
@@ -50,14 +51,63 @@ const HeaderRight = styled.div`
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: 12px;
   min-width: 120px;
 `;
+
+const UserAvatar = styled(Avatar)`
+  cursor: pointer;
+  background: var(--geekblue-6);
+  color: var(--gray-1);
+  font-weight: 600;
+`;
+
+interface CurrentUserProfile {
+  name?: string;
+  email?: string;
+}
 
 export default function HeaderBar() {
   const router = useRouter();
   const { pathname } = router;
   const showNav = !pathname.startsWith(Path.Onboarding);
   const isModeling = pathname.startsWith(Path.Modeling);
+  const [currentUser, setCurrentUser] = useState<CurrentUserProfile | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!showNav) return;
+
+    const loadCurrentUser = async () => {
+      try {
+        const response = await fetch('/api/v1/users/current');
+        if (!response.ok) return;
+        const payload = (await response.json()) as CurrentUserProfile;
+        setCurrentUser(payload);
+      } catch {
+        setCurrentUser(null);
+      }
+    };
+
+    loadCurrentUser();
+  }, [showNav]);
+
+  const userInitials = useMemo(() => {
+    const displayName = currentUser?.name || currentUser?.email || 'User';
+    const parts = displayName.trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return 'U';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  }, [currentUser]);
+
+  const userMenu = (
+    <Menu>
+      <Menu.Item key="profile" onClick={() => router.push(Path.UserProfile)}>
+        {currentUser?.email || 'Profile'}
+      </Menu.Item>
+    </Menu>
+  );
 
   return (
     <StyledHeader>
@@ -113,7 +163,18 @@ export default function HeaderBar() {
           )}
         </HeaderLeft>
         <HeaderCenter>{showNav && <OrganizationSwitcher />}</HeaderCenter>
-        <HeaderRight>{isModeling && <Deploy />}</HeaderRight>
+        <HeaderRight>
+          {isModeling && <Deploy />}
+          {showNav && (
+            <Dropdown
+              overlay={userMenu}
+              trigger={['click']}
+              placement="bottomRight"
+            >
+              <UserAvatar size={32}>{userInitials}</UserAvatar>
+            </Dropdown>
+          )}
+        </HeaderRight>
       </div>
     </StyledHeader>
   );
