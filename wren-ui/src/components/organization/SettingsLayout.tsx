@@ -58,6 +58,7 @@ export default function OrganizationSettingsLayout({
   section:
     | 'project-general'
     | 'project-access-control'
+    | 'project-danger-zone'
     | 'general'
     | 'members'
     | 'danger-zone'
@@ -83,7 +84,11 @@ export default function OrganizationSettingsLayout({
             </Link>
           </SidebarItem>
           <PlaceholderItem>Data source</PlaceholderItem>
-          <PlaceholderItem>Danger zone</PlaceholderItem>
+          <SidebarItem $active={section === 'project-danger-zone'}>
+            <Link style={linkStyle} href={Path.ProjectDangerZone}>
+              Danger zone
+            </Link>
+          </SidebarItem>
 
           <SidebarSection>Organization</SidebarSection>
           <SidebarItem $active={section === 'general'}>
