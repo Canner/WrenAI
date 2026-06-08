@@ -12,6 +12,7 @@ import urllib.request
 import pytest
 from typer.testing import CliRunner
 
+from wren.context_cli import _warn_genbi_drift
 from wren.genbi import catalog, runtime
 from wren.genbi.cli import genbi_app
 
@@ -88,17 +89,48 @@ def test_create_without_cubes_notes_static_only(project):
 
 @pytest.mark.unit
 def test_serve_refuses_on_mdl_drift(project):
-    # Declare a panel referencing a cube that the (empty) MDL doesn't provide.
+    # A cube_panel in app.py references a cube the (empty) MDL doesn't provide.
     runner.invoke(genbi_app, ["create", "sales"])
     (project / "target").mkdir()
     (project / "target" / "mdl.json").write_text(json.dumps({"cubes": []}))
-    (project / "apps" / "sales" / "panels.yml").write_text(
-        "panels:\n  - cube: ghost\n    measures: [revenue]\n"
+    (project / "apps" / "sales" / "app.py").write_text(
+        "from wren.genbi.panel import cube_panel\n"
+        "cube_panel(cube='ghost', measures=['revenue'])\n"
     )
     result = runner.invoke(genbi_app, ["serve", "sales"])
     assert result.exit_code == 1
     assert "out of sync" in result.output
     assert "ghost" in result.output
+
+
+@pytest.mark.unit
+def test_context_build_warns_about_drifted_apps(project, capsys):
+
+    runner.invoke(genbi_app, ["create", "sales"])
+    (project / "apps" / "sales" / "app.py").write_text(
+        "from wren.genbi.panel import cube_panel\n"
+        "cube_panel(cube='ghost', measures=['revenue'])\n"
+    )
+    # New manifest no longer has the 'ghost' cube the app references.
+    _warn_genbi_drift(project, {"cubes": []})
+    out = capsys.readouterr().out
+    assert "may be affected" in out
+    assert "sales" in out
+    assert "wren genbi check --all" in out
+
+
+@pytest.mark.unit
+def test_context_build_no_warning_when_clean(project, capsys):
+
+    runner.invoke(genbi_app, ["create", "sales"])
+    (project / "apps" / "sales" / "app.py").write_text(
+        "from wren.genbi.panel import cube_panel\n"
+        "cube_panel(cube='sales', measures=['revenue'])\n"
+    )
+    _warn_genbi_drift(
+        project, {"cubes": [{"name": "sales", "measures": [{"name": "revenue"}]}]}
+    )
+    assert "may be affected" not in capsys.readouterr().out
 
 
 @pytest.mark.genbi
@@ -116,6 +148,12 @@ def test_serve_then_stop_end_to_end(project):
         f"http://127.0.0.1:{port}/_stcore/health", timeout=5
     ) as resp:
         assert resp.status == 200
+
+    # status reports it running with the URL (and survives the PID-reuse guard).
+    status_result = runner.invoke(genbi_app, ["status", "demo", "--json"])
+    status = json.loads(status_result.output.strip().splitlines()[-1])
+    assert status["running"] is True
+    assert status["url"] == f"http://localhost:{port}"
 
     stop_result = runner.invoke(genbi_app, ["stop", "demo"])
     assert stop_result.exit_code == 0

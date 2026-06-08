@@ -657,6 +657,7 @@ def build(
     typer.echo(f"Built: {n_models} models, {n_views} views → {out_path}")
     typer.echo("")
     typer.echo("Next: wren --sql 'SELECT ...' to query your data.")
+    _warn_genbi_drift(project_path, manifest_json)
     # Soft nudge toward semantic memory once the schema crosses the threshold
     # where embedding search starts to pay off.
     if n_models >= 200:
@@ -665,6 +666,33 @@ def build(
             '  pip install "wrenai[memory]"\n'
             "  wren memory index"
         )
+
+
+def _warn_genbi_drift(project_path: Path, manifest_json: dict) -> None:
+    """After a rebuild, warn if any GenBI data app references dropped cubes/dims.
+
+    Best-effort and dependency-light: the genbi check/introspect modules are
+    pure (no Streamlit), but any failure here must never break `context build`.
+    """
+    try:
+        from wren.genbi import catalog, check, introspect  # noqa: PLC0415
+
+        affected = []
+        for entry in catalog.read_index(project_path):
+            app_file = catalog.apps_dir(project_path) / entry.entry
+            if not app_file.exists():
+                continue
+            specs = introspect.extract_panel_specs(app_file.read_text())
+            if specs and check.check_panels(specs, manifest_json):
+                affected.append(entry.name)
+        if affected:
+            typer.echo(
+                f"\n⚠ {len(affected)} data app(s) may be affected by this rebuild: "
+                f"{', '.join(affected)}\n"
+                "  Run `wren genbi check --all` to see what drifted."
+            )
+    except Exception:
+        return
 
 
 @context_app.command()

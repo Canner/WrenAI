@@ -8,9 +8,8 @@ from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
-import yaml
 
-from wren.genbi import catalog, check, runstate, runtime
+from wren.genbi import catalog, check, introspect, runstate, runtime
 
 genbi_app = typer.Typer(
     name="genbi",
@@ -41,27 +40,16 @@ def _entry_for(project: Path, name: str) -> Path:
     return _app_dir(project, name) / "app.py"
 
 
-def _panels_path(project: Path, name: str) -> Path:
-    return _app_dir(project, name) / "panels.yml"
-
-
 def _load_panel_specs(project: Path, name: str) -> list[check.PanelSpec]:
-    """Read declared cube panels from the app's optional panels.yml sidecar."""
-    path = _panels_path(project, name)
-    if not path.exists():
+    """Extract the app's declared cube panels by statically parsing app.py.
+
+    The ``cube_panel(...)`` calls in the app ARE the declaration — no sidecar to
+    maintain. Returns ``[]`` if the entry file is missing or unparseable.
+    """
+    entry = _entry_for(project, name)
+    if not entry.exists():
         return []
-    data = yaml.safe_load(path.read_text()) or {}
-    specs = []
-    for row in data.get("panels", []):
-        specs.append(
-            check.PanelSpec(
-                cube=row["cube"],
-                measures=row.get("measures", []),
-                dimensions=row.get("dimensions", []),
-                time_dimensions=row.get("time_dimensions", []),
-            )
-        )
-    return specs
+    return introspect.extract_panel_specs(entry.read_text())
 
 
 def _load_manifest_dict(project: Path) -> dict:
@@ -69,6 +57,22 @@ def _load_manifest_dict(project: Path) -> dict:
     if not target.exists():
         return {}
     return _json.loads(target.read_text())
+
+
+def _is_running(project: Path, name: str, state) -> bool:
+    """True iff the recorded process is still *our* live, healthy app.
+
+    Defeats PID reuse: the pid must be alive AND its live command line must
+    still reference this app's entry file and port AND the health endpoint must
+    answer — not just "some process with that pid exists".
+    """
+    if state is None or not runtime.is_alive(state.pid):
+        return False
+    cmdline = runtime.process_cmdline(state.pid)
+    entry = _entry_for(project, name)
+    if not cmdline or entry.name not in cmdline or str(state.port) not in cmdline:
+        return False
+    return runtime.wait_healthy(state.port, timeout=2, interval=0.2)
 
 
 # ── create ──────────────────────────────────────────────────────────────────
@@ -152,11 +156,7 @@ def serve(
 
     # Idempotent start-or-attach: reuse a healthy existing process.
     existing = runstate.load(project, name)
-    if (
-        existing
-        and runtime.is_alive(existing.pid)
-        and runtime.wait_healthy(existing.port, timeout=2, interval=0.2)
-    ):
+    if existing and _is_running(project, name, existing):
         _emit_url(existing.port, json_out, attached=True)
         return
 
@@ -234,11 +234,7 @@ def list_apps(json_out: JsonOpt = False) -> None:
     rows = []
     for e in entries:
         state = runstate.load(project, e.name)
-        running = bool(
-            state
-            and runtime.is_alive(state.pid)
-            and runtime.wait_healthy(state.port, timeout=1, interval=0.2)
-        )
+        running = _is_running(project, e.name, state)
         rows.append(
             {
                 "name": e.name,
@@ -288,6 +284,42 @@ def logs(
     lines = log_path.read_text().splitlines()
     for line in lines[-tail:]:
         typer.echo(line)
+
+
+# ── status ──────────────────────────────────────────────────────────────────
+
+
+@genbi_app.command()
+def status(name: NameArg, json_out: JsonOpt = False) -> None:
+    """Show one app's health, URL, pid, and the tail of its last error."""
+    project = _project()
+    state = runstate.load(project, name)
+    running = _is_running(project, name, state)
+    log_path = _app_dir(project, name) / ".wren-app.log"
+    last_error = ""
+    if log_path.exists():
+        lines = [
+            ln
+            for ln in log_path.read_text().splitlines()
+            if ("Error" in ln or "Traceback" in ln or "Exception" in ln)
+        ]
+        last_error = lines[-1] if lines else ""
+
+    info = {
+        "name": name,
+        "running": running,
+        "url": f"http://localhost:{state.port}" if running and state else None,
+        "pid": state.pid if state else None,
+        "last_error": last_error,
+    }
+    if json_out:
+        typer.echo(_json.dumps(info))
+        return
+    typer.echo(f"{name}: {'running' if running else 'stopped'}")
+    if info["url"]:
+        typer.echo(f"  url: {info['url']}  (pid {info['pid']})")
+    if last_error:
+        typer.echo(f"  last error: {last_error}")
 
 
 # ── check ───────────────────────────────────────────────────────────────────

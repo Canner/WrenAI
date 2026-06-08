@@ -150,6 +150,26 @@ def wait_healthy(
     return False
 
 
+def process_cmdline(pid: int) -> str | None:
+    """Return the full command line of *pid*, or None if it can't be read.
+
+    Used to defeat PID reuse: a stored app's pid is only trusted as "ours" if
+    its live command line still matches what we launched. Best-effort via ``ps``;
+    returns None when the pid is gone or ``ps`` is unavailable.
+    """
+    try:
+        out = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "command="],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    line = out.stdout.strip()
+    return line or None
+
+
 def is_alive(pid: int) -> bool:
     """Return True if *pid* refers to a live process this user can signal."""
     try:

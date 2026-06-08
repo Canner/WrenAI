@@ -92,3 +92,23 @@ def test_is_alive_false_after_stop_reaps_exited_process():
     time.sleep(0.3)  # let it exit (now a zombie until reaped)
     runtime.stop(handle)  # reaps it; safe even though the group is already gone
     assert runtime.is_alive(handle.pid) is False
+
+
+def test_process_cmdline_reflects_running_argv():
+    handle = runtime.spawn(
+        [sys.executable, "-c", "import time;time.sleep(30)", "WREN_MARKER_XYZ"],
+        cwd=os.getcwd(),
+        log_path=None,
+    )
+    try:
+        time.sleep(0.3)
+        cmdline = runtime.process_cmdline(handle.pid)
+        assert cmdline is not None
+        assert "WREN_MARKER_XYZ" in cmdline
+    finally:
+        runtime.stop(handle)
+
+
+def test_process_cmdline_none_for_dead_pid():
+    # A pid that is essentially never live for this user.
+    assert runtime.process_cmdline(999_999) is None
