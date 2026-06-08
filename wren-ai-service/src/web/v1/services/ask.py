@@ -184,6 +184,50 @@ class AskService:
         }
         return any(term in normalized for term in analysis_terms)
 
+    def _rewrite_query_for_text_to_sql(self, query: str) -> str:
+        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized:
+            return query
+
+        guidance: list[str] = []
+
+        if any(
+            term in normalized
+            for term in ("chart", "bar chart", "line chart", "pie chart", "graph")
+        ):
+            guidance.append(
+                "Return SQL only for the aggregated dataset required to build the requested chart."
+            )
+
+        if any(
+            term in normalized
+            for term in (
+                "failure category",
+                "failure categories",
+                "common failure",
+                "common failures",
+                "failure code",
+                "top 10",
+                "most common",
+            )
+        ):
+            guidance.append(
+                "Use an exposed failure category, failure name, or failure code field from the schema and return that dimension with a count metric."
+            )
+
+        if any(
+            term in normalized
+            for term in ("monthly", "last 12 months", "last month", "trend", "volume")
+        ):
+            guidance.append(
+                "Use a real timestamp column from the schema and aggregate results by calendar month when a monthly trend is requested."
+            )
+
+        if not guidance:
+            return query
+
+        return f"{query}\n\nSQL generation guidance:\n- " + "\n- ".join(guidance)
+
     def _is_schema_grounded_query(
         self, query: str, db_schemas: Optional[list[str]] = None
     ) -> bool:
@@ -356,6 +400,7 @@ class AskService:
 
         try:
             user_query = ask_request.query
+            sql_user_query = user_query
 
             # ask status can be understanding, searching, generating, finished, failed, stopped
             # we will need to handle business logic for each status
@@ -487,6 +532,12 @@ class AskService:
                         elif rephrased_question:
                             user_query = rephrased_question
 
+                        sql_user_query = (
+                            self._rewrite_query_for_text_to_sql(user_query)
+                            if self._is_data_analysis_query(user_query)
+                            else user_query
+                        )
+
                         if intent == "MISLEADING_QUERY":
                             general_result = await self._run_with_timeout(
                                 "Misleading assistance",
@@ -595,10 +646,13 @@ class AskService:
                 retrieval_result = await self._run_with_timeout(
                     "Schema retrieval",
                     self._pipelines["db_schema_retrieval"].run(
-                        query=user_query,
+                        query=sql_user_query,
                         histories=histories,
                         project_id=ask_request.project_id,
-                        enable_column_pruning=enable_column_pruning,
+                        enable_column_pruning=(
+                            enable_column_pruning
+                            and not self._is_data_analysis_query(user_query)
+                        ),
                     ),
                 )
                 _retrieval_result = retrieval_result.get(
@@ -681,7 +735,7 @@ class AskService:
                                 self._pipelines[
                                     "followup_sql_generation_reasoning"
                                 ].run(
-                                    query=user_query,
+                                    query=sql_user_query,
                                     contexts=table_ddls,
                                     histories=histories,
                                     sql_samples=sql_samples,
@@ -704,7 +758,7 @@ class AskService:
                             await self._run_with_timeout(
                                 "SQL generation reasoning",
                                 self._pipelines["sql_generation_reasoning"].run(
-                                    query=user_query,
+                                    query=sql_user_query,
                                     contexts=table_ddls,
                                     sql_samples=sql_samples,
                                     instructions=instructions,
@@ -774,7 +828,7 @@ class AskService:
                     text_to_sql_generation_results = await self._run_with_timeout(
                         "Follow-up SQL generation",
                         self._pipelines["followup_sql_generation"].run(
-                            query=user_query,
+                            query=sql_user_query,
                             contexts=table_ddls,
                             sql_generation_reasoning=sql_generation_reasoning,
                             histories=histories,
@@ -794,7 +848,7 @@ class AskService:
                     text_to_sql_generation_results = await self._run_with_timeout(
                         "SQL generation",
                         self._pipelines["sql_generation"].run(
-                            query=user_query,
+                            query=sql_user_query,
                             contexts=table_ddls,
                             sql_generation_reasoning=sql_generation_reasoning,
                             project_id=ask_request.project_id,
@@ -888,7 +942,7 @@ class AskService:
                                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                                 sql_functions=sql_functions,
                                 sql_knowledge=sql_knowledge,
-                                query=user_query,
+                                query=sql_user_query,
                             ),
                         )
 
