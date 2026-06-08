@@ -184,6 +184,49 @@ class AskService:
         }
         return any(term in normalized for term in analysis_terms)
 
+    def _is_schema_grounded_query(
+        self, query: str, db_schemas: Optional[list[str]] = None
+    ) -> bool:
+        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized:
+            return False
+
+        explicit_schema_terms = (
+            "table",
+            "column",
+            "schema",
+            "dataset",
+            "dbo.",
+            "select ",
+            " from ",
+            " join ",
+            " where ",
+            " group by ",
+            " order by ",
+        )
+        if any(term in normalized for term in explicit_schema_terms):
+            return True
+
+        identifier_tokens = re.findall(r"[a-zA-Z_][a-zA-Z0-9_\.]*", normalized)
+        if any("." in token for token in identifier_tokens):
+            return True
+
+        for schema in db_schemas or []:
+            schema_text = schema.lower()
+            table_matches = re.findall(
+                r"create\s+table\s+([a-zA-Z0-9_\.\"]+)", schema_text
+            )
+            column_matches = re.findall(r"\n\s*\"?([a-zA-Z_][a-zA-Z0-9_]*)\"?\s+", schema_text)
+            candidates = {
+                token.strip('"')
+                for token in table_matches + column_matches
+                if token and len(token.strip('"')) > 2
+            }
+            if any(candidate in normalized for candidate in candidates):
+                return True
+
+        return False
+
     def _get_unqueryable_metric_message(
         self, query: str, table_ddls: list[str]
     ) -> str | None:
@@ -408,16 +451,25 @@ class AskService:
                             "rephrased_question"
                         )
                         intent_reasoning = intent_classification_result.get("reasoning")
+                        retrieved_db_schemas = intent_classification_result.get(
+                            "db_schemas"
+                        ) or []
                         is_original_analytics_query = self._is_data_analysis_query(
                             original_user_query
                         )
+                        is_schema_grounded_query = self._is_schema_grounded_query(
+                            original_user_query, retrieved_db_schemas
+                        ) or self._is_schema_grounded_query(
+                            rephrased_question or "", retrieved_db_schemas
+                        )
 
-                        if intent in {"GENERAL", "MISLEADING_QUERY"} and (
+                        if intent in {"GENERAL", "MISLEADING_QUERY", "USER_GUIDE"} and (
                             is_original_analytics_query
+                            or is_schema_grounded_query
                             or self._is_data_analysis_query(rephrased_question or "")
                         ):
                             logger.info(
-                                "Overriding intent %s to TEXT_TO_SQL for analytics query: %s",
+                                "Overriding intent %s to TEXT_TO_SQL for schema/data query: %s",
                                 intent,
                                 user_query,
                             )
