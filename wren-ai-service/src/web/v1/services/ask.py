@@ -228,8 +228,15 @@ class AskService:
 
         return f"{query}\n\nSQL generation guidance:\n- " + "\n- ".join(guidance)
 
-    def _schema_contains(self, table_ddls: list[str], pattern: str) -> bool:
+    def _schema_contains(
+        self,
+        table_ddls: list[str],
+        pattern: str,
+        table_names: Optional[list[str]] = None,
+    ) -> bool:
         schema_text = "\n".join(table_ddls or [])
+        if table_names:
+            schema_text += "\n" + "\n".join(table_names)
         return bool(re.search(pattern, schema_text, flags=re.IGNORECASE))
 
     def _extract_requested_top_n(self, query: str, default_value: int = 10) -> int:
@@ -238,13 +245,15 @@ class AskService:
         return default_value
 
     def _build_heuristic_text_to_sql_fallback(
-        self, query: str, table_ddls: list[str]
+        self,
+        query: str,
+        table_ddls: list[str],
+        table_names: Optional[list[str]] = None,
     ) -> str | None:
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized:
             return None
 
-        schema_text = "\n".join(table_ddls or [])
         wants_chart = any(
             term in normalized for term in ("chart", "bar chart", "line chart", "graph")
         )
@@ -272,16 +281,26 @@ class AskService:
         if wants_failure_counts and wants_chart:
             top_n = self._extract_requested_top_n(query)
             has_debug_entries = self._schema_contains(
-                table_ddls, r"\bCREATE\s+TABLE\s+dbo_DebugEntries\b"
+                table_ddls, r"\bdbo_DebugEntries\b", table_names=table_names
             )
             has_failure_patterns = self._schema_contains(
-                table_ddls, r"\bCREATE\s+TABLE\s+dbo_failure_patterns\b"
+                table_ddls, r"\bdbo_failure_patterns\b", table_names=table_names
             )
-            has_failure_sys = self._schema_contains(table_ddls, r"\bFailureSys\b")
-            has_debug_entry_id = self._schema_contains(table_ddls, r"\bDebugEntryId\b")
-            has_pattern_id = self._schema_contains(table_ddls, r"\bid\b")
-            has_pattern_category = self._schema_contains(table_ddls, r"\bcategory\b")
-            has_pattern_name = self._schema_contains(table_ddls, r"\bname\b")
+            has_failure_sys = self._schema_contains(
+                table_ddls, r"\bFailureSys\b", table_names=table_names
+            )
+            has_debug_entry_id = self._schema_contains(
+                table_ddls, r"\bDebugEntryId\b", table_names=table_names
+            )
+            has_pattern_id = self._schema_contains(
+                table_ddls, r"\bid\b", table_names=table_names
+            )
+            has_pattern_category = self._schema_contains(
+                table_ddls, r"\bcategory\b", table_names=table_names
+            )
+            has_pattern_name = self._schema_contains(
+                table_ddls, r"\bname\b", table_names=table_names
+            )
 
             if (
                 has_debug_entries
@@ -311,9 +330,11 @@ class AskService:
                 )
 
             has_repair_logs = self._schema_contains(
-                table_ddls, r"\bCREATE\s+TABLE\s+dbo_repair_logs\b"
+                table_ddls, r"\bdbo_repair_logs\b", table_names=table_names
             )
-            has_failure_code = self._schema_contains(table_ddls, r"\bfailure_code\b")
+            has_failure_code = self._schema_contains(
+                table_ddls, r"\bfailure_code\b", table_names=table_names
+            )
             if has_repair_logs and has_failure_code:
                 return (
                     f'SELECT TOP {top_n} '
@@ -326,8 +347,37 @@ class AskService:
                 )
 
         if wants_monthly_repairs and self._schema_contains(
-            table_ddls, r"\bCREATE\s+TABLE\s+dbo_repair_logs\b"
-        ) and self._schema_contains(table_ddls, r"\bcreated_at\b"):
+            table_ddls, r"\bdbo_repair_logs\b", table_names=table_names
+        ) and self._schema_contains(
+            table_ddls, r"\bcreated_at\b", table_names=table_names
+        ):
+            return (
+                'SELECT DATEPART(YEAR, "dbo_repair_logs"."created_at") AS "year", '
+                'DATEPART(MONTH, "dbo_repair_logs"."created_at") AS "month", '
+                'COUNT(*) AS "repair_count" '
+                'FROM "dbo_repair_logs" '
+                'WHERE "dbo_repair_logs"."created_at" >= DATEADD(month, -12, GETDATE()) '
+                'GROUP BY DATEPART(YEAR, "dbo_repair_logs"."created_at"), '
+                'DATEPART(MONTH, "dbo_repair_logs"."created_at") '
+                'ORDER BY DATEPART(YEAR, "dbo_repair_logs"."created_at") ASC, '
+                'DATEPART(MONTH, "dbo_repair_logs"."created_at") ASC'
+            )
+
+        if wants_failure_counts and wants_chart:
+            top_n = self._extract_requested_top_n(query)
+            return (
+                f'SELECT TOP {top_n} '
+                f'"dbo_failure_patterns"."category" AS "failure_category", '
+                f'COUNT("dbo_DebugEntries"."DebugEntryId") AS "repair_count" '
+                f'FROM "dbo_DebugEntries" '
+                f'JOIN "dbo_failure_patterns" '
+                f'ON "dbo_DebugEntries"."FailureSys" = "dbo_failure_patterns"."id" '
+                f'WHERE "dbo_failure_patterns"."category" IS NOT NULL '
+                f'GROUP BY "dbo_failure_patterns"."category" '
+                f'ORDER BY "repair_count" DESC'
+            )
+
+        if wants_monthly_repairs:
             return (
                 'SELECT DATEPART(YEAR, "dbo_repair_logs"."created_at") AS "year", '
                 'DATEPART(MONTH, "dbo_repair_logs"."created_at") AS "month", '
@@ -808,6 +858,37 @@ class AskService:
                     return results
 
                 if not documents:
+                    if heuristic_sql := self._build_heuristic_text_to_sql_fallback(
+                        user_query, table_ddls, table_names=table_names
+                    ):
+                        logger.info(
+                            "Using heuristic text-to-sql fallback before retrieval failure for query_id %s: %s",
+                            query_id,
+                            user_query,
+                        )
+                        api_results = [
+                            AskResult(
+                                **{
+                                    "sql": heuristic_sql,
+                                    "type": "llm",
+                                }
+                            )
+                        ]
+                        if not self._is_stopped(query_id, self._ask_results):
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="TEXT_TO_SQL",
+                                response=api_results,
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                retrieved_tables=table_names,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                            )
+                        results["ask_result"] = api_results
+                        results["metadata"]["type"] = "TEXT_TO_SQL"
+                        return results
+
                     logger.exception(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
                     if not self._is_stopped(query_id, self._ask_results):
                         self._ask_results[query_id] = AskResultResponse(
@@ -1098,7 +1179,7 @@ class AskService:
                 results["metadata"]["type"] = "TEXT_TO_SQL"
             else:
                 if heuristic_sql := self._build_heuristic_text_to_sql_fallback(
-                    user_query, table_ddls
+                    user_query, table_ddls, table_names=table_names
                 ):
                     logger.info(
                         "Using heuristic text-to-sql fallback for query_id %s: %s",
