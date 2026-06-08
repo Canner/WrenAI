@@ -607,17 +607,14 @@ app.add_typer(cube_app)
 app.add_typer(utils_app)
 app.add_typer(skills_app)
 
-try:
-    import lancedb  # noqa: PLC0415, F401
-    import sentence_transformers  # noqa: PLC0415, F401
+from importlib.util import find_spec  # noqa: E402
 
+# Detect the optional `memory` extra without importing it: a real import would
+# eagerly pull lancedb (and the heavy ML stack it loads) into every CLI startup.
+if find_spec("lancedb") and find_spec("sentence_transformers"):
     from wren.memory.cli import memory_app  # noqa: PLC0415
 
     app.add_typer(memory_app)
-except ImportError:
-    # `memory` is installed on demand via `pip install "wrenai[memory]"`;
-    # until then the subcommand group simply isn't registered.
-    pass
 
 from wren.profile_cli import profile_app  # noqa: PLC0415, E402
 
