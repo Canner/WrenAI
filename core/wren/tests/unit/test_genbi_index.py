@@ -9,6 +9,7 @@ import yaml
 from typer.testing import CliRunner
 
 from wren.cli import app
+from wren.genbi.index import MalformedIndexError, index_path, load_index
 
 runner = CliRunner()
 
@@ -119,3 +120,28 @@ def test_remove_unknown_app_errors(tmp_path: Path) -> None:
 
     assert result.exit_code != 0
     assert "not registered" in result.output.lower()
+
+
+def test_load_index_raises_on_malformed_yaml(tmp_path: Path) -> None:
+    path = index_path(tmp_path)
+    path.parent.mkdir(parents=True)
+    path.write_text("apps: [unclosed\n")  # invalid YAML
+
+    with pytest.raises(MalformedIndexError):
+        load_index(tmp_path)
+
+
+def test_load_index_raises_on_non_mapping(tmp_path: Path) -> None:
+    path = index_path(tmp_path)
+    path.parent.mkdir(parents=True)
+    path.write_text("- just\n- a list\n")  # valid YAML, wrong shape
+
+    with pytest.raises(MalformedIndexError):
+        load_index(tmp_path)
+
+
+def test_register_rejects_path_traversal_name(tmp_path: Path) -> None:
+    project = _make_project(tmp_path)
+    result = runner.invoke(app, ["genbi", "register", "../evil", "-p", str(project)])
+    assert result.exit_code != 0
+    assert "invalid app name" in result.output

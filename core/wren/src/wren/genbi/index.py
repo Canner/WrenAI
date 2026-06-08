@@ -25,12 +25,31 @@ def index_path(project_path: Path) -> Path:
     return project_path / _INDEX_RELPATH
 
 
+class MalformedIndexError(Exception):
+    """Raised when ``.wren/apps.yml`` exists but can't be parsed as an index."""
+
+
 def load_index(project_path: Path) -> dict:
-    """Return the parsed index, or an empty skeleton if absent."""
+    """Return the parsed index, or an empty skeleton if absent.
+
+    Raises :class:`MalformedIndexError` (with the offending path) when the file
+    exists but is malformed YAML or not a mapping — better than crashing with
+    an opaque ``YAMLError``/``AttributeError`` deep in a command.
+    """
     path = index_path(project_path)
     if not path.exists():
         return {"schema_version": INDEX_SCHEMA_VERSION, "apps": {}}
-    data = yaml.safe_load(path.read_text()) or {}
+    try:
+        data = yaml.safe_load(path.read_text())
+    except yaml.YAMLError as e:
+        raise MalformedIndexError(f"{path} is not valid YAML: {e}") from e
+    if data is None:
+        data = {}
+    if not isinstance(data, dict):
+        raise MalformedIndexError(
+            f"{path} is malformed — expected a mapping at the top level, "
+            f"got {type(data).__name__}."
+        )
     data.setdefault("schema_version", INDEX_SCHEMA_VERSION)
     data.setdefault("apps", {})
     return data

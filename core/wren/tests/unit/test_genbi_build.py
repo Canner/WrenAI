@@ -247,3 +247,12 @@ def test_build_live_mode_gives_connection_guidance_and_hard_rule(
     # hard rule: never inline warehouse credentials into the public app
     assert "credentials" in out.lower()
     assert "never" in out.lower() or "must not" in out.lower()
+
+
+def test_build_rejects_path_traversal_name(tmp_path: Path) -> None:
+    project = _make_project(tmp_path)
+    result = runner.invoke(
+        app, ["genbi", "build", "../evil", "--prompt", "x", "-p", str(project)]
+    )
+    assert result.exit_code != 0
+    assert "invalid app name" in result.output

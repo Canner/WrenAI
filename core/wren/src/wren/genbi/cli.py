@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Annotated, Optional
 
 import typer
@@ -10,6 +11,27 @@ genbi_app = typer.Typer(
     name="genbi",
     help="Build and deploy GenBI apps from this project's semantic layer.",
 )
+
+# App names become a path segment under <project>/apps/. Constrain them to a
+# simple slug so a crafted name (e.g. "../../etc") can't escape apps/ when
+# joined in build/register/verify/open/deploy.
+_APP_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+
+
+def _resolve_app_dir(project_path, name: str):
+    """Validate ``name`` as a slug and return the ``apps/<name>`` directory.
+
+    The slug rule rejects path separators, ``..`` and a leading dot, so the
+    returned path is always contained in ``<project>/apps/``.
+    """
+    if not _APP_NAME_RE.fullmatch(name):
+        typer.echo(
+            "Error: invalid app name. Use letters, numbers, '_' or '-' "
+            "(no path separators, and not starting with a dot).",
+            err=True,
+        )
+        raise typer.Exit(1)
+    return project_path / "apps" / name
 
 
 def _resolve_prompt(prompt: str | None, prompt_file: str | None) -> str | None:
@@ -60,7 +82,10 @@ def build(
     ] = "snapshot",
     path: ProjectPathOpt = None,
 ) -> None:
-    """Print a project-hydrated build instruction for an agent. Writes nothing."""
+    """Print a project-hydrated build instruction for an agent.
+
+    Writes no app files; only compiles target/mdl.json if it's missing.
+    """
     from wren.context import (  # noqa: PLC0415
         discover_project_path,
         load_models,
@@ -93,6 +118,8 @@ def build(
         )
         raise typer.Exit(1)
 
+    app_dir = _resolve_app_dir(project_path, name)
+
     mdl_path = project_path / "target" / "mdl.json"
     if not mdl_path.exists():
         # Hydrating the instruction needs a current MDL — compile implicitly
@@ -112,7 +139,7 @@ def build(
         data_mode=data_mode,
         user_prompt=user_prompt,
         mdl_path=mdl_path,
-        app_dir=project_path / "apps" / name,
+        app_dir=app_dir,
         models=load_models(project_path),
         data_source=config.get("data_source", "unknown"),
     )
@@ -152,7 +179,7 @@ def register(
         )
         raise typer.Exit(1)
 
-    app_dir = project_path / "apps" / name
+    app_dir = _resolve_app_dir(project_path, name)
     if not app_dir.is_dir():
         typer.echo(
             f"Error: no app found at {app_dir}.\n"
@@ -227,7 +254,7 @@ def verify(
     entry = _require_registered(project_path, name)
 
     result = verify_app(
-        project_path / "apps" / name,
+        _resolve_app_dir(project_path, name),
         data_mode=entry.get("data_mode", "snapshot"),
     )
     if not result.passed:
@@ -256,7 +283,7 @@ def open_app(
 
     project_path = _discover(path)
     _require_registered(project_path, name)
-    app_dir = project_path / "apps" / name
+    app_dir = _resolve_app_dir(project_path, name)
 
     handler = partial(http.server.SimpleHTTPRequestHandler, directory=str(app_dir))
     with socketserver.TCPServer(("127.0.0.1", port), handler) as httpd:
@@ -292,6 +319,7 @@ def deploy(
 
     project_path = _discover(path)
     entry = _require_registered(project_path, name)
+    app_dir = _resolve_app_dir(project_path, name)
 
     try:
         adapter = get_provider(provider)
@@ -301,7 +329,7 @@ def deploy(
 
     # Preflight — a broken app never reaches a public URL.
     result = verify_app(
-        project_path / "apps" / name,
+        app_dir,
         data_mode=entry.get("data_mode", "snapshot"),
     )
     if not result.passed:
@@ -323,7 +351,7 @@ def deploy(
 
     try:
         deployment = adapter.deploy(
-            project_path / "apps" / name,
+            app_dir,
             app_name=name,
             token=token,
             prod=prod,

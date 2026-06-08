@@ -26,16 +26,23 @@ def _request(*, method: str, url: str, headers: dict, payload: dict) -> dict:
 
 
 def _collect_files(build_dir: Path) -> list[dict]:
+    # Skip symlinks and anything resolving outside build_dir — the app folder
+    # ships to a public host, so a stray symlink must never exfiltrate files
+    # from elsewhere on disk.
+    build_root = build_dir.resolve()
     files = []
     for path in sorted(build_dir.rglob("*")):
-        if path.is_file():
-            files.append(
-                {
-                    "file": str(path.relative_to(build_dir)),
-                    "data": base64.b64encode(path.read_bytes()).decode(),
-                    "encoding": "base64",
-                }
-            )
+        if not path.is_file() or path.is_symlink():
+            continue
+        if not path.resolve().is_relative_to(build_root):
+            continue
+        files.append(
+            {
+                "file": str(path.relative_to(build_dir)),
+                "data": base64.b64encode(path.read_bytes()).decode(),
+                "encoding": "base64",
+            }
+        )
     return files
 
 
@@ -67,7 +74,12 @@ class VercelProvider:
 
         data = _request(method="POST", url=url, headers=headers, payload=payload)
 
-        raw_url = data.get("url", "")
+        raw_url = data.get("url")
+        if not raw_url:
+            raise DeployError(
+                "Vercel API response did not include a deployment URL; "
+                "cannot confirm where the app was deployed."
+            )
         return Deployment(
             url=raw_url if raw_url.startswith("http") else f"https://{raw_url}",
             environment="production" if prod else "preview",

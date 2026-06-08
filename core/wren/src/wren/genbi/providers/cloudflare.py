@@ -30,11 +30,17 @@ def _request(*, method: str, url: str, headers: dict, payload: dict) -> dict:
 
 
 def _collect_files(build_dir: Path) -> dict[str, str]:
-    """Relative path → base64 content for every file in the app folder."""
+    """Relative path → base64 content for every file in the app folder.
+
+    Skips symlinks and anything resolving outside ``build_dir`` — the app
+    folder ships to a public host, so a stray symlink must never exfiltrate
+    files from elsewhere on disk.
+    """
+    build_root = build_dir.resolve()
     return {
         str(p.relative_to(build_dir)): base64.b64encode(p.read_bytes()).decode()
         for p in sorted(build_dir.rglob("*"))
-        if p.is_file()
+        if p.is_file() and not p.is_symlink() and p.resolve().is_relative_to(build_root)
     }
 
 
@@ -90,7 +96,12 @@ class CloudflareProvider:
         )
 
         result = data.get("result") or {}
-        url = result.get("url") or f"https://{app_name}.pages.dev"
+        url = result.get("url")
+        if not url:
+            raise DeployError(
+                "Cloudflare API response did not include a deployment URL; "
+                "cannot confirm where the app was deployed."
+            )
         return Deployment(
             url=url,
             environment="production" if prod else "preview",

@@ -10,6 +10,7 @@ import yaml
 from typer.testing import CliRunner
 
 from wren.cli import app
+from wren.genbi.verify import verify_app
 
 runner = CliRunner()
 
@@ -169,3 +170,10 @@ def test_verify_snapshot_app_with_secret_also_fails(tmp_path: Path) -> None:
 
     assert result.exit_code != 0
     assert "index.html" in result.output
+
+
+def test_verify_fails_closed_on_unknown_data_mode(tmp_path: Path) -> None:
+    # a typo'd mode must NOT silently skip the snapshot data-asset check
+    result = verify_app(tmp_path, data_mode="snapsho")
+    assert not result.passed
+    assert any("unknown data_mode" in f for f in result.failures)

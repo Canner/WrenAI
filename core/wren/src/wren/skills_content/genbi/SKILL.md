@@ -51,8 +51,9 @@ wren genbi build <name> --prompt "<the user's request, verbatim>" --data-mode <m
 For long or multi-line prompts use `--prompt-file <file>` or pipe to
 `--prompt -`. The command prints the authoritative build instruction —
 wasm wiring (pinned version, CDN load), the project's model/column inventory,
-data-mode guidance, acceptance criteria, and the target folder. It writes
-nothing to disk.
+data-mode guidance, acceptance criteria, and the target folder. It writes no
+app files — the only thing it may touch is `target/mdl.json`, which it compiles
+first if missing (see Precondition 2).
 
 ### 3. Author the app
 

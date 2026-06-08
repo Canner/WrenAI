@@ -67,7 +67,20 @@ class VerifyResult:
 
 def verify_app(app_dir: Path, *, data_mode: str) -> VerifyResult:
     """Run all structural checks for the app at ``app_dir``."""
+    from wren.genbi.composer import DATA_MODES  # noqa: PLC0415
+
     failures: list[str] = []
+
+    # Fail closed on an unknown mode — otherwise a typo (e.g. "snapsho") would
+    # silently skip the snapshot data-asset check and pass.
+    if data_mode not in DATA_MODES:
+        return VerifyResult(
+            False,
+            [
+                f"unknown data_mode {data_mode!r} "
+                f"(expected one of: {', '.join(DATA_MODES)})"
+            ],
+        )
 
     if not app_dir.is_dir():
         return VerifyResult(False, [f"app folder missing: {app_dir}"])

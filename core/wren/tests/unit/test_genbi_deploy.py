@@ -19,6 +19,23 @@ runner = CliRunner()
 pytestmark = pytest.mark.unit
 
 
+@pytest.fixture(autouse=True)
+def _isolate_env_loading(monkeypatch):
+    """Make token discovery hermetic.
+
+    ``resolve_token``'s tier-2 calls ``wren.profile._ensure_env_loaded()``,
+    which merges ``~/.wren/.env`` (and any cwd ``.env``) into ``os.environ``.
+    Without neutralizing it, these tests depend on the developer's machine —
+    a real ``VERCEL_TOKEN`` in ``~/.wren/.env`` makes the missing-token cases
+    pass spuriously and can even trigger a real provider API call. Tests must
+    only see tokens they set via ``setenv`` (tier 1) or a project ``.env``
+    (tier 3).
+    """
+    import wren.profile  # noqa: PLC0415
+
+    monkeypatch.setattr(wren.profile, "_ensure_env_loaded", lambda: None)
+
+
 def _make_deployable_project(tmp_path: Path) -> Path:
     (tmp_path / "wren_project.yml").write_text(
         'schema_version: 2\nname: test_proj\nversion: "1.0"\n'
@@ -231,3 +248,39 @@ def test_deploy_cloudflare_requires_account_id(tmp_path, monkeypatch) -> None:
 
     assert result.exit_code != 0
     assert "CLOUDFLARE_ACCOUNT_ID" in result.output
+
+
+# ── Never fabricate a deployment URL ────────────────────────────────────────
+
+
+def test_deploy_vercel_fails_when_response_omits_url(tmp_path, monkeypatch) -> None:
+    project = _make_deployable_project(tmp_path)
+    monkeypatch.setenv("VERCEL_TOKEN", "tok-123")
+    monkeypatch.setattr(vercel, "_request", _FakeTransport({"id": "dpl_1"}))  # no url
+
+    result = runner.invoke(
+        app, ["genbi", "deploy", "myapp", "--provider", "vercel", "-p", str(project)]
+    )
+
+    assert result.exit_code != 0
+    assert "did not include a deployment URL" in result.output
+    # a missing URL must not be persisted as a successful deploy
+    index = yaml.safe_load((project / ".wren" / "apps.yml").read_text())
+    assert index["apps"]["myapp"]["status"] != "deployed"
+
+
+def test_deploy_cloudflare_fails_when_response_omits_url(tmp_path, monkeypatch) -> None:
+    project = _make_deployable_project(tmp_path)
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "cf-tok")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct-42")
+    monkeypatch.setattr(
+        cloudflare, "_request", _FakeTransport({"result": {}})
+    )  # no url
+
+    result = runner.invoke(
+        app,
+        ["genbi", "deploy", "myapp", "--provider", "cloudflare", "-p", str(project)],
+    )
+
+    assert result.exit_code != 0
+    assert "did not include a deployment URL" in result.output
