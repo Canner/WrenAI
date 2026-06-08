@@ -1,30 +1,14 @@
 ---
-name: wren-usage
+name: usage
 description: "Wren Engine CLI workflow guide for AI agents. Answer data questions end-to-end using the wren CLI: gather schema context, recall past queries, write SQL through the MDL semantic layer, execute, and learn from confirmed results. Use when: user asks a data question, requests a report or analysis, asks about metrics, revenue, customers, orders, trends, or any business data; user says 'how many', 'show me', 'what is the', 'top N', 'compare', 'trend', 'growth', 'breakdown'; user wants to explore, analyze, filter, aggregate, or summarize data from a database; agent needs to query data, connect a data source, handle errors, or manage MDL changes via the wren CLI."
 license: Apache-2.0
 metadata:
   author: wrenai
-  version: "2.4"
 ---
 
 # Wren Engine CLI — Agent Workflow Guide
 
-## Version check
-
-Silently fetch `https://raw.githubusercontent.com/Canner/WrenAI/main/skills/versions.json`.
-Compare the `wren-usage` key with this skill's version (from the frontmatter above).
-If the remote version is newer, notify the user before proceeding:
-
-> A newer version of the **wren-usage** skill is available.
-> Update with:
-> ```
-> npx skills add Canner/WrenAI --skill wren-usage
-> ```
-> The CLI auto-detects your installed agent. To target a specific one, add `--agent <name>` (e.g., `claude-code`, `cursor`, `windsurf`, `cline`).
-
-Then continue with the workflow below regardless of update status.
-
----
+> This guide is served by the `wren` CLI (`wren skills get usage`), so it always matches your installed wren-engine version. Pull the deeper reference docs with `wren skills get usage --full`.
 
 ## Preflight — Verify environment and installation
 
@@ -88,8 +72,8 @@ Two things drive everything:
 
 The CLI reads the active profile for connection info and datasource. Use `wren profile list` to see which profile is active, `wren profile switch <name>` to change it. `dry-plan` also accepts `--datasource` / `-d` for transpile-only use without a profile.
 
-For memory-specific decisions, see [references/memory.md](references/memory.md).
-For SQL syntax, CTE-based modeling, and error diagnosis, see [references/wren-sql.md](references/wren-sql.md).
+For memory-specific decisions, see the `memory` reference (run `wren skills get usage --full`).
+For SQL syntax, CTE-based modeling, and error diagnosis, see the `wren-sql` reference (run `wren skills get usage --full`).
 For project structure, MDL field definitions, and CLI workflow details, see the [documentation](https://github.com/Canner/WrenAI/tree/main/docs/core).
 
 ---
@@ -264,7 +248,7 @@ The DB error + dry-plan output together pinpoint the issue:
 the query to the smallest failing fragment. Execute subqueries independently
 to isolate which part fails.
 
-For the CTE rewrite pipeline and additional error patterns, see [references/wren-sql.md](references/wren-sql.md).
+For the CTE rewrite pipeline and additional error patterns, see the `wren-sql` reference (run `wren skills get usage --full`).
 
 ---
 

@@ -14,7 +14,7 @@ Snowflake Cortex coding agent.
 ## Install Wren skills
 
 ```bash
-npx skills add Canner/WrenAI --skill '*' --agent cortex
+npx skills add Canner/WrenAI --agent cortex
 ```
 
 ## Run onboarding
@@ -24,7 +24,7 @@ Open your project in Snowflake's Cortex Code interface, then start a new agent s
 Then ask:
 
 ```text
-Use the /wren-onboarding skill to install and set up Wren AI.
+Use the /wren skill to install and set up Wren AI.
 ```
 
 The skill walks the agent through environment checks, profile creation, project scaffolding, and a first query.

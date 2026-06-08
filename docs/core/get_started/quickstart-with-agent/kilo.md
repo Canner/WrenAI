@@ -13,7 +13,7 @@ VS Code coding agent (fork of Roo Code).
 ## Install Wren skills
 
 ```bash
-npx skills add Canner/WrenAI --skill '*' --agent kilo
+npx skills add Canner/WrenAI --agent kilo
 ```
 
 ## Run onboarding
@@ -27,7 +27,7 @@ kilo
 Then ask:
 
 ```text
-Use the /wren-onboarding skill to install and set up Wren AI.
+Use the /wren skill to install and set up Wren AI.
 ```
 
 The skill walks the agent through environment checks, profile creation, project scaffolding, and a first query.

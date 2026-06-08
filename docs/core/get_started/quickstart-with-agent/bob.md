@@ -14,7 +14,7 @@ IBM watsonx coding agent.
 ## Install Wren skills
 
 ```bash
-npx skills add Canner/WrenAI --skill '*' --agent bob
+npx skills add Canner/WrenAI --agent bob
 ```
 
 ## Run onboarding
@@ -24,7 +24,7 @@ Open your project folder in IBM Bob (watsonx Code Assistant), then start a new c
 Then ask:
 
 ```text
-Use the /wren-onboarding skill to install and set up Wren AI.
+Use the /wren skill to install and set up Wren AI.
 ```
 
 The skill walks the agent through environment checks, profile creation, project scaffolding, and a first query.

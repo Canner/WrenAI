@@ -5,13 +5,13 @@
     "email": "dev@cannerdata.com"
   },
   "metadata": {
-    "description": "Wren Engine CLI skills — semantic SQL, MDL generation, query workflows for 22+ data sources"
+    "description": "Wren Engine — discovery stub for AI agents. Actual workflow guides and prompt helpers ship inside the wren CLI (pip install wrenai) and are served by `wren skills get` / `wren ask`."
   },
   "plugins": [
     {
       "name": "wren",
       "source": ".",
-      "description": "AI agent skills for Wren Engine CLI — semantic SQL layer for 22+ data sources.",
+      "description": "Wren CLI for AI agents — semantic SQL over 22+ databases. Installs a single discovery stub that points the agent at the wren CLI for all workflow content.",
       "version": "1.0.0",
       "keywords": [
         "wren",

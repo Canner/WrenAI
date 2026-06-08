@@ -1,10 +1,9 @@
 ---
-name: wren-onboarding
+name: onboarding
 description: "Onboard a user to Wren Engine end-to-end. Walks through environment checks, project scaffolding, connection configuration via .env, and first query. Use when: user wants to install Wren Engine, set up a new data source connection, or bootstrap a new project from scratch. Triggers: '/wren-onboarding', 'install wren', 'set up wren engine', 'wren onboarding', 'connect new database to wren'."
 license: Apache-2.0
 metadata:
   author: wrenai
-  version: "2.2"
 ---
 
 # Wren Onboarding — Agent Workflow
@@ -16,25 +15,13 @@ Reference docs (the skill points to these — never duplicate their content):
 - [`docs/core/guides/connect.md`](https://github.com/Canner/WrenAI/blob/main/docs/core/guides/connect.md) — full connection procedure, **per-datasource setup notes, complete troubleshooting playbook**
 - [`docs/core/get_started/quickstart.md`](https://github.com/Canner/WrenAI/blob/main/docs/core/get_started/quickstart.md) — bundled `jaffle_shop` demo
 
-## Version check
-
-Silently fetch `https://raw.githubusercontent.com/Canner/WrenAI/main/skills/versions.json`. Compare the `wren-onboarding` key with this skill's version (from the frontmatter above). If the remote version is newer, notify the user:
-
-> A newer version of the **wren-onboarding** skill is available.
-> Update with:
-> ```
-> npx skills add Canner/WrenAI --skill wren-onboarding
-> ```
-
-Continue regardless of update status.
-
 ## Mode of operation — READ THIS FIRST
 
 **One step per round-trip.** Each numbered step below is its own turn: explain briefly, ask **only** what the step needs, run the command(s), confirm, move on.
 
 - ❌ **Never collect information for future steps upfront.** Do not ask for project name + database type + credentials in one message.
 - ❌ **Never ask for credentials in chat — not host, port, user, password, tokens, anything.** Credentials always go through `.env`. The user fills the file in their editor; the agent never sees the values.
-- ❌ **Never query the database before MDL is built** via the `wren-generate-mdl` skill.
+- ❌ **Never query the database before MDL is built** via `wren skills get generate-mdl`.
 - ❌ **Never invent connection field names.** Always run `wren docs connection-info <ds>` to see the real fields — it's introspected from the live Pydantic schema, so it's always correct.
 - ✅ Wait for each command to finish, report its output in plain language, then move on.
 - ✅ For any error, consult `connect.md#troubleshooting` and surface the relevant section to the user — don't carry a copy of the playbook here.
@@ -142,7 +129,7 @@ This step also future-proofs the project for multi-project setups: once the bind
 
 > ⚠️ The agent **must** build MDL before any data query. Queries against tables not in MDL will fail.
 
-Invoke the **`wren-generate-mdl`** skill. It walks the agent through table introspection, type normalization, and YAML generation. When it finishes, return here and run:
+Run `wren skills get generate-mdl` and follow it. It walks the agent through table introspection, type normalization, and YAML generation. When it finishes, return here and run:
 
 ```bash
 wren context validate
@@ -155,16 +142,16 @@ Report the model count and any validate warnings.
 
 ## Step 5 — Ready to explore (hand off)
 
-Suggest 2–3 NL questions based on the discovered tables (e.g. for an orders schema: "How many orders last month?", "Top 5 customers by total"). Then end this skill: for day-to-day querying the agent should switch to the **`wren-usage`** skill.
+Suggest 2–3 NL questions based on the discovered tables (e.g. for an orders schema: "How many orders last month?", "Top 5 customers by total"). Then end this skill: for day-to-day querying the agent should run `wren skills get usage`.
 
 ## Cross-skill routing
 
 | Trigger | Skill |
 |---------|-------|
-| User mentions a SaaS source (HubSpot, Stripe, Salesforce, GitHub, Slack, …) | `wren-dlt-connector` |
-| User has a connected DB but no MDL yet | `wren-generate-mdl` |
-| User has MDL ready, wants to query | `wren-usage` |
-| Anything else from-scratch | `wren-onboarding` (this skill) |
+| User mentions a SaaS source (HubSpot, Stripe, Salesforce, GitHub, Slack, …) | `wren skills get dlt-connector` |
+| User has a connected DB but no MDL yet | `wren skills get generate-mdl` |
+| User has MDL ready, wants to query | `wren skills get usage` |
+| Anything else from-scratch | `wren skills get onboarding` (this skill) |
 
 ## On error
 

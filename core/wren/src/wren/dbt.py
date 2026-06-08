@@ -520,22 +520,21 @@ def convert_dbt_target_to_wren_profile(target: DbtTarget) -> dict[str, Any]:
         )
 
     if datasource == "databricks":
+        payload = {
+            "databricks_type": "token",
+            "server_hostname": str(
+                _require_output_field(output, "server_hostname", "host")
+            ),
+            "http_path": str(_require_output_field(output, "http_path", "httpPath")),
+            "access_token": str(
+                _require_output_field(output, "token", "access_token", "accessToken")
+            ),
+        }
+        if output.get("catalog"):
+            payload["catalog"] = str(output["catalog"])
         return _build_wren_profile(
             "databricks",
-            {
-                "databricks_type": "token",
-                "server_hostname": str(
-                    _require_output_field(output, "server_hostname", "host")
-                ),
-                "http_path": str(
-                    _require_output_field(output, "http_path", "httpPath")
-                ),
-                "access_token": str(
-                    _require_output_field(
-                        output, "token", "access_token", "accessToken"
-                    )
-                ),
-            },
+            payload,
         )
 
     if datasource == "bigquery":

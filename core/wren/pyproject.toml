@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wrenai"
-version = "0.8.1"
+version = "0.9.0"
 description = "Wren AI CLI and Python SDK — semantic SQL layer for 20+ data sources"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -83,7 +83,13 @@ Issues = "https://github.com/Canner/WrenAI/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/wren"]
-artifacts = ["src/wren/templates/*.html", "src/wren/genbi/templates/*"]
+artifacts = [
+    "src/wren/templates/*.html",
+    "src/wren/skills_content/**/*.md",
+    "src/wren/skills_content/**/*.py",
+    "src/wren/ask_templates/*.tmpl",
+    "src/wren/genbi/templates/*",
+]
 
 [tool.ruff]
 line-length = 88

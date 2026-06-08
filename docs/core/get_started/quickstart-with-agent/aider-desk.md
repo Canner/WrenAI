@@ -13,7 +13,7 @@ A desktop UI for the Aider coding agent.
 ## Install Wren skills
 
 ```bash
-npx skills add Canner/WrenAI --skill '*' --agent aider-desk
+npx skills add Canner/WrenAI --agent aider-desk
 ```
 
 ## Run onboarding
@@ -23,7 +23,7 @@ Launch the AiderDesk app, then `File → Open Folder...` to open your project an
 Then ask:
 
 ```text
-Use the /wren-onboarding skill to install and set up Wren AI.
+Use the /wren skill to install and set up Wren AI.
 ```
 
 The skill walks the agent through environment checks, profile creation, project scaffolding, and a first query.

@@ -50,7 +50,7 @@ Three things sit above Wren AI: the **agents** that ask questions. Three things 
 
 ### You have no semantic layer
 
-Wren AI can be your first one. The `wren-generate-mdl` skill scaffolds an MDL project from your warehouse schema in a few minutes. Enrich it over time with the grill / auto-pilot workflow.
+Wren AI can be your first one. The `generate-mdl` guide scaffolds an MDL project from your warehouse schema in a few minutes. Enrich it over time with the grill / auto-pilot workflow.
 
 ### You have a transformation pipeline (dbt, Coalesce, in-house)
 

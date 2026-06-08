@@ -13,7 +13,7 @@ This guide drops three things on you in the first few steps. Skim before you sta
 - **Wren CLI (`wren`)** — the Python CLI that runs all of this. Connects to a database, holds your modeling files, executes SQL through the semantic layer, manages a local memory index. ([CLI reference →](/oss/reference/cli))
 - **MDL (Modeling Definition Language)** — YAML files under `models/`, `views/`, and `relationships.yml` that describe your tables, columns, and joins in business terms. The agent reads MDL instead of guessing from raw schema. ([MDL concept →](/oss/concepts/what_is_mdl) · [Wren project guide →](/oss/reference/mdl))
 - **jaffle_shop** — a public sample database from dbt Labs. We use it so you do not need to bring your own database to follow this quickstart. It is a fictional ecommerce business with `customers`, `orders`, `products`, and `supplies`. *(Want to skip jaffle_shop and use your own database? Finish the install in step 2 then jump to [Connect your database](/oss/guides/connect).)*
-- **Skills** — markdown workflow guides that tell an AI coding agent (Claude Code, Openclaw, Hermes, Codex, etc.) how to operate the CLI. Two skills drive this quickstart: `wren-generate-mdl` (one-time scaffolding) and `wren-usage` (day-to-day querying). ([Skills concept →](/oss/reference/skills))
+- **Skills** — markdown workflow guides that tell an AI coding agent (Claude Code, Openclaw, Hermes, Codex, etc.) how to operate the CLI. You install one `wren` discovery stub; it fetches the guides from the CLI on demand. Two guides drive this quickstart: `generate-mdl` (one-time scaffolding) and `usage` (day-to-day querying). ([Skills concept →](/oss/reference/skills))
 
 ---
 
@@ -88,26 +88,26 @@ wren version
 
 ---
 
-## Step 3 — Install CLI skills
+## Step 3 — Install the CLI skill
 
-Skills are workflow guides that tell your AI coding agent how to use the Wren CLI effectively. Install the skill bundle:
+Skills are workflow guides that tell your AI coding agent how to use the Wren CLI effectively. Install the discovery stub — it fetches the guides from the CLI on demand:
 
 ```bash
-npx skills add Canner/WrenAI --skill '*'
+npx skills add Canner/WrenAI
 # or:
 curl -fsSL https://raw.githubusercontent.com/Canner/WrenAI/main/skills/install.sh | bash
 ```
 
-The CLI auto-detects your installed agent. To target a specific one, add `--agent <name>` (e.g., `claude-code`, `cursor`, `windsurf`, `cline`).
+The CLI auto-detects your installed agent. To target a specific one, add `--agent <name>` (e.g., `claude-code`, `cursor`, `windsurf`, `cline`). Only one skill (`wren`) is installed; the workflow guides below are served on demand with `wren skills get <name>`.
 
-This quickstart uses two of the installed skills:
+This quickstart uses two of those guides:
 
-| Skill | Purpose |
+| Guide | Purpose |
 |-------|---------|
-| **wren-usage** | Day-to-day workflow — gather context, recall past queries, write SQL, store results |
-| **wren-generate-mdl** | One-time setup — explore database schema and generate the MDL project |
+| **usage** | Day-to-day workflow — gather context, recall past queries, write SQL, store results |
+| **generate-mdl** | One-time setup — explore database schema and generate the MDL project |
 
-For the full skill list (including `wren-onboarding` and `wren-dlt-connector`), see the [Skills reference](/oss/reference/skills).
+For the full guide list (including `onboarding` and `dlt-connector`), see the [Skills reference](/oss/reference/skills).
 
 ---
 
@@ -218,9 +218,11 @@ claude
 Then ask:
 
 ```
-Use the wren-generate-mdl skill to explore the jaffle_shop database
+Use the /wren skill to explore the jaffle_shop database
 and generate the MDL for all tables. The data source is DuckDB.
 ```
+
+The `wren` skill recognizes this as a scaffolding task and pulls in the `generate-mdl` guide (`wren skills get generate-mdl`) to drive it.
 
 Claude Code will:
 
@@ -258,7 +260,7 @@ What are the top 5 products by total revenue?
 Show me the monthly order count trend.
 ```
 
-Behind the scenes, Claude Code uses the **wren-usage** skill to:
+Behind the scenes, Claude Code uses the **usage** guide to:
 
 1. **Fetch context** (`wren memory fetch`) — find relevant tables and columns for your question
 2. **Recall examples** (`wren memory recall`) — find similar past queries
