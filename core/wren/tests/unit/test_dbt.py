@@ -279,6 +279,32 @@ class TestConvertDbtTargetToWrenProfile:
         assert profile["dataset_id"] == "analytics"
         assert profile["credentials"]
 
+    def test_convert_databricks_profile_preserves_catalog(self, tmp_path):
+        project_dir, profiles_path = _write_basic_dbt_project(tmp_path)
+        profiles_path.write_text(
+            "jaffle_shop:\n"
+            "  target: dev\n"
+            "  outputs:\n"
+            "    dev:\n"
+            "      type: databricks\n"
+            "      host: dbc.example.cloud.databricks.com\n"
+            "      http_path: /sql/1.0/warehouses/abc\n"
+            "      token: dapi-token\n"
+            "      catalog: main\n"
+        )
+        target = resolve_dbt_target(project_dir, profiles_path=profiles_path)
+
+        profile = convert_dbt_target_to_wren_profile(target)
+
+        assert profile == {
+            "datasource": "databricks",
+            "databricks_type": "token",
+            "server_hostname": "dbc.example.cloud.databricks.com",
+            "http_path": "/sql/1.0/warehouses/abc",
+            "access_token": "dapi-token",
+            "catalog": "main",
+        }
+
     def test_convert_profile_missing_required_field(self, tmp_path):
         project_dir, profiles_path = _write_basic_dbt_project(tmp_path)
         profiles_path.write_text(

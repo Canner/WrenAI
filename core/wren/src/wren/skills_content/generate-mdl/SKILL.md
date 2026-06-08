@@ -1,47 +1,25 @@
 ---
-name: wren-generate-mdl
+name: generate-mdl
 description: "Generate a Wren MDL project by exploring a database with available tools (SQLAlchemy, database drivers, MCP connectors, or raw SQL). Guides agents through schema discovery, type normalization, and MDL YAML generation using the wren CLI. Use when: user wants to create or set up a new MDL, onboard a new data source, or scaffold a project from an existing database."
 license: Apache-2.0
 metadata:
   author: wrenai
-  version: "2.3"
 ---
 
 # Generate Wren MDL — CLI Agent Workflow
-
-## Version check
-
-Silently fetch `https://raw.githubusercontent.com/Canner/WrenAI/main/skills/versions.json`.
-Compare the `wren-generate-mdl` key with this skill's version (from the frontmatter above).
-If the remote version is newer, notify the user before proceeding:
-
-> A newer version of the **wren-generate-mdl** skill is available.
-> Update with:
-> ```
-> npx skills add Canner/WrenAI --skill wren-generate-mdl
-> ```
-> The CLI auto-detects your installed agent. To target a specific one, add `--agent <name>` (e.g., `claude-code`, `cursor`, `windsurf`, `cline`).
-
-Then continue with the workflow below regardless of update status.
-
----
 
 Builds an MDL project by discovering database schema and converting it
 into Wren's YAML project format. The agent uses whatever database tools
 are available in its environment for introspection; the wren CLI handles
 type normalization, validation, and build.
 
-For memory and query workflows after setup, see the **wren-usage** skill.
-
----
+For memory and query workflows after setup, run `wren skills get usage`.
 
 ## Prerequisites
 
 - `wren` CLI installed (`pip install "wrenai[<datasource>]"`)
 - A working database connection (credentials available to the agent)
-- A wren profile configured (`wren profile add`) or connection info ready
-
----
+- A connection profile (set up via `wren profile add`) or connection info ready
 
 ## Phase 0 — Detect existing project
 
@@ -62,8 +40,6 @@ Check whether `wren_project.yml` exists in the current working directory
 
 If no existing project is detected, proceed directly to Phase 1.
 
----
-
 ## Phase 1 — Establish connection and scope
 
 **Goal:** Confirm the agent can reach the database and agree on scope with the user.
@@ -78,8 +54,6 @@ If no existing project is detected, proceed directly to Phase 1.
    - Which **schema(s)** or **dataset(s)** to include (skip if only one exists)
    - Whether to include **all tables** or a subset
    - The **datasource type** for wren (e.g., `postgres` (including Aurora), `mysql` (including Aurora), `bigquery`, `snowflake`) — needed for type normalization dialect
-
----
 
 ## Phase 2 — Discover schema
 
@@ -132,8 +106,6 @@ Note: this goes through the MDL layer, so it only works if you already
 have a minimal MDL or if the database supports `information_schema` as
 regular tables. For bootstrapping from zero, Option A or B is preferred.
 
----
-
 ## Phase 3 — Normalize types
 
 **Goal:** Convert raw database types to wren-core-compatible types.
@@ -170,8 +142,6 @@ echo '[{"column":"id","raw_type":"int8"},{"column":"name","raw_type":"character 
   | wren utils parse-types --dialect postgres
 ```
 
----
-
 ## Phase 4 — Scaffold and write MDL project
 
 **Goal:** Create the YAML project structure.
@@ -197,7 +167,7 @@ project/
 > "revenue by month" or "top customers", define cubes alongside models —
 > they give agents a structured query API instead of forcing them to
 > hand-write `GROUP BY` / `DATE_TRUNC` SQL. See the
-> [Cube guide](https://github.com/Canner/WrenAI/blob/main/docs/core/guides/modeling/cube.md).
+> [Cube guide](https://github.com/Canner/WrenAI/blob/main/docs/core/guides/cubes.md).
 
 > **IMPORTANT: `catalog` and `schema` in `wren_project.yml`**
 >
@@ -270,8 +240,6 @@ Ask the user to describe:
 These descriptions are indexed by `wren memory index` and significantly
 improve LLM query accuracy.
 
----
-
 ## Phase 5 — Validate and build
 
 ```bash
@@ -294,8 +262,6 @@ If validation fails, fix the reported issues and re-run. Common errors:
 - Relationship referencing non-existent model
 - Invalid column type (try re-running through `parse_type`)
 
----
-
 ## Phase 6 — Initialize memory
 
 ```bash
@@ -307,9 +273,7 @@ wren memory status
 ```
 
 After this step, `wren memory fetch` and `wren memory recall` are
-operational. See the **wren-usage** skill for query workflows.
-
----
+operational. See `wren skills get usage` for query workflows.
 
 ## Phase 7 — Iterate with the user
 
@@ -321,8 +285,6 @@ The initial MDL is a starting point. Improve it by:
 
 Each change follows: edit YAML → `wren context validate` →
 `wren context build` → `wren memory index`.
-
----
 
 ## Quick reference
 
@@ -341,8 +303,6 @@ Each change follows: edit YAML → `wren context validate` →
 | Build manifest | `wren context build` |
 | Test query | `wren --sql "SELECT * FROM <model> LIMIT 1"` |
 | Index memory | `wren memory index` |
-
----
 
 ## Things to avoid
 

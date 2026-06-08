@@ -591,54 +591,21 @@ def version():
 
 # ── Docs subcommand ───────────────────────────────────────────────────────
 
-docs_app = typer.Typer(name="docs", help="Generate documentation for Wren Engine")
-
-
-@docs_app.command(name="connection-info")
-def docs_connection_info(
-    datasource: Annotated[
-        Optional[str],
-        typer.Argument(help="Data source name (e.g. postgres, mysql). Omit for all."),
-    ] = None,
-    format: Annotated[
-        str,
-        typer.Option("--format", "-f", help="Output format: md or json"),
-    ] = "md",
-    envelope: Annotated[
-        bool,
-        typer.Option(
-            "--envelope",
-            help='Wrap JSON output in {"datasource": ..., "properties": ...} format.',
-        ),
-    ] = False,
-):
-    """Show connection info fields for each data source."""
-    from wren.docs import generate_json_schema, generate_markdown  # noqa: PLC0415
-
-    fmt = format.lower()
-    try:
-        if fmt == "md":
-            typer.echo(generate_markdown(datasource))
-        elif fmt == "json":
-            typer.echo(generate_json_schema(datasource, envelope=envelope))
-        else:
-            typer.echo(
-                f"Error: unsupported format '{format}'. Use md or json.", err=True
-            )
-            raise typer.Exit(1)
-    except ValueError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
-
+from wren.docs_cli import docs_app  # noqa: E402, PLC0415
 
 app.add_typer(docs_app)
 
+from wren.ask_cli import ask as _ask_command  # noqa: E402, PLC0415
 from wren.cube_cli import cube_app  # noqa: E402, PLC0415
+from wren.skills_cli import skills_app  # noqa: E402, PLC0415
 from wren.utils_cli import utils_app  # noqa: E402, PLC0415
+
+app.command(name="ask")(_ask_command)
 
 app.add_typer(context_app)
 app.add_typer(cube_app)
 app.add_typer(utils_app)
+app.add_typer(skills_app)
 
 try:
     import lancedb  # noqa: PLC0415, F401

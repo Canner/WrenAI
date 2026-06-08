@@ -1,13 +1,14 @@
 ---
-name: wren-dlt-connector
+name: dlt-connector
 description: "Connect SaaS data (HubSpot, Stripe, Salesforce, GitHub, Slack, etc.) to Wren Engine for SQL analysis. Guides the user through the full flow: install dlt, pick a SaaS source, set up credentials, run the data pipeline into DuckDB, then auto-generate a Wren semantic project from the loaded data. Use this skill whenever the user mentions: connecting SaaS data, importing data from an API, dlt pipelines, loading HubSpot/Stripe/Salesforce/GitHub/Slack data, querying SaaS data with SQL, or setting up a new data source from a REST API. Also trigger when the user already has a dlt-produced DuckDB file and wants to create a Wren project from it."
 license: Apache-2.0
 metadata:
   author: wrenai
-  version: "1.0"
 ---
 
 # wren-dlt-connector
+
+> Reference docs (`dlt_sources`) and the `introspect_dlt` script are bundled. Pull references with `wren skills get dlt-connector --full`; fetch a script with `wren skills get dlt-connector --script <name>`.
 
 Connect SaaS data to Wren Engine for SQL analysis — from zero to a verified, queryable project in one conversation.
 
@@ -50,7 +51,7 @@ The `introspect_dlt.py` script does this automatically when wren SDK is installe
 
 ### Step 1: Pick the SaaS source
 
-Ask the user which SaaS service they want to connect. Read `references/dlt_sources.md` for a list of popular verified sources and their auth requirements. If the source isn't listed, check whether dlt has a verified source for it by searching `dlthub.com/docs/dlt-ecosystem/verified-sources`.
+Ask the user which SaaS service they want to connect. Read `dlt_sources` for a list of popular verified sources and their auth requirements. If the source isn't listed, check whether dlt has a verified source for it by searching `dlthub.com/docs/dlt-ecosystem/verified-sources`.
 
 ### Step 2: Install dlt
 
@@ -65,7 +66,7 @@ Create a Python script that:
 2. Configures the pipeline with `destination='duckdb'` and a local file path
 3. Runs the pipeline with `pipeline.run(source)`
 
-Here's the general pattern — adapt it per source (check `references/dlt_sources.md` for source-specific templates):
+Here's the general pattern — adapt it per source (check `dlt_sources` for source-specific templates):
 
 ```python
 import dlt
@@ -76,7 +77,7 @@ pipeline = dlt.pipeline(
     dataset_name="<source>_data",
 )
 
-# Source-specific: check references/dlt_sources.md for auth patterns
+# Source-specific: check the dlt_sources reference for auth patterns
 source = <source_function>(api_key=dlt.secrets.value)
 
 info = pipeline.run(source)
@@ -89,7 +90,7 @@ dlt reads credentials from environment variables or `.dlt/secrets.toml`. The sim
 
 ```bash
 # Set the credential as an environment variable
-# The exact variable name depends on the source — check references/dlt_sources.md
+# The exact variable name depends on the source — check the dlt_sources reference
 export SOURCES__<SOURCE>__API_KEY="the-actual-key"
 ```
 
@@ -130,7 +131,8 @@ con.close()
 Run the introspection script to auto-generate a complete Wren project from the DuckDB file:
 
 ```bash
-python <path-to-this-skill>/scripts/introspect_dlt.py \
+# first fetch the script: wren skills get dlt-connector --script introspect_dlt > introspect_dlt.py
+python introspect_dlt.py \
     --duckdb-path <path-to-duckdb-file> \
     --output-dir <project-directory> \
     --project-name <name>

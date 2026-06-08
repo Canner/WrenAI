@@ -1,13 +1,15 @@
 ---
-name: wren-genbi-app
+name: genbi-app
 description: "Turn a Wren project's semantic layer into a shareable, browser-side GenBI web app and deploy it to the user's Vercel or Cloudflare account. Orchestrates the full flow: `wren genbi build` returns a project-hydrated build instruction, the agent authors the app from scratch into apps/<name>/, then register → verify → deploy produce a shareable URL. Use this skill whenever the user wants to: build a dashboard from their Wren project, make a shareable analytics app, deploy their semantic layer as a web app, host a GenBI app on Vercel or Cloudflare Pages, or says '把這個語意層變成 app', '做一個 dashboard 分享出去', '部署成網頁', 'genbi app'."
 license: Apache-2.0
 metadata:
   author: wrenai
-  version: "1.0"
 ---
 
-# wren-genbi-app
+# Wren GenBI App — Agent Workflow Guide
+
+> This guide is served by the `wren` CLI (`wren skills get genbi-app`), so it
+> always matches your installed wren-engine version.
 
 Turn a Wren semantic layer into a shareable GenBI app — from a natural-language
 request to a public URL in one conversation.

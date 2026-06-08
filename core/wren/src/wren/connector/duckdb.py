@@ -75,7 +75,7 @@ class DuckDBConnector(ConnectorABC):
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         if limit is not None:
             sql = f"SELECT * FROM ({sql}) AS _q LIMIT {int(limit)}"
-        return self.connection.execute(sql).to_arrow_table()
+        return self.connection.execute(sql).fetch_arrow_table()
 
     def dry_run(self, sql: str) -> None:
         self.connection.execute(f"EXPLAIN {sql}")

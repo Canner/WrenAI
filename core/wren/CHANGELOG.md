@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.0](https://github.com/Canner/WrenAI/compare/wren-v0.8.1...wren-v0.9.0) (2026-06-04)
+
+
+### Features
+
+* **wren:** query MDL views in the SDK rewriter and strict mode ([#2334](https://github.com/Canner/WrenAI/issues/2334)) ([731c9c0](https://github.com/Canner/WrenAI/commit/731c9c0d92e665254afb2eff129f9e061a932fd2))
+* **wren:** serve agent skills and reference docs from the CLI ([#2329](https://github.com/Canner/WrenAI/issues/2329)) ([cbd10cd](https://github.com/Canner/WrenAI/commit/cbd10cd0ae31876e9dc8a0d113c482b29b6f5ad2))
+
+
+### Bug Fixes
+
+* **wren:** support Databricks catalog ([#2340](https://github.com/Canner/WrenAI/issues/2340)) ([5e58ef6](https://github.com/Canner/WrenAI/commit/5e58ef633fe3e657f99e512a3fdd33b61d03dbdd))
+
 ## [0.8.1](https://github.com/Canner/WrenAI/compare/wren-v0.8.0...wren-v0.8.1) (2026-05-28)
 
 

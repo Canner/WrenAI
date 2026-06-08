@@ -11,6 +11,16 @@ from wren.model import (
 )
 
 
+def _connection_kwargs(connection_info: DatabricksConnectionUnion) -> dict[str, str]:
+    kwargs = {
+        "server_hostname": connection_info.server_hostname,
+        "http_path": connection_info.http_path,
+    }
+    if connection_info.catalog:
+        kwargs["catalog"] = connection_info.catalog
+    return kwargs
+
+
 class DatabricksConnector(ConnectorABC):
     def __init__(self, connection_info: DatabricksConnectionUnion):
         from databricks import sql as dbsql  # noqa: PLC0415
@@ -19,8 +29,7 @@ class DatabricksConnector(ConnectorABC):
 
         if isinstance(connection_info, DatabricksTokenConnectionInfo):
             self.connection = dbsql.connect(
-                server_hostname=connection_info.server_hostname,
-                http_path=connection_info.http_path,
+                **_connection_kwargs(connection_info),
                 access_token=connection_info.access_token.get_secret_value(),
             )
         elif isinstance(connection_info, DatabricksServicePrincipalConnectionInfo):
@@ -36,8 +45,7 @@ class DatabricksConnector(ConnectorABC):
                 return oauth_service_principal(DbConfig(**kwargs))
 
             self.connection = dbsql.connect(
-                server_hostname=connection_info.server_hostname,
-                http_path=connection_info.http_path,
+                **_connection_kwargs(connection_info),
                 credentials_provider=credential_provider,
             )
 

@@ -31,9 +31,9 @@
   📺 HERO DEMO (place here)
   ─────────────────────────
   Suggested: a 5–10 second silent loop showing:
-    1. Terminal: `wren ask "who are our top 10 customers this quarter?"`
-    2. Agent fetches context (memory + MDL) — visible reasoning trace
-    3. Final SQL + result table
+    1. Terminal: `wren skills get onboarding` (agent fetches the workflow guide from the CLI)
+    2. Agent walks the user through setup, then writes SQL via `wren query` — visible reasoning trace
+    3. Final result table
   Format: .gif (≤2 MB) or .mp4 (autoplay-muted).
   Save under  /assets/wrenai-demo.gif  and use the line below:
 
@@ -64,65 +64,71 @@ Agents are everywhere. Claude Code, Cursor, ChatGPT, Aider, LangChain pipelines,
 
 ## Quickstart
 
-WrenAI is **agent-driven by design**: you install the skill bundle once, then let your AI coding agent (Claude Code, Openclaw, Hermes, Codex, etc.) drive the rest — Python deps, DB connection, project scaffold, and first query.
+WrenAI is **agent-driven by design**: install the CLI, install a one-file
+discovery stub for your AI client, then let your AI agent drive the rest.
+Workflow guides live inside the CLI itself and are served on demand, so
+content always matches the installed version.
 
-### 1. Install the skill bundle
-
-Skills are workflow guides that teach AI coding agents (Claude Code, Openclaw, Hermes, Codex, etc.) how to drive the Wren CLI for you.
-
-```bash
-npx skills add Canner/WrenAI --skill '*'
-```
-
-Have multiple AI coding agents installed and want the skills available in all of them? Pass `--agent '*'`:
+### 1. Install the CLI
 
 ```bash
-npx skills add Canner/WrenAI --skill '*' --agent '*'
+pip install wrenai                      # core (DuckDB included)
+pip install "wrenai[postgres,memory]"   # add per-datasource and memory extras as needed
 ```
 
-Or via the install script:
+### 2. Install the discovery stub for your AI client
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Canner/WrenAI/main/skills/install.sh | bash
+npx skills add Canner/WrenAI            # auto-detects Claude Code, Cursor, Cline, Codex, …
 ```
 
-See the [Skills reference](https://docs.getwren.ai/oss/reference/skills) for the full list of skills installed and what each one does.
+The stub is ~50 lines. It teaches your agent to fetch workflow guides via
+`wren skills get <name>` and shaped prompts via
+`wren ask "<question>" --guided|--direct` — everything else lives in the CLI.
 
-### 2. Ask your agent to set things up
+### 3. Ask your agent to set things up
 
-Open your agent in a project directory and ask:
+Open your agent in a project directory and say something like:
 
-Use the `/wren-onboarding` skill to install and set up Wren AI.
+> "Use Wren to set up my Postgres database."
 
-The agent will check your environment, install `wrenai`, create a connection profile, scaffold the project, and run a first query — all in one flow.
+The agent runs `wren skills get onboarding`, follows the guide step-by-step,
+checks your environment, creates a connection profile, scaffolds the project,
+and runs a first query.
 
-### 3. (Optional) Enrich the project
+### 4. (Optional) Enrich the project
 
-Once onboarding finishes, give your project the business context schemas can't carry:
+Once onboarding finishes, ask:
 
-Use the `/wren-enrich-context` skill in grill mode.
+> "Enrich my Wren project with the business context in `raw/`."
 
-Two modes: **grill** (one question at a time, you in the loop) or **auto-pilot** (agent reads `<project>/raw/` and proposes). Both modes write to MDL, instructions, queries, and memory — all reviewable, all Git-friendly.
+The agent runs `wren skills get enrich-context` and follows the guide in
+**grill** mode (one question at a time) or **auto-pilot** mode (agent reads
+`<project>/raw/` and proposes). Both modes write to MDL, instructions,
+queries, and memory — all reviewable, all Git-friendly.
 
-### 4. Ask questions
+### 5. Ask questions
 
-```bash
-# Ask any question
-"who are our top 10 customers by sales this quarter?"
-```
+> "Who are our top 10 customers by sales this quarter?"
 
-Or just ask your agent in natural language — it uses the context layer to resolve schema, recall similar past queries, and write governed SQL.
+Your agent fetches MDL context, recalls similar past queries, writes
+governed SQL, and executes via `wren query`.
 
-**Want to try it without your own database?** Ask your agent to run `/wren-onboarding` with the bundled `jaffle_shop` sample dataset — same flow, but you'll be querying a real warehouse end-to-end in a couple of minutes.
+**Want to try it without your own database?** Ask your agent to use the
+bundled `jaffle_shop` sample dataset — same flow, querying a real warehouse
+end-to-end in a couple of minutes.
 
 ## Two beats: scaffold fast, enrich deep
 
 ```bash
-/wren-onboarding         # Scaffold a Wren project from your DB (agent-driven)
-/wren-enrich-context     # One skill, two modes: (Under development)
-                         #   grill      — one question at a time, you in the loop
-                         #   auto-pilot — agent reads <project>/raw/ and proposes
-wren ask "..."           # Query through the context layer
+# Day 1 — agent-driven
+wren skills get onboarding         # workflow guide: set up project + first query
+wren skills get enrich-context     # workflow guide: add business context (cubes, units, enums)
+
+# Day-to-day
+wren query --sql '...'             # query through the MDL semantic layer
+wren ask "<question>" --guided     # wrap a question for a weaker agent
+wren ask "<question>" --direct     # wrap a question for a stronger agent
 ```
 
 Fast at first. Deep when you need it. Always reviewable and Git-friendly.
