@@ -243,6 +243,14 @@ Only after queries return real data, tell the user the setup is complete. Summar
 - Which profile is active
 - Example queries they can try next
 
+### Next step: share it as an app
+
+The project is now DuckDB-backed, which is exactly what GenBI snapshot mode
+wants. If the user wants to turn this data into a shareable dashboard / web app
+and deploy it (Vercel / Cloudflare), hand off to the GenBI workflow:
+`wren skills get genbi`. Its snapshot source is the very `.duckdb` file this
+pipeline produced.
+
 ## Troubleshooting
 
 If `wren context build` fails:

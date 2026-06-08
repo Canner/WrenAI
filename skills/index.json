@@ -7,14 +7,15 @@
   "skills": [
     {
       "name": "wren",
-      "description": "Wren CLI discovery stub. The actual workflow guides live inside the wren CLI; this stub teaches an AI agent to call `wren skills list`, `wren skills get <name>`, and `wren ask <prompt> --guided|--direct`. Use whenever the user asks a data question, wants to install / set up Wren Engine, connect a new database, load SaaS data via dlt, generate or regenerate an MDL project, or enrich a project with business context.",
+      "description": "Wren CLI discovery stub. The actual workflow guides live inside the wren CLI; this stub teaches an AI agent to call `wren skills list`, `wren skills get <name>`, and `wren ask <prompt> --guided|--direct`. Use whenever the user asks a data question, wants to install / set up Wren Engine, connect a new database, load SaaS data via dlt, generate or regenerate an MDL project, enrich a project with business context, or build & deploy a shareable GenBI web app / dashboard from a project's semantic layer (Vercel / Cloudflare).",
       "tags": [
         "wren",
         "discovery-stub",
         "cli",
         "sql",
         "mdl",
-        "semantic-layer"
+        "semantic-layer",
+        "genbi"
       ],
       "repository": "https://github.com/Canner/WrenAI/tree/main/skills/wren"
     }

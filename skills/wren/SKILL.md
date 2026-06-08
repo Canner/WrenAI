@@ -1,6 +1,6 @@
 ---
 name: wren
-description: "Wren CLI for AI agents — a semantic SQL layer over 22+ databases (Postgres, MySQL, BigQuery, Snowflake, Spark, …). The actual workflow guides live inside the `wren` CLI itself; this is just a discovery stub. Use whenever the user asks a data question (how many, show me, top N, compare, trend, breakdown, metric, revenue, customers, orders), wants to install / set up Wren Engine, connect a new database, connect SaaS data via dlt (HubSpot, Stripe, Salesforce, GitHub, Slack), generate or regenerate an MDL project from a database schema, or enrich a project with business context (enum meanings, units, cubes like ARR / DAU / churn). Triggers: 'install wren', 'set up wren engine', 'connect database to wren', 'connect SaaS to wren', 'load hubspot / stripe / salesforce data', 'generate mdl', 'scaffold wren project', 'enrich wren context', 'augment my project', 'add cubes', 'wren onboarding', 'wren usage', 'wren generate mdl', 'wren dlt connector', 'wren enrich context'."
+description: "Wren CLI for AI agents — a semantic SQL layer over 22+ databases (Postgres, MySQL, BigQuery, Snowflake, Spark, …). The actual workflow guides live inside the `wren` CLI itself; this is just a discovery stub. Use whenever the user asks a data question (how many, show me, top N, compare, trend, breakdown, metric, revenue, customers, orders), wants to install / set up Wren Engine, connect a new database, connect SaaS data via dlt (HubSpot, Stripe, Salesforce, GitHub, Slack), generate or regenerate an MDL project from a database schema, enrich a project with business context (enum meanings, units, cubes like ARR / DAU / churn), or turn a project's semantic layer into a shareable GenBI web app / dashboard and deploy it to Vercel or Cloudflare. Triggers: 'install wren', 'set up wren engine', 'connect database to wren', 'connect SaaS to wren', 'load hubspot / stripe / salesforce data', 'generate mdl', 'scaffold wren project', 'enrich wren context', 'augment my project', 'add cubes', 'build a dashboard', 'make a shareable analytics app', 'deploy my semantic layer as a web app', 'genbi app', '把這個語意層變成 app', '做一個 dashboard 分享出去', '部署成網頁', 'wren onboarding', 'wren usage', 'wren generate mdl', 'wren dlt connector', 'wren enrich context', 'wren genbi'."
 license: Apache-2.0
 allowed-tools: Bash(wren:*)
 ---
@@ -22,7 +22,7 @@ wren skills get usage                   # day-to-day querying
 wren skills get generate-mdl            # generate MDL from a database schema
 wren skills get dlt-connector           # connect SaaS sources via dlt
 wren skills get enrich-context          # add business context (units, enums, cubes)
-wren skills get genbi-app               # build & deploy a shareable GenBI web app
+wren skills get genbi                   # build & deploy a shareable GenBI web app
 # add --full to include the skill's reference docs
 # add --script <name> to fetch a bundled script (e.g. dlt-connector / introspect_dlt)
 ```

@@ -259,10 +259,10 @@ fi
 # ════════════════════════════════════════════════════════════════════════════
 echo "── slice 07: skill walkthrough"
 
-# the skill guide is served by the CLI (wren skills get genbi-app), not shipped
+# the skill guide is served by the CLI (wren skills get genbi), not shipped
 # as a standalone skills/ dir — the discovery stub is the only external skill.
-$WREN skills get genbi-app > "$WORK/skill.out" 2>&1
-assert_contains "$WORK/skill.out" "Wren GenBI App" "skill guide served via 'wren skills get genbi-app'"
+$WREN skills get genbi > "$WORK/skill.out" 2>&1
+assert_contains "$WORK/skill.out" "Wren GenBI App" "skill guide served via 'wren skills get genbi'"
 
 # every command in the skill's quick reference exists in the real CLI
 HELP="$WORK/genbi-help.out"
