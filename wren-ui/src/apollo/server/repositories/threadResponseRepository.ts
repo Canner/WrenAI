@@ -4,7 +4,7 @@ import {
   IBasicRepository,
   IQueryOptions,
 } from './baseRepository';
-import { camelCase, isPlainObject, mapKeys, mapValues, snakeCase } from 'lodash';
+import { camelCase, isPlainObject, mapKeys, mapValues } from 'lodash';
 import { AskResultStatus } from '@server/models/adaptor';
 
 export interface DetailStep {
@@ -73,6 +73,8 @@ export interface ThreadResponse {
   breakdownDetail?: ThreadResponseBreakdownDetail; // Thread response breakdown detail
   chartDetail?: ThreadResponseChartDetail; // Thread response chart detail
   adjustment?: ThreadResponseAdjustment; // Thread response adjustment
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export interface IThreadResponseRepository
@@ -93,9 +95,30 @@ export class ThreadResponseRepository
     'chartDetail',
     'adjustment',
   ];
+  private hasIdentityIdPromise?: Promise<boolean>;
 
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'thread_response' });
+  }
+
+  public override async createOne(
+    data: Partial<ThreadResponse>,
+    queryOptions?: IQueryOptions,
+  ): Promise<ThreadResponse> {
+    return super.createOne(
+      await this.withMssqlId(this.withTimestamps(data), queryOptions),
+      queryOptions,
+    );
+  }
+
+  public override async createMany(
+    data: Partial<ThreadResponse>[],
+    queryOptions?: IQueryOptions,
+  ): Promise<ThreadResponse[]> {
+    return super.createMany(
+      await this.withMssqlIds(data.map(this.withTimestamps), queryOptions),
+      queryOptions,
+    );
   }
 
   public async getResponsesWithThread(threadId: number, limit?: number) {
@@ -168,6 +191,7 @@ export class ThreadResponseRepository
         ? JSON.stringify(data.chartDetail)
         : undefined,
       adjustment: data.adjustment ? JSON.stringify(data.adjustment) : undefined,
+      updatedAt: new Date(),
     };
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
     const [result] = await executer(this.tableName)
@@ -196,16 +220,90 @@ export class ThreadResponseRepository
     return formattedData;
   };
 
-  protected override transformToDBData = (data: Partial<ThreadResponse>) => {
-    if (!isPlainObject(data)) {
-      throw new Error('Unexpected dbdata');
+  private withTimestamps = (
+    data: Partial<ThreadResponse>,
+  ): Partial<ThreadResponse> => {
+    const now = new Date();
+    return {
+      ...data,
+      createdAt: data.createdAt ?? now,
+      updatedAt: data.updatedAt ?? now,
+    };
+  };
+
+  private isMssql = () =>
+    String(this.knex.client.config.client || '').toLowerCase() === 'mssql';
+
+  private hasIdentityId = async (): Promise<boolean> => {
+    if (!this.isMssql()) {
+      return true;
     }
-    const transformedData = mapValues(data, (value, key) => {
-      if (this.jsonbColumns.includes(key)) {
-        return value ? JSON.stringify(value) : value;
-      }
-      return value;
+
+    if (!this.hasIdentityIdPromise) {
+      this.hasIdentityIdPromise = this.knex('INFORMATION_SCHEMA.COLUMNS')
+        .select('COLUMN_NAME')
+        .where({
+          TABLE_SCHEMA: 'dbo',
+          TABLE_NAME: this.tableName,
+          COLUMN_NAME: 'id',
+        })
+        .whereRaw(
+          "COLUMNPROPERTY(OBJECT_ID(TABLE_SCHEMA + '.' + TABLE_NAME), COLUMN_NAME, 'IsIdentity') = 1",
+        )
+        .first()
+        .then(Boolean);
+    }
+
+    return this.hasIdentityIdPromise;
+  };
+
+  private withMssqlId = async (
+    data: Partial<ThreadResponse>,
+    queryOptions?: IQueryOptions,
+  ): Promise<Partial<ThreadResponse>> => {
+    if (
+      (data.id !== undefined && data.id !== null) ||
+      !this.isMssql() ||
+      (await this.hasIdentityId())
+    ) {
+      return data;
+    }
+
+    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
+    const [row] = await executer(this.tableName).max<{ maxId?: number }>({
+      maxId: 'id',
     });
-    return mapKeys(transformedData, (_value, key) => snakeCase(key));
+    return {
+      ...data,
+      id: Number(row?.maxId || 0) + 1,
+    };
+  };
+
+  private withMssqlIds = async (
+    data: Partial<ThreadResponse>[],
+    queryOptions?: IQueryOptions,
+  ): Promise<Partial<ThreadResponse>[]> => {
+    if (
+      data.every((item) => item.id !== undefined && item.id !== null) ||
+      !this.isMssql() ||
+      (await this.hasIdentityId())
+    ) {
+      return data;
+    }
+
+    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
+    const [row] = await executer(this.tableName).max<{ maxId?: number }>({
+      maxId: 'id',
+    });
+    let nextId = Number(row?.maxId || 0) + 1;
+    return data.map((item) => {
+      if (item.id !== undefined && item.id !== null) {
+        return item;
+      }
+      return {
+        ...item,
+        id: nextId++,
+      };
+    });
   };
 }
