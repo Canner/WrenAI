@@ -38,6 +38,7 @@ def test_import_cli_does_not_pull_heavy_ml_stack():
 
 @pytest.mark.skipif(not MEMORY_INSTALLED, reason="memory extra not installed")
 def test_memory_subcommand_registered_when_extra_present():
+    """The `memory` subcommand group is registered when the extra is installed."""
     cli = importlib.import_module("wren.cli")
     names = {g.typer_instance.info.name for g in cli.app.registered_groups}
     assert "memory" in names, "memory subcommand not registered despite extra installed"
@@ -45,6 +46,7 @@ def test_memory_subcommand_registered_when_extra_present():
 
 @pytest.mark.skipif(MEMORY_INSTALLED, reason="memory extra IS installed")
 def test_memory_subcommand_absent_when_extra_missing():
+    """The `memory` subcommand group is not registered when the extra is missing."""
     cli = importlib.import_module("wren.cli")
     names = {g.typer_instance.info.name for g in cli.app.registered_groups}
     assert "memory" not in names, "memory subcommand registered without the extra"
