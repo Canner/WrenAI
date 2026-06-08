@@ -125,11 +125,24 @@ def _build_view_ddl(content: dict) -> str:
 def expand_business_terms_for_retrieval(query: str) -> str:
     normalized = (query or "").lower()
     pcb_terms = {
+        "assembly",
+        "bar chart",
+        "business unit",
+        "category",
+        "common",
+        "contributor",
+        "count by",
         "pcb",
         "repair",
         "debug",
         "turnaround",
         "failure",
+        "failure code",
+        "failure category",
+        "failure pattern",
+        "top 10",
+        "top ten",
+        "most common",
         "resolved",
         "trend",
         "volume",
@@ -151,6 +164,9 @@ def expand_business_terms_for_retrieval(query: str) -> str:
             "repair trends repair volume repair counts debug entries debug fixes",
             "average debug hours turnaround time resolved entries failure category failure code",
             "monthly trend quarter grouped by month bar chart line chart",
+            "top common pcb failures top 10 failures most common failure categories",
+            "failure patterns category occurrences debugentryid failuresys material workorder serialnumber",
+            "dbo_DebugEntries dbo_failure_patterns dbo_repair_logs created_at failedat datein dateout",
         ]
     )
 

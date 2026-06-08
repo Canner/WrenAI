@@ -1321,6 +1321,12 @@ _MSSQL_TEXT_TO_SQL_RULES = """
     - For throughput trends across manufacturing/business units, use "dbo_DebugEntries"."BusinessUnit" as the unit dimension and a real debug-entry timestamp such as "dbo_DebugEntries"."DateIn" or "dbo_DebugEntries"."FailedAt" for the trend bucket. Do not use "dbo_repair_logs"."ManufacturingUnit", "dbo_repair_logs"."MONTH", or invented manufacturing/date fields.
     - For top/common PCB failure questions, prefer grouping by "dbo_failure_patterns"."name" or "dbo_failure_patterns"."category" and counting "dbo_DebugEntries"."DebugEntryId" after joining "dbo_DebugEntries"."FailureSys" = "dbo_failure_patterns"."id".
     - If a useful aggregate already exists in "dbo_failure_patterns" such as "occurrences", it can be used directly for top failure pattern questions without joining event rows.
+    - For requests such as "show top 10 most common PCB failures", "bar chart of failures by category", or "count of repairs grouped by failure category", generate SQL first. Do not answer with general charting guidance. Return the categorical failure field plus a count metric that can drive a bar chart.
+    - For failure-category charts, prefer one of these patterns depending on schema availability:
+        1. `GROUP BY "dbo_failure_patterns"."category"` and `COUNT("dbo_DebugEntries"."DebugEntryId")`
+        2. `GROUP BY "dbo_failure_patterns"."name"` and `COUNT("dbo_DebugEntries"."DebugEntryId")`
+        3. `GROUP BY "dbo_repair_logs"."failure_code"` and `COUNT(*)`
+    - For chart-oriented questions, ensure the final SELECT contains only the chart-ready dimension and metric columns. Avoid prose-like outputs or helper columns.
 - DO NOT use DATEADD, DATEDIFF, DATETIME2, or DATETIMEOFFSET unless the SQL FUNCTIONS section explicitly proves they are supported by the target runtime.
 - Do not subtract timestamp/date columns directly. If a duration or turnaround column exists in the schema, select that column directly. If only start/end timestamps exist and the SQL FUNCTIONS section lists DATEDIFF, use DATEDIFF('second', <start_timestamp>, <end_timestamp>) for duration in seconds.
 - Resolve relative time phrases such as "last 12 months", "last month", or "this year" into absolute ISO timestamp boundaries using the current time context. Prefer closed-open literal ranges over runtime date arithmetic.
