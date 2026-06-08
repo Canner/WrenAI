@@ -101,7 +101,6 @@ export default function OrganizationSettingsLayout({
               Members
             </Link>
           </SidebarItem>
-          <PlaceholderItem>Billing</PlaceholderItem>
           <SidebarItem $active={section === 'danger-zone'}>
             <Link style={linkStyle} href={Path.OrganizationDangerZone}>
               Danger zone
