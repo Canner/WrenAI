@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
-import { Avatar, Button, Dropdown, Layout, Menu, Space } from 'antd';
+import { Button, Dropdown, Layout, Menu, Space } from 'antd';
 import styled from 'styled-components';
 import LogoBar from '@/components/LogoBar';
 import { Path } from '@/utils/enum';
@@ -55,11 +55,18 @@ const HeaderRight = styled.div`
   min-width: 120px;
 `;
 
-const UserAvatar = styled(Avatar)`
+const UserAvatar = styled.div`
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   background: var(--geekblue-6);
   color: var(--gray-1);
   font-weight: 600;
+  line-height: 1;
 `;
 
 interface CurrentUserProfile {
@@ -171,7 +178,7 @@ export default function HeaderBar() {
               trigger={['click']}
               placement="bottomRight"
             >
-              <UserAvatar size={32}>{userInitials}</UserAvatar>
+              <UserAvatar>{userInitials}</UserAvatar>
             </Dropdown>
           )}
         </HeaderRight>
