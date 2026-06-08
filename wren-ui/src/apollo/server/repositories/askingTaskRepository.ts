@@ -1,5 +1,9 @@
 import { Knex } from 'knex';
-import { BaseRepository, IBasicRepository } from './baseRepository';
+import {
+  BaseRepository,
+  IBasicRepository,
+  IQueryOptions,
+} from './baseRepository';
 import {
   camelCase,
   isPlainObject,
@@ -44,6 +48,35 @@ export class AskingTaskRepository
     return this.findOneBy({ queryId });
   }
 
+  public override async createOne(
+    data: Partial<AskingTask>,
+    queryOptions?: IQueryOptions,
+  ): Promise<AskingTask> {
+    return super.createOne(this.withTimestamps(data), queryOptions);
+  }
+
+  public override async createMany(
+    data: Partial<AskingTask>[],
+    queryOptions?: IQueryOptions,
+  ): Promise<AskingTask[]> {
+    return super.createMany(data.map(this.withTimestamps), queryOptions);
+  }
+
+  public override async updateOne(
+    id: string | number,
+    data: Partial<AskingTask>,
+    queryOptions?: IQueryOptions,
+  ): Promise<AskingTask> {
+    return super.updateOne(
+      id,
+      {
+        ...data,
+        updatedAt: data.updatedAt ?? new Date(),
+      },
+      queryOptions,
+    );
+  }
+
   protected override transformFromDBData = (data: any) => {
     if (!isPlainObject(data)) {
       throw new Error('Unexpected dbdata');
@@ -73,5 +106,16 @@ export class AskingTaskRepository
       }
     });
     return mapKeys(transformedData, (_value, key) => snakeCase(key));
+  };
+
+  private withTimestamps = (
+    data: Partial<AskingTask>,
+  ): Partial<AskingTask> => {
+    const now = new Date();
+    return {
+      ...data,
+      createdAt: data.createdAt ?? now,
+      updatedAt: data.updatedAt ?? now,
+    };
   };
 }
