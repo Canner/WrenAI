@@ -14,7 +14,7 @@ Atlassian Rovo Dev.
 ## Install Wren skills
 
 ```bash
-npx skills add Canner/WrenAI --skill '*' --agent rovodev
+npx skills add Canner/WrenAI --agent rovodev
 ```
 
 ## Run onboarding
@@ -26,7 +26,7 @@ acli rovodev run
 Then ask:
 
 ```text
-Use the /wren-onboarding skill to install and set up Wren AI.
+Use the /wren skill to install and set up Wren AI.
 ```
 
 The skill walks the agent through environment checks, profile creation, project scaffolding, and a first query.

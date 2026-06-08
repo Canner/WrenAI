@@ -14,7 +14,7 @@ Moonshot Kimi CLI. Uses the shared `.agents/skills/` directory.
 ## Install Wren skills
 
 ```bash
-npx skills add Canner/WrenAI --skill '*' --agent kimi-cli
+npx skills add Canner/WrenAI --agent kimi-cli
 ```
 
 ## Run onboarding
@@ -26,7 +26,7 @@ kimi
 Then ask:
 
 ```text
-Use the /wren-onboarding skill to install and set up Wren AI.
+Use the /wren skill to install and set up Wren AI.
 ```
 
 The skill walks the agent through environment checks, profile creation, project scaffolding, and a first query.

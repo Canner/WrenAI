@@ -13,7 +13,7 @@ Sourcegraph's coding agent. Uses the shared `.agents/skills/` directory.
 ## Install Wren skills
 
 ```bash
-npx skills add Canner/WrenAI --skill '*' --agent amp
+npx skills add Canner/WrenAI --agent amp
 ```
 
 ## Run onboarding
@@ -25,7 +25,7 @@ amp
 Then ask:
 
 ```text
-Use the /wren-onboarding skill to install and set up Wren AI.
+Use the /wren skill to install and set up Wren AI.
 ```
 
 The skill walks the agent through environment checks, profile creation, project scaffolding, and a first query.

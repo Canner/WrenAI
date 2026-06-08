@@ -14,7 +14,7 @@ Huawei Cloud CodeArts Doer.
 ## Install Wren skills
 
 ```bash
-npx skills add Canner/WrenAI --skill '*' --agent codearts-agent
+npx skills add Canner/WrenAI --agent codearts-agent
 ```
 
 ## Run onboarding
@@ -24,7 +24,7 @@ Open your project in CodeArts IDE, then open the CodeArts Agent panel.
 Then ask:
 
 ```text
-Use the /wren-onboarding skill to install and set up Wren AI.
+Use the /wren skill to install and set up Wren AI.
 ```
 
 The skill walks the agent through environment checks, profile creation, project scaffolding, and a first query.

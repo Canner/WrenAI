@@ -17,7 +17,7 @@ Turn your warehouse schema into an agent-readable MDL project that captures your
 
 1. **Connect your data source.** See [Connect your data](./connect.md) for profile setup.
 2. **Open your agent in a fresh project directory and ask:**
-   > Use the `wren-generate-mdl` skill to scaffold an MDL project for this database.
+   > Use the `/wren` skill to scaffold an MDL project for this database.
 3. **Review the scaffold.** The agent introspects schema, normalizes types, detects relationships, and writes one model per table. It will ask one focused question whenever it cannot decide alone — naming, canonical tables, ambiguous foreign keys.
 4. **Build and index.** The skill finishes with:
    ```bash

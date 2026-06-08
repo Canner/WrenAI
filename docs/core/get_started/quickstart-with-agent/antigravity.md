@@ -14,7 +14,7 @@ Google's AI development workspace.
 ## Install Wren skills
 
 ```bash
-npx skills add Canner/WrenAI --skill '*' --agent antigravity
+npx skills add Canner/WrenAI --agent antigravity
 ```
 
 ## Run onboarding
@@ -24,7 +24,7 @@ Open your project folder in Antigravity, then start a new agent session.
 Then ask:
 
 ```text
-Use the /wren-onboarding skill to install and set up Wren AI.
+Use the /wren skill to install and set up Wren AI.
 ```
 
 The skill walks the agent through environment checks, profile creation, project scaffolding, and a first query.

@@ -13,7 +13,7 @@ Charm's TUI coding agent.
 ## Install Wren skills
 
 ```bash
-npx skills add Canner/WrenAI --skill '*' --agent crush
+npx skills add Canner/WrenAI --agent crush
 ```
 
 ## Run onboarding
@@ -25,7 +25,7 @@ crush
 Then ask:
 
 ```text
-Use the /wren-onboarding skill to install and set up Wren AI.
+Use the /wren skill to install and set up Wren AI.
 ```
 
 The skill walks the agent through environment checks, profile creation, project scaffolding, and a first query.
