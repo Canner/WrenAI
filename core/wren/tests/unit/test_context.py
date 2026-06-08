@@ -774,10 +774,10 @@ def test_validate_view_dialect_unknown(tmp_path):
 # ── Cubes ───────────────────────────────────────────────────────────────────
 
 
-def _make_v3_cube_project(tmp_path: Path) -> Path:
-    """v3 project with an orders model, ready for cubes/*.yml files."""
+def _make_v2_cube_project(tmp_path: Path) -> Path:
+    """v2 project with an orders model, ready for cubes/*/metadata.yml files."""
     (tmp_path / "wren_project.yml").write_text(
-        "schema_version: 3\nname: test\ndata_source: postgres\ncatalog: wren\nschema: public\n"
+        "schema_version: 2\nname: test\ndata_source: postgres\ncatalog: wren\nschema: public\n"
     )
     d = tmp_path / "models" / "orders"
     d.mkdir(parents=True)
@@ -791,15 +791,40 @@ def _make_v3_cube_project(tmp_path: Path) -> Path:
     return tmp_path
 
 
+def _write_cube(tmp_path: Path, name: str, content: str) -> Path:
+    cube_dir = tmp_path / "cubes" / name
+    cube_dir.mkdir(parents=True)
+    cube_file = cube_dir / "metadata.yml"
+    cube_file.write_text(content)
+    return cube_file
+
+
 def test_load_cubes_returns_empty_when_no_dir(tmp_path):
     assert load_cubes(tmp_path) == []
 
 
-def test_load_cubes_parses_yaml(tmp_path):
-    _make_v3_cube_project(tmp_path)
+def test_load_cubes_v1_parses_flat_yaml(tmp_path):
+    (tmp_path / "wren_project.yml").write_text(
+        "schema_version: 1\nname: test\ndata_source: postgres\ncatalog: wren\nschema: public\n"
+    )
     cubes_dir = tmp_path / "cubes"
     cubes_dir.mkdir()
     (cubes_dir / "order_metrics.yml").write_text(
+        "name: order_metrics\n"
+        "base_object: orders\n"
+        "measures:\n"
+        "  - name: revenue\n    expression: SUM(o_totalprice)\n    type: DOUBLE\n"
+    )
+    cubes = load_cubes(tmp_path)
+    assert len(cubes) == 1
+    assert cubes[0]["name"] == "order_metrics"
+
+
+def test_load_cubes_v2_parses_metadata_yaml(tmp_path):
+    _make_v2_cube_project(tmp_path)
+    _write_cube(
+        tmp_path,
+        "order_metrics",
         "name: order_metrics\n"
         "base_object: orders\n"
         "measures:\n"
@@ -814,11 +839,42 @@ def test_load_cubes_parses_yaml(tmp_path):
     assert cubes[0]["measures"][0]["name"] == "revenue"
 
 
-def test_build_manifest_includes_cubes(tmp_path):
-    _make_v3_cube_project(tmp_path)
+def test_load_cubes_v2_ignores_flat_yaml(tmp_path):
+    _make_v2_cube_project(tmp_path)
     cubes_dir = tmp_path / "cubes"
     cubes_dir.mkdir()
     (cubes_dir / "order_metrics.yml").write_text(
+        "name: order_metrics\n"
+        "base_object: orders\n"
+        "measures:\n"
+        "  - name: revenue\n    expression: SUM(o_totalprice)\n    type: DOUBLE\n"
+    )
+    assert load_cubes(tmp_path) == []
+
+
+def test_load_cubes_v3_uses_v2_layout(tmp_path):
+    _make_v2_cube_project(tmp_path)
+    (tmp_path / "wren_project.yml").write_text(
+        "schema_version: 3\nname: test\ndata_source: postgres\ncatalog: wren\nschema: public\n"
+    )
+    _write_cube(
+        tmp_path,
+        "order_metrics",
+        "name: order_metrics\n"
+        "base_object: orders\n"
+        "measures:\n"
+        "  - name: revenue\n    expression: SUM(o_totalprice)\n    type: DOUBLE\n"
+    )
+    cubes = load_cubes(tmp_path)
+    assert len(cubes) == 1
+    assert cubes[0]["name"] == "order_metrics"
+
+
+def test_build_manifest_includes_cubes(tmp_path):
+    _make_v2_cube_project(tmp_path)
+    _write_cube(
+        tmp_path,
+        "order_metrics",
         "name: order_metrics\n"
         "base_object: orders\n"
         "measures:\n"
@@ -831,10 +887,10 @@ def test_build_manifest_includes_cubes(tmp_path):
 
 
 def test_build_json_cube_camel_case(tmp_path):
-    _make_v3_cube_project(tmp_path)
-    cubes_dir = tmp_path / "cubes"
-    cubes_dir.mkdir()
-    (cubes_dir / "order_metrics.yml").write_text(
+    _make_v2_cube_project(tmp_path)
+    _write_cube(
+        tmp_path,
+        "order_metrics",
         "name: order_metrics\n"
         "base_object: orders\n"
         "measures:\n"
@@ -849,10 +905,10 @@ def test_build_json_cube_camel_case(tmp_path):
 
 
 def test_validate_cube_unknown_base_object(tmp_path):
-    _make_v3_cube_project(tmp_path)
-    cubes_dir = tmp_path / "cubes"
-    cubes_dir.mkdir()
-    (cubes_dir / "bad.yml").write_text(
+    _make_v2_cube_project(tmp_path)
+    _write_cube(
+        tmp_path,
+        "bad",
         "name: bad\nbase_object: nosuch\nmeasures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
     )
     errors = validate_project(tmp_path)
@@ -860,25 +916,23 @@ def test_validate_cube_unknown_base_object(tmp_path):
 
 
 def test_validate_cube_duplicate_name(tmp_path):
-    _make_v3_cube_project(tmp_path)
-    cubes_dir = tmp_path / "cubes"
-    cubes_dir.mkdir()
+    _make_v2_cube_project(tmp_path)
     body = (
         "name: order_metrics\nbase_object: orders\n"
         "measures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
     )
-    (cubes_dir / "a.yml").write_text(body)
-    (cubes_dir / "b.yml").write_text(body)
+    _write_cube(tmp_path, "a", body)
+    _write_cube(tmp_path, "b", body)
     errors = validate_project(tmp_path)
     assert any("duplicate cube name" in e.message for e in errors)
 
 
 def test_validate_cube_missing_base_object_uses_snake_case(tmp_path):
     """Validation error should reference the YAML field name (snake_case)."""
-    _make_v3_cube_project(tmp_path)
-    cubes_dir = tmp_path / "cubes"
-    cubes_dir.mkdir()
-    (cubes_dir / "om.yml").write_text(
+    _make_v2_cube_project(tmp_path)
+    _write_cube(
+        tmp_path,
+        "om",
         "name: order_metrics\n"
         "measures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
     )
@@ -889,10 +943,10 @@ def test_validate_cube_missing_base_object_uses_snake_case(tmp_path):
 
 def test_validate_cube_non_string_hierarchy_level(tmp_path):
     """Non-string hierarchy levels must be reported, not crash."""
-    _make_v3_cube_project(tmp_path)
-    cubes_dir = tmp_path / "cubes"
-    cubes_dir.mkdir()
-    (cubes_dir / "om.yml").write_text(
+    _make_v2_cube_project(tmp_path)
+    _write_cube(
+        tmp_path,
+        "om",
         "name: order_metrics\n"
         "base_object: orders\n"
         "measures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
@@ -907,10 +961,10 @@ def test_validate_cube_non_string_hierarchy_level(tmp_path):
 
 
 def test_validate_cube_bad_hierarchy(tmp_path):
-    _make_v3_cube_project(tmp_path)
-    cubes_dir = tmp_path / "cubes"
-    cubes_dir.mkdir()
-    (cubes_dir / "om.yml").write_text(
+    _make_v2_cube_project(tmp_path)
+    _write_cube(
+        tmp_path,
+        "om",
         "name: order_metrics\n"
         "base_object: orders\n"
         "measures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
@@ -923,10 +977,10 @@ def test_validate_cube_bad_hierarchy(tmp_path):
 
 
 def test_validate_cube_ok(tmp_path):
-    _make_v3_cube_project(tmp_path)
-    cubes_dir = tmp_path / "cubes"
-    cubes_dir.mkdir()
-    (cubes_dir / "om.yml").write_text(
+    _make_v2_cube_project(tmp_path)
+    _write_cube(
+        tmp_path,
+        "om",
         "name: order_metrics\n"
         "base_object: orders\n"
         "measures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"

@@ -589,12 +589,19 @@ def _load_views_v2(project_path: Path) -> list[dict]:
 
 
 def load_cubes(project_path: Path) -> list[dict]:
-    """Load cubes from project_path/cubes/*.yml.
+    """Load cubes — dispatches on schema_version.
 
-    Each file is one cube definition. Files use the same YAML shape on
-    every schema version (no v1/v2 dispatch — cubes were added after the
-    directory-per-entity migration).
+    v1 (legacy): cubes/*.yml
+    v2: cubes/<name>/metadata.yml
     """
+    sv = get_schema_version(project_path)
+    if sv == 1:
+        return _load_cubes_v1(project_path)
+    return _load_cubes_v2(project_path)
+
+
+def _load_cubes_v1(project_path: Path) -> list[dict]:
+    """Legacy: load cube YAML files from project_path/cubes/*.yml."""
     cubes_dir = project_path / "cubes"
     if not cubes_dir.is_dir():
         return []
@@ -603,6 +610,28 @@ def load_cubes(project_path: Path) -> list[dict]:
         data = yaml.safe_load(f.read_text())
         if isinstance(data, dict):
             data["_source_file"] = f.name
+            cubes.append(data)
+    return cubes
+
+
+def _load_cubes_v2(project_path: Path) -> list[dict]:
+    """v2: load cubes from project_path/cubes/<cube_name>/ directories.
+
+    Each cube directory must contain metadata.yml.
+    """
+    cubes_dir = project_path / "cubes"
+    if not cubes_dir.is_dir():
+        return []
+    cubes = []
+    for d in sorted(cubes_dir.iterdir()):
+        if not d.is_dir():
+            continue
+        meta_file = d / "metadata.yml"
+        if not meta_file.exists():
+            continue
+        data = yaml.safe_load(meta_file.read_text())
+        if isinstance(data, dict):
+            data["_source_file"] = str(meta_file.relative_to(cubes_dir))
             cubes.append(data)
     return cubes
 
