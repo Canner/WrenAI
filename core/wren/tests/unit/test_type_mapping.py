@@ -21,6 +21,18 @@ from wren.type_mapping import parse_type, parse_types
         ("INT64", "bigquery", "BIGINT"),
         ("STRING", "bigquery", "TEXT"),
         ("Nullable(UInt32)", "clickhouse", "UINT"),
+        # Nullable(T) regression — Canner/WrenAI#2184
+        ("Nullable(String)", "clickhouse", "TEXT"),
+        ("Nullable(Int32)", "clickhouse", "INT"),
+        ("Nullable(Int64)", "clickhouse", "BIGINT"),
+        ("Nullable(Float64)", "clickhouse", "DOUBLE"),
+        ("Nullable(DateTime)", "clickhouse", "DATETIME"),
+        ("Nullable(Date)", "clickhouse", "DATE"),
+        ("Nullable(Decimal(18, 4))", "clickhouse", "DECIMAL(18, 4)"),
+        ("Nullable(UUID)", "clickhouse", "UUID"),
+        # LowCardinality — storage hint must not change the canonical type string
+        ("LowCardinality(String)", "clickhouse", "LOWCARDINALITY<TEXT>"),
+        ("LowCardinality(Nullable(String))", "clickhouse", "LOWCARDINALITY<TEXT>"),
         ("TIMESTAMP WITH TIME ZONE", "postgres", "TIMESTAMPTZ"),
         ("DECIMAL(10,2)", "mysql", "DECIMAL(10, 2)"),
         # graceful fallback for unknown types
