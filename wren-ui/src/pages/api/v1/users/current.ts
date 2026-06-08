@@ -29,10 +29,25 @@ export default async function handler(
   const startTime = Date.now();
 
   try {
-    assertAllowedMethods(req, ['GET', 'PUT']);
+    assertAllowedMethods(req, ['GET', 'PUT', 'DELETE']);
     const organizationMemberService = getOrganizationMemberService();
     const projectContext = await getCurrentProjectContext();
     const projectId = projectContext.id ?? 0;
+
+    if (req.method === 'DELETE') {
+      await organizationMemberService.deleteCurrentUserAccount();
+      await respondWithSimple({
+        res,
+        statusCode: 200,
+        responsePayload: { success: true },
+        projectId,
+        apiType: ApiType.DELETE_CURRENT_USER,
+        startTime,
+        requestPayload: {},
+        headers: req.headers as Record<string, string>,
+      });
+      return;
+    }
 
     if (req.method === 'PUT') {
       const user = await organizationMemberService.updateCurrentUserProfile(
@@ -68,9 +83,11 @@ export default async function handler(
       res,
       projectId: (await getCurrentProjectContext()).id ?? 0,
       apiType:
-        req.method === 'PUT'
-          ? ApiType.UPDATE_CURRENT_USER
-          : ApiType.GET_CURRENT_USER,
+        req.method === 'DELETE'
+          ? ApiType.DELETE_CURRENT_USER
+          : req.method === 'PUT'
+            ? ApiType.UPDATE_CURRENT_USER
+            : ApiType.GET_CURRENT_USER,
       requestPayload: req.method === 'PUT' ? req.body : {},
       headers: req.headers as Record<string, string>,
       startTime,

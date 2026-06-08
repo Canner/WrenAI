@@ -24,4 +24,5 @@ export enum Path {
   ProjectAccessControl = '/project/access-control',
   ProjectCreate = '/projects/create',
   UserProfile = '/user/profile',
+  UserDangerZone = '/user/danger-zone',
 }
