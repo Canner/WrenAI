@@ -269,6 +269,10 @@ def init(
     (project_path / "models").mkdir(parents=True, exist_ok=True)
     (project_path / "views").mkdir(parents=True, exist_ok=True)
     (project_path / "cubes").mkdir(parents=True, exist_ok=True)
+    # GenBI data apps live here; ephemeral serve state under apps/.run/ is
+    # gitignored while the index and app sources are committable.
+    (project_path / "apps").mkdir(parents=True, exist_ok=True)
+    (project_path / "apps" / ".gitignore").write_text(".run/\n")
 
     # wren_project.yml
     project_yml = (

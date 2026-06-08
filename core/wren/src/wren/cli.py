@@ -652,6 +652,17 @@ except ImportError:
     # until then the subcommand group simply isn't registered.
     pass
 
+try:
+    import streamlit  # noqa: PLC0415, F401
+
+    from wren.genbi.cli import genbi_app  # noqa: PLC0415
+
+    app.add_typer(genbi_app)
+except ImportError:
+    # `genbi` is installed on demand via `pip install "wrenai[genbi]"`;
+    # until then the subcommand group simply isn't registered.
+    pass
+
 from wren.profile_cli import profile_app  # noqa: PLC0415, E402
 
 app.add_typer(profile_app)

@@ -57,11 +57,13 @@ spark = ["pyspark>=3.5"]
 athena = ["pyathena[pandas]>=3"]
 oracle = ["oracledb>=2"]
 memory = ["lancedb>=0.6", "sentence-transformers>=2.2"]
+# GenBI: agent-generated, locally-served Streamlit data apps (`wren genbi`).
+genbi = ["streamlit>=1.40"]
 interactive = ["InquirerPy>=0.3.4"]
 ui = ["starlette>=0.37", "uvicorn>=0.29", "jinja2>=3.1", "python-multipart>=0.0.9"]
 main = ["wrenai[interactive,ui]"]
 all = [
-  "wrenai[postgres,mysql,bigquery,snowflake,clickhouse,trino,mssql,databricks,redshift,athena,oracle,spark,main,memory]",
+  "wrenai[postgres,mysql,bigquery,snowflake,clickhouse,trino,mssql,databricks,redshift,athena,oracle,spark,main,memory,genbi]",
 ]
 dev = [
   "pytest>=8",
@@ -81,7 +83,7 @@ Issues = "https://github.com/Canner/WrenAI/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/wren"]
-artifacts = ["src/wren/templates/*.html"]
+artifacts = ["src/wren/templates/*.html", "src/wren/genbi/templates/*"]
 
 [tool.ruff]
 line-length = 88

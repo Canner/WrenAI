@@ -65,6 +65,8 @@ See https://docs.getwren.ai/oss/engine/get_started/installation for full setup.
 | Check connection | `wren profile debug` |
 | Check memory index | `wren memory status` |
 | Rebuild after changes | `wren context build && wren memory index` |
+| Build an interactive data app | `wren genbi create <name>` then `wren genbi serve <name>` |
+| List / open data apps | `wren genbi list` |
 """
 
 
