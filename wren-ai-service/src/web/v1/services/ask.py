@@ -282,6 +282,78 @@ class AskService:
             return max(1, min(int(match.group(1)), 100))
         return default_value
 
+    def _build_manufacturing_throughput_sql(
+        self,
+        query: str,
+        table_ddls: list[str],
+        table_names: Optional[list[str]] = None,
+    ) -> str | None:
+        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized:
+            return None
+
+        wants_throughput = "throughput" in normalized or (
+            "repair" in normalized and "volume" in normalized
+        )
+        wants_unit_breakdown = any(
+            term in normalized
+            for term in (
+                "manufacturing unit",
+                "manufacturing units",
+                "business unit",
+                "business units",
+                "different unit",
+                "different units",
+            )
+        )
+
+        if not (wants_throughput and wants_unit_breakdown):
+            return None
+
+        has_debug_entries = self._schema_contains(
+            table_ddls, r"\bdbo_DebugEntries\b", table_names=table_names
+        )
+        has_business_unit = self._schema_contains(
+            table_ddls, r"\bBusinessUnit\b", table_names=table_names
+        )
+        if not (has_debug_entries and has_business_unit):
+            return None
+
+        timestamp_column = None
+        for candidate in ("DateIn", "FailedAt"):
+            if self._schema_contains(
+                table_ddls, rf"\b{candidate}\b", table_names=table_names
+            ):
+                timestamp_column = candidate
+                break
+
+        if timestamp_column and any(
+            term in normalized for term in ("trend", "monthly", "over time")
+        ):
+            timestamp_expression = f'"dbo_DebugEntries"."{timestamp_column}"'
+            return (
+                'SELECT "dbo_DebugEntries"."BusinessUnit" AS "unit_name", '
+                f'DATEPART(YEAR, {timestamp_expression}) AS "year", '
+                f'DATEPART(MONTH, {timestamp_expression}) AS "month", '
+                'COUNT(*) AS "throughput" '
+                'FROM "dbo_DebugEntries" '
+                'WHERE "dbo_DebugEntries"."BusinessUnit" IS NOT NULL '
+                f'AND {timestamp_expression} IS NOT NULL '
+                'GROUP BY "dbo_DebugEntries"."BusinessUnit", '
+                f'DATEPART(YEAR, {timestamp_expression}), '
+                f'DATEPART(MONTH, {timestamp_expression}) '
+                'ORDER BY "unit_name" ASC, "year" ASC, "month" ASC'
+            )
+
+        return (
+            'SELECT "dbo_DebugEntries"."BusinessUnit" AS "unit_name", '
+            'COUNT(*) AS "throughput" '
+            'FROM "dbo_DebugEntries" '
+            'WHERE "dbo_DebugEntries"."BusinessUnit" IS NOT NULL '
+            'GROUP BY "dbo_DebugEntries"."BusinessUnit" '
+            'ORDER BY "throughput" DESC'
+        )
+
     def _build_heuristic_text_to_sql_fallback(
         self,
         query: str,
@@ -291,6 +363,11 @@ class AskService:
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized:
             return None
+
+        if throughput_sql := self._build_manufacturing_throughput_sql(
+            query, table_ddls, table_names=table_names
+        ):
+            return throughput_sql
 
         wants_chart = any(
             term in normalized for term in ("chart", "bar chart", "line chart", "graph")
@@ -926,6 +1003,37 @@ class AskService:
                         )
                     results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
                     results["metadata"]["error_message"] = unqueryable_metric_message
+                    results["metadata"]["type"] = "TEXT_TO_SQL"
+                    return results
+
+                if heuristic_sql := self._build_manufacturing_throughput_sql(
+                    user_query, table_ddls, table_names=table_names
+                ):
+                    logger.info(
+                        "Using manufacturing throughput fallback for query_id %s: %s",
+                        query_id,
+                        user_query,
+                    )
+                    api_results = [
+                        AskResult(
+                            **{
+                                "sql": heuristic_sql,
+                                "type": "llm",
+                            }
+                        )
+                    ]
+                    if not self._is_stopped(query_id, self._ask_results):
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="finished",
+                            type="TEXT_TO_SQL",
+                            response=api_results,
+                            rephrased_question=rephrased_question,
+                            intent_reasoning=intent_reasoning,
+                            retrieved_tables=table_names,
+                            trace_id=trace_id,
+                            is_followup=True if histories else False,
+                        )
+                    results["ask_result"] = api_results
                     results["metadata"]["type"] = "TEXT_TO_SQL"
                     return results
 
