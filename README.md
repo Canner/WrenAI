@@ -76,6 +76,13 @@ pip install wrenai                      # core (DuckDB included)
 pip install "wrenai[postgres,memory]"   # add per-datasource and memory extras as needed
 ```
 
+> **Tip for users in mainland China:** If `pip install` is slow or fails, use the Tsinghua mirror:
+> ```bash
+> pip install wrenai -i https://pypi.tuna.tsinghua.edu.cn/simple
+> ```
+> If HuggingFace model downloads time out, add `export HF_ENDPOINT=https://hf-mirror.com` before running the CLI.
+```
+
 ### 2. Install the discovery stub for your AI client
 
 ```bash
