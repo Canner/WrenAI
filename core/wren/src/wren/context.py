@@ -1198,6 +1198,18 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
     if views_file.exists():
         deleted.append("views.yml")
 
+    # Cubes: flat files → directories
+    cubes = _load_cubes_v1(project_path)
+    for cube in cubes:
+        source_file = cube.pop("_source_file", None)
+        name = cube.get("name", Path(source_file).stem if source_file else "unknown")
+        dir_path = f"cubes/{name}"
+
+        created.append(f"{dir_path}/metadata.yml")
+
+        if source_file:
+            deleted.append(f"cubes/{source_file}")
+
     return created, deleted
 
 
@@ -1269,6 +1281,23 @@ def _apply_v1_to_v2(project_path: Path) -> None:
     views_file = project_path / "views.yml"
     if views_file.exists():
         views_file.unlink()
+
+    # Write new cube directories
+    cubes = _load_cubes_v1(project_path)
+    for cube in cubes:
+        source_file = cube.pop("_source_file", None)
+        name = cube.get("name", Path(source_file).stem if source_file else "unknown")
+        cube_dir = project_path / "cubes" / name
+        cube_dir.mkdir(parents=True, exist_ok=True)
+
+        (cube_dir / "metadata.yml").write_text(
+            yaml.dump(cube, default_flow_style=False, sort_keys=False)
+        )
+
+        if source_file:
+            old_file = project_path / "cubes" / source_file
+            if old_file.exists():
+                old_file.unlink()
 
 
 # ── Semantic validation (view dry-plan + description completeness) ─────────

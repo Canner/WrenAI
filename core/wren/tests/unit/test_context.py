@@ -1019,6 +1019,14 @@ def _make_v1_project(tmp_path: Path) -> Path:
         "  - name: monthly\n"
         '    statement: "SELECT\\n  date_trunc(month, d)\\n  FROM t"\n'
     )
+    cubes_dir = tmp_path / "cubes"
+    cubes_dir.mkdir()
+    (cubes_dir / "order_metrics.yml").write_text(
+        "name: order_metrics\n"
+        "base_object: orders\n"
+        "measures:\n"
+        "  - name: revenue\n    expression: SUM(amount)\n    type: DOUBLE\n"
+    )
     (tmp_path / "relationships.yml").write_text("relationships: []\n")
     (tmp_path / "instructions.md").write_text("## Rule 1\nAlways use UTC.\n")
     return tmp_path
@@ -1031,7 +1039,9 @@ def test_plan_upgrade_v1_to_v2(tmp_path):
     assert result.to_version == 2
     assert any("models/orders/metadata.yml" in f for f in result.files_created)
     assert any("models/revenue/ref_sql.sql" in f for f in result.files_created)
+    assert any("cubes/order_metrics/metadata.yml" in f for f in result.files_created)
     assert any("models/orders.yml" in f for f in result.files_deleted)
+    assert any("cubes/order_metrics.yml" in f for f in result.files_deleted)
     assert any("views.yml" in f for f in result.files_deleted)
 
 
@@ -1088,10 +1098,12 @@ def test_apply_upgrade_v1_to_v2(tmp_path):
     assert (tmp_path / "models" / "revenue" / "metadata.yml").exists()
     assert (tmp_path / "models" / "revenue" / "ref_sql.sql").exists()
     assert (tmp_path / "views" / "summary" / "metadata.yml").exists()
+    assert (tmp_path / "cubes" / "order_metrics" / "metadata.yml").exists()
 
     # Old files deleted
     assert not (tmp_path / "models" / "orders.yml").exists()
     assert not (tmp_path / "models" / "revenue.yml").exists()
+    assert not (tmp_path / "cubes" / "order_metrics.yml").exists()
     assert not (tmp_path / "views.yml").exists()
 
     # schema_version updated
@@ -1104,6 +1116,9 @@ def test_apply_upgrade_v1_to_v2(tmp_path):
     assert names == {"orders", "revenue"}
     revenue = next(m for m in models if m["name"] == "revenue")
     assert "SELECT SUM(amount)" in revenue["ref_sql"]
+    cubes = load_cubes(tmp_path)
+    assert len(cubes) == 1
+    assert cubes[0]["name"] == "order_metrics"
 
 
 def test_apply_upgrade_v2_to_v3(tmp_path):
