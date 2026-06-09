@@ -169,6 +169,7 @@ class AskService:
             "chart",
             "compare",
             "count",
+            "cost",
             "debug",
             "failure",
             "group",
@@ -238,6 +239,43 @@ class AskService:
         if table_names:
             schema_text += "\n" + "\n".join(table_names)
         return bool(re.search(pattern, schema_text, flags=re.IGNORECASE))
+
+    def _extract_schema_column_names(self, table_ddls: list[str]) -> list[str]:
+        column_names: list[str] = []
+        non_column_prefixes = (
+            "create ",
+            "constraint ",
+            "foreign ",
+            "primary ",
+            "unique ",
+            "index ",
+            ")",
+            "/*",
+            "--",
+        )
+
+        for ddl in table_ddls:
+            for line in ddl.splitlines():
+                stripped = line.strip().rstrip(",")
+                if not stripped:
+                    continue
+                if stripped.lower().startswith(non_column_prefixes):
+                    continue
+
+                column_match = re.match(
+                    r'(?:"(?P<quoted>[^"]+)"|\[(?P<bracketed>[^\]]+)\]|'
+                    r"`(?P<backticked>[^`]+)`|(?P<bare>[A-Za-z_][A-Za-z0-9_]*))\s+",
+                    stripped,
+                )
+                if not column_match:
+                    continue
+
+                column_name = next(
+                    value for value in column_match.groupdict().values() if value
+                )
+                column_names.append(column_name.lower())
+
+        return column_names
 
     def _extract_requested_top_n(self, query: str, default_value: int = 10) -> int:
         if match := re.search(r"\btop\s+(\d+)\b", query or "", flags=re.IGNORECASE):
@@ -440,9 +478,43 @@ class AskService:
     ) -> str | None:
         normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
         normalized_schema = re.sub(r"\s+", " ", " ".join(table_ddls).lower())
+        schema_column_names = self._extract_schema_column_names(table_ddls)
 
         if not normalized_query:
             return None
+
+        repair_cost_terms = (
+            "repair cost",
+            "repair_cost",
+            "repaircost",
+            "cost",
+            "cost impact",
+            "cost_impact",
+        )
+        if any(term in normalized_query for term in repair_cost_terms):
+            cost_field_patterns = (
+                r"\brepair[_ ]?cost\b",
+                r"\bcost[_ ]?impact\b",
+                r"\bcost[_ ]?amount\b",
+                r"\btotal[_ ]?cost\b",
+                r"\bunit[_ ]?cost\b",
+                r"\bcost\b",
+                r"\bamount\b",
+            )
+            has_cost_field = any(
+                re.search(pattern, column_name)
+                for pattern in cost_field_patterns
+                for column_name in schema_column_names
+            )
+
+            if not has_cost_field:
+                return (
+                    "The schema does not expose repair cost as a queryable "
+                    "column. The MSSQL Wren/Ibis runtime cannot extract cost "
+                    "from generic JSON/text fields such as data. Add repair "
+                    "cost as a first-class column or calculated field, then "
+                    "ask again."
+                )
 
         first_pass_yield_terms = (
             "first pass yield",
