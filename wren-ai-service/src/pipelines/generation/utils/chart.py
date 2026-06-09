@@ -57,7 +57,7 @@ def _normalize_chart_schema_fields(chart_schema: dict, columns: list[str]) -> di
     normalized = deepcopy(chart_schema)
     encoding = normalized.get("encoding", {})
 
-    for key in ("x", "y", "color", "xOffset", "theta"):
+    for key in ("x", "y", "x2", "y2", "color", "xOffset", "theta"):
         axis = encoding.get(key)
         if isinstance(axis, dict) and axis.get("field"):
             axis["field"] = _match_column_name(axis["field"], columns)
@@ -207,7 +207,7 @@ def _is_schema_compatible_with_sample_data(
 
     columns = set(sample_data[0].keys())
     encoding = chart_schema.get("encoding", {})
-    for key in ("x", "y", "color", "xOffset", "theta"):
+    for key in ("x", "y", "x2", "y2", "color", "xOffset", "theta"):
         axis = encoding.get(key)
         if isinstance(axis, dict) and axis.get("field") and axis["field"] not in columns:
             return False
@@ -219,6 +219,51 @@ def _is_schema_compatible_with_sample_data(
                     return False
 
     return True
+
+
+def _needs_deterministic_bar_fallback(
+    chart_schema: dict,
+    chart_type: str,
+    sample_data: list[dict],
+) -> bool:
+    if chart_type not in {"bar", "grouped_bar", "stacked_bar"}:
+        return False
+    if not sample_data:
+        return False
+
+    encoding = chart_schema.get("encoding", {}) if chart_schema else {}
+
+    # Reject range-style bar encodings for simple grouped-count datasets.
+    for key in ("x2", "y2"):
+        axis = encoding.get(key)
+        if isinstance(axis, dict) and axis.get("field"):
+            return True
+
+    for axis_name in ("x", "y", "color", "xOffset", "theta"):
+        axis = encoding.get(axis_name)
+        if not isinstance(axis, dict):
+            continue
+        field = axis.get("field", "")
+        if isinstance(field, str) and (
+            field.endswith("_start") or field.endswith("_end")
+        ):
+            return True
+
+    inferred = _infer_column_types(sample_data)
+    quantitative = inferred["quantitative"]
+    nominal = inferred["nominal"]
+
+    # For the common case "category + count", prefer a deterministic bar spec
+    # if the model did not produce a usable quantitative y axis.
+    if len(quantitative) == 1 and len(nominal) >= 1:
+        y_axis = encoding.get("y")
+        x_axis = encoding.get("x")
+        if not isinstance(y_axis, dict) or y_axis.get("field") not in quantitative:
+            return True
+        if not isinstance(x_axis, dict) or x_axis.get("field") not in nominal:
+            return True
+
+    return False
 
 
 chart_generation_instructions = """
@@ -515,7 +560,12 @@ class ChartGenerationPostProcessor:
                     chart_schema, list(sample_data[0].keys()) if sample_data else []
                 )
 
-                if not _is_schema_compatible_with_sample_data(chart_schema, sample_data):
+                if (
+                    not _is_schema_compatible_with_sample_data(chart_schema, sample_data)
+                    or _needs_deterministic_bar_fallback(
+                        chart_schema, chart_type or "", sample_data
+                    )
+                ):
                     chart_schema = _build_fallback_chart_schema(
                         query, chart_type or "bar", sample_data
                     )
