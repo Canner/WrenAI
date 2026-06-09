@@ -124,6 +124,8 @@ pip install 'wrenai[memory,main]'
 
 All `memory` subcommands accept `--path DIR` to override the default storage location (`~/.wren/memory/`).
 
+> **Note:** The `memory` extra bundles ~800MB of large unsigned native libraries (lancedb plus sentence-transformers/torch). On macOS, the first command that loads the memory stack can trigger a one-time XProtect/Gatekeeper scan and pause for up to about a minute before it finishes; this is normal macOS behavior, not a Wren error, and happens once per install or fresh virtual environment. With lazy memory loading, lightweight non-`memory` commands are unaffected — the scan is deferred to your first real memory use, not eliminated.
+
 ### Hybrid strategy: full text vs. embedding search
 
 When providing schema context to an LLM, there is a trade-off:
