@@ -177,6 +177,8 @@ const AdjustmentInformation = (props: {
 };
 
 const isNeedGenerateAnswer = (answerDetail: ThreadResponseAnswerDetail) => {
+  if (!answerDetail) return true;
+
   const isFinished = getAnswerIsFinished(answerDetail?.status);
   // it means the background task has not started yet, but answer is pending for generating
   const isProcessing = [
@@ -184,7 +186,7 @@ const isNeedGenerateAnswer = (answerDetail: ThreadResponseAnswerDetail) => {
     ThreadResponseAnswerStatus.PREPROCESSING,
     ThreadResponseAnswerStatus.FETCHING_DATA,
   ].includes(answerDetail?.status);
-  return answerDetail?.queryId === null && !isFinished && !isProcessing;
+  return !answerDetail?.queryId && !isFinished && !isProcessing;
 };
 
 const isAnswerGenerationInProgress = (
