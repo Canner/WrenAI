@@ -7,12 +7,14 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pyarrow as pa
 import pytest
 
 from wren.connector.clickhouse import (
     ClickHouseConnector,
     _build_clickhouse_arrow_table,
     _build_clickhouse_client_kwargs,
+    _parse_clickhouse_type,
 )
 
 pytestmark = pytest.mark.unit
@@ -155,3 +157,74 @@ def test_clickhouse_arrow_table_preserves_duplicate_column_names() -> None:
     assert table.column_names == ["a", "a"]
     assert table.column(0).to_pylist() == [1, 3]
     assert table.column(1).to_pylist() == [2, 4]
+
+
+# ---------------------------------------------------------------------------
+# 4. Nullable(...) and LowCardinality(...) type parsing
+#
+# Regression for Canner/WrenAI#2184: Nullable(T) columns were mapped to
+# UNKNOWN in older ibis-server; the current SDK uses sqlglot which strips
+# the Nullable wrapper automatically. These tests prevent silent regressions.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "type_str, expected",
+    [
+        # Core Nullable cases from the bug report
+        ("Nullable(String)", pa.string()),
+        ("Nullable(Int32)", pa.int32()),
+        ("Nullable(Int64)", pa.int64()),
+        ("Nullable(UInt32)", pa.uint32()),
+        ("Nullable(Float32)", pa.float32()),
+        ("Nullable(Float64)", pa.float64()),
+        ("Nullable(DateTime)", pa.timestamp("ns")),
+        ("Nullable(Date)", pa.date32()),
+        ("Nullable(Decimal(18, 4))", pa.decimal128(38, 9)),
+        ("Nullable(UUID)", pa.string()),
+        # LowCardinality — storage-only hint, inner type must be preserved
+        ("LowCardinality(String)", pa.string()),
+        ("LowCardinality(Nullable(String))", pa.string()),
+        ("LowCardinality(Nullable(Int64))", pa.int64()),
+        # Nested: Array of Nullable elements
+        ("Array(Nullable(Int32))", pa.list_(pa.int32())),
+        # None input falls back to string (driver returns null descriptor)
+        (None, pa.string()),
+    ],
+)
+def test_parse_clickhouse_type_nullable(
+    type_str: str | None, expected: pa.DataType
+) -> None:
+    """Nullable(T) and LowCardinality(T) wrappers must resolve to the inner type."""
+    assert _parse_clickhouse_type(type_str) == expected
+
+
+def test_clickhouse_arrow_table_nullable_columns_preserve_none_values() -> None:
+    """Nullable columns must round-trip None through _build_clickhouse_arrow_table.
+
+    Verifies that the correct Arrow type is inferred from the type descriptor
+    and that None values in the result rows are preserved as null, not coerced
+    to a sentinel or dropped.
+    """
+    fake = MagicMock()
+    fake.column_names = ["id", "name", "score"]
+    fake.column_types = [
+        _FakeChType("Nullable(Int32)"),
+        _FakeChType("Nullable(String)"),
+        _FakeChType("Nullable(Float64)"),
+    ]
+    fake.result_rows = [
+        [1, "Alice", 9.5],
+        [None, "Bob", None],
+        [3, None, 7.0],
+    ]
+
+    table = _build_clickhouse_arrow_table(fake)
+
+    assert table.schema.field("id").type == pa.int32()
+    assert table.schema.field("name").type == pa.string()
+    assert table.schema.field("score").type == pa.float64()
+
+    assert table.column("id").to_pylist() == [1, None, 3]
+    assert table.column("name").to_pylist() == ["Alice", "Bob", None]
+    assert table.column("score").to_pylist() == [9.5, None, 7.0]
