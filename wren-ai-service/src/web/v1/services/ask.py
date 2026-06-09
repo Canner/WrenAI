@@ -1218,68 +1218,6 @@ class AskService:
                     results["metadata"]["type"] = "TEXT_TO_SQL"
                     return results
 
-                if heuristic_sql := self._build_manufacturing_throughput_sql(
-                    user_query, table_ddls, table_names=table_names
-                ):
-                    logger.info(
-                        "Using manufacturing throughput fallback for query_id %s: %s",
-                        query_id,
-                        user_query,
-                    )
-                    api_results = [
-                        AskResult(
-                            **{
-                                "sql": heuristic_sql,
-                                "type": "llm",
-                            }
-                        )
-                    ]
-                    if not self._is_stopped(query_id, self._ask_results):
-                        self._ask_results[query_id] = AskResultResponse(
-                            status="finished",
-                            type="TEXT_TO_SQL",
-                            response=api_results,
-                            rephrased_question=rephrased_question,
-                            intent_reasoning=intent_reasoning,
-                            retrieved_tables=table_names,
-                            trace_id=trace_id,
-                            is_followup=True if histories else False,
-                        )
-                    results["ask_result"] = api_results
-                    results["metadata"]["type"] = "TEXT_TO_SQL"
-                    return results
-
-                if heuristic_sql := self._build_repair_failure_count_sql(
-                    user_query, table_ddls, table_names=table_names
-                ):
-                    logger.info(
-                        "Using repair failure-count fallback for query_id %s: %s",
-                        query_id,
-                        user_query,
-                    )
-                    api_results = [
-                        AskResult(
-                            **{
-                                "sql": heuristic_sql,
-                                "type": "llm",
-                            }
-                        )
-                    ]
-                    if not self._is_stopped(query_id, self._ask_results):
-                        self._ask_results[query_id] = AskResultResponse(
-                            status="finished",
-                            type="TEXT_TO_SQL",
-                            response=api_results,
-                            rephrased_question=rephrased_question,
-                            intent_reasoning=intent_reasoning,
-                            retrieved_tables=table_names,
-                            trace_id=trace_id,
-                            is_followup=True if histories else False,
-                        )
-                    results["ask_result"] = api_results
-                    results["metadata"]["type"] = "TEXT_TO_SQL"
-                    return results
-
                 if not documents:
                     if heuristic_sql := self._build_heuristic_text_to_sql_fallback(
                         user_query, table_ddls, table_names=table_names
@@ -1329,23 +1267,6 @@ class AskService:
                     results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
                     results["metadata"]["type"] = "TEXT_TO_SQL"
                     return results
-
-                if heuristic_sql := self._build_heuristic_text_to_sql_fallback(
-                    user_query, table_ddls, table_names=table_names
-                ):
-                    logger.info(
-                        "Using heuristic text-to-sql shortcut after retrieval for query_id %s: %s",
-                        query_id,
-                        user_query,
-                    )
-                    api_results = [
-                        AskResult(
-                            **{
-                                "sql": heuristic_sql,
-                                "type": "llm",
-                            }
-                        )
-                    ]
 
             if (
                 not self._is_stopped(query_id, self._ask_results)

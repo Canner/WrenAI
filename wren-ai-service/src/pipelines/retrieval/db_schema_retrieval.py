@@ -171,6 +171,52 @@ def expand_business_terms_for_retrieval(query: str) -> str:
     )
 
 
+def _is_project_wide_analysis_query(query: str) -> bool:
+    normalized = (query or "").lower()
+    if not normalized:
+        return False
+
+    analysis_terms = {
+        "average",
+        "avg",
+        "bar chart",
+        "chart",
+        "compare",
+        "count",
+        "counts",
+        "group by",
+        "grouped",
+        "line chart",
+        "monthly",
+        "most common",
+        "pie chart",
+        "quarter",
+        "recommend",
+        "recommended",
+        "show",
+        "top",
+        "trend",
+        "volume",
+    }
+    return any(term in normalized for term in analysis_terms)
+
+
+def _dedupe_documents(documents: list[Document]) -> list[Document]:
+    deduped: list[Document] = []
+    seen: set[tuple[str, str, str]] = set()
+    for document in documents:
+        key = (
+            str(document.meta.get("name", "")),
+            str(document.meta.get("type", "")),
+            document.content,
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(document)
+    return deduped
+
+
 @observe(capture_input=False, capture_output=False)
 async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> dict:
     if query:
@@ -275,7 +321,22 @@ async def dbschema_retrieval(
 
         results = await dbschema_retriever.run(query_embedding=[], filters=filters)
         if results.get("documents") or not project_id:
-            return results["documents"]
+            documents = results["documents"]
+            if project_id and _is_project_wide_analysis_query(query):
+                all_project_results = await dbschema_retriever.run(
+                    query_embedding=[],
+                    filters={
+                        "operator": "AND",
+                        "conditions": [
+                            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+                            {"field": "project_id", "operator": "==", "value": project_id},
+                        ],
+                    },
+                )
+                documents = _dedupe_documents(
+                    documents + all_project_results.get("documents", [])
+                )
+            return documents
 
         fallback_filters = {
             "operator": "AND",
@@ -287,7 +348,22 @@ async def dbschema_retrieval(
         fallback_results = await dbschema_retriever.run(
             query_embedding=[], filters=fallback_filters
         )
-        return fallback_results["documents"]
+        documents = fallback_results["documents"]
+        if project_id and _is_project_wide_analysis_query(query):
+            all_project_results = await dbschema_retriever.run(
+                query_embedding=[],
+                filters={
+                    "operator": "AND",
+                    "conditions": [
+                        {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+                        {"field": "project_id", "operator": "==", "value": project_id},
+                    ],
+                },
+            )
+            documents = _dedupe_documents(
+                documents + all_project_results.get("documents", [])
+            )
+        return documents
 
     filters = {
         "operator": "AND",
