@@ -354,6 +354,94 @@ class AskService:
             'ORDER BY "throughput" DESC'
         )
 
+    def _build_repair_failure_count_sql(
+        self,
+        query: str,
+        table_ddls: list[str],
+        table_names: Optional[list[str]] = None,
+    ) -> str | None:
+        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized:
+            return None
+
+        wants_failure_counts = (
+            "failure" in normalized
+            and any(
+                term in normalized
+                for term in ("count", "counts", "category", "code", "grouped")
+            )
+            and any(term in normalized for term in ("repair", "bar chart", "chart"))
+        )
+        if not wants_failure_counts:
+            return None
+
+        top_n = self._extract_requested_top_n(query)
+        has_repair_logs = self._schema_contains(
+            table_ddls, r"\bdbo_repair_logs\b", table_names=table_names
+        )
+        has_failure_code = self._schema_contains(
+            table_ddls, r"\bfailure_code\b", table_names=table_names
+        )
+        if has_repair_logs and has_failure_code:
+            return (
+                f'SELECT TOP {top_n} '
+                f'"dbo_repair_logs"."failure_code" AS "failure_category", '
+                f'COUNT(*) AS "repair_count" '
+                f'FROM "dbo_repair_logs" '
+                f'WHERE "dbo_repair_logs"."failure_code" IS NOT NULL '
+                f'GROUP BY "dbo_repair_logs"."failure_code" '
+                f'ORDER BY "repair_count" DESC'
+            )
+
+        has_debug_entries = self._schema_contains(
+            table_ddls, r"\bdbo_DebugEntries\b", table_names=table_names
+        )
+        has_failure_patterns = self._schema_contains(
+            table_ddls, r"\bdbo_failure_patterns\b", table_names=table_names
+        )
+        has_failure_sys = self._schema_contains(
+            table_ddls, r"\bFailureSys\b", table_names=table_names
+        )
+        has_debug_entry_id = self._schema_contains(
+            table_ddls, r"\bDebugEntryId\b", table_names=table_names
+        )
+        has_pattern_id = self._schema_contains(
+            table_ddls, r"\bid\b", table_names=table_names
+        )
+        has_pattern_category = self._schema_contains(
+            table_ddls, r"\bcategory\b", table_names=table_names
+        )
+        has_pattern_name = self._schema_contains(
+            table_ddls, r"\bname\b", table_names=table_names
+        )
+
+        if (
+            has_debug_entries
+            and has_failure_patterns
+            and has_failure_sys
+            and has_debug_entry_id
+            and has_pattern_id
+            and (has_pattern_category or has_pattern_name)
+        ):
+            dimension_column = (
+                "category"
+                if ("category" in normalized and has_pattern_category)
+                else ("name" if has_pattern_name else "category")
+            )
+            return (
+                f'SELECT TOP {top_n} '
+                f'"dbo_failure_patterns"."{dimension_column}" AS "failure_category", '
+                f'COUNT("dbo_DebugEntries"."DebugEntryId") AS "repair_count" '
+                f'FROM "dbo_DebugEntries" '
+                f'JOIN "dbo_failure_patterns" '
+                f'ON "dbo_DebugEntries"."FailureSys" = "dbo_failure_patterns"."id" '
+                f'WHERE "dbo_failure_patterns"."{dimension_column}" IS NOT NULL '
+                f'GROUP BY "dbo_failure_patterns"."{dimension_column}" '
+                f'ORDER BY "repair_count" DESC'
+            )
+
+        return None
+
     def _build_heuristic_text_to_sql_fallback(
         self,
         query: str,
@@ -368,6 +456,11 @@ class AskService:
             query, table_ddls, table_names=table_names
         ):
             return throughput_sql
+
+        if repair_failure_count_sql := self._build_repair_failure_count_sql(
+            query, table_ddls, table_names=table_names
+        ):
+            return repair_failure_count_sql
 
         wants_chart = any(
             term in normalized for term in ("chart", "bar chart", "line chart", "graph")
@@ -1011,6 +1104,37 @@ class AskService:
                 ):
                     logger.info(
                         "Using manufacturing throughput fallback for query_id %s: %s",
+                        query_id,
+                        user_query,
+                    )
+                    api_results = [
+                        AskResult(
+                            **{
+                                "sql": heuristic_sql,
+                                "type": "llm",
+                            }
+                        )
+                    ]
+                    if not self._is_stopped(query_id, self._ask_results):
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="finished",
+                            type="TEXT_TO_SQL",
+                            response=api_results,
+                            rephrased_question=rephrased_question,
+                            intent_reasoning=intent_reasoning,
+                            retrieved_tables=table_names,
+                            trace_id=trace_id,
+                            is_followup=True if histories else False,
+                        )
+                    results["ask_result"] = api_results
+                    results["metadata"]["type"] = "TEXT_TO_SQL"
+                    return results
+
+                if heuristic_sql := self._build_repair_failure_count_sql(
+                    user_query, table_ddls, table_names=table_names
+                ):
+                    logger.info(
+                        "Using repair failure-count fallback for query_id %s: %s",
                         query_id,
                         user_query,
                     )

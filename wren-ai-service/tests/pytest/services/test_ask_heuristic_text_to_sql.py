@@ -54,3 +54,59 @@ def test_manufacturing_throughput_fallback_requires_business_unit_column():
         )
         is None
     )
+
+
+def test_repair_failure_count_uses_repair_log_failure_code():
+    service = AskService(pipelines={})
+    table_ddls = [
+        """
+        CREATE TABLE dbo_repair_logs (
+          id VARCHAR,
+          board_model VARCHAR,
+          failure_code VARCHAR,
+          status VARCHAR,
+          created_at TIMESTAMP
+        );
+        """,
+        """
+        CREATE TABLE dbo_reports (
+          id VARCHAR,
+          name VARCHAR
+        );
+        """,
+    ]
+
+    sql = service._build_repair_failure_count_sql(
+        "Create a bar chart of repair counts grouped by failure category.",
+        table_ddls,
+        table_names=["dbo_repair_logs", "dbo_reports"],
+    )
+
+    assert sql
+    assert '"dbo_repair_logs"."failure_code" AS "failure_category"' in sql
+    assert 'COUNT(*) AS "repair_count"' in sql
+    assert "Failure Category" not in sql
+    assert "dbo_reports" not in sql
+
+
+def test_repair_failure_count_requires_schema_backed_failure_dimension():
+    service = AskService(pipelines={})
+    table_ddls = [
+        """
+        CREATE TABLE dbo_repair_logs (
+          id VARCHAR,
+          board_model VARCHAR,
+          status VARCHAR,
+          created_at TIMESTAMP
+        );
+        """
+    ]
+
+    assert (
+        service._build_repair_failure_count_sql(
+            "Create a bar chart of repair counts grouped by failure category.",
+            table_ddls,
+            table_names=["dbo_repair_logs"],
+        )
+        is None
+    )
