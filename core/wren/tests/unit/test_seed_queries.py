@@ -9,7 +9,7 @@ from wren.memory.seed_queries import SEED_TAG, generate_seed_queries
 # ── Fixtures ──────────────────────────────────────────────────────────────
 
 
-def _model(name: str, pk: str, columns: list[dict]) -> dict:
+def _model(name: str, pk: str | list[str], columns: list[dict]) -> dict:
     return {"name": name, "primaryKey": pk, "columns": columns}
 
 
@@ -381,3 +381,265 @@ class TestGenerateSeedQueries:
         manifest = {"models": [_model("t", "id", [_col("id", "varchar")])]}
         pairs = generate_seed_queries(manifest)
         assert "LIMIT 100" in pairs[0]["sql"]
+
+
+# ── relationship-key / identifier exclusion ───────────────────────────────
+
+
+@pytest.mark.unit
+class TestIdentifierExclusion:
+    """Numeric identifier columns must not be picked as aggregation targets:
+    SUM(customer_id) is semantically meaningless noise (MEM-001)."""
+
+    def test_relationship_key_not_aggregated(self):
+        # customer_id is numeric and declared as a relationship key on orders.
+        manifest = {
+            "models": [
+                _model(
+                    "orders",
+                    "order_id",
+                    [
+                        _col("order_id", "int"),
+                        _col("customer_id", "int"),
+                        _col("amount", "double"),
+                        _col("status", "varchar"),
+                    ],
+                ),
+                _model(
+                    "customers",
+                    "customer_id",
+                    [_col("customer_id", "int"), _col("name", "varchar")],
+                ),
+            ],
+            "relationships": [
+                {
+                    "name": "orders_customers",
+                    "models": ["orders", "customers"],
+                    "condition": "orders.customer_id = customers.customer_id",
+                }
+            ],
+        }
+        pairs = generate_seed_queries(manifest)
+        sqls = [p["sql"] for p in pairs]
+        # No relationship-key aggregation on either side of the join.
+        assert not any("SUM(customer_id)" in s for s in sqls)
+        # The real metric is aggregated instead
+        assert "SELECT SUM(amount) FROM orders" in sqls
+        assert "SELECT status, SUM(amount) FROM orders GROUP BY 1" in sqls
+
+    def test_composite_primary_key_columns_not_aggregated(self):
+        # Composite PKs are list-shaped in schema v4 MDL. Every PK member must
+        # be treated as an identifier even when it is numeric and not *_id-like.
+        manifest = {
+            "models": [
+                _model(
+                    "store_sales",
+                    ["ss_item_sk", "ss_ticket_number"],
+                    [
+                        _col("ss_item_sk", "int"),
+                        _col("ss_ticket_number", "int"),
+                        _col("sales_price", "decimal"),
+                        _col("status", "varchar"),
+                    ],
+                )
+            ]
+        }
+        pairs = generate_seed_queries(manifest)
+        sqls = [p["sql"] for p in pairs]
+        assert not any("SUM(ss_item_sk)" in s for s in sqls)
+        assert not any("SUM(ss_ticket_number)" in s for s in sqls)
+        assert "SELECT SUM(sales_price) FROM store_sales" in sqls
+        assert "SELECT status, SUM(sales_price) FROM store_sales GROUP BY 1" in sqls
+
+    def test_id_like_column_not_aggregated_without_relationship(self):
+        # user_id is numeric, not a PK, and not declared in any relationship —
+        # the *_id naming heuristic should still exclude it.
+        manifest = {
+            "models": [
+                _model(
+                    "raw_orders",
+                    "id",
+                    [
+                        _col("id", "int"),
+                        _col("user_id", "int"),
+                        _col("amount", "double"),
+                    ],
+                )
+            ]
+        }
+        pairs = generate_seed_queries(manifest)
+        sqls = [p["sql"] for p in pairs]
+        assert not any("SUM(user_id)" in s for s in sqls)
+        assert "SELECT SUM(amount) FROM raw_orders" in sqls
+
+    def test_column_named_id_not_aggregated(self):
+        # A bare numeric "id" that is not the declared primaryKey.
+        manifest = {
+            "models": [
+                _model(
+                    "events",
+                    "event_pk",
+                    [
+                        _col("event_pk", "varchar"),
+                        _col("id", "bigint"),
+                        _col("duration", "int"),
+                    ],
+                )
+            ]
+        }
+        pairs = generate_seed_queries(manifest)
+        sqls = [p["sql"] for p in pairs]
+        assert not any("SUM(id)" in s for s in sqls)
+        assert "SELECT SUM(duration) FROM events" in sqls
+
+    def test_relationship_key_only_model_has_no_aggregation(self):
+        # When the sole numeric column is a relationship key, fall back to
+        # listing only.
+        manifest = {
+            "models": [
+                _model(
+                    "order_items",
+                    "line_id",
+                    [
+                        _col("line_id", "varchar"),
+                        _col("order_id", "int"),
+                        _col("label", "varchar"),
+                    ],
+                ),
+                _model("orders", "order_id", [_col("order_id", "int")]),
+            ],
+            "relationships": [
+                {
+                    "name": "order_items_orders",
+                    "models": ["order_items", "orders"],
+                    "condition": "order_items.order_id = orders.order_id",
+                }
+            ],
+        }
+        pairs = generate_seed_queries(manifest)
+        sqls = [p["sql"] for p in pairs]
+        assert not any("SUM(" in s for s in sqls)
+
+    def test_quoted_relationship_condition_parsed(self):
+        # Conditions may quote identifiers; relationship-key detection must
+        # still work.
+        manifest = {
+            "models": [
+                _model(
+                    "orders",
+                    "order_id",
+                    [
+                        _col("order_id", "int"),
+                        _col("customer_id", "int"),
+                        _col("amount", "double"),
+                    ],
+                ),
+                _model("customers", "customer_id", [_col("customer_id", "int")]),
+            ],
+            "relationships": [
+                {
+                    "name": "orders_customers",
+                    "models": ["orders", "customers"],
+                    "condition": '"orders"."customer_id" = "customers"."customer_id"',
+                }
+            ],
+        }
+        pairs = generate_seed_queries(manifest)
+        sqls = [p["sql"] for p in pairs]
+        assert not any("SUM(customer_id)" in s for s in sqls)
+        assert "SELECT SUM(amount) FROM orders" in sqls
+
+    def test_legitimate_metric_named_with_id_suffix_is_still_excluded(self):
+        # Documented trade-off: the *_id heuristic also drops a would-be metric
+        # like "household_id". Real metrics should avoid the _id suffix; the
+        # noise reduction is worth this rare false-positive.
+        manifest = {
+            "models": [
+                _model(
+                    "households",
+                    "pk",
+                    [_col("pk", "varchar"), _col("household_id", "int")],
+                )
+            ]
+        }
+        pairs = generate_seed_queries(manifest)
+        assert not any("SUM(household_id)" in p["sql"] for p in pairs)
+
+    def test_uppercase_id_like_column_excluded(self):
+        # Warehouses such as Snowflake/Oracle fold identifiers to upper case.
+        # An undeclared CUSTOMER_ID (not a PK, not a relationship key) must
+        # still be caught by the case-insensitive *_id heuristic.
+        manifest = {
+            "models": [
+                _model(
+                    "orders",
+                    "ORDER_PK",
+                    [
+                        _col("ORDER_PK", "varchar"),
+                        _col("CUSTOMER_ID", "int"),
+                        _col("AMOUNT", "double"),
+                    ],
+                )
+            ]
+        }
+        sqls = [p["sql"] for p in generate_seed_queries(manifest)]
+        assert not any("SUM(CUSTOMER_ID)" in s for s in sqls)
+        assert "SELECT SUM(AMOUNT) FROM orders" in sqls
+
+    def test_relationship_key_without_id_suffix_excluded(self):
+        # A foreign key whose name does NOT end in _id (e.g. created_by) is only
+        # caught via the relationship condition, not the naming heuristic — this
+        # is the value the relationship-key parsing adds on top of *_id.
+        manifest = {
+            "models": [
+                _model(
+                    "documents",
+                    "doc_pk",
+                    [
+                        _col("doc_pk", "varchar"),
+                        _col("created_by", "int"),
+                        _col("word_count", "int"),
+                    ],
+                ),
+                _model("users", "id", [_col("id", "int")]),
+            ],
+            "relationships": [
+                {
+                    "name": "users_documents",
+                    "models": ["users", "documents"],
+                    "condition": "users.id = documents.created_by",
+                }
+            ],
+        }
+        sqls = [p["sql"] for p in generate_seed_queries(manifest)]
+        assert not any("SUM(created_by)" in s for s in sqls)
+        assert "SELECT SUM(word_count) FROM documents" in sqls
+
+    def test_composite_and_condition_parsed(self):
+        # Composite join keys are emitted as an `AND`-joined condition; every
+        # referenced column on both sides must be excluded from aggregation.
+        manifest = {
+            "models": [
+                _model(
+                    "a",
+                    "akey",
+                    [
+                        _col("akey", "varchar"),
+                        _col("x", "int"),
+                        _col("y", "int"),
+                        _col("val", "double"),
+                    ],
+                ),
+                _model("b", ["x", "y"], [_col("x", "int"), _col("y", "int")]),
+            ],
+            "relationships": [
+                {
+                    "name": "a_b",
+                    "models": ["a", "b"],
+                    "condition": "a.x = b.x AND a.y = b.y",
+                }
+            ],
+        }
+        sqls = [p["sql"] for p in generate_seed_queries(manifest)]
+        assert not any("SUM(x)" in s or "SUM(y)" in s for s in sqls)
+        assert "SELECT SUM(val) FROM a" in sqls

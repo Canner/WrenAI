@@ -5,6 +5,7 @@ Pure functions — no LanceDB or embedding dependency.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 
 _NUMERIC_TYPES = {
@@ -23,6 +24,10 @@ _NUMERIC_TYPES = {
 
 SEED_TAG = "source:seed"
 
+# Matches a ``model.column`` reference inside a relationship condition,
+# tolerating optional double-quoting and whitespace around the dot.
+_JOIN_REF = re.compile(r'"?(\w+)"?\s*\.\s*"?(\w+)"?')
+
 
 def generate_seed_queries(manifest: dict) -> list[dict]:
     """Return a list of {"nl": ..., "sql": ...} seed pairs."""
@@ -31,11 +36,14 @@ def generate_seed_queries(manifest: dict) -> list[dict]:
         model["name"]: _prop_value(model, "dbtLayer", "dbt_layer")
         for model in manifest.get("models", [])
     }
+    relationship_keys = _relationship_key_columns(manifest)
 
     for model in manifest.get("models", []):
         if model_layers.get(model["name"]) == "raw":
             continue
-        pairs.extend(_model_seeds(model))
+        pairs.extend(
+            _model_seeds(model, relationship_keys.get(model["name"], frozenset()))
+        )
 
     for rel in manifest.get("relationships", []):
         pair = _relationship_seed(rel, model_layers)
@@ -45,9 +53,12 @@ def generate_seed_queries(manifest: dict) -> list[dict]:
     return pairs
 
 
-def _model_seeds(model: dict) -> list[dict]:
+def _model_seeds(
+    model: dict, relationship_keys: frozenset[str] = frozenset()
+) -> list[dict]:
     name = model["name"]
     columns = model.get("columns", [])
+    primary_keys = _primary_key_columns(model)
     pairs = []
 
     # Template 1: basic listing
@@ -64,12 +75,17 @@ def _model_seeds(model: dict) -> list[dict]:
     for col in columns:
         col_type = (col.get("type") or "").split("(")[0].lower().strip()
         is_calc = col.get("isCalculated", False)
-        is_pk = col["name"] == model.get("primaryKey")
+        is_pk = col["name"] in primary_keys
+        # Identifiers are numeric by storage but not measures: summing a join
+        # key (e.g. SUM(customer_id)) is semantically meaningless.
+        is_identifier = (
+            is_pk or col["name"] in relationship_keys or _is_id_like(col["name"])
+        )
 
         if (
             col_type in _NUMERIC_TYPES
             and not is_calc
-            and not is_pk
+            and not is_identifier
             and numeric_col is None
         ):
             numeric_col = col["name"]
@@ -130,6 +146,41 @@ def _relationship_seed(rel: dict, model_layers: dict[str, str]) -> dict | None:
         "nl": f"{left} with {right} details",
         "sql": f"SELECT * FROM {left} JOIN {right} ON {condition} LIMIT 100",
     }
+
+
+def _relationship_key_columns(manifest: dict) -> dict[str, frozenset[str]]:
+    """Map each model to the set of columns it exposes as a relationship key.
+
+    Relationship conditions (e.g. ``orders.customer_id = customers.customer_id``)
+    are the manifest's own declaration of join keys, so we keep both sides out
+    of aggregation seeds.
+    """
+    accum: dict[str, set[str]] = {}
+    for rel in manifest.get("relationships", []):
+        condition = rel.get("condition") or ""
+        for model_name, col_name in _JOIN_REF.findall(condition):
+            accum.setdefault(model_name, set()).add(col_name)
+    return {model: frozenset(cols) for model, cols in accum.items()}
+
+
+def _primary_key_columns(model: dict) -> frozenset[str]:
+    """Return primary key column names for string and composite-list PKs."""
+    primary_key = model.get("primaryKey")
+    if isinstance(primary_key, str):
+        return frozenset([primary_key])
+    if isinstance(primary_key, list):
+        return frozenset(str(part) for part in primary_key if part)
+    return frozenset()
+
+
+def _is_id_like(col_name: str) -> bool:
+    """Cheap heuristic for identifier columns not declared as relationships.
+
+    Case-insensitive: warehouses such as Snowflake/Oracle fold identifiers to
+    upper case, so an undeclared ``CUSTOMER_ID`` must be caught too.
+    """
+    lowered = col_name.lower()
+    return lowered == "id" or lowered.endswith("_id")
 
 
 def _prop_value(obj: dict, *keys: str) -> str:
