@@ -519,6 +519,12 @@ class AskService:
 
         if wants_failure_counts and wants_chart:
             top_n = self._extract_requested_top_n(query)
+            has_pattern_failure_sys = self._schema_contains(
+                table_ddls, r"\bFailuresys\b", table_names=table_names
+            )
+            has_pattern_occurrences = self._schema_contains(
+                table_ddls, r"\boccurrences\b", table_names=table_names
+            )
             has_debug_entries = self._schema_contains(
                 table_ddls, r"\bdbo_DebugEntries\b", table_names=table_names
             )
@@ -540,6 +546,28 @@ class AskService:
             has_pattern_name = self._schema_contains(
                 table_ddls, r"\bname\b", table_names=table_names
             )
+
+            if has_failure_patterns and has_pattern_failure_sys and has_pattern_occurrences:
+                return (
+                    f'SELECT TOP {top_n} '
+                    f'"dbo_failure_patterns"."Failuresys" AS "failure_category", '
+                    f'"dbo_failure_patterns"."occurrences" AS "repair_count" '
+                    f'FROM "dbo_failure_patterns" '
+                    f'WHERE "dbo_failure_patterns"."Failuresys" IS NOT NULL '
+                    f'AND "dbo_failure_patterns"."occurrences" IS NOT NULL '
+                    f'ORDER BY "dbo_failure_patterns"."occurrences" DESC'
+                )
+
+            if has_failure_patterns and has_pattern_failure_sys:
+                return (
+                    f'SELECT TOP {top_n} '
+                    f'"dbo_failure_patterns"."Failuresys" AS "failure_category", '
+                    f'COUNT(*) AS "repair_count" '
+                    f'FROM "dbo_failure_patterns" '
+                    f'WHERE "dbo_failure_patterns"."Failuresys" IS NOT NULL '
+                    f'GROUP BY "dbo_failure_patterns"."Failuresys" '
+                    f'ORDER BY "repair_count" DESC'
+                )
 
             if (
                 has_debug_entries
@@ -606,13 +634,11 @@ class AskService:
             top_n = self._extract_requested_top_n(query)
             return (
                 f'SELECT TOP {top_n} '
-                f'"dbo_failure_patterns"."category" AS "failure_category", '
-                f'COUNT("dbo_DebugEntries"."DebugEntryId") AS "repair_count" '
-                f'FROM "dbo_DebugEntries" '
-                f'JOIN "dbo_failure_patterns" '
-                f'ON "dbo_DebugEntries"."FailureSys" = "dbo_failure_patterns"."id" '
-                f'WHERE "dbo_failure_patterns"."category" IS NOT NULL '
-                f'GROUP BY "dbo_failure_patterns"."category" '
+                f'"dbo_failure_patterns"."Failuresys" AS "failure_category", '
+                f'COUNT(*) AS "repair_count" '
+                f'FROM "dbo_failure_patterns" '
+                f'WHERE "dbo_failure_patterns"."Failuresys" IS NOT NULL '
+                f'GROUP BY "dbo_failure_patterns"."Failuresys" '
                 f'ORDER BY "repair_count" DESC'
             )
 
@@ -1303,6 +1329,23 @@ class AskService:
                     results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
                     results["metadata"]["type"] = "TEXT_TO_SQL"
                     return results
+
+                if heuristic_sql := self._build_heuristic_text_to_sql_fallback(
+                    user_query, table_ddls, table_names=table_names
+                ):
+                    logger.info(
+                        "Using heuristic text-to-sql shortcut after retrieval for query_id %s: %s",
+                        query_id,
+                        user_query,
+                    )
+                    api_results = [
+                        AskResult(
+                            **{
+                                "sql": heuristic_sql,
+                                "type": "llm",
+                            }
+                        )
+                    ]
 
             if (
                 not self._is_stopped(query_id, self._ask_results)
