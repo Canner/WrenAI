@@ -25,6 +25,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: 3.11
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
       - name: Cache Cargo
         uses: actions/cache@v4
         with:
@@ -35,12 +37,10 @@ jobs:
             ~/.cargo/git/db/
             ./core/wren-core-py/target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: Install poetry
-        run: pipx install poetry
       - name: Install dependencies
-        run: poetry install --no-root
+        run: uv sync --locked --no-install-project
       - name: Test Rust and Python code
         run: |
           cargo test
-          poetry run maturin develop
-          poetry run pytest
+          uv run --no-sync maturin develop
+          uv run --no-sync pytest

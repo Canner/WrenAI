@@ -86,7 +86,6 @@ dependencies:
           - "**/Cargo.toml"
           - "**/Cargo.lock"
           - "**/pyproject.toml"
-          - "**/poetry.lock"
           - "**/uv.lock"
           - "**/package.json"
           - "**/yarn.lock"
