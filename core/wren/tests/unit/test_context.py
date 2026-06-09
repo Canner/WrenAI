@@ -1053,6 +1053,22 @@ def test_plan_upgrade_v1_to_v3(tmp_path):
     assert len(result.files_created) > 0
 
 
+def test_plan_upgrade_v1_to_v2_rejects_duplicate_cube_targets(tmp_path):
+    _make_v1_project(tmp_path)
+    (tmp_path / "cubes" / "other_metrics.yml").write_text(
+        "name: order_metrics\n"
+        "base_object: orders\n"
+        "measures:\n"
+        "  - name: count\n    expression: COUNT(*)\n    type: BIGINT\n"
+    )
+
+    # Use fresh import to avoid stale class reference after importlib.reload in earlier tests.
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="multiple legacy cube files"):
+        plan_upgrade(tmp_path, target_version=2)
+
+
 def test_plan_upgrade_v2_to_v3(tmp_path):
     _make_v2_project(tmp_path)
     result = plan_upgrade(tmp_path, target_version=3)
@@ -1135,6 +1151,9 @@ def test_apply_upgrade_v1_to_v3(tmp_path):
     assert get_schema_version(tmp_path) == 3
     assert (tmp_path / "models" / "orders" / "metadata.yml").exists()
     assert not (tmp_path / "models" / "orders.yml").exists()
+    assert (tmp_path / "cubes" / "order_metrics" / "metadata.yml").exists()
+    assert not (tmp_path / "cubes" / "order_metrics.yml").exists()
+    assert load_cubes(tmp_path)[0]["name"] == "order_metrics"
 
 
 def test_upgrade_preserves_relationships(tmp_path):

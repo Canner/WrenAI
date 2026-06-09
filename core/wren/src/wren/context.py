@@ -636,6 +636,12 @@ def _load_cubes_v2(project_path: Path) -> list[dict]:
     return cubes
 
 
+def _cube_migration_target(cube: dict, source_file: str | None) -> tuple[str, str]:
+    """Return (cube_name, target_metadata_path) for a v1 cube migration."""
+    name = cube.get("name", Path(source_file).stem if source_file else "unknown")
+    return name, f"cubes/{name}/metadata.yml"
+
+
 def load_relationships(project_path: Path) -> list[dict]:
     """Load relationships from project_path/relationships.yml."""
     rel_file = project_path / "relationships.yml"
@@ -1199,13 +1205,18 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
         deleted.append("views.yml")
 
     # Cubes: flat files → directories
+    seen_cube_targets: set[str] = set()
     cubes = _load_cubes_v1(project_path)
     for cube in cubes:
         source_file = cube.pop("_source_file", None)
-        name = cube.get("name", Path(source_file).stem if source_file else "unknown")
-        dir_path = f"cubes/{name}"
+        _, target = _cube_migration_target(cube, source_file)
+        if target in seen_cube_targets:
+            raise UpgradeError(
+                f"Cannot upgrade: multiple legacy cube files map to '{target}'"
+            )
+        seen_cube_targets.add(target)
 
-        created.append(f"{dir_path}/metadata.yml")
+        created.append(target)
 
         if source_file:
             deleted.append(f"cubes/{source_file}")
@@ -1283,10 +1294,17 @@ def _apply_v1_to_v2(project_path: Path) -> None:
         views_file.unlink()
 
     # Write new cube directories
+    seen_cube_targets: set[str] = set()
     cubes = _load_cubes_v1(project_path)
     for cube in cubes:
         source_file = cube.pop("_source_file", None)
-        name = cube.get("name", Path(source_file).stem if source_file else "unknown")
+        name, target = _cube_migration_target(cube, source_file)
+        if target in seen_cube_targets:
+            raise UpgradeError(
+                f"Cannot upgrade: multiple legacy cube files map to '{target}'"
+            )
+        seen_cube_targets.add(target)
+
         cube_dir = project_path / "cubes" / name
         cube_dir.mkdir(parents=True, exist_ok=True)
 
