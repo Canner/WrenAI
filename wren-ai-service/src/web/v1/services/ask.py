@@ -368,7 +368,16 @@ class AskService:
             "failure" in normalized
             and any(
                 term in normalized
-                for term in ("count", "counts", "category", "code", "grouped")
+                for term in (
+                    "count",
+                    "counts",
+                    "category",
+                    "code",
+                    "grouped",
+                    "common",
+                    "most common",
+                    "top",
+                )
             )
             and any(term in normalized for term in ("repair", "bar chart", "chart"))
         )
@@ -441,6 +450,28 @@ class AskService:
             )
 
         return None
+
+    def _is_direct_heuristic_sql_query(self, query: str) -> bool:
+        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized:
+            return False
+
+        asks_manufacturing_throughput = (
+            "throughput" in normalized
+            and any(term in normalized for term in ("manufacturing", "unit", "units"))
+        )
+        asks_failure_counts = (
+            "failure" in normalized
+            and any(
+                term in normalized
+                for term in ("count", "counts", "common", "most common", "top")
+            )
+            and any(
+                term in normalized
+                for term in ("pcb", "repair", "bar chart", "chart", "category")
+            )
+        )
+        return asks_manufacturing_throughput or asks_failure_counts
 
     def _build_heuristic_text_to_sql_fallback(
         self,
@@ -831,6 +862,68 @@ class AskService:
                     )
                     results["metadata"]["type"] = "GENERAL"
                     return results
+
+                if self._is_direct_heuristic_sql_query(user_query):
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="searching",
+                        type="TEXT_TO_SQL",
+                        trace_id=trace_id,
+                        is_followup=True if histories else False,
+                    )
+                    retrieval_result = await self._run_with_timeout(
+                        "Schema retrieval",
+                        self._pipelines["db_schema_retrieval"].run(
+                            query=user_query,
+                            histories=histories,
+                            project_id=ask_request.project_id,
+                            enable_column_pruning=False,
+                        ),
+                    )
+                    _retrieval_result = retrieval_result.get(
+                        "construct_retrieval_results", {}
+                    )
+                    documents = _retrieval_result.get("retrieval_results", [])
+                    table_names = [
+                        document.get("table_name") for document in documents
+                    ]
+                    table_ddls = [
+                        document.get("table_ddl", "") or "" for document in documents
+                    ]
+                    logger.info(
+                        "Retrieved tables for direct heuristic query_id %s: %s",
+                        query_id,
+                        table_names,
+                    )
+
+                    if heuristic_sql := self._build_heuristic_text_to_sql_fallback(
+                        user_query, table_ddls, table_names=table_names
+                    ):
+                        logger.info(
+                            "Using direct heuristic text-to-sql fallback for query_id %s: %s",
+                            query_id,
+                            user_query,
+                        )
+                        api_results = [
+                            AskResult(
+                                **{
+                                    "sql": heuristic_sql,
+                                    "type": "llm",
+                                }
+                            )
+                        ]
+                        if not self._is_stopped(query_id, self._ask_results):
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="TEXT_TO_SQL",
+                                response=api_results,
+                                rephrased_question=user_query,
+                                retrieved_tables=table_names,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                            )
+                        results["ask_result"] = api_results
+                        results["metadata"]["type"] = "TEXT_TO_SQL"
+                        return results
 
                 historical_question = await self._run_with_timeout(
                     "Historical question retrieval",

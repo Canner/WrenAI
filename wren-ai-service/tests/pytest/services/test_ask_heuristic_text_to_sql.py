@@ -89,6 +89,47 @@ def test_repair_failure_count_uses_repair_log_failure_code():
     assert "dbo_reports" not in sql
 
 
+def test_common_pcb_failures_uses_repair_log_failure_code():
+    service = AskService(pipelines={})
+    table_ddls = [
+        """
+        CREATE TABLE dbo_repair_logs (
+          id VARCHAR,
+          board_model VARCHAR,
+          failure_code VARCHAR,
+          status VARCHAR,
+          created_at TIMESTAMP
+        );
+        """,
+        """
+        CREATE TABLE dbo_DebugEntries (
+          DebugEntryId VARCHAR,
+          FailureSys VARCHAR
+        );
+        """,
+    ]
+
+    sql = service._build_repair_failure_count_sql(
+        "Show top 10 most common PCB failures in a bar chart.",
+        table_ddls,
+        table_names=["dbo_repair_logs", "dbo_DebugEntries"],
+    )
+
+    assert sql
+    assert sql.startswith('SELECT TOP 10 ')
+    assert '"dbo_repair_logs"."failure_code" AS "failure_category"' in sql
+    assert 'COUNT(*) AS "repair_count"' in sql
+    assert "FailureSys" not in sql
+
+
+def test_common_pcb_failures_uses_direct_heuristic_route():
+    service = AskService(pipelines={})
+
+    assert service._is_direct_heuristic_sql_query(
+        "Show top 10 most common PCB failures in a bar chart."
+    )
+
+
 def test_repair_failure_count_requires_schema_backed_failure_dimension():
     service = AskService(pipelines={})
     table_ddls = [
