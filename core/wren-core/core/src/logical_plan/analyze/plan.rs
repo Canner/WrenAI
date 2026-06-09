@@ -35,7 +35,7 @@ use crate::mdl::utils::{
 use crate::mdl::Dataset;
 use crate::mdl::{AnalyzedWrenMDL, ColumnReference, SessionStateRef};
 
-use super::access_control::{collect_condition, validate_rule};
+use super::access_control::{build_filter_expression, collect_condition, validate_rule};
 
 #[derive(Debug)]
 pub(crate) enum WrenPlan {
@@ -59,6 +59,13 @@ impl WrenPlan {
 /// [ModelPlanNode] is a logical plan node that represents a model. It contains the model name,
 /// required fields, and the relation chain that connects the model with other models.
 /// It only generates the top plan for the model, and the relation chain will generate the source plan.
+///
+/// `rlac_filter` carries the pre-parsed Row Level Access Control filter for this model.
+/// Parsing happens during [`ModelAnalyzeRule`] (rather than during model generation) so that
+/// any subqueries embedded in the condition — e.g. `SELECT id FROM other_model WHERE ...` —
+/// are visited by the same analyzer pass. That visitation rewrites their internal
+/// `TableScan` references to `ModelPlanNode`s, allowing the referenced model's own RLAC
+/// to apply transitively.
 #[derive(PartialEq, Eq, Hash, Debug, Clone)]
 pub(crate) struct ModelPlanNode {
     pub(crate) model: Arc<Model>,
@@ -66,6 +73,7 @@ pub(crate) struct ModelPlanNode {
     pub(crate) relation_chain: Box<RelationChain>,
     schema_ref: DFSchemaRef,
     pub(crate) original_table_scan: Option<LogicalPlan>,
+    pub(crate) rlac_filter: Option<Expr>,
 }
 
 impl ModelPlanNode {
@@ -411,6 +419,8 @@ impl ModelPlanNodeBuilder {
             );
         }
 
+        let rlac_filter = self.build_rlac_filter(&model)?;
+
         Ok(ModelPlanNode {
             model,
             required_exprs: self
@@ -422,7 +432,39 @@ impl ModelPlanNodeBuilder {
             relation_chain: Box::new(relation_chain),
             schema_ref,
             original_table_scan,
+            rlac_filter,
         })
+    }
+
+    /// Build the combined RLAC filter expression for this model.
+    ///
+    /// Each rule whose required session properties are present contributes one `Expr`; all
+    /// matching rules are AND-combined. Returns `None` when no rule matches (e.g. all rules
+    /// are optional and the corresponding session properties are unset).
+    ///
+    /// Note: subqueries inside the parsed expression may contain `TableScan`s that point at
+    /// other Wren models — they remain unanalyzed here. [`ModelAnalyzeRule`] is responsible
+    /// for recursively analyzing those subqueries (and for detecting cycles between RLAC
+    /// rules that reference each other).
+    fn build_rlac_filter(&self, model: &Arc<Model>) -> Result<Option<Expr>> {
+        let mut combined: Option<Expr> = None;
+        for rule in model.row_level_access_controls().iter() {
+            if !validate_rule(&rule.name, &rule.required_properties, &self.properties)? {
+                continue;
+            }
+            let expr = build_filter_expression(
+                &self.session_state,
+                Some(Arc::clone(&self.analyzed_wren_mdl)),
+                Arc::clone(model),
+                &self.properties,
+                rule,
+            )?;
+            combined = Some(match combined {
+                Some(acc) => acc.and(expr),
+                None => expr,
+            });
+        }
+        Ok(combined)
     }
 
     fn add_required_columns_from_session_properties(
@@ -505,6 +547,31 @@ impl ModelPlanNodeBuilder {
             qualified_column,
             &mut partial_model_required_fields,
         )?;
+
+        // Default use the primary key of the model as the required field for the partial model if there is no any required field. It's always used when the `TO_MANY` calculation is used,
+        // because the result of `TO_MANY` calculation is always grouped by the primary key of the source model.
+        let Some(model) = self
+            .analyzed_wren_mdl
+            .wren_mdl()
+            .get_model(model_ref.table())
+        else {
+            return plan_err!("Model not found for {}", model_ref);
+        };
+
+        let primary_key_column = model.primary_key().and_then(|pk| model.get_column(pk));
+
+        if let Some(primary_key_column) = primary_key_column {
+            let expr = create_wren_expr_for_model(
+                &primary_key_column.name,
+                Arc::clone(&model),
+                Arc::clone(&self.session_state),
+            )?;
+
+            partial_model_required_fields
+                .entry(model_ref.clone())
+                .or_default()
+                .insert(OrdExpr::with_column(expr, Arc::clone(&column)));
+        }
 
         let mut iter = column_graph.node_indices();
 
@@ -853,11 +920,21 @@ impl UserDefinedLogicalNodeCore for ModelPlanNode {
     }
 
     fn expressions(&self) -> Vec<Expr> {
-        self.schema_ref
+        // First emit one column reference per output field so the node's schema width
+        // matches `expressions()` length (DataFusion uses this for validation).
+        // Then append the RLAC filter — exposing it here lets `map_subqueries` walk into
+        // any subqueries inside the filter so they get the same analyzer treatment as
+        // subqueries in the outer plan.
+        let mut exprs: Vec<Expr> = self
+            .schema_ref
             .fields()
             .iter()
             .map(|field| col(field.name()))
-            .collect()
+            .collect();
+        if let Some(filter) = &self.rlac_filter {
+            exprs.push(filter.clone());
+        }
+        exprs
     }
 
     fn fmt_for_explain(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -871,15 +948,41 @@ impl UserDefinedLogicalNodeCore for ModelPlanNode {
 
     fn with_exprs_and_inputs(
         &self,
-        _: Vec<Expr>,
+        exprs: Vec<Expr>,
         _: Vec<LogicalPlan>,
     ) -> datafusion::common::Result<Self> {
+        // `expressions()` returns one `col(field)` per schema field followed by the
+        // optional RLAC filter. After DataFusion's traversal callbacks (e.g.
+        // `map_subqueries`) rewrite individual expressions, we need to put the updated
+        // RLAC filter back. The column refs are stable — only the trailing filter (if
+        // present) carries any meaningful change.
+        //
+        // Guard against a count mismatch: if DataFusion ever changes its traversal API
+        // and passes fewer expressions than we emitted, silently dropping `rlac_filter`
+        // would bypass row-level access control. Surface it as an internal error so the
+        // regression is caught immediately.
+        let field_count = self.schema_ref.fields().len();
+        let rlac_filter = if self.rlac_filter.is_some() {
+            if exprs.len() <= field_count {
+                return internal_err!(
+                    "ModelPlanNode::with_exprs_and_inputs received {} expressions but \
+                     expected at least {} (field count + 1 for rlac_filter); dropping \
+                     the filter would silently bypass row-level access control",
+                    exprs.len(),
+                    field_count + 1
+                );
+            }
+            exprs.get(field_count).cloned()
+        } else {
+            None
+        };
         Ok(ModelPlanNode {
             model: self.model.clone(),
             required_exprs: self.required_exprs.clone(),
             relation_chain: self.relation_chain.clone(),
             schema_ref: self.schema_ref.clone(),
             original_table_scan: self.original_table_scan.clone(),
+            rlac_filter,
         })
     }
 }
