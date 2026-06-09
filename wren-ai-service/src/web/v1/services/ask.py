@@ -393,13 +393,13 @@ class AskService:
         )
         if has_repair_logs and has_failure_code:
             return (
-                f'SELECT TOP {top_n} '
-                f'"dbo_repair_logs"."failure_code" AS "failure_category", '
+                f'SELECT "dbo_repair_logs"."failure_code" AS "failure_category", '
                 f'COUNT(*) AS "repair_count" '
                 f'FROM "dbo_repair_logs" '
                 f'WHERE "dbo_repair_logs"."failure_code" IS NOT NULL '
                 f'GROUP BY "dbo_repair_logs"."failure_code" '
-                f'ORDER BY "repair_count" DESC'
+                f'ORDER BY "repair_count" DESC '
+                f'LIMIT {top_n}'
             )
 
         has_debug_entries = self._schema_contains(
@@ -438,15 +438,15 @@ class AskService:
                 else ("name" if has_pattern_name else "category")
             )
             return (
-                f'SELECT TOP {top_n} '
-                f'"dbo_failure_patterns"."{dimension_column}" AS "failure_category", '
+                f'SELECT "dbo_failure_patterns"."{dimension_column}" AS "failure_category", '
                 f'COUNT("dbo_DebugEntries"."DebugEntryId") AS "repair_count" '
                 f'FROM "dbo_DebugEntries" '
                 f'JOIN "dbo_failure_patterns" '
                 f'ON "dbo_DebugEntries"."FailureSys" = "dbo_failure_patterns"."id" '
                 f'WHERE "dbo_failure_patterns"."{dimension_column}" IS NOT NULL '
                 f'GROUP BY "dbo_failure_patterns"."{dimension_column}" '
-                f'ORDER BY "repair_count" DESC'
+                f'ORDER BY "repair_count" DESC '
+                f'LIMIT {top_n}'
             )
 
         return None
@@ -549,24 +549,24 @@ class AskService:
 
             if has_failure_patterns and has_pattern_failure_sys and has_pattern_occurrences:
                 return (
-                    f'SELECT TOP {top_n} '
-                    f'"dbo_failure_patterns"."Failuresys" AS "failure_category", '
+                    f'SELECT "dbo_failure_patterns"."Failuresys" AS "failure_category", '
                     f'"dbo_failure_patterns"."occurrences" AS "repair_count" '
                     f'FROM "dbo_failure_patterns" '
                     f'WHERE "dbo_failure_patterns"."Failuresys" IS NOT NULL '
                     f'AND "dbo_failure_patterns"."occurrences" IS NOT NULL '
-                    f'ORDER BY "dbo_failure_patterns"."occurrences" DESC'
+                    f'ORDER BY "dbo_failure_patterns"."occurrences" DESC '
+                    f'LIMIT {top_n}'
                 )
 
             if has_failure_patterns and has_pattern_failure_sys:
                 return (
-                    f'SELECT TOP {top_n} '
-                    f'"dbo_failure_patterns"."Failuresys" AS "failure_category", '
+                    f'SELECT "dbo_failure_patterns"."Failuresys" AS "failure_category", '
                     f'COUNT(*) AS "repair_count" '
                     f'FROM "dbo_failure_patterns" '
                     f'WHERE "dbo_failure_patterns"."Failuresys" IS NOT NULL '
                     f'GROUP BY "dbo_failure_patterns"."Failuresys" '
-                    f'ORDER BY "repair_count" DESC'
+                    f'ORDER BY "repair_count" DESC '
+                    f'LIMIT {top_n}'
                 )
 
             if (
@@ -585,15 +585,15 @@ class AskService:
                     dimension_column = "name"
 
                 return (
-                    f'SELECT TOP {top_n} '
-                    f'"dbo_failure_patterns"."{dimension_column}" AS "failure_category", '
+                    f'SELECT "dbo_failure_patterns"."{dimension_column}" AS "failure_category", '
                     f'COUNT("dbo_DebugEntries"."DebugEntryId") AS "repair_count" '
                     f'FROM "dbo_DebugEntries" '
                     f'JOIN "dbo_failure_patterns" '
                     f'ON "dbo_DebugEntries"."FailureSys" = "dbo_failure_patterns"."id" '
                     f'WHERE "dbo_failure_patterns"."{dimension_column}" IS NOT NULL '
                     f'GROUP BY "dbo_failure_patterns"."{dimension_column}" '
-                    f'ORDER BY "repair_count" DESC'
+                    f'ORDER BY "repair_count" DESC '
+                    f'LIMIT {top_n}'
                 )
 
             has_repair_logs = self._schema_contains(
@@ -604,13 +604,13 @@ class AskService:
             )
             if has_repair_logs and has_failure_code:
                 return (
-                    f'SELECT TOP {top_n} '
-                    f'"dbo_repair_logs"."failure_code" AS "failure_category", '
+                    f'SELECT "dbo_repair_logs"."failure_code" AS "failure_category", '
                     f'COUNT(*) AS "repair_count" '
                     f'FROM "dbo_repair_logs" '
                     f'WHERE "dbo_repair_logs"."failure_code" IS NOT NULL '
                     f'GROUP BY "dbo_repair_logs"."failure_code" '
-                    f'ORDER BY "repair_count" DESC'
+                    f'ORDER BY "repair_count" DESC '
+                    f'LIMIT {top_n}'
                 )
 
         if wants_monthly_repairs and self._schema_contains(
@@ -633,13 +633,13 @@ class AskService:
         if wants_failure_counts and wants_chart:
             top_n = self._extract_requested_top_n(query)
             return (
-                f'SELECT TOP {top_n} '
-                f'"dbo_failure_patterns"."Failuresys" AS "failure_category", '
+                f'SELECT "dbo_failure_patterns"."Failuresys" AS "failure_category", '
                 f'COUNT(*) AS "repair_count" '
                 f'FROM "dbo_failure_patterns" '
                 f'WHERE "dbo_failure_patterns"."Failuresys" IS NOT NULL '
                 f'GROUP BY "dbo_failure_patterns"."Failuresys" '
-                f'ORDER BY "repair_count" DESC'
+                f'ORDER BY "repair_count" DESC '
+                f'LIMIT {top_n}'
             )
 
         if wants_monthly_repairs:

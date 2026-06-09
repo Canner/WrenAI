@@ -116,10 +116,12 @@ def test_common_pcb_failures_uses_repair_log_failure_code():
     )
 
     assert sql
-    assert sql.startswith('SELECT TOP 10 ')
+    assert sql.startswith('SELECT "dbo_repair_logs"."failure_code"')
     assert '"dbo_repair_logs"."failure_code" AS "failure_category"' in sql
     assert 'COUNT(*) AS "repair_count"' in sql
     assert "FailureSys" not in sql
+    assert "TOP 10" not in sql
+    assert sql.endswith("LIMIT 10")
 
 
 def test_common_pcb_failures_uses_direct_heuristic_route():
