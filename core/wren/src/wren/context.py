@@ -589,12 +589,19 @@ def _load_views_v2(project_path: Path) -> list[dict]:
 
 
 def load_cubes(project_path: Path) -> list[dict]:
-    """Load cubes from project_path/cubes/*.yml.
+    """Load cubes — dispatches on schema_version.
 
-    Each file is one cube definition. Files use the same YAML shape on
-    every schema version (no v1/v2 dispatch — cubes were added after the
-    directory-per-entity migration).
+    v1 (legacy): cubes/*.yml
+    v2: cubes/<name>/metadata.yml
     """
+    sv = get_schema_version(project_path)
+    if sv == 1:
+        return _load_cubes_v1(project_path)
+    return _load_cubes_v2(project_path)
+
+
+def _load_cubes_v1(project_path: Path) -> list[dict]:
+    """Legacy: load cube YAML files from project_path/cubes/*.yml."""
     cubes_dir = project_path / "cubes"
     if not cubes_dir.is_dir():
         return []
@@ -605,6 +612,34 @@ def load_cubes(project_path: Path) -> list[dict]:
             data["_source_file"] = f.name
             cubes.append(data)
     return cubes
+
+
+def _load_cubes_v2(project_path: Path) -> list[dict]:
+    """v2: load cubes from project_path/cubes/<cube_name>/ directories.
+
+    Each cube directory must contain metadata.yml.
+    """
+    cubes_dir = project_path / "cubes"
+    if not cubes_dir.is_dir():
+        return []
+    cubes = []
+    for d in sorted(cubes_dir.iterdir()):
+        if not d.is_dir():
+            continue
+        meta_file = d / "metadata.yml"
+        if not meta_file.exists():
+            continue
+        data = yaml.safe_load(meta_file.read_text())
+        if isinstance(data, dict):
+            data["_source_file"] = str(meta_file.relative_to(cubes_dir))
+            cubes.append(data)
+    return cubes
+
+
+def _cube_migration_target(cube: dict, source_file: str | None) -> tuple[str, str]:
+    """Return (cube_name, target_metadata_path) for a v1 cube migration."""
+    name = cube.get("name", Path(source_file).stem if source_file else "unknown")
+    return name, f"cubes/{name}/metadata.yml"
 
 
 def load_relationships(project_path: Path) -> list[dict]:
@@ -1169,6 +1204,23 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
     if views_file.exists():
         deleted.append("views.yml")
 
+    # Cubes: flat files → directories
+    seen_cube_targets: set[str] = set()
+    cubes = _load_cubes_v1(project_path)
+    for cube in cubes:
+        source_file = cube.pop("_source_file", None)
+        _, target = _cube_migration_target(cube, source_file)
+        if target in seen_cube_targets:
+            raise UpgradeError(
+                f"Cannot upgrade: multiple legacy cube files map to '{target}'"
+            )
+        seen_cube_targets.add(target)
+
+        created.append(target)
+
+        if source_file:
+            deleted.append(f"cubes/{source_file}")
+
     return created, deleted
 
 
@@ -1240,6 +1292,30 @@ def _apply_v1_to_v2(project_path: Path) -> None:
     views_file = project_path / "views.yml"
     if views_file.exists():
         views_file.unlink()
+
+    # Write new cube directories
+    seen_cube_targets: set[str] = set()
+    cubes = _load_cubes_v1(project_path)
+    for cube in cubes:
+        source_file = cube.pop("_source_file", None)
+        name, target = _cube_migration_target(cube, source_file)
+        if target in seen_cube_targets:
+            raise UpgradeError(
+                f"Cannot upgrade: multiple legacy cube files map to '{target}'"
+            )
+        seen_cube_targets.add(target)
+
+        cube_dir = project_path / "cubes" / name
+        cube_dir.mkdir(parents=True, exist_ok=True)
+
+        (cube_dir / "metadata.yml").write_text(
+            yaml.dump(cube, default_flow_style=False, sort_keys=False)
+        )
+
+        if source_file:
+            old_file = project_path / "cubes" / source_file
+            if old_file.exists():
+                old_file.unlink()
 
 
 # ── Semantic validation (view dry-plan + description completeness) ─────────
