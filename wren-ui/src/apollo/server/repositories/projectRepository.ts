@@ -192,6 +192,8 @@ export interface Project {
   questionsError?: object;
   projectType?: WorkspaceProjectType;
   isCurrent?: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export interface IProjectRepository extends IBasicRepository<Project> {
@@ -217,7 +219,7 @@ export class ProjectRepository
     queryOptions?: IQueryOptions,
   ): Promise<Project> {
     return super.createOne(
-      await this.withMssqlId(data, queryOptions),
+      await this.withMssqlId(this.withTimestamps(data), queryOptions),
       queryOptions,
     );
   }
@@ -227,7 +229,22 @@ export class ProjectRepository
     queryOptions?: IQueryOptions,
   ): Promise<Project[]> {
     return super.createMany(
-      await this.withMssqlIds(data, queryOptions),
+      await this.withMssqlIds(data.map(this.withTimestamps), queryOptions),
+      queryOptions,
+    );
+  }
+
+  public override async updateOne(
+    id: string | number,
+    data: Partial<Project>,
+    queryOptions?: IQueryOptions,
+  ): Promise<Project> {
+    return super.updateOne(
+      id,
+      {
+        ...data,
+        updatedAt: data.updatedAt ?? new Date(),
+      },
       queryOptions,
     );
   }
@@ -323,6 +340,15 @@ export class ProjectRepository
 
   private isMssql = () =>
     String(this.knex.client.config.client || '').toLowerCase() === 'mssql';
+
+  private withTimestamps = (data: Partial<Project>): Partial<Project> => {
+    const now = new Date();
+    return {
+      ...data,
+      createdAt: data.createdAt ?? now,
+      updatedAt: data.updatedAt ?? now,
+    };
+  };
 
   private hasIdentityId = async (): Promise<boolean> => {
     if (!this.isMssql()) {
