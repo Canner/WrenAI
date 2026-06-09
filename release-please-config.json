@@ -16,7 +16,11 @@
       "release-type": "python",
       "bump-minor-pre-major": true,
       "extra-files": [
-        "src/wren/__init__.py"
+        {
+          "path": "uv.lock",
+          "type": "toml",
+          "jsonpath": "$.package[?(@.name.value=='wrenai')].version"
+        }
       ]
     },
     "core/wren-core-wasm": {
