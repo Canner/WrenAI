@@ -244,31 +244,38 @@ impl ModelPlanNodeBuilder {
                         expr,
                     )?;
                     self.required_calculation.push(calculation);
-                    // insert the primary key to the required fields for join with the calculation
-
-                    let Some(pk_column) = model
-                        .primary_key()
-                        .and_then(|pk| model.get_visible_column(pk))
-                    else {
+                    // insert the primary key(s) to the required fields for join with the calculation
+                    let pk_names = model.primary_keys();
+                    if pk_names.is_empty() {
                         return plan_err!(
                             "Primary key not found for model {}. To use `TO_MANY` relationship, the primary key is required for the base model.",
                             model.name()
                         );
-                    };
-                    self.model_required_fields
+                    }
+                    let required_fields = self
+                        .model_required_fields
                         .entry(TableReference::full(
                             self.analyzed_wren_mdl.wren_mdl().catalog(),
                             self.analyzed_wren_mdl.wren_mdl().schema(),
                             model.name(),
                         ))
-                        .or_default()
-                        .insert(OrdExpr::new(Expr::Column(
+                        .or_default();
+                    for pk in pk_names {
+                        let Some(pk_column) = model.get_visible_column(pk) else {
+                            return plan_err!(
+                                "Primary key column {} not found for model {}",
+                                pk,
+                                model.name()
+                            );
+                        };
+                        required_fields.insert(OrdExpr::new(Expr::Column(
                             DFColumn::from_qualified_name(format!(
                                 "{}.{}",
                                 quoted(model.name()),
                                 quoted(pk_column.name()),
                             )),
                         )));
+                    }
                 } else {
                     merge_graph(&mut self.directed_graph, column_graph)?;
                     if self.is_contain_calculation_source(&qualified_column) {
@@ -397,24 +404,35 @@ impl ModelPlanNodeBuilder {
 
         for calculation_plan in calculate_iter {
             let target_ref = TableReference::bare(calculation_plan.name());
-            let Some(join_key) = model.primary_key() else {
+            let join_keys = model.primary_keys();
+            if join_keys.is_empty() {
                 return plan_err!(
                     "Model {} should have primary key for calculation",
                     model.name()
                 );
-            };
+            }
+            // Join the calculation on every primary key column. The conjunction is
+            // re-parsed downstream by `collect_join_keys`, so a composite key emits
+            // `pk1 = pk1 AND pk2 = pk2`.
+            let join_condition = join_keys
+                .iter()
+                .map(|join_key| {
+                    format!(
+                        "{}.{} = {}.{}",
+                        quoted(model_ref.table()),
+                        quoted(join_key),
+                        quoted(target_ref.table()),
+                        quoted(join_key),
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(" AND ");
             relation_chain = RelationChain::Chain(
                 LogicalPlan::Extension(Extension {
                     node: calculation_plan.as_ref(),
                 }),
                 JoinType::OneToOne,
-                format!(
-                    "{}.{} = {}.{}",
-                    quoted(model_ref.table()),
-                    quoted(join_key),
-                    quoted(target_ref.table()),
-                    quoted(join_key),
-                ),
+                join_condition,
                 Box::new(relation_chain),
             );
         }
@@ -1156,35 +1174,46 @@ impl CalculationPlanNode {
         let Some(model) = calculation.dataset.try_as_model() else {
             return plan_err!("Only support model as source dataset");
         };
-        let Some(pk_column) = model
-            .primary_key()
-            .and_then(|pk| model.get_visible_column(pk))
-        else {
+        let pk_names = model.primary_keys();
+        if pk_names.is_empty() {
             return plan_err!("Primary key not found");
-        };
+        }
+        let mut pk_columns = Vec::with_capacity(pk_names.len());
+        for pk in pk_names {
+            let Some(pk_column) = model.get_visible_column(pk) else {
+                return plan_err!("Primary key not found");
+            };
+            pk_columns.push(pk_column);
+        }
 
-        // include calculation column and join key (pk)
-        let output_field = vec![
-            Arc::new(Field::new(
-                calculation.column.name(),
-                try_map_data_type(&calculation.column.r#type)?,
-                calculation.column.not_null,
-            )),
-            Arc::new(Field::new(
+        // include calculation column and join key(s) (pk)
+        let mut output_field = vec![Arc::new(Field::new(
+            calculation.column.name(),
+            try_map_data_type(&calculation.column.r#type)?,
+            calculation.column.not_null,
+        ))];
+        for pk_column in &pk_columns {
+            output_field.push(Arc::new(Field::new(
                 pk_column.name(),
                 try_map_data_type(&pk_column.r#type)?,
                 pk_column.not_null,
-            )),
-        ]
-        .into_iter()
-        .map(|f| (Some(TableReference::bare(quoted(model.name()))), f))
-        .collect();
-        let dimensions = vec![create_wren_expr_for_model(
-            &pk_column.name,
-            Arc::clone(&model),
-            Arc::clone(&session_state_ref),
-        )?
-        .alias(pk_column.name())];
+            )));
+        }
+        let output_field = output_field
+            .into_iter()
+            .map(|f| (Some(TableReference::bare(quoted(model.name()))), f))
+            .collect();
+        let dimensions = pk_columns
+            .iter()
+            .map(|pk_column| {
+                Ok(create_wren_expr_for_model(
+                    &pk_column.name,
+                    Arc::clone(&model),
+                    Arc::clone(&session_state_ref),
+                )?
+                .alias(pk_column.name()))
+            })
+            .collect::<Result<Vec<_>>>()?;
         let schema_ref = DFSchemaRef::new(
             DFSchema::new_with_metadata(output_field, HashMap::new())
                 .expect("create schema failed"),

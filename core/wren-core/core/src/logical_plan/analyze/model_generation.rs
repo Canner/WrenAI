@@ -212,15 +212,18 @@ impl ModelGenerationRule {
                         let name = alias.name.clone();
                         let ident =
                             ident(rebased_measure.to_string()).alias(name.clone());
-                        let rebased_dimension =
-                            rebase_column(&calculation_plan.dimensions[0], &plan_alias)?;
-                        let project = vec![rebased_dimension.clone(), ident];
+                        // Group by every primary key dimension so composite-key
+                        // calculations expose all key columns for the join back.
+                        let rebased_dimensions = calculation_plan
+                            .dimensions
+                            .iter()
+                            .map(|dimension| rebase_column(dimension, &plan_alias))
+                            .collect::<Result<Vec<_>>>()?;
+                        let mut project = rebased_dimensions.clone();
+                        project.push(ident);
                         let result = match source_plan {
                             Some(plan) => LogicalPlanBuilder::from(plan)
-                                .aggregate(
-                                    vec![rebased_dimension],
-                                    vec![rebased_measure],
-                                )?
+                                .aggregate(rebased_dimensions, vec![rebased_measure])?
                                 .project(project)?
                                 .build()?,
                             _ => {

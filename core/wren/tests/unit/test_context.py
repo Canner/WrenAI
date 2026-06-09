@@ -483,6 +483,77 @@ def test_validate_pk_not_in_columns(tmp_path):
     assert any("not found in columns" in e.message for e in errors)
 
 
+def test_validate_pk_invalid_type(tmp_path):
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: orders\n"
+        "table_reference:\n  table: orders\n"
+        "columns:\n  - name: id\n    type: INTEGER\n"
+        "primary_key: 123\n"
+    )
+    # Must not raise (no TypeError) and must flag the malformed shape.
+    errors = validate_project(tmp_path)
+    assert any("must be a non-empty string or list" in e.message for e in errors)
+
+
+def test_validate_composite_pk_missing_col(tmp_path):
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: orders\n"
+        "table_reference:\n  table: orders\n"
+        "columns:\n  - name: a\n    type: INTEGER\n"
+        "primary_key:\n  - a\n  - missing_col\n"
+    )
+    errors = validate_project(tmp_path)
+    assert any("primary_key 'missing_col' not found" in e.message for e in errors)
+
+
+def test_validate_composite_pk_all_present(tmp_path):
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: orders\n"
+        "table_reference:\n  table: orders\n"
+        "columns:\n  - name: a\n    type: INTEGER\n  - name: b\n    type: INTEGER\n"
+        "primary_key:\n  - a\n  - b\n"
+    )
+    errors = validate_project(tmp_path)
+    assert not any("not found in columns" in e.message for e in errors)
+
+
+def test_validate_composite_pk_requires_schema_version_4(tmp_path):
+    _make_v2_project(tmp_path, schema_version=3)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: orders\n"
+        "table_reference:\n  table: orders\n"
+        "columns:\n  - name: a\n    type: INTEGER\n  - name: b\n    type: INTEGER\n"
+        "primary_key:\n  - a\n  - b\n"
+    )
+    errors = validate_project(tmp_path)
+    assert any("requires schema_version >= 4" in e.message for e in errors)
+
+
+def test_validate_composite_pk_ok_at_schema_version_4(tmp_path):
+    _make_v2_project(tmp_path, schema_version=4)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: orders\n"
+        "table_reference:\n  table: orders\n"
+        "columns:\n  - name: a\n    type: INTEGER\n  - name: b\n    type: INTEGER\n"
+        "primary_key:\n  - a\n  - b\n"
+    )
+    errors = validate_project(tmp_path)
+    assert not any("requires schema_version >= 4" in e.message for e in errors)
+
+
 def test_validate_relationship_unknown_model(tmp_path):
     _make_valid_project(tmp_path)
     (tmp_path / "relationships.yml").write_text(
@@ -1101,7 +1172,7 @@ def test_plan_upgrade_above_target(tmp_path):
 def test_plan_upgrade_default_to_latest(tmp_path):
     _make_v1_project(tmp_path)
     result = plan_upgrade(tmp_path)
-    assert result.to_version == 3
+    assert result.to_version == 4
 
 
 def test_apply_upgrade_v1_to_v2(tmp_path):

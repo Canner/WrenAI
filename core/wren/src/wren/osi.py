@@ -354,7 +354,7 @@ def _convert_field(
     *,
     dialect: str,
     type_override: str | None,
-    primary_key_name: str | None,
+    primary_key_names: set[str],
 ) -> dict:
     name = field_obj["name"]
     expr = _pick_expression(field_obj.get("expression"), dialect)
@@ -370,7 +370,7 @@ def _convert_field(
     }
     if is_calc:
         column["expression"] = expr
-    if primary_key_name == name:
+    if name in primary_key_names:
         column["is_primary_key"] = True
         column["not_null"] = True
     if desc := _osi_description(field_obj):
@@ -391,20 +391,6 @@ def _format_column_types_snippet(dataset_name: str, field_names: list[str]) -> s
         f"              {pairs}\n"
         "            }\n"
         "          }"
-    )
-
-
-def _format_composite_pk_snippet(
-    dataset_name: str, candidates: list[str], picked: str
-) -> str:
-    """Snippet hint when wren falls back to first column of composite PK."""
-    return (
-        f"  Wren picked {picked!r}. To override, add to dataset "
-        f"'{dataset_name}' in the OSI file:\n\n"
-        "    custom_extensions:\n"
-        "      - vendor_name: WREN\n"
-        f'        data: \'{{"primary_key": "<one of: '
-        f"{', '.join(candidates)}>\"}}'"
     )
 
 
@@ -441,34 +427,24 @@ def _convert_dataset(
         }
     ds_pk_override = ds_wren.get("primary_key")
 
-    # Primary key — OSI allows composite arrays; wren takes a single string.
+    # Primary key — OSI allows a single string or a composite array; wren MDL
+    # supports both (a string for single, an array for composite).
     pk_raw = ds.get("primary_key")
-    pk_name: str | None = None
+    pk_names: list[str] = []
     if isinstance(pk_raw, list):
-        if len(pk_raw) == 1:
-            pk_name = str(pk_raw[0])
-        elif len(pk_raw) > 1:
-            candidates = [str(c) for c in pk_raw]
-            pick: str | None = None
-            if isinstance(ds_pk_override, str) and ds_pk_override in candidates:
-                pick = ds_pk_override
-            elif name in wren_cfg.primary_key_pick:
-                want = wren_cfg.primary_key_pick[name]
-                if want in candidates:
-                    pick = want
-            pk_name = pick or candidates[0]
-            if pick is None:
-                errors.append(
-                    ValidationError(
-                        "warning",
-                        f"dataset '{name}'",
-                        f"composite primary_key {candidates} — Wren MDL "
-                        f"takes one column.\n"
-                        + _format_composite_pk_snippet(name, candidates, pk_name),
-                    )
-                )
+        candidates = [str(c) for c in pk_raw if c]
+        # Explicit-narrowing escape hatch: a WREN override / primary_key_pick may
+        # select a single column out of a composite key.
+        pick: str | None = None
+        if isinstance(ds_pk_override, str) and ds_pk_override in candidates:
+            pick = ds_pk_override
+        elif name in wren_cfg.primary_key_pick:
+            want = wren_cfg.primary_key_pick[name]
+            if want in candidates:
+                pick = want
+        pk_names = [pick] if pick else candidates
     elif isinstance(pk_raw, str) and pk_raw:
-        pk_name = pk_raw
+        pk_names = [pk_raw]
 
     # Convert fields
     columns: list[dict] = []
@@ -491,7 +467,7 @@ def _convert_dataset(
             f,
             dialect=wren_cfg.dialect,
             type_override=type_override,
-            primary_key_name=pk_name,
+            primary_key_names=set(pk_names),
         )
         columns.append(col)
         if type_override is None:
@@ -519,8 +495,8 @@ def _convert_dataset(
         model["table_reference"] = table_ref
     else:
         model["ref_sql"] = ref_sql
-    if pk_name:
-        model["primary_key"] = pk_name
+    if pk_names:
+        model["primary_key"] = pk_names[0] if len(pk_names) == 1 else pk_names
     if desc := _osi_description(ds):
         model["properties"]["description"] = desc
 
