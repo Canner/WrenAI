@@ -2,6 +2,7 @@ import { Knex } from 'knex';
 import {
   BaseRepository,
   IBasicRepository,
+  IQueryOptions,
   coerceBoolean,
 } from './baseRepository';
 import {
@@ -205,9 +206,30 @@ export class ProjectRepository
   implements IProjectRepository
 {
   private jsonTypeColumns = ['questions', 'questions_error', 'connection_info'];
+  private hasIdentityIdPromise?: Promise<boolean>;
 
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'project' });
+  }
+
+  public override async createOne(
+    data: Partial<Project>,
+    queryOptions?: IQueryOptions,
+  ): Promise<Project> {
+    return super.createOne(
+      await this.withMssqlId(data, queryOptions),
+      queryOptions,
+    );
+  }
+
+  public override async createMany(
+    data: Partial<Project>[],
+    queryOptions?: IQueryOptions,
+  ): Promise<Project[]> {
+    return super.createMany(
+      await this.withMssqlIds(data, queryOptions),
+      queryOptions,
+    );
   }
 
   public async getCurrentProject() {
@@ -283,8 +305,8 @@ export class ProjectRepository
     return camelCaseData as Project;
   };
 
-  public override transformToDBData: (data: Project) => any = (
-    data: Project,
+  public override transformToDBData: (data: Partial<Project>) => any = (
+    data: Partial<Project>,
   ) => {
     if (!isPlainObject(data)) {
       throw new Error('Unexpected db data');
@@ -297,5 +319,81 @@ export class ProjectRepository
       return value;
     });
     return formattedData;
+  };
+
+  private isMssql = () =>
+    String(this.knex.client.config.client || '').toLowerCase() === 'mssql';
+
+  private hasIdentityId = async (): Promise<boolean> => {
+    if (!this.isMssql()) {
+      return true;
+    }
+
+    if (!this.hasIdentityIdPromise) {
+      this.hasIdentityIdPromise = this.knex('INFORMATION_SCHEMA.COLUMNS')
+        .select('COLUMN_NAME')
+        .where({
+          TABLE_SCHEMA: 'dbo',
+          TABLE_NAME: this.tableName,
+          COLUMN_NAME: 'id',
+        })
+        .whereRaw(
+          "COLUMNPROPERTY(OBJECT_ID(TABLE_SCHEMA + '.' + TABLE_NAME), COLUMN_NAME, 'IsIdentity') = 1",
+        )
+        .first()
+        .then(Boolean);
+    }
+
+    return this.hasIdentityIdPromise;
+  };
+
+  private withMssqlId = async (
+    data: Partial<Project>,
+    queryOptions?: IQueryOptions,
+  ): Promise<Partial<Project>> => {
+    if (
+      (data.id !== undefined && data.id !== null) ||
+      !this.isMssql() ||
+      (await this.hasIdentityId())
+    ) {
+      return data;
+    }
+
+    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
+    const [row] = await executer(this.tableName).max<{ maxId?: number }>({
+      maxId: 'id',
+    });
+    return {
+      ...data,
+      id: Number(row?.maxId || 0) + 1,
+    };
+  };
+
+  private withMssqlIds = async (
+    data: Partial<Project>[],
+    queryOptions?: IQueryOptions,
+  ): Promise<Partial<Project>[]> => {
+    if (
+      data.every((item) => item.id !== undefined && item.id !== null) ||
+      !this.isMssql() ||
+      (await this.hasIdentityId())
+    ) {
+      return data;
+    }
+
+    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
+    const [row] = await executer(this.tableName).max<{ maxId?: number }>({
+      maxId: 'id',
+    });
+    let nextId = Number(row?.maxId || 0) + 1;
+    return data.map((item) => {
+      if (item.id !== undefined && item.id !== null) {
+        return item;
+      }
+      return {
+        ...item,
+        id: nextId++,
+      };
+    });
   };
 }
