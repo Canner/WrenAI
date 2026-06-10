@@ -382,16 +382,24 @@ def test_build_tpcds_full_runs():
     assert len(manifest["relationships"]) == 4
 
 
-def test_build_tpcds_composite_pk_warning():
-    """store_sales has composite PK [ss_item_sk, ss_ticket_number]."""
-    _, errors = build_manifest_from_osi(
+def test_build_tpcds_composite_pk_preserved():
+    """store_sales has composite PK [ss_item_sk, ss_ticket_number] — wren MDL now
+    keeps it as a list instead of downgrading to one column with a warning."""
+    manifest, errors = build_manifest_from_osi(
         _fixture("tpcds_full.yaml"), data_source="postgres"
     )
+    # No downgrade warning any more.
     composite_warns = [e for e in errors if "composite primary_key" in e.message]
-    assert len(composite_warns) == 1
-    assert "store_sales" in composite_warns[0].path
-    # Snippet must guide the user to override
-    assert 'data: \'{"primary_key"' in composite_warns[0].message
+    assert composite_warns == []
+
+    store_sales = next(m for m in manifest["models"] if m["name"] == "store_sales")
+    assert store_sales["primary_key"] == ["ss_item_sk", "ss_ticket_number"]
+    # Every composite member that is a declared field is flagged on its column.
+    # (ss_ticket_number is referenced by the PK but not declared as a field in
+    # this fixture, so it has no column to flag.)
+    pk_cols = {c["name"] for c in store_sales["columns"] if c.get("is_primary_key")}
+    assert "ss_item_sk" in pk_cols
+    assert pk_cols <= {"ss_item_sk", "ss_ticket_number"}
 
 
 def test_build_tpcds_untyped_field_warnings_include_snippets():

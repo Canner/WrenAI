@@ -40,7 +40,8 @@ impl Lineage {
         let mut source_columns_map = HashMap::new();
 
         for model in mdl.manifest.models.iter() {
-            for column in model.get_visible_columns() {
+            // Use physical columns for both the normal column and the calculated column
+            for column in model.get_physical_columns(false) {
                 if column.is_calculated {
                     let expr: &String = match column.expression {
                         Some(ref exp) => exp,

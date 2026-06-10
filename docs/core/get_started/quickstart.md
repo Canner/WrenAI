@@ -235,6 +235,8 @@ Claude Code will:
 7. **Validate and build** — `wren context validate` → `wren context build`
 8. **Index memory** — `wren memory index` (generates seed NL-SQL examples)
 
+> **Tip:** If `wren memory index` (the indexing step above) seems to hang for tens of seconds on macOS — it hasn't. That first `wren memory` command loads large unsigned native libraries (lancedb and torch, ~800MB), and macOS runs a one-time XProtect security scan the first time they execute. This is expected macOS behavior, not a Wren problem, and it's a one-off — every later `wren memory` command runs at normal speed. To avoid the pause during a live demo, run any `wren memory` command once right after install and let it finish.
+
 After completion, verify the project:
 
 ```bash

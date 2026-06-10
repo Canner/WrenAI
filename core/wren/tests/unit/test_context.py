@@ -483,6 +483,77 @@ def test_validate_pk_not_in_columns(tmp_path):
     assert any("not found in columns" in e.message for e in errors)
 
 
+def test_validate_pk_invalid_type(tmp_path):
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: orders\n"
+        "table_reference:\n  table: orders\n"
+        "columns:\n  - name: id\n    type: INTEGER\n"
+        "primary_key: 123\n"
+    )
+    # Must not raise (no TypeError) and must flag the malformed shape.
+    errors = validate_project(tmp_path)
+    assert any("must be a non-empty string or list" in e.message for e in errors)
+
+
+def test_validate_composite_pk_missing_col(tmp_path):
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: orders\n"
+        "table_reference:\n  table: orders\n"
+        "columns:\n  - name: a\n    type: INTEGER\n"
+        "primary_key:\n  - a\n  - missing_col\n"
+    )
+    errors = validate_project(tmp_path)
+    assert any("primary_key 'missing_col' not found" in e.message for e in errors)
+
+
+def test_validate_composite_pk_all_present(tmp_path):
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: orders\n"
+        "table_reference:\n  table: orders\n"
+        "columns:\n  - name: a\n    type: INTEGER\n  - name: b\n    type: INTEGER\n"
+        "primary_key:\n  - a\n  - b\n"
+    )
+    errors = validate_project(tmp_path)
+    assert not any("not found in columns" in e.message for e in errors)
+
+
+def test_validate_composite_pk_requires_schema_version_4(tmp_path):
+    _make_v2_project(tmp_path, schema_version=3)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: orders\n"
+        "table_reference:\n  table: orders\n"
+        "columns:\n  - name: a\n    type: INTEGER\n  - name: b\n    type: INTEGER\n"
+        "primary_key:\n  - a\n  - b\n"
+    )
+    errors = validate_project(tmp_path)
+    assert any("requires schema_version >= 4" in e.message for e in errors)
+
+
+def test_validate_composite_pk_ok_at_schema_version_4(tmp_path):
+    _make_v2_project(tmp_path, schema_version=4)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: orders\n"
+        "table_reference:\n  table: orders\n"
+        "columns:\n  - name: a\n    type: INTEGER\n  - name: b\n    type: INTEGER\n"
+        "primary_key:\n  - a\n  - b\n"
+    )
+    errors = validate_project(tmp_path)
+    assert not any("requires schema_version >= 4" in e.message for e in errors)
+
+
 def test_validate_relationship_unknown_model(tmp_path):
     _make_valid_project(tmp_path)
     (tmp_path / "relationships.yml").write_text(
@@ -774,10 +845,10 @@ def test_validate_view_dialect_unknown(tmp_path):
 # ── Cubes ───────────────────────────────────────────────────────────────────
 
 
-def _make_v3_cube_project(tmp_path: Path) -> Path:
-    """v3 project with an orders model, ready for cubes/*.yml files."""
+def _make_v2_cube_project(tmp_path: Path) -> Path:
+    """v2 project with an orders model, ready for cubes/*/metadata.yml files."""
     (tmp_path / "wren_project.yml").write_text(
-        "schema_version: 3\nname: test\ndata_source: postgres\ncatalog: wren\nschema: public\n"
+        "schema_version: 2\nname: test\ndata_source: postgres\ncatalog: wren\nschema: public\n"
     )
     d = tmp_path / "models" / "orders"
     d.mkdir(parents=True)
@@ -791,15 +862,40 @@ def _make_v3_cube_project(tmp_path: Path) -> Path:
     return tmp_path
 
 
+def _write_cube(tmp_path: Path, name: str, content: str) -> Path:
+    cube_dir = tmp_path / "cubes" / name
+    cube_dir.mkdir(parents=True)
+    cube_file = cube_dir / "metadata.yml"
+    cube_file.write_text(content)
+    return cube_file
+
+
 def test_load_cubes_returns_empty_when_no_dir(tmp_path):
     assert load_cubes(tmp_path) == []
 
 
-def test_load_cubes_parses_yaml(tmp_path):
-    _make_v3_cube_project(tmp_path)
+def test_load_cubes_v1_parses_flat_yaml(tmp_path):
+    (tmp_path / "wren_project.yml").write_text(
+        "schema_version: 1\nname: test\ndata_source: postgres\ncatalog: wren\nschema: public\n"
+    )
     cubes_dir = tmp_path / "cubes"
     cubes_dir.mkdir()
     (cubes_dir / "order_metrics.yml").write_text(
+        "name: order_metrics\n"
+        "base_object: orders\n"
+        "measures:\n"
+        "  - name: revenue\n    expression: SUM(o_totalprice)\n    type: DOUBLE\n"
+    )
+    cubes = load_cubes(tmp_path)
+    assert len(cubes) == 1
+    assert cubes[0]["name"] == "order_metrics"
+
+
+def test_load_cubes_v2_parses_metadata_yaml(tmp_path):
+    _make_v2_cube_project(tmp_path)
+    _write_cube(
+        tmp_path,
+        "order_metrics",
         "name: order_metrics\n"
         "base_object: orders\n"
         "measures:\n"
@@ -814,11 +910,42 @@ def test_load_cubes_parses_yaml(tmp_path):
     assert cubes[0]["measures"][0]["name"] == "revenue"
 
 
-def test_build_manifest_includes_cubes(tmp_path):
-    _make_v3_cube_project(tmp_path)
+def test_load_cubes_v2_ignores_flat_yaml(tmp_path):
+    _make_v2_cube_project(tmp_path)
     cubes_dir = tmp_path / "cubes"
     cubes_dir.mkdir()
     (cubes_dir / "order_metrics.yml").write_text(
+        "name: order_metrics\n"
+        "base_object: orders\n"
+        "measures:\n"
+        "  - name: revenue\n    expression: SUM(o_totalprice)\n    type: DOUBLE\n"
+    )
+    assert load_cubes(tmp_path) == []
+
+
+def test_load_cubes_v3_uses_v2_layout(tmp_path):
+    _make_v2_cube_project(tmp_path)
+    (tmp_path / "wren_project.yml").write_text(
+        "schema_version: 3\nname: test\ndata_source: postgres\ncatalog: wren\nschema: public\n"
+    )
+    _write_cube(
+        tmp_path,
+        "order_metrics",
+        "name: order_metrics\n"
+        "base_object: orders\n"
+        "measures:\n"
+        "  - name: revenue\n    expression: SUM(o_totalprice)\n    type: DOUBLE\n"
+    )
+    cubes = load_cubes(tmp_path)
+    assert len(cubes) == 1
+    assert cubes[0]["name"] == "order_metrics"
+
+
+def test_build_manifest_includes_cubes(tmp_path):
+    _make_v2_cube_project(tmp_path)
+    _write_cube(
+        tmp_path,
+        "order_metrics",
         "name: order_metrics\n"
         "base_object: orders\n"
         "measures:\n"
@@ -831,10 +958,10 @@ def test_build_manifest_includes_cubes(tmp_path):
 
 
 def test_build_json_cube_camel_case(tmp_path):
-    _make_v3_cube_project(tmp_path)
-    cubes_dir = tmp_path / "cubes"
-    cubes_dir.mkdir()
-    (cubes_dir / "order_metrics.yml").write_text(
+    _make_v2_cube_project(tmp_path)
+    _write_cube(
+        tmp_path,
+        "order_metrics",
         "name: order_metrics\n"
         "base_object: orders\n"
         "measures:\n"
@@ -849,10 +976,10 @@ def test_build_json_cube_camel_case(tmp_path):
 
 
 def test_validate_cube_unknown_base_object(tmp_path):
-    _make_v3_cube_project(tmp_path)
-    cubes_dir = tmp_path / "cubes"
-    cubes_dir.mkdir()
-    (cubes_dir / "bad.yml").write_text(
+    _make_v2_cube_project(tmp_path)
+    _write_cube(
+        tmp_path,
+        "bad",
         "name: bad\nbase_object: nosuch\nmeasures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
     )
     errors = validate_project(tmp_path)
@@ -860,25 +987,23 @@ def test_validate_cube_unknown_base_object(tmp_path):
 
 
 def test_validate_cube_duplicate_name(tmp_path):
-    _make_v3_cube_project(tmp_path)
-    cubes_dir = tmp_path / "cubes"
-    cubes_dir.mkdir()
+    _make_v2_cube_project(tmp_path)
     body = (
         "name: order_metrics\nbase_object: orders\n"
         "measures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
     )
-    (cubes_dir / "a.yml").write_text(body)
-    (cubes_dir / "b.yml").write_text(body)
+    _write_cube(tmp_path, "a", body)
+    _write_cube(tmp_path, "b", body)
     errors = validate_project(tmp_path)
     assert any("duplicate cube name" in e.message for e in errors)
 
 
 def test_validate_cube_missing_base_object_uses_snake_case(tmp_path):
     """Validation error should reference the YAML field name (snake_case)."""
-    _make_v3_cube_project(tmp_path)
-    cubes_dir = tmp_path / "cubes"
-    cubes_dir.mkdir()
-    (cubes_dir / "om.yml").write_text(
+    _make_v2_cube_project(tmp_path)
+    _write_cube(
+        tmp_path,
+        "om",
         "name: order_metrics\n"
         "measures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
     )
@@ -889,10 +1014,10 @@ def test_validate_cube_missing_base_object_uses_snake_case(tmp_path):
 
 def test_validate_cube_non_string_hierarchy_level(tmp_path):
     """Non-string hierarchy levels must be reported, not crash."""
-    _make_v3_cube_project(tmp_path)
-    cubes_dir = tmp_path / "cubes"
-    cubes_dir.mkdir()
-    (cubes_dir / "om.yml").write_text(
+    _make_v2_cube_project(tmp_path)
+    _write_cube(
+        tmp_path,
+        "om",
         "name: order_metrics\n"
         "base_object: orders\n"
         "measures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
@@ -907,10 +1032,10 @@ def test_validate_cube_non_string_hierarchy_level(tmp_path):
 
 
 def test_validate_cube_bad_hierarchy(tmp_path):
-    _make_v3_cube_project(tmp_path)
-    cubes_dir = tmp_path / "cubes"
-    cubes_dir.mkdir()
-    (cubes_dir / "om.yml").write_text(
+    _make_v2_cube_project(tmp_path)
+    _write_cube(
+        tmp_path,
+        "om",
         "name: order_metrics\n"
         "base_object: orders\n"
         "measures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
@@ -923,10 +1048,10 @@ def test_validate_cube_bad_hierarchy(tmp_path):
 
 
 def test_validate_cube_ok(tmp_path):
-    _make_v3_cube_project(tmp_path)
-    cubes_dir = tmp_path / "cubes"
-    cubes_dir.mkdir()
-    (cubes_dir / "om.yml").write_text(
+    _make_v2_cube_project(tmp_path)
+    _write_cube(
+        tmp_path,
+        "om",
         "name: order_metrics\n"
         "base_object: orders\n"
         "measures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
@@ -965,6 +1090,14 @@ def _make_v1_project(tmp_path: Path) -> Path:
         "  - name: monthly\n"
         '    statement: "SELECT\\n  date_trunc(month, d)\\n  FROM t"\n'
     )
+    cubes_dir = tmp_path / "cubes"
+    cubes_dir.mkdir()
+    (cubes_dir / "order_metrics.yml").write_text(
+        "name: order_metrics\n"
+        "base_object: orders\n"
+        "measures:\n"
+        "  - name: revenue\n    expression: SUM(amount)\n    type: DOUBLE\n"
+    )
     (tmp_path / "relationships.yml").write_text("relationships: []\n")
     (tmp_path / "instructions.md").write_text("## Rule 1\nAlways use UTC.\n")
     return tmp_path
@@ -977,7 +1110,9 @@ def test_plan_upgrade_v1_to_v2(tmp_path):
     assert result.to_version == 2
     assert any("models/orders/metadata.yml" in f for f in result.files_created)
     assert any("models/revenue/ref_sql.sql" in f for f in result.files_created)
+    assert any("cubes/order_metrics/metadata.yml" in f for f in result.files_created)
     assert any("models/orders.yml" in f for f in result.files_deleted)
+    assert any("cubes/order_metrics.yml" in f for f in result.files_deleted)
     assert any("views.yml" in f for f in result.files_deleted)
 
 
@@ -987,6 +1122,22 @@ def test_plan_upgrade_v1_to_v3(tmp_path):
     assert result.from_version == 1
     assert result.to_version == 3
     assert len(result.files_created) > 0
+
+
+def test_plan_upgrade_v1_to_v2_rejects_duplicate_cube_targets(tmp_path):
+    _make_v1_project(tmp_path)
+    (tmp_path / "cubes" / "other_metrics.yml").write_text(
+        "name: order_metrics\n"
+        "base_object: orders\n"
+        "measures:\n"
+        "  - name: count\n    expression: COUNT(*)\n    type: BIGINT\n"
+    )
+
+    # Use fresh import to avoid stale class reference after importlib.reload in earlier tests.
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="multiple legacy cube files"):
+        plan_upgrade(tmp_path, target_version=2)
 
 
 def test_plan_upgrade_v2_to_v3(tmp_path):
@@ -1021,7 +1172,7 @@ def test_plan_upgrade_above_target(tmp_path):
 def test_plan_upgrade_default_to_latest(tmp_path):
     _make_v1_project(tmp_path)
     result = plan_upgrade(tmp_path)
-    assert result.to_version == 3
+    assert result.to_version == 4
 
 
 def test_apply_upgrade_v1_to_v2(tmp_path):
@@ -1034,10 +1185,12 @@ def test_apply_upgrade_v1_to_v2(tmp_path):
     assert (tmp_path / "models" / "revenue" / "metadata.yml").exists()
     assert (tmp_path / "models" / "revenue" / "ref_sql.sql").exists()
     assert (tmp_path / "views" / "summary" / "metadata.yml").exists()
+    assert (tmp_path / "cubes" / "order_metrics" / "metadata.yml").exists()
 
     # Old files deleted
     assert not (tmp_path / "models" / "orders.yml").exists()
     assert not (tmp_path / "models" / "revenue.yml").exists()
+    assert not (tmp_path / "cubes" / "order_metrics.yml").exists()
     assert not (tmp_path / "views.yml").exists()
 
     # schema_version updated
@@ -1050,6 +1203,9 @@ def test_apply_upgrade_v1_to_v2(tmp_path):
     assert names == {"orders", "revenue"}
     revenue = next(m for m in models if m["name"] == "revenue")
     assert "SELECT SUM(amount)" in revenue["ref_sql"]
+    cubes = load_cubes(tmp_path)
+    assert len(cubes) == 1
+    assert cubes[0]["name"] == "order_metrics"
 
 
 def test_apply_upgrade_v2_to_v3(tmp_path):
@@ -1066,6 +1222,9 @@ def test_apply_upgrade_v1_to_v3(tmp_path):
     assert get_schema_version(tmp_path) == 3
     assert (tmp_path / "models" / "orders" / "metadata.yml").exists()
     assert not (tmp_path / "models" / "orders.yml").exists()
+    assert (tmp_path / "cubes" / "order_metrics" / "metadata.yml").exists()
+    assert not (tmp_path / "cubes" / "order_metrics.yml").exists()
+    assert load_cubes(tmp_path)[0]["name"] == "order_metrics"
 
 
 def test_upgrade_preserves_relationships(tmp_path):

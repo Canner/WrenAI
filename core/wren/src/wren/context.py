@@ -151,9 +151,9 @@ def convert_mdl_to_project(mdl_json: dict) -> list[ProjectFile]:
     # ── wren_project.yml ──────────────────────────────────────
     # Map layoutVersion back to schema_version
     layout_version = mdl_json.get("layoutVersion", 1)
-    _LAYOUT_TO_SCHEMA = {1: 2, 2: 3}
+    _LAYOUT_TO_SCHEMA = {1: 2, 2: 3, 3: 4}
     schema_version = _LAYOUT_TO_SCHEMA.get(
-        layout_version, 3 if layout_version >= 2 else 2
+        layout_version, 4 if layout_version >= 3 else (3 if layout_version >= 2 else 2)
     )
     project_config: dict[str, Any] = {"schema_version": schema_version}
     if "name" in mdl_json:
@@ -419,10 +419,10 @@ def save_project_config(project_path: Path, config: dict) -> None:
     )
 
 
-_SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3}
+_SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4}
 
 # schema_version → layoutVersion mapping for the engine
-_LAYOUT_VERSION_MAP = {1: 1, 2: 1, 3: 2}
+_LAYOUT_VERSION_MAP = {1: 1, 2: 1, 3: 2, 4: 3}
 
 # Valid dialect values (matches Rust DataSource enum)
 _VALID_DIALECTS = {
@@ -589,12 +589,19 @@ def _load_views_v2(project_path: Path) -> list[dict]:
 
 
 def load_cubes(project_path: Path) -> list[dict]:
-    """Load cubes from project_path/cubes/*.yml.
+    """Load cubes — dispatches on schema_version.
 
-    Each file is one cube definition. Files use the same YAML shape on
-    every schema version (no v1/v2 dispatch — cubes were added after the
-    directory-per-entity migration).
+    v1 (legacy): cubes/*.yml
+    v2: cubes/<name>/metadata.yml
     """
+    sv = get_schema_version(project_path)
+    if sv == 1:
+        return _load_cubes_v1(project_path)
+    return _load_cubes_v2(project_path)
+
+
+def _load_cubes_v1(project_path: Path) -> list[dict]:
+    """Legacy: load cube YAML files from project_path/cubes/*.yml."""
     cubes_dir = project_path / "cubes"
     if not cubes_dir.is_dir():
         return []
@@ -605,6 +612,34 @@ def load_cubes(project_path: Path) -> list[dict]:
             data["_source_file"] = f.name
             cubes.append(data)
     return cubes
+
+
+def _load_cubes_v2(project_path: Path) -> list[dict]:
+    """v2: load cubes from project_path/cubes/<cube_name>/ directories.
+
+    Each cube directory must contain metadata.yml.
+    """
+    cubes_dir = project_path / "cubes"
+    if not cubes_dir.is_dir():
+        return []
+    cubes = []
+    for d in sorted(cubes_dir.iterdir()):
+        if not d.is_dir():
+            continue
+        meta_file = d / "metadata.yml"
+        if not meta_file.exists():
+            continue
+        data = yaml.safe_load(meta_file.read_text())
+        if isinstance(data, dict):
+            data["_source_file"] = str(meta_file.relative_to(cubes_dir))
+            cubes.append(data)
+    return cubes
+
+
+def _cube_migration_target(cube: dict, source_file: str | None) -> tuple[str, str]:
+    """Return (cube_name, target_metadata_path) for a v1 cube migration."""
+    name = cube.get("name", Path(source_file).stem if source_file else "unknown")
+    return name, f"cubes/{name}/metadata.yml"
 
 
 def load_relationships(project_path: Path) -> list[dict]:
@@ -864,12 +899,39 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                 )
 
         pk = model.get("primary_key")
-        if pk and pk not in col_names:
+        if pk is None:
+            pk_cols = []
+        elif isinstance(pk, str):
+            pk_cols = [pk]
+        elif isinstance(pk, list) and all(isinstance(c, str) and c for c in pk) and pk:
+            pk_cols = pk
+        else:
             errors.append(
                 ValidationError(
                     "error",
                     f"{src_path} > {name}",
-                    f"primary_key '{pk}' not found in columns",
+                    "primary_key must be a non-empty string or list of non-empty strings",
+                )
+            )
+            pk_cols = []
+        for pk_col in pk_cols:
+            if pk_col not in col_names:
+                errors.append(
+                    ValidationError(
+                        "error",
+                        f"{src_path} > {name}",
+                        f"primary_key '{pk_col}' not found in columns",
+                    )
+                )
+
+        # Composite (list-form) primary_key is a layoutVersion 3 / schema_version 4
+        # wire format that older engines cannot deserialize.
+        if isinstance(pk, list) and sv < 4:
+            errors.append(
+                ValidationError(
+                    "warning",
+                    f"{src_path} > {name}",
+                    f"composite primary_key requires schema_version >= 4 (current: {sv})",
                 )
             )
 
@@ -1119,7 +1181,8 @@ def plan_upgrade(
             created, deleted = _plan_v1_to_v2(project_path)
             files_created.extend(created)
             files_deleted.extend(deleted)
-        # v2→v3: no file layout changes needed
+        # v2→v3 (dialect) and v3→v4 (composite primary_key): no file layout
+        # changes needed — only wren_project.yml is restamped.
 
     return UpgradeResult(
         from_version=current,
@@ -1168,6 +1231,23 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
     views_file = project_path / "views.yml"
     if views_file.exists():
         deleted.append("views.yml")
+
+    # Cubes: flat files → directories
+    seen_cube_targets: set[str] = set()
+    cubes = _load_cubes_v1(project_path)
+    for cube in cubes:
+        source_file = cube.pop("_source_file", None)
+        _, target = _cube_migration_target(cube, source_file)
+        if target in seen_cube_targets:
+            raise UpgradeError(
+                f"Cannot upgrade: multiple legacy cube files map to '{target}'"
+            )
+        seen_cube_targets.add(target)
+
+        created.append(target)
+
+        if source_file:
+            deleted.append(f"cubes/{source_file}")
 
     return created, deleted
 
@@ -1240,6 +1320,30 @@ def _apply_v1_to_v2(project_path: Path) -> None:
     views_file = project_path / "views.yml"
     if views_file.exists():
         views_file.unlink()
+
+    # Write new cube directories
+    seen_cube_targets: set[str] = set()
+    cubes = _load_cubes_v1(project_path)
+    for cube in cubes:
+        source_file = cube.pop("_source_file", None)
+        name, target = _cube_migration_target(cube, source_file)
+        if target in seen_cube_targets:
+            raise UpgradeError(
+                f"Cannot upgrade: multiple legacy cube files map to '{target}'"
+            )
+        seen_cube_targets.add(target)
+
+        cube_dir = project_path / "cubes" / name
+        cube_dir.mkdir(parents=True, exist_ok=True)
+
+        (cube_dir / "metadata.yml").write_text(
+            yaml.dump(cube, default_flow_style=False, sort_keys=False)
+        )
+
+        if source_file:
+            old_file = project_path / "cubes" / source_file
+            if old_file.exists():
+                old_file.unlink()
 
 
 # ── Semantic validation (view dry-plan + description completeness) ─────────
