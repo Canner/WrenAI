@@ -229,7 +229,7 @@ def init(
             typer.echo(f"Error: {mdl_path} not found.", err=True)
             raise typer.Exit(1)
 
-        mdl_json = json.loads(mdl_path.read_text())
+        mdl_json = json.loads(mdl_path.read_text(encoding="utf-8"))
         files = convert_mdl_to_project(mdl_json)
         try:
             write_project_files(files, project_path, force=force)
@@ -710,7 +710,11 @@ def show(
     elif output == "yaml":
         # YAML output uses snake_case (native)
         manifest = build_manifest(project_path)
-        typer.echo(_yaml.dump(manifest, default_flow_style=False, sort_keys=False))
+        typer.echo(
+            _yaml.dump(
+                manifest, default_flow_style=False, sort_keys=False, allow_unicode=True
+            )
+        )
     else:
         # Summary view
         config = load_project_config(project_path)
@@ -1158,7 +1162,11 @@ def _show_from_osi(
         typer.echo(json.dumps(manifest_json, indent=2, ensure_ascii=False))
         return
     if output == "yaml":
-        typer.echo(_yaml.dump(manifest, default_flow_style=False, sort_keys=False))
+        typer.echo(
+            _yaml.dump(
+                manifest, default_flow_style=False, sort_keys=False, allow_unicode=True
+            )
+        )
         return
 
     # Summary

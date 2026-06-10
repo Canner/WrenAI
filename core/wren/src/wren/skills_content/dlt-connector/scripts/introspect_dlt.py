@@ -283,7 +283,7 @@ def generate_project_files(
         "data_source": "duckdb",
     }
     files["wren_project.yml"] = yaml.dump(
-        project_config, default_flow_style=False, sort_keys=False
+        project_config, default_flow_style=False, sort_keys=False, allow_unicode=True
     )
 
     # -- models/<table_name>/metadata.yml --
@@ -316,7 +316,7 @@ def generate_project_files(
 
         dir_name = _safe_path_segment(model_name)
         files[f"models/{dir_name}/metadata.yml"] = yaml.dump(
-            model, default_flow_style=False, sort_keys=False
+            model, default_flow_style=False, sort_keys=False, allow_unicode=True
         )
 
     # -- relationships.yml --
@@ -337,6 +337,7 @@ def generate_project_files(
             {"relationships": rels_yaml},
             default_flow_style=False,
             sort_keys=False,
+            allow_unicode=True,
         )
     else:
         files["relationships.yml"] = "relationships: []\n"

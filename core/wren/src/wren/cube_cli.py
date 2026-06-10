@@ -32,7 +32,7 @@ def _load_mdl_json(mdl: str | None) -> str:
     path_str = _require_mdl(mdl)
     path = Path(path_str).expanduser()
     if path.exists():
-        return path.read_text()
+        return path.read_text(encoding="utf-8")
     typer.echo(f"Error: MDL file not found: {path}", err=True)
     raise typer.Exit(1)
 
@@ -126,7 +126,7 @@ def _load_cube_query_from(source: str) -> dict:
         if not p.exists():
             typer.echo(f"Error: CubeQuery file not found: {p}", err=True)
             raise typer.Exit(1)
-        raw = p.read_text()
+        raw = p.read_text(encoding="utf-8")
         label = str(p)
     try:
         data = json.loads(raw)

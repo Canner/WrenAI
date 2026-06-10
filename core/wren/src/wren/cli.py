@@ -109,7 +109,7 @@ def _load_conn(
             typer.echo(f"Error: connection file not found: {path_str}", err=True)
             raise typer.Exit(1)
         try:
-            conn = json.loads(path.read_text())
+            conn = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as e:
             typer.echo(f"Error: invalid JSON in {path_str}: {e}", err=True)
             raise typer.Exit(1)
