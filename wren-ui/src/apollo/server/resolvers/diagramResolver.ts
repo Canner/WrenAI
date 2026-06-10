@@ -133,7 +133,7 @@ export class DiagramResolver {
   }
 
   private transformModel(model: Model): DiagramModel {
-    const properties = JSON.parse(model.properties);
+    const properties = this.parseProperties(model.properties);
     return {
       id: uuidv4(),
       modelId: model.id,
@@ -155,7 +155,7 @@ export class DiagramResolver {
     column: ModelColumn,
     nestedColumns: ModelNestedColumn[],
   ): DiagramModelField {
-    const properties = JSON.parse(column.properties);
+    const properties = this.parseProperties(column.properties);
     return {
       id: uuidv4(),
       columnId: column.id,
@@ -186,8 +186,8 @@ export class DiagramResolver {
     column: ModelColumn,
     columnsMDL: ColumnMDL[],
   ): DiagramModelField {
-    const properties = JSON.parse(column.properties);
-    const lineage = JSON.parse(column.lineage);
+    const properties = this.parseProperties(column.properties);
+    const lineage = this.parseLineage(column.lineage);
     const columnMDL = columnsMDL.find(
       ({ name }) => name === column.referenceName,
     );
@@ -222,9 +222,7 @@ export class DiagramResolver {
     const displayName = models.find(
       (model) => model.referenceName === referenceName,
     )?.displayName;
-    const properties = relation.properties
-      ? JSON.parse(relation.properties)
-      : null;
+    const properties = this.parseProperties(relation.properties);
     return {
       id: uuidv4(),
       relationId: relation.id,
@@ -249,7 +247,7 @@ export class DiagramResolver {
   }
 
   private transformView(view: View): DiagramView {
-    const properties = JSON.parse(view.properties);
+    const properties = this.parseProperties(view.properties);
     const fields = (properties?.columns || []).map((column: any) => ({
       id: uuidv4(),
       nodeType: NodeType.FIELD,
@@ -269,5 +267,31 @@ export class DiagramResolver {
       fields,
       description: properties?.description,
     };
+  }
+
+  private parseProperties(properties?: string | null): Record<string, any> {
+    if (!properties) {
+      return {};
+    }
+    try {
+      const parsed = JSON.parse(properties);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (error) {
+      logger.debug(`Can not parse properties "${properties}"`);
+      return {};
+    }
+  }
+
+  private parseLineage(lineage?: string | null): number[] {
+    if (!lineage) {
+      return [];
+    }
+    try {
+      const parsed = JSON.parse(lineage);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      logger.debug(`Can not parse lineage "${lineage}"`);
+      return [];
+    }
   }
 }
