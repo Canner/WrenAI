@@ -177,3 +177,54 @@ def test_verify_fails_closed_on_unknown_data_mode(tmp_path: Path) -> None:
     result = verify_app(tmp_path, data_mode="snapsho")
     assert not result.passed
     assert any("unknown data_mode" in f for f in result.failures)
+
+
+def _otherwise_valid_snapshot_app(tmp_path: Path) -> Path:
+    (tmp_path / "index.html").write_text("<html></html>")
+    (tmp_path / "mdl.json").write_text('{"models": []}')
+    (tmp_path / "data.parquet").write_bytes(b"PAR1")  # snapshot asset
+    return tmp_path
+
+
+@pytest.mark.parametrize(
+    "filename, contents",
+    [
+        # .ts / .yaml are NOT in any web allowlist but are scanned (default-deny)
+        ("config.ts", 'export const DB = "postgres://user:p4ssword@host/db";\n'),
+        ("settings.yaml", 'password: "s3cretValue123"\n'),
+    ],
+)
+def test_verify_scans_non_weblike_files_for_secrets(
+    tmp_path: Path, filename: str, contents: str
+) -> None:
+    app = _otherwise_valid_snapshot_app(tmp_path)
+    (app / filename).write_text(contents)
+
+    result = verify_app(app, data_mode="snapshot")
+
+    assert not result.passed
+    assert any(filename in f for f in result.failures), result.failures
+
+
+def test_verify_rejects_dotenv_by_presence(tmp_path: Path) -> None:
+    # a .env file must fail the gate on presence alone — even content the
+    # narrow patterns wouldn't recognize, and even though wrangler would
+    # otherwise ship the whole folder.
+    app = _otherwise_valid_snapshot_app(tmp_path)
+    (app / ".env").write_text("API_KEY=plain_unquoted_value\n")
+
+    result = verify_app(app, data_mode="snapshot")
+
+    assert not result.passed
+    assert any(".env" in f for f in result.failures), result.failures
+
+
+def test_verify_does_not_scan_binary_data_assets(tmp_path: Path) -> None:
+    # a parquet whose bytes happen to contain a secret-like run must not be
+    # read/flagged — binary/data formats are skipped to avoid false positives.
+    app = _otherwise_valid_snapshot_app(tmp_path)
+    (app / "data.parquet").write_bytes(b'password="s3cretValue123"\x00PAR1')
+
+    result = verify_app(app, data_mode="snapshot")
+
+    assert result.passed, result.failures

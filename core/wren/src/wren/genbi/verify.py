@@ -14,8 +14,34 @@ from pathlib import Path
 
 _DATA_ASSET_SUFFIXES = {".parquet", ".duckdb"}
 
-# Text files worth scanning for inlined credentials.
-_SCANNABLE_SUFFIXES = {".html", ".htm", ".js", ".mjs", ".json", ".css", ".txt", ".md"}
+# Secret scanning is DEFAULT-DENY: scan every file except known binary/data
+# formats. An allowlist of text suffixes loses the race against whatever
+# extension an agent picks next (.env, .ts, .vue, …) — those are exactly the
+# files most likely to carry an inlined credential, and they all ship to the
+# public host. Only skip formats that are binary or can't meaningfully hold a
+# secret as readable text.
+_UNSCANNABLE_SUFFIXES = {
+    ".parquet",
+    ".duckdb",
+    ".wasm",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".ico",
+    ".bmp",
+    ".woff",
+    ".woff2",
+    ".ttf",
+    ".otf",
+    ".eot",
+    ".pdf",
+    ".zip",
+    ".gz",
+    ".mp4",
+    ".webm",
+}
 
 # A public static app must never ship credentials — anyone who opens the
 # URL can read every file. Patterns kept narrow to avoid false positives.
@@ -40,10 +66,27 @@ _SECRET_PATTERNS: tuple[tuple[str, re.Pattern], ...] = (
 
 
 def _scan_for_secrets(app_dir: Path) -> list[str]:
-    """Return failure messages for files that appear to inline credentials."""
+    """Return failure messages for files that appear to inline credentials.
+
+    Default-deny: every regular file is scanned except known binary/data
+    formats (see ``_UNSCANNABLE_SUFFIXES``). Symlinks are skipped — the
+    providers don't ship them.
+    """
     failures = []
     for path in sorted(app_dir.rglob("*")):
-        if not path.is_file() or path.suffix.lower() not in _SCANNABLE_SUFFIXES:
+        if not path.is_file() or path.is_symlink():
+            continue
+        # A `.env*` file in a public static app is virtually always a mistake.
+        # Fail on its mere presence — independent of whether the narrow content
+        # patterns recognize the secret inside (and `wrangler pages deploy .`
+        # would ship it whole, so the gate is the only thing that can stop it).
+        if path.name.startswith(".env"):
+            failures.append(
+                f"{path.relative_to(app_dir)} must not ship to a public host — "
+                "remove the .env file from the app folder"
+            )
+            continue
+        if path.suffix.lower() in _UNSCANNABLE_SUFFIXES:
             continue
         try:
             text = path.read_text(errors="ignore")

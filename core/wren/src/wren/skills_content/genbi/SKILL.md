@@ -1,6 +1,6 @@
 ---
 name: genbi
-description: "Turn a Wren project's semantic layer into a shareable, browser-side GenBI web app and deploy it to the user's Vercel or Cloudflare account. Orchestrates the full flow: `wren genbi build` returns a project-hydrated build instruction, the agent authors the app from scratch into apps/<name>/, then register → verify → deploy produce a shareable URL. Use this skill whenever the user wants to: build a dashboard from their Wren project, make a shareable analytics app, deploy their semantic layer as a web app, host a GenBI app on Vercel or Cloudflare Pages, or says '把這個語意層變成 app', '做一個 dashboard 分享出去', '部署成網頁', 'genbi app'."
+description: "Turn a Wren project's semantic layer into a shareable, browser-side GenBI web app and deploy it to the user's Vercel or Cloudflare account. Orchestrates the full flow: `wren genbi build` returns a project-hydrated build instruction, the agent authors the app from scratch into apps/<name>/, then register → verify → deploy produce a shareable URL. Use this skill whenever the user wants to: build a dashboard from their Wren project, make a shareable analytics app, deploy their semantic layer as a web app, host a GenBI app on Vercel or Cloudflare Pages, or asks for a 'genbi app'."
 license: Apache-2.0
 metadata:
   author: wrenai
@@ -67,7 +67,8 @@ Follow the instruction exactly. Key conventions:
   parquet (`verify` requires at least one `.parquet`/`.duckdb` asset). See
   **Snapshot data export** below for the recipe and where the data comes from.
 - live: write an endpoint-only connection config. NEVER inline credentials —
-  `verify` will fail the app and `deploy` will refuse to ship it.
+  `verify` scans for them (best-effort) and `deploy` gates on `verify`, but
+  the rule is on you: a public static host exposes every shipped file.
 - Design the dashboard to actually answer the user's request: pick the right
   charts/tables for the question, not a generic template.
 
@@ -156,7 +157,10 @@ URL is just gated.
 ## Safety boundaries
 
 - Never inline secrets/credentials into app files — the deploy target is a
-  public static host; anyone with the URL can read every file.
+  public static host; anyone with the URL can read every file. `verify`
+  scans for inlined credentials, but treat it as best-effort
+  defense-in-depth, not a guarantee — never rely on it to catch a secret
+  you shouldn't have written in the first place.
 - Never pass tokens as CLI flags; they leak into shell history.
 - Confirm before production deploys.
 - All index state goes through `wren genbi register/remove` — never edit

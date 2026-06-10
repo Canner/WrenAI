@@ -370,3 +370,77 @@ to run.
 ```bash
 wren ask "monthly orders trend" --direct
 ```
+
+## `wren genbi` — Build & Deploy GenBI Apps
+
+Turn a project's semantic layer into a shareable, browser-side GenBI web app
+(powered by `wren-core-wasm`) and deploy it to Vercel or Cloudflare Pages.
+
+**CLI ↔ agent split:** the CLI owns the authoritative build instruction and all
+deterministic state (the app index, verify, deploy). The agent authors the app
+code by following the instruction. `.wren/apps.yml` is only ever written by the
+CLI — never by hand. The matching agent workflow guide is `wren skills get
+genbi`.
+
+### `wren genbi build <name>`
+
+Print a project-hydrated build instruction (wasm wiring with the pinned
+`wren-core-wasm` version, the project's model/column inventory, data-mode
+guidance, acceptance criteria, and the target folder). Writes no app files; it
+only compiles `target/mdl.json` first if it's missing.
+
+```bash
+wren genbi build sales-overview --prompt "orders dashboard" --data-mode snapshot
+# --prompt-file <file> / --prompt -    read a long prompt from a file or stdin
+# --data-mode snapshot|live            snapshot (default): bundle data with the app
+#                                      live: app calls a CORS endpoint at view time
+```
+
+### `wren genbi register <name>` / `list` / `remove <name>`
+
+Machine-written app index (`<project>/.wren/apps.yml`).
+
+```bash
+wren genbi register sales-overview --data-mode snapshot   # record an authored app
+wren genbi list                                           # apps + status + deploy state
+wren genbi remove sales-overview                          # drop index entry (files kept)
+```
+
+App names must be simple slugs (letters, numbers, `_`, `-`); names containing
+path separators are rejected so they can't escape `<project>/apps/`.
+
+### `wren genbi verify <name>`
+
+Deterministic deploy preflight (no browser): required files exist, `mdl.json`
+parses, snapshot apps ship a `.parquet`/`.duckdb` asset, and a default-deny
+secret scan flags inlined credentials. `deploy` gates on this. The secret scan
+is best-effort defense-in-depth, not a guarantee — never inline secrets.
+
+### `wren genbi open <name>`
+
+Serve a built app locally for preview (blocking; Ctrl-C stops).
+
+```bash
+wren genbi open sales-overview --port 8848   # 0 = auto-pick
+```
+
+### `wren genbi deploy <name>`
+
+Verify, then ship to the user's provider account and return a shareable URL.
+Preview by default; `--prod` deploys to production (confirm with the user
+first).
+
+```bash
+wren genbi deploy sales-overview --provider vercel        # or cloudflare
+wren genbi deploy sales-overview --provider vercel --prod
+```
+
+- **Tokens** are discovered from the environment or `.env` files
+  (`VERCEL_TOKEN` / `CLOUDFLARE_API_TOKEN`) — never passed as CLI flags.
+  Cloudflare also needs `CLOUDFLARE_ACCOUNT_ID`.
+- **Cloudflare** shells out to the `wrangler` CLI (`npm install -g wrangler`,
+  or have `npx` available) — Pages has no single inline-upload REST endpoint.
+- **Vercel Deployment Protection:** new Vercel projects return HTTP 401 to
+  logged-out visitors by default. To make the URL public, disable it at
+  Project → Settings → Deployment Protection. The deploy itself succeeded;
+  the URL is just gated.

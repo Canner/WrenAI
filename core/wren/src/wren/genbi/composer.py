@@ -25,7 +25,9 @@ warehouse/API at query time:
 2. HARD RULE: warehouse credentials MUST NEVER be inlined into the app.
    The app is a public static site — anyone who opens the URL can read
    every file. Use a proxy/API with its own auth, or browser-side auth.
-   `wren genbi verify` fails the app if it detects inlined credentials.
+   `wren genbi verify` scans for inlined credentials as best-effort
+   defense-in-depth — it catches common patterns but is NOT a guarantee;
+   the HARD RULE above is what actually keeps secrets out.
 3. The endpoint the app queries must allow the deployed origin via CORS —
    surface this requirement to the user; it is configured on their side.
 """

@@ -36,6 +36,10 @@ def _collect_files(build_dir: Path) -> list[dict]:
             continue
         if not path.resolve().is_relative_to(build_root):
             continue
+        # Never ship a .env* file to a public host, even if verify's scan
+        # found no recognizable secret pattern in it.
+        if path.name.startswith(".env"):
+            continue
         files.append(
             {
                 "file": str(path.relative_to(build_dir)),
