@@ -103,7 +103,7 @@ export class MDLBuilder implements IMDLBuilder {
       return;
     }
     this.manifest.models = this.models.map((model: Model) => {
-      const properties = model.properties ? JSON.parse(model.properties) : {};
+      const properties = this.parseProperties(model.properties);
       // put displayName in properties
       if (model.displayName) {
         properties.displayName = model.displayName;
@@ -136,7 +136,7 @@ export class MDLBuilder implements IMDLBuilder {
       return;
     }
     this.manifest.views = this.views.map((view: View) => {
-      const properties = JSON.parse(view.properties) || {};
+      const properties = this.parseProperties(view.properties);
 
       // filter out properties that are not null or undefined
       // and are in the list of properties that are allowed
@@ -193,9 +193,7 @@ export class MDLBuilder implements IMDLBuilder {
         if (!model.columns) {
           model.columns = [];
         }
-        const properties = column.properties
-          ? JSON.parse(column.properties)
-          : {};
+        const properties = this.parseProperties(column.properties);
         // put displayName in properties
         if (column.displayName) {
           properties.displayName = column.displayName;
@@ -269,7 +267,7 @@ export class MDLBuilder implements IMDLBuilder {
           isCalculated: true,
           expression,
           notNull: column.notNull ? true : false,
-          properties: JSON.parse(column.properties),
+          properties: this.parseProperties(column.properties),
         };
         model.columns.push(columnValue);
       });
@@ -307,7 +305,7 @@ export class MDLBuilder implements IMDLBuilder {
       isCalculated: true,
       expression,
       notNull: calculatedField.notNull ? true : false,
-      properties: JSON.parse(calculatedField.properties),
+      properties: this.parseProperties(calculatedField.properties),
     };
     model.columns.push(columnValue);
   }
@@ -335,9 +333,7 @@ export class MDLBuilder implements IMDLBuilder {
           relation: name,
         });
 
-        const properties = relation.properties
-          ? JSON.parse(relation.properties)
-          : {};
+        const properties = this.parseProperties(relation.properties);
 
         return {
           name: name,
@@ -466,7 +462,7 @@ export class MDLBuilder implements IMDLBuilder {
   private buildTableReference(model: Model): TableReference | null {
     const modelProps =
       model.properties && typeof model.properties === 'string'
-        ? JSON.parse(model.properties)
+        ? this.parseProperties(model.properties)
         : {};
     if (!modelProps.table) {
       return null;
@@ -487,6 +483,18 @@ export class MDLBuilder implements IMDLBuilder {
     } catch (error) {
       logger.debug(`Can not parse calculated field lineage "${lineage}"`);
       return [];
+    }
+  }
+  private parseProperties(properties?: string | null): Record<string, any> {
+    if (!properties) {
+      return {};
+    }
+    try {
+      const parsed = JSON.parse(properties);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (error) {
+      logger.debug(`Can not parse properties "${properties}"`);
+      return {};
     }
   }
   private postProcessManifest() {
