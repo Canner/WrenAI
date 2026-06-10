@@ -109,8 +109,8 @@ then query them with a structured input instead of writing `GROUP BY` SQL by han
 
 ```bash
 wren cube list
-wren cube describe order_metrics
-wren cube query --cube order_metrics --measures revenue --time-dimension "created_at:month"
+wren cube describe revenue
+wren cube query --cube revenue --measures total --time-dimension "order_date:month"
 ```
 
 The translator produces `DATE_TRUNC` / `GROUP BY` / `WHERE` clauses for you and
