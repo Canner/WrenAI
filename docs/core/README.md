@@ -31,6 +31,7 @@ Changes merged to `main` are automatically synced to the doc website via GitHub 
 - [Memory](guides/memory.md)
 - [Profiles](guides/profiles.md)
 - [dbt Integration](guides/dbt-integration.md)
+- [Build & deploy a GenBI app](guides/genbi.md)
 
 ## Reference
 

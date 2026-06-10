@@ -142,6 +142,25 @@ wren memory store --nl "top customers" --sql "SELECT ..."  # store NL→SQL pair
 wren memory recall -q "best customers"         # retrieve similar past queries
 ```
 
+**7. (Optional) Build a shareable GenBI app** — turn the semantic layer into a
+browser-side dashboard (powered by `wren-core-wasm`) and deploy it to Vercel or
+Cloudflare Pages. The CLI owns the build instruction + deterministic state; an
+agent authors the app from it:
+
+```bash
+wren genbi build sales --prompt "orders dashboard" --data-mode snapshot  # print build instruction
+# agent authors apps/sales/ from the instruction (mdl.json + data/*.parquet)
+wren genbi register sales --data-mode snapshot   # record the app
+wren genbi verify sales                          # preflight (files, MDL, data, secret scan)
+wren genbi open sales                            # local preview
+wren genbi deploy sales --provider vercel        # ship a shareable URL (preview; --prod for production)
+```
+
+Tokens come from the env / `.env` (`VERCEL_TOKEN` / `CLOUDFLARE_API_TOKEN`),
+never CLI flags; Cloudflare needs `wrangler` installed. See the
+[GenBI guide](../../docs/core/guides/genbi.md) and the
+[CLI reference](../../docs/core/reference/cli.md#wren-genbi--build--deploy-genbi-apps).
+
 ---
 
 ## Connection profiles
