@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from wren.memory.seed_queries import SEED_TAG, generate_seed_queries
+from wren.memory.seed_queries import (
+    SEED_TAG,
+    _relationship_key_columns,
+    generate_seed_queries,
+)
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -548,6 +552,61 @@ class TestIdentifierExclusion:
         sqls = [p["sql"] for p in pairs]
         assert not any("SUM(customer_id)" in s for s in sqls)
         assert "SELECT SUM(amount) FROM orders" in sqls
+
+    def test_quoted_relationship_key_with_space_excluded(self):
+        # sqlglot parses quoted identifiers with spaces; the old regex-based
+        # extraction missed these relationship keys.
+        manifest = {
+            "models": [
+                _model(
+                    "orders",
+                    "order_pk",
+                    [
+                        _col("order_pk", "varchar"),
+                        _col("Customer Key", "int"),
+                        _col("amount", "double"),
+                    ],
+                ),
+                _model(
+                    "customers",
+                    "customer_pk",
+                    [
+                        _col("customer_pk", "varchar"),
+                        _col("Customer Key", "int"),
+                    ],
+                ),
+            ],
+            "relationships": [
+                {
+                    "name": "orders_customers",
+                    "models": ["orders", "customers"],
+                    "condition": '"orders"."Customer Key" = "customers"."Customer Key"',
+                }
+            ],
+        }
+        sqls = [p["sql"] for p in generate_seed_queries(manifest)]
+        assert not any("SUM(Customer Key)" in s for s in sqls)
+        assert "SELECT SUM(amount) FROM orders" in sqls
+
+    def test_invalid_relationship_condition_skipped_for_key_extraction(self):
+        manifest = {
+            "relationships": [
+                {
+                    "name": "broken_relationship",
+                    "models": ["orders", "customers"],
+                    "condition": "orders.customer_id =",
+                },
+                {
+                    "name": "valid_relationship",
+                    "models": ["orders", "customers"],
+                    "condition": "orders.customer_id = customers.customer_id",
+                },
+            ]
+        }
+        assert _relationship_key_columns(manifest) == {
+            "orders": frozenset({"customer_id"}),
+            "customers": frozenset({"customer_id"}),
+        }
 
     def test_legitimate_metric_named_with_id_suffix_is_still_excluded(self):
         # Documented trade-off: the *_id heuristic also drops a would-be metric

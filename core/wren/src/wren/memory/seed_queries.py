@@ -5,8 +5,11 @@ Pure functions — no LanceDB or embedding dependency.
 
 from __future__ import annotations
 
-import re
 from collections.abc import Sequence
+
+import sqlglot
+import sqlglot.errors
+from sqlglot import exp
 
 _NUMERIC_TYPES = {
     "int",
@@ -23,10 +26,6 @@ _NUMERIC_TYPES = {
 }
 
 SEED_TAG = "source:seed"
-
-# Matches a ``model.column`` reference inside a relationship condition,
-# tolerating optional double-quoting and whitespace around the dot.
-_JOIN_REF = re.compile(r'"?(\w+)"?\s*\.\s*"?(\w+)"?')
 
 
 def generate_seed_queries(manifest: dict) -> list[dict]:
@@ -160,8 +159,15 @@ def _relationship_key_columns(manifest: dict) -> dict[str, frozenset[str]]:
     accum: dict[str, set[str]] = {}
     for rel in manifest.get("relationships", []):
         condition = rel.get("condition") or ""
-        for model_name, col_name in _JOIN_REF.findall(condition):
-            accum.setdefault(_norm_ident(model_name), set()).add(_norm_ident(col_name))
+        try:
+            tree = sqlglot.parse_one(condition)
+        except sqlglot.errors.SqlglotError:
+            continue
+        for col in tree.find_all(exp.Column):
+            if col.table and col.name:
+                accum.setdefault(_norm_ident(col.table), set()).add(
+                    _norm_ident(col.name)
+                )
     return {model: frozenset(cols) for model, cols in accum.items()}
 
 
