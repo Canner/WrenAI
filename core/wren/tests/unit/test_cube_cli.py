@@ -29,6 +29,7 @@ def _make_mdl(tmp_path: Path) -> Path:
                 "columns": [
                     {"name": "o_totalprice", "type": "double"},
                     {"name": "o_orderstatus", "type": "varchar"},
+                    {"name": "o_orderdate", "type": "date"},
                 ],
             }
         ],
@@ -53,6 +54,13 @@ def _make_mdl(tmp_path: Path) -> Path:
                         "name": "status",
                         "expression": "o_orderstatus",
                         "type": "VARCHAR",
+                    }
+                ],
+                "timeDimensions": [
+                    {
+                        "name": "order_date",
+                        "expression": "o_orderdate",
+                        "type": "DATE",
                     }
                 ],
             }
@@ -134,6 +142,29 @@ def test_cube_query_sql_only(tmp_path):
     assert "o_orderstatus AS status" in result.output
     assert "FROM orders" in result.output
     assert "GROUP BY" in result.output
+
+
+def test_cube_query_sql_only_time_dimension(tmp_path):
+    mdl = _make_mdl(tmp_path)
+    result = runner.invoke(
+        app,
+        [
+            "cube",
+            "query",
+            "--cube",
+            "order_metrics",
+            "--measures",
+            "revenue",
+            "--time-dimension",
+            "order_date:month",
+            "--sql-only",
+            "--mdl",
+            str(mdl),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "DATE_TRUNC('month', o_orderdate)" in result.output
+    assert "SUM(o_totalprice) AS revenue" in result.output
 
 
 def test_cube_query_sql_only_filter(tmp_path):
