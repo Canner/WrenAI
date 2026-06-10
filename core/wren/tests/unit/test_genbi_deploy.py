@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import types
 from pathlib import Path
 
 import pytest
@@ -202,17 +203,45 @@ def test_deploy_unknown_provider_errors(tmp_path) -> None:
     assert "provider" in result.output.lower()
 
 
-# ── Cloudflare deploy ──────────────────────────────────────────────────────
+# ── Cloudflare deploy (shells out to wrangler) ──────────────────────────────
 
 
-def test_deploy_cloudflare_uploads_and_persists_state(tmp_path, monkeypatch) -> None:
+class _FakeWrangler:
+    """Stub for cloudflare._run — returns queued CompletedProcess-likes."""
+
+    def __init__(self, results: list) -> None:
+        self.results = list(results)
+        self.calls: list[dict] = []
+
+    def __call__(self, cmd, *, env, cwd=None):
+        self.calls.append({"cmd": cmd, "env": env, "cwd": cwd})
+        return self.results.pop(0)
+
+
+def _proc(stdout: str = "", stderr: str = "", returncode: int = 0):
+    return types.SimpleNamespace(returncode=returncode, stdout=stdout, stderr=stderr)
+
+
+def _patch_wrangler(monkeypatch, results: list) -> _FakeWrangler:
+    monkeypatch.setattr(cloudflare, "_wrangler_cmd", lambda: ["wrangler"])
+    fake = _FakeWrangler(results)
+    monkeypatch.setattr(cloudflare, "_run", fake)
+    return fake
+
+
+def test_deploy_cloudflare_invokes_wrangler_and_persists_state(
+    tmp_path, monkeypatch
+) -> None:
     project = _make_deployable_project(tmp_path)
     monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "cf-tok")
     monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct-42")
-    fake = _FakeTransport(
-        {"result": {"url": "https://abc123.myapp.pages.dev", "id": "dep_1"}}
+    fake = _patch_wrangler(
+        monkeypatch,
+        [
+            _proc(),  # project create
+            _proc(stdout="✨ Deployment complete! https://abc123.myapp.pages.dev"),
+        ],
     )
-    monkeypatch.setattr(cloudflare, "_request", fake)
 
     result = runner.invoke(
         app,
@@ -221,12 +250,18 @@ def test_deploy_cloudflare_uploads_and_persists_state(tmp_path, monkeypatch) -> 
 
     assert result.exit_code == 0, result.output
     assert "https://abc123.myapp.pages.dev" in result.output
-    # request construction: account-scoped Pages endpoint + bearer token
-    urls = [c["url"] for c in fake.calls]
-    assert any("accounts/acct-42/pages/projects" in u for u in urls)
+    # deploy command construction
+    deploy_call = fake.calls[-1]
+    assert deploy_call["cmd"][:3] == ["wrangler", "pages", "deploy"]
+    assert "--project-name" in deploy_call["cmd"] and "myapp" in deploy_call["cmd"]
+    assert "--branch" in deploy_call["cmd"] and "preview" in deploy_call["cmd"]
+    assert deploy_call["cwd"] == str(project / "apps" / "myapp")
+    # token travels via env, NEVER argv
     for call in fake.calls:
-        assert call["headers"]["Authorization"] == "Bearer cf-tok"
-    # deploy state persisted with the account id
+        assert "cf-tok" not in " ".join(call["cmd"])
+        assert call["env"]["CLOUDFLARE_API_TOKEN"] == "cf-tok"
+        assert call["env"]["CLOUDFLARE_ACCOUNT_ID"] == "acct-42"
+    # deploy state persisted; no secret in the index
     index = yaml.safe_load((project / ".wren" / "apps.yml").read_text())
     entry = index["apps"]["myapp"]
     assert entry["status"] == "deployed"
@@ -234,6 +269,55 @@ def test_deploy_cloudflare_uploads_and_persists_state(tmp_path, monkeypatch) -> 
     assert entry["deploy"]["account_id"] == "acct-42"
     assert entry["deploy"]["last_url"] == "https://abc123.myapp.pages.dev"
     assert "cf-tok" not in (project / ".wren" / "apps.yml").read_text()
+
+
+def test_deploy_cloudflare_prod_uses_production_branch(tmp_path, monkeypatch) -> None:
+    project = _make_deployable_project(tmp_path)
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "cf-tok")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct-42")
+    fake = _patch_wrangler(
+        monkeypatch,
+        [_proc(), _proc(stdout="https://myapp.pages.dev")],
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "genbi",
+            "deploy",
+            "myapp",
+            "--provider",
+            "cloudflare",
+            "--prod",
+            "-p",
+            str(project),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    deploy_cmd = fake.calls[-1]["cmd"]
+    assert deploy_cmd[deploy_cmd.index("--branch") + 1] == "main"
+
+
+def test_deploy_cloudflare_tolerates_existing_project(tmp_path, monkeypatch) -> None:
+    project = _make_deployable_project(tmp_path)
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "cf-tok")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct-42")
+    _patch_wrangler(
+        monkeypatch,
+        [
+            _proc(stderr="A project with this name already exists", returncode=1),
+            _proc(stdout="https://abc.myapp.pages.dev"),
+        ],
+    )
+
+    result = runner.invoke(
+        app,
+        ["genbi", "deploy", "myapp", "--provider", "cloudflare", "-p", str(project)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "https://abc.myapp.pages.dev" in result.output
 
 
 def test_deploy_cloudflare_requires_account_id(tmp_path, monkeypatch) -> None:
@@ -248,6 +332,39 @@ def test_deploy_cloudflare_requires_account_id(tmp_path, monkeypatch) -> None:
 
     assert result.exit_code != 0
     assert "CLOUDFLARE_ACCOUNT_ID" in result.output
+
+
+def test_deploy_cloudflare_errors_when_wrangler_missing(tmp_path, monkeypatch) -> None:
+    project = _make_deployable_project(tmp_path)
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "cf-tok")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct-42")
+    monkeypatch.setattr(cloudflare, "_wrangler_cmd", lambda: None)
+
+    result = runner.invoke(
+        app,
+        ["genbi", "deploy", "myapp", "--provider", "cloudflare", "-p", str(project)],
+    )
+
+    assert result.exit_code != 0
+    assert "wrangler" in result.output.lower()
+
+
+def test_deploy_cloudflare_surfaces_wrangler_failure(tmp_path, monkeypatch) -> None:
+    project = _make_deployable_project(tmp_path)
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "cf-tok")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct-42")
+    _patch_wrangler(
+        monkeypatch,
+        [_proc(), _proc(stderr="Authentication error [code: 10000]", returncode=1)],
+    )
+
+    result = runner.invoke(
+        app,
+        ["genbi", "deploy", "myapp", "--provider", "cloudflare", "-p", str(project)],
+    )
+
+    assert result.exit_code != 0
+    assert "wrangler pages deploy failed" in result.output
 
 
 # ── Never fabricate a deployment URL ────────────────────────────────────────
@@ -269,13 +386,14 @@ def test_deploy_vercel_fails_when_response_omits_url(tmp_path, monkeypatch) -> N
     assert index["apps"]["myapp"]["status"] != "deployed"
 
 
-def test_deploy_cloudflare_fails_when_response_omits_url(tmp_path, monkeypatch) -> None:
+def test_deploy_cloudflare_fails_when_no_url_in_output(tmp_path, monkeypatch) -> None:
     project = _make_deployable_project(tmp_path)
     monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "cf-tok")
     monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct-42")
-    monkeypatch.setattr(
-        cloudflare, "_request", _FakeTransport({"result": {}})
-    )  # no url
+    _patch_wrangler(
+        monkeypatch,
+        [_proc(), _proc(stdout="deployed, but no url printed", returncode=0)],
+    )
 
     result = runner.invoke(
         app,
@@ -283,4 +401,4 @@ def test_deploy_cloudflare_fails_when_response_omits_url(tmp_path, monkeypatch) 
     )
 
     assert result.exit_code != 0
-    assert "did not include a deployment URL" in result.output
+    assert "could not determine the deployment URL" in result.output

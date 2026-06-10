@@ -1,47 +1,45 @@
-"""Cloudflare Pages adapter — Direct Upload via the REST API.
+"""Cloudflare Pages adapter — deploys via the official ``wrangler`` CLI.
 
-Requires CLOUDFLARE_API_TOKEN (scope must include Pages:Edit) and
-CLOUDFLARE_ACCOUNT_ID. The token travels ONLY in the Authorization
-header — never argv.
+Cloudflare Pages has no single inline-upload REST endpoint (unlike Vercel);
+Direct Upload is a multi-step protocol (manifest → upload token → multipart
+asset upload → completion token → create deployment) that is only partially
+documented and drifts over time. Cloudflare's own guidance is to use
+``wrangler pages deploy``, so this adapter shells out to it.
+
+Requires the ``wrangler`` CLI (or ``npx wrangler``), CLOUDFLARE_API_TOKEN
+(scope must include Pages:Edit) and CLOUDFLARE_ACCOUNT_ID. The token travels
+ONLY via the subprocess environment — never argv.
 """
 
 from __future__ import annotations
 
-import base64
+import re
 from pathlib import Path
 
 from wren.genbi.providers.base import DeployError, Deployment
 
-_API_BASE = "https://api.cloudflare.com/client/v4"
+# Matches the per-deployment / project URL wrangler prints on success.
+_PAGES_URL_RE = re.compile(r"https://[A-Za-z0-9.-]+\.pages\.dev\S*")
 
 
-def _request(*, method: str, url: str, headers: dict, payload: dict) -> dict:
-    """Thin transport wrapper — monkeypatched in tests."""
-    import requests  # noqa: PLC0415
+def _wrangler_cmd() -> list[str] | None:
+    """Return the base argv for invoking wrangler, or None if unavailable."""
+    import shutil  # noqa: PLC0415
 
-    resp = requests.request(method, url, headers=headers, json=payload, timeout=120)
-    if resp.status_code == 403:
-        raise DeployError(
-            "Cloudflare API 403 — check that the API token's scope includes Pages:Edit."
-        )
-    if resp.status_code >= 400:
-        raise DeployError(f"Cloudflare API error {resp.status_code}: {resp.text[:500]}")
-    return resp.json()
+    if shutil.which("wrangler"):
+        return ["wrangler"]
+    if shutil.which("npx"):
+        return ["npx", "wrangler"]
+    return None
 
 
-def _collect_files(build_dir: Path) -> dict[str, str]:
-    """Relative path → base64 content for every file in the app folder.
+def _run(cmd: list[str], *, env: dict, cwd: str | None = None):
+    """Run a subprocess and return the CompletedProcess. Patched in tests."""
+    import subprocess  # noqa: PLC0415
 
-    Skips symlinks and anything resolving outside ``build_dir`` — the app
-    folder ships to a public host, so a stray symlink must never exfiltrate
-    files from elsewhere on disk.
-    """
-    build_root = build_dir.resolve()
-    return {
-        str(p.relative_to(build_dir)): base64.b64encode(p.read_bytes()).decode()
-        for p in sorted(build_dir.rglob("*"))
-        if p.is_file() and not p.is_symlink() and p.resolve().is_relative_to(build_root)
-    }
+    return subprocess.run(
+        cmd, env=env, cwd=cwd, capture_output=True, text=True, timeout=600
+    )
 
 
 class CloudflareProvider:
@@ -70,40 +68,68 @@ class CloudflareProvider:
                 "project's .env (Cloudflare Pages deploys are account-scoped)."
             )
 
-        headers = {"Authorization": f"Bearer {token}"}
-        project_url = f"{_API_BASE}/accounts/{account_id}/pages/projects"
-
-        # Ensure the Pages project exists; tolerate "already exists" responses.
-        try:
-            _request(
-                method="POST",
-                url=project_url,
-                headers=headers,
-                payload={"name": app_name, "production_branch": "main"},
-            )
-        except DeployError as e:
-            if "already exists" not in str(e).lower():
-                raise
-
-        data = _request(
-            method="POST",
-            url=f"{project_url}/{app_name}/deployments",
-            headers=headers,
-            payload={
-                "branch": "main" if prod else "preview",
-                "files": _collect_files(build_dir),
-            },
-        )
-
-        result = data.get("result") or {}
-        url = result.get("url")
-        if not url:
+        base = _wrangler_cmd()
+        if base is None:
             raise DeployError(
-                "Cloudflare API response did not include a deployment URL; "
+                "Cloudflare Pages deploys require the `wrangler` CLI, which "
+                "isn't on PATH. Install it (`npm install -g wrangler`) or make "
+                "`npx` available, then retry."
+            )
+
+        # Token + account id travel via the environment, never argv.
+        env = {
+            **os.environ,
+            "CLOUDFLARE_API_TOKEN": token,
+            "CLOUDFLARE_ACCOUNT_ID": account_id,
+        }
+
+        # Ensure the Pages project exists; tolerate "already exists".
+        created = _run(
+            base
+            + ["pages", "project", "create", app_name, "--production-branch", "main"],
+            env=env,
+        )
+        if created.returncode != 0:
+            combined = f"{created.stdout}\n{created.stderr}".lower()
+            if "already exists" not in combined:
+                raise DeployError(
+                    "could not create Cloudflare Pages project: "
+                    f"{(created.stderr or created.stdout).strip()[:500]}"
+                )
+
+        # Deploy the prebuilt folder. Run with cwd=build_dir (deploying ".") so
+        # wrangler can't pick up an unrelated wrangler.toml from the project
+        # root. Production = the project's production branch ("main"); any other
+        # branch is a preview deployment.
+        branch = "main" if prod else "preview"
+        result = _run(
+            base
+            + [
+                "pages",
+                "deploy",
+                ".",
+                "--project-name",
+                app_name,
+                "--branch",
+                branch,
+            ],
+            env=env,
+            cwd=str(build_dir),
+        )
+        if result.returncode != 0:
+            raise DeployError(
+                "wrangler pages deploy failed: "
+                f"{(result.stderr or result.stdout).strip()[:500]}"
+            )
+
+        match = _PAGES_URL_RE.search(f"{result.stdout}\n{result.stderr}")
+        if not match:
+            raise DeployError(
+                "could not determine the deployment URL from wrangler output; "
                 "cannot confirm where the app was deployed."
             )
         return Deployment(
-            url=url,
+            url=match.group(0),
             environment="production" if prod else "preview",
             account_id=account_id,
         )

@@ -126,8 +126,10 @@ wren genbi deploy <name> --provider vercel      # or cloudflare
 - Tokens: the CLI discovers `VERCEL_TOKEN` / `CLOUDFLARE_API_TOKEN` from the
   environment or `.env` files. If missing, ask the user to export it or add
   it to the project `.env`. NEVER put a token on the command line.
-- Cloudflare also needs `CLOUDFLARE_ACCOUNT_ID` (env or `.env`) and a token
-  scoped with Pages:Edit.
+- Cloudflare also needs `CLOUDFLARE_ACCOUNT_ID` (env or `.env`), a token
+  scoped with Pages:Edit, and the `wrangler` CLI on PATH (or `npx` available)
+  — the adapter shells out to `wrangler pages deploy`. If it's missing, ask
+  the user to `npm install -g wrangler`.
 - Report the returned URL to the user. Re-deploying the same app updates the
   same provider target.
 - **Verify the URL actually loads.** After deploying, fetch the URL — a
