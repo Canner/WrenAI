@@ -9,7 +9,7 @@ Cubes are pre-aggregated semantic objects: a base model or view plus declared me
 ## What you'll end up with
 
 - A `cubes/<name>/metadata.yml` per cube, declaring its measures and dimensions
-- A queryable cube name in MDL — `wren cube query --cube revenue --measures total --dimensions month`
+- A queryable cube name in MDL — `wren cube query --cube revenue --measures total --time-dimension "order_date:month"`
 - An agent that picks structured cube queries instead of inventing aggregation SQL
 
 ## Why this primitive matters
@@ -44,7 +44,7 @@ dimensions:
     expression: status
     type: VARCHAR
 time_dimensions:
-  - name: month
+  - name: order_date
     expression: order_date
     grain: month
     type: DATE
@@ -64,21 +64,14 @@ wren cube query \
   --cube revenue \
   --measures total,order_count \
   --dimensions status \
-  --time-dimension month \
-  --filter "status = 'completed'"
+  --time-dimension "order_date:month" \
+  --filter "status:eq:completed"
 ```
 
-Or from an agent SDK:
-
-```python
-result = wren.cube.query(
-  cube="revenue",
-  measures=["total"],
-  dimensions=["status"],
-  time_dimension="month",
-  filter="status = 'completed'"
-)
-```
+`--time-dimension` takes `<name>:<granularity>`, and `--filter` takes
+`<dimension>:<operator>:<value>`. See the
+[CLI reference](/oss/reference/cli#wren-cube--pre-aggregation-queries) for the
+full list of granularities and filter operators.
 
 No hand-written `GROUP BY`. No `DATE_TRUNC`. No join inference.
 
