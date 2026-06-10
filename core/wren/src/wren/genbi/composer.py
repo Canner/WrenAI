@@ -78,7 +78,7 @@ def compose_build_instruction(
 
 You are building a self-contained, static GenBI web app powered by
 `wren-core-wasm`. The app runs the Wren engine in the browser and answers the
-user's request below using this project's semantic layer.
+user's request below using this project's context layer.
 
 ## Wiring wren-core-wasm (pinned: {WREN_CORE_WASM_VERSION})
 

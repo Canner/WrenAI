@@ -1,6 +1,6 @@
 ---
 name: genbi
-description: "Turn a Wren project's semantic layer into a shareable, browser-side GenBI web app and deploy it to the user's Vercel or Cloudflare account. Orchestrates the full flow: `wren genbi build` returns a project-hydrated build instruction, the agent authors the app from scratch into apps/<name>/, then register → verify → deploy produce a shareable URL. Use this skill whenever the user wants to: build a dashboard from their Wren project, make a shareable analytics app, deploy their semantic layer as a web app, host a GenBI app on Vercel or Cloudflare Pages, or asks for a 'genbi app'."
+description: "Turn a Wren project's context layer into a shareable, browser-side GenBI web app and deploy it to the user's Vercel or Cloudflare account. Orchestrates the full flow: `wren genbi build` returns a project-hydrated build instruction, the agent authors the app from scratch into apps/<name>/, then register → verify → deploy produce a shareable URL. Use this skill whenever the user wants to: build a dashboard from their Wren project, make a shareable analytics app, deploy their context layer as a web app, host a GenBI app on Vercel or Cloudflare Pages, or asks for a 'genbi app'."
 license: Apache-2.0
 metadata:
   author: wrenai
@@ -11,7 +11,7 @@ metadata:
 > This guide is served by the `wren` CLI (`wren skills get genbi`), so it
 > always matches your installed wren-engine version.
 
-Turn a Wren semantic layer into a shareable GenBI app — from a natural-language
+Turn a Wren context layer into a shareable GenBI app — from a natural-language
 request to a public URL in one conversation.
 
 **Division of labor:** the CLI owns the authoritative build instruction (it
@@ -23,7 +23,7 @@ code by following the instruction. Never hand-write `.wren/apps.yml`.
 
 1. A Wren project is discoverable (`wren_project.yml` in cwd/ancestors, or ask
    for the path and pass `-p`).
-2. The semantic layer exists. If `target/mdl.json` is missing, `wren genbi
+2. The context layer exists. If `target/mdl.json` is missing, `wren genbi
    build` compiles it implicitly — no separate step needed.
 3. `wren` CLI ≥ the version that ships the `genbi` command group
    (`wren genbi --help` works).
@@ -104,7 +104,7 @@ PY
 ```
 
 Only export the columns/rows the dashboard uses. The compiled `mdl.json` you
-copied in keeps the semantic layer intact regardless of how you bundle data.
+copied in keeps the context layer intact regardless of how you bundle data.
 
 ### 4. Register and verify
 

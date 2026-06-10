@@ -37,7 +37,7 @@ always matches the installed CLI.
 | **generate-mdl** | `wren skills get generate-mdl` | One-time setup: explore database schema, normalize types, scaffold MDL YAML project |
 | **enrich-context** | `wren skills get enrich-context` | Deepen business context the schema can't carry: enum/unit/null semantics, default filters, synonyms, currency rules, and named aggregation metrics as cubes — via grill or auto-pilot mode |
 | **dlt-connector** | `wren skills get dlt-connector` | Connect SaaS APIs (HubSpot, Stripe, Salesforce, GitHub, Slack, …) into DuckDB via dlt, then auto-generate a Wren project |
-| **genbi** | `wren skills get genbi` | Turn a project's semantic layer into a shareable, browser-side GenBI web app and deploy it to Vercel or Cloudflare Pages |
+| **genbi** | `wren skills get genbi` | Turn a project's context layer into a shareable, browser-side GenBI web app and deploy it to Vercel or Cloudflare Pages |
 
 List them with `wren skills list`.
 
@@ -369,7 +369,7 @@ before improvising.
 
 ## genbi
 
-Turns a project's semantic layer into a shareable, browser-side GenBI web
+Turns a project's context layer into a shareable, browser-side GenBI web
 app (powered by `wren-core-wasm`) and deploys it to Vercel or Cloudflare
 Pages — from a natural-language request to a public URL in one conversation.
 Full command reference: [`wren genbi`](cli.md#wren-genbi--build--deploy-genbi-apps).
@@ -414,7 +414,7 @@ The discovery stub routes the agent here on phrases like:
 
 - "build a dashboard from my Wren project"
 - "make a shareable analytics app"
-- "deploy my semantic layer as a web app"
+- "deploy my context layer as a web app"
 - "host a GenBI app on Vercel / Cloudflare Pages"
 
 ### Data origin handoff

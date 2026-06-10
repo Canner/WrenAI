@@ -373,7 +373,7 @@ wren ask "monthly orders trend" --direct
 
 ## `wren genbi` — Build & Deploy GenBI Apps
 
-Turn a project's semantic layer into a shareable, browser-side GenBI web app
+Turn a project's context layer into a shareable, browser-side GenBI web app
 (powered by `wren-core-wasm`) and deploy it to Vercel or Cloudflare Pages.
 
 **CLI ↔ agent split:** the CLI owns the authoritative build instruction and all

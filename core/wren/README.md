@@ -142,7 +142,7 @@ wren memory store --nl "top customers" --sql "SELECT ..."  # store NL→SQL pair
 wren memory recall -q "best customers"         # retrieve similar past queries
 ```
 
-**7. (Optional) Build a shareable GenBI app** — turn the semantic layer into a
+**7. (Optional) Build a shareable GenBI app** — turn the context layer into a
 browser-side dashboard (powered by `wren-core-wasm`) and deploy it to Vercel or
 Cloudflare Pages. The CLI owns the build instruction + deterministic state; an
 agent authors the app from it:

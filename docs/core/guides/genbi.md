@@ -4,7 +4,7 @@ sidebar_label: Build & deploy a GenBI app
 
 # Build & deploy a GenBI app
 
-`wren genbi` turns a project's semantic layer into a shareable, browser-side
+`wren genbi` turns a project's context layer into a shareable, browser-side
 GenBI web app — powered by [`wren-core-wasm`](../sdk/wasm.md) — and deploys it
 to the user's Vercel or Cloudflare Pages account. The whole flow runs through
 an AI agent: the user describes the dashboard they want in natural language,

@@ -9,7 +9,7 @@ import typer
 
 genbi_app = typer.Typer(
     name="genbi",
-    help="Build and deploy GenBI apps from this project's semantic layer.",
+    help="Build and deploy GenBI apps from this project's context layer.",
 )
 
 # App names become a path segment under <project>/apps/. Constrain them to a
@@ -123,7 +123,7 @@ def build(
     mdl_path = project_path / "target" / "mdl.json"
     if not mdl_path.exists():
         # Hydrating the instruction needs a current MDL — compile implicitly
-        # (PRD risk #6) so the agent always sees an up-to-date semantic layer.
+        # (PRD risk #6) so the agent always sees an up-to-date context layer.
         from wren.context import build_json, save_target  # noqa: PLC0415
 
         try:
