@@ -200,19 +200,24 @@ export class ModelResolver {
   }
 
   public async checkModelSync(_root: any, _args: any, ctx: IContext) {
-    const { id } = await ctx.projectService.getCurrentProject();
-    const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-    const currentHash = ctx.deployService.createMDLHash(manifest, id);
-    const lastDeploy = await ctx.deployService.getLastDeployment(id);
-    const lastDeployHash = lastDeploy?.hash;
-    const inProgressDeployment =
-      await ctx.deployService.getInProgressDeployment(id);
-    if (inProgressDeployment) {
-      return { status: SyncStatusEnum.IN_PROGRESS };
+    try {
+      const { id } = await ctx.projectService.getCurrentProject();
+      const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
+      const currentHash = ctx.deployService.createMDLHash(manifest, id);
+      const lastDeploy = await ctx.deployService.getLastDeployment(id);
+      const lastDeployHash = lastDeploy?.hash;
+      const inProgressDeployment =
+        await ctx.deployService.getInProgressDeployment(id);
+      if (inProgressDeployment) {
+        return { status: SyncStatusEnum.IN_PROGRESS };
+      }
+      return currentHash == lastDeployHash
+        ? { status: SyncStatusEnum.SYNCRONIZED }
+        : { status: SyncStatusEnum.UNSYNCRONIZED };
+    } catch (err: any) {
+      logger.error(`checkModelSync failed: ${err.message}`, err);
+      return { status: SyncStatusEnum.UNSYNCRONIZED };
     }
-    return currentHash == lastDeployHash
-      ? { status: SyncStatusEnum.SYNCRONIZED }
-      : { status: SyncStatusEnum.UNSYNCRONIZED };
   }
 
   public async deploy(
