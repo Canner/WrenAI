@@ -643,3 +643,67 @@ class TestIdentifierExclusion:
         sqls = [p["sql"] for p in generate_seed_queries(manifest)]
         assert not any("SUM(x)" in s or "SUM(y)" in s for s in sqls)
         assert "SELECT SUM(val) FROM a" in sqls
+
+    def test_identifier_matching_is_case_insensitive(self):
+        # A non-*_id identifier (e.g. "Custkey") is only excluded via the PK /
+        # relationship-key path. Those checks must be case-insensitive so a
+        # manifest that mixes cases — PK "custkey", column "Custkey", condition
+        # "ORDERS.CUSTKEY = ..." — still keeps it out of aggregation. The
+        # generated SQL must preserve the original column case.
+        manifest = {
+            "models": [
+                _model(
+                    "orders",
+                    "custkey",  # PK declared lower-case
+                    [
+                        _col("Custkey", "int"),  # column defined Title-case
+                        _col("totalprice", "double"),
+                    ],
+                ),
+                _model(
+                    "customer",
+                    "CUSTKEY",
+                    [_col("CUSTKEY", "int"), _col("name", "varchar")],
+                ),
+            ],
+            "relationships": [
+                {
+                    "name": "orders_customer",
+                    "models": ["orders", "customer"],
+                    "condition": "ORDERS.CUSTKEY = CUSTOMER.CUSTKEY",
+                }
+            ],
+        }
+        sqls = [p["sql"] for p in generate_seed_queries(manifest)]
+        assert not any("SUM(Custkey)" in s for s in sqls)
+        assert "SELECT SUM(totalprice) FROM orders" in sqls
+
+    def test_relationship_key_case_insensitive_isolated(self):
+        # Isolates the relationship-key normalization path: "CreatedBy" is NOT a
+        # PK and NOT *_id-like, so only the (case-insensitive) relationship-key
+        # match can exclude it. The column is "CreatedBy" but the condition says
+        # "DOCUMENTS.CREATEDBY" — without normalization this leaks SUM(CreatedBy).
+        manifest = {
+            "models": [
+                _model(
+                    "documents",
+                    "doc_pk",
+                    [
+                        _col("doc_pk", "varchar"),
+                        _col("CreatedBy", "int"),
+                        _col("word_count", "int"),
+                    ],
+                ),
+                _model("users", "user_pk", [_col("user_pk", "int")]),
+            ],
+            "relationships": [
+                {
+                    "name": "users_documents",
+                    "models": ["users", "documents"],
+                    "condition": "DOCUMENTS.CREATEDBY = USERS.USER_PK",
+                }
+            ],
+        }
+        sqls = [p["sql"] for p in generate_seed_queries(manifest)]
+        assert not any("SUM(CreatedBy)" in s for s in sqls)
+        assert "SELECT SUM(word_count) FROM documents" in sqls

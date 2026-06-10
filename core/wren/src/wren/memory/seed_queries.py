@@ -42,7 +42,9 @@ def generate_seed_queries(manifest: dict) -> list[dict]:
         if model_layers.get(model["name"]) == "raw":
             continue
         pairs.extend(
-            _model_seeds(model, relationship_keys.get(model["name"], frozenset()))
+            _model_seeds(
+                model, relationship_keys.get(_norm_ident(model["name"]), frozenset())
+            )
         )
 
     for rel in manifest.get("relationships", []):
@@ -73,14 +75,14 @@ def _model_seeds(
     numeric_col = None
     group_col = None
     for col in columns:
+        col_name = col["name"]
+        norm_name = _norm_ident(col_name)
         col_type = (col.get("type") or "").split("(")[0].lower().strip()
         is_calc = col.get("isCalculated", False)
-        is_pk = col["name"] in primary_keys
+        is_pk = norm_name in primary_keys
         # Identifiers are numeric by storage but not measures: summing a join
         # key (e.g. SUM(customer_id)) is semantically meaningless.
-        is_identifier = (
-            is_pk or col["name"] in relationship_keys or _is_id_like(col["name"])
-        )
+        is_identifier = is_pk or norm_name in relationship_keys or _is_id_like(col_name)
 
         if (
             col_type in _NUMERIC_TYPES
@@ -88,14 +90,14 @@ def _model_seeds(
             and not is_identifier
             and numeric_col is None
         ):
-            numeric_col = col["name"]
+            numeric_col = col_name
         elif (
             col_type not in _NUMERIC_TYPES
             and not is_pk
             and not is_calc
             and group_col is None
         ):
-            group_col = col["name"]
+            group_col = col_name
 
     # Template 2a: simple aggregation
     if numeric_col:
@@ -159,7 +161,7 @@ def _relationship_key_columns(manifest: dict) -> dict[str, frozenset[str]]:
     for rel in manifest.get("relationships", []):
         condition = rel.get("condition") or ""
         for model_name, col_name in _JOIN_REF.findall(condition):
-            accum.setdefault(model_name, set()).add(col_name)
+            accum.setdefault(_norm_ident(model_name), set()).add(_norm_ident(col_name))
     return {model: frozenset(cols) for model, cols in accum.items()}
 
 
@@ -167,10 +169,21 @@ def _primary_key_columns(model: dict) -> frozenset[str]:
     """Return primary key column names for string and composite-list PKs."""
     primary_key = model.get("primaryKey")
     if isinstance(primary_key, str):
-        return frozenset([primary_key])
+        return frozenset([_norm_ident(primary_key)])
     if isinstance(primary_key, list):
-        return frozenset(str(part) for part in primary_key if part)
+        return frozenset(_norm_ident(str(part)) for part in primary_key if part)
     return frozenset()
+
+
+def _norm_ident(name: str) -> str:
+    """Canonicalize an identifier for case-insensitive membership checks.
+
+    Primary-key, relationship-key and ``*_id`` matching all compare against a
+    column name; normalizing keeps them consistent when a manifest mixes cases
+    (e.g. a condition referencing ``ORDERS.CUSTKEY`` while the column is
+    declared ``Custkey``). The original name is always used for generated SQL.
+    """
+    return name.strip().lower()
 
 
 def _is_id_like(col_name: str) -> bool:
@@ -179,7 +192,7 @@ def _is_id_like(col_name: str) -> bool:
     Case-insensitive: warehouses such as Snowflake/Oracle fold identifiers to
     upper case, so an undeclared ``CUSTOMER_ID`` must be caught too.
     """
-    lowered = col_name.lower()
+    lowered = _norm_ident(col_name)
     return lowered == "id" or lowered.endswith("_id")
 
 
