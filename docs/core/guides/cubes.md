@@ -46,7 +46,6 @@ dimensions:
 time_dimensions:
   - name: order_date
     expression: order_date
-    grain: month
     type: DATE
 hierarchies:
   - name: time

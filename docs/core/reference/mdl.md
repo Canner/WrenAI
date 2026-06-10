@@ -259,9 +259,8 @@ dimensions:
     expression: status
     type: VARCHAR
 time_dimensions:
-  - name: month
+  - name: order_date
     expression: order_date
-    grain: month
     type: DATE
 hierarchies:
   - name: time
@@ -274,7 +273,7 @@ hierarchies:
 | `base_object` | yes | Model or view this cube aggregates over. |
 | `measures[]` | yes | Aggregated values (`expression` + `type`). |
 | `dimensions[]` | no | Categorical group-bys. |
-| `time_dimensions[]` | no | Time-based group-bys with explicit grain. |
+| `time_dimensions[]` | no | Time-based group-bys. Granularity is applied at query time via `--time-dimension name:granularity` (see [CLI reference](/oss/reference/cli#wren-cube--pre-aggregation-queries)). |
 | `hierarchies[]` | no | Ordered levels for drill-down (year → quarter → month). |
 | `refresh_time` | no | Cache refresh interval. |
 | `properties` | no | Arbitrary metadata. |
