@@ -113,9 +113,13 @@ export class DiagramResolver {
         }
 
         if (column.isCalculated) {
-          transformedModel.calculatedFields.push(
-            this.transformCalculatedField(column, modelMDL.columns),
+          const transformedCalculatedField = this.transformCalculatedField(
+            column,
+            modelMDL?.columns || [],
           );
+          if (transformedCalculatedField) {
+            transformedModel.calculatedFields.push(transformedCalculatedField);
+          }
         } else {
           const nestedColumns = modelNestedColumns.filter(
             (nestedColumn) => nestedColumn.columnId === column.id,
@@ -185,12 +189,18 @@ export class DiagramResolver {
   private transformCalculatedField(
     column: ModelColumn,
     columnsMDL: ColumnMDL[],
-  ): DiagramModelField {
+  ): DiagramModelField | null {
     const properties = this.parseProperties(column.properties);
     const lineage = this.parseLineage(column.lineage);
     const columnMDL = columnsMDL.find(
       ({ name }) => name === column.referenceName,
     );
+    if (!columnMDL) {
+      logger.debug(
+        `Skip diagram calculated field "${column.referenceName}" because it is missing from built MDL`,
+      );
+      return null;
+    }
     return {
       id: uuidv4(),
       columnId: column.id,
