@@ -86,7 +86,7 @@ def parse_osi(text: str, *, suffix: str = ".yaml") -> dict:
 
 
 def load_osi_file(path: Path) -> dict:
-    return parse_osi(path.read_text(), suffix=path.suffix)
+    return parse_osi(path.read_text(encoding="utf-8"), suffix=path.suffix)
 
 
 def _extract_wren_block(custom_extensions: Any) -> dict:

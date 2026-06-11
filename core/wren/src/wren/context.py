@@ -171,7 +171,10 @@ def convert_mdl_to_project(mdl_json: dict) -> list[ProjectFile]:
         ProjectFile(
             relative_path="wren_project.yml",
             content=yaml.dump(
-                project_config, default_flow_style=False, sort_keys=False
+                project_config,
+                default_flow_style=False,
+                sort_keys=False,
+                allow_unicode=True,
             ),
         )
     )
@@ -197,7 +200,10 @@ def convert_mdl_to_project(mdl_json: dict) -> list[ProjectFile]:
             ProjectFile(
                 relative_path=f"{dir_path}/metadata.yml",
                 content=yaml.dump(
-                    model_snake, default_flow_style=False, sort_keys=False
+                    model_snake,
+                    default_flow_style=False,
+                    sort_keys=False,
+                    allow_unicode=True,
                 ),
             )
         )
@@ -219,6 +225,7 @@ def convert_mdl_to_project(mdl_json: dict) -> list[ProjectFile]:
                         {"statement": statement},
                         default_flow_style=False,
                         sort_keys=False,
+                        allow_unicode=True,
                     ),
                 )
             )
@@ -229,7 +236,10 @@ def convert_mdl_to_project(mdl_json: dict) -> list[ProjectFile]:
             ProjectFile(
                 relative_path=f"{dir_path}/metadata.yml",
                 content=yaml.dump(
-                    view_snake, default_flow_style=False, sort_keys=False
+                    view_snake,
+                    default_flow_style=False,
+                    sort_keys=False,
+                    allow_unicode=True,
                 ),
             )
         )
@@ -245,6 +255,7 @@ def convert_mdl_to_project(mdl_json: dict) -> list[ProjectFile]:
                     {"relationships": rels_snake},
                     default_flow_style=False,
                     sort_keys=False,
+                    allow_unicode=True,
                 ),
             )
         )
@@ -335,7 +346,7 @@ def load_global_config() -> dict:
     config_file = _WREN_HOME / "config.yml"
     if not config_file.exists():
         return {}
-    return yaml.safe_load(config_file.read_text()) or {}
+    return yaml.safe_load(config_file.read_text(encoding="utf-8")) or {}
 
 
 def discover_project_path(explicit: str | None = None) -> Path:
@@ -382,7 +393,7 @@ def load_project_config(project_path: Path) -> dict:
     config_file = project_path / PROJECT_FILE
     if not config_file.exists():
         return {}
-    return yaml.safe_load(config_file.read_text()) or {}
+    return yaml.safe_load(config_file.read_text(encoding="utf-8")) or {}
 
 
 # Field order preferred when writing wren_project.yml back from a dict —
@@ -415,7 +426,9 @@ def save_project_config(project_path: Path, config: dict) -> None:
             ordered[key] = value
 
     (project_path / PROJECT_FILE).write_text(
-        yaml.safe_dump(ordered, default_flow_style=False, sort_keys=False)
+        yaml.safe_dump(
+            ordered, default_flow_style=False, sort_keys=False, allow_unicode=True
+        )
     )
 
 
@@ -494,7 +507,7 @@ def _load_models_v1(project_path: Path) -> list[dict]:
         return []
     models = []
     for f in sorted(models_dir.glob("*.yml")):
-        data = yaml.safe_load(f.read_text())
+        data = yaml.safe_load(f.read_text(encoding="utf-8"))
         if isinstance(data, dict):
             data["_source_dir"] = f.stem
             models.append(data)
@@ -518,7 +531,7 @@ def _load_models_v2(project_path: Path) -> list[dict]:
         meta_file = d / "metadata.yml"
         if not meta_file.exists():
             continue
-        model = yaml.safe_load(meta_file.read_text()) or {}
+        model = yaml.safe_load(meta_file.read_text(encoding="utf-8")) or {}
         if not isinstance(model, dict):
             continue
         model["_source_dir"] = d.name
@@ -526,7 +539,7 @@ def _load_models_v2(project_path: Path) -> list[dict]:
         # Merge ref_sql.sql if present (takes precedence)
         ref_sql_file = d / "ref_sql.sql"
         if ref_sql_file.exists():
-            sql_content = ref_sql_file.read_text().strip()
+            sql_content = ref_sql_file.read_text(encoding="utf-8").strip()
             if sql_content:
                 model["ref_sql"] = sql_content
 
@@ -551,7 +564,7 @@ def _load_views_v1(project_path: Path) -> list[dict]:
     views_file = project_path / "views.yml"
     if not views_file.exists():
         return []
-    data = yaml.safe_load(views_file.read_text()) or {}
+    data = yaml.safe_load(views_file.read_text(encoding="utf-8")) or {}
     return data.get("views", []) if isinstance(data, dict) else []
 
 
@@ -572,7 +585,7 @@ def _load_views_v2(project_path: Path) -> list[dict]:
         meta_file = d / "metadata.yml"
         if not meta_file.exists():
             continue
-        view = yaml.safe_load(meta_file.read_text()) or {}
+        view = yaml.safe_load(meta_file.read_text(encoding="utf-8")) or {}
         if not isinstance(view, dict):
             continue
         view["_source_dir"] = d.name
@@ -580,7 +593,7 @@ def _load_views_v2(project_path: Path) -> list[dict]:
         # Merge sql.yml if present (takes precedence)
         sql_file = d / "sql.yml"
         if sql_file.exists():
-            sql_data = yaml.safe_load(sql_file.read_text()) or {}
+            sql_data = yaml.safe_load(sql_file.read_text(encoding="utf-8")) or {}
             if isinstance(sql_data, dict) and sql_data.get("statement"):
                 view["statement"] = sql_data["statement"]
 
@@ -607,7 +620,7 @@ def _load_cubes_v1(project_path: Path) -> list[dict]:
         return []
     cubes = []
     for f in sorted(cubes_dir.glob("*.yml")):
-        data = yaml.safe_load(f.read_text())
+        data = yaml.safe_load(f.read_text(encoding="utf-8"))
         if isinstance(data, dict):
             data["_source_file"] = f.name
             cubes.append(data)
@@ -647,7 +660,7 @@ def load_relationships(project_path: Path) -> list[dict]:
     rel_file = project_path / "relationships.yml"
     if not rel_file.exists():
         return []
-    data = yaml.safe_load(rel_file.read_text()) or {}
+    data = yaml.safe_load(rel_file.read_text(encoding="utf-8")) or {}
     return data.get("relationships", []) if isinstance(data, dict) else []
 
 
@@ -656,7 +669,7 @@ def load_instructions(project_path: Path) -> str | None:
     inst_file = project_path / "instructions.md"
     if not inst_file.exists():
         return None
-    return inst_file.read_text().strip() or None
+    return inst_file.read_text(encoding="utf-8").strip() or None
 
 
 # ── Build ─────────────────────────────────────────────────────────────────
@@ -1264,7 +1277,9 @@ def apply_upgrade(project_path: Path, result: UpgradeResult) -> None:
     config = load_project_config(project_path)
     config["schema_version"] = result.to_version
     config_file = project_path / PROJECT_FILE
-    config_file.write_text(yaml.dump(config, default_flow_style=False, sort_keys=False))
+    config_file.write_text(
+        yaml.dump(config, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    )
 
 
 def _apply_v1_to_v2(project_path: Path) -> None:
@@ -1282,7 +1297,9 @@ def _apply_v1_to_v2(project_path: Path) -> None:
             (model_dir / "ref_sql.sql").write_text(ref_sql.strip() + "\n")
 
         (model_dir / "metadata.yml").write_text(
-            yaml.dump(model, default_flow_style=False, sort_keys=False)
+            yaml.dump(
+                model, default_flow_style=False, sort_keys=False, allow_unicode=True
+            )
         )
 
         # Delete old flat file
@@ -1307,13 +1324,16 @@ def _apply_v1_to_v2(project_path: Path) -> None:
                     {"statement": statement},
                     default_flow_style=False,
                     sort_keys=False,
+                    allow_unicode=True,
                 )
             )
         elif statement:
             view["statement"] = statement
 
         (view_dir / "metadata.yml").write_text(
-            yaml.dump(view, default_flow_style=False, sort_keys=False)
+            yaml.dump(
+                view, default_flow_style=False, sort_keys=False, allow_unicode=True
+            )
         )
 
     # Delete old views.yml
