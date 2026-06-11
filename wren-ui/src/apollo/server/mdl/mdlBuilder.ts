@@ -235,41 +235,48 @@ export class MDLBuilder implements IMDLBuilder {
     this.columns
       .filter(({ isCalculated }) => isCalculated)
       .forEach((column: ModelColumn) => {
-        // validate manifest.model exist
-        const relatedModel = this.relatedModels.find(
-          (model: any) => model.id === column.modelId,
-        );
-        if (!relatedModel) {
-          logger.debug(
-            `Build MDL Column Error: can not find related model, modelId "${column.modelId}", columnId: "${column.id}"`,
+        try {
+          // validate manifest.model exist
+          const relatedModel = this.relatedModels.find(
+            (model: any) => model.id === column.modelId,
           );
-          return;
-        }
-        const model = this.manifest.models.find(
-          (model: any) => model.name === relatedModel.referenceName,
-        );
-        if (!model) {
-          logger.debug(
-            `Build MDL Column Error: can not find model, modelId "${column.modelId}", columnId: "${column.id}"`,
+          if (!relatedModel) {
+            logger.debug(
+              `Build MDL Column Error: can not find related model, modelId "${column.modelId}", columnId: "${column.id}"`,
+            );
+            return;
+          }
+          const model = this.manifest.models.find(
+            (model: any) => model.name === relatedModel.referenceName,
           );
-          return;
-        }
-        const expression = this.getColumnExpression(column, model);
-        if (expression === null) {
-          logger.debug(
-            `Build MDL Column Error: invalid calculated field metadata, modelId "${column.modelId}", columnId: "${column.id}"`,
+          if (!model) {
+            logger.debug(
+              `Build MDL Column Error: can not find model, modelId "${column.modelId}", columnId: "${column.id}"`,
+            );
+            return;
+          }
+          const expression = this.getColumnExpression(column, model);
+          if (expression === null) {
+            logger.debug(
+              `Build MDL Column Error: invalid calculated field metadata, modelId "${column.modelId}", columnId: "${column.id}"`,
+            );
+            return;
+          }
+          const columnValue = {
+            name: column.referenceName,
+            type: column.type,
+            isCalculated: true,
+            expression,
+            notNull: column.notNull ? true : false,
+            properties: this.parseProperties(column.properties),
+          };
+          model.columns.push(columnValue);
+        } catch (error: any) {
+          logger.error(
+            `Build MDL Column Error: failed to add calculated field, modelId "${column.modelId}", columnId: "${column.id}", message: ${error.message}`,
+            error,
           );
-          return;
         }
-        const columnValue = {
-          name: column.referenceName,
-          type: column.type,
-          isCalculated: true,
-          expression,
-          notNull: column.notNull ? true : false,
-          properties: this.parseProperties(column.properties),
-        };
-        model.columns.push(columnValue);
       });
   }
 
@@ -277,37 +284,44 @@ export class MDLBuilder implements IMDLBuilder {
     modelName: string,
     calculatedField: ModelColumn,
   ) {
-    const model = this.manifest.models.find(
-      (model: any) => model.name === modelName,
-    );
-    if (!model) {
-      logger.debug(`Can not find model "${modelName}" to add calculated field`);
-      return;
-    }
-    // if calculated field is already in the model, skip
-    if (
-      model.columns.find(
-        (column: any) => column.name === calculatedField.referenceName,
-      )
-    ) {
-      return;
-    }
-    const expression = this.getColumnExpression(calculatedField, model);
-    if (expression === null) {
-      logger.debug(
-        `Can not add calculated field "${calculatedField.referenceName}" because its metadata is invalid`,
+    try {
+      const model = this.manifest.models.find(
+        (model: any) => model.name === modelName,
       );
-      return;
+      if (!model) {
+        logger.debug(`Can not find model "${modelName}" to add calculated field`);
+        return;
+      }
+      // if calculated field is already in the model, skip
+      if (
+        model.columns.find(
+          (column: any) => column.name === calculatedField.referenceName,
+        )
+      ) {
+        return;
+      }
+      const expression = this.getColumnExpression(calculatedField, model);
+      if (expression === null) {
+        logger.debug(
+          `Can not add calculated field "${calculatedField.referenceName}" because its metadata is invalid`,
+        );
+        return;
+      }
+      const columnValue = {
+        name: calculatedField.referenceName,
+        type: calculatedField.type,
+        isCalculated: true,
+        expression,
+        notNull: calculatedField.notNull ? true : false,
+        properties: this.parseProperties(calculatedField.properties),
+      };
+      model.columns.push(columnValue);
+    } catch (error: any) {
+      logger.error(
+        `Can not add calculated field "${calculatedField.referenceName}" because building it failed: ${error.message}`,
+        error,
+      );
     }
-    const columnValue = {
-      name: calculatedField.referenceName,
-      type: calculatedField.type,
-      isCalculated: true,
-      expression,
-      notNull: calculatedField.notNull ? true : false,
-      properties: this.parseProperties(calculatedField.properties),
-    };
-    model.columns.push(columnValue);
   }
 
   public addRelation(): void {
