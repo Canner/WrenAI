@@ -55,12 +55,19 @@ def test_skills_get_unknown_raises():
         skills_delivery.get_skill("nope")
 
 
-# ── Ticket 1b: all five skills + --full + --script ──────────────────────────
+# ── Ticket 1b: all bundled skills + --full + --script ───────────────────────
 
-ALL_SKILLS = {"onboarding", "usage", "generate-mdl", "dlt-connector", "enrich-context"}
+ALL_SKILLS = {
+    "onboarding",
+    "usage",
+    "generate-mdl",
+    "dlt-connector",
+    "enrich-context",
+    "genbi",
+}
 
 
-def test_all_five_skills_bundled():
+def test_all_skills_bundled():
     names = {s.name for s in skills_delivery.list_skills()}
     assert names == ALL_SKILLS
 

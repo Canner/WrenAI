@@ -68,6 +68,29 @@ profile: pg-dev
 
 > The same field names `catalog` and `schema` appear inside each model's `table_reference` to point at the database. Do not confuse the two — see the [MDL schema reference](/oss/reference/mdl) for the full distinction.
 
+## Project layout
+
+Everything below lives **in the project** (version-controlled); connection credentials and global CLI state live separately under `~/.wren/` (see [Where profiles live](#where-profiles-live)).
+
+```text
+my_project/
+├── wren_project.yml      # project manifest (fields above)
+├── models/               # one YAML file per model
+├── relationships.yml     # relationships between models
+├── cubes/                # (optional) pre-aggregation cubes
+├── views/                # (optional) saved views
+├── instructions.md       # business context for the agent
+├── apps/                 # (optional) generated GenBI apps, one dir per app
+│   └── <name>/           #   built by an agent via `wren genbi` — see the GenBI guide
+├── target/
+│   └── mdl.json          # compiled MDL — `wren context build`
+└── .wren/                # project-local CLI state (gitignore-able)
+    ├── memory/           # indexed schema + NL→SQL pairs — `wren memory index`
+    └── apps.yml          # GenBI app index — written by `wren genbi register`
+```
+
+`apps/<name>/` and `.wren/apps.yml` are added by the [GenBI workflow](genbi.md); `.wren/apps.yml` is machine-written via `wren genbi register/remove` — never edit it by hand.
+
 ## Profile management
 
 Profiles separate connection credentials from project definitions. The same MDL project can connect to multiple databases by switching profiles.

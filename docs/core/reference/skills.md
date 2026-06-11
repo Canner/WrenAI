@@ -37,6 +37,7 @@ always matches the installed CLI.
 | **generate-mdl** | `wren skills get generate-mdl` | One-time setup: explore database schema, normalize types, scaffold MDL YAML project |
 | **enrich-context** | `wren skills get enrich-context` | Deepen business context the schema can't carry: enum/unit/null semantics, default filters, synonyms, currency rules, and named aggregation metrics as cubes — via grill or auto-pilot mode |
 | **dlt-connector** | `wren skills get dlt-connector` | Connect SaaS APIs (HubSpot, Stripe, Salesforce, GitHub, Slack, …) into DuckDB via dlt, then auto-generate a Wren project |
+| **genbi** | `wren skills get genbi` | Turn a project's context layer into a shareable, browser-side GenBI web app and deploy it to Vercel or Cloudflare Pages |
 
 List them with `wren skills list`.
 
@@ -363,6 +364,63 @@ The skill ships a reference list of common dlt-verified sources with auth
 patterns. For sources not on the list, the agent checks
 [dlthub.com/docs/dlt-ecosystem/verified-sources](https://dlthub.com/docs/dlt-ecosystem/verified-sources)
 before improvising.
+
+---
+
+## genbi
+
+Turns a project's context layer into a shareable, browser-side GenBI web
+app (powered by `wren-core-wasm`) and deploys it to Vercel or Cloudflare
+Pages — from a natural-language request to a public URL in one conversation.
+Full command reference: [`wren genbi`](cli.md#wren-genbi--build--deploy-genbi-apps).
+
+### CLI ↔ agent split
+
+The CLI owns the authoritative build instruction and all deterministic state
+(the app index, verify, deploy); the agent authors the app code by following
+the instruction. `.wren/apps.yml` is only ever written by the CLI.
+
+### Workflow
+
+| Step | Goal | Key actions |
+|------|------|-------------|
+| **1. Build** | Get the authoritative build instruction | `wren genbi build <name> --prompt "…" --data-mode snapshot\|live` — prints wasm wiring (pinned version), the model/column inventory, acceptance criteria, target folder |
+| **2. Author** | Write the app | Agent writes `apps/<name>/` per the instruction; copies in `mdl.json`; exports the snapshot data to `data/*.parquet` (DuckDB-backed projects — incl. dlt output — export trivially) |
+| **3. Register & verify** | Record + preflight | `wren genbi register <name> --data-mode <mode>`, then `wren genbi verify <name>` (files, parseable MDL, snapshot asset, default-deny secret scan) |
+| **4. Preview** | Local check | `wren genbi open <name>` serves the app for local review |
+| **5. Deploy** | Ship a URL | `wren genbi deploy <name> --provider vercel\|cloudflare [--prod]` — preview by default; confirm before `--prod` |
+
+### Data modes
+
+- **snapshot** (default) — data ships with the app (parquet/duckdb), queried
+  client-side. Fully serverless; right for demos, reports, small data, and
+  dlt-pipeline output.
+- **live** — the app calls back to a CORS-enabled endpoint at view time. Right
+  for production-scale or always-fresh data; never inline credentials.
+
+### Deploy notes
+
+- **Tokens** come from the environment or `.env` (`VERCEL_TOKEN` /
+  `CLOUDFLARE_API_TOKEN`, plus `CLOUDFLARE_ACCOUNT_ID`) — never CLI flags.
+- **Cloudflare** shells out to the `wrangler` CLI (`npm install -g wrangler`).
+- **Vercel Deployment Protection** is on by default — a deployed URL returns
+  401 to logged-out visitors until disabled in Project → Settings → Deployment
+  Protection. The agent verifies the URL actually loads before calling it
+  shareable.
+
+### When to trigger
+
+The discovery stub routes the agent here on phrases like:
+
+- "build a dashboard from my Wren project"
+- "make a shareable analytics app"
+- "deploy my context layer as a web app"
+- "host a GenBI app on Vercel / Cloudflare Pages"
+
+### Data origin handoff
+
+If the data is coming from a SaaS source, run [`dlt-connector`](#dlt-connector)
+first — its DuckDB output is exactly the snapshot source `genbi` bundles.
 
 ---
 
