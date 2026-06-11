@@ -78,7 +78,7 @@ def _load_manifest(mdl: str | None) -> dict:
         )
         raise typer.Exit(1)
     try:
-        return json.loads(mdl_path.read_text())
+        return json.loads(mdl_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
         typer.echo(f"Error: invalid JSON in {mdl_path}: {e}", err=True)
         raise typer.Exit(1)

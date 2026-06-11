@@ -149,7 +149,7 @@ def _load_raw() -> dict:
     if not _PROFILES_FILE.exists():
         return {"active": None, "profiles": {}}
     try:
-        data = yaml.safe_load(_PROFILES_FILE.read_text())
+        data = yaml.safe_load(_PROFILES_FILE.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
         raise ValueError(
             f"profiles.yml is not valid YAML: {exc}\n"
@@ -180,7 +180,9 @@ def _load_raw() -> dict:
 def _save_raw(data: dict) -> None:
     """Write profiles.yml atomically with 0600 permissions."""
     _WREN_HOME.mkdir(parents=True, exist_ok=True)
-    payload = yaml.dump(data, default_flow_style=False, sort_keys=False)
+    payload = yaml.dump(
+        data, default_flow_style=False, sort_keys=False, allow_unicode=True
+    )
     # Write to a temp file in the same directory then atomically replace
     fd, tmp_path = tempfile.mkstemp(dir=_WREN_HOME, suffix=".yml.tmp")
     try:
@@ -232,7 +234,7 @@ def resolve_profile_for_project(project_path: Path) -> tuple[str | None, dict]:
     pinned_name: str | None = None
     if project_yml.exists():
         try:
-            config = yaml.safe_load(project_yml.read_text()) or {}
+            config = yaml.safe_load(project_yml.read_text(encoding="utf-8")) or {}
         except yaml.YAMLError as exc:
             # Fail loudly: a malformed project file shouldn't silently fall
             # back to the global active profile — that risks running against

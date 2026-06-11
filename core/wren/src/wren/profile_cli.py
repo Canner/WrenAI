@@ -133,7 +133,7 @@ def add(
             typer.echo(f"Error: file not found: {from_file}", err=True)
             raise typer.Exit(1)
         try:
-            text = path.read_text()
+            text = path.read_text(encoding="utf-8")
             if path.suffix in (".yml", ".yaml"):
                 raw = yaml.safe_load(text)
             else:

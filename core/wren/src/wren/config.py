@@ -38,7 +38,7 @@ def load_config(wren_home: Path) -> WrenConfig:
         return WrenConfig()
 
     try:
-        raw = json.loads(config_path.read_text())
+        raw = json.loads(config_path.read_text(encoding="utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError, OSError) as e:
         raise WrenError(
             ErrorCode.GENERIC_USER_ERROR,
