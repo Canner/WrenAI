@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/Canner/WrenAI/compare/wren-core-py-v0.6.0...wren-core-py-v0.7.0) (2026-06-12)
+
+
+### Features
+
+* **wren-core:** RLAC subqueries on MDL models + to-many calc on non-PK column ([#2335](https://github.com/Canner/WrenAI/issues/2335)) ([6972e69](https://github.com/Canner/WrenAI/commit/6972e696b2cb364ec22e48f1ef3ccbea168b4580))
+
 ## [0.6.0](https://github.com/Canner/WrenAI/compare/wren-core-py-v0.5.0...wren-core-py-v0.6.0) (2026-05-15)
 
 
