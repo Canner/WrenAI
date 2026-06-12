@@ -89,6 +89,53 @@ def test_repair_failure_count_uses_repair_log_failure_code():
     assert "dbo_reports" not in sql
 
 
+def test_repair_failure_count_prefers_debug_fix_description_when_available():
+    service = AskService(pipelines={})
+    table_ddls = [
+        """
+        CREATE TABLE dbo_DebugEntries (
+          DebugEntryId VARCHAR,
+          FailureSys VARCHAR
+        );
+        """,
+        """
+        CREATE TABLE dbo_DebugFixLogs (
+          DebugEntryId VARCHAR,
+          FixId VARCHAR
+        );
+        """,
+        """
+        CREATE TABLE dbo_DebugFixes (
+          Id VARCHAR,
+          Description VARCHAR
+        );
+        """,
+        """
+        CREATE TABLE dbo_repair_logs (
+          id VARCHAR,
+          failure_code VARCHAR
+        );
+        """,
+    ]
+
+    sql = service._build_repair_failure_count_sql(
+        "Create a bar chart of repair counts grouped by failure category.",
+        table_ddls,
+        table_names=[
+            "dbo_DebugEntries",
+            "dbo_DebugFixLogs",
+            "dbo_DebugFixes",
+            "dbo_repair_logs",
+        ],
+    )
+
+    assert sql
+    assert '"dbo_DebugFixes"."Description" AS "failure_category"' in sql
+    assert '"dbo_DebugFixLogs"."FixId" = "dbo_DebugFixes"."Id"' in sql
+    assert '"dbo_repair_logs"."failure_code"' not in sql
+    assert "FailurePatternID" not in sql
+
+
 def test_common_pcb_failures_uses_repair_log_failure_code():
     service = AskService(pipelines={})
     table_ddls = [

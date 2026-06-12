@@ -240,6 +240,24 @@ class AskService:
             schema_text += "\n" + "\n".join(table_names)
         return bool(re.search(pattern, schema_text, flags=re.IGNORECASE))
 
+    def _schema_has_table_column(
+        self,
+        table_ddls: list[str],
+        table_name: str,
+        column_name: str,
+        table_names: Optional[list[str]] = None,
+    ) -> bool:
+        table_pattern = rf"\b{re.escape(table_name)}\b"
+        column_pattern = rf"\b{re.escape(column_name)}\b"
+
+        for ddl in table_ddls or []:
+            if re.search(table_pattern, ddl, flags=re.IGNORECASE) and re.search(
+                column_pattern, ddl, flags=re.IGNORECASE
+            ):
+                return True
+
+        return False
+
     def _extract_schema_column_names(self, table_ddls: list[str]) -> list[str]:
         column_names: list[str] = []
         non_column_prefixes = (
@@ -385,21 +403,54 @@ class AskService:
             return None
 
         top_n = self._extract_requested_top_n(query)
-        has_repair_logs = self._schema_contains(
-            table_ddls, r"\bdbo_repair_logs\b", table_names=table_names
+
+        has_debug_fix_route = all(
+            (
+                self._schema_has_table_column(
+                    table_ddls,
+                    "dbo_DebugEntries",
+                    "DebugEntryId",
+                    table_names=table_names,
+                ),
+                self._schema_has_table_column(
+                    table_ddls,
+                    "dbo_DebugFixLogs",
+                    "DebugEntryId",
+                    table_names=table_names,
+                ),
+                self._schema_has_table_column(
+                    table_ddls,
+                    "dbo_DebugFixLogs",
+                    "FixId",
+                    table_names=table_names,
+                ),
+                self._schema_has_table_column(
+                    table_ddls,
+                    "dbo_DebugFixes",
+                    "Id",
+                    table_names=table_names,
+                ),
+                self._schema_has_table_column(
+                    table_ddls,
+                    "dbo_DebugFixes",
+                    "Description",
+                    table_names=table_names,
+                ),
+            )
         )
-        has_failure_code = self._schema_contains(
-            table_ddls, r"\bfailure_code\b", table_names=table_names
-        )
-        if has_repair_logs and has_failure_code:
+        if has_debug_fix_route:
             return (
-                f'SELECT "dbo_repair_logs"."failure_code" AS "failure_category", '
-                f'COUNT(*) AS "repair_count" '
-                f'FROM "dbo_repair_logs" '
-                f'WHERE "dbo_repair_logs"."failure_code" IS NOT NULL '
-                f'GROUP BY "dbo_repair_logs"."failure_code" '
-                f'ORDER BY "repair_count" DESC '
-                f'LIMIT {top_n}'
+                'SELECT "dbo_DebugFixes"."Description" AS "failure_category", '
+                'COUNT(*) AS "repair_count" '
+                'FROM "dbo_DebugEntries" '
+                'JOIN "dbo_DebugFixLogs" '
+                'ON "dbo_DebugEntries"."DebugEntryId" = "dbo_DebugFixLogs"."DebugEntryId" '
+                'JOIN "dbo_DebugFixes" '
+                'ON "dbo_DebugFixLogs"."FixId" = "dbo_DebugFixes"."Id" '
+                'WHERE "dbo_DebugFixes"."Description" IS NOT NULL '
+                'GROUP BY "dbo_DebugFixes"."Description" '
+                'ORDER BY "repair_count" DESC '
+                f"LIMIT {top_n}"
             )
 
         has_debug_entries = self._schema_contains(
@@ -445,6 +496,23 @@ class AskService:
                 f'ON "dbo_DebugEntries"."FailureSys" = "dbo_failure_patterns"."id" '
                 f'WHERE "dbo_failure_patterns"."{dimension_column}" IS NOT NULL '
                 f'GROUP BY "dbo_failure_patterns"."{dimension_column}" '
+                f'ORDER BY "repair_count" DESC '
+                f'LIMIT {top_n}'
+            )
+
+        has_repair_logs = self._schema_has_table_column(
+            table_ddls,
+            "dbo_repair_logs",
+            "failure_code",
+            table_names=table_names,
+        )
+        if has_repair_logs:
+            return (
+                f'SELECT "dbo_repair_logs"."failure_code" AS "failure_category", '
+                f'COUNT(*) AS "repair_count" '
+                f'FROM "dbo_repair_logs" '
+                f'WHERE "dbo_repair_logs"."failure_code" IS NOT NULL '
+                f'GROUP BY "dbo_repair_logs"."failure_code" '
                 f'ORDER BY "repair_count" DESC '
                 f'LIMIT {top_n}'
             )
