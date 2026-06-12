@@ -8,7 +8,7 @@ use std::ops::ControlFlow;
 use std::sync::Arc;
 use wren_core::ast::{visit_relations, ObjectName};
 use wren_core::dialect::GenericDialect;
-use wren_core::mdl::manifest::{Model, Relationship, View};
+use wren_core::mdl::manifest::{Cube, Model, Relationship, View};
 use wren_core::mdl::WrenMDL;
 use wren_core::parser::Parser;
 use wren_core_base::mdl::Manifest;
@@ -127,6 +127,7 @@ fn extract_manifest(
         .into_iter()
         .collect::<Vec<_>>();
     let used_relationships = extract_relationships(mdl, &used_models);
+    let used_cubes = extract_cubes(mdl, &used_models, &used_views);
     Ok(Manifest {
         layout_version: mdl.manifest.layout_version,
         catalog: mdl.catalog().to_string(),
@@ -135,7 +136,7 @@ fn extract_manifest(
         relationships: used_relationships,
         views: used_views,
         data_source: mdl.data_source(),
-        cubes: mdl.manifest.cubes.clone(),
+        cubes: used_cubes,
     })
 }
 
@@ -218,6 +219,29 @@ fn extract_relationships(
         .collect()
 }
 
+/// Keep only cubes whose `baseObject` resolves to a model or view that survived
+/// extraction. A cube query references the cube's `baseObject` by name (not the
+/// cube), so the base model is always pulled in when the cube is queried —
+/// dropping orphaned cubes is therefore safe and avoids wren-core failing MDL
+/// analysis with "baseObject is not a defined Model or View" when the base
+/// model gets pruned (e.g. a query touching only unrelated tables, or a scalar
+/// `SELECT 1` that references no model).
+fn extract_cubes(
+    mdl: &WrenMDL,
+    used_models: &[Arc<Model>],
+    used_views: &[Arc<View>],
+) -> Vec<Arc<Cube>> {
+    let mut base_object_names: HashSet<&str> =
+        used_models.iter().map(|m| m.name.as_str()).collect();
+    base_object_names.extend(used_views.iter().map(|v| v.name.as_str()));
+    mdl.manifest
+        .cubes
+        .iter()
+        .filter(|cube| base_object_names.contains(cube.base_object.as_str()))
+        .cloned()
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use crate::extractor::PyManifestExtractor;
@@ -226,7 +250,8 @@ mod tests {
     use std::iter::Iterator;
     use wren_core::mdl::manifest::{DataSource, JoinType};
     use wren_core_base::mdl::builder::{
-        ColumnBuilder, ManifestBuilder, ModelBuilder, RelationshipBuilder, ViewBuilder,
+        ColumnBuilder, CubeBuilder, ManifestBuilder, ModelBuilder, RelationshipBuilder,
+        ViewBuilder,
     };
 
     #[fixture]
@@ -300,6 +325,17 @@ mod tests {
                 "id IN (SELECT id FROM level2)",
             )
             .build();
+        // A cube whose baseObject is the `orders` model. Kept only when `orders`
+        // survives extraction, dropped otherwise (e.g. a scalar query touching no
+        // model) so wren-core does not fail MDL analysis with "baseObject is not
+        // a defined Model or View".
+        let orders_cube = CubeBuilder::new("orders_cube", "orders").build();
+        // Cubes whose baseObject is a *view*. Two cubes over two unrelated views
+        // reproduce the view-based case: querying one view-cube must scope the
+        // other out rather than leaving it orphaned for MDL analysis.
+        let customer_view_cube =
+            CubeBuilder::new("customer_view_cube", "customer_view").build();
+        let part_view_cube = CubeBuilder::new("part_view_cube", "part_view").build();
         let manifest = ManifestBuilder::new()
             .catalog("my_catalog")
             .schema("my_schema")
@@ -314,6 +350,9 @@ mod tests {
             .relationship(o_l_relationship)
             .view(c_view)
             .view(p_view)
+            .cube(orders_cube)
+            .cube(customer_view_cube)
+            .cube(part_view_cube)
             .data_source(DataSource::BigQuery)
             .build();
         to_json_base64(manifest).unwrap()
@@ -434,6 +473,40 @@ mod tests {
                 .map(|v| v.name.as_str())
                 .collect::<Vec<_>>(),
             expected_views
+        );
+    }
+
+    #[rstest]
+    // `orders` pulled in directly keeps its cube.
+    #[case(&["orders"], &["orders_cube"])]
+    // `customer` pulls in `orders` via relationship, so its cube is kept too.
+    #[case(&["customer"], &["orders_cube"])]
+    // No dataset referenced (scalar query): every cube's baseObject is pruned,
+    // so all orphaned cubes are dropped rather than failing MDL analysis.
+    #[case(&[], &[])]
+    // A model unrelated to any cube's baseObject keeps every cube out.
+    #[case(&["part"], &[])]
+    // Querying one view-based cube keeps only that view's cube. `part_view`
+    // resolves to `part` only, so neither `orders_cube` nor `customer_view_cube`
+    // is kept.
+    #[case(&["part_view"], &["part_view_cube"])]
+    // `customer_view` pulls in `orders` (via the customer→orders relationship),
+    // so its own cube AND `orders_cube` are kept; `part_view_cube` is scoped out.
+    #[case(&["customer_view"], &["orders_cube", "customer_view_cube"])]
+    fn test_extract_manifest_for_cubes(
+        extractor: PyManifestExtractor,
+        #[case] dataset: &[&str],
+        #[case] expected_cubes: &[&str],
+    ) {
+        assert_eq!(
+            extractor
+                .extract_by(dataset.iter().map(|s| s.to_string()).collect())
+                .unwrap()
+                .cubes
+                .iter()
+                .map(|c| c.name.as_str())
+                .collect::<Vec<_>>(),
+            expected_cubes
         );
     }
 }
