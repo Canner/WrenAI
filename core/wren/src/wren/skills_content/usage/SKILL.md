@@ -333,9 +333,9 @@ time dimensions, and hierarchies.
 
 | User phrase | Maps to |
 |---|---|
-| "total revenue" | `--measures revenue` |
-| "by month" | `--time-dimension "created_at:month"` |
-| "in 2024" | `--time-dimension "created_at:month:2024-01-01,2025-01-01"` |
+| "total revenue" | `--measures total` |
+| "by month" | `--time-dimension "order_date:month"` |
+| "in 2024" | `--time-dimension "order_date:month:2024-01-01,2025-01-01"` |
 | "for completed orders" | `--filter "status:eq:completed"` |
 | "top N customers" | `--dimensions customer --limit N` |
 
@@ -345,9 +345,9 @@ CLI flags:
 
 ```bash
 wren cube query \
-  --cube order_metrics \
-  --measures revenue,order_count \
-  --time-dimension "created_at:month:2024-01-01,2025-01-01" \
+  --cube revenue \
+  --measures total,order_count \
+  --time-dimension "order_date:month:2024-01-01,2025-01-01" \
   --filter "status:eq:completed" \
   --limit 100
 ```
@@ -355,7 +355,7 @@ wren cube query \
 JSON input (good for agent-generated structured queries):
 
 ```bash
-echo '{"cube":"order_metrics","measures":["revenue"]}' | wren cube query --from -
+echo '{"cube":"revenue","measures":["total"]}' | wren cube query --from -
 ```
 
 Add `--sql-only` to print the generated SQL without executing — useful for

@@ -72,10 +72,9 @@ dimensions:
     expression: <column>      # column on base_object
     type: VARCHAR             # use the column's actual type
 time_dimensions:
-  - name: <td_name>           # e.g. "month"
+  - name: <td_name>           # e.g. "order_date" — semantic column name, not the grain
     expression: <ts_column>   # e.g. "created_at"
-    grain: month              # one of: day | week | month | quarter | year
-    type: TIMESTAMP
+    type: TIMESTAMP           # granularity (day/week/month/…) is set at query time via --time-dimension
 hierarchies:
   - name: time
     levels: [year, quarter, month]   # only if multiple time grains are declared
@@ -169,7 +168,7 @@ Action: skip the cube proposal. Add to `queries.yml`:
   sql: |
     -- via cube
     SELECT day, dau FROM (
-      <result of: wren cube query --cube daily_engagement --measures dau --time-dimension day:day:LAST_7_DAYS>
+      <result of: wren cube query --cube daily_engagement --measures dau --time-dimension "day:day:2024-01-01,2024-01-08">
     )
   source: enrich
 ```

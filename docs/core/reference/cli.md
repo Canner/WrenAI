@@ -253,7 +253,7 @@ Pretty-print the full cube schema as JSON: `baseObject`, measures (with
 expressions), dimensions, time dimensions, hierarchies.
 
 ```bash
-wren cube describe order_metrics
+wren cube describe revenue
 ```
 
 ### `wren cube query`
@@ -265,10 +265,10 @@ the same path as `wren --sql`. Two input modes:
 
 ```bash
 wren cube query \
-  --cube order_metrics \
-  --measures revenue,order_count \
+  --cube revenue \
+  --measures total,order_count \
   --dimensions status \
-  --time-dimension "created_at:month:2024-01-01,2025-01-01" \
+  --time-dimension "order_date:month:2024-01-01,2025-01-01" \
   --filter "status:eq:completed" \
   --limit 100
 ```

@@ -182,6 +182,7 @@ This creates:
 ├── wren_project.yml        # project metadata
 ├── models/                 # one folder per table
 ├── views/                  # reusable SQL views
+├── cubes/                  # pre-aggregation metrics
 ├── relationships.yml       # table join definitions
 └── instructions.md         # business rules for the AI
 ```
@@ -274,24 +275,36 @@ The more you ask, the smarter the system gets — each stored query improves fut
 
 ---
 
-## Step 8 — Query a cube (optional)
+## Step 8 — Add and query a cube (optional)
 
-If your MDL defines cubes, use the cube CLI for aggregation queries — agents
-don't have to hand-write `GROUP BY` / `DATE_TRUNC` SQL:
+A **cube** is a semantic aggregation object — a model plus declared measures, dimensions, and time grains. `generate-mdl` scaffolds tables and relationships but not cubes, so add one now with Claude Code.
+
+### Step 8a — Add a cube
+
+In Claude Code:
+
+```
+Use the /wren skill to add a cube named "revenue" over the orders model:
+total revenue as SUM(amount), an order count, broken down by status and
+monthly by order_date.
+```
+
+Claude Code drafts the cube YAML, confirms with you, writes it to `cubes/revenue/metadata.yml`, and rebuilds the manifest.
+
+> **Prefer to write it by hand?** See the [Cube guide](../guides/cubes.md) for the full YAML structure, then run `wren context build`.
+
+### Step 8b — Query the cube
 
 ```bash
 wren cube list
 
 wren cube query \
-  --cube order_metrics \
-  --measures revenue \
-  --time-dimension "created_at:month"
+  --cube revenue \
+  --measures total,order_count \
+  --time-dimension "order_date:month"
 ```
 
-Cube queries are the recommended path for aggregation when a cube covers the
-question. Lower error rate, especially on small / local models. See the
-[Cube guide](../guides/cubes.md) for the YAML structure and the
-[CLI reference](../reference/cli.md#wren-cube--pre-aggregation-queries) for all flags.
+`--time-dimension` takes `<name>:<granularity>`. Add `--dimensions status` or `--filter "status:eq:completed"` to slice further. See the [Cube guide](../guides/cubes.md) and [CLI reference](../reference/cli.md#wren-cube--pre-aggregation-queries) for all options.
 
 ---
 
@@ -312,6 +325,9 @@ After setup, your project directory looks like this:
 │   └── supplies/
 │       └── metadata.yml
 ├── views/
+├── cubes/                      # only if you did Step 8
+│   └── revenue/
+│       └── metadata.yml        # measures + dimensions for aggregation
 ├── relationships.yml           # e.g. orders → customers (many_to_one)
 ├── instructions.md             # your business rules
 ├── .wren/
