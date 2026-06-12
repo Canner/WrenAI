@@ -41,6 +41,11 @@ export interface IMDLBuilder {
 // responsible to generate a valid manifest json
 export class MDLBuilder implements IMDLBuilder {
   private manifest: Manifest;
+  private invalidCalculatedFields: Array<{
+    modelId: number;
+    columnId: number;
+    reason: string;
+  }> = [];
 
   private project: Project;
   private readonly models: Model[];
@@ -84,6 +89,7 @@ export class MDLBuilder implements IMDLBuilder {
   }
 
   public build(): Manifest {
+    this.invalidCalculatedFields = [];
     this.addProject();
     this.addModel();
     this.addNormalField();
@@ -91,6 +97,7 @@ export class MDLBuilder implements IMDLBuilder {
     this.addCalculatedField();
     this.addView();
     this.postProcessManifest();
+    this.logInvalidCalculatedFieldSummary();
     return this.getManifest();
   }
 
@@ -241,8 +248,10 @@ export class MDLBuilder implements IMDLBuilder {
             (model: any) => model.id === column.modelId,
           );
           if (!relatedModel) {
-            logger.debug(
-              `Build MDL Column Error: can not find related model, modelId "${column.modelId}", columnId: "${column.id}"`,
+            this.recordInvalidCalculatedField(
+              column.modelId,
+              column.id,
+              'can not find related model',
             );
             return;
           }
@@ -250,15 +259,19 @@ export class MDLBuilder implements IMDLBuilder {
             (model: any) => model.name === relatedModel.referenceName,
           );
           if (!model) {
-            logger.debug(
-              `Build MDL Column Error: can not find model, modelId "${column.modelId}", columnId: "${column.id}"`,
+            this.recordInvalidCalculatedField(
+              column.modelId,
+              column.id,
+              'can not find model',
             );
             return;
           }
           const expression = this.getColumnExpression(column, model);
           if (expression === null) {
-            logger.debug(
-              `Build MDL Column Error: invalid calculated field metadata, modelId "${column.modelId}", columnId: "${column.id}"`,
+            this.recordInvalidCalculatedField(
+              column.modelId,
+              column.id,
+              'invalid calculated field metadata',
             );
             return;
           }
@@ -272,9 +285,10 @@ export class MDLBuilder implements IMDLBuilder {
           };
           model.columns.push(columnValue);
         } catch (error: any) {
-          logger.error(
-            `Build MDL Column Error: failed to add calculated field, modelId "${column.modelId}", columnId: "${column.id}", message: ${error.message}`,
-            error,
+          this.recordInvalidCalculatedField(
+            column.modelId,
+            column.id,
+            `failed to add calculated field: ${error.message}`,
           );
         }
       });
@@ -302,8 +316,10 @@ export class MDLBuilder implements IMDLBuilder {
       }
       const expression = this.getColumnExpression(calculatedField, model);
       if (expression === null) {
-        logger.debug(
-          `Can not add calculated field "${calculatedField.referenceName}" because its metadata is invalid`,
+        this.recordInvalidCalculatedField(
+          calculatedField.modelId,
+          calculatedField.id,
+          `insert skipped because metadata is invalid for "${calculatedField.referenceName}"`,
         );
         return;
       }
@@ -317,9 +333,10 @@ export class MDLBuilder implements IMDLBuilder {
       };
       model.columns.push(columnValue);
     } catch (error: any) {
-      logger.error(
-        `Can not add calculated field "${calculatedField.referenceName}" because building it failed: ${error.message}`,
-        error,
+      this.recordInvalidCalculatedField(
+        calculatedField.modelId,
+        calculatedField.id,
+        `insert failed for "${calculatedField.referenceName}": ${error.message}`,
       );
     }
   }
@@ -510,6 +527,28 @@ export class MDLBuilder implements IMDLBuilder {
       logger.debug(`Can not parse properties "${properties}"`);
       return {};
     }
+  }
+  private recordInvalidCalculatedField(
+    modelId: number,
+    columnId: number,
+    reason: string,
+  ) {
+    this.invalidCalculatedFields.push({ modelId, columnId, reason });
+  }
+  private logInvalidCalculatedFieldSummary() {
+    if (this.invalidCalculatedFields.length === 0) {
+      return;
+    }
+    const preview = this.invalidCalculatedFields
+      .slice(0, 10)
+      .map(
+        ({ modelId, columnId, reason }) =>
+          `modelId="${modelId}", columnId="${columnId}", reason="${reason}"`,
+      )
+      .join('; ');
+    logger.warn(
+      `Skipped ${this.invalidCalculatedFields.length} invalid calculated field(s) while building MDL. ${preview}${this.invalidCalculatedFields.length > 10 ? '; ...' : ''}`,
+    );
   }
   private postProcessManifest() {
     if (this.useRustWrenEngine()) {
