@@ -218,20 +218,44 @@ export class ProjectRepository
     data: Partial<Project>,
     queryOptions?: IQueryOptions,
   ): Promise<Project> {
-    return super.createOne(
-      await this.withMssqlId(this.withTimestamps(data), queryOptions),
-      queryOptions,
-    );
+    const timestamped = this.withTimestamps(data);
+    try {
+      return await super.createOne(
+        await this.withMssqlId(timestamped, queryOptions),
+        queryOptions,
+      );
+    } catch (error) {
+      if (!this.shouldRetryManualId(error, timestamped)) {
+        throw error;
+      }
+
+      return await super.createOne(
+        await this.withMssqlId(timestamped, queryOptions, true),
+        queryOptions,
+      );
+    }
   }
 
   public override async createMany(
     data: Partial<Project>[],
     queryOptions?: IQueryOptions,
   ): Promise<Project[]> {
-    return super.createMany(
-      await this.withMssqlIds(data.map(this.withTimestamps), queryOptions),
-      queryOptions,
-    );
+    const timestamped = data.map(this.withTimestamps);
+    try {
+      return await super.createMany(
+        await this.withMssqlIds(timestamped, queryOptions),
+        queryOptions,
+      );
+    } catch (error) {
+      if (!this.shouldRetryManualId(error, timestamped)) {
+        throw error;
+      }
+
+      return await super.createMany(
+        await this.withMssqlIds(timestamped, queryOptions, true),
+        queryOptions,
+      );
+    }
   }
 
   public override async updateOne(
@@ -376,11 +400,12 @@ export class ProjectRepository
   private withMssqlId = async (
     data: Partial<Project>,
     queryOptions?: IQueryOptions,
+    forceManualId = false,
   ): Promise<Partial<Project>> => {
     if (
       (data.id !== undefined && data.id !== null) ||
       !this.isMssql() ||
-      (await this.hasIdentityId())
+      (!forceManualId && (await this.hasIdentityId()))
     ) {
       return data;
     }
@@ -398,11 +423,12 @@ export class ProjectRepository
   private withMssqlIds = async (
     data: Partial<Project>[],
     queryOptions?: IQueryOptions,
+    forceManualId = false,
   ): Promise<Partial<Project>[]> => {
     if (
       data.every((item) => item.id !== undefined && item.id !== null) ||
       !this.isMssql() ||
-      (await this.hasIdentityId())
+      (!forceManualId && (await this.hasIdentityId()))
     ) {
       return data;
     }
@@ -421,5 +447,31 @@ export class ProjectRepository
         id: nextId++,
       };
     });
+  };
+
+  private shouldRetryManualId = (
+    error: unknown,
+    data: Partial<Project> | Partial<Project>[],
+  ): boolean => {
+    if (!this.isMssql()) {
+      return false;
+    }
+
+    const hasMissingId = Array.isArray(data)
+      ? data.some((item) => item.id === undefined || item.id === null)
+      : data.id === undefined || data.id === null;
+
+    if (!hasMissingId) {
+      return false;
+    }
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === 'string'
+          ? error
+          : '';
+
+    return message.includes("Cannot insert the value NULL into column 'id'");
   };
 }
