@@ -3,7 +3,6 @@ import {
   BaseRepository,
   IBasicRepository,
   IQueryOptions,
-  coerceBoolean,
 } from './baseRepository';
 import {
   camelCase,
@@ -174,6 +173,19 @@ export enum WorkspaceProjectType {
   CLASSIC = 'CLASSIC',
 }
 
+const coerceProjectBoolean = (value: unknown): boolean => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    return value === 1;
+  }
+  if (typeof value === 'string') {
+    return ['1', 'true'].includes(value.toLowerCase());
+  }
+  return Boolean(value);
+};
+
 export interface Project {
   id: number; // ID
   type: DataSourceName; // Project datasource type. ex: bigquery, mysql, postgresql, mongodb, etc
@@ -341,7 +353,7 @@ export class ProjectRepository
       camelCase(key),
     );
     if (Object.prototype.hasOwnProperty.call(camelCaseData, 'isCurrent')) {
-      camelCaseData.isCurrent = coerceBoolean(camelCaseData.isCurrent);
+      camelCaseData.isCurrent = coerceProjectBoolean(camelCaseData.isCurrent);
     }
     return camelCaseData as Project;
   };
