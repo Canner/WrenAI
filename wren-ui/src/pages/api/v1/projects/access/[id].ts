@@ -15,10 +15,20 @@ const logger = getLogger('API_PROJECT_ACCESS_MEMBER');
 logger.level = 'debug';
 
 const getOrganizationMemberService = () => {
-  const { components } = require('@/common');
-  const componentGraph = components ?? globalThis.__wrenComponents;
-  if (!componentGraph) {
-    throw new Error('Components are not initialized');
+  const { components, initComponents } = require('@/common');
+  let componentGraph = components ?? globalThis.__wrenComponents;
+
+  if (
+    !componentGraph?.organizationMemberService ||
+    typeof componentGraph.organizationMemberService.listCurrentProjectAccess !==
+      'function'
+  ) {
+    componentGraph = initComponents();
+    globalThis.__wrenComponents = componentGraph;
+  }
+
+  if (!componentGraph?.organizationMemberService) {
+    throw new Error('Organization member service is not initialized');
   }
   return componentGraph.organizationMemberService;
 };
