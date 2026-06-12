@@ -173,19 +173,6 @@ export enum WorkspaceProjectType {
   CLASSIC = 'CLASSIC',
 }
 
-const coerceProjectBoolean = (value: unknown): boolean => {
-  if (typeof value === 'boolean') {
-    return value;
-  }
-  if (typeof value === 'number') {
-    return value === 1;
-  }
-  if (typeof value === 'string') {
-    return ['1', 'true'].includes(value.toLowerCase());
-  }
-  return Boolean(value);
-};
-
 export interface Project {
   id: number; // ID
   type: DataSourceName; // Project datasource type. ex: bigquery, mysql, postgresql, mongodb, etc
@@ -353,7 +340,7 @@ export class ProjectRepository
       camelCase(key),
     );
     if (Object.prototype.hasOwnProperty.call(camelCaseData, 'isCurrent')) {
-      camelCaseData.isCurrent = coerceProjectBoolean(camelCaseData.isCurrent);
+      camelCaseData.isCurrent = this.normalizeProjectBoolean(camelCaseData.isCurrent);
     }
     return camelCaseData as Project;
   };
@@ -373,6 +360,19 @@ export class ProjectRepository
     });
     return formattedData;
   };
+
+  private normalizeProjectBoolean(value: unknown): boolean {
+    if (typeof value === 'boolean') {
+      return value;
+    }
+    if (typeof value === 'number') {
+      return value === 1;
+    }
+    if (typeof value === 'string') {
+      return ['1', 'true'].includes(value.toLowerCase());
+    }
+    return Boolean(value);
+  }
 
   private isMssql = () =>
     String(this.knex.client.config.client || '').toLowerCase() === 'mssql';
@@ -487,3 +487,4 @@ export class ProjectRepository
     return message.includes("Cannot insert the value NULL into column 'id'");
   };
 }
+
