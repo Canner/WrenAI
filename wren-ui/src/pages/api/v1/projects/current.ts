@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { ApiType } from '@server/repositories/apiHistoryRepository';
+import { coerceBoolean } from '@server/repositories/baseRepository';
 import {
   ApiError,
   handleApiError,
@@ -25,7 +26,7 @@ const serializeProject = (project) =>
         id: project.id,
         displayName: project.displayName,
         projectType: project.projectType || 'CLASSIC',
-        isCurrent: Boolean(project.isCurrent),
+        isCurrent: coerceBoolean(project.isCurrent),
         hasDataSource: Boolean(project.type),
         type: project.type || null,
         createdAt: project.createdAt,
@@ -46,7 +47,8 @@ export default async function handler(
 
     const projectService = getProjectService();
     const projects = await projectService.listProjects();
-    const currentProject = projects.find((project) => project.isCurrent) || null;
+    const currentProject =
+      projects.find((project) => coerceBoolean(project.isCurrent)) || null;
 
     await respondWithSimple({
       res,
