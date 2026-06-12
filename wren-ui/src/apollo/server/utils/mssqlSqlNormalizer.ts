@@ -150,6 +150,41 @@ const replaceInventedTimeBuckets = (sql: string): string => {
   return sql;
 };
 
+const rewriteMssqlLimitClause = (sql: string): string => {
+  const limitMatch = sql.match(/\s+LIMIT\s+(\d+)\s*;?\s*$/i);
+  if (!limitMatch || limitMatch.index === undefined) {
+    return sql;
+  }
+
+  const limit = limitMatch[1];
+  const withoutLimit = sql.slice(0, limitMatch.index).trimEnd();
+  if (/\bSELECT\s+(?:DISTINCT\s+)?TOP\s+(?:\(\s*)?\d+/i.test(withoutLimit)) {
+    return withoutLimit;
+  }
+
+  if (/^\s*SELECT\s+DISTINCT\b/i.test(withoutLimit)) {
+    return withoutLimit.replace(/\bSELECT\s+DISTINCT\b/i, `SELECT DISTINCT TOP ${limit}`);
+  }
+
+  if (/^\s*SELECT\b/i.test(withoutLimit)) {
+    return withoutLimit.replace(/\bSELECT\b/i, `SELECT TOP ${limit}`);
+  }
+
+  return withoutLimit;
+};
+
+const unwrapSimpleMssqlWhereParentheses = (sql: string): string =>
+  sql.replace(
+    /\bWHERE\s*\(\s*([^()]+?)\s*\)(?=\s*(?:GROUP\s+BY|ORDER\s+BY|HAVING|LIMIT|OFFSET|FETCH|UNION|$))/gis,
+    'WHERE $1',
+  );
+
+const normalizeMssqlGeneratedSqlSyntax = (sql: string): string => {
+  sql = sql.replace(/\s+NULLS\s+(?:LAST|FIRST)\b/gi, '');
+  sql = unwrapSimpleMssqlWhereParentheses(sql);
+  return rewriteMssqlLimitClause(sql);
+};
+
 const replaceBadFailurePatternJoins = (sql: string): string => {
   if (
     !/\bdbo_DebugEntries\b/i.test(sql) ||
@@ -294,6 +329,7 @@ export const normalizeMssqlGeneratedSqlFields = (
   }
 
   sql = sql.replace(/\\"/g, '"');
+  sql = normalizeMssqlGeneratedSqlSyntax(sql);
   sql = replaceRelativeCurrentDateCalls(sql);
   sql = replaceInventedDateFields(sql);
   sql = replaceRepairLogThroughputShape(sql);
@@ -379,5 +415,6 @@ export const normalizeMssqlSqlForIbis = (
   dataSource: DataSourceName,
 ): string => {
   sql = normalizeMssqlGeneratedSqlFields(sql, dataSource);
-  return rewriteMssqlDatepartAliasReferences(sql, dataSource);
+  sql = rewriteMssqlDatepartAliasReferences(sql, dataSource);
+  return normalizeMssqlGeneratedSqlFields(sql, dataSource);
 };

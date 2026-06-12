@@ -772,33 +772,36 @@ def _rewrite_mssql_bare_time_bucket_identifiers(sql: str) -> str:
             rf'(?:"{bucket}"|\[{bucket}\]|{bucket})',
             re.IGNORECASE,
         )
-        select_identifier_pattern = re.compile(
-            rf'(?P<prefix>\bSELECT\s+|,\s*)"{bucket}"(?P<suffix>\s*(?:,|\bFROM\b))',
-            re.IGNORECASE,
-        )
-        select_bare_identifier_pattern = re.compile(
-            rf"(?P<prefix>\bSELECT\s+|,\s*){bucket}(?P<suffix>\s*(?:,|\bFROM\b))",
-            re.IGNORECASE,
-        )
-        select_qualified_identifier_pattern = re.compile(
-            rf'(?P<prefix>\bSELECT\s+|,\s*){qualified_bucket_pattern.pattern}(?P<suffix>\s*(?:,|\bFROM\b))',
-            re.IGNORECASE,
+        select_pattern = re.compile(
+            r"\bSELECT\b(?P<body>.*?)(?=\bFROM\b)",
+            re.IGNORECASE | re.DOTALL,
         )
 
-        def replace_select_identifier(match: re.Match[str]) -> str:
-            prefix = match.group("prefix")
-            suffix = match.group("suffix")
-            return f'{prefix}{expression} AS "{bucket}"{suffix}'
+        def replace_select(match: re.Match[str]) -> str:
+            body = match.group("body")
+            items = _split_top_level_select_items(body)
+            if not items:
+                return match.group(0)
 
-        rewritten = select_qualified_identifier_pattern.sub(
-            replace_select_identifier, rewritten
-        )
-        rewritten = select_identifier_pattern.sub(
-            replace_select_identifier, rewritten
-        )
-        rewritten = select_bare_identifier_pattern.sub(
-            replace_select_identifier, rewritten
-        )
+            rebuilt: list[str] = []
+            changed = False
+            select_identifier_pattern = re.compile(
+                rf"^(?:\"{bucket}\"|\[{bucket}\]|{bucket}|{qualified_bucket_pattern.pattern})$",
+                re.IGNORECASE,
+            )
+            for item in items:
+                if select_identifier_pattern.fullmatch(item.strip()):
+                    rebuilt.append(f'{expression} AS "{bucket}"')
+                    changed = True
+                else:
+                    rebuilt.append(item)
+
+            if not changed:
+                return match.group(0)
+
+            return "SELECT " + ", ".join(rebuilt) + " "
+
+        rewritten = select_pattern.sub(replace_select, rewritten)
 
     clause_pattern = re.compile(
         r"\b(GROUP\s+BY|ORDER\s+BY|HAVING)\b(?P<body>.*?)(?=\b(?:ORDER\s+BY|GROUP\s+BY|HAVING|LIMIT|OFFSET|FETCH|UNION|WHERE)\b|$)",
@@ -835,6 +838,50 @@ def _rewrite_mssql_bare_time_bucket_identifiers(sql: str) -> str:
         return f"{match.group(1)}{body}"
 
     return clause_pattern.sub(replace_clause, rewritten)
+
+
+def _rewrite_mssql_limit_clause(sql: str) -> str:
+    limit_match = re.search(r"\s+LIMIT\s+(\d+)\s*;?\s*$", sql, flags=re.IGNORECASE)
+    if not limit_match:
+        return sql
+
+    limit = limit_match.group(1)
+    without_limit = sql[: limit_match.start()].rstrip()
+    if re.search(
+        r"\bSELECT\s+(?:DISTINCT\s+)?TOP\s+(?:\(\s*)?\d+",
+        without_limit,
+        flags=re.IGNORECASE,
+    ):
+        return without_limit
+
+    if re.match(r"\s*SELECT\s+DISTINCT\b", without_limit, flags=re.IGNORECASE):
+        return re.sub(
+            r"\bSELECT\s+DISTINCT\b",
+            f"SELECT DISTINCT TOP {limit}",
+            without_limit,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+
+    if re.match(r"\s*SELECT\b", without_limit, flags=re.IGNORECASE):
+        return re.sub(
+            r"\bSELECT\b",
+            f"SELECT TOP {limit}",
+            without_limit,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+
+    return without_limit
+
+
+def _unwrap_simple_mssql_where_parentheses(sql: str) -> str:
+    return re.sub(
+        r"\bWHERE\s*\(\s*([^()]+?)\s*\)(?=\s*(?:GROUP\s+BY|ORDER\s+BY|HAVING|LIMIT|OFFSET|FETCH|UNION|$))",
+        r"WHERE \1",
+        sql,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
 
 
 def _rewrite_mssql_datepart_alias_references(sql: str) -> str:
@@ -994,6 +1041,8 @@ def _references_known_hallucination_prone_schema(sql: str) -> bool:
 
 def _rewrite_known_schema_hallucinations(sql: str, now: datetime) -> str:
     normalized = _replace_relative_current_date_calls(sql, now)
+    normalized = _unwrap_simple_mssql_where_parentheses(normalized)
+    normalized = _rewrite_mssql_limit_clause(normalized)
     normalized = _rewrite_mssql_to_date_buckets(normalized)
     normalized = _rewrite_mssql_invented_date_identifiers(normalized)
     normalized = _rewrite_mssql_invented_repair_relationship_identifiers(normalized)
@@ -1018,6 +1067,8 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
         normalized = re.sub(
             r"\s+NULLS\s+(?:LAST|FIRST)\b", "", normalized, flags=re.IGNORECASE
         )
+        normalized = _unwrap_simple_mssql_where_parentheses(normalized)
+        normalized = _rewrite_mssql_limit_clause(normalized)
         normalized = re.sub(
             r"CAST\(\s*('(?:[^']|'')*')\s+AS\s+DATETIME(?:2|OFFSET)\s*\)",
             r"\1",
@@ -1044,6 +1095,7 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
         normalized = _rewrite_temporal_bucket_functions(normalized)
         normalized = _rewrite_mssql_datepart_alias_references(normalized)
         normalized = _rewrite_mssql_temporal_bucket_alias_references(normalized)
+        normalized = _rewrite_mssql_bare_time_bucket_identifiers(normalized)
     elif _references_known_hallucination_prone_schema(normalized):
         normalized = _rewrite_known_schema_hallucinations(normalized, datetime.now())
 

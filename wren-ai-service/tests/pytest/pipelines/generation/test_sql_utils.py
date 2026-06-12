@@ -724,3 +724,51 @@ def test_normalize_generation_result_sql_rewrites_timestamp_subtraction_for_mssq
         'DATEDIFF(\'second\', "created_at", "updated_at") AS "turnaround_seconds"'
         in normalized
     )
+
+
+def test_normalize_generation_result_sql_rewrites_mssql_time_buckets_and_ordering():
+    sql = """
+    SELECT
+      YEAR,
+      MONTH,
+      COUNT(*) AS repair_count
+    FROM dbo_repair_logs
+    GROUP BY YEAR, MONTH
+    ORDER BY YEAR ASC NULLS LAST, MONTH ASC NULLS LAST
+    """
+
+    normalized = normalize_generation_result_sql(sql, data_source="MSSQL")
+
+    assert "NULLS LAST" not in normalized
+    assert "SELECT YEAR" not in normalized
+    assert "GROUP BY YEAR" not in normalized
+    assert "ORDER BY YEAR" not in normalized
+    assert (
+        'DATEPART(YEAR, "dbo_repair_logs"."created_at") AS "year"'
+        in normalized
+    )
+    assert (
+        'DATEPART(MONTH, "dbo_repair_logs"."created_at") AS "month"'
+        in normalized
+    )
+    assert 'GROUP BY DATEPART(YEAR, "dbo_repair_logs"."created_at")' in normalized
+    assert 'ORDER BY DATEPART(YEAR, "dbo_repair_logs"."created_at") ASC' in normalized
+
+
+def test_normalize_generation_result_sql_rewrites_mssql_limit_and_where_parentheses():
+    sql = """
+    SELECT model_id, COUNT(*) AS ticket_count
+    FROM dbo_tickets
+    WHERE (source = 'AI')
+    GROUP BY model_id
+    ORDER BY ticket_count DESC NULLS LAST
+    LIMIT 1
+    """
+
+    normalized = normalize_generation_result_sql(sql, data_source="MSSQL")
+
+    assert normalized.startswith("SELECT TOP 1")
+    assert "WHERE (source = 'AI')" not in normalized
+    assert "WHERE source = 'AI'" in normalized
+    assert "NULLS LAST" not in normalized
+    assert "LIMIT 1" not in normalized
