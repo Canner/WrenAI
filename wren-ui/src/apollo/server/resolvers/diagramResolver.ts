@@ -201,6 +201,12 @@ export class DiagramResolver {
       );
       return null;
     }
+    if (columnMDL.expression == null) {
+      logger.debug(
+        `Skip diagram calculated field "${column.referenceName}" because its MDL expression is missing`,
+      );
+      return null;
+    }
     return {
       id: uuidv4(),
       columnId: column.id,
