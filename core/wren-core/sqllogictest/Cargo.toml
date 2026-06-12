@@ -20,13 +20,13 @@ datafusion = { workspace = true, default-features = true }
 half = { version = "2.4.1", default-features = true }
 log = { workspace = true }
 rust_decimal = { version = "1.27.0" }
-sqllogictest = "0.28.4"
+sqllogictest = "0.29.1"
 thiserror = "2.0.3"
 tokio = { workspace = true }
 wren-core = { path = "../core" }
 
 itertools = "0.14.0"
-object_store = { version = "0.12.3", default-features = false }
+object_store = { version = "0.13.2", default-features = false }
 
 clap = { version = "4.4.8", features = ["derive", "env"] }
 futures = "0.3.17"
