@@ -519,6 +519,41 @@ class AskService:
 
         return None
 
+    def _build_repair_sla_compliance_sql(
+        self,
+        query: str,
+        table_ddls: list[str],
+        table_names: Optional[list[str]] = None,
+    ) -> str | None:
+        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized:
+            return None
+
+        wants_sla = "sla" in normalized and any(
+            term in normalized
+            for term in ("compliance", "dashboard", "chart", "repair", "repairs")
+        )
+        if not wants_sla:
+            return None
+
+        has_repair_status = self._schema_has_table_column(
+            table_ddls,
+            "dbo_repair_logs",
+            "status",
+            table_names=table_names,
+        )
+        if has_repair_status:
+            return (
+                'SELECT "dbo_repair_logs"."status" AS "sla_status", '
+                'COUNT(*) AS "repair_count" '
+                'FROM "dbo_repair_logs" '
+                'WHERE "dbo_repair_logs"."status" IS NOT NULL '
+                'GROUP BY "dbo_repair_logs"."status" '
+                'ORDER BY "repair_count" DESC'
+            )
+
+        return None
+
     def _is_direct_heuristic_sql_query(self, query: str) -> bool:
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized:
@@ -539,7 +574,15 @@ class AskService:
                 for term in ("pcb", "repair", "bar chart", "chart", "category")
             )
         )
-        return asks_manufacturing_throughput or asks_failure_counts
+        asks_sla_compliance = "sla" in normalized and any(
+            term in normalized
+            for term in ("compliance", "dashboard", "chart", "repair", "repairs")
+        )
+        return (
+            asks_manufacturing_throughput
+            or asks_failure_counts
+            or asks_sla_compliance
+        )
 
     def _build_heuristic_text_to_sql_fallback(
         self,
@@ -560,6 +603,11 @@ class AskService:
             query, table_ddls, table_names=table_names
         ):
             return repair_failure_count_sql
+
+        if repair_sla_sql := self._build_repair_sla_compliance_sql(
+            query, table_ddls, table_names=table_names
+        ):
+            return repair_sla_sql
 
         wants_chart = any(
             term in normalized for term in ("chart", "bar chart", "line chart", "graph")

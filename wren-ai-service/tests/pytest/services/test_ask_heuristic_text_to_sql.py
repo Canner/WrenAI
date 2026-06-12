@@ -179,6 +179,46 @@ def test_common_pcb_failures_uses_direct_heuristic_route():
     )
 
 
+def test_repair_sla_compliance_uses_status_when_no_sla_duration_field():
+    service = AskService(pipelines={})
+    table_ddls = [
+        """
+        CREATE TABLE dbo_repair_logs (
+          id VARCHAR,
+          board_model VARCHAR,
+          failure_code VARCHAR,
+          status VARCHAR,
+          priority VARCHAR,
+          created_at TIMESTAMP,
+          updated_at TIMESTAMP,
+          data VARCHAR
+        );
+        """
+    ]
+
+    sql = service._build_repair_sla_compliance_sql(
+        "Generate a dashboard chart for repair SLA compliance.",
+        table_ddls,
+        table_names=["dbo_repair_logs"],
+    )
+
+    assert sql
+    assert '"dbo_repair_logs"."status" AS "sla_status"' in sql
+    assert 'COUNT(*) AS "repair_count"' in sql
+    assert '"dbo_repair_logs"."turnaround_time"' not in sql
+    assert '"DAY"' not in sql
+    assert '"MONTH"' not in sql
+    assert "DATEDIFF" not in sql.upper()
+
+
+def test_repair_sla_compliance_uses_direct_heuristic_route():
+    service = AskService(pipelines={})
+
+    assert service._is_direct_heuristic_sql_query(
+        "Generate a dashboard chart for repair SLA compliance."
+    )
+
+
 def test_repair_failure_count_requires_schema_backed_failure_dimension():
     service = AskService(pipelines={})
     table_ddls = [

@@ -80,6 +80,8 @@ def test_get_text_to_sql_rules_adds_mssql_specific_constraints():
     assert "connected datasource metadata" in rules
     assert '"dbo_DebugFixes"."Description"' in rules
     assert '"dbo_DebugFixLogs"."FixId"' in rules
+    assert "repair SLA compliance" in rules
+    assert '"dbo_repair_logs"."status"' in rules
     assert "FailurePatternID" in rules
     assert "failure_code" in rules
     assert "CURRENT_DATE - INTERVAL '1 month'" not in rules
@@ -122,6 +124,7 @@ def test_get_sql_generation_system_prompt_uses_data_source_specific_rules():
     assert "DATEPART(YEAR, <timestamp_expression>)" in prompt
     assert "deployed semantic model definitions" in prompt
     assert '"dbo_DebugFixes"."Description"' in prompt
+    assert "repair SLA compliance" in prompt
 
 
 def test_normalize_generation_result_sql_rewrites_common_mssql_time_patterns():
