@@ -153,3 +153,33 @@ def test_repair_failure_count_requires_schema_backed_failure_dimension():
         )
         is None
     )
+
+
+def test_ask_result_validation_requires_select_sql():
+    service = AskService(pipelines={})
+
+    assert service._build_ask_result_from_sql("SELECT 1")
+    assert service._build_ask_result_from_sql("WITH rows AS (SELECT 1) SELECT * FROM rows")
+    assert service._build_ask_result_from_sql("") is None
+    assert service._build_ask_result_from_sql("DELETE FROM dbo_repair_logs") is None
+    assert service._build_ask_result_from_sql(None) is None
+
+
+def test_retrieval_metadata_ignores_malformed_documents():
+    service = AskService(pipelines={})
+
+    documents, table_names, table_ddls = service._extract_retrieval_metadata(
+        {
+            "construct_retrieval_results": {
+                "retrieval_results": [
+                    {"table_name": "dbo_repair_logs", "table_ddl": "CREATE TABLE dbo_repair_logs (id varchar)"},
+                    {},
+                    "bad-document",
+                ]
+            }
+        }
+    )
+
+    assert len(documents) == 1
+    assert table_names == ["dbo_repair_logs"]
+    assert table_ddls == ["CREATE TABLE dbo_repair_logs (id varchar)"]

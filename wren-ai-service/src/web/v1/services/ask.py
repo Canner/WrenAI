@@ -810,6 +810,84 @@ class AskService:
 
         return ""
 
+    def _extract_retrieval_documents(self, retrieval_result: dict) -> list[dict]:
+        construct_result = retrieval_result.get("construct_retrieval_results", {})
+        documents = construct_result.get("retrieval_results", [])
+        if not isinstance(documents, list):
+            logger.warning("Schema retrieval returned invalid document payload")
+            return []
+
+        valid_documents = []
+        for document in documents:
+            if not isinstance(document, dict):
+                logger.warning("Ignoring malformed retrieval document: %s", document)
+                continue
+            if not document.get("table_name") and not document.get("table_ddl"):
+                logger.warning("Ignoring retrieval document without table metadata")
+                continue
+            valid_documents.append(document)
+
+        return valid_documents
+
+    def _extract_retrieval_metadata(
+        self, retrieval_result: dict
+    ) -> tuple[list[dict], list[str], list[str]]:
+        documents = self._extract_retrieval_documents(retrieval_result)
+        table_names = [
+            table_name
+            for document in documents
+            if isinstance(table_name := document.get("table_name"), str)
+            and table_name.strip()
+        ]
+        table_ddls = [
+            table_ddl
+            for document in documents
+            if isinstance(table_ddl := document.get("table_ddl"), str)
+            and table_ddl.strip()
+        ]
+        return documents, table_names, table_ddls
+
+    def _is_valid_select_sql(self, sql: Optional[str]) -> bool:
+        if not isinstance(sql, str):
+            return False
+
+        normalized = re.sub(r"\s+", " ", sql.strip())
+        if not normalized:
+            return False
+
+        return bool(re.match(r"^(?:WITH|SELECT)\b", normalized, flags=re.IGNORECASE))
+
+    def _build_ask_result_from_sql(self, sql: Optional[str]) -> Optional[AskResult]:
+        if not self._is_valid_select_sql(sql):
+            return None
+        return AskResult(sql=sql.strip(), type="llm")
+
+    def _build_failed_text_to_sql_response(
+        self,
+        trace_id: Optional[str],
+        message: str,
+        *,
+        rephrased_question: Optional[str] = None,
+        intent_reasoning: Optional[str] = None,
+        retrieved_tables: Optional[list[str]] = None,
+        sql_generation_reasoning: Optional[str] = None,
+        invalid_sql: Optional[str] = None,
+        is_followup: bool = False,
+        code: Literal["NO_RELEVANT_DATA", "NO_RELEVANT_SQL", "OTHERS"] = "NO_RELEVANT_SQL",
+    ) -> AskResultResponse:
+        return AskResultResponse(
+            status="failed",
+            type="TEXT_TO_SQL",
+            error=AskError(code=code, message=message),
+            rephrased_question=rephrased_question,
+            intent_reasoning=intent_reasoning,
+            retrieved_tables=retrieved_tables,
+            sql_generation_reasoning=sql_generation_reasoning,
+            invalid_sql=invalid_sql,
+            trace_id=trace_id,
+            is_followup=is_followup,
+        )
+
     @observe(name="Ask Question")
     @trace_metadata
     async def ask(
@@ -831,6 +909,18 @@ class AskService:
         query_id = ask_request.query_id
         if not query_id:
             raise ValueError("query_id is required for ask service execution")
+
+        user_query = (ask_request.query or "").strip()
+        if not user_query:
+            self._ask_results[query_id] = self._build_failed_text_to_sql_response(
+                trace_id,
+                "Question is required",
+                code="OTHERS",
+            )
+            results["metadata"]["error_type"] = "OTHERS"
+            results["metadata"]["error_message"] = "Question is required"
+            results["metadata"]["type"] = "TEXT_TO_SQL"
+            return results
 
         logger.info(f"Ask pipeline started for query_id: {query_id}")
         histories = ask_request.histories[: self._max_histories][
@@ -862,7 +952,6 @@ class AskService:
         sql_knowledge = None
 
         try:
-            user_query = ask_request.query
             sql_user_query = user_query
 
             # ask status can be understanding, searching, generating, finished, failed, stopped
@@ -905,16 +994,9 @@ class AskService:
                             enable_column_pruning=False,
                         ),
                     )
-                    _retrieval_result = retrieval_result.get(
-                        "construct_retrieval_results", {}
+                    documents, table_names, table_ddls = (
+                        self._extract_retrieval_metadata(retrieval_result)
                     )
-                    documents = _retrieval_result.get("retrieval_results", [])
-                    table_names = [
-                        document.get("table_name") for document in documents
-                    ]
-                    table_ddls = [
-                        document.get("table_ddl", "") or "" for document in documents
-                    ]
                     logger.info(
                         "Retrieved tables for direct heuristic query_id %s: %s",
                         query_id,
@@ -929,27 +1011,25 @@ class AskService:
                             query_id,
                             user_query,
                         )
-                        api_results = [
-                            AskResult(
-                                **{
-                                    "sql": heuristic_sql,
-                                    "type": "llm",
-                                }
-                            )
-                        ]
-                        if not self._is_stopped(query_id, self._ask_results):
-                            self._ask_results[query_id] = AskResultResponse(
-                                status="finished",
-                                type="TEXT_TO_SQL",
-                                response=api_results,
-                                rephrased_question=user_query,
-                                retrieved_tables=table_names,
-                                trace_id=trace_id,
-                                is_followup=True if histories else False,
-                            )
-                        results["ask_result"] = api_results
-                        results["metadata"]["type"] = "TEXT_TO_SQL"
-                        return results
+                        if ask_result := self._build_ask_result_from_sql(
+                            heuristic_sql
+                        ):
+                            api_results = [ask_result]
+                            if not self._is_stopped(query_id, self._ask_results):
+                                self._ask_results[query_id] = AskResultResponse(
+                                    status="finished",
+                                    type="TEXT_TO_SQL",
+                                    response=api_results,
+                                    rephrased_question=user_query,
+                                    retrieved_tables=table_names,
+                                    trace_id=trace_id,
+                                    is_followup=True if histories else False,
+                                )
+                            results["ask_result"] = api_results
+                            results["metadata"]["type"] = "TEXT_TO_SQL"
+                            return results
+                        invalid_sql = heuristic_sql
+                        error_message = "Heuristic SQL fallback did not produce a valid SELECT statement."
 
                 historical_question = await self._run_with_timeout(
                     "Historical question retrieval",
@@ -964,17 +1044,27 @@ class AskService:
                     "formatted_output", {}
                 ).get("documents", [])[:1]
 
-                if historical_question_result:
-                    api_results = [
+                valid_historical_results = []
+                for result in historical_question_result:
+                    sql_statement = result.get("statement")
+                    if not self._is_valid_select_sql(sql_statement):
+                        logger.warning(
+                            "Ignoring historical question without valid SQL for query_id %s",
+                            query_id,
+                        )
+                        continue
+                    valid_historical_results.append(
                         AskResult(
                             **{
-                                "sql": result.get("statement"),
+                                "sql": sql_statement.strip(),
                                 "type": "view" if result.get("viewId") else "llm",
                                 "viewId": result.get("viewId"),
                             }
                         )
-                        for result in historical_question_result
-                    ]
+                    )
+
+                if valid_historical_results:
+                    api_results = valid_historical_results
                     sql_generation_reasoning = ""
                 else:
                     original_user_query = user_query
@@ -1183,11 +1273,9 @@ class AskService:
                 _retrieval_result = retrieval_result.get(
                     "construct_retrieval_results", {}
                 )
-                documents = _retrieval_result.get("retrieval_results", [])
-                table_names = [document.get("table_name") for document in documents]
-                table_ddls = [
-                    document.get("table_ddl", "") or "" for document in documents
-                ]
+                documents, table_names, table_ddls = (
+                    self._extract_retrieval_metadata(retrieval_result)
+                )
                 logger.info(
                     "Retrieved tables for query_id %s: %s", query_id, table_names
                 )
@@ -1227,14 +1315,27 @@ class AskService:
                             query_id,
                             user_query,
                         )
-                        api_results = [
-                            AskResult(
-                                **{
-                                    "sql": heuristic_sql,
-                                    "type": "llm",
-                                }
-                            )
-                        ]
+                        ask_result = self._build_ask_result_from_sql(heuristic_sql)
+                        if not ask_result:
+                            invalid_sql = heuristic_sql
+                            error_message = "Heuristic SQL fallback did not produce a valid SELECT statement."
+                            if not self._is_stopped(query_id, self._ask_results):
+                                self._ask_results[query_id] = (
+                                    self._build_failed_text_to_sql_response(
+                                        trace_id,
+                                        error_message,
+                                        rephrased_question=rephrased_question,
+                                        intent_reasoning=intent_reasoning,
+                                        retrieved_tables=table_names,
+                                        invalid_sql=invalid_sql,
+                                        is_followup=True if histories else False,
+                                    )
+                                )
+                            results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
+                            results["metadata"]["error_message"] = error_message
+                            results["metadata"]["type"] = "TEXT_TO_SQL"
+                            return results
+                        api_results = [ask_result]
                         if not self._is_stopped(query_id, self._ask_results):
                             self._ask_results[query_id] = AskResultResponse(
                                 status="finished",
@@ -1423,14 +1524,15 @@ class AskService:
                 if sql_valid_result := text_to_sql_generation_results["post_process"][
                     "valid_generation_result"
                 ]:
-                    api_results = [
-                        AskResult(
-                            **{
-                                "sql": sql_valid_result.get("sql"),
-                                "type": "llm",
-                            }
+                    if ask_result := self._build_ask_result_from_sql(
+                        sql_valid_result.get("sql")
+                    ):
+                        api_results = [ask_result]
+                    else:
+                        invalid_sql = sql_valid_result.get("sql")
+                        error_message = (
+                            "SQL generation did not produce a valid SELECT statement."
                         )
-                    ]
                 elif failed_dry_run_result := text_to_sql_generation_results[
                     "post_process"
                 ]["invalid_generation_result"]:
@@ -1505,15 +1607,15 @@ class AskService:
                         if valid_generation_result := sql_correction_results[
                             "post_process"
                         ]["valid_generation_result"]:
-                            api_results = [
-                                AskResult(
-                                    **{
-                                        "sql": valid_generation_result.get("sql"),
-                                        "type": "llm",
-                                    }
-                                )
-                            ]
-                            break
+                            if ask_result := self._build_ask_result_from_sql(
+                                valid_generation_result.get("sql")
+                            ):
+                                api_results = [ask_result]
+                                break
+                            invalid_sql = valid_generation_result.get("sql")
+                            error_message = (
+                                "SQL correction did not produce a valid SELECT statement."
+                            )
 
                         failed_dry_run_result = sql_correction_results["post_process"][
                             "invalid_generation_result"
@@ -1547,29 +1649,27 @@ class AskService:
                         query_id,
                         user_query,
                     )
-                    api_results = [
-                        AskResult(
-                            **{
-                                "sql": heuristic_sql,
-                                "type": "llm",
-                            }
-                        )
-                    ]
-                    if not self._is_stopped(query_id, self._ask_results):
-                        self._ask_results[query_id] = AskResultResponse(
-                            status="finished",
-                            type="TEXT_TO_SQL",
-                            response=api_results,
-                            rephrased_question=rephrased_question,
-                            intent_reasoning=intent_reasoning,
-                            retrieved_tables=table_names,
-                            sql_generation_reasoning=sql_generation_reasoning,
-                            trace_id=trace_id,
-                            is_followup=True if histories else False,
-                        )
-                    results["ask_result"] = api_results
-                    results["metadata"]["type"] = "TEXT_TO_SQL"
-                    return results
+                    ask_result = self._build_ask_result_from_sql(heuristic_sql)
+                    if not ask_result:
+                        invalid_sql = heuristic_sql
+                        error_message = "Heuristic SQL fallback did not produce a valid SELECT statement."
+                    else:
+                        api_results = [ask_result]
+                        if not self._is_stopped(query_id, self._ask_results):
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="TEXT_TO_SQL",
+                                response=api_results,
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                retrieved_tables=table_names,
+                                sql_generation_reasoning=sql_generation_reasoning,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                            )
+                        results["ask_result"] = api_results
+                        results["metadata"]["type"] = "TEXT_TO_SQL"
+                        return results
 
                 logger.exception(f"ask pipeline - NO_RELEVANT_SQL: {user_query}")
                 if not self._is_stopped(query_id, self._ask_results):
