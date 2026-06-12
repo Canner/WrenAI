@@ -554,6 +554,47 @@ class AskService:
 
         return None
 
+    def _build_monthly_repair_volume_sql(
+        self,
+        query: str,
+        table_ddls: list[str],
+        table_names: Optional[list[str]] = None,
+    ) -> str | None:
+        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized:
+            return None
+
+        wants_monthly_repairs = (
+            "repair" in normalized
+            and any(
+                term in normalized
+                for term in ("monthly", "last 12 months", "trend", "volume")
+            )
+        )
+        if not wants_monthly_repairs:
+            return None
+
+        has_repair_created_at = self._schema_has_table_column(
+            table_ddls,
+            "dbo_repair_logs",
+            "created_at",
+            table_names=table_names,
+        )
+        if has_repair_created_at:
+            return (
+                'SELECT DATEPART(YEAR, "dbo_repair_logs"."created_at") AS "year", '
+                'DATEPART(MONTH, "dbo_repair_logs"."created_at") AS "month", '
+                'COUNT(*) AS "repair_count" '
+                'FROM "dbo_repair_logs" '
+                'WHERE "dbo_repair_logs"."created_at" IS NOT NULL '
+                'GROUP BY DATEPART(YEAR, "dbo_repair_logs"."created_at"), '
+                'DATEPART(MONTH, "dbo_repair_logs"."created_at") '
+                'ORDER BY DATEPART(YEAR, "dbo_repair_logs"."created_at") ASC, '
+                'DATEPART(MONTH, "dbo_repair_logs"."created_at") ASC'
+            )
+
+        return None
+
     def _is_direct_heuristic_sql_query(self, query: str) -> bool:
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized:
@@ -578,10 +619,18 @@ class AskService:
             term in normalized
             for term in ("compliance", "dashboard", "chart", "repair", "repairs")
         )
+        asks_monthly_repairs = (
+            "repair" in normalized
+            and any(
+                term in normalized
+                for term in ("monthly", "last 12 months", "trend", "volume")
+            )
+        )
         return (
             asks_manufacturing_throughput
             or asks_failure_counts
             or asks_sla_compliance
+            or asks_monthly_repairs
         )
 
     def _build_heuristic_text_to_sql_fallback(
@@ -608,6 +657,11 @@ class AskService:
             query, table_ddls, table_names=table_names
         ):
             return repair_sla_sql
+
+        if monthly_repair_volume_sql := self._build_monthly_repair_volume_sql(
+            query, table_ddls, table_names=table_names
+        ):
+            return monthly_repair_volume_sql
 
         wants_chart = any(
             term in normalized for term in ("chart", "bar chart", "line chart", "graph")
@@ -729,23 +783,6 @@ class AskService:
                     f'LIMIT {top_n}'
                 )
 
-        if wants_monthly_repairs and self._schema_contains(
-            table_ddls, r"\bdbo_repair_logs\b", table_names=table_names
-        ) and self._schema_contains(
-            table_ddls, r"\bcreated_at\b", table_names=table_names
-        ):
-            return (
-                'SELECT DATEPART(YEAR, "dbo_repair_logs"."created_at") AS "year", '
-                'DATEPART(MONTH, "dbo_repair_logs"."created_at") AS "month", '
-                'COUNT(*) AS "repair_count" '
-                'FROM "dbo_repair_logs" '
-                'WHERE "dbo_repair_logs"."created_at" >= DATEADD(month, -12, GETDATE()) '
-                'GROUP BY DATEPART(YEAR, "dbo_repair_logs"."created_at"), '
-                'DATEPART(MONTH, "dbo_repair_logs"."created_at") '
-                'ORDER BY DATEPART(YEAR, "dbo_repair_logs"."created_at") ASC, '
-                'DATEPART(MONTH, "dbo_repair_logs"."created_at") ASC'
-            )
-
         if wants_failure_counts and wants_chart:
             top_n = self._extract_requested_top_n(query)
             return (
@@ -756,19 +793,6 @@ class AskService:
                 f'GROUP BY "dbo_failure_patterns"."Failuresys" '
                 f'ORDER BY "repair_count" DESC '
                 f'LIMIT {top_n}'
-            )
-
-        if wants_monthly_repairs:
-            return (
-                'SELECT DATEPART(YEAR, "dbo_repair_logs"."created_at") AS "year", '
-                'DATEPART(MONTH, "dbo_repair_logs"."created_at") AS "month", '
-                'COUNT(*) AS "repair_count" '
-                'FROM "dbo_repair_logs" '
-                'WHERE "dbo_repair_logs"."created_at" >= DATEADD(month, -12, GETDATE()) '
-                'GROUP BY DATEPART(YEAR, "dbo_repair_logs"."created_at"), '
-                'DATEPART(MONTH, "dbo_repair_logs"."created_at") '
-                'ORDER BY DATEPART(YEAR, "dbo_repair_logs"."created_at") ASC, '
-                'DATEPART(MONTH, "dbo_repair_logs"."created_at") ASC'
             )
 
         return None

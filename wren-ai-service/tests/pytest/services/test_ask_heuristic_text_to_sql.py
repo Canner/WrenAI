@@ -219,6 +219,47 @@ def test_repair_sla_compliance_uses_direct_heuristic_route():
     )
 
 
+def test_monthly_repair_volume_uses_created_at_bucket():
+    service = AskService(pipelines={})
+    table_ddls = [
+        """
+        CREATE TABLE dbo_repair_logs (
+          id VARCHAR,
+          board_model VARCHAR,
+          failure_code VARCHAR,
+          status VARCHAR,
+          priority VARCHAR,
+          created_at TIMESTAMP,
+          updated_at TIMESTAMP,
+          data VARCHAR
+        );
+        """
+    ]
+
+    sql = service._build_monthly_repair_volume_sql(
+        "Generate a line chart showing monthly repair volume for the last 12 months.",
+        table_ddls,
+        table_names=["dbo_repair_logs"],
+    )
+
+    assert sql
+    assert 'DATEPART(YEAR, "dbo_repair_logs"."created_at") AS "year"' in sql
+    assert 'DATEPART(MONTH, "dbo_repair_logs"."created_at") AS "month"' in sql
+    assert 'COUNT(*) AS "repair_count"' in sql
+    assert '"dbo_repair_logs"."MONTH"' not in sql
+    assert '"MONTH"' not in sql
+    assert "DATEADD" not in sql.upper()
+    assert "GETDATE" not in sql.upper()
+
+
+def test_monthly_repair_volume_uses_direct_heuristic_route():
+    service = AskService(pipelines={})
+
+    assert service._is_direct_heuristic_sql_query(
+        "Generate a line chart showing monthly repair volume for the last 12 months."
+    )
+
+
 def test_repair_failure_count_requires_schema_backed_failure_dimension():
     service = AskService(pipelines={})
     table_ddls = [
