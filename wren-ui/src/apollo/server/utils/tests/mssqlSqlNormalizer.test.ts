@@ -135,6 +135,20 @@ describe('mssqlSqlNormalizer', () => {
     expect(normalized).not.toContain('FROM dbo_tickets');
   });
 
+  it('quotes dbo-prefixed model names for non-MSSQL project contexts', () => {
+    const normalized = normalizeMssqlSqlForIbis(
+      `
+      SELECT org_id, COUNT(*) AS num_questions
+      FROM dbo_search_queries
+      GROUP BY org_id
+      `,
+      DataSourceName.POSTGRES,
+    );
+
+    expect(normalized).toContain('FROM "dbo_search_queries"');
+    expect(normalized).not.toContain('FROM dbo_search_queries');
+  });
+
   it('normalizes schema-qualified dbo references back to model names', () => {
     const normalized = normalizeMssqlSqlForIbis(
       `

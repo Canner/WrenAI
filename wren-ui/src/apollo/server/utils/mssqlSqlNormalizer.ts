@@ -456,11 +456,13 @@ export const normalizeMssqlGeneratedSqlFields = (
   sql: string,
   dataSource: DataSourceName,
 ): string => {
+  sql = sql.replace(/\\"/g, '"');
+  sql = quoteMssqlDboModelReferences(sql);
+
   if (dataSource !== DataSourceName.MSSQL) {
     return sql;
   }
 
-  sql = sql.replace(/\\"/g, '"');
   sql = normalizeMssqlGeneratedSqlSyntax(sql);
   sql = rewriteMssqlDatepartFunctions(sql);
   sql = replaceRelativeCurrentDateCalls(sql);
