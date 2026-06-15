@@ -205,28 +205,27 @@ const normalizeMssqlGeneratedSqlSyntax = (sql: string): string => {
   return rewriteMssqlLimitClause(sql);
 };
 
-const rewriteSchemaNormalizedDboTables = (sql: string): string => {
-  const tableRef =
-    String.raw`(?:"(dbo_[A-Za-z0-9_]+)"|\[(dbo_[A-Za-z0-9_]+)\]|\b(dbo_[A-Za-z0-9_]+)\b)`;
-  const tableClause = new RegExp(
-    String.raw`\b(FROM|JOIN)\s+${tableRef}(?=\s*(?:WHERE|JOIN|LEFT|RIGHT|INNER|FULL|CROSS|GROUP\s+BY|ORDER\s+BY|HAVING|LIMIT|OFFSET|FETCH|UNION|ON|,|\)|$))`,
-    'gi',
-  );
+const quoteMssqlDboModelReferences = (sql: string): string => {
+  sql = sql.replace(/\bdbo\.([A-Za-z0-9_]+)\b/g, '"dbo_$1"');
 
-  return sql.replace(
-    tableClause,
-    (_match, clause, quotedName, bracketName, bareName) => {
-      const modelName = quotedName || bracketName || bareName;
-      const tableName = modelName.replace(/^dbo_/i, '');
-      const schemaQualifiedTable =
-        quotedName || bracketName
-          ? `"dbo"."${tableName}"`
-          : `dbo.${tableName}`;
-      const alias =
-        quotedName || bracketName ? ` AS "${modelName}"` : ` AS ${modelName}`;
-      return `${clause} ${schemaQualifiedTable}${alias}`;
-    },
-  );
+  const quotedModels = new Set<string>();
+  sql.replace(/"dbo_[A-Za-z0-9_]+"/gi, (match) => {
+    quotedModels.add(match.slice(1, -1));
+    return match;
+  });
+
+  const bareDboModel = /\bdbo_[A-Za-z0-9_]+\b/g;
+  return sql.replace(bareDboModel, (modelName, offset, source) => {
+    if (source[offset - 1] === '"' || source[offset + modelName.length] === '"') {
+      return modelName;
+    }
+
+    if (!quotedModels.has(modelName)) {
+      quotedModels.add(modelName);
+    }
+
+    return `"${modelName}"`;
+  });
 };
 
 const replaceBadFailurePatternJoins = (sql: string): string => {
@@ -475,7 +474,7 @@ export const normalizeMssqlGeneratedSqlFields = (
   sql = replaceInventedTimeBuckets(sql);
   sql = replaceBadFailurePatternJoins(sql);
   sql = rewriteMssqlDatepartFunctions(sql);
-  sql = rewriteSchemaNormalizedDboTables(sql);
+  sql = quoteMssqlDboModelReferences(sql);
   return normalizeMssqlGeneratedSqlSyntax(sql);
 };
 

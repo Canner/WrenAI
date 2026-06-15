@@ -105,7 +105,7 @@ describe('mssqlSqlNormalizer', () => {
     expect(normalized).toContain('"created_by_user_id"');
   });
 
-  it('rewrites quoted dbo-prefixed table names to schema-qualified tables with aliases', () => {
+  it('keeps quoted dbo-prefixed model names for ibis model resolution', () => {
     const normalized = normalizeMssqlSqlForIbis(
       `
       SELECT "dbo_search_queries"."org_id", COUNT(*) AS completed_questions
@@ -116,12 +116,12 @@ describe('mssqlSqlNormalizer', () => {
       DataSourceName.MSSQL,
     );
 
-    expect(normalized).toContain('FROM "dbo"."search_queries" AS "dbo_search_queries"');
+    expect(normalized).toContain('FROM "dbo_search_queries"');
     expect(normalized).toContain('"dbo_search_queries"."org_id"');
-    expect(normalized).not.toContain('FROM "dbo_search_queries"');
+    expect(normalized).not.toContain('FROM dbo_search_queries');
   });
 
-  it('rewrites unquoted dbo-prefixed table names to schema-qualified tables with aliases', () => {
+  it('quotes unquoted dbo-prefixed model names for ibis model resolution', () => {
     const normalized = normalizeMssqlSqlForIbis(
       `
       SELECT status, COUNT(*) AS count_of_questions
@@ -131,7 +131,25 @@ describe('mssqlSqlNormalizer', () => {
       DataSourceName.MSSQL,
     );
 
-    expect(normalized).toContain('FROM dbo.tickets AS dbo_tickets');
+    expect(normalized).toContain('FROM "dbo_tickets"');
     expect(normalized).not.toContain('FROM dbo_tickets');
+  });
+
+  it('normalizes schema-qualified dbo references back to model names', () => {
+    const normalized = normalizeMssqlSqlForIbis(
+      `
+      SELECT dbo.search_queries.org_id, COUNT(*) AS completed_questions
+      FROM dbo.search_queries
+      INNER JOIN dbo.organizations ON dbo.search_queries.org_id = dbo.organizations.id
+      GROUP BY dbo.organizations.name
+      `,
+      DataSourceName.MSSQL,
+    );
+
+    expect(normalized).toContain('FROM "dbo_search_queries"');
+    expect(normalized).toContain('INNER JOIN "dbo_organizations"');
+    expect(normalized).toContain('"dbo_search_queries".org_id');
+    expect(normalized).not.toContain('dbo.search_queries');
+    expect(normalized).not.toContain('dbo.organizations');
   });
 });
