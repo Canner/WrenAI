@@ -125,13 +125,7 @@ def _build_view_ddl(content: dict) -> str:
 def expand_business_terms_for_retrieval(query: str) -> str:
     normalized = (query or "").lower()
     pcb_terms = {
-        "assembly",
-        "bar chart",
         "business unit",
-        "category",
-        "common",
-        "contributor",
-        "count by",
         "pcb",
         "repair",
         "debug",
@@ -140,19 +134,7 @@ def expand_business_terms_for_retrieval(query: str) -> str:
         "failure code",
         "failure category",
         "failure pattern",
-        "top 10",
-        "top ten",
-        "most common",
         "resolved",
-        "trend",
-        "volume",
-        "count",
-        "counts",
-        "average",
-        "avg",
-        "chart",
-        "month",
-        "monthly",
     }
     if not any(term in normalized for term in pcb_terms):
         return query

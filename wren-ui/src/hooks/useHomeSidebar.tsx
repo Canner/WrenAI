@@ -10,7 +10,8 @@ import {
 export default function useHomeSidebar() {
   const router = useRouter();
   const { data, refetch } = useThreadsQuery({
-    fetchPolicy: 'cache-and-network',
+    fetchPolicy: 'network-only',
+    nextFetchPolicy: 'network-only',
   });
   const [updateThread] = useUpdateThreadMutation({
     onError: (error) => console.error(error),

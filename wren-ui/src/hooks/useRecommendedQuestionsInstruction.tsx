@@ -45,6 +45,8 @@ export default function useRecommendedQuestionsInstruction() {
 
   const [fetchRecommendationQuestions, recommendationQuestionsResult] =
     useGetProjectRecommendationQuestionsLazyQuery({
+      fetchPolicy: 'network-only',
+      nextFetchPolicy: 'network-only',
       pollInterval: 2000,
     });
 
@@ -79,6 +81,7 @@ export default function useRecommendedQuestionsInstruction() {
     };
 
     fetchRecommendationQuestionsData();
+    return () => recommendationQuestionsResult.stopPolling();
   }, []);
 
   useEffect(() => {

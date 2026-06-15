@@ -930,11 +930,11 @@ class AskService:
 
     def _build_greeting_response(self, query: str) -> str:
         return (
-            f"Hi. I can help with questions about your PCB database and Wren AI.\n\n"
+            f"Hi. I can help with questions about your active datasource and Wren AI.\n\n"
             f"Try a data question like:\n"
-            f"- Show repair trends for the last 12 months\n"
-            f"- Compare average debug hours by product family\n"
-            f"- Which failure codes occur most often?\n\n"
+            f"- Show monthly trends for the last 12 months\n"
+            f"- Compare totals by category\n"
+            f"- Which records occur most often?\n\n"
             f"If you want, ask a database question directly instead of `{query}`."
         )
 

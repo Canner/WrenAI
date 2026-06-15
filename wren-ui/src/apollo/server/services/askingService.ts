@@ -536,10 +536,7 @@ export class AskingService implements IAskingService {
   public async getThreadRecommendationQuestions(
     threadId: number,
   ): Promise<ThreadRecommendQuestionResult> {
-    const thread = await this.threadRepository.findOneBy({ id: threadId });
-    if (!thread) {
-      throw new Error(`Thread ${threadId} not found`);
-    }
+    const thread = await this.ensureThreadInCurrentProject(threadId);
 
     // handle not started
     const res: ThreadRecommendQuestionResult = {
@@ -580,10 +577,7 @@ export class AskingService implements IAskingService {
   private async doGenerateThreadRecommendationQuestions(
     threadId: number,
   ): Promise<void> {
-    const thread = await this.threadRepository.findOneBy({ id: threadId });
-    if (!thread) {
-      throw new Error(`Thread ${threadId} not found`);
-    }
+    const thread = await this.ensureThreadInCurrentProject(threadId);
 
     if (this.threadRecommendQuestionBackgroundTracker.isExist(thread)) {
       logger.debug(
@@ -668,8 +662,14 @@ export class AskingService implements IAskingService {
     threadResponseId?: number,
   ): Promise<Task> {
     const { threadId, language } = payload;
-    const projectId =
-      payload.projectId ?? (await this.projectService.getCurrentProject()).id;
+    const currentProject = await this.projectService.getCurrentProject();
+    const projectId = payload.projectId ?? currentProject.id;
+    if (projectId !== currentProject.id) {
+      throw new Error(`Project ${projectId} is not the active project`);
+    }
+    if (threadId) {
+      await this.ensureThreadInCurrentProject(threadId);
+    }
     const deployId = await this.getDeployId();
 
     // if it's a follow-up question, then the input will have a threadId
@@ -704,6 +704,7 @@ export class AskingService implements IAskingService {
     if (!threadResponse) {
       throw new Error(`Thread response ${threadResponseId} not found`);
     }
+    await this.ensureThreadInCurrentProject(threadResponse.threadId);
 
     // get the original question and ask again
     const question = threadResponse.question;
@@ -800,12 +801,14 @@ export class AskingService implements IAskingService {
       throw new Error('Update thread input is empty');
     }
 
+    await this.ensureThreadInCurrentProject(threadId);
     return this.threadRepository.updateOne(threadId, {
       summary: input.summary,
     });
   }
 
   public async deleteThread(threadId: number): Promise<void> {
+    await this.ensureThreadInCurrentProject(threadId);
     await this.threadRepository.deleteOne(threadId);
   }
 
@@ -813,13 +816,7 @@ export class AskingService implements IAskingService {
     input: AskingDetailTaskInput,
     threadId: number,
   ): Promise<ThreadResponse> {
-    const thread = await this.threadRepository.findOneBy({
-      id: threadId,
-    });
-
-    if (!thread) {
-      throw new Error(`Thread ${threadId} not found`);
-    }
+    const thread = await this.ensureThreadInCurrentProject(threadId);
 
     const threadResponse = await this.threadResponseRepository.createOne({
       threadId: thread.id,
@@ -852,6 +849,7 @@ export class AskingService implements IAskingService {
     if (!threadResponse) {
       throw new Error(`Thread response ${responseId} not found`);
     }
+    await this.ensureThreadInCurrentProject(threadResponse.threadId);
 
     return await this.threadResponseRepository.updateOne(responseId, {
       sql: data.sql,
@@ -870,6 +868,7 @@ export class AskingService implements IAskingService {
     if (!threadResponse) {
       throw new Error(`Thread response ${threadResponseId} not found`);
     }
+    await this.ensureThreadInCurrentProject(threadResponse.threadId);
 
     // 1. create a task on AI service to generate the detail
     const response = await this.wrenAIAdaptor.generateAskDetail({
@@ -906,6 +905,7 @@ export class AskingService implements IAskingService {
     if (!threadResponse) {
       throw new Error(`Thread response ${threadResponseId} not found`);
     }
+    await this.ensureThreadInCurrentProject(threadResponse.threadId);
 
     if (isAnswerGenerationInProgress(threadResponse.answerDetail?.status)) {
       logger.debug(
@@ -941,6 +941,7 @@ export class AskingService implements IAskingService {
     if (!threadResponse) {
       throw new Error(`Thread response ${threadResponseId} not found`);
     }
+    await this.ensureThreadInCurrentProject(threadResponse.threadId);
 
     if (isChartGenerationInProgress(threadResponse.chartDetail?.status)) {
       logger.debug(
@@ -985,6 +986,7 @@ export class AskingService implements IAskingService {
     if (!threadResponse) {
       throw new Error(`Thread response ${threadResponseId} not found`);
     }
+    await this.ensureThreadInCurrentProject(threadResponse.threadId);
 
     if (
       isChartGenerationInProgress(threadResponse.chartDetail?.status) &&
@@ -1024,11 +1026,19 @@ export class AskingService implements IAskingService {
   }
 
   public async getResponsesWithThread(threadId: number) {
+    await this.ensureThreadInCurrentProject(threadId);
     return this.threadResponseRepository.getResponsesWithThread(threadId);
   }
 
   public async getResponse(responseId: number) {
-    return this.threadResponseRepository.findOneBy({ id: responseId });
+    const response = await this.threadResponseRepository.findOneBy({
+      id: responseId,
+    });
+    if (!response) {
+      return null;
+    }
+    await this.ensureThreadInCurrentProject(response.threadId);
+    return response;
   }
 
   public async previewData(responseId: number, limit?: number) {
@@ -1104,14 +1114,18 @@ export class AskingService implements IAskingService {
   public async createInstantRecommendedQuestions(
     input: InstantRecommendedQuestionsInput,
   ): Promise<Task> {
-    const key = JSON.stringify(input.previousQuestions || []);
+    const project = await this.projectService.getCurrentProject();
+    const key = JSON.stringify({
+      projectId: project.id,
+      previousQuestions: input.previousQuestions || [],
+    });
     const existingJob = this.instantRecommendationJobs.get(key);
     if (existingJob) {
       logger.debug('instant recommended questions are already being requested');
       return existingJob;
     }
 
-    const job = this.doCreateInstantRecommendedQuestions(input);
+    const job = this.doCreateInstantRecommendedQuestions(input, project);
     this.instantRecommendationJobs.set(key, job);
     try {
       return await job;
@@ -1122,15 +1136,19 @@ export class AskingService implements IAskingService {
 
   private async doCreateInstantRecommendedQuestions(
     input: InstantRecommendedQuestionsInput,
+    project?: Project,
   ): Promise<Task> {
-    const project = await this.projectService.getCurrentProject();
-    const { manifest } = await this.deployService.getLastDeployment(project.id);
+    const currentProject =
+      project ?? (await this.projectService.getCurrentProject());
+    const { manifest } = await this.deployService.getLastDeployment(
+      currentProject.id,
+    );
 
     const response = await this.wrenAIAdaptor.generateRecommendationQuestions({
       manifest,
-      projectId: project.id.toString(),
+      projectId: currentProject.id.toString(),
       previousQuestions: input.previousQuestions,
-      ...this.getThreadRecommendationQuestionsConfig(project),
+      ...this.getThreadRecommendationQuestionsConfig(currentProject),
     });
     return { id: response.queryId };
   }
@@ -1194,6 +1212,7 @@ export class AskingService implements IAskingService {
     if (!response) {
       throw new Error(`Thread response ${threadResponseId} not found`);
     }
+    await this.ensureThreadInCurrentProject(response.threadId);
 
     return await this.threadResponseRepository.createOne({
       sql: input.sql,
@@ -1221,6 +1240,7 @@ export class AskingService implements IAskingService {
     if (!originalThreadResponse) {
       throw new Error(`Thread response ${threadResponseId} not found`);
     }
+    await this.ensureThreadInCurrentProject(originalThreadResponse.threadId);
 
     const { createdThreadResponse } =
       await this.adjustmentBackgroundTracker.createAdjustmentTask({
@@ -1252,6 +1272,7 @@ export class AskingService implements IAskingService {
     if (!threadResponse) {
       throw new Error(`Thread response ${threadResponseId} not found`);
     }
+    await this.ensureThreadInCurrentProject(threadResponse.threadId);
 
     const { queryId } =
       await this.adjustmentBackgroundTracker.rerunAdjustmentTask({
@@ -1287,6 +1308,7 @@ export class AskingService implements IAskingService {
     if (!threadId) {
       return [];
     }
+    await this.ensureThreadInCurrentProject(threadId);
     let responses = await this.threadResponseRepository.getResponsesWithThread(
       threadId,
       10,
@@ -1313,5 +1335,18 @@ export class AskingService implements IAskingService {
         language: WrenAILanguage[project.language] || WrenAILanguage.EN,
       },
     };
+  }
+
+  private async ensureThreadInCurrentProject(threadId: number): Promise<Thread> {
+    const [thread, project] = await Promise.all([
+      this.threadRepository.findOneBy({ id: threadId }),
+      this.projectService.getCurrentProject(),
+    ]);
+
+    if (!thread || thread.projectId !== project.id) {
+      throw new Error(`Thread ${threadId} not found in current project`);
+    }
+
+    return thread;
   }
 }

@@ -95,7 +95,7 @@ export class ProjectService implements IProjectService {
   private mdlService: IMDLService;
   private wrenAIAdaptor: IWrenAIAdaptor;
   private projectRecommendQuestionBackgroundTracker: ProjectRecommendQuestionBackgroundTracker;
-  private projectRecommendationJob: Promise<void> | null = null;
+  private projectRecommendationJobs = new Map<number, Promise<void>>();
   constructor({
     projectRepository,
     metadataService,
@@ -147,28 +147,32 @@ export class ProjectService implements IProjectService {
   }
 
   public async generateProjectRecommendationQuestions(): Promise<void> {
-    if (this.projectRecommendationJob) {
-      logger.debug(
-        'project recommended questions are already being requested, reusing in-flight job',
-      );
-      return this.projectRecommendationJob;
-    }
-
-    this.projectRecommendationJob =
-      this.doGenerateProjectRecommendationQuestions();
-    try {
-      return await this.projectRecommendationJob;
-    } finally {
-      this.projectRecommendationJob = null;
-    }
-  }
-
-  private async doGenerateProjectRecommendationQuestions(): Promise<void> {
     const project = await this.getCurrentProject();
     if (!project) {
       throw new Error(`Project not found`);
     }
-    const { manifest } = await this.mdlService.makeCurrentModelMDL();
+
+    const existingJob = this.projectRecommendationJobs.get(project.id);
+    if (existingJob) {
+      logger.debug(
+        `project "${project.id}" recommended questions are already being requested, reusing in-flight job`,
+      );
+      return existingJob;
+    }
+
+    const job = this.doGenerateProjectRecommendationQuestions(project);
+    this.projectRecommendationJobs.set(project.id, job);
+    try {
+      return await job;
+    } finally {
+      this.projectRecommendationJobs.delete(project.id);
+    }
+  }
+
+  private async doGenerateProjectRecommendationQuestions(
+    project: Project,
+  ): Promise<void> {
+    const { manifest } = await this.mdlService.makeModelMDL(project);
     const recommendQuestionResult =
       await this.wrenAIAdaptor.generateRecommendationQuestions({
         manifest,

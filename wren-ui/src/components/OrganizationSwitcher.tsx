@@ -20,6 +20,7 @@ import SearchOutlined from '@ant-design/icons/SearchOutlined';
 import { useRouter } from 'next/router';
 import { Path } from '@/utils/enum';
 import { WorkspaceProjectType } from '@/apollo/client/graphql/__types__';
+import apolloClient from '@/apollo/client';
 
 interface OrganizationRecord {
   id: number;
@@ -300,8 +301,9 @@ export default function OrganizationSwitcher() {
         throw new Error(payload.error || 'Failed to switch project');
       }
       message.success('Project switched successfully.');
+      await apolloClient.clearStore();
       await loadOrganizations();
-      await router.push(Path.Home);
+      await router.replace(Path.Home);
     } catch (error: any) {
       message.error(error.message || 'Failed to switch project');
     }

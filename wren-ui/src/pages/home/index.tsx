@@ -94,14 +94,16 @@ export default function Home() {
   const askPrompt = useAskPrompt();
 
   const { data: suggestedQuestionsData } = useSuggestedQuestionsQuery({
-    fetchPolicy: 'cache-and-network',
+    fetchPolicy: 'network-only',
+    nextFetchPolicy: 'network-only',
   });
   const [createThread, { loading: threadCreating }] = useCreateThreadMutation({
     onError: (error) => console.error(error),
     onCompleted: () => homeSidebar.refetch(),
   });
   const [preloadThread] = useThreadLazyQuery({
-    fetchPolicy: 'cache-and-network',
+    fetchPolicy: 'network-only',
+    nextFetchPolicy: 'network-only',
   });
 
   const { data: settingsResult } = useGetSettingsQuery();

@@ -98,7 +98,8 @@ export default function HomeThread() {
 
   const { data, updateQuery: updateThreadQuery } = useThreadQuery({
     variables: { threadId },
-    fetchPolicy: 'cache-and-network',
+    fetchPolicy: 'network-only',
+    nextFetchPolicy: 'network-only',
     skip: threadId === null,
     onError: () => router.push(Path.Home),
   });

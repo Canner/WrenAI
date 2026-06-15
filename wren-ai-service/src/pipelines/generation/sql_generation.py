@@ -83,11 +83,13 @@ SQL:
 ### QUESTION ###
 User's Question: {{ query }}
 
+{% if has_pcb_context %}
 ### PCB ANALYTICS TERM MAPPING ###
 If the user asks about PCB repair trends, repair volume, repair counts, debug hours,
 turnaround time, resolved entries, or failure category, map those business terms to
 the closest explicit table and column names in DATABASE SCHEMA and VALID TABLE NAMES.
 Do not answer with general guidance when a SQL aggregation, comparison, trend, or chart is requested.
+{% endif %}
 
 {% if sql_generation_reasoning %}
 ### REASONING PLAN ###
@@ -114,10 +116,24 @@ def prompt(
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
+    schema_context = "\n".join(documents or []).lower()
+    has_pcb_context = any(
+        term in schema_context
+        for term in (
+            "dbo_debugentries",
+            "debugentryid",
+            "failure_patterns",
+            "repair_logs",
+            "failedat",
+            "failuresys",
+            "workorder",
+        )
+    )
     _prompt = prompt_builder.run(
         query=query,
         data_source=data_source,
         documents=documents,
+        has_pcb_context=has_pcb_context,
         valid_table_names=construct_valid_table_names(documents),
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
