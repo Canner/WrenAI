@@ -631,6 +631,52 @@ describe('MDLBuilder', () => {
     expect(manifest.models[0].refSql).toBeUndefined();
   });
 
+  it('should split dbo-prefixed source table names for non-mssql projects.', () => {
+    const project = {
+      id: 1,
+      type: DataSourceName.POSTGRES,
+      displayName: 'wren ai project',
+      connectionInfo: {},
+      catalog: 'wrenai',
+      schema: 'public',
+      sampleDataset: null,
+    } as Project;
+    const models = [
+      {
+        id: 1,
+        projectId: 1,
+        displayName: 'Search Queries',
+        sourceTableName: 'dbo_search_queries',
+        referenceName: 'dbo_search_queries',
+        refSql: 'SELECT * FROM dbo.search_queries',
+        cached: false,
+        refreshTime: null,
+        properties: null,
+      },
+    ] as Model[];
+    const builderOptions = {
+      project,
+      models,
+      columns: [],
+      nestedColumns: [],
+      relations: [],
+      views: [],
+      relatedModels: [],
+      relatedColumns: [],
+      relatedRelations: [],
+    } as MDLBuilderBuildFromOptions;
+    mdlBuilder = new MDLBuilder(builderOptions);
+
+    const manifest = mdlBuilder.build();
+
+    expect(manifest.models[0].tableReference).toEqual({
+      catalog: null,
+      schema: 'dbo',
+      table: 'search_queries',
+    });
+    expect(manifest.models[0].refSql).toBeUndefined();
+  });
+
   it('should return correct expression in calculated field.', () => {
     const models = [
       // customer model

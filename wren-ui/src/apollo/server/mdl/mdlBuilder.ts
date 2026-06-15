@@ -512,14 +512,6 @@ export class MDLBuilder implements IMDLBuilder {
       return null;
     }
 
-    if (this.project.type !== DataSourceName.MSSQL) {
-      return {
-        catalog: null,
-        schema: null,
-        table: model.sourceTableName,
-      };
-    }
-
     const sourceTableName = model.sourceTableName.trim();
     const dotQualifiedMatch = sourceTableName.match(/^([^.]+)\.([^.]+)$/);
     if (dotQualifiedMatch) {
@@ -536,6 +528,14 @@ export class MDLBuilder implements IMDLBuilder {
         catalog: null,
         schema: underscoreQualifiedMatch[1],
         table: underscoreQualifiedMatch[2],
+      };
+    }
+
+    if (this.project.type !== DataSourceName.MSSQL) {
+      return {
+        catalog: null,
+        schema: null,
+        table: sourceTableName,
       };
     }
 
