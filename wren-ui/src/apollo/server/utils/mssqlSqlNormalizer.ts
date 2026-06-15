@@ -205,6 +205,30 @@ const normalizeMssqlGeneratedSqlSyntax = (sql: string): string => {
   return rewriteMssqlLimitClause(sql);
 };
 
+const rewriteSchemaNormalizedDboTables = (sql: string): string => {
+  const tableRef =
+    String.raw`(?:"(dbo_[A-Za-z0-9_]+)"|\[(dbo_[A-Za-z0-9_]+)\]|\b(dbo_[A-Za-z0-9_]+)\b)`;
+  const tableClause = new RegExp(
+    String.raw`\b(FROM|JOIN)\s+${tableRef}(?=\s*(?:WHERE|JOIN|LEFT|RIGHT|INNER|FULL|CROSS|GROUP\s+BY|ORDER\s+BY|HAVING|LIMIT|OFFSET|FETCH|UNION|ON|,|\)|$))`,
+    'gi',
+  );
+
+  return sql.replace(
+    tableClause,
+    (_match, clause, quotedName, bracketName, bareName) => {
+      const modelName = quotedName || bracketName || bareName;
+      const tableName = modelName.replace(/^dbo_/i, '');
+      const schemaQualifiedTable =
+        quotedName || bracketName
+          ? `"dbo"."${tableName}"`
+          : `dbo.${tableName}`;
+      const alias =
+        quotedName || bracketName ? ` AS "${modelName}"` : ` AS ${modelName}`;
+      return `${clause} ${schemaQualifiedTable}${alias}`;
+    },
+  );
+};
+
 const replaceBadFailurePatternJoins = (sql: string): string => {
   if (
     !/\bdbo_DebugEntries\b/i.test(sql) ||
@@ -451,6 +475,7 @@ export const normalizeMssqlGeneratedSqlFields = (
   sql = replaceInventedTimeBuckets(sql);
   sql = replaceBadFailurePatternJoins(sql);
   sql = rewriteMssqlDatepartFunctions(sql);
+  sql = rewriteSchemaNormalizedDboTables(sql);
   return normalizeMssqlGeneratedSqlSyntax(sql);
 };
 

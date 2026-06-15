@@ -104,4 +104,34 @@ describe('mssqlSqlNormalizer', () => {
     expect(normalized).not.toContain('GROUP BY created_by');
     expect(normalized).toContain('"created_by_user_id"');
   });
+
+  it('rewrites quoted dbo-prefixed table names to schema-qualified tables with aliases', () => {
+    const normalized = normalizeMssqlSqlForIbis(
+      `
+      SELECT "dbo_search_queries"."org_id", COUNT(*) AS completed_questions
+      FROM "dbo_search_queries"
+      WHERE "dbo_search_queries"."result_count" > 0
+      GROUP BY "dbo_search_queries"."org_id"
+      `,
+      DataSourceName.MSSQL,
+    );
+
+    expect(normalized).toContain('FROM "dbo"."search_queries" AS "dbo_search_queries"');
+    expect(normalized).toContain('"dbo_search_queries"."org_id"');
+    expect(normalized).not.toContain('FROM "dbo_search_queries"');
+  });
+
+  it('rewrites unquoted dbo-prefixed table names to schema-qualified tables with aliases', () => {
+    const normalized = normalizeMssqlSqlForIbis(
+      `
+      SELECT status, COUNT(*) AS count_of_questions
+      FROM dbo_tickets
+      GROUP BY status
+      `,
+      DataSourceName.MSSQL,
+    );
+
+    expect(normalized).toContain('FROM dbo.tickets AS dbo_tickets');
+    expect(normalized).not.toContain('FROM dbo_tickets');
+  });
 });
