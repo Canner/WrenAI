@@ -495,13 +495,16 @@ export class MDLBuilder implements IMDLBuilder {
       model.properties && typeof model.properties === 'string'
         ? this.parseProperties(model.properties)
         : {};
-    if (!modelProps.table) {
+    const table =
+      modelProps.table ||
+      (this.useRustWrenEngine() ? model.sourceTableName : null);
+    if (!table) {
       return null;
     }
     return {
       catalog: modelProps.catalog || null,
       schema: modelProps.schema || null,
-      table: modelProps.table,
+      table,
     };
   }
   private parseLineage(lineage?: string): number[] {
