@@ -14,6 +14,7 @@ from wren.connector.mysql import (
     _apply_limit,
     _arrow_decimal_from_mysql_field,
     _build_mysql_column,
+    _build_mysql_connect_kwargs,
     _coerce_limit,
     _mysql_blob_codes,
     _mysql_decimal_codes,
@@ -21,8 +22,23 @@ from wren.connector.mysql import (
     _mysql_string_codes,
     _mysql_unsigned_variant_map,
 )
+from wren.model.error import ErrorCode, WrenError
 
 pytestmark = pytest.mark.unit
+
+
+class _FakeConnUrl:
+    def __init__(self, url: str) -> None:
+        self._url = url
+
+    def get_secret_value(self) -> str:
+        return self._url
+
+
+class _FakeConnInfoFromUrl:
+    def __init__(self, url: str, kwargs: dict[str, str] | None = None) -> None:
+        self.connection_url = _FakeConnUrl(url)
+        self.kwargs = kwargs
 
 
 # ── _coerce_limit ─────────────────────────────────────────────────────────
@@ -71,6 +87,78 @@ def test_apply_limit_strips_trailing_semicolon() -> None:
 def test_apply_limit_zero() -> None:
     out = _apply_limit("SELECT a FROM t", 0)
     assert out.endswith("LIMIT 0")
+
+
+# ── URL connection kwargs ─────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("scheme", ["mysql", "mysql+pymysql", "mysql+mysqldb"])
+def test_mysql_url_allows_raw_brackets_in_password(scheme: str) -> None:
+    out = _build_mysql_connect_kwargs(
+        _FakeConnInfoFromUrl(f"{scheme}://user:p[a]ss@db.example.com:3306/test")
+    )
+
+    assert out["host"] == "db.example.com"
+    assert out["port"] == 3306
+    assert out["user"] == "user"
+    assert out["passwd"] == "p[a]ss"
+    assert out["db"] == "test"
+
+
+def test_mysql_url_decodes_user_password_and_database() -> None:
+    out = _build_mysql_connect_kwargs(
+        _FakeConnInfoFromUrl(
+            "mysql://us%40er:p%40ss%20word@db.example.com:3306/my%20db"
+            "?charset=utf8mb4"
+        )
+    )
+
+    assert out["user"] == "us@er"
+    assert out["passwd"] == "p@ss word"
+    assert out["db"] == "my db"
+    assert out["charset"] == "utf8mb4"
+
+
+def test_mysql_url_preserves_literal_plus_in_userinfo() -> None:
+    out = _build_mysql_connect_kwargs(
+        _FakeConnInfoFromUrl("mysql://svc+etl:p+wd@db.example.com:3306/test")
+    )
+
+    assert out["user"] == "svc+etl"
+    assert out["passwd"] == "p+wd"
+
+
+def test_mysql_url_preserves_ipv6_host_parsing() -> None:
+    out = _build_mysql_connect_kwargs(
+        _FakeConnInfoFromUrl("mysql://user:p[a]ss@[::1]:3306/test")
+    )
+
+    assert out["host"] == "::1"
+    assert out["port"] == 3306
+    assert out["passwd"] == "p[a]ss"
+    assert out["db"] == "test"
+
+
+def test_mysql_url_kwargs_override_query_params() -> None:
+    out = _build_mysql_connect_kwargs(
+        _FakeConnInfoFromUrl(
+            "mysql://user:pw@db.example.com:3306/test"
+            "?charset=latin1&connect_timeout=10",
+            kwargs={"charset": "utf8mb4"},
+        )
+    )
+
+    assert out["charset"] == "utf8mb4"
+    assert out["connect_timeout"] == "10"
+
+
+def test_mysql_url_invalid_scheme_raises() -> None:
+    with pytest.raises(WrenError) as exc:
+        _build_mysql_connect_kwargs(
+            _FakeConnInfoFromUrl("postgres://user:pw@db.example.com:5432/test")
+        )
+
+    assert exc.value.error_code == ErrorCode.INVALID_CONNECTION_INFO
 
 
 # ── _arrow_decimal_from_mysql_field ──────────────────────────────────────
