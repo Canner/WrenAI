@@ -45,6 +45,8 @@ export interface DashboardItem {
   detail: DashboardItemDetail;
   displayName?: string;
   title?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export interface IDashboardItemRepository
@@ -58,6 +60,7 @@ export class DashboardItemRepository
   private hasIdColumnCache: boolean | null = null;
   private hasTitleColumnCache: boolean | null = null;
   private hasDisplayNameColumnCache: boolean | null = null;
+  private columnCache = new Map<string, boolean>();
 
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'dashboard_item' });
@@ -126,11 +129,19 @@ export class DashboardItemRepository
     includeGeneratedId = false,
   ): Promise<Partial<DashboardItem>> {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    const [hasIdColumn, hasTitleColumn, hasDisplayNameColumn] =
+    const [
+      hasIdColumn,
+      hasTitleColumn,
+      hasDisplayNameColumn,
+      hasCreatedAtColumn,
+      hasUpdatedAtColumn,
+    ] =
       await Promise.all([
         this.hasColumn('id', executer),
         this.hasColumn('title', executer),
         this.hasColumn('display_name', executer),
+        this.hasColumn('created_at', executer),
+        this.hasColumn('updated_at', executer),
       ]);
     const normalizedData: Partial<DashboardItem> = { ...data };
     const displayName =
@@ -155,11 +166,20 @@ export class DashboardItemRepository
     ) {
       normalizedData.id = await this.getNextId(executer);
     }
+    if (includeGeneratedId && hasCreatedAtColumn && !normalizedData.createdAt) {
+      normalizedData.createdAt = new Date();
+    }
+    if (includeGeneratedId && hasUpdatedAtColumn && !normalizedData.updatedAt) {
+      normalizedData.updatedAt = normalizedData.createdAt || new Date();
+    }
 
     return normalizedData;
   }
 
   private async hasColumn(column: string, executer: Knex | Knex.Transaction) {
+    if (this.columnCache.has(column)) {
+      return this.columnCache.get(column);
+    }
     if (column === 'id' && this.hasIdColumnCache !== null) {
       return this.hasIdColumnCache;
     }
@@ -174,6 +194,7 @@ export class DashboardItemRepository
     }
 
     const result = await executer.schema.hasColumn(this.tableName, column);
+    this.columnCache.set(column, result);
     if (column === 'id') {
       this.hasIdColumnCache = result;
     }
