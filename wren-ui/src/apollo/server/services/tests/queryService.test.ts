@@ -54,6 +54,115 @@ describe('QueryService', () => {
     });
   });
 
+  it('should normalize deployed dbo-prefixed table references for non-mssql previews', async () => {
+    mockIbisAdaptor.dryRun.mockResolvedValue({
+      correlationId: '123',
+      processTime: '1s',
+    });
+
+    await queryService.preview('SELECT * FROM "dbo_search_queries"', {
+      project: {
+        type: DataSourceName.POSTGRES,
+        connectionInfo: {},
+        schema: 'public',
+      },
+      manifest: {
+        schema: 'public',
+        models: [
+          {
+            name: 'dbo_search_queries',
+            tableReference: {
+              catalog: 'wrenai',
+              schema: 'public',
+              table: 'dbo_search_queries',
+            },
+          },
+          {
+            name: 'dbo_tickets',
+            tableReference: {
+              catalog: 'wrenai',
+              schema: 'dbo',
+              table: 'tickets',
+            },
+          },
+        ],
+      },
+      dryRun: true,
+    });
+
+    expect(mockIbisAdaptor.dryRun).toHaveBeenCalledWith(
+      'SELECT * FROM "dbo_search_queries"',
+      expect.objectContaining({
+        mdl: expect.objectContaining({
+          models: [
+            expect.objectContaining({
+              name: 'dbo_search_queries',
+              tableReference: {
+                catalog: 'wrenai',
+                schema: 'public',
+                table: 'search_queries',
+              },
+            }),
+            expect.objectContaining({
+              name: 'dbo_tickets',
+              tableReference: {
+                catalog: 'wrenai',
+                schema: 'public',
+                table: 'tickets',
+              },
+            }),
+          ],
+        }),
+      }),
+    );
+  });
+
+  it('should preserve deployed dbo-prefixed table references for mssql previews', async () => {
+    mockIbisAdaptor.dryRun.mockResolvedValue({
+      correlationId: '123',
+      processTime: '1s',
+    });
+
+    await queryService.preview('SELECT * FROM "dbo_search_queries"', {
+      project: {
+        type: DataSourceName.MSSQL,
+        connectionInfo: {},
+        schema: 'public',
+      },
+      manifest: {
+        schema: 'public',
+        models: [
+          {
+            name: 'dbo_search_queries',
+            tableReference: {
+              catalog: null,
+              schema: 'dbo',
+              table: 'search_queries',
+            },
+          },
+        ],
+      },
+      dryRun: true,
+    });
+
+    expect(mockIbisAdaptor.dryRun).toHaveBeenCalledWith(
+      'SELECT * FROM "dbo_search_queries"',
+      expect.objectContaining({
+        mdl: expect.objectContaining({
+          models: [
+            expect.objectContaining({
+              tableReference: {
+                catalog: null,
+                schema: 'dbo',
+                table: 'search_queries',
+              },
+            }),
+          ],
+        }),
+      }),
+    );
+  });
+
   it('should send event when previewing via ibis dry run fails', async () => {
     mockIbisAdaptor.dryRun.mockRejectedValue({
       message: 'Error message',

@@ -1,5 +1,5 @@
 import { DataSourceName } from '@server/types';
-import { Manifest } from '@server/mdl/type';
+import { Manifest, TableReference } from '@server/mdl/type';
 import { IWrenEngineAdaptor } from '../adaptors/wrenEngineAdaptor';
 import {
   SupportedDataSource,
@@ -107,6 +107,69 @@ const normalizePreviewSqlForIbis = (
   };
 };
 
+const normalizeDeployedManifestForDatasource = (
+  manifest: Manifest,
+  project: Project,
+): Manifest => {
+  if (project.type === DataSourceName.MSSQL || !manifest?.models?.length) {
+    return manifest;
+  }
+
+  const fallbackSchema = manifest.schema || project.schema || null;
+
+  return {
+    ...manifest,
+    models: manifest.models.map((model) => {
+      const tableReference = normalizeTableReference(
+        model.tableReference,
+        fallbackSchema,
+      );
+
+      if (!tableReference) {
+        return model;
+      }
+
+      return {
+        ...model,
+        tableReference,
+      };
+    }),
+  };
+};
+
+const normalizeTableReference = (
+  tableReference: TableReference | undefined,
+  fallbackSchema: string | null,
+): TableReference | undefined => {
+  if (!tableReference?.table) {
+    return tableReference;
+  }
+
+  const normalizedTableName = normalizeDboPrefixedTableName(
+    tableReference.table,
+  );
+  const shouldReplaceDboSchema =
+    tableReference.schema?.toLowerCase() === 'dbo' && fallbackSchema;
+
+  if (
+    normalizedTableName === tableReference.table &&
+    !shouldReplaceDboSchema
+  ) {
+    return tableReference;
+  }
+
+  return {
+    ...tableReference,
+    schema: shouldReplaceDboSchema ? fallbackSchema : tableReference.schema,
+    table: normalizedTableName,
+  };
+};
+
+const normalizeDboPrefixedTableName = (tableName: string): string => {
+  const match = tableName.match(/^dbo_(.+)$/i);
+  return match ? match[1] : tableName;
+};
+
 export class QueryService implements IQueryService {
   private readonly ibisAdaptor: IIbisAdaptor;
   private readonly wrenEngineAdaptor: IWrenEngineAdaptor;
@@ -132,12 +195,13 @@ export class QueryService implements IQueryService {
   ): Promise<IbisResponse | PreviewDataResponse | boolean> {
     const {
       project,
-      manifest: mdl,
+      manifest: rawMdl,
       limit,
       dryRun,
       refresh,
       cacheEnabled,
     } = options;
+    const mdl = normalizeDeployedManifestForDatasource(rawMdl, project);
     const { type: dataSource, connectionInfo } = project;
     if (this.useEngine(dataSource)) {
       if (dryRun) {
@@ -193,11 +257,12 @@ export class QueryService implements IQueryService {
     parameters: Record<string, any>,
   ): Promise<ValidateResponse> {
     const { type: dataSource, connectionInfo } = project;
+    const mdl = normalizeDeployedManifestForDatasource(manifest, project);
     const res = await this.ibisAdaptor.validate(
       dataSource,
       rule,
       connectionInfo,
-      manifest,
+      mdl,
       parameters,
     );
     return res;
