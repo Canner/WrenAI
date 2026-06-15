@@ -495,16 +495,54 @@ export class MDLBuilder implements IMDLBuilder {
       model.properties && typeof model.properties === 'string'
         ? this.parseProperties(model.properties)
         : {};
-    const table =
-      modelProps.table ||
-      (this.useRustWrenEngine() ? model.sourceTableName : null);
+    const fallbackTableReference = this.buildFallbackTableReference(model);
+    const table = modelProps.table || fallbackTableReference?.table;
     if (!table) {
       return null;
     }
     return {
-      catalog: modelProps.catalog || null,
-      schema: modelProps.schema || null,
+      catalog: modelProps.catalog || fallbackTableReference?.catalog || null,
+      schema: modelProps.schema || fallbackTableReference?.schema || null,
       table,
+    };
+  }
+
+  private buildFallbackTableReference(model: Model): TableReference | null {
+    if (!this.useRustWrenEngine() || !model.sourceTableName) {
+      return null;
+    }
+
+    if (this.project.type !== DataSourceName.MSSQL) {
+      return {
+        catalog: null,
+        schema: null,
+        table: model.sourceTableName,
+      };
+    }
+
+    const sourceTableName = model.sourceTableName.trim();
+    const dotQualifiedMatch = sourceTableName.match(/^([^.]+)\.([^.]+)$/);
+    if (dotQualifiedMatch) {
+      return {
+        catalog: null,
+        schema: dotQualifiedMatch[1],
+        table: dotQualifiedMatch[2],
+      };
+    }
+
+    const underscoreQualifiedMatch = sourceTableName.match(/^(dbo)_(.+)$/i);
+    if (underscoreQualifiedMatch) {
+      return {
+        catalog: null,
+        schema: underscoreQualifiedMatch[1],
+        table: underscoreQualifiedMatch[2],
+      };
+    }
+
+    return {
+      catalog: null,
+      schema: null,
+      table: sourceTableName,
     };
   }
   private parseLineage(lineage?: string): number[] {

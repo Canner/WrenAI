@@ -579,8 +579,54 @@ describe('MDLBuilder', () => {
 
     expect(manifest.models[0].tableReference).toEqual({
       catalog: null,
-      schema: null,
-      table: 'dbo.search_queries',
+      schema: 'dbo',
+      table: 'search_queries',
+    });
+    expect(manifest.models[0].refSql).toBeUndefined();
+  });
+
+  it('should split mssql schema-normalized source table names in rust engine table reference fallback.', () => {
+    const project = {
+      id: 1,
+      type: DataSourceName.MSSQL,
+      displayName: 'my project',
+      connectionInfo: {},
+      catalog: 'wrenai',
+      schema: 'public',
+      sampleDataset: null,
+    } as Project;
+    const models = [
+      {
+        id: 1,
+        projectId: 1,
+        displayName: 'Tickets',
+        sourceTableName: 'dbo_tickets',
+        referenceName: 'dbo_tickets',
+        refSql: 'SELECT * FROM dbo.tickets',
+        cached: false,
+        refreshTime: null,
+        properties: null,
+      },
+    ] as Model[];
+    const builderOptions = {
+      project,
+      models,
+      columns: [],
+      nestedColumns: [],
+      relations: [],
+      views: [],
+      relatedModels: [],
+      relatedColumns: [],
+      relatedRelations: [],
+    } as MDLBuilderBuildFromOptions;
+    mdlBuilder = new MDLBuilder(builderOptions);
+
+    const manifest = mdlBuilder.build();
+
+    expect(manifest.models[0].tableReference).toEqual({
+      catalog: null,
+      schema: 'dbo',
+      table: 'tickets',
     });
     expect(manifest.models[0].refSql).toBeUndefined();
   });
