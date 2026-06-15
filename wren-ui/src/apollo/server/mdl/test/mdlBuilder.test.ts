@@ -631,7 +631,7 @@ describe('MDLBuilder', () => {
     expect(manifest.models[0].refSql).toBeUndefined();
   });
 
-  it('should split dbo-prefixed source table names for non-mssql projects.', () => {
+  it('should strip dbo-prefixed source table names for non-mssql projects.', () => {
     const project = {
       id: 1,
       type: DataSourceName.POSTGRES,
@@ -671,13 +671,13 @@ describe('MDLBuilder', () => {
 
     expect(manifest.models[0].tableReference).toEqual({
       catalog: null,
-      schema: 'dbo',
+      schema: null,
       table: 'search_queries',
     });
     expect(manifest.models[0].refSql).toBeUndefined();
   });
 
-  it('should split dbo-prefixed property table names before project schema fallback.', () => {
+  it('should strip dbo-prefixed property table names before project schema fallback.', () => {
     const project = {
       id: 1,
       type: DataSourceName.POSTGRES,
@@ -720,7 +720,55 @@ describe('MDLBuilder', () => {
 
     expect(manifest.models[0].tableReference).toEqual({
       catalog: null,
-      schema: 'dbo',
+      schema: 'public',
+      table: 'search_queries',
+    });
+    expect(manifest.models[0].refSql).toBeUndefined();
+  });
+
+  it('should strip dbo-prefixed table names from catalog-qualified non-mssql table references.', () => {
+    const project = {
+      id: 1,
+      type: DataSourceName.POSTGRES,
+      displayName: 'wren ai project',
+      connectionInfo: {},
+      catalog: 'wrenai',
+      schema: 'public',
+      sampleDataset: null,
+    } as Project;
+    const models = [
+      {
+        id: 1,
+        projectId: 1,
+        displayName: 'Search Queries',
+        sourceTableName: 'wrenai.public.dbo_search_queries',
+        referenceName: 'dbo_search_queries',
+        refSql: 'SELECT * FROM wrenai.public.dbo_search_queries',
+        cached: false,
+        refreshTime: null,
+        properties: JSON.stringify({
+          table: 'wrenai.public.dbo_search_queries',
+        }),
+      },
+    ] as Model[];
+    const builderOptions = {
+      project,
+      models,
+      columns: [],
+      nestedColumns: [],
+      relations: [],
+      views: [],
+      relatedModels: [],
+      relatedColumns: [],
+      relatedRelations: [],
+    } as MDLBuilderBuildFromOptions;
+    mdlBuilder = new MDLBuilder(builderOptions);
+
+    const manifest = mdlBuilder.build();
+
+    expect(manifest.models[0].tableReference).toEqual({
+      catalog: 'wrenai',
+      schema: 'public',
       table: 'search_queries',
     });
     expect(manifest.models[0].refSql).toBeUndefined();

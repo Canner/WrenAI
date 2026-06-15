@@ -549,10 +549,13 @@ export class MDLBuilder implements IMDLBuilder {
       /^([^.]+)\.([^.]+)\.([^.]+)$/,
     );
     if (catalogQualifiedMatch) {
+      const normalizedTableName = this.normalizeDboPrefixedTableName(
+        catalogQualifiedMatch[3],
+      );
       return {
         catalog: catalogQualifiedMatch[1],
-        schema: catalogQualifiedMatch[2],
-        table: catalogQualifiedMatch[3],
+        schema: normalizedTableName.schema || catalogQualifiedMatch[2],
+        table: normalizedTableName.table,
       };
     }
 
@@ -569,12 +572,33 @@ export class MDLBuilder implements IMDLBuilder {
     if (underscoreQualifiedMatch) {
       return {
         catalog: null,
-        schema: underscoreQualifiedMatch[1],
+        schema:
+          this.project.type === DataSourceName.MSSQL
+            ? underscoreQualifiedMatch[1]
+            : null,
         table: underscoreQualifiedMatch[2],
       };
     }
 
     return null;
+  }
+
+  private normalizeDboPrefixedTableName(tableName: string): {
+    schema: string | null;
+    table: string;
+  } {
+    const underscoreQualifiedMatch = tableName.match(/^(dbo)_(.+)$/i);
+    if (!underscoreQualifiedMatch) {
+      return { schema: null, table: tableName };
+    }
+
+    return {
+      schema:
+        this.project.type === DataSourceName.MSSQL
+          ? underscoreQualifiedMatch[1]
+          : null,
+      table: underscoreQualifiedMatch[2],
+    };
   }
   private parseLineage(lineage?: string): number[] {
     if (!lineage) {
