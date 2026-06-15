@@ -115,24 +115,47 @@ const normalizeDeployedManifestForDatasource = (
     return manifest;
   }
 
+  const fallbackCatalog = manifest.catalog || project.catalog || null;
   const fallbackSchema = manifest.schema || project.schema || null;
 
   return {
     ...manifest,
     models: manifest.models.map((model) => {
-      const tableReference = normalizeTableReference(
+      const tableReferenceResult = normalizeTableReference(
         model.tableReference,
         fallbackSchema,
       );
+      const synthesizedTableReference =
+        tableReferenceResult.tableReference ||
+        buildTableReferenceFromDboModelName(
+          model.name,
+          fallbackCatalog,
+          fallbackSchema,
+        ) ||
+        buildTableReferenceFromDboRefSql(
+          model.refSql,
+          fallbackCatalog,
+          fallbackSchema,
+        );
 
-      if (!tableReference) {
+      if (!synthesizedTableReference) {
         return model;
       }
 
-      return {
+      const normalizedModel = {
         ...model,
-        tableReference,
+        tableReference: synthesizedTableReference,
       };
+
+      if (
+        tableReferenceResult.changed ||
+        isDboPrefixedModelName(model.name) ||
+        containsDboPhysicalReference(model.refSql)
+      ) {
+        delete normalizedModel.refSql;
+      }
+
+      return normalizedModel;
     }),
   };
 };
@@ -140,9 +163,9 @@ const normalizeDeployedManifestForDatasource = (
 const normalizeTableReference = (
   tableReference: TableReference | undefined,
   fallbackSchema: string | null,
-): TableReference | undefined => {
+): { tableReference?: TableReference; changed: boolean } => {
   if (!tableReference?.table) {
-    return tableReference;
+    return { tableReference, changed: false };
   }
 
   const normalizedTableName = normalizeDboPrefixedTableName(
@@ -155,19 +178,76 @@ const normalizeTableReference = (
     normalizedTableName === tableReference.table &&
     !shouldReplaceDboSchema
   ) {
-    return tableReference;
+    return { tableReference, changed: false };
   }
 
   return {
-    ...tableReference,
-    schema: shouldReplaceDboSchema ? fallbackSchema : tableReference.schema,
-    table: normalizedTableName,
+    tableReference: {
+      ...tableReference,
+      schema: shouldReplaceDboSchema ? fallbackSchema : tableReference.schema,
+      table: normalizedTableName,
+    },
+    changed: true,
   };
 };
 
 const normalizeDboPrefixedTableName = (tableName: string): string => {
   const match = tableName.match(/^dbo_(.+)$/i);
   return match ? match[1] : tableName;
+};
+
+const buildTableReferenceFromDboModelName = (
+  modelName: string | undefined,
+  fallbackCatalog: string | null,
+  fallbackSchema: string | null,
+): TableReference | undefined => {
+  if (!modelName || !isDboPrefixedModelName(modelName)) {
+    return undefined;
+  }
+
+  return {
+    catalog: fallbackCatalog,
+    schema: fallbackSchema,
+    table: normalizeDboPrefixedTableName(modelName),
+  };
+};
+
+const buildTableReferenceFromDboRefSql = (
+  refSql: string | undefined,
+  fallbackCatalog: string | null,
+  fallbackSchema: string | null,
+): TableReference | undefined => {
+  if (!refSql || !containsDboPhysicalReference(refSql)) {
+    return undefined;
+  }
+
+  const tableName =
+    extractDboPrefixedTableName(refSql) || extractDboSchemaTableName(refSql);
+  if (!tableName) {
+    return undefined;
+  }
+
+  return {
+    catalog: fallbackCatalog,
+    schema: fallbackSchema,
+    table: normalizeDboPrefixedTableName(tableName),
+  };
+};
+
+const isDboPrefixedModelName = (modelName: string | undefined): boolean =>
+  !!modelName && /^dbo_.+/i.test(modelName);
+
+const containsDboPhysicalReference = (sql: string | undefined): boolean =>
+  !!sql && /(?:^|[.\s"])(?:dbo_[\w]+|dbo\.[\w"]+)/i.test(sql);
+
+const extractDboPrefixedTableName = (sql: string): string | undefined => {
+  const match = sql.match(/\bdbo_([A-Za-z0-9_]+)\b/i);
+  return match ? `dbo_${match[1]}` : undefined;
+};
+
+const extractDboSchemaTableName = (sql: string): string | undefined => {
+  const match = sql.match(/\bdbo\.("?)([A-Za-z0-9_]+)\1/i);
+  return match ? match[2] : undefined;
 };
 
 export class QueryService implements IQueryService {

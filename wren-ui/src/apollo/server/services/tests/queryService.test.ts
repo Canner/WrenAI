@@ -163,6 +163,43 @@ describe('QueryService', () => {
     );
   });
 
+  it('should repair old non-mssql deployments that still use dbo refSql', async () => {
+    mockIbisAdaptor.dryRun.mockResolvedValue({
+      correlationId: '123',
+      processTime: '1s',
+    });
+
+    await queryService.preview('SELECT * FROM "dbo_search_queries"', {
+      project: {
+        type: DataSourceName.POSTGRES,
+        connectionInfo: {},
+        catalog: 'wrenai',
+        schema: 'public',
+      },
+      manifest: {
+        catalog: 'wrenai',
+        schema: 'public',
+        models: [
+          {
+            name: 'dbo_search_queries',
+            refSql: 'SELECT * FROM wrenai.public.dbo_search_queries',
+          },
+        ],
+      },
+      dryRun: true,
+    });
+
+    const dryRunOptions = mockIbisAdaptor.dryRun.mock.calls[0][1];
+    expect(dryRunOptions.mdl.models[0]).toEqual({
+      name: 'dbo_search_queries',
+      tableReference: {
+        catalog: 'wrenai',
+        schema: 'public',
+        table: 'search_queries',
+      },
+    });
+  });
+
   it('should send event when previewing via ibis dry run fails', async () => {
     mockIbisAdaptor.dryRun.mockRejectedValue({
       message: 'Error message',
