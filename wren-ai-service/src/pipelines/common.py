@@ -88,10 +88,6 @@ async def retrieve_metadata(project_id: str, retriever) -> dict[str, Any]:
     result = await retriever.run(query_embedding=[], filters=filters)
     documents = result["documents"]
 
-    if not documents and project_id:
-        result = await retriever.run(query_embedding=[], filters=None)
-        documents = result["documents"]
-
     # only one document for a project, thus we can return the first one
     if documents:
         doc = documents[0]

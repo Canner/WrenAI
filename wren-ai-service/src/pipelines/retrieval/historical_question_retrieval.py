@@ -52,8 +52,6 @@ async def count_documents(
     )
 
     count = await view_questions_store.count_documents(filters=filters)
-    if count == 0 and project_id:
-        count = await view_questions_store.count_documents(filters=None)
     return count
 
 
@@ -87,11 +85,6 @@ async def retrieval(
             query_embedding=embedding.get("embedding"),
             filters=filters,
         )
-        if not view_question_res.get("documents") and project_id:
-            view_question_res = await view_questions_retriever.run(
-                query_embedding=embedding.get("embedding"),
-                filters=None,
-            )
         return dict(documents=view_question_res.get("documents"))
 
     return {}

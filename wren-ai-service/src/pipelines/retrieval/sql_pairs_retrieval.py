@@ -49,8 +49,6 @@ async def count_documents(
         else None
     )
     document_count = await store.count_documents(filters=filters)
-    if document_count == 0 and project_id:
-        document_count = await store.count_documents(filters=None)
     return document_count
 
 
@@ -80,11 +78,6 @@ async def retrieval(embedding: dict, project_id: str, retriever: Any) -> dict:
             query_embedding=embedding.get("embedding"),
             filters=filters,
         )
-        if not res.get("documents") and project_id:
-            res = await retriever.run(
-                query_embedding=embedding.get("embedding"),
-                filters=None,
-            )
         return dict(documents=res.get("documents"))
 
     return {}
