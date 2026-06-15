@@ -390,29 +390,6 @@ const replaceInventedKnowledgeArticleFields = (sql: string): string => {
   return sql;
 };
 
-const rewriteMssqlLimitClause = (sql: string): string => {
-  const limitMatch = sql.match(/\s+LIMIT\s+(\d+)\s*;?\s*$/i);
-  if (!limitMatch || limitMatch.index === undefined) {
-    return sql;
-  }
-
-  const limit = limitMatch[1];
-  const withoutLimit = sql.slice(0, limitMatch.index).trimEnd();
-  if (/\bSELECT\s+(?:DISTINCT\s+)?TOP\s*\(?\s*\d+\s*\)?/i.test(withoutLimit)) {
-    return withoutLimit;
-  }
-
-  return withoutLimit.replace(
-    /\bSELECT\s+(DISTINCT\s+)?/i,
-    (match) => `${match}TOP ${limit} `,
-  );
-};
-
-const normalizeMssqlGeneratedSqlSyntax = (sql: string): string => {
-  sql = sql.replace(/\s+NULLS\s+(?:LAST|FIRST)\b/gi, '');
-  return rewriteMssqlLimitClause(sql);
-};
-
 export const normalizeMssqlGeneratedSqlFields = (
   sql: string,
   dataSource: DataSourceName,
