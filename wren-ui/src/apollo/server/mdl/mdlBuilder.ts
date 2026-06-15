@@ -495,14 +495,29 @@ export class MDLBuilder implements IMDLBuilder {
       model.properties && typeof model.properties === 'string'
         ? this.parseProperties(model.properties)
         : {};
+    const propertyTableReference =
+      typeof modelProps.table === 'string'
+        ? this.buildTableReferenceFromTableName(modelProps.table)
+        : null;
     const fallbackTableReference = this.buildFallbackTableReference(model);
-    const table = modelProps.table || fallbackTableReference?.table;
+    const table =
+      propertyTableReference?.table ||
+      modelProps.table ||
+      fallbackTableReference?.table;
     if (!table) {
       return null;
     }
     return {
-      catalog: modelProps.catalog || fallbackTableReference?.catalog || null,
-      schema: modelProps.schema || fallbackTableReference?.schema || null,
+      catalog:
+        propertyTableReference?.catalog ||
+        modelProps.catalog ||
+        fallbackTableReference?.catalog ||
+        null,
+      schema:
+        propertyTableReference?.schema ||
+        modelProps.schema ||
+        fallbackTableReference?.schema ||
+        null,
       table,
     };
   }
@@ -513,6 +528,34 @@ export class MDLBuilder implements IMDLBuilder {
     }
 
     const sourceTableName = model.sourceTableName.trim();
+    const normalizedTableReference =
+      this.buildTableReferenceFromTableName(sourceTableName);
+    if (normalizedTableReference) {
+      return normalizedTableReference;
+    }
+
+    return {
+      catalog: null,
+      schema: null,
+      table: sourceTableName,
+    };
+  }
+
+  private buildTableReferenceFromTableName(
+    tableName: string,
+  ): TableReference | null {
+    const sourceTableName = tableName.trim();
+    const catalogQualifiedMatch = sourceTableName.match(
+      /^([^.]+)\.([^.]+)\.([^.]+)$/,
+    );
+    if (catalogQualifiedMatch) {
+      return {
+        catalog: catalogQualifiedMatch[1],
+        schema: catalogQualifiedMatch[2],
+        table: catalogQualifiedMatch[3],
+      };
+    }
+
     const dotQualifiedMatch = sourceTableName.match(/^([^.]+)\.([^.]+)$/);
     if (dotQualifiedMatch) {
       return {
@@ -531,19 +574,7 @@ export class MDLBuilder implements IMDLBuilder {
       };
     }
 
-    if (this.project.type !== DataSourceName.MSSQL) {
-      return {
-        catalog: null,
-        schema: null,
-        table: sourceTableName,
-      };
-    }
-
-    return {
-      catalog: null,
-      schema: null,
-      table: sourceTableName,
-    };
+    return null;
   }
   private parseLineage(lineage?: string): number[] {
     if (!lineage) {
