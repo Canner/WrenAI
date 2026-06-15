@@ -55,6 +55,7 @@ export class DashboardItemRepository
   implements IDashboardItemRepository
 {
   private readonly jsonbColumns = ['layout', 'detail'];
+  private hasIdColumnCache: boolean | null = null;
   private hasTitleColumnCache: boolean | null = null;
   private hasDisplayNameColumnCache: boolean | null = null;
 
@@ -67,7 +68,7 @@ export class DashboardItemRepository
     queryOptions?: IQueryOptions,
   ): Promise<DashboardItem> {
     return await super.createOne(
-      await this.normalizeWriteData(data, queryOptions),
+      await this.normalizeWriteData(data, queryOptions, true),
       queryOptions,
     );
   }
@@ -122,12 +123,15 @@ export class DashboardItemRepository
   private async normalizeWriteData(
     data: Partial<DashboardItem>,
     queryOptions?: IQueryOptions,
+    includeGeneratedId = false,
   ): Promise<Partial<DashboardItem>> {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    const [hasTitleColumn, hasDisplayNameColumn] = await Promise.all([
-      this.hasColumn('title', executer),
-      this.hasColumn('display_name', executer),
-    ]);
+    const [hasIdColumn, hasTitleColumn, hasDisplayNameColumn] =
+      await Promise.all([
+        this.hasColumn('id', executer),
+        this.hasColumn('title', executer),
+        this.hasColumn('display_name', executer),
+      ]);
     const normalizedData: Partial<DashboardItem> = { ...data };
     const displayName =
       typeof data.displayName === 'string' ? data.displayName.trim() : '';
@@ -143,11 +147,22 @@ export class DashboardItemRepository
     if (!hasDisplayNameColumn) {
       delete normalizedData.displayName;
     }
+    if (
+      includeGeneratedId &&
+      hasIdColumn &&
+      normalizedData.id === undefined &&
+      this.isMssqlLike(executer)
+    ) {
+      normalizedData.id = await this.getNextId(executer);
+    }
 
     return normalizedData;
   }
 
   private async hasColumn(column: string, executer: Knex | Knex.Transaction) {
+    if (column === 'id' && this.hasIdColumnCache !== null) {
+      return this.hasIdColumnCache;
+    }
     if (column === 'title' && this.hasTitleColumnCache !== null) {
       return this.hasTitleColumnCache;
     }
@@ -159,6 +174,9 @@ export class DashboardItemRepository
     }
 
     const result = await executer.schema.hasColumn(this.tableName, column);
+    if (column === 'id') {
+      this.hasIdColumnCache = result;
+    }
     if (column === 'title') {
       this.hasTitleColumnCache = result;
     }
@@ -166,5 +184,24 @@ export class DashboardItemRepository
       this.hasDisplayNameColumnCache = result;
     }
     return result;
+  }
+
+  private isMssqlLike(executer: Knex | Knex.Transaction) {
+    const clientName = String(executer.client.config.client || '').toLowerCase();
+    const dialect = String((executer.client as any).dialect || '').toLowerCase();
+    const driverName = String(
+      (executer.client as any).driverName || '',
+    ).toLowerCase();
+
+    return [clientName, dialect, driverName].some((value) =>
+      value.includes('mssql'),
+    );
+  }
+
+  private async getNextId(executer: Knex | Knex.Transaction) {
+    const [row] = await executer(this.tableName).max<{ maxId: number | null }>(
+      'id as maxId',
+    );
+    return (row?.maxId || 0) + 1;
   }
 }
