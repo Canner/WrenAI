@@ -132,27 +132,36 @@ def _build_fallback_chart_schema(
             base["timeUnit"] = "yearmonth"
         return base
 
+    def count_axis() -> dict:
+        return {
+            "aggregate": "count",
+            "type": "quantitative",
+            "title": "Count",
+        }
+
     if chart_type == "pie":
         color_field = nominal[0] if nominal else columns[0]
-        theta_field = quantitative[0] if quantitative else (
-            columns[1] if len(columns) > 1 else columns[0]
+        theta_encoding = (
+            axis(quantitative[0], "quantitative") if quantitative else count_axis()
         )
         return {
             "title": title,
             "mark": {"type": "arc"},
             "encoding": {
-                "theta": axis(theta_field, "quantitative"),
+                "theta": theta_encoding,
                 "color": axis(color_field, "nominal"),
             },
         }
 
     if chart_type in {"line", "area", "multi_line"}:
-        y_field = quantitative[0] if quantitative else columns[-1]
+        y_encoding = (
+            axis(quantitative[0], "quantitative") if quantitative else count_axis()
+        )
         if {"year", "month"}.issubset({c.lower() for c in columns}):
             month_field = next(c for c in columns if c.lower() == "month")
             encoding = {
                 "x": axis(month_field, "ordinal"),
-                "y": axis(y_field, "quantitative"),
+                "y": y_encoding,
             }
             years = [c for c in columns if c.lower() == "year"]
             if years:
@@ -170,16 +179,18 @@ def _build_fallback_chart_schema(
             "mark": {"type": "area" if chart_type == "area" else "line"},
             "encoding": {
                 "x": axis(x_field, x_type),
-                "y": axis(y_field, "quantitative"),
+                "y": y_encoding,
             },
         }
 
     x_field = nominal[0] if nominal else (temporal[0] if temporal else columns[0])
-    y_field = quantitative[0] if quantitative else (columns[1] if len(columns) > 1 else columns[0])
     x_type = "nominal" if x_field in nominal else ("temporal" if x_field in temporal else "ordinal")
+    y_encoding = (
+        axis(quantitative[0], "quantitative") if quantitative else count_axis()
+    )
     encoding = {
         "x": axis(x_field, x_type),
-        "y": axis(y_field, "quantitative"),
+        "y": y_encoding,
     }
     if chart_type == "grouped_bar" and len(nominal) > 1:
         encoding["xOffset"] = axis(nominal[1], "nominal")
@@ -261,6 +272,13 @@ def _needs_deterministic_bar_fallback(
         if not isinstance(y_axis, dict) or y_axis.get("field") not in quantitative:
             return True
         if not isinstance(x_axis, dict) or x_axis.get("field") not in nominal:
+            return True
+
+    if len(quantitative) == 0 and len(nominal) >= 1:
+        y_axis = encoding.get("y")
+        if isinstance(y_axis, dict) and y_axis.get("field") in nominal:
+            return True
+        if not isinstance(y_axis, dict) or y_axis.get("aggregate") != "count":
             return True
 
     return False
