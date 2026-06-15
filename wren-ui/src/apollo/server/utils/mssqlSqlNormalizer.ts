@@ -100,12 +100,18 @@ const replaceInventedDateFields = (sql: string): string => {
   return sql;
 };
 
+const quoteMssqlDatepartUnits = (sql: string): string =>
+  sql.replace(
+    /\bDATEPART\(\s*'?\s*(YEAR|MONTH|DAY)\s*'?\s*,/gi,
+    (_match, part) => `DATEPART('${String(part).toUpperCase()}',`,
+  );
+
 const replaceInventedTimeBuckets = (sql: string): string => {
   const timestampExpression = inferMssqlTimestampExpression(sql);
   const bucketExpressions: Record<string, string> = {
-    YEAR: `DATEPART(YEAR, ${timestampExpression})`,
-    MONTH: `DATEPART(MONTH, ${timestampExpression})`,
-    DAY: `DATEPART(DAY, ${timestampExpression})`,
+    YEAR: `DATEPART('YEAR', ${timestampExpression})`,
+    MONTH: `DATEPART('MONTH', ${timestampExpression})`,
+    DAY: `DATEPART('DAY', ${timestampExpression})`,
   };
 
   sql = sql.replace(/\bSELECT\b(?<body>.*?)(?=\bFROM\b)/is, (match, _body, _offset, _source, groups) => {
@@ -153,7 +159,7 @@ const replaceInventedTimeBuckets = (sql: string): string => {
       body = body.replace(new RegExp(String.raw`"${bucket}"`, 'gi'), expression);
       body = body.replace(new RegExp(String.raw`\[${bucket}\]`, 'gi'), expression);
       body = body.replace(
-        new RegExp(String.raw`(?<!DATEPART\()\b${bucket}\b`, 'gi'),
+        new RegExp(String.raw`(?<![('\.\w])\b${bucket}\b(?!['\w])`, 'gi'),
         expression,
       );
     });
@@ -284,6 +290,27 @@ const replaceRepairLogThroughputShape = (sql: string): string => {
   ].join(' ');
 };
 
+const replaceTicketCycleTurnaroundShape = (sql: string): string => {
+  if (
+    !/\bdbo_ticket_cycles\b/i.test(sql) ||
+    !/\b(?:turnaround_time|avg_turnaround_time)\b/i.test(sql) ||
+    !/\bMONTH\b|DATEPART\(\s*'?\s*MONTH/i.test(sql)
+  ) {
+    return sql;
+  }
+
+  return [
+    'SELECT DATEPART(\'YEAR\', "dbo_ticket_cycles"."created_at") AS "year",',
+    'DATEPART(\'MONTH\', "dbo_ticket_cycles"."created_at") AS "month",',
+    'AVG(DATEDIFF(\'second\', "dbo_ticket_cycles"."start_date", "dbo_ticket_cycles"."end_date")) AS "avg_turnaround_seconds"',
+    'FROM "dbo_ticket_cycles"',
+    'WHERE "dbo_ticket_cycles"."start_date" IS NOT NULL',
+    'AND "dbo_ticket_cycles"."end_date" IS NOT NULL',
+    'GROUP BY DATEPART(\'YEAR\', "dbo_ticket_cycles"."created_at"), DATEPART(\'MONTH\', "dbo_ticket_cycles"."created_at")',
+    'ORDER BY DATEPART(\'YEAR\', "dbo_ticket_cycles"."created_at") ASC, DATEPART(\'MONTH\', "dbo_ticket_cycles"."created_at") ASC',
+  ].join(' ');
+};
+
 const replaceInventedFailureCategory = (sql: string): string => {
   if (!/\bdbo_repair_logs\b/i.test(sql) || !/\bfailure_category\b/i.test(sql)) {
     return sql;
@@ -347,6 +374,9 @@ const replaceInventedKnowledgeArticleFields = (sql: string): string => {
       author_id: '"author"',
     },
     dbo_kb_articles: {
+      category: '"category"',
+      section: '"category"',
+      article_section: '"category"',
       created_by: '"created_by_user_id"',
       created_by_user: '"created_by_user_id"',
       author: '"created_by_user_id"',
@@ -407,15 +437,18 @@ export const normalizeMssqlGeneratedSqlFields = (
 
   sql = sql.replace(/\\"/g, '"');
   sql = normalizeMssqlGeneratedSqlSyntax(sql);
+  sql = quoteMssqlDatepartUnits(sql);
   sql = replaceRelativeCurrentDateCalls(sql);
   sql = replaceInventedDateFields(sql);
   sql = replaceRepairLogThroughputShape(sql);
+  sql = replaceTicketCycleTurnaroundShape(sql);
   sql = replacePcbThroughputFields(sql);
   sql = replaceInventedFailureCategory(sql);
   sql = replaceInventedReportFields(sql);
   sql = replaceInventedKnowledgeArticleFields(sql);
   sql = replaceInventedTimeBuckets(sql);
   sql = replaceBadFailurePatternJoins(sql);
+  sql = quoteMssqlDatepartUnits(sql);
   return normalizeMssqlGeneratedSqlSyntax(sql);
 };
 
@@ -434,7 +467,7 @@ export const rewriteMssqlDatepartAliasReferences = (
     String.raw`(?:"([^"]+)"|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))`;
   const aliasPatterns = [
     new RegExp(
-      String.raw`\b(DATEPART\(\s*(?:YEAR|MONTH|DAY)\s*,\s*((?:[^()]|\([^()]*\))+?)\s*\))\s+AS\s+${aliasTargetPattern}`,
+      String.raw`\b(DATEPART\(\s*'?\s*(?:YEAR|MONTH|DAY)\s*'?\s*,\s*((?:[^()]|\([^()]*\))+?)\s*\))\s+AS\s+${aliasTargetPattern}`,
       'gi',
     ),
     new RegExp(
