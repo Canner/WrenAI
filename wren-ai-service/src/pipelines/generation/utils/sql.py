@@ -516,6 +516,11 @@ def _infer_mssql_timestamp_expression(sql: str) -> str | None:
             return f'{quoted_table_name}."generated_at"'
         if any(
             token in normalized_table_name
+            for token in ("knowledge", "kb_article", "kb_articles", "article")
+        ):
+            return f'{quoted_table_name}."created_at"'
+        if any(
+            token in normalized_table_name
             for token in ("repair", "ticket", "event", "log")
         ):
             return f'{quoted_table_name}."created_at"'
@@ -732,6 +737,71 @@ def _rewrite_mssql_invented_report_fields(sql: str) -> str:
         rewritten,
         flags=re.IGNORECASE,
     )
+    return rewritten
+
+
+def _rewrite_mssql_invented_knowledge_article_fields(sql: str) -> str:
+    if not re.search(
+        r"\b(?:dbo_knowledge_articles|dbo_kb_articles)\b", sql, flags=re.IGNORECASE
+    ):
+        return sql
+
+    rewritten = sql
+    table_replacements = {
+        "dbo_knowledge_articles": {
+            "effectiveness_score": '"helpful"',
+            "created_by": '"author"',
+            "created_by_user": '"author"',
+            "created_by_user_id": '"author"',
+            "author_id": '"author"',
+        },
+        "dbo_kb_articles": {
+            "created_by": '"created_by_user_id"',
+            "created_by_user": '"created_by_user_id"',
+            "author": '"created_by_user_id"',
+            "author_id": '"created_by_user_id"',
+        },
+    }
+
+    for table_name, field_replacements in table_replacements.items():
+        article_table = (
+            rf'(?:"{table_name}"|\[{table_name}\]|{table_name})'
+        )
+        for invented_field, replacement_field in field_replacements.items():
+            rewritten = re.sub(
+                rf"(?P<table>{article_table})\s*\.\s*(?:\"{invented_field}\"|\[{invented_field}\]|\b{invented_field}\b)",
+                rf"\g<table>.{replacement_field}",
+                rewritten,
+                flags=re.IGNORECASE,
+            )
+
+    if re.search(r"\bdbo_knowledge_articles\b", rewritten, flags=re.IGNORECASE):
+        unqualified_replacements = table_replacements["dbo_knowledge_articles"]
+    elif re.search(r"\bdbo_kb_articles\b", rewritten, flags=re.IGNORECASE):
+        unqualified_replacements = table_replacements["dbo_kb_articles"]
+    else:
+        unqualified_replacements = {}
+
+    for invented_field, replacement_field in unqualified_replacements.items():
+        rewritten = re.sub(
+            rf'(?<!\.)"{invented_field}"',
+            replacement_field,
+            rewritten,
+            flags=re.IGNORECASE,
+        )
+        rewritten = re.sub(
+            rf"(?<!\.)\[{invented_field}\]",
+            replacement_field,
+            rewritten,
+            flags=re.IGNORECASE,
+        )
+        rewritten = re.sub(
+            rf"(?<![\.\w]){invented_field}(?!\w)",
+            replacement_field,
+            rewritten,
+            flags=re.IGNORECASE,
+        )
+
     return rewritten
 
 
@@ -1032,7 +1102,7 @@ def _rewrite_mssql_temporal_bucket_alias_references(sql: str) -> str:
 def _references_known_hallucination_prone_schema(sql: str) -> bool:
     return bool(
         re.search(
-            r"\b(?:dbo_repair_logs|dbo_DebugEntries|dbo_reports)\b",
+            r"\b(?:dbo_repair_logs|dbo_DebugEntries|dbo_reports|dbo_knowledge_articles|dbo_kb_articles)\b",
             sql,
             flags=re.IGNORECASE,
         )
@@ -1051,11 +1121,35 @@ def _rewrite_known_schema_hallucinations(sql: str, now: datetime) -> str:
     normalized = _rewrite_mssql_invented_pcb_throughput_identifiers(normalized)
     normalized = _rewrite_mssql_invented_failure_category(normalized)
     normalized = _rewrite_mssql_invented_report_fields(normalized)
+    normalized = _rewrite_mssql_invented_knowledge_article_fields(normalized)
     normalized = _rewrite_mssql_bare_time_bucket_identifiers(normalized)
     normalized = _rewrite_temporal_bucket_functions(normalized)
     normalized = _rewrite_mssql_datepart_alias_references(normalized)
     normalized = _rewrite_mssql_temporal_bucket_alias_references(normalized)
     return normalized
+
+
+def _rewrite_mssql_limit_clause(sql: str) -> str:
+    limit_match = re.search(r"\s+LIMIT\s+(\d+)\s*;?\s*$", sql, flags=re.IGNORECASE)
+    if not limit_match:
+        return sql
+
+    limit = limit_match.group(1)
+    without_limit = sql[: limit_match.start()].rstrip()
+    if re.search(
+        r"\bSELECT\s+(?:DISTINCT\s+)?TOP\s*\(?\s*\d+\s*\)?",
+        without_limit,
+        flags=re.IGNORECASE,
+    ):
+        return without_limit
+
+    return re.sub(
+        r"\bSELECT\s+(DISTINCT\s+)?",
+        lambda match: f"{match.group(0)}TOP {limit} ",
+        without_limit,
+        count=1,
+        flags=re.IGNORECASE,
+    )
 
 
 def normalize_generation_result_sql(sql: str, data_source: str | None = None) -> str:
@@ -1090,12 +1184,14 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
         normalized = _rewrite_mssql_invented_pcb_throughput_identifiers(normalized)
         normalized = _rewrite_mssql_invented_failure_category(normalized)
         normalized = _rewrite_mssql_invented_report_fields(normalized)
+        normalized = _rewrite_mssql_invented_knowledge_article_fields(normalized)
         normalized = _rewrite_mssql_bare_time_bucket_identifiers(normalized)
         normalized = _rewrite_mssql_bucket_functions(normalized)
         normalized = _rewrite_temporal_bucket_functions(normalized)
         normalized = _rewrite_mssql_datepart_alias_references(normalized)
         normalized = _rewrite_mssql_temporal_bucket_alias_references(normalized)
         normalized = _rewrite_mssql_bare_time_bucket_identifiers(normalized)
+        normalized = _rewrite_mssql_limit_clause(normalized)
     elif _references_known_hallucination_prone_schema(normalized):
         normalized = _rewrite_known_schema_hallucinations(normalized, datetime.now())
 
@@ -1383,6 +1479,10 @@ _MSSQL_TEXT_TO_SQL_RULES = """
         3. `GROUP BY "dbo_failure_patterns"."name"` and `COUNT("dbo_DebugEntries"."DebugEntryId")`
         4. `GROUP BY "dbo_repair_logs"."failure_code"` and `COUNT(*)`
     - For chart-oriented questions, ensure the final SELECT contains only the chart-ready dimension and metric columns. Avoid prose-like outputs or helper columns.
+- For knowledge article tables:
+    - Use "created_at" for year/month trend buckets. Do not select, group by, or order by invented "YEAR" or "MONTH" columns.
+    - In "dbo_knowledge_articles", use "helpful" and "views" for effectiveness-style questions, and use "author" for creator/author groupings. Do not invent "effectiveness_score" or "created_by".
+    - In "dbo_kb_articles", use "created_by_user_id" for creator groupings. Do not invent "created_by" or "author" unless those exact columns appear in the schema.
 - DO NOT use DATEADD, DATEDIFF, DATETIME2, or DATETIMEOFFSET unless the SQL FUNCTIONS section explicitly proves they are supported by the target runtime.
 - Do not subtract timestamp/date columns directly. If a duration or turnaround column exists in the schema, select that column directly. If only start/end timestamps exist and the SQL FUNCTIONS section lists DATEDIFF, use DATEDIFF('second', <start_timestamp>, <end_timestamp>) for duration in seconds.
 - Resolve relative time phrases such as "last 12 months", "last month", or "this year" into absolute ISO timestamp boundaries using the current time context. Prefer closed-open literal ranges over runtime date arithmetic.

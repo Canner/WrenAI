@@ -725,7 +725,6 @@ def test_normalize_generation_result_sql_rewrites_timestamp_subtraction_for_mssq
         in normalized
     )
 
-
 def test_normalize_generation_result_sql_rewrites_mssql_time_buckets_and_ordering():
     sql = """
     SELECT
@@ -772,3 +771,78 @@ def test_normalize_generation_result_sql_rewrites_mssql_limit_and_where_parenthe
     assert "WHERE source = 'AI'" in normalized
     assert "NULLS LAST" not in normalized
     assert "LIMIT 1" not in normalized
+
+
+def test_normalize_generation_result_sql_removes_mssql_limit_when_top_exists():
+    sql = """
+    SELECT TOP 5
+      id
+    FROM dbo_tickets
+    ORDER BY id DESC
+    LIMIT 1
+    """
+
+    normalized = normalize_generation_result_sql(sql, data_source="MSSQL")
+
+    assert "LIMIT" not in normalized
+    assert "SELECT TOP 5 id" in normalized
+
+
+def test_normalize_generation_result_sql_rewrites_knowledge_article_time_buckets_for_mssql():
+    sql = """
+    SELECT
+      "YEAR",
+      COUNT("dbo_knowledge_articles"."id") AS "article_count"
+    FROM "dbo_knowledge_articles"
+    GROUP BY "YEAR"
+    ORDER BY "YEAR" ASC
+    """
+
+    normalized = normalize_generation_result_sql(sql, data_source="MSSQL")
+
+    assert 'SELECT "YEAR"' not in normalized
+    assert 'GROUP BY "YEAR"' not in normalized
+    assert 'ORDER BY "YEAR"' not in normalized
+    assert (
+        'DATEPART(YEAR, "dbo_knowledge_articles"."created_at") AS "year"'
+        in normalized
+    )
+    assert (
+        'GROUP BY DATEPART(YEAR, "dbo_knowledge_articles"."created_at")'
+        in normalized
+    )
+
+
+def test_normalize_generation_result_sql_rewrites_knowledge_article_hallucinated_fields_for_mssql():
+    sql = """
+    SELECT
+      AVG("dbo_knowledge_articles"."effectiveness_score") AS "avg_effectiveness",
+      "dbo_knowledge_articles"."created_by" AS "created_by"
+    FROM "dbo_knowledge_articles"
+    GROUP BY "dbo_knowledge_articles"."created_by"
+    """
+
+    normalized = normalize_generation_result_sql(sql, data_source="MSSQL")
+
+    assert "effectiveness_score" not in normalized
+    assert '"dbo_knowledge_articles"."created_by"' not in normalized
+    assert 'AVG("dbo_knowledge_articles"."helpful") AS "avg_effectiveness"' in normalized
+    assert '"dbo_knowledge_articles"."author" AS "author"' in normalized
+    assert 'GROUP BY "dbo_knowledge_articles"."author"' in normalized
+
+
+def test_normalize_generation_result_sql_rewrites_kb_article_created_by_for_mssql():
+    sql = """
+    SELECT
+      created_by,
+      COUNT(*) AS article_count
+    FROM dbo_kb_articles
+    GROUP BY created_by
+    ORDER BY article_count DESC
+    """
+
+    normalized = normalize_generation_result_sql(sql, data_source="MSSQL")
+
+    assert "created_by," not in normalized
+    assert "GROUP BY created_by" not in normalized
+    assert '"created_by_user_id"' in normalized

@@ -59,6 +59,12 @@ const inferMssqlTimestampExpression = (sql: string): string => {
     if (tableName.toLowerCase() === 'dbo_reports') {
       return `"${tableName}"."generated_at"`;
     }
+    if (
+      tableName.toLowerCase() === 'dbo_knowledge_articles' ||
+      tableName.toLowerCase() === 'dbo_kb_articles'
+    ) {
+      return `"${tableName}"."created_at"`;
+    }
     if (tableName.toLowerCase() === 'dbo_repair_logs') {
       return `"${tableName}"."created_at"`;
     }
@@ -320,6 +326,93 @@ const replaceInventedReportFields = (sql: string): string => {
   return sql;
 };
 
+const replaceInventedKnowledgeArticleFields = (sql: string): string => {
+  if (!/\b(?:dbo_knowledge_articles|dbo_kb_articles)\b/i.test(sql)) {
+    return sql;
+  }
+
+  const replacementsByTable: Record<string, Record<string, string>> = {
+    dbo_knowledge_articles: {
+      effectiveness_score: '"helpful"',
+      created_by: '"author"',
+      created_by_user: '"author"',
+      created_by_user_id: '"author"',
+      author_id: '"author"',
+    },
+    dbo_kb_articles: {
+      created_by: '"created_by_user_id"',
+      created_by_user: '"created_by_user_id"',
+      author: '"created_by_user_id"',
+      author_id: '"created_by_user_id"',
+    },
+  };
+
+  Object.entries(replacementsByTable).forEach(([tableName, replacements]) => {
+    const tablePattern = String.raw`(?:"${tableName}"|\[${tableName}\]|${tableName})`;
+    Object.entries(replacements).forEach(([inventedField, replacementField]) => {
+      const escapedField = escapeRegex(inventedField);
+      sql = sql.replace(
+        new RegExp(
+          String.raw`(${tablePattern})\s*\.\s*(?:"${escapedField}"|\[${escapedField}\]|\b${escapedField}\b)`,
+          'gi',
+        ),
+        `$1.${replacementField}`,
+      );
+    });
+  });
+
+  const activeTable = /\bdbo_knowledge_articles\b/i.test(sql)
+    ? 'dbo_knowledge_articles'
+    : /\bdbo_kb_articles\b/i.test(sql)
+      ? 'dbo_kb_articles'
+      : null;
+
+  if (activeTable) {
+    Object.entries(replacementsByTable[activeTable]).forEach(
+      ([inventedField, replacementField]) => {
+        const escapedField = escapeRegex(inventedField);
+        sql = sql.replace(
+          new RegExp(String.raw`(?<!\.)"${escapedField}"`, 'gi'),
+          replacementField,
+        );
+        sql = sql.replace(
+          new RegExp(String.raw`(?<!\.)\[${escapedField}\]`, 'gi'),
+          replacementField,
+        );
+        sql = sql.replace(
+          new RegExp(String.raw`(?<![\.\w])${escapedField}(?!\w)`, 'gi'),
+          replacementField,
+        );
+      },
+    );
+  }
+
+  return sql;
+};
+
+const rewriteMssqlLimitClause = (sql: string): string => {
+  const limitMatch = sql.match(/\s+LIMIT\s+(\d+)\s*;?\s*$/i);
+  if (!limitMatch || limitMatch.index === undefined) {
+    return sql;
+  }
+
+  const limit = limitMatch[1];
+  const withoutLimit = sql.slice(0, limitMatch.index).trimEnd();
+  if (/\bSELECT\s+(?:DISTINCT\s+)?TOP\s*\(?\s*\d+\s*\)?/i.test(withoutLimit)) {
+    return withoutLimit;
+  }
+
+  return withoutLimit.replace(
+    /\bSELECT\s+(DISTINCT\s+)?/i,
+    (match) => `${match}TOP ${limit} `,
+  );
+};
+
+const normalizeMssqlGeneratedSqlSyntax = (sql: string): string => {
+  sql = sql.replace(/\s+NULLS\s+(?:LAST|FIRST)\b/gi, '');
+  return rewriteMssqlLimitClause(sql);
+};
+
 export const normalizeMssqlGeneratedSqlFields = (
   sql: string,
   dataSource: DataSourceName,
@@ -336,9 +429,10 @@ export const normalizeMssqlGeneratedSqlFields = (
   sql = replacePcbThroughputFields(sql);
   sql = replaceInventedFailureCategory(sql);
   sql = replaceInventedReportFields(sql);
+  sql = replaceInventedKnowledgeArticleFields(sql);
   sql = replaceInventedTimeBuckets(sql);
   sql = replaceBadFailurePatternJoins(sql);
-  return sql;
+  return normalizeMssqlGeneratedSqlSyntax(sql);
 };
 
 export const rewriteMssqlDatepartAliasReferences = (
