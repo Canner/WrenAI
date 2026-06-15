@@ -200,6 +200,56 @@ describe('QueryService', () => {
     });
   });
 
+  it('should normalize non-mssql dbo model names before previewing with ibis', async () => {
+    mockIbisAdaptor.dryRun.mockResolvedValue({
+      correlationId: '123',
+      processTime: '1s',
+    });
+
+    await queryService.preview(
+      'SELECT created_at FROM dbo_search_queries ORDER BY created_at',
+      {
+        project: {
+          type: DataSourceName.POSTGRES,
+          connectionInfo: {},
+          schema: 'public',
+        },
+        manifest: {},
+        dryRun: true,
+      },
+    );
+
+    expect(mockIbisAdaptor.dryRun).toHaveBeenCalledWith(
+      'SELECT created_at FROM "dbo_search_queries" ORDER BY created_at',
+      expect.any(Object),
+    );
+  });
+
+  it('should normalize generated datediff calls for non-mssql previews', async () => {
+    mockIbisAdaptor.dryRun.mockResolvedValue({
+      correlationId: '123',
+      processTime: '1s',
+    });
+
+    await queryService.preview(
+      `SELECT DATEDIFF('day', "dbo_tickets"."created_at", CURRENT_DATE) AS ticket_age FROM "dbo_tickets"`,
+      {
+        project: {
+          type: DataSourceName.POSTGRES,
+          connectionInfo: {},
+          schema: 'public',
+        },
+        manifest: {},
+        dryRun: true,
+      },
+    );
+
+    expect(mockIbisAdaptor.dryRun).toHaveBeenCalledWith(
+      'SELECT EXTRACT(DAY FROM (CURRENT_DATE - "dbo_tickets"."created_at")) AS ticket_age FROM "dbo_tickets"',
+      expect.any(Object),
+    );
+  });
+
   it('should send event when previewing via ibis dry run fails', async () => {
     mockIbisAdaptor.dryRun.mockRejectedValue({
       message: 'Error message',

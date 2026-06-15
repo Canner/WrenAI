@@ -82,11 +82,14 @@ const normalizePreviewSqlForIbis = (
   dataSource: DataSourceName,
   limit?: number,
 ): { sql: string; limit?: number } => {
-  if (dataSource !== DataSourceName.MSSQL) {
-    return { sql, limit };
-  }
-
   sql = normalizeMssqlSqlForIbis(sql, dataSource);
+
+  if (dataSource !== DataSourceName.MSSQL) {
+    return {
+      sql: normalizeNonMssqlGeneratedSqlSyntax(sql, dataSource),
+      limit,
+    };
+  }
 
   const topMatch = sql.match(/^\s*SELECT\s+(DISTINCT\s+)?TOP\s*\(?\s*(\d+)\s*\)?\s+/i);
   if (!topMatch) {
@@ -158,6 +161,45 @@ const normalizeDeployedManifestForDatasource = (
       return normalizedModel;
     }),
   };
+};
+
+const normalizeNonMssqlGeneratedSqlSyntax = (
+  sql: string,
+  dataSource: DataSourceName,
+): string => {
+  if (dataSource === DataSourceName.MSSQL) {
+    return sql;
+  }
+
+  return rewriteGeneratedDateDiff(sql);
+};
+
+const rewriteGeneratedDateDiff = (sql: string): string => {
+  const dateDiffPattern =
+    /\bdate_?diff\s*\(\s*'?([A-Za-z]+)'?\s*,\s*([^,()]+(?:\([^)]*\))?[^,()]*)\s*,\s*([^()]+(?:\([^)]*\))?[^()]*)\)/gi;
+
+  return sql.replace(
+    dateDiffPattern,
+    (_match, unit: string, startExpression: string, endExpression: string) => {
+      const normalizedUnit = unit.toLowerCase();
+      const start = startExpression.trim();
+      const end = endExpression.trim();
+
+      if (['day', 'dd', 'd'].includes(normalizedUnit)) {
+        return `EXTRACT(DAY FROM (${end} - ${start}))`;
+      }
+
+      if (['month', 'mm', 'm'].includes(normalizedUnit)) {
+        return `((EXTRACT(YEAR FROM ${end}) - EXTRACT(YEAR FROM ${start})) * 12 + (EXTRACT(MONTH FROM ${end}) - EXTRACT(MONTH FROM ${start})))`;
+      }
+
+      if (['year', 'yy', 'yyyy'].includes(normalizedUnit)) {
+        return `(EXTRACT(YEAR FROM ${end}) - EXTRACT(YEAR FROM ${start}))`;
+      }
+
+      return `EXTRACT(DAY FROM (${end} - ${start}))`;
+    },
+  );
 };
 
 const normalizeTableReference = (
