@@ -100,14 +100,14 @@ def _rewrite_mssql_bucket_functions(sql: str) -> str:
     sql = re.sub(
         rf"DATEADD\(\s*month\s*,\s*DATEDIFF\(\s*month\s*,\s*0\s*,\s*{expression_pattern}\s*\)\s*,\s*0\s*\)",
         lambda m: (
-            f"(DATEPART(YEAR, {m.group(1)}) * 100 + DATEPART(MONTH, {m.group(1)}))"
+            f"(EXTRACT(YEAR FROM {m.group(1)}) * 100 + EXTRACT(MONTH FROM {m.group(1)}))"
         ),
         sql,
         flags=re.IGNORECASE,
     )
     sql = re.sub(
         rf"DATEADD\(\s*year\s*,\s*DATEDIFF\(\s*year\s*,\s*0\s*,\s*{expression_pattern}\s*\)\s*,\s*0\s*\)",
-        lambda m: f"DATEPART(YEAR, {m.group(1)})",
+        lambda m: f"EXTRACT(YEAR FROM {m.group(1)})",
         sql,
         flags=re.IGNORECASE,
     )
@@ -122,124 +122,124 @@ def _rewrite_temporal_bucket_functions(sql: str) -> str:
                 rf"DATEPART\(\s*YEAR\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART(YEAR, {m.group(1)})",
+            lambda m: f"EXTRACT(YEAR FROM {m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATEPART\(\s*MONTH\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART(MONTH, {m.group(1)})",
+            lambda m: f"EXTRACT(MONTH FROM {m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATEPART\(\s*DAY\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART(DAY, {m.group(1)})",
+            lambda m: f"EXTRACT(DAY FROM {m.group(1)})",
         ),
         (
             re.compile(rf"YEAR\(\s*{expression_pattern}\s*\)", re.IGNORECASE),
-            lambda m: f"DATEPART(YEAR, {m.group(1)})",
+            lambda m: f"EXTRACT(YEAR FROM {m.group(1)})",
         ),
         (
             re.compile(rf"MONTH\(\s*{expression_pattern}\s*\)", re.IGNORECASE),
-            lambda m: f"DATEPART(MONTH, {m.group(1)})",
+            lambda m: f"EXTRACT(MONTH FROM {m.group(1)})",
         ),
         (
             re.compile(rf"DAY\(\s*{expression_pattern}\s*\)", re.IGNORECASE),
-            lambda m: f"DATEPART(DAY, {m.group(1)})",
+            lambda m: f"EXTRACT(DAY FROM {m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATETRUNC\(\s*MONTH\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART(MONTH, {m.group(1)})",
+            lambda m: f"EXTRACT(MONTH FROM {m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATETRUNC\(\s*YEAR\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART(YEAR, {m.group(1)})",
+            lambda m: f"EXTRACT(YEAR FROM {m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATE_TRUNC\(\s*'?\s*MONTH\s*'?\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART(MONTH, {m.group(1)})",
+            lambda m: f"EXTRACT(MONTH FROM {m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATE_TRUNC\(\s*'?\s*YEAR\s*'?\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART(YEAR, {m.group(1)})",
+            lambda m: f"EXTRACT(YEAR FROM {m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATE_PART\(\s*'?\s*YEAR\s*'?\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART(YEAR, {m.group(1)})",
+            lambda m: f"EXTRACT(YEAR FROM {m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATE_PART\(\s*'?\s*MONTH\s*'?\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART(MONTH, {m.group(1)})",
+            lambda m: f"EXTRACT(MONTH FROM {m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATE_PART\(\s*'?\s*DAY\s*'?\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART(DAY, {m.group(1)})",
+            lambda m: f"EXTRACT(DAY FROM {m.group(1)})",
         ),
         (
             re.compile(
                 rf"EXTRACT\(\s*YEAR\s+FROM\s+{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART(YEAR, {m.group(1)})",
+            lambda m: f"EXTRACT(YEAR FROM {m.group(1)})",
         ),
         (
             re.compile(
                 rf"EXTRACT\(\s*MONTH\s+FROM\s+{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART(MONTH, {m.group(1)})",
+            lambda m: f"EXTRACT(MONTH FROM {m.group(1)})",
         ),
         (
             re.compile(
                 rf"EXTRACT\(\s*DAY\s+FROM\s+{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART(DAY, {m.group(1)})",
+            lambda m: f"EXTRACT(DAY FROM {m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATEPART\(\s*'YEAR'\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART(YEAR, {m.group(1)})",
+            lambda m: f"EXTRACT(YEAR FROM {m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATEPART\(\s*'MONTH'\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART(MONTH, {m.group(1)})",
+            lambda m: f"EXTRACT(MONTH FROM {m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATEPART\(\s*'DAY'\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART(DAY, {m.group(1)})",
+            lambda m: f"EXTRACT(DAY FROM {m.group(1)})",
         ),
     ]
 
@@ -345,9 +345,9 @@ def _rewrite_mssql_bare_time_bucket_identifiers(sql: str) -> str:
         return sql
 
     bucket_expressions = {
-        "year": f"DATEPART(YEAR, {timestamp_expression})",
-        "month": f"DATEPART(MONTH, {timestamp_expression})",
-        "day": f"DATEPART(DAY, {timestamp_expression})",
+        "year": f"EXTRACT(YEAR FROM {timestamp_expression})",
+        "month": f"EXTRACT(MONTH FROM {timestamp_expression})",
+        "day": f"EXTRACT(DAY FROM {timestamp_expression})",
     }
     rewritten = sql
 
@@ -391,16 +391,53 @@ def _rewrite_mssql_bare_time_bucket_identifiers(sql: str) -> str:
     return clause_pattern.sub(replace_clause, rewritten)
 
 
+def _rewrite_mssql_invented_failure_category(sql: str) -> str:
+    if not re.search(r"\bdbo_repair_logs\b", sql, flags=re.IGNORECASE):
+        return sql
+    if not re.search(r"\bfailure[_\s]+category\b", sql, flags=re.IGNORECASE):
+        return sql
+
+    failure_code_expression = '"dbo_repair_logs"."failure_code"'
+    rewritten = re.sub(
+        r'(?P<prefix>\bSELECT\s+|,\s*)(?:(?:"dbo_repair_logs"|\[dbo_repair_logs\]|dbo_repair_logs)\s*\.\s*)?(?:"failure[_\s]+category"|\[failure[_\s]+category\]|failure[_\s]+category)(?P<suffix>\s*(?:,|\bFROM\b))',
+        rf'\g<prefix>{failure_code_expression} AS "failure_category"\g<suffix>',
+        sql,
+        flags=re.IGNORECASE,
+    )
+    rewritten = re.sub(
+        r"\bAS\s+failure\s+category\b",
+        'AS "failure_category"',
+        rewritten,
+        flags=re.IGNORECASE,
+    )
+
+    clause_pattern = re.compile(
+        r"\b(GROUP\s+BY|ORDER\s+BY|HAVING)\b(?P<body>.*?)(?=\b(?:ORDER\s+BY|GROUP\s+BY|HAVING|LIMIT|OFFSET|FETCH|UNION|WHERE)\b|$)",
+        re.IGNORECASE | re.DOTALL,
+    )
+
+    def replace_clause(match: re.Match[str]) -> str:
+        body = re.sub(
+            r'(?:(?:"dbo_repair_logs"|\[dbo_repair_logs\]|dbo_repair_logs)\s*\.\s*)?(?:"failure[_\s]+category"|\[failure[_\s]+category\]|failure[_\s]+category)',
+            failure_code_expression,
+            match.group("body"),
+            flags=re.IGNORECASE,
+        )
+        return f"{match.group(1)}{body}"
+
+    return clause_pattern.sub(replace_clause, rewritten)
+
+
 def _rewrite_mssql_datepart_alias_references(sql: str) -> str:
     datepart_alias_pattern = re.compile(
-        r"\b(DATEPART\(\s*(YEAR|MONTH|DAY)\s*,\s*((?:[^()]|\([^()]*\))+?)\s*\))\s+AS\s+(?:\"([^\"]+)\"|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))",
+        r"\b((?:DATEPART\(\s*'?\s*(?:YEAR|MONTH|DAY)\s*'?\s*,\s*((?:[^()]|\([^()]*\))+?)\s*\)|(?:YEAR|MONTH|DAY)\(\s*((?:[^()]|\([^()]*\))+?)\s*\)|EXTRACT\(\s*(?:YEAR|MONTH|DAY)\s+FROM\s+((?:[^()]|\([^()]*\))+?)\s*\)))\s+AS\s+(?:\"([^\"]+)\"|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))",
         re.IGNORECASE,
     )
     aliases: dict[str, str] = {}
 
     for match in datepart_alias_pattern.finditer(sql):
         expression = match.group(1)
-        alias = match.group(4) or match.group(5) or match.group(6)
+        alias = match.group(5) or match.group(6) or match.group(7)
         aliases[alias.lower()] = expression
 
     if not aliases:
@@ -430,7 +467,7 @@ def _rewrite_mssql_datepart_alias_references(sql: str) -> str:
                 flags=re.IGNORECASE,
             )
             body = re.sub(
-                rf"(?<!DATEPART\()\b{re.escape(alias)}\b",
+                rf"(?<![A-Za-z_\(])\b{re.escape(alias)}\b(?!\s*\()",
                 placeholder,
                 body,
                 flags=re.IGNORECASE,
@@ -457,10 +494,17 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
             flags=re.IGNORECASE,
         )
         normalized = _replace_relative_getdate_calls(normalized, now)
+        normalized = re.sub(
+            r"\bAS\s+failure\s+category\b",
+            'AS "failure_category"',
+            normalized,
+            flags=re.IGNORECASE,
+        )
         normalized = _rewrite_mssql_to_unixtime(normalized)
         normalized = _rewrite_mssql_timestamp_subtraction(normalized)
         normalized = _rewrite_mssql_timestamp_casts(normalized)
         normalized = _rewrite_mssql_invented_date_identifiers(normalized)
+        normalized = _rewrite_mssql_invented_failure_category(normalized)
         normalized = _rewrite_mssql_bare_time_bucket_identifiers(normalized)
         normalized = _rewrite_mssql_bucket_functions(normalized)
         normalized = _rewrite_temporal_bucket_functions(normalized)

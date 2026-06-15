@@ -104,15 +104,15 @@ const rewriteMssqlDatepartFunctions = (sql: string): string =>
   sql.replace(
     /\bDATEPART\(\s*'?\s*(YEAR|MONTH|DAY)\s*'?\s*,\s*((?:[^()]|\([^()]*\))+?)\s*\)/gi,
     (_match, part, expression) =>
-      `${String(part).toUpperCase()}(${String(expression).trim()})`,
+      `EXTRACT(${String(part).toUpperCase()} FROM ${String(expression).trim()})`,
   );
 
 const replaceInventedTimeBuckets = (sql: string): string => {
   const timestampExpression = inferMssqlTimestampExpression(sql);
   const bucketExpressions: Record<string, string> = {
-    YEAR: `YEAR(${timestampExpression})`,
-    MONTH: `MONTH(${timestampExpression})`,
-    DAY: `DAY(${timestampExpression})`,
+    YEAR: `EXTRACT(YEAR FROM ${timestampExpression})`,
+    MONTH: `EXTRACT(MONTH FROM ${timestampExpression})`,
+    DAY: `EXTRACT(DAY FROM ${timestampExpression})`,
   };
 
   sql = sql.replace(/\bSELECT\b(?<body>.*?)(?=\bFROM\b)/is, (match, _body, _offset, _source, groups) => {
@@ -301,19 +301,19 @@ const replaceTicketCycleTurnaroundShape = (sql: string): string => {
   }
 
   return [
-    'SELECT YEAR("dbo_ticket_cycles"."created_at") AS "year",',
-    'MONTH("dbo_ticket_cycles"."created_at") AS "month",',
+    'SELECT EXTRACT(YEAR FROM "dbo_ticket_cycles"."created_at") AS "year",',
+    'EXTRACT(MONTH FROM "dbo_ticket_cycles"."created_at") AS "month",',
     'AVG(DATEDIFF(\'second\', "dbo_ticket_cycles"."start_date", "dbo_ticket_cycles"."end_date")) AS "avg_turnaround_seconds"',
     'FROM "dbo_ticket_cycles"',
     'WHERE "dbo_ticket_cycles"."start_date" IS NOT NULL',
     'AND "dbo_ticket_cycles"."end_date" IS NOT NULL',
-    'GROUP BY YEAR("dbo_ticket_cycles"."created_at"), MONTH("dbo_ticket_cycles"."created_at")',
-    'ORDER BY YEAR("dbo_ticket_cycles"."created_at") ASC, MONTH("dbo_ticket_cycles"."created_at") ASC',
+    'GROUP BY EXTRACT(YEAR FROM "dbo_ticket_cycles"."created_at"), EXTRACT(MONTH FROM "dbo_ticket_cycles"."created_at")',
+    'ORDER BY EXTRACT(YEAR FROM "dbo_ticket_cycles"."created_at") ASC, EXTRACT(MONTH FROM "dbo_ticket_cycles"."created_at") ASC',
   ].join(' ');
 };
 
 const replaceInventedFailureCategory = (sql: string): string => {
-  if (!/\bdbo_repair_logs\b/i.test(sql) || !/\bfailure_category\b/i.test(sql)) {
+  if (!/\bdbo_repair_logs\b/i.test(sql) || !/\bfailure[_\s]+category\b/i.test(sql)) {
     return sql;
   }
 
@@ -323,18 +323,19 @@ const replaceInventedFailureCategory = (sql: string): string => {
     (match, _body, _offset, _source, groups) => {
       let body = groups?.body || '';
       body = body.replace(
-        /(^|,)\s*(?:(?:"dbo_repair_logs"|\[dbo_repair_logs\]|dbo_repair_logs)\s*\.\s*)?(?:"failure_category"|\[failure_category\]|failure_category)(?=\s*(?:,|$))/gi,
+        /(^|,)\s*(?:(?:"dbo_repair_logs"|\[dbo_repair_logs\]|dbo_repair_logs)\s*\.\s*)?(?:"failure[_\s]+category"|\[failure[_\s]+category\]|failure[_\s]+category)(?=\s*(?:,|$))/gi,
         `$1 ${failureCodeExpression} AS "failure_category"`,
       );
       return `SELECT${body}`;
     },
   );
+  sql = sql.replace(/\bAS\s+failure\s+category\b/gi, 'AS "failure_category"');
 
   const clausePattern =
     /\b(GROUP\s+BY|ORDER\s+BY|HAVING)\b(?<body>.*?)(?=\b(?:ORDER\s+BY|GROUP\s+BY|HAVING|LIMIT|OFFSET|FETCH|UNION|WHERE)\b|$)/gis;
   return sql.replace(clausePattern, (match, clause, _body, _offset, _source, groups) => {
     const body = (groups?.body || '').replace(
-      /(?:(?:"dbo_repair_logs"|\[dbo_repair_logs\]|dbo_repair_logs)\s*\.\s*)?(?:"failure_category"|\[failure_category\]|failure_category)/gi,
+      /(?:(?:"dbo_repair_logs"|\[dbo_repair_logs\]|dbo_repair_logs)\s*\.\s*)?(?:"failure[_\s]+category"|\[failure[_\s]+category\]|failure[_\s]+category)/gi,
       failureCodeExpression,
     );
     return `${clause}${body}`;
