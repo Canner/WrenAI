@@ -1233,19 +1233,33 @@ class AskService:
                     )
 
                     if self._allow_intent_classification:
-                        intent_classification_result = (
-                            await self._run_with_timeout(
-                                "Intent classification",
-                                self._pipelines["intent_classification"].run(
-                                    query=user_query,
-                                    histories=histories,
-                                    sql_samples=sql_samples,
-                                    instructions=instructions,
-                                    project_id=ask_request.project_id,
-                                    configuration=ask_request.configurations,
-                                ),
+                        try:
+                            intent_classification_result = (
+                                await self._run_with_timeout(
+                                    "Intent classification",
+                                    self._pipelines["intent_classification"].run(
+                                        query=user_query,
+                                        histories=histories,
+                                        sql_samples=sql_samples,
+                                        instructions=instructions,
+                                        project_id=ask_request.project_id,
+                                        configuration=ask_request.configurations,
+                                    ),
+                                )
+                            ).get("post_process", {})
+                        except TimeoutError as exc:
+                            logger.warning(
+                                "Intent classification timed out; continuing with TEXT_TO_SQL. query_id=%s project_id=%s error=%s",
+                                query_id,
+                                ask_request.project_id,
+                                exc,
                             )
-                        ).get("post_process", {})
+                            intent_classification_result = {
+                                "intent": "TEXT_TO_SQL",
+                                "rephrased_question": user_query,
+                                "reasoning": "Intent classification timed out; using SQL generation.",
+                                "db_schemas": [],
+                            }
                         intent = intent_classification_result.get("intent")
                         rephrased_question = intent_classification_result.get(
                             "rephrased_question"
