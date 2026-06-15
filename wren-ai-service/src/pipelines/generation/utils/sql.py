@@ -248,14 +248,14 @@ def _rewrite_mssql_bucket_functions(sql: str) -> str:
     sql = re.sub(
         rf"DATEADD\(\s*month\s*,\s*DATEDIFF\(\s*month\s*,\s*0\s*,\s*{expression_pattern}\s*\)\s*,\s*0\s*\)",
         lambda m: (
-            f"(DATEPART('YEAR', {m.group(1)}) * 100 + DATEPART('MONTH', {m.group(1)}))"
+            f"(YEAR({m.group(1)}) * 100 + MONTH({m.group(1)}))"
         ),
         sql,
         flags=re.IGNORECASE,
     )
     sql = re.sub(
         rf"DATEADD\(\s*year\s*,\s*DATEDIFF\(\s*year\s*,\s*0\s*,\s*{expression_pattern}\s*\)\s*,\s*0\s*\)",
-        lambda m: f"DATEPART('YEAR', {m.group(1)})",
+        lambda m: f"YEAR({m.group(1)})",
         sql,
         flags=re.IGNORECASE,
     )
@@ -270,124 +270,124 @@ def _rewrite_temporal_bucket_functions(sql: str) -> str:
                 rf"DATEPART\(\s*YEAR\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART('YEAR', {m.group(1)})",
+            lambda m: f"YEAR({m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATEPART\(\s*MONTH\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART('MONTH', {m.group(1)})",
+            lambda m: f"MONTH({m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATEPART\(\s*DAY\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART('DAY', {m.group(1)})",
+            lambda m: f"DAY({m.group(1)})",
         ),
         (
             re.compile(rf"YEAR\(\s*{expression_pattern}\s*\)", re.IGNORECASE),
-            lambda m: f"DATEPART('YEAR', {m.group(1)})",
+            lambda m: f"YEAR({m.group(1)})",
         ),
         (
             re.compile(rf"MONTH\(\s*{expression_pattern}\s*\)", re.IGNORECASE),
-            lambda m: f"DATEPART('MONTH', {m.group(1)})",
+            lambda m: f"MONTH({m.group(1)})",
         ),
         (
             re.compile(rf"DAY\(\s*{expression_pattern}\s*\)", re.IGNORECASE),
-            lambda m: f"DATEPART('DAY', {m.group(1)})",
+            lambda m: f"DAY({m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATETRUNC\(\s*MONTH\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART('MONTH', {m.group(1)})",
+            lambda m: f"MONTH({m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATETRUNC\(\s*YEAR\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART('YEAR', {m.group(1)})",
+            lambda m: f"YEAR({m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATE_TRUNC\(\s*'?\s*MONTH\s*'?\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART('MONTH', {m.group(1)})",
+            lambda m: f"MONTH({m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATE_TRUNC\(\s*'?\s*YEAR\s*'?\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART('YEAR', {m.group(1)})",
+            lambda m: f"YEAR({m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATE_PART\(\s*'?\s*YEAR\s*'?\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART('YEAR', {m.group(1)})",
+            lambda m: f"YEAR({m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATE_PART\(\s*'?\s*MONTH\s*'?\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART('MONTH', {m.group(1)})",
+            lambda m: f"MONTH({m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATE_PART\(\s*'?\s*DAY\s*'?\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART('DAY', {m.group(1)})",
+            lambda m: f"DAY({m.group(1)})",
         ),
         (
             re.compile(
                 rf"EXTRACT\(\s*YEAR\s+FROM\s+{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART('YEAR', {m.group(1)})",
+            lambda m: f"YEAR({m.group(1)})",
         ),
         (
             re.compile(
                 rf"EXTRACT\(\s*MONTH\s+FROM\s+{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART('MONTH', {m.group(1)})",
+            lambda m: f"MONTH({m.group(1)})",
         ),
         (
             re.compile(
                 rf"EXTRACT\(\s*DAY\s+FROM\s+{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART('DAY', {m.group(1)})",
+            lambda m: f"DAY({m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATEPART\(\s*'YEAR'\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART('YEAR', {m.group(1)})",
+            lambda m: f"YEAR({m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATEPART\(\s*'MONTH'\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART('MONTH', {m.group(1)})",
+            lambda m: f"MONTH({m.group(1)})",
         ),
         (
             re.compile(
                 rf"DATEPART\(\s*'DAY'\s*,\s*{expression_pattern}\s*\)",
                 re.IGNORECASE,
             ),
-            lambda m: f"DATEPART('DAY', {m.group(1)})",
+            lambda m: f"DAY({m.group(1)})",
         ),
     ]
 
@@ -422,9 +422,9 @@ def _rewrite_mssql_to_date_buckets(sql: str) -> str:
     def make_day_bucket(expression: str) -> str:
         timestamp_expression = _qualify_mssql_temporal_expression(expression, sql)
         return (
-            f"(DATEPART('YEAR', {timestamp_expression}) * 10000 + "
-            f"DATEPART('MONTH', {timestamp_expression}) * 100 + "
-            f"DATEPART('DAY', {timestamp_expression}))"
+            f"(YEAR({timestamp_expression}) * 10000 + "
+            f"MONTH({timestamp_expression}) * 100 + "
+            f"DAY({timestamp_expression}))"
         )
 
     rewritten = re.sub(
@@ -675,17 +675,17 @@ def _rewrite_mssql_repair_log_turnaround_trend_shape(sql: str) -> str:
         return sql
 
     return (
-        "SELECT DATEPART('YEAR', \"dbo_repair_logs\".\"created_at\") AS \"year\", "
-        "DATEPART('MONTH', \"dbo_repair_logs\".\"created_at\") AS \"month\", "
+        "SELECT YEAR(\"dbo_repair_logs\".\"created_at\") AS \"year\", "
+        "MONTH(\"dbo_repair_logs\".\"created_at\") AS \"month\", "
         'AVG(DATEDIFF(\'second\', "dbo_repair_logs"."created_at", '
         '"dbo_repair_logs"."updated_at")) AS "avg_turnaround_seconds" '
         'FROM "dbo_repair_logs" '
         'WHERE "dbo_repair_logs"."created_at" IS NOT NULL '
         'AND "dbo_repair_logs"."updated_at" IS NOT NULL '
-        "GROUP BY DATEPART('YEAR', \"dbo_repair_logs\".\"created_at\"), "
-        "DATEPART('MONTH', \"dbo_repair_logs\".\"created_at\") "
-        "ORDER BY DATEPART('YEAR', \"dbo_repair_logs\".\"created_at\") ASC, "
-        "DATEPART('MONTH', \"dbo_repair_logs\".\"created_at\") ASC"
+        "GROUP BY YEAR(\"dbo_repair_logs\".\"created_at\"), "
+        "MONTH(\"dbo_repair_logs\".\"created_at\") "
+        "ORDER BY YEAR(\"dbo_repair_logs\".\"created_at\") ASC, "
+        "MONTH(\"dbo_repair_logs\".\"created_at\") ASC"
     )
 
 
@@ -698,17 +698,17 @@ def _rewrite_mssql_ticket_cycle_turnaround_shape(sql: str) -> str:
         return sql
 
     return (
-        'SELECT DATEPART(\'YEAR\', "dbo_ticket_cycles"."created_at") AS "year", '
-        'DATEPART(\'MONTH\', "dbo_ticket_cycles"."created_at") AS "month", '
+        'SELECT YEAR("dbo_ticket_cycles"."created_at") AS "year", '
+        'MONTH("dbo_ticket_cycles"."created_at") AS "month", '
         'AVG(DATEDIFF(\'second\', "dbo_ticket_cycles"."start_date", '
         '"dbo_ticket_cycles"."end_date")) AS "avg_turnaround_seconds" '
         'FROM "dbo_ticket_cycles" '
         'WHERE "dbo_ticket_cycles"."start_date" IS NOT NULL '
         'AND "dbo_ticket_cycles"."end_date" IS NOT NULL '
-        'GROUP BY DATEPART(\'YEAR\', "dbo_ticket_cycles"."created_at"), '
-        'DATEPART(\'MONTH\', "dbo_ticket_cycles"."created_at") '
-        'ORDER BY DATEPART(\'YEAR\', "dbo_ticket_cycles"."created_at") ASC, '
-        'DATEPART(\'MONTH\', "dbo_ticket_cycles"."created_at") ASC'
+        'GROUP BY YEAR("dbo_ticket_cycles"."created_at"), '
+        'MONTH("dbo_ticket_cycles"."created_at") '
+        'ORDER BY YEAR("dbo_ticket_cycles"."created_at") ASC, '
+        'MONTH("dbo_ticket_cycles"."created_at") ASC'
     )
 
 
@@ -856,9 +856,9 @@ def _rewrite_mssql_bare_time_bucket_identifiers(sql: str) -> str:
         return sql
 
     bucket_expressions = {
-        "year": f"DATEPART('YEAR', {timestamp_expression})",
-        "month": f"DATEPART('MONTH', {timestamp_expression})",
-        "day": f"DATEPART('DAY', {timestamp_expression})",
+        "year": f"YEAR({timestamp_expression})",
+        "month": f"MONTH({timestamp_expression})",
+        "day": f"DAY({timestamp_expression})",
     }
     rewritten = sql
 
@@ -985,14 +985,14 @@ def _unwrap_simple_mssql_where_parentheses(sql: str) -> str:
 
 def _rewrite_mssql_datepart_alias_references(sql: str) -> str:
     datepart_alias_pattern = re.compile(
-        r"\b(DATEPART\(\s*'?\s*(?:YEAR|MONTH|DAY)\s*'?\s*,\s*((?:[^()]|\([^()]*\))+?)\s*\))\s+AS\s+(?:\"([^\"]+)\"|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))",
+        r"\b((?:DATEPART\(\s*'?\s*(?:YEAR|MONTH|DAY)\s*'?\s*,\s*((?:[^()]|\([^()]*\))+?)\s*\)|(?:YEAR|MONTH|DAY)\(\s*((?:[^()]|\([^()]*\))+?)\s*\)))\s+AS\s+(?:\"([^\"]+)\"|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))",
         re.IGNORECASE,
     )
     aliases: dict[str, str] = {}
 
     for match in datepart_alias_pattern.finditer(sql):
         expression = match.group(1)
-        alias = match.group(3) or match.group(4) or match.group(5)
+        alias = match.group(4) or match.group(5) or match.group(6)
         aliases[alias.lower()] = expression
 
     if not aliases:
@@ -1074,7 +1074,9 @@ def _rewrite_mssql_temporal_bucket_alias_references(sql: str) -> str:
 
     aliases: dict[str, str] = {}
     for item in _split_top_level_select_items(select_match.group("body")):
-        if not re.search(r"\bDATEPART\s*\(", item, flags=re.IGNORECASE):
+        if not re.search(
+            r"\b(?:DATEPART|YEAR|MONTH|DAY)\s*\(", item, flags=re.IGNORECASE
+        ):
             continue
 
         alias_match = re.search(
@@ -1486,7 +1488,7 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 _MSSQL_TEXT_TO_SQL_RULES = """
 ### MSSQL-SPECIFIC RULES ###
 - The target database is MSSQL.
-- Prefer native T-SQL date bucket syntax such as DATEPART('YEAR', "created_at") and DATEPART('MONTH', "created_at").
+- Prefer native T-SQL date bucket syntax such as YEAR("created_at") and MONTH("created_at").
 - DO NOT use PostgreSQL-style or Trino-style date syntax such as DATE_TRUNC, DATETRUNC, INTERVAL, CURRENT_DATE, TIMESTAMP WITH TIME ZONE, TO_CHAR, TO_UNIXTIME, TO_TIMESTAMP, TO_TIMESTAMP_MILLIS, TO_TIMESTAMP_SECONDS, TO_TIMESTAMP_MICROS, TO_TIMESTAMP_NANOS, or :: casts.
 - DO NOT use JSON extraction functions or operators such as JSON_VALUE, JSON_QUERY, JSON_EXTRACT, JSON_EXTRACT_SCALAR, JSON_EXTRACT_ARRAY, json_value, json_extract, ->, or ->>. The MSSQL Wren/Ibis runtime does not support them.
 - If a table has a generic JSON/text column such as "data", do not assume keys inside it are queryable. Only use fields that are exposed as first-class columns in the DATABASE SCHEMA.
@@ -1518,11 +1520,11 @@ _MSSQL_TEXT_TO_SQL_RULES = """
 - Do not subtract timestamp/date columns directly. If a duration or turnaround column exists in the schema, select that column directly. If only start/end timestamps exist and the SQL FUNCTIONS section lists DATEDIFF, use DATEDIFF('second', <start_timestamp>, <end_timestamp>) for duration in seconds.
 - Resolve relative time phrases such as "last 12 months", "last month", or "this year" into absolute ISO timestamp boundaries using the current time context. Prefer closed-open literal ranges over runtime date arithmetic.
 - For month bucketing, prefer separate year/month fields:
-    - DATEPART('YEAR', <timestamp_expression>) AS "year"
-    - DATEPART('MONTH', <timestamp_expression>) AS "month"
+    - YEAR(<timestamp_expression>) AS "year"
+    - MONTH(<timestamp_expression>) AS "month"
   Then GROUP BY and ORDER BY the same year/month expressions.
-- Do not GROUP BY or ORDER BY quoted year/month aliases such as "YEAR" or "MONTH"; repeat the DATEPART(...) expression instead.
-- For year bucketing, prefer DATEPART('YEAR', <timestamp_expression>).
+- Do not GROUP BY or ORDER BY quoted year/month aliases such as "YEAR" or "MONTH"; repeat the YEAR(...) or MONTH(...) expression instead.
+- For year bucketing, prefer YEAR(<timestamp_expression>).
 - For top/bottom N questions in MSSQL, prefer SELECT TOP (N) with ORDER BY over DENSE_RANK/ROW_NUMBER when the user did not explicitly request ranks.
 - For filtering a specific year such as 2025, prefer a closed-open range:
     - <timestamp_expression> >= '2025-01-01 00:00:00'
@@ -1809,7 +1811,7 @@ def get_metric_instructions(
 #### MSSQL Metric Notes ####
 - Resolve relative metric time windows into absolute ISO date ranges whenever current time context is available.
 - Do not use DATE_TRUNC, DATETRUNC, DATEADD, DATEDIFF, INTERVAL, CURRENT_DATE, or TIMESTAMP WITH TIME ZONE in MSSQL metric queries unless the SQL FUNCTIONS section explicitly shows they are supported by the target engine.
-- For month trend metrics, prefer DATEPART('YEAR', <timestamp_expression>) and DATEPART('MONTH', <timestamp_expression>) as separate grouped columns.
+- For month trend metrics, prefer YEAR(<timestamp_expression>) and MONTH(<timestamp_expression>) as separate grouped columns.
 """
 
     return instructions

@@ -100,18 +100,19 @@ const replaceInventedDateFields = (sql: string): string => {
   return sql;
 };
 
-const quoteMssqlDatepartUnits = (sql: string): string =>
+const rewriteMssqlDatepartFunctions = (sql: string): string =>
   sql.replace(
-    /\bDATEPART\(\s*'?\s*(YEAR|MONTH|DAY)\s*'?\s*,/gi,
-    (_match, part) => `DATEPART('${String(part).toUpperCase()}',`,
+    /\bDATEPART\(\s*'?\s*(YEAR|MONTH|DAY)\s*'?\s*,\s*((?:[^()]|\([^()]*\))+?)\s*\)/gi,
+    (_match, part, expression) =>
+      `${String(part).toUpperCase()}(${String(expression).trim()})`,
   );
 
 const replaceInventedTimeBuckets = (sql: string): string => {
   const timestampExpression = inferMssqlTimestampExpression(sql);
   const bucketExpressions: Record<string, string> = {
-    YEAR: `DATEPART('YEAR', ${timestampExpression})`,
-    MONTH: `DATEPART('MONTH', ${timestampExpression})`,
-    DAY: `DATEPART('DAY', ${timestampExpression})`,
+    YEAR: `YEAR(${timestampExpression})`,
+    MONTH: `MONTH(${timestampExpression})`,
+    DAY: `DAY(${timestampExpression})`,
   };
 
   sql = sql.replace(/\bSELECT\b(?<body>.*?)(?=\bFROM\b)/is, (match, _body, _offset, _source, groups) => {
@@ -300,14 +301,14 @@ const replaceTicketCycleTurnaroundShape = (sql: string): string => {
   }
 
   return [
-    'SELECT DATEPART(\'YEAR\', "dbo_ticket_cycles"."created_at") AS "year",',
-    'DATEPART(\'MONTH\', "dbo_ticket_cycles"."created_at") AS "month",',
+    'SELECT YEAR("dbo_ticket_cycles"."created_at") AS "year",',
+    'MONTH("dbo_ticket_cycles"."created_at") AS "month",',
     'AVG(DATEDIFF(\'second\', "dbo_ticket_cycles"."start_date", "dbo_ticket_cycles"."end_date")) AS "avg_turnaround_seconds"',
     'FROM "dbo_ticket_cycles"',
     'WHERE "dbo_ticket_cycles"."start_date" IS NOT NULL',
     'AND "dbo_ticket_cycles"."end_date" IS NOT NULL',
-    'GROUP BY DATEPART(\'YEAR\', "dbo_ticket_cycles"."created_at"), DATEPART(\'MONTH\', "dbo_ticket_cycles"."created_at")',
-    'ORDER BY DATEPART(\'YEAR\', "dbo_ticket_cycles"."created_at") ASC, DATEPART(\'MONTH\', "dbo_ticket_cycles"."created_at") ASC',
+    'GROUP BY YEAR("dbo_ticket_cycles"."created_at"), MONTH("dbo_ticket_cycles"."created_at")',
+    'ORDER BY YEAR("dbo_ticket_cycles"."created_at") ASC, MONTH("dbo_ticket_cycles"."created_at") ASC',
   ].join(' ');
 };
 
@@ -437,7 +438,7 @@ export const normalizeMssqlGeneratedSqlFields = (
 
   sql = sql.replace(/\\"/g, '"');
   sql = normalizeMssqlGeneratedSqlSyntax(sql);
-  sql = quoteMssqlDatepartUnits(sql);
+  sql = rewriteMssqlDatepartFunctions(sql);
   sql = replaceRelativeCurrentDateCalls(sql);
   sql = replaceInventedDateFields(sql);
   sql = replaceRepairLogThroughputShape(sql);
@@ -448,7 +449,7 @@ export const normalizeMssqlGeneratedSqlFields = (
   sql = replaceInventedKnowledgeArticleFields(sql);
   sql = replaceInventedTimeBuckets(sql);
   sql = replaceBadFailurePatternJoins(sql);
-  sql = quoteMssqlDatepartUnits(sql);
+  sql = rewriteMssqlDatepartFunctions(sql);
   return normalizeMssqlGeneratedSqlSyntax(sql);
 };
 
