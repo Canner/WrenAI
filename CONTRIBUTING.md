@@ -25,7 +25,7 @@ Each module under `core/` has its own dev setup. Start with the module's own `RE
 
 - **Commit messages**: [conventional commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`, `perf:`, `deps:`). Releases are automated via release-please with independent release lines per module.
 - **Rust**: format with `cargo fmt`, lint with `clippy -D warnings`, format `Cargo.toml` with `taplo`.
-- **Python**: format and lint with `ruff` (line length 88, target Python 3.11). `core/wren-core-py` uses Poetry; `core/wren` uses `uv`.
+- **Python**: format and lint with `ruff` (line length 88, target Python 3.11). Both `core/wren-core-py` and `core/wren` use `uv`.
 - **Tests** must pass and lint must be clean before review. CI is path-filtered per module.
 
 ## Licensing of contributions

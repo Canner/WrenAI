@@ -15,7 +15,7 @@ PyO3 bindings exposing wren-core to Python. Built with Maturin. This is the brid
 ## Dev Commands
 
 ```bash
-just install     # Poetry install
+just install     # uv sync (deps only; --no-install-project)
 just develop     # Build dev wheel with maturin (for local testing)
 just build       # Build release wheel
 just test-rs     # Rust tests only (cargo test --no-default-features)

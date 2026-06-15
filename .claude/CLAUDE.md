@@ -42,7 +42,7 @@ Most unit tests live in `core/wren-core/core/src/mdl/mod.rs`. SQL end-to-end tes
 ### core/wren-core-py (Python bindings)
 ```bash
 cd core/wren-core-py
-just install      # poetry install
+just install      # uv sync (deps only; --no-install-project)
 just develop      # build dev wheel with maturin
 just test-rs      # Rust tests (cargo test --no-default-features)
 just test-py      # Python tests (pytest)
@@ -107,7 +107,7 @@ SQL query
 
 - **Commits**: Conventional commits (`feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`, `perf:`, `deps:`). Releases are automated via release-please with independent release lines per module.
 - **Rust**: format with `cargo fmt`, lint with `clippy -D warnings`, TOML with `taplo`.
-- **Python**: format and lint with `ruff` (line-length 88, target Python 3.11). `core/wren-core-py` uses Poetry; `core/wren` uses uv.
+- **Python**: format and lint with `ruff` (line-length 88, target Python 3.11). Both `core/wren-core-py` and `core/wren` use uv.
 - **DataFusion fork**: `https://github.com/Canner/datafusion.git` branch `canner/v49.0.1`.
 - **Snapshot testing**: wren-core uses `insta` for Rust snapshot tests.
 - **CI**: Per-module path-filtered workflows trigger only on changes inside that module.

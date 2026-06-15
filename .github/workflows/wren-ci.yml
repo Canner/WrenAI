@@ -59,9 +59,8 @@ jobs:
       - name: Build wren-core-py wheel
         working-directory: core/wren-core-py
         run: |
-          pipx install poetry
-          poetry install --no-root
-          poetry run maturin build
+          uv sync --locked --no-install-project
+          uv run --no-sync maturin build
       - name: Install dependencies
         run: |
           uv lock --find-links ../wren-core-py/target/wheels/ --upgrade-package wren-core-py
@@ -113,9 +112,8 @@ jobs:
       - name: Build wren-core-py wheel
         working-directory: core/wren-core-py
         run: |
-          pipx install poetry
-          poetry install --no-root
-          poetry run maturin build
+          uv sync --locked --no-install-project
+          uv run --no-sync maturin build
       - name: Install dependencies
         run: |
           uv lock --find-links ../wren-core-py/target/wheels/ --upgrade-package wren-core-py
@@ -151,9 +149,8 @@ jobs:
       - name: Build wren-core-py wheel
         working-directory: core/wren-core-py
         run: |
-          pipx install poetry
-          poetry install --no-root
-          poetry run maturin build
+          uv sync --locked --no-install-project
+          uv run --no-sync maturin build
       - name: Install dependencies
         run: |
           uv lock --find-links ../wren-core-py/target/wheels/ --upgrade-package wren-core-py
@@ -189,9 +186,8 @@ jobs:
       - name: Build wren-core-py wheel
         working-directory: core/wren-core-py
         run: |
-          pipx install poetry
-          poetry install --no-root
-          poetry run maturin build
+          uv sync --locked --no-install-project
+          uv run --no-sync maturin build
       - name: Install dependencies
         run: |
           uv lock --find-links ../wren-core-py/target/wheels/ --upgrade-package wren-core-py

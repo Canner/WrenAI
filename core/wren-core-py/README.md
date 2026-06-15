@@ -40,8 +40,8 @@ planned_sql = ctx.transform_sql("SELECT * FROM my_model")
 ### Environment Setup
 
 - Install [Rust](https://www.rust-lang.org/tools/install) and [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html)
-- Install [Python](https://www.python.org/downloads/) and [pipx](https://pipx.pypa.io/)
-- Install [poetry](https://github.com/python-poetry/poetry)
+- Install [Python](https://www.python.org/downloads/)
+- Install [uv](https://github.com/astral-sh/uv)
 - Install [casey/just](https://github.com/casey/just)
 
 ### Test and Build
