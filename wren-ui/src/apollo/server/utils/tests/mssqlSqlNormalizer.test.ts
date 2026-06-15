@@ -149,6 +149,21 @@ describe('mssqlSqlNormalizer', () => {
     expect(normalized).not.toContain('FROM dbo_search_queries');
   });
 
+  it('collapses fully qualified dbo-prefixed model names for switched projects', () => {
+    const normalized = normalizeMssqlSqlForIbis(
+      `
+      SELECT wrenai.public.dbo_search_queries.org_id, COUNT(*) AS num_questions
+      FROM wrenai.public.dbo_search_queries
+      GROUP BY wrenai.public.dbo_search_queries.org_id
+      `,
+      DataSourceName.POSTGRES,
+    );
+
+    expect(normalized).toContain('FROM "dbo_search_queries"');
+    expect(normalized).toContain('"dbo_search_queries".org_id');
+    expect(normalized).not.toContain('wrenai.public.dbo_search_queries');
+  });
+
   it('normalizes schema-qualified dbo references back to model names', () => {
     const normalized = normalizeMssqlSqlForIbis(
       `

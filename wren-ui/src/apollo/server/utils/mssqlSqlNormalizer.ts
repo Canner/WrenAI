@@ -206,6 +206,18 @@ const normalizeMssqlGeneratedSqlSyntax = (sql: string): string => {
 };
 
 const quoteMssqlDboModelReferences = (sql: string): string => {
+  sql = sql.replace(
+    /(?:"[^"]+"\.){1,2}"(dbo_[A-Za-z0-9_]+)"/gi,
+    '"$1"',
+  );
+  sql = sql.replace(
+    /\b[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*\.(dbo_[A-Za-z0-9_]+)\b/g,
+    '"$1"',
+  );
+  sql = sql.replace(
+    /\[[^\]]+\]\.\[[^\]]+\]\.\[(dbo_[A-Za-z0-9_]+)\]/gi,
+    '"$1"',
+  );
   sql = sql.replace(/\bdbo\.([A-Za-z0-9_]+)\b/g, '"dbo_$1"');
 
   const quotedModels = new Set<string>();
