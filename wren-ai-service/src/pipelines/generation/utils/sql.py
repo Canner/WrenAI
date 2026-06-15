@@ -855,13 +855,16 @@ def _rewrite_mssql_bare_time_bucket_identifiers(sql: str) -> str:
 
             rebuilt: list[str] = []
             changed = False
-            select_identifier_pattern = re.compile(
-                rf"^(?:\"{bucket}\"|\[{bucket}\]|{bucket}|{qualified_bucket_pattern.pattern})$",
+            bucket_select_item_pattern = re.compile(
+                rf"^(?P<identifier>(?:\"{bucket}\"|\[{bucket}\]|{bucket}|{qualified_bucket_pattern.pattern}))"
+                rf"(?:\s+(?:AS\s+)?(?P<alias>\"[^\"]+\"|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*))?$",
                 re.IGNORECASE,
             )
             for item in items:
-                if select_identifier_pattern.fullmatch(item.strip()):
-                    rebuilt.append(f'{expression} AS "{bucket}"')
+                item_match = bucket_select_item_pattern.fullmatch(item.strip())
+                if item_match:
+                    alias = item_match.group("alias") or f'"{bucket}"'
+                    rebuilt.append(f"{expression} AS {alias}")
                     changed = True
                 else:
                     rebuilt.append(item)

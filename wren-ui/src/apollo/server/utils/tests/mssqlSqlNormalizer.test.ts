@@ -2,6 +2,54 @@ import { DataSourceName } from '../../types';
 import { normalizeMssqlSqlForIbis } from '../mssqlSqlNormalizer';
 
 describe('mssqlSqlNormalizer', () => {
+  it('rewrites aliased repair log time buckets', () => {
+    const normalized = normalizeMssqlSqlForIbis(
+      `
+      SELECT YEAR AS year, MONTH AS month, COUNT(*) AS repair_count
+      FROM dbo_repair_logs
+      GROUP BY YEAR, MONTH
+      ORDER BY YEAR ASC, MONTH ASC
+      `,
+      DataSourceName.MSSQL,
+    );
+
+    expect(normalized).not.toContain('YEAR AS year');
+    expect(normalized).not.toContain('MONTH AS month');
+    expect(normalized).toContain(
+      'DATEPART(YEAR, "dbo_repair_logs"."created_at") AS year',
+    );
+    expect(normalized).toContain(
+      'DATEPART(MONTH, "dbo_repair_logs"."created_at") AS month',
+    );
+    expect(normalized).toContain(
+      'GROUP BY DATEPART(YEAR, "dbo_repair_logs"."created_at")',
+    );
+  });
+
+  it('rewrites quoted debug entry year aliases', () => {
+    const normalized = normalizeMssqlSqlForIbis(
+      `
+      SELECT
+        "YEAR" AS "YEAR",
+        "dbo_DebugEntries"."BusinessUnit" AS "manufacturing_unit",
+        COUNT("dbo_DebugEntries"."DebugEntryId") AS "throughput"
+      FROM "dbo_DebugEntries"
+      GROUP BY "YEAR", "dbo_DebugEntries"."BusinessUnit"
+      ORDER BY "YEAR" ASC
+      `,
+      DataSourceName.MSSQL,
+    );
+
+    expect(normalized).not.toContain('"YEAR" AS "YEAR"');
+    expect(normalized).not.toContain('GROUP BY "YEAR"');
+    expect(normalized).toContain(
+      'DATEPART(YEAR, "dbo_DebugEntries"."DateIn") AS "YEAR"',
+    );
+    expect(normalized).toContain(
+      'GROUP BY DATEPART(YEAR, "dbo_DebugEntries"."DateIn")',
+    );
+  });
+
   it('rewrites knowledge article time buckets', () => {
     const normalized = normalizeMssqlSqlForIbis(
       `

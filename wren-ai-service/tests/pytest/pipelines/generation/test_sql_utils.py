@@ -754,6 +754,54 @@ def test_normalize_generation_result_sql_rewrites_mssql_time_buckets_and_orderin
     assert 'ORDER BY DATEPART(YEAR, "dbo_repair_logs"."created_at") ASC' in normalized
 
 
+def test_normalize_generation_result_sql_rewrites_aliased_mssql_time_buckets():
+    sql = """
+    SELECT
+      YEAR AS year,
+      MONTH AS month,
+      COUNT(*) AS repair_count
+    FROM dbo_repair_logs
+    GROUP BY YEAR, MONTH
+    ORDER BY YEAR ASC, MONTH ASC
+    """
+
+    normalized = normalize_generation_result_sql(sql, data_source="MSSQL")
+
+    assert "YEAR AS year" not in normalized
+    assert "MONTH AS month" not in normalized
+    assert (
+        'DATEPART(YEAR, "dbo_repair_logs"."created_at") AS year'
+        in normalized
+    )
+    assert (
+        'DATEPART(MONTH, "dbo_repair_logs"."created_at") AS month'
+        in normalized
+    )
+    assert 'GROUP BY DATEPART(YEAR, "dbo_repair_logs"."created_at")' in normalized
+    assert 'ORDER BY DATEPART(YEAR, "dbo_repair_logs"."created_at") ASC' in normalized
+
+
+def test_normalize_generation_result_sql_rewrites_debug_entry_quoted_year_alias():
+    sql = """
+    SELECT
+      "YEAR" AS "YEAR",
+      "dbo_DebugEntries"."BusinessUnit" AS "manufacturing_unit",
+      COUNT("dbo_DebugEntries"."DebugEntryId") AS "throughput"
+    FROM "dbo_DebugEntries"
+    GROUP BY "YEAR", "dbo_DebugEntries"."BusinessUnit"
+    ORDER BY "YEAR" ASC
+    """
+
+    normalized = normalize_generation_result_sql(sql, data_source="MSSQL")
+
+    assert '"YEAR" AS "YEAR"' not in normalized
+    assert 'GROUP BY "YEAR"' not in normalized
+    assert 'ORDER BY "YEAR"' not in normalized
+    assert 'DATEPART(YEAR, "dbo_DebugEntries"."DateIn") AS "YEAR"' in normalized
+    assert 'GROUP BY DATEPART(YEAR, "dbo_DebugEntries"."DateIn")' in normalized
+    assert 'ORDER BY DATEPART(YEAR, "dbo_DebugEntries"."DateIn") ASC' in normalized
+
+
 def test_normalize_generation_result_sql_rewrites_mssql_limit_and_where_parentheses():
     sql = """
     SELECT model_id, COUNT(*) AS ticket_count

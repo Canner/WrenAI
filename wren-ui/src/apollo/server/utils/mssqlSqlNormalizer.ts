@@ -114,10 +114,17 @@ const replaceInventedTimeBuckets = (sql: string): string => {
       const alias = bucket.toLowerCase();
       body = body.replace(
         new RegExp(
-          String.raw`(^|,)\s*(?:(?:"[^"]+"\.)"?${bucket}"?|(?:\[[^\]]+\]\.)(?:\[${bucket}\]|${bucket})|\b[A-Za-z_][A-Za-z0-9_]*\.${bucket}\b|"${bucket}"|\[${bucket}\]|\b${bucket}\b)(?=\s*(?:,|$))`,
+          String.raw`(^|,)\s*(?:(?:"[^"]+"\.)"?${bucket}"?|(?:\[[^\]]+\]\.)(?:\[${bucket}\]|${bucket})|\b[A-Za-z_][A-Za-z0-9_]*\.${bucket}\b|"${bucket}"|\[${bucket}\]|\b${bucket}\b)(?:\s+(?:AS\s+)?(?:"([^"]+)"|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*)))?(?=\s*(?:,|$))`,
           'gi',
         ),
-        `$1 ${expression} AS "${alias}"`,
+        (_match, prefix, quotedAlias, bracketAlias, bareAlias) => {
+          const selectedAlias = quotedAlias
+            ? `"${quotedAlias}"`
+            : bracketAlias
+              ? `[${bracketAlias}]`
+              : bareAlias || `"${alias}"`;
+          return `${prefix} ${expression} AS ${selectedAlias}`;
+        },
       );
     });
     return `SELECT${body}`;
