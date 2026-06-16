@@ -9,6 +9,8 @@ export interface Deploy {
   hash: string;
   status: string; // Deploy status
   error: string; // Error message
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export enum DeployStatusEnum {
@@ -26,8 +28,26 @@ export class DeployLogRepository
   extends BaseRepository<Deploy>
   implements IDeployLogRepository
 {
+  private hasIdentityIdPromise?: Promise<boolean>;
+
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'deploy_log' });
+  }
+
+  public async createOne(data: Partial<Deploy>): Promise<Deploy> {
+    if (!this.isMssql() || (await this.hasIdentityId())) {
+      return super.createOne(this.withTimestamps(data));
+    }
+
+    const id = await this.nextDeployLogId();
+    return super.createOne(this.withTimestamps({ id, ...data }));
+  }
+
+  public async updateOne(id: number, data: Partial<Deploy>) {
+    return super.updateOne(id, {
+      ...data,
+      updatedAt: data.updatedAt ?? new Date(),
+    });
   }
 
   public async findLastProjectDeployLog(projectId: number) {
@@ -71,4 +91,41 @@ export class DeployLogRepository
     });
     return formattedData as Deploy;
   };
+
+  private isMssql = () =>
+    String(this.knex.client.config.client || '').toLowerCase() === 'mssql';
+
+  private withTimestamps = (data: Partial<Deploy>): Partial<Deploy> => {
+    const now = new Date();
+    return {
+      ...data,
+      createdAt: data.createdAt ?? now,
+      updatedAt: data.updatedAt ?? now,
+    };
+  };
+
+  private async hasIdentityId() {
+    this.hasIdentityIdPromise ??= this.knex('sys.columns as c')
+      .join('sys.tables as t', 'c.object_id', 't.object_id')
+      .where('t.name', this.tableName)
+      .where('c.name', 'id')
+      .select(
+        this.knex.raw(
+          'COLUMNPROPERTY(c.object_id, c.name, ?) as isIdentity',
+          ['IsIdentity'],
+        ),
+      )
+      .first()
+      .then((row) => Number(row?.isIdentity ?? 0) === 1);
+
+    return this.hasIdentityIdPromise;
+  }
+
+  private async nextDeployLogId() {
+    const row = await this.knex(this.tableName)
+      .max<{ maxId?: number | string }>('id as maxId')
+      .first();
+
+    return Number(row?.maxId ?? 0) + 1;
+  }
 }
