@@ -353,31 +353,43 @@ export class ModelService implements IModelService {
       .flat();
     const columns =
       await this.modelColumnRepository.findColumnsByIds(columnIds);
-    const relationValues = relations.map((relation) => {
+    const relationValues = relations.flatMap((relation) => {
       const fromColumn = columns.find(
         (column) => column.id === relation.fromColumnId,
       );
       if (!fromColumn) {
-        throw new Error(`Column not found, column Id ${relation.fromColumnId}`);
+        logger.warn(
+          `Skip relation because column ${relation.fromColumnId} was not found`,
+        );
+        return [];
       }
       const toColumn = columns.find(
         (column) => column.id === relation.toColumnId,
       );
       if (!toColumn) {
-        throw new Error(`Column not found, column Id  ${relation.toColumnId}`);
+        logger.warn(
+          `Skip relation because column ${relation.toColumnId} was not found`,
+        );
+        return [];
       }
       const relationName = this.generateRelationName(relation, models, columns);
-      return {
-        projectId: id,
-        name: relationName,
-        fromColumnId: relation.fromColumnId,
-        toColumnId: relation.toColumnId,
-        joinType: relation.type,
-        properties: relation.description
-          ? JSON.stringify({ description: relation.description })
-          : null,
-      } as Partial<Relation>;
+      return [
+        {
+          projectId: id,
+          name: relationName,
+          fromColumnId: relation.fromColumnId,
+          toColumnId: relation.toColumnId,
+          joinType: relation.type,
+          properties: relation.description
+            ? JSON.stringify({ description: relation.description })
+            : null,
+        } as Partial<Relation>,
+      ];
     });
+
+    if (isEmpty(relationValues)) {
+      return [];
+    }
 
     const savedRelations =
       await this.relationRepository.createMany(relationValues);

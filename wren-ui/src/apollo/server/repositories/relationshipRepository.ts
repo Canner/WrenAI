@@ -15,6 +15,8 @@ export interface Relation {
   fromColumnId: number; // from column id, "{fromColumn} {joinType} {toColumn}"
   toColumnId: number; // to column id, "{fromColumn} {joinType} {toColumn}"
   properties: string | null; // Model properties, a json string, the description should be stored here
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export interface ExtraRelationInfo {
@@ -62,8 +64,48 @@ export class RelationRepository
   extends BaseRepository<Relation>
   implements IRelationRepository
 {
+  private hasIdentityIdPromise?: Promise<boolean>;
+
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'relation' });
+  }
+
+  public async createOne(data: Partial<Relation>): Promise<Relation> {
+    if (!this.isMssql() || (await this.hasIdentityId())) {
+      return super.createOne(this.withTimestamps(data));
+    }
+
+    const id = await this.nextRelationId();
+    return super.createOne(this.withTimestamps({ id, ...data }));
+  }
+
+  public async createMany(data: Partial<Relation>[]): Promise<Relation[]> {
+    if (data.length === 0) {
+      return [];
+    }
+
+    const dataWithTimestamps = data.map((relation) =>
+      this.withTimestamps(relation),
+    );
+
+    if (!this.isMssql() || (await this.hasIdentityId())) {
+      return super.createMany(dataWithTimestamps);
+    }
+
+    const startId = await this.nextRelationId();
+    return super.createMany(
+      dataWithTimestamps.map((relation, index) => ({
+        id: startId + index,
+        ...relation,
+      })),
+    );
+  }
+
+  public async updateOne(id: number, data: Partial<Relation>) {
+    return super.updateOne(id, {
+      ...data,
+      updatedAt: data.updatedAt ?? new Date(),
+    });
   }
 
   public async findRelationsBy(
@@ -219,5 +261,42 @@ export class RelationRepository
       .select(`${this.tableName}.*`);
     const result = await query;
     return result.map((r) => this.transformFromDBData(r)) as RelationInfo[];
+  }
+
+  private isMssql = () =>
+    String(this.knex.client.config.client || '').toLowerCase() === 'mssql';
+
+  private withTimestamps = (data: Partial<Relation>): Partial<Relation> => {
+    const now = new Date();
+    return {
+      ...data,
+      createdAt: data.createdAt ?? now,
+      updatedAt: data.updatedAt ?? now,
+    };
+  };
+
+  private async hasIdentityId() {
+    this.hasIdentityIdPromise ??= this.knex('sys.columns as c')
+      .join('sys.tables as t', 'c.object_id', 't.object_id')
+      .where('t.name', this.tableName)
+      .where('c.name', 'id')
+      .select(
+        this.knex.raw(
+          'COLUMNPROPERTY(c.object_id, c.name, ?) as isIdentity',
+          ['IsIdentity'],
+        ),
+      )
+      .first()
+      .then((row) => Number(row?.isIdentity ?? 0) === 1);
+
+    return this.hasIdentityIdPromise;
+  }
+
+  private async nextRelationId() {
+    const row = await this.knex(this.tableName)
+      .max<{ maxId?: number | string }>('id as maxId')
+      .first();
+
+    return Number(row?.maxId ?? 0) + 1;
   }
 }
