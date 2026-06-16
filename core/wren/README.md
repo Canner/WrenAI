@@ -213,11 +213,32 @@ with WrenEngine(manifest_str, DataSource.mysql, {"host": "...", ...}) as engine:
 
 ## Development
 
+Prerequisites: `just` and `uv`. (Rust + Cargo are only needed for the
+local-engine recipes below.)
+
+### Standard setup (no Rust toolchain)
+
 ```bash
-just install-dev    # Install with dev dependencies
+just install        # uv sync — pulls the prebuilt wren-core-py wheel from PyPI
 just lint           # Ruff format check + lint
 just format         # Auto-fix
 ```
+
+`just install` is a plain `uv sync`: it installs the locked prebuilt `wren-core-py` engine binding and the dev tools (pytest/ruff), which live in the default dependency group. No compilation required. This is enough for all Python-side development. Use `just install-extra <extra>` or `just install-all` for data-source extras.
+
+### Engine development (changing the Rust core)
+
+Only needed when you modify `../wren-core-py` (or `../wren-core`) and want
+`core/wren` to run against your local build. Requires Rust + Cargo.
+
+```bash
+just install-local    # uv sync + build the local wheel + overlay it into .venv
+just use-local-core   # rebuild + re-overlay after each subsequent Rust change
+```
+
+The run recipes (`just test*`, `just lint`, `just dev`) use `uv run --no-sync`,
+so they never revert a locally overlaid engine back to the lockfile version. If
+dependencies change, re-run an install recipe first.
 
 | Command | What it runs | Docker needed |
 |---------|-------------|---------------|
@@ -230,8 +251,8 @@ just format         # Auto-fix
 Profile web tests (`test_profile_web.py`) require `wrenai[ui]`:
 
 ```bash
-uv sync --extra dev --extra ui --find-links ../wren-core-py/target/wheels/
-uv run pytest tests/test_profile_web.py -v
+uv sync --extra ui
+uv run --no-sync pytest tests/test_profile_web.py -v
 ```
 
 ## Publishing
