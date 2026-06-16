@@ -3428,7 +3428,7 @@ requires-dist = [
     { name = "clickhouse-connect", marker = "extra == 'clickhouse'", specifier = ">=0.8" },
     { name = "databricks-sdk", marker = "extra == 'databricks'" },
     { name = "databricks-sql-connector", marker = "extra == 'databricks'" },
-    { name = "duckdb", specifier = ">=1.0" },
+    { name = "duckdb", specifier = ">=1.5.0" },
     { name = "google-auth", marker = "extra == 'bigquery'" },
     { name = "google-cloud-bigquery", marker = "extra == 'bigquery'", specifier = ">=3.40,<4" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
