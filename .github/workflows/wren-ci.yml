@@ -63,10 +63,10 @@ jobs:
           uv run --no-sync maturin build
       - name: Install dependencies
         run: |
-          uv lock --find-links ../wren-core-py/target/wheels/ --upgrade-package wren-core-py
-          uv sync --extra dev --find-links ../wren-core-py/target/wheels/
+          uv sync --locked
+          uv pip install --reinstall --no-index --find-links ../wren-core-py/target/wheels/ wren-core-py
       - name: Run unit tests
-        run: uv run pytest tests/unit/ -v -m unit
+        run: uv run --no-sync pytest tests/unit/ -v -m unit
 
   test-connector:
     name: ${{ matrix.datasource }} tests
@@ -116,10 +116,10 @@ jobs:
           uv run --no-sync maturin build
       - name: Install dependencies
         run: |
-          uv lock --find-links ../wren-core-py/target/wheels/ --upgrade-package wren-core-py
-          uv sync --extra ${{ matrix.extra }} --extra dev --find-links ../wren-core-py/target/wheels/
+          uv sync --locked --extra ${{ matrix.extra }}
+          uv pip install --reinstall --no-index --find-links ../wren-core-py/target/wheels/ wren-core-py
       - name: Run ${{ matrix.datasource }} tests
-        run: uv run pytest ${{ matrix.test_file }} -v -m ${{ matrix.marker }}
+        run: uv run --no-sync pytest ${{ matrix.test_file }} -v -m ${{ matrix.marker }}
 
   test-ui:
     name: ui tests
@@ -153,10 +153,10 @@ jobs:
           uv run --no-sync maturin build
       - name: Install dependencies
         run: |
-          uv lock --find-links ../wren-core-py/target/wheels/ --upgrade-package wren-core-py
-          uv sync --extra dev --extra ui --find-links ../wren-core-py/target/wheels/
+          uv sync --locked --extra ui
+          uv pip install --reinstall --no-index --find-links ../wren-core-py/target/wheels/ wren-core-py
       - name: Run UI tests
-        run: uv run pytest tests/test_profile_web.py tests/test_field_registry.py -v
+        run: uv run --no-sync pytest tests/test_profile_web.py tests/test_field_registry.py -v
 
   test-memory:
     name: memory tests
@@ -190,8 +190,8 @@ jobs:
           uv run --no-sync maturin build
       - name: Install dependencies
         run: |
-          uv lock --find-links ../wren-core-py/target/wheels/ --upgrade-package wren-core-py
-          uv sync --extra dev --extra memory --find-links ../wren-core-py/target/wheels/
+          uv sync --locked --extra memory
+          uv pip install --reinstall --no-index --find-links ../wren-core-py/target/wheels/ wren-core-py
       - name: Cache sentence-transformers model
         uses: actions/cache@v4
         with:
@@ -200,4 +200,4 @@ jobs:
       - name: Run memory tests
         env:
           WREN_EMBEDDING_MODEL: paraphrase-MiniLM-L3-v2
-        run: uv run pytest tests/unit/test_memory.py -v
+        run: uv run --no-sync pytest tests/unit/test_memory.py -v
