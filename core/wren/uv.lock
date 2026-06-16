@@ -3360,13 +3360,6 @@ databricks = [
     { name = "databricks-sdk" },
     { name = "databricks-sql-connector" },
 ]
-dev = [
-    { name = "httpx" },
-    { name = "orjson" },
-    { name = "pytest" },
-    { name = "ruff" },
-    { name = "testcontainers", extra = ["mysql"] },
-]
 interactive = [
     { name = "inquirerpy" },
 ]
@@ -3431,7 +3424,6 @@ requires-dist = [
     { name = "duckdb", specifier = ">=1.5.0" },
     { name = "google-auth", marker = "extra == 'bigquery'" },
     { name = "google-cloud-bigquery", marker = "extra == 'bigquery'", specifier = ">=3.40,<4" },
-    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
     { name = "inquirerpy", marker = "extra == 'interactive'", specifier = ">=0.3.4" },
     { name = "jinja2", marker = "extra == 'ui'", specifier = ">=3.1" },
     { name = "lancedb", marker = "extra == 'memory'", specifier = ">=0.6" },
@@ -3440,7 +3432,6 @@ requires-dist = [
     { name = "mysqlclient", marker = "extra == 'mysql'", specifier = ">=2.2" },
     { name = "opendal", specifier = ">=0.45" },
     { name = "oracledb", marker = "extra == 'oracle'", specifier = ">=2" },
-    { name = "orjson", marker = "extra == 'dev'", specifier = ">=3" },
     { name = "pandas", specifier = ">=2" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3" },
     { name = "pyarrow", specifier = ">=14" },
@@ -3451,18 +3442,15 @@ requires-dist = [
     { name = "pyodbc", marker = "extra == 'mssql'", specifier = ">=5,<6" },
     { name = "pyopenssl", specifier = ">=26.0.0" },
     { name = "pyspark", marker = "extra == 'spark'", specifier = ">=3.5" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "python-multipart", marker = "extra == 'ui'", specifier = ">=0.0.9" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "redshift-connector", marker = "extra == 'redshift'" },
     { name = "requests", specifier = ">=2.33.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
     { name = "sentence-transformers", marker = "extra == 'memory'", specifier = ">=2.2" },
     { name = "snowflake-connector-python", extras = ["pandas"], marker = "extra == 'snowflake'", specifier = ">=3.10" },
     { name = "sqlglot", specifier = ">=27" },
     { name = "starlette", marker = "extra == 'ui'", specifier = ">=0.37" },
-    { name = "testcontainers", extras = ["postgres", "mysql"], marker = "extra == 'dev'", specifier = ">=4" },
     { name = "trino", marker = "extra == 'trino'", specifier = ">=0.333,<1" },
     { name = "typer", specifier = ">=0.12" },
     { name = "urllib3", specifier = ">=2.7.0" },
@@ -3471,7 +3459,7 @@ requires-dist = [
     { name = "wrenai", extras = ["interactive", "ui"], marker = "extra == 'main'" },
     { name = "wrenai", extras = ["postgres", "mysql", "bigquery", "snowflake", "clickhouse", "trino", "mssql", "databricks", "redshift", "athena", "oracle", "spark", "main", "memory"], marker = "extra == 'all'" },
 ]
-provides-extras = ["postgres", "mysql", "bigquery", "snowflake", "clickhouse", "trino", "mssql", "databricks", "redshift", "spark", "athena", "oracle", "memory", "interactive", "ui", "main", "all", "dev"]
+provides-extras = ["postgres", "mysql", "bigquery", "snowflake", "clickhouse", "trino", "mssql", "databricks", "redshift", "spark", "athena", "oracle", "memory", "interactive", "ui", "main", "all"]
 
 [package.metadata.requires-dev]
 dev = [

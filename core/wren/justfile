@@ -5,7 +5,7 @@ core-wheel-dir := "../wren-core-py/target/wheels/"
 
 # ─── Install (light) ──────────────────────────────────────────────
 # Uses the locked prebuilt wren-core-py wheel. No Rust toolchain required.
-# Dev tools live in the default dependency group.
+# Dev tools come from uv's default dev dependency group.
 
 install:
     uv sync

@@ -224,7 +224,7 @@ just lint           # Ruff format check + lint
 just format         # Auto-fix
 ```
 
-`just install` is a plain `uv sync`: it installs the locked prebuilt `wren-core-py` engine binding and the dev tools (pytest/ruff), which live in the default dependency group. No compilation required. This is enough for all Python-side development. Use `just install-extra <extra>` or `just install-all` for data-source extras.
+`just install` is a plain `uv sync`: it installs the locked prebuilt `wren-core-py` engine binding and the development tools from uv's default `dev` dependency group. No compilation required. This is enough for all Python-side development. Use `just install-extra <extra>` or `just install-all` for data-source extras.
 
 ### Engine development (changing the Rust core)
 

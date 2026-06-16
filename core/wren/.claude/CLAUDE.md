@@ -20,7 +20,7 @@ just format           # ruff auto-fix (also aliased as `just fmt`)
 just build            # uv build (produces wheel)
 ```
 
-`install`, `install-all`, `install-extra`, and `install-memory` use the locked prebuilt engine wheel and do not require Rust (dev tools are in the default dependency group). Local engine testing is opt-in via `install-local`/`use-local-core`. Run recipes use `uv run --no-sync` so they don't revert an overlaid local wheel.
+`install`, `install-all`, `install-extra`, and `install-memory` use the locked prebuilt engine wheel and do not require Rust. Dev tools come from uv's default `dev` dependency group. Local engine testing is opt-in via `install-local`/`use-local-core`. Run recipes use `uv run --no-sync` so they don't revert an overlaid local wheel.
 
 Uses `uv` (not Poetry). `pyproject.toml` uses `hatchling` as build backend.
 
@@ -68,7 +68,7 @@ Uses `uv` (not Poetry). `pyproject.toml` uses `hatchling` as build backend.
 
 ## Optional Extras
 
-Install per data-source extras: `postgres`, `mysql`, `bigquery`, `snowflake`, `clickhouse`, `trino`, `mssql`, `databricks`, `redshift`, `spark`, `athena`, `oracle`, `memory`, `all`, `dev`.
+Install per data-source extras: `postgres`, `mysql`, `bigquery`, `snowflake`, `clickhouse`, `trino`, `mssql`, `databricks`, `redshift`, `spark`, `athena`, `oracle`, `memory`, `all`.
 
 On macOS, `mysql` extra needs:
 ```bash

@@ -63,13 +63,6 @@ main = ["wrenai[interactive,ui]"]
 all = [
   "wrenai[postgres,mysql,bigquery,snowflake,clickhouse,trino,mssql,databricks,redshift,athena,oracle,spark,main,memory]",
 ]
-dev = [
-  "pytest>=8",
-  "ruff>=0.4",
-  "orjson>=3",
-  "testcontainers[postgres,mysql]>=4",
-  "httpx>=0.27",
-]
 
 [project.scripts]
 wren = "wren.cli:app"
