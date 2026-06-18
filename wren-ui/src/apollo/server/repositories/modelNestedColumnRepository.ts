@@ -129,17 +129,6 @@ export class ModelNestedColumnRepository
     return rows;
   }
 
-  private toWhereInBatches<TValue>(values: TValue[]) {
-    const batchSize = this.isMssql()
-      ? this.getMssqlWhereInBatchSize()
-      : Math.max(values.length, 1);
-    const batches: TValue[][] = [];
-    for (let index = 0; index < values.length; index += batchSize) {
-      batches.push(values.slice(index, index + batchSize));
-    }
-    return batches;
-  }
-
   protected override transformToDBData = (data: any) => {
     if (!isPlainObject(data)) {
       throw new Error('Unexpected dbdata');

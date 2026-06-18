@@ -112,41 +112,41 @@ export class RelationRepository
     { columnIds, modelIds },
     queryOptions?: IQueryOptions,
   ) {
-    let executer = this.knex;
-    if (queryOptions && queryOptions.tx) {
-      const { tx } = queryOptions;
-      executer = tx;
-    }
-    // select the leftModel name and rightModel name along with relation
-    const builder = executer(this.tableName)
-      .join(
-        'model_column AS fmc',
-        `${this.tableName}.from_column_id`,
-        '=',
-        'fmc.id',
-      )
-      .join(
-        'model_column AS tmc',
-        `${this.tableName}.to_column_id`,
-        '=',
-        'tmc.id',
+    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
+    const selectRows = (builder) =>
+      builder.select(
+        `${this.tableName}.*`,
+        'fmc.model_id AS fromModelId',
+        'tmc.model_id AS toModelId',
       );
+    const rows = [];
     if (columnIds && columnIds.length > 0) {
-      builder
-        .whereIn(`${this.tableName}.from_column_id`, columnIds)
-        .orWhereIn(`${this.tableName}.to_column_id`, columnIds);
-    }
-    if (modelIds && modelIds.length > 0) {
-      builder
-        .whereIn('fmc.model_id', modelIds)
-        .orWhereIn('tmc.model_id', modelIds);
+      for (const batch of this.toWhereInBatches(columnIds)) {
+        const result = await selectRows(this.relationJoinBuilder(executer)).where(
+          (builder) =>
+            builder
+              .whereIn(`${this.tableName}.from_column_id`, batch)
+              .orWhereIn(`${this.tableName}.to_column_id`, batch),
+        );
+        rows.push(...result);
+      }
+      return rows.map((r) => this.transformFromDBData(r));
     }
 
-    const result = await builder.select(
-      `${this.tableName}.*`,
-      'fmc.model_id AS fromModelId',
-      'tmc.model_id AS toModelId',
-    );
+    if (modelIds && modelIds.length > 0) {
+      for (const batch of this.toWhereInBatches(modelIds)) {
+        const result = await selectRows(this.relationJoinBuilder(executer)).where(
+          (builder) =>
+            builder
+              .whereIn('fmc.model_id', batch)
+              .orWhereIn('tmc.model_id', batch),
+        );
+        rows.push(...result);
+      }
+      return rows.map((r) => this.transformFromDBData(r));
+    }
+
+    const result = await selectRows(this.relationJoinBuilder(executer));
     return result.map((r) => this.transformFromDBData(r));
   }
 
@@ -157,9 +157,11 @@ export class RelationRepository
       executer = tx;
     }
 
-    const result = await executer(this.tableName)
-      .whereIn('id', ids)
-      .select('*');
+    const result = [];
+    for (const batch of this.toWhereInBatches(ids)) {
+      const rows = await executer(this.tableName).whereIn('id', batch).select('*');
+      result.push(...rows);
+    }
     return result.map((r) => this.transformFromDBData(r));
   }
 
@@ -167,70 +169,69 @@ export class RelationRepository
     columnIds: number[],
     queryOptions?: IQueryOptions,
   ) {
-    if (queryOptions && queryOptions.tx) {
-      const { tx } = queryOptions;
-      await tx(this.tableName)
-        .whereIn('from_column_id', columnIds)
-        .orWhereIn('to_column_id', columnIds)
+    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
+    for (const batch of this.toWhereInBatches(columnIds)) {
+      await executer(this.tableName)
+        .where((builder) =>
+          builder
+            .whereIn('from_column_id', batch)
+            .orWhereIn('to_column_id', batch),
+        )
         .delete();
-      return;
     }
-    await this.knex(this.tableName)
-      .whereIn('from_column_id', columnIds)
-      .orWhereIn('to_column_id', columnIds)
-      .delete();
   }
 
   public async findRelationInfoBy(filter, queryOptions) {
     const { projectId, columnIds, modelIds } = filter;
-    let executer = this.knex;
-    if (queryOptions && queryOptions.tx) {
-      const { tx } = queryOptions;
-      executer = tx;
-    }
-    // select the leftModel name and rightModel name along with relation
-    const builder = executer(this.tableName)
-      .join(
-        'model_column AS fmc',
-        `${this.tableName}.from_column_id`,
-        '=',
-        'fmc.id',
-      )
-      .join(
-        'model_column AS tmc',
-        `${this.tableName}.to_column_id`,
-        '=',
-        'tmc.id',
-      )
-      .join('model AS fm', 'fmc.model_id', '=', 'fm.id')
-      .join('model AS tm', 'tmc.model_id', '=', 'tm.id');
+    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
+    const selectRows = (builder) =>
+      builder.select(
+        `${this.tableName}.*`,
+        'fm.id AS fromModelId',
+        'fm.reference_name AS fromModelName',
+        'fm.display_name AS fromModelDisplayName',
+        'tm.id AS toModelId',
+        'tm.reference_name AS toModelName',
+        'tm.display_name AS toModelDisplayName',
+        'fmc.reference_name AS fromColumnName',
+        'fmc.display_name AS fromColumnDisplayName',
+        'tmc.reference_name AS toColumnName',
+        'tmc.display_name AS toColumnDisplayName',
+      );
 
     if (projectId) {
+      const builder = this.relationInfoJoinBuilder(executer);
       builder.where(`${this.tableName}.project_id`, projectId);
-    } else if (columnIds && columnIds.length > 0) {
-      builder
-        .whereIn(`${this.tableName}.from_column_id`, columnIds)
-        .orWhereIn(`${this.tableName}.to_column_id`, columnIds);
-    } else if (modelIds && modelIds.length > 0) {
-      builder
-        .whereIn('fmc.model_id', modelIds)
-        .orWhereIn('tmc.model_id', modelIds);
+      const result = await selectRows(builder);
+      return result.map((r) => this.transformFromDBData(r)) as RelationInfo[];
     }
 
-    const result = await builder.select(
-      `${this.tableName}.*`,
-      'fm.id AS fromModelId',
-      'fm.reference_name AS fromModelName',
-      'fm.display_name AS fromModelDisplayName',
-      'tm.id AS toModelId',
-      'tm.reference_name AS toModelName',
-      'tm.display_name AS toModelDisplayName',
-      'fmc.reference_name AS fromColumnName',
-      'fmc.display_name AS fromColumnDisplayName',
-      'tmc.reference_name AS toColumnName',
-      'tmc.display_name AS toColumnDisplayName',
-    );
-    return result.map((r) => this.transformFromDBData(r)) as RelationInfo[];
+    const rows = [];
+    if (columnIds && columnIds.length > 0) {
+      for (const batch of this.toWhereInBatches(columnIds)) {
+        const result = await selectRows(this.relationInfoJoinBuilder(executer)).where(
+          (builder) =>
+            builder
+              .whereIn(`${this.tableName}.from_column_id`, batch)
+              .orWhereIn(`${this.tableName}.to_column_id`, batch),
+        );
+        rows.push(...result);
+      }
+    } else if (modelIds && modelIds.length > 0) {
+      for (const batch of this.toWhereInBatches(modelIds)) {
+        const result = await selectRows(this.relationInfoJoinBuilder(executer)).where(
+          (builder) =>
+            builder
+              .whereIn('fmc.model_id', batch)
+              .orWhereIn('tmc.model_id', batch),
+        );
+        rows.push(...result);
+      }
+    } else {
+      rows.push(...(await selectRows(this.relationInfoJoinBuilder(executer))));
+    }
+
+    return rows.map((r) => this.transformFromDBData(r)) as RelationInfo[];
   }
 
   public async findExistedRelationBetweenModels(relation: RelationData) {
@@ -265,6 +266,28 @@ export class RelationRepository
 
   private isMssql = () =>
     String(this.knex.client.config.client || '').toLowerCase() === 'mssql';
+
+  private relationJoinBuilder(executer: Knex | Knex.Transaction) {
+    return executer(this.tableName)
+      .join(
+        'model_column AS fmc',
+        `${this.tableName}.from_column_id`,
+        '=',
+        'fmc.id',
+      )
+      .join(
+        'model_column AS tmc',
+        `${this.tableName}.to_column_id`,
+        '=',
+        'tmc.id',
+      );
+  }
+
+  private relationInfoJoinBuilder(executer: Knex | Knex.Transaction) {
+    return this.relationJoinBuilder(executer)
+      .join('model AS fm', 'fmc.model_id', '=', 'fm.id')
+      .join('model AS tm', 'tmc.model_id', '=', 'tm.id');
+  }
 
   private withTimestamps = (data: Partial<Relation>): Partial<Relation> => {
     const now = new Date();

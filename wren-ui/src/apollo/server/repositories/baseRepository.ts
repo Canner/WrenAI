@@ -173,8 +173,14 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     queryOptions?: IQueryOptions,
   ) {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    const builder = executer.from(this.tableName).whereIn('id', ids).delete();
-    return await builder;
+    let deleted = 0;
+    for (const batch of this.toWhereInBatches(ids)) {
+      deleted += await executer
+        .from(this.tableName)
+        .whereIn('id', batch)
+        .delete();
+    }
+    return deleted;
   }
 
   public deleteAllBy = async (
@@ -208,6 +214,19 @@ export class BaseRepository<T> implements IBasicRepository<T> {
 
   protected getMssqlWhereInBatchSize() {
     return 2000;
+  }
+
+  protected toWhereInBatches<TValue>(values: TValue[]) {
+    const client = String(this.knex.client.config.client || '').toLowerCase();
+    const batchSize =
+      client === 'mssql'
+        ? this.getMssqlWhereInBatchSize()
+        : Math.max(values.length, 1);
+    const batches: TValue[][] = [];
+    for (let index = 0; index < values.length; index += batchSize) {
+      batches.push(values.slice(index, index + batchSize));
+    }
+    return batches;
   }
 
   protected getCreateManyBatchSize(insertValues: any[]) {

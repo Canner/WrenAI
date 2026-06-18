@@ -225,17 +225,6 @@ export class ModelColumnRepository
     return deleted;
   }
 
-  private toWhereInBatches<TValue>(values: TValue[]) {
-    const batchSize = this.isMssql()
-      ? this.getMssqlWhereInBatchSize()
-      : Math.max(values.length, 1);
-    const batches: TValue[][] = [];
-    for (let index = 0; index < values.length; index += batchSize) {
-      batches.push(values.slice(index, index + batchSize));
-    }
-    return batches;
-  }
-
   private isMssql = () =>
     String(this.knex.client.config.client || '').toLowerCase() === 'mssql';
 
