@@ -1,27 +1,19 @@
 default:
     @just --list
 
-build-core:
-    cd ../wren-core-py && just install && just build
-
 core-wheel-dir := "../wren-core-py/target/wheels/"
 
-install-core:
-    just build-core
+# ─── Install (light) ──────────────────────────────────────────────
+# Uses the locked prebuilt wren-core-py wheel. No Rust toolchain required.
+# Dev tools come from uv's default dev dependency group.
 
 install:
-    just build-core
-    uv sync --find-links {{ core-wheel-dir }}
-
-install-dev:
-    just build-core
-    uv sync --extra dev --find-links {{ core-wheel-dir }}
+    uv sync
 
 install-all:
-    just build-core
-    uv sync --all-extras --find-links {{ core-wheel-dir }}
+    uv sync --all-extras
 
-install-extra extra *flags:
+install-extra extra:
     #!/usr/bin/env bash
     set -euo pipefail
     if [ "{{ extra }}" = "mysql" ]; then
@@ -30,66 +22,81 @@ install-extra extra *flags:
             export PKG_CONFIG_PATH="$mysql_prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
         fi
     fi
-    dev_flag=""
-    for flag in {{ flags }}; do
-        if [ "$flag" = "--dev" ]; then
-            dev_flag="--extra dev"
-        fi
-    done
-    uv sync --extra {{ extra }} $dev_flag --find-links {{ core-wheel-dir }}
-
-dev:
-    uv run wren
-
-test:
-    uv run pytest tests/ -v
-
-test-unit:
-    uv run pytest tests/unit/ -v -m unit
-
-test-datafusion:
-    uv run pytest tests/connectors/test_datafusion.py -v -m datafusion
-
-test-duckdb:
-    uv run pytest tests/connectors/test_duckdb.py -v -m duckdb
-
-test-postgres:
-    uv run pytest tests/connectors/test_postgres.py -v -m postgres
-
-test-mysql:
-    uv run pytest tests/connectors/test_mysql.py tests/connectors/test_mysql_connector.py -v -m mysql
-
-test-snowflake:
-    uv run pytest tests/connectors/test_snowflake.py -v -m snowflake
-
-test-canner:
-    uv run pytest tests/connectors/test_canner.py -v -m canner
-
-test-clickhouse:
-    uv run pytest tests/connectors/test_clickhouse.py -v -m clickhouse
-
-test-trino:
-    uv run pytest tests/connectors/test_trino.py -v -m trino
-
-test-connector marker:
-    uv run pytest tests/connectors/ -v -m {{ marker }}
+    uv sync --extra {{ extra }}
 
 install-memory:
+    uv sync --extra memory
+
+# ─── Local engine (opt-in; requires Rust + Cargo) ─────────────────
+# Use only when testing core/wren against local Rust changes.
+
+# Low-level helper: builds the wheel only; does not modify .venv.
+build-core:
+    cd ../wren-core-py && just install && just build
+
+# Rebuild and overlay the local wheel into the current .venv.
+use-local-core:
     just build-core
-    uv sync --extra memory --extra dev --find-links {{ core-wheel-dir }}
+    uv pip install --reinstall --no-index --find-links {{ core-wheel-dir }} wren-core-py
+
+# First-time setup for engine development: light sync + local overlay.
+install-local:
+    just install
+    just use-local-core
+
+# ─── Run (read-only; assumes dependencies are installed) ──────────
+# --no-sync preserves any local core overlay. Re-run an install recipe
+# after dependency changes.
+
+dev:
+    uv run --no-sync wren
+
+test:
+    uv run --no-sync pytest tests/ -v
+
+test-unit:
+    uv run --no-sync pytest tests/unit/ -v -m unit
+
+test-datafusion:
+    uv run --no-sync pytest tests/connectors/test_datafusion.py -v -m datafusion
+
+test-duckdb:
+    uv run --no-sync pytest tests/connectors/test_duckdb.py -v -m duckdb
+
+test-postgres:
+    uv run --no-sync pytest tests/connectors/test_postgres.py -v -m postgres
+
+test-mysql:
+    uv run --no-sync pytest tests/connectors/test_mysql.py tests/connectors/test_mysql_connector.py -v -m mysql
+
+test-snowflake:
+    uv run --no-sync pytest tests/connectors/test_snowflake.py -v -m snowflake
+
+test-canner:
+    uv run --no-sync pytest tests/connectors/test_canner.py -v -m canner
+
+test-clickhouse:
+    uv run --no-sync pytest tests/connectors/test_clickhouse.py -v -m clickhouse
+
+test-trino:
+    uv run --no-sync pytest tests/connectors/test_trino.py -v -m trino
+
+test-connector marker:
+    uv run --no-sync pytest tests/connectors/ -v -m {{ marker }}
 
 test-memory:
-    uv run pytest tests/unit/test_memory.py -v
+    uv run --no-sync pytest tests/unit/test_memory.py -v
 
 lint:
-    uv run ruff format --check src/
-    uv run ruff check src/
+    uv run --no-sync ruff format --check src/
+    uv run --no-sync ruff check src/
 
 format:
-    uv run ruff format src/
-    uv run ruff check --fix src/
+    uv run --no-sync ruff format src/
+    uv run --no-sync ruff check --fix src/
 
 build:
     uv build
 
 alias fmt := format
+alias install-dev := install

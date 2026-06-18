@@ -6,10 +6,12 @@ Python SDK and CLI for Wren Engine. Wraps `wren-core-py` (PyO3 bindings) + Ibis 
 
 ```bash
 cd wren
-just install          # build wren-core-py wheel + uv sync
+just install          # uv sync — prebuilt wren-core-py wheel from PyPI (no Rust build)
 just install-all      # with all optional extras (including memory)
 just install-extra <extra>   # e.g. just install-extra postgres
 just install-memory   # install memory extra (lancedb + sentence-transformers)
+just install-local    # engine dev: uv sync + build local wheel + overlay (needs Rust)
+just use-local-core   # rebuild + re-overlay local wheel after a Rust change
 just dev              # run `wren` CLI
 just test             # pytest tests/
 just test-memory      # memory-specific tests
@@ -17,6 +19,8 @@ just lint             # ruff format --check + ruff check
 just format           # ruff auto-fix (also aliased as `just fmt`)
 just build            # uv build (produces wheel)
 ```
+
+`install`, `install-all`, `install-extra`, and `install-memory` use the locked prebuilt engine wheel and do not require Rust. Dev tools come from uv's default `dev` dependency group. Local engine testing is opt-in via `install-local`/`use-local-core`. Run recipes use `uv run --no-sync` so they don't revert an overlaid local wheel.
 
 Uses `uv` (not Poetry). `pyproject.toml` uses `hatchling` as build backend.
 
@@ -64,7 +68,7 @@ Uses `uv` (not Poetry). `pyproject.toml` uses `hatchling` as build backend.
 
 ## Optional Extras
 
-Install per data-source extras: `postgres`, `mysql`, `bigquery`, `snowflake`, `clickhouse`, `trino`, `mssql`, `databricks`, `redshift`, `spark`, `athena`, `oracle`, `memory`, `all`, `dev`.
+Install per data-source extras: `postgres`, `mysql`, `bigquery`, `snowflake`, `clickhouse`, `trino`, `mssql`, `databricks`, `redshift`, `spark`, `athena`, `oracle`, `memory`, `all`.
 
 On macOS, `mysql` extra needs:
 ```bash
@@ -73,4 +77,9 @@ PKG_CONFIG_PATH="$(brew --prefix mysql-client)/lib/pkgconfig" just install-extra
 
 ## Dependency on wren-core-py
 
-`wren-core-py` wheel is built locally from `../wren-core-py/` and installed via `--find-links`. Run `just build-core` (or `just install`) to rebuild after Rust changes.
+By default the engine binding comes prebuilt from PyPI (pinned in `uv.lock`), so
+ordinary `just install` needs no Rust toolchain. To test against local Rust
+changes, `just use-local-core` builds the wheel from `../wren-core-py/` and
+overlays it into `.venv` (via `uv pip install --reinstall --no-index
+--find-links`). The run recipes use `uv run --no-sync` so a subsequent `uv run`
+won't revert that overlay to the locked PyPI version.

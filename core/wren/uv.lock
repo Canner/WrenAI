@@ -3287,11 +3287,14 @@ wheels = [
 
 [[package]]
 name = "wren-core-py"
-version = "0.1.0"
+version = "0.6.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/7e/89/64d5a0a5b4e6e4d9f36d0e8856e358b78f8df537d754457a143c596ade68/wren_core_py-0.1.0.tar.gz", hash = "sha256:e1f85e4a76cd753850ab9750121c85788eff85ef9497481ac8c660bf92363e80", size = 173500, upload-time = "2026-03-31T13:51:59.085Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fb/38/b2cb577b44e0f167b1cd465f1f757d1e759f7d02b9156cc2d59da89f409c/wren_core_py-0.6.0.tar.gz", hash = "sha256:cb0c947d5201b6857b95395edd3ccfd5e40ec0f2789f14781a3efc79b68644a0", size = 183149, upload-time = "2026-05-15T09:26:06.337Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c8/37/02dae70f121c22cfb60dd0a0e16afd349d193e4bdca0e836e0b1952bb3c1/wren_core_py-0.1.0-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:51624141000c008cead7b330883d39fd36d2a1ffc10e18aedcf1a938df2ced6f", size = 31035179, upload-time = "2026-03-31T13:51:56.408Z" },
+    { url = "https://files.pythonhosted.org/packages/e2/80/ea296d00ace9d68c8619b6b2f2d506d231d1003f392fe49612b1a87edc65/wren_core_py-0.6.0-cp311-abi3-macosx_10_12_x86_64.whl", hash = "sha256:65bab57150c475edf55b7aac5dc3548196e5bd5eeff0e1aff8f0b8be164394b6", size = 44663050, upload-time = "2026-05-15T09:25:52.979Z" },
+    { url = "https://files.pythonhosted.org/packages/a8/cf/3238a3ee4cabafb35d9731547a5600a3664801270af6a337f8768b1605fe/wren_core_py-0.6.0-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:6d7b358778adc8a5bbaab3523f7021b060a4ba0b29527f0e917e8046574ef81e", size = 42638553, upload-time = "2026-05-15T09:25:56.621Z" },
+    { url = "https://files.pythonhosted.org/packages/11/1a/2fae1e144252ab296df8fa5dcfb06b43c397028cb15a010b70709e76a04f/wren_core_py-0.6.0-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:eb3a453f7a86b8cd9325c2696585e3a6c042616e12fa3ed10b34e9a5793a9442", size = 47920325, upload-time = "2026-05-15T09:26:00.21Z" },
+    { url = "https://files.pythonhosted.org/packages/59/9b/3a8e1d8b38567f0112af7d0faf540ff61799980e68a6f8a423f42567b534/wren_core_py-0.6.0-cp311-abi3-win_amd64.whl", hash = "sha256:b829a8faf28f44f58910bd73246e69a86bd01b14d45288cce52c712578ff8199", size = 41809570, upload-time = "2026-05-15T09:26:04.087Z" },
 ]
 
 [[package]]
@@ -3357,13 +3360,6 @@ databricks = [
     { name = "databricks-sdk" },
     { name = "databricks-sql-connector" },
 ]
-dev = [
-    { name = "httpx" },
-    { name = "orjson" },
-    { name = "pytest" },
-    { name = "ruff" },
-    { name = "testcontainers", extra = ["mysql"] },
-]
 interactive = [
     { name = "inquirerpy" },
 ]
@@ -3412,6 +3408,11 @@ ui = [
 [package.dev-dependencies]
 dev = [
     { name = "duckdb" },
+    { name = "httpx" },
+    { name = "orjson" },
+    { name = "pytest" },
+    { name = "ruff" },
+    { name = "testcontainers", extra = ["mysql"] },
 ]
 
 [package.metadata]
@@ -3420,10 +3421,9 @@ requires-dist = [
     { name = "clickhouse-connect", marker = "extra == 'clickhouse'", specifier = ">=0.8" },
     { name = "databricks-sdk", marker = "extra == 'databricks'" },
     { name = "databricks-sql-connector", marker = "extra == 'databricks'" },
-    { name = "duckdb", specifier = ">=1.0" },
+    { name = "duckdb", specifier = ">=1.5.0" },
     { name = "google-auth", marker = "extra == 'bigquery'" },
     { name = "google-cloud-bigquery", marker = "extra == 'bigquery'", specifier = ">=3.40,<4" },
-    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
     { name = "inquirerpy", marker = "extra == 'interactive'", specifier = ">=0.3.4" },
     { name = "jinja2", marker = "extra == 'ui'", specifier = ">=3.1" },
     { name = "lancedb", marker = "extra == 'memory'", specifier = ">=0.6" },
@@ -3432,7 +3432,6 @@ requires-dist = [
     { name = "mysqlclient", marker = "extra == 'mysql'", specifier = ">=2.2" },
     { name = "opendal", specifier = ">=0.45" },
     { name = "oracledb", marker = "extra == 'oracle'", specifier = ">=2" },
-    { name = "orjson", marker = "extra == 'dev'", specifier = ">=3" },
     { name = "pandas", specifier = ">=2" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3" },
     { name = "pyarrow", specifier = ">=14" },
@@ -3443,30 +3442,34 @@ requires-dist = [
     { name = "pyodbc", marker = "extra == 'mssql'", specifier = ">=5,<6" },
     { name = "pyopenssl", specifier = ">=26.0.0" },
     { name = "pyspark", marker = "extra == 'spark'", specifier = ">=3.5" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "python-multipart", marker = "extra == 'ui'", specifier = ">=0.0.9" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "redshift-connector", marker = "extra == 'redshift'" },
     { name = "requests", specifier = ">=2.33.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
     { name = "sentence-transformers", marker = "extra == 'memory'", specifier = ">=2.2" },
     { name = "snowflake-connector-python", extras = ["pandas"], marker = "extra == 'snowflake'", specifier = ">=3.10" },
     { name = "sqlglot", specifier = ">=27" },
     { name = "starlette", marker = "extra == 'ui'", specifier = ">=0.37" },
-    { name = "testcontainers", extras = ["postgres", "mysql"], marker = "extra == 'dev'", specifier = ">=4" },
     { name = "trino", marker = "extra == 'trino'", specifier = ">=0.333,<1" },
     { name = "typer", specifier = ">=0.12" },
     { name = "urllib3", specifier = ">=2.7.0" },
     { name = "uvicorn", marker = "extra == 'ui'", specifier = ">=0.29" },
-    { name = "wren-core-py", specifier = ">=0.1" },
+    { name = "wren-core-py", specifier = ">=0.6" },
     { name = "wrenai", extras = ["interactive", "ui"], marker = "extra == 'main'" },
     { name = "wrenai", extras = ["postgres", "mysql", "bigquery", "snowflake", "clickhouse", "trino", "mssql", "databricks", "redshift", "athena", "oracle", "spark", "main", "memory"], marker = "extra == 'all'" },
 ]
-provides-extras = ["postgres", "mysql", "bigquery", "snowflake", "clickhouse", "trino", "mssql", "databricks", "redshift", "spark", "athena", "oracle", "memory", "interactive", "ui", "main", "all", "dev"]
+provides-extras = ["postgres", "mysql", "bigquery", "snowflake", "clickhouse", "trino", "mssql", "databricks", "redshift", "spark", "athena", "oracle", "memory", "interactive", "ui", "main", "all"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "duckdb", specifier = ">=1.5.0" }]
+dev = [
+    { name = "duckdb", specifier = ">=1.5.0" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "orjson", specifier = ">=3" },
+    { name = "pytest", specifier = ">=8" },
+    { name = "ruff", specifier = ">=0.4" },
+    { name = "testcontainers", extras = ["postgres", "mysql"], specifier = ">=4" },
+]
 
 [[package]]
 name = "zstandard"

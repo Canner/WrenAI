@@ -61,10 +61,12 @@ Outputs a ~68 MB WASM binary; distributed via npm and unpkg (jsDelivr's 50 MB pe
 ### core/wren (SDK & CLI)
 ```bash
 cd core/wren
-just install              # build wren-core-py wheel + uv sync
+just install              # uv sync (locked prebuilt wren-core-py wheel from PyPI; no Rust build)
 just install-all          # with all optional extras (incl. memory)
 just install-extra <e>    # e.g. just install-extra postgres
 just install-memory       # memory extra (lancedb + sentence-transformers)
+just install-local        # engine dev: uv sync + build local wheel + overlay
+just use-local-core       # rebuild + re-overlay after Rust changes
 just dev                  # run `wren` CLI
 just test                 # pytest tests/
 just test-memory          # memory-specific tests
