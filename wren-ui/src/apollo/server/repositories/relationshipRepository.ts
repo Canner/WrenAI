@@ -121,7 +121,7 @@ export class RelationRepository
       );
     const rows = [];
     if (columnIds && columnIds.length > 0) {
-      for (const batch of this.toWhereInBatches(columnIds)) {
+      for (const batch of this.toDualWhereInBatches(columnIds)) {
         const result = await selectRows(this.relationJoinBuilder(executer)).where(
           (builder) =>
             builder
@@ -134,7 +134,7 @@ export class RelationRepository
     }
 
     if (modelIds && modelIds.length > 0) {
-      for (const batch of this.toWhereInBatches(modelIds)) {
+      for (const batch of this.toDualWhereInBatches(modelIds)) {
         const result = await selectRows(this.relationJoinBuilder(executer)).where(
           (builder) =>
             builder
@@ -170,7 +170,7 @@ export class RelationRepository
     queryOptions?: IQueryOptions,
   ) {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    for (const batch of this.toWhereInBatches(columnIds)) {
+    for (const batch of this.toDualWhereInBatches(columnIds)) {
       await executer(this.tableName)
         .where((builder) =>
           builder
@@ -208,7 +208,7 @@ export class RelationRepository
 
     const rows = [];
     if (columnIds && columnIds.length > 0) {
-      for (const batch of this.toWhereInBatches(columnIds)) {
+      for (const batch of this.toDualWhereInBatches(columnIds)) {
         const result = await selectRows(this.relationInfoJoinBuilder(executer)).where(
           (builder) =>
             builder
@@ -218,7 +218,7 @@ export class RelationRepository
         rows.push(...result);
       }
     } else if (modelIds && modelIds.length > 0) {
-      for (const batch of this.toWhereInBatches(modelIds)) {
+      for (const batch of this.toDualWhereInBatches(modelIds)) {
         const result = await selectRows(this.relationInfoJoinBuilder(executer)).where(
           (builder) =>
             builder
@@ -266,6 +266,22 @@ export class RelationRepository
 
   private isMssql = () =>
     String(this.knex.client.config.client || '').toLowerCase() === 'mssql';
+
+  private toDualWhereInBatches<TValue>(values: TValue[]) {
+    if (!this.isMssql()) {
+      return this.toWhereInBatches(values);
+    }
+
+    const batchSize = Math.max(
+      Math.floor(this.getMssqlWhereInBatchSize() / 2),
+      1,
+    );
+    const batches: TValue[][] = [];
+    for (let index = 0; index < values.length; index += batchSize) {
+      batches.push(values.slice(index, index + batchSize));
+    }
+    return batches;
+  }
 
   private relationJoinBuilder(executer: Knex | Knex.Transaction) {
     return executer(this.tableName)
