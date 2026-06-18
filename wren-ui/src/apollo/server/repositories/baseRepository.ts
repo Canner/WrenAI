@@ -129,7 +129,11 @@ export class BaseRepository<T> implements IBasicRepository<T> {
   public async createMany(data: Partial<T>[], queryOptions?: IQueryOptions) {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
     const preparedData = await this.prepareInsertManyData(data, executer);
-    const batchSize = 100;
+    if (preparedData.length === 0) {
+      return [];
+    }
+
+    const batchSize = this.getCreateManyBatchSize(preparedData);
     const batchCount = Math.ceil(preparedData.length / batchSize);
     const result = [];
     for (let i = 0; i < batchCount; i++) {
@@ -201,6 +205,37 @@ export class BaseRepository<T> implements IBasicRepository<T> {
 
   protected transformFromDBData = (data: any): T =>
     this.defaultTransformFromDBData(data);
+
+  protected getMssqlWhereInBatchSize() {
+    return 2000;
+  }
+
+  protected getCreateManyBatchSize(insertValues: any[]) {
+    const defaultBatchSize = 100;
+    if (insertValues.length === 0) {
+      return defaultBatchSize;
+    }
+
+    const client = String(this.knex.client.config.client || '').toLowerCase();
+    if (client !== 'mssql') {
+      return defaultBatchSize;
+    }
+
+    const parameterLimit = 2100;
+    const safetyMargin = 100;
+    const columnCount = Math.max(
+      ...insertValues.map((value) => Object.keys(value).length),
+      1,
+    );
+
+    return Math.max(
+      1,
+      Math.min(
+        defaultBatchSize,
+        Math.floor((parameterLimit - safetyMargin) / columnCount),
+      ),
+    );
+  }
 
   private isMssql(executer: Knex | Knex.Transaction) {
     return executer.client.config.client === 'mssql';

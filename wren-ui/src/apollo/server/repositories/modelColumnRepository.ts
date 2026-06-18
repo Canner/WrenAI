@@ -130,28 +130,16 @@ export class ModelColumnRepository
   };
 
   public async findColumnsByModelIds(modelIds, queryOptions?: IQueryOptions) {
-    if (queryOptions && queryOptions.tx) {
-      const { tx } = queryOptions;
-      const result = await tx(this.tableName)
-        .whereIn('model_id', modelIds)
-        .select('*');
-      return result.map((r) => this.transformFromDBData(r));
-    }
-    const result = await this.knex<ModelColumn>('model_column')
-      .whereIn('model_id', modelIds)
-      .select('*');
+    const result = await this.findByColumnIn(
+      'model_id',
+      modelIds,
+      queryOptions,
+    );
     return result.map((r) => this.transformFromDBData(r));
   }
 
   public async findColumnsByIds(ids: number[], queryOptions?: IQueryOptions) {
-    if (queryOptions && queryOptions.tx) {
-      const { tx } = queryOptions;
-      const result = await tx(this.tableName).whereIn('id', ids).select('*');
-      return result.map((r) => this.transformFromDBData(r));
-    }
-    const result = await this.knex<ModelColumn>('model_column')
-      .whereIn('id', ids)
-      .select('*');
+    const result = await this.findByColumnIn('id', ids, queryOptions);
     return result.map((r) => this.transformFromDBData(r));
   }
 
@@ -159,14 +147,7 @@ export class ModelColumnRepository
     modelIds: number[],
     queryOptions?: IQueryOptions,
   ) {
-    if (queryOptions && queryOptions.tx) {
-      const { tx } = queryOptions;
-      await tx(this.tableName).whereIn('model_id', modelIds).delete();
-      return;
-    }
-    await this.knex<ModelColumn>('model_column')
-      .whereIn('model_id', modelIds)
-      .delete();
+    await this.deleteByColumnIn('model_id', modelIds, queryOptions);
   }
 
   public async resetModelPrimaryKey(modelId: number) {
@@ -185,22 +166,74 @@ export class ModelColumnRepository
     sourceColumnNames: string[],
     queryOptions?: IQueryOptions,
   ): Promise<number> {
-    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    const builder = executer(this.tableName)
-      .where(this.transformToDBData({ modelId }))
-      .whereIn('source_column_name', sourceColumnNames)
-      .delete();
-    return await builder;
+    return await this.deleteByColumnIn(
+      'source_column_name',
+      sourceColumnNames,
+      queryOptions,
+      this.transformToDBData({ modelId }),
+    );
   }
 
   public async deleteAllByColumnIds(
     columnIds: number[],
     queryOptions?: IQueryOptions,
   ): Promise<void> {
+    await this.deleteByColumnIn('id', columnIds, queryOptions);
+  }
+
+  private async findByColumnIn(
+    columnName: string,
+    values: Array<string | number>,
+    queryOptions?: IQueryOptions,
+  ) {
+    if (values.length === 0) {
+      return [];
+    }
+
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    await executer<ModelColumn>(this.tableName)
-      .whereIn('id', columnIds)
-      .delete();
+    const rows = [];
+    for (const batch of this.toWhereInBatches(values)) {
+      const result = await executer(this.tableName)
+        .whereIn(columnName, batch)
+        .select('*');
+      rows.push(...result);
+    }
+
+    return rows;
+  }
+
+  private async deleteByColumnIn(
+    columnName: string,
+    values: Array<string | number>,
+    queryOptions?: IQueryOptions,
+    extraWhere?: Record<string, unknown>,
+  ) {
+    if (values.length === 0) {
+      return 0;
+    }
+
+    const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
+    let deleted = 0;
+    for (const batch of this.toWhereInBatches(values)) {
+      const query = executer(this.tableName).whereIn(columnName, batch);
+      if (extraWhere) {
+        query.where(extraWhere);
+      }
+      deleted += await query.delete();
+    }
+
+    return deleted;
+  }
+
+  private toWhereInBatches<TValue>(values: TValue[]) {
+    const batchSize = this.isMssql()
+      ? this.getMssqlWhereInBatchSize()
+      : Math.max(values.length, 1);
+    const batches: TValue[][] = [];
+    for (let index = 0; index < values.length; index += batchSize) {
+      batches.push(values.slice(index, index + batchSize));
+    }
+    return batches;
   }
 
   private isMssql = () =>

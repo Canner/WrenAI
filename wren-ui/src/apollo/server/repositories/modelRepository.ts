@@ -106,8 +106,17 @@ export class ModelRepository
   };
 
   public async findAllByIds(ids: number[]) {
-    const res = await this.knex<Model>(this.tableName).whereIn('id', ids);
-    return res.map((r) => this.transformFromDBData(r));
+    if (ids.length === 0) {
+      return [];
+    }
+
+    const rows = [];
+    for (const batch of this.toWhereInBatches(ids)) {
+      const res = await this.knex<Model>(this.tableName).whereIn('id', batch);
+      rows.push(...res);
+    }
+
+    return rows.map((r) => this.transformFromDBData(r));
   }
 
   public async deleteAllBySourceTableNames(
@@ -115,10 +124,24 @@ export class ModelRepository
     queryOptions?: IQueryOptions,
   ) {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    const builder = executer(this.tableName)
-      .whereIn('source_table_name', sourceTableNames)
-      .delete();
-    return await builder;
+    let deleted = 0;
+    for (const batch of this.toWhereInBatches(sourceTableNames)) {
+      deleted += await executer(this.tableName)
+        .whereIn('source_table_name', batch)
+        .delete();
+    }
+    return deleted;
+  }
+
+  private toWhereInBatches<TValue>(values: TValue[]) {
+    const batchSize = this.isMssql()
+      ? this.getMssqlWhereInBatchSize()
+      : Math.max(values.length, 1);
+    const batches: TValue[][] = [];
+    for (let index = 0; index < values.length; index += batchSize) {
+      batches.push(values.slice(index, index + batchSize));
+    }
+    return batches;
   }
 
   private isMssql = () =>

@@ -102,18 +102,43 @@ export class ModelNestedColumnRepository
   }
 
   public findNestedColumnsByModelIds = async (modelIds: number[]) => {
-    const result = await this.knex(this.tableName)
-      .select('*')
-      .whereIn('model_id', modelIds);
+    const result = await this.findByColumnIn('model_id', modelIds);
     return result.map((r) => this.transformFromDBData(r));
   };
 
   public findNestedColumnsByIds = async (ids: number[]) => {
-    const result = await this.knex(this.tableName)
-      .select('*')
-      .whereIn('id', ids);
+    const result = await this.findByColumnIn('id', ids);
     return result.map((r) => this.transformFromDBData(r));
   };
+
+  private async findByColumnIn(
+    columnName: string,
+    values: Array<string | number>,
+  ) {
+    if (values.length === 0) {
+      return [];
+    }
+
+    const rows = [];
+    for (const batch of this.toWhereInBatches(values)) {
+      const result = await this.knex(this.tableName)
+        .select('*')
+        .whereIn(columnName, batch);
+      rows.push(...result);
+    }
+    return rows;
+  }
+
+  private toWhereInBatches<TValue>(values: TValue[]) {
+    const batchSize = this.isMssql()
+      ? this.getMssqlWhereInBatchSize()
+      : Math.max(values.length, 1);
+    const batches: TValue[][] = [];
+    for (let index = 0; index < values.length; index += batchSize) {
+      batches.push(values.slice(index, index + batchSize));
+    }
+    return batches;
+  }
 
   protected override transformToDBData = (data: any) => {
     if (!isPlainObject(data)) {
