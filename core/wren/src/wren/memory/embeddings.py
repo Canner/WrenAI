@@ -1,39 +1,65 @@
-"""
+"""Embedding function abstraction for Wren Memory.
+
 Uses LanceDB's embedding registry with sentence-transformers (local, no API key).
 """
 
+from __future__ import annotations
+
+import contextlib
+import os
+
 from transformers.utils import logging as transformers_logging
 
-transformers_logging.disable_progress_bar()
-
-from lancedb.embeddings import get_registry
-
-
-# Register the sentence-transformers embedding function so LanceDB can use it.
-try:
-    registry = get_registry()
-    # The "sentence-transformers" embedding function is registered by LanceDB
-    # when sentence_transformers is importable.
-    _SENTENCE_TRANSFORMERS_AVAILABLE = "sentence-transformers" in registry
-except Exception:
-    _SENTENCE_TRANSFORMERS_AVAILABLE = False
+_DEFAULT_MODEL = os.getenv(
+    "WREN_EMBEDDING_MODEL", "paraphrase-multilingual-MiniLM-L12-v2"
+)
+_DEFAULT_DIM = 384
 
 
-def get_embedding_function():
+def _disable_transformers_progress_bar() -> None:
+    transformers_logging.disable_progress_bar()
+
+
+def get_embedding_function(model_name: str = _DEFAULT_MODEL):
+    """Return a LanceDB sentence-transformers embedding function.
+
+    The returned object implements ``compute_source_embeddings(texts)``
+    and ``compute_query_embeddings(query)`` used by :class:`MemoryStore`.
     """
-    Return a LanceDB-compatible embedding function for sentence-transformers.
+    _disable_transformers_progress_bar()
 
-    Returns:
-        A callable that accepts a batch of strings and returns a list of embeddings.
-        Each embedding is a list of floats (1024-dimensional for the default
-        all-MiniLM-L6-v2 model).
+    import lancedb.embeddings  # noqa: PLC0415
 
-    Raises:
-        ImportError: If sentence-transformers or lancedb is not installed.
+    registry = lancedb.embeddings.get_registry()
+    return registry.get("sentence-transformers").create(name=model_name)
+
+
+@contextlib.contextmanager
+def suppress_stderr():
+    """Temporarily redirect stderr to /dev/null.
+
+    Suppresses noisy native output (progress bars, load reports) from
+    sentence-transformers / candle during model loading.
     """
-    if not _SENTENCE_TRANSFORMERS_AVAILABLE:
-        raise ImportError(
-            "sentence-transformers not available. Install with: pip install 'wrenai[memory]'"
-        )
-    registry = get_registry()
-    return registry.get("sentence-transformers").create()
+    old_fd = os.dup(2)
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(devnull, 2)
+    os.close(devnull)
+    try:
+        yield
+    finally:
+        os.dup2(old_fd, 2)
+        os.close(old_fd)
+
+
+def warm_up(embed_fn):
+    """Trigger model loading silently and return the vector dimension."""
+    _disable_transformers_progress_bar()
+    with suppress_stderr():
+        probe = embed_fn.compute_source_embeddings(["probe"])
+    return len(probe[0])
+
+
+def default_dimension() -> int:
+    """Return the vector dimension for the default model."""
+    return _DEFAULT_DIM
