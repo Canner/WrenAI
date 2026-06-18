@@ -22,6 +22,33 @@ export function transformInvalidColumnName(columnName: string) {
   return referenceName;
 }
 
+export function getUniqueReferenceName(
+  referenceName: string,
+  usedReferenceNames: Set<string>,
+) {
+  const baseName = referenceName || 'column';
+  let uniqueName = baseName;
+  let suffix = 2;
+
+  while (usedReferenceNames.has(uniqueName.toLowerCase())) {
+    uniqueName = `${baseName}_${suffix}`;
+    suffix += 1;
+  }
+
+  usedReferenceNames.add(uniqueName.toLowerCase());
+  return uniqueName;
+}
+
+export function transformUniqueInvalidColumnName(
+  columnName: string,
+  usedReferenceNames: Set<string>,
+) {
+  return getUniqueReferenceName(
+    transformInvalidColumnName(columnName),
+    usedReferenceNames,
+  );
+}
+
 export function replaceInvalidReferenceName(referenceName: string) {
   // replace dot with underscore
   return referenceName.replace(/\./g, '_');

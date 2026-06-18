@@ -12,7 +12,7 @@ import {
   trim,
   getLogger,
   replaceInvalidReferenceName,
-  transformInvalidColumnName,
+  transformUniqueInvalidColumnName,
   handleNestedColumns,
 } from '@server/utils';
 import {
@@ -733,13 +733,17 @@ export class ProjectResolver {
       const compactColumns = table.columns;
       const primaryKey = table.primaryKey;
       const model = models.find((m) => m.sourceTableName === table.name);
+      const usedReferenceNames = new Set<string>();
       return compactColumns.map(
         (column) =>
           ({
             modelId: model.id,
             isCalculated: false,
             displayName: column.name,
-            referenceName: transformInvalidColumnName(column.name),
+            referenceName: transformUniqueInvalidColumnName(
+              column.name,
+              usedReferenceNames,
+            ),
             sourceColumnName: column.name,
             type: column.type || 'string',
             notNull: column.notNull || false,
@@ -753,15 +757,19 @@ export class ProjectResolver {
     const columns = await ctx.modelColumnRepository.createMany(columnValues);
 
     // create nested columns
-    const compactColumns = selectedTables.flatMap((table) => table.columns);
-    const nestedColumnValues = compactColumns.flatMap((compactColumn) => {
-      const column = columns.find(
-        (c) => c.sourceColumnName === compactColumn.name,
-      );
-      return handleNestedColumns(compactColumn, {
-        modelId: column.modelId,
-        columnId: column.id,
-        sourceColumnName: column.sourceColumnName,
+    const nestedColumnValues = selectedTables.flatMap((table) => {
+      const model = models.find((m) => m.sourceTableName === table.name);
+      const tableColumns = columns.filter((c) => c.modelId === model.id);
+      return table.columns.flatMap((compactColumn) => {
+        const column = tableColumns.find(
+          (c) => c.sourceColumnName === compactColumn.name,
+        );
+        if (!column) return [];
+        return handleNestedColumns(compactColumn, {
+          modelId: column.modelId,
+          columnId: column.id,
+          sourceColumnName: column.sourceColumnName,
+        });
       });
     });
     await ctx.modelNestedColumnRepository.createMany(nestedColumnValues);

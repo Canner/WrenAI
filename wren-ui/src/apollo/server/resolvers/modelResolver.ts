@@ -13,7 +13,7 @@ import {
   RelationData,
   UpdateRelationData,
 } from '../types';
-import { getLogger, transformInvalidColumnName } from '@server/utils';
+import { getLogger, transformUniqueInvalidColumnName } from '@server/utils';
 import { DeployResponse } from '../services/deployService';
 import { safeFormatSQL } from '@server/utils/sqlFormat';
 import { isEmpty, isNil } from 'lodash';
@@ -396,13 +396,17 @@ export class ModelResolver {
     const compactColumns = dataSourceTable.columns.filter((c) =>
       fields.includes(c.name),
     );
+    const usedReferenceNames = new Set<string>();
     const columnValues = compactColumns.map(
       (column) =>
         ({
           modelId: model.id,
           isCalculated: false,
           displayName: column.name,
-          referenceName: transformInvalidColumnName(column.name),
+          referenceName: transformUniqueInvalidColumnName(
+            column.name,
+            usedReferenceNames,
+          ),
           sourceColumnName: column.name,
           type: column.type || 'string',
           notNull: column.notNull || false,
@@ -491,6 +495,11 @@ export class ModelResolver {
 
     // create columns
     if (toCreateColumns.length) {
+      const usedReferenceNames = new Set(
+        existingColumns
+          .filter(({ id }) => !toDeleteColumnIds.includes(id))
+          .map(({ referenceName }) => referenceName.toLowerCase()),
+      );
       const compactColumns = sourceTableColumns.filter((sourceColumn) =>
         toCreateColumns.includes(sourceColumn.name),
       );
@@ -500,7 +509,10 @@ export class ModelResolver {
           isCalculated: false,
           displayName: column.name,
           sourceColumnName: column.name,
-          referenceName: transformInvalidColumnName(column.name),
+          referenceName: transformUniqueInvalidColumnName(
+            column.name,
+            usedReferenceNames,
+          ),
           type: column.type || 'string',
           notNull: column.notNull,
           isPk: primaryKey === column.name,

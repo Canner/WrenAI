@@ -8,6 +8,7 @@ import {
   View,
 } from '../repositories';
 import {
+  ColumnMDL,
   Manifest,
   ModelMDL,
   TableReference,
@@ -16,6 +17,7 @@ import {
 import { getLogger } from '@server/utils';
 import { getConfig } from '@server/config';
 import { DataSourceName } from '../types';
+import { getUniqueReferenceName } from '../utils/model';
 
 const logger = getLogger('MDLBuilder');
 logger.level = 'debug';
@@ -61,6 +63,8 @@ export class MDLBuilder implements IMDLBuilder {
   private readonly relatedColumns: ModelColumn[];
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private readonly relatedRelations: RelationInfo[];
+  private readonly columnNameAliases = new Map<number, string>();
+  private readonly manifestColumnNamesByModel = new Map<string, Set<string>>();
 
   constructor(builderOptions: MDLBuilderBuildFromOptions) {
     const {
@@ -191,11 +195,6 @@ export class MDLBuilder implements IMDLBuilder {
           (model: any) => model.name === modelRefName,
         );
 
-        // modify model primary key
-        if (column.isPk) {
-          model.primaryKey = column.referenceName;
-        }
-
         // add column into model
         if (!model.columns) {
           model.columns = [];
@@ -221,9 +220,15 @@ export class MDLBuilder implements IMDLBuilder {
             }
           }, {});
         }
-        const expression = this.getColumnExpression(column, model);
+        const columnName = this.getManifestColumnName(column, model);
+        // modify model primary key
+        if (column.isPk) {
+          model.primaryKey = columnName;
+        }
+
+        const expression = this.getColumnExpression(column, model, columnName);
         model.columns.push({
-          name: column.referenceName,
+          name: columnName,
           type: column.type,
           isCalculated: column.isCalculated ? true : false,
           notNull: column.notNull ? true : false,
@@ -266,7 +271,8 @@ export class MDLBuilder implements IMDLBuilder {
             );
             return;
           }
-          const expression = this.getColumnExpression(column, model);
+          const columnName = this.getManifestColumnName(column, model);
+          const expression = this.getColumnExpression(column, model, columnName);
           if (expression === null) {
             this.recordInvalidCalculatedField(
               column.modelId,
@@ -276,7 +282,7 @@ export class MDLBuilder implements IMDLBuilder {
             return;
           }
           const columnValue = {
-            name: column.referenceName,
+            name: columnName,
             type: column.type,
             isCalculated: true,
             expression,
@@ -306,15 +312,12 @@ export class MDLBuilder implements IMDLBuilder {
         logger.debug(`Can not find model "${modelName}" to add calculated field`);
         return;
       }
-      // if calculated field is already in the model, skip
-      if (
-        model.columns.find(
-          (column: any) => column.name === calculatedField.referenceName,
-        )
-      ) {
-        return;
-      }
-      const expression = this.getColumnExpression(calculatedField, model);
+      const columnName = this.getManifestColumnName(calculatedField, model);
+      const expression = this.getColumnExpression(
+        calculatedField,
+        model,
+        columnName,
+      );
       if (expression === null) {
         this.recordInvalidCalculatedField(
           calculatedField.modelId,
@@ -324,7 +327,7 @@ export class MDLBuilder implements IMDLBuilder {
         return;
       }
       const columnValue = {
-        name: calculatedField.referenceName,
+        name: columnName,
         type: calculatedField.type,
         isCalculated: true,
         expression,
@@ -349,18 +352,22 @@ export class MDLBuilder implements IMDLBuilder {
           joinType,
           fromModelName,
           fromColumnName,
+          fromColumnId,
           toModelName,
           toColumnName,
+          toColumnId,
         } = relation;
         const condition = this.getRelationCondition(relation);
         this.addRelationColumn(fromModelName, {
           modelReferenceName: toModelName,
-          columnReferenceName: toColumnName,
+          columnReferenceName:
+            this.columnNameAliases.get(toColumnId) || toColumnName,
           relation: name,
         });
         this.addRelationColumn(toModelName, {
           modelReferenceName: fromModelName,
-          columnReferenceName: fromColumnName,
+          columnReferenceName:
+            this.columnNameAliases.get(fromColumnId) || fromColumnName,
           relation: name,
         });
 
@@ -405,13 +412,18 @@ export class MDLBuilder implements IMDLBuilder {
       model.columns = [];
     }
     // check if the modelReferenceName is already in the model column
-    const modelNameDuplicated = model.columns.find(
-      (column: any) => column.name === columnData.modelReferenceName,
+    const modelColumnNames = this.getManifestColumnNames(model);
+    const modelNameDuplicated = modelColumnNames.has(
+      columnData.modelReferenceName.toLowerCase(),
     );
-    const column = {
-      name: modelNameDuplicated
+    const columnName = getUniqueReferenceName(
+      modelNameDuplicated
         ? `${columnData.modelReferenceName}_${columnData.columnReferenceName}`
         : columnData.modelReferenceName,
+      modelColumnNames,
+    );
+    const column = {
+      name: columnName,
       type: columnData.modelReferenceName,
       properties: null,
       relationship: columnData.relation,
@@ -424,11 +436,12 @@ export class MDLBuilder implements IMDLBuilder {
   protected getColumnExpression(
     column: ModelColumn,
     currentModel?: Partial<ModelMDL>,
+    columnReferenceName = column.referenceName,
   ): string | null {
     if (!column.isCalculated) {
       // columns existed in the data source.
       // Provide original column name in expression to MDL if referenceName has converted.
-      if (column.sourceColumnName !== column.referenceName) {
+      if (column.sourceColumnName !== columnReferenceName) {
         return `"${column.sourceColumnName}"`;
       }
       return '';
@@ -443,9 +456,13 @@ export class MDLBuilder implements IMDLBuilder {
       const isLast = index === lineage.length - 1;
       if (isLast) {
         // id is columnId
-        const columnReferenceName = this.relatedColumns.find(
+        const relatedColumn = this.relatedColumns.find(
           (relatedColumn) => relatedColumn.id === id,
-        )?.referenceName;
+        );
+        const columnReferenceName = relatedColumn
+          ? this.columnNameAliases.get(relatedColumn.id) ||
+            relatedColumn.referenceName
+          : null;
         if (!columnReferenceName) {
           return acc;
         }
@@ -485,9 +502,19 @@ export class MDLBuilder implements IMDLBuilder {
 
   protected getRelationCondition(relation: RelationInfo): string {
     //TODO phase2: implement the expression for relation condition
-    const { fromColumnName, toColumnName, fromModelName, toModelName } =
-      relation;
-    return `"${fromModelName}".${fromColumnName} = "${toModelName}".${toColumnName}`;
+    const {
+      fromColumnId,
+      fromColumnName,
+      toColumnId,
+      toColumnName,
+      fromModelName,
+      toModelName,
+    } = relation;
+    const fromColumnReferenceName =
+      this.columnNameAliases.get(fromColumnId) || fromColumnName;
+    const toColumnReferenceName =
+      this.columnNameAliases.get(toColumnId) || toColumnName;
+    return `"${fromModelName}".${fromColumnReferenceName} = "${toModelName}".${toColumnReferenceName}`;
   }
 
   private buildTableReference(model: Model): TableReference | null {
@@ -646,6 +673,34 @@ export class MDLBuilder implements IMDLBuilder {
       `Skipped ${this.invalidCalculatedFields.length} invalid calculated field(s) while building MDL. ${preview}${this.invalidCalculatedFields.length > 10 ? '; ...' : ''}`,
     );
   }
+
+  private getManifestColumnName(
+    column: ModelColumn,
+    model: Partial<ModelMDL>,
+  ): string {
+    if (this.columnNameAliases.has(column.id)) {
+      return this.columnNameAliases.get(column.id)!;
+    }
+    const columnName = getUniqueReferenceName(
+      column.referenceName,
+      this.getManifestColumnNames(model),
+    );
+    this.columnNameAliases.set(column.id, columnName);
+    return columnName;
+  }
+
+  private getManifestColumnNames(model: Partial<ModelMDL>): Set<string> {
+    const modelName = model.name || '';
+    if (!this.manifestColumnNamesByModel.has(modelName)) {
+      const existingColumns = (model.columns || []) as ColumnMDL[];
+      this.manifestColumnNamesByModel.set(
+        modelName,
+        new Set(existingColumns.map((column) => column.name.toLowerCase())),
+      );
+    }
+    return this.manifestColumnNamesByModel.get(modelName)!;
+  }
+
   private postProcessManifest() {
     if (this.useRustWrenEngine()) {
       // 1. remove all the key that the value is null
