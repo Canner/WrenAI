@@ -1419,6 +1419,7 @@ class SQLGenPostProcessor:
         data_source: str = "",
         allow_data_preview: bool = False,
         valid_table_names: list[str] | None = None,
+        valid_table_columns: dict[str, list[str]] | None = None,
     ) -> dict:
         try:
             cleaned_generation_result = extract_sql_generation_result(replies[0])
@@ -1457,6 +1458,29 @@ class SQLGenPostProcessor:
                             f"active datasource metadata: {invalid_table_list}. "
                             "Use only these valid table names exactly as shown: "
                             f"{valid_table_list}"
+                        ),
+                        "correlation_id": "",
+                    },
+                }
+
+            invalid_column_references = find_invalid_column_references(
+                cleaned_generation_result,
+                valid_table_columns or {},
+            )
+            if invalid_column_references:
+                invalid_column_list = ", ".join(invalid_column_references)
+                valid_column_list = format_valid_table_columns(valid_table_columns or {})
+                return {
+                    "valid_generation_result": {},
+                    "invalid_generation_result": {
+                        "sql": cleaned_generation_result,
+                        "original_sql": cleaned_generation_result,
+                        "type": "SCHEMA_VALIDATION",
+                        "error": (
+                            "Generated SQL references column(s) not present in the "
+                            f"active datasource metadata: {invalid_column_list}. "
+                            "Use only these valid table columns exactly as shown: "
+                            f"{valid_column_list}"
                         ),
                         "correlation_id": "",
                     },
@@ -1563,7 +1587,7 @@ class SQLGenPostProcessor:
                 else:
                     error_message = addition.get("error_message", "")
                     normalized_error_sql = normalize_generation_result_sql(
-                        addition.get("error_sql", generation_result),
+                        generation_result,
                         data_source=data_source,
                     )
                     invalid_generation_result = {
@@ -1597,7 +1621,7 @@ class SQLGenPostProcessor:
                         else "PREVIEW_FAILED"
                     )
                     normalized_error_sql = normalize_generation_result_sql(
-                        addition.get("error_sql", generation_result),
+                        generation_result,
                         data_source=data_source,
                     )
                     invalid_generation_result = {
@@ -2128,6 +2152,59 @@ def construct_valid_table_names(documents: list[Any] | None = None) -> list[str]
     return sorted(set(table_names))
 
 
+def construct_valid_table_columns(
+    documents: list[Any] | None = None,
+) -> dict[str, list[str]]:
+    table_columns: dict[str, set[str]] = {}
+    for document in documents or []:
+        content = getattr(document, "content", document)
+        if not isinstance(content, str):
+            continue
+
+        for table_match in re.finditer(
+            r"\bCREATE\s+TABLE\s+([`\"\[]?)(?P<table>[A-Za-z_][A-Za-z0-9_.$]*)\1\s*\(",
+            content,
+            flags=re.IGNORECASE,
+        ):
+            table_name = table_match.group("table")
+            body_start = table_match.end()
+            depth = 1
+            body_end = body_start
+            while body_end < len(content) and depth > 0:
+                char = content[body_end]
+                if char == "(":
+                    depth += 1
+                elif char == ")":
+                    depth -= 1
+                body_end += 1
+
+            table_body = content[body_start : body_end - 1]
+            columns = table_columns.setdefault(table_name, set())
+            for line in table_body.splitlines():
+                line = line.strip()
+                if not line or line.startswith("--"):
+                    continue
+                line = line.rstrip(",")
+                if re.match(
+                    r"^(?:PRIMARY|FOREIGN|CONSTRAINT|UNIQUE|KEY)\b",
+                    line,
+                    flags=re.IGNORECASE,
+                ):
+                    continue
+
+                column_match = re.match(
+                    r"([`\"\[]?)(?P<column>[A-Za-z_][A-Za-z0-9_$]*)\1\s+",
+                    line,
+                )
+                if column_match:
+                    columns.add(column_match.group("column"))
+
+    return {
+        table_name: sorted(columns)
+        for table_name, columns in sorted(table_columns.items())
+    }
+
+
 _SQL_IDENTIFIER_PATTERN = (
     r'(?:"[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_$]*)'
 )
@@ -2136,10 +2213,36 @@ _SQL_TABLE_REFERENCE_PATTERN = re.compile(
     rf"(?P<table>{_SQL_IDENTIFIER_PATTERN}(?:\s*\.\s*{_SQL_IDENTIFIER_PATTERN})*)",
     flags=re.IGNORECASE,
 )
+_SQL_TABLE_WITH_ALIAS_PATTERN = re.compile(
+    rf"\b(?:FROM|JOIN)\s+"
+    rf"(?P<table>{_SQL_IDENTIFIER_PATTERN}(?:\s*\.\s*{_SQL_IDENTIFIER_PATTERN})*)"
+    rf"(?:\s+(?:AS\s+)?(?P<alias>{_SQL_IDENTIFIER_PATTERN}))?",
+    flags=re.IGNORECASE,
+)
 _SQL_CTE_PATTERN = re.compile(
     rf"(?:\bWITH\b|,)\s*(?P<cte>{_SQL_IDENTIFIER_PATTERN})\s+AS\s*\(",
     flags=re.IGNORECASE,
 )
+_SQL_QUALIFIED_COLUMN_PATTERN = re.compile(
+    rf"(?P<qualifier>{_SQL_IDENTIFIER_PATTERN})\s*\.\s*(?P<column>{_SQL_IDENTIFIER_PATTERN})",
+    flags=re.IGNORECASE,
+)
+_SQL_RESERVED_ALIASES = {
+    "where",
+    "join",
+    "left",
+    "right",
+    "inner",
+    "outer",
+    "full",
+    "cross",
+    "on",
+    "group",
+    "order",
+    "having",
+    "limit",
+    "union",
+}
 
 
 def _normalize_sql_identifier(identifier: str) -> str:
@@ -2193,6 +2296,74 @@ def find_invalid_table_references(sql: str, valid_table_names: list[str]) -> lis
         invalid_references.append(table_reference)
 
     return sorted(set(invalid_references))
+
+
+def _extract_table_aliases(
+    sql: str, valid_table_columns: dict[str, list[str]]
+) -> dict[str, str]:
+    valid_tables = {
+        table_name.lower(): table_name for table_name in valid_table_columns
+    }
+    cte_names = extract_cte_names(sql)
+    aliases: dict[str, str] = {}
+
+    for table_name in valid_table_columns:
+        aliases[table_name.lower()] = table_name
+
+    for match in _SQL_TABLE_WITH_ALIAS_PATTERN.finditer(sql):
+        table_reference = ".".join(_split_table_reference(match.group("table")))
+        normalized_table = table_reference.lower()
+        if normalized_table not in valid_tables or normalized_table in cte_names:
+            continue
+
+        alias = match.group("alias")
+        if not alias:
+            continue
+
+        normalized_alias = _normalize_sql_identifier(alias).lower()
+        if normalized_alias in _SQL_RESERVED_ALIASES:
+            continue
+        aliases[normalized_alias] = valid_tables[normalized_table]
+
+    return aliases
+
+
+def find_invalid_column_references(
+    sql: str, valid_table_columns: dict[str, list[str]]
+) -> list[str]:
+    if not valid_table_columns:
+        return []
+
+    aliases = _extract_table_aliases(sql, valid_table_columns)
+    cte_names = extract_cte_names(sql)
+    invalid_references = []
+
+    for match in _SQL_QUALIFIED_COLUMN_PATTERN.finditer(sql):
+        qualifier = _normalize_sql_identifier(match.group("qualifier"))
+        column = _normalize_sql_identifier(match.group("column"))
+        normalized_qualifier = qualifier.lower()
+
+        if normalized_qualifier in cte_names:
+            continue
+
+        table_name = aliases.get(normalized_qualifier)
+        if not table_name:
+            continue
+
+        valid_columns = {
+            col.lower() for col in valid_table_columns.get(table_name, [])
+        }
+        if column.lower() not in valid_columns:
+            invalid_references.append(f"{qualifier}.{column}")
+
+    return sorted(set(invalid_references))
+
+
+def format_valid_table_columns(valid_table_columns: dict[str, list[str]]) -> str:
+    return "; ".join(
+        f"{table}: {', '.join(columns)}"
+        for table, columns in sorted(valid_table_columns.items())
+    )
 
 
 def construct_ask_history_messages(
