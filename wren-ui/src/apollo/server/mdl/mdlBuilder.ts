@@ -65,6 +65,10 @@ export class MDLBuilder implements IMDLBuilder {
   private readonly relatedRelations: RelationInfo[];
   private readonly columnNameAliases = new Map<number, string>();
   private readonly manifestColumnNamesByModel = new Map<string, Set<string>>();
+  private readonly manifestColumnNameBySourceByModel = new Map<
+    string,
+    Map<string, string>
+  >();
 
   constructor(builderOptions: MDLBuilderBuildFromOptions) {
     const {
@@ -220,7 +224,24 @@ export class MDLBuilder implements IMDLBuilder {
             }
           }, {});
         }
+        const sourceColumnName = column.sourceColumnName || column.referenceName;
+        const sourceColumnNames = this.getManifestSourceColumnNameMap(model);
+        const existingColumnName = sourceColumnNames.get(
+          sourceColumnName.toLowerCase(),
+        );
+        if (existingColumnName) {
+          this.columnNameAliases.set(column.id, existingColumnName);
+          if (column.isPk) {
+            model.primaryKey = existingColumnName;
+          }
+          logger.debug(
+            `Skipping duplicate source column "${sourceColumnName}" for model "${model.name}". Reusing manifest column "${existingColumnName}".`,
+          );
+          return;
+        }
+
         const columnName = this.getManifestColumnName(column, model);
+        sourceColumnNames.set(sourceColumnName.toLowerCase(), columnName);
         // modify model primary key
         if (column.isPk) {
           model.primaryKey = columnName;
@@ -699,6 +720,16 @@ export class MDLBuilder implements IMDLBuilder {
       );
     }
     return this.manifestColumnNamesByModel.get(modelName)!;
+  }
+
+  private getManifestSourceColumnNameMap(
+    model: Partial<ModelMDL>,
+  ): Map<string, string> {
+    const modelName = model.name || '';
+    if (!this.manifestColumnNameBySourceByModel.has(modelName)) {
+      this.manifestColumnNameBySourceByModel.set(modelName, new Map());
+    }
+    return this.manifestColumnNameBySourceByModel.get(modelName)!;
   }
 
   private postProcessManifest() {

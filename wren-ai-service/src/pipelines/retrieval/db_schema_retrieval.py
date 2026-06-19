@@ -250,18 +250,7 @@ async def table_retrieval(
             query_embedding=embedding.get("embedding"),
             filters=base_filters,
         )
-        if result.get("documents") or not project_id:
-            return result
-        fallback_filters = {
-            "operator": "AND",
-            "conditions": [
-                {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
-            ],
-        }
-        return await table_retriever.run(
-            query_embedding=embedding.get("embedding"),
-            filters=fallback_filters,
-        )
+        return result
     else:
         base_filters["conditions"].append(
             {"field": "name", "operator": "in", "value": tables}
@@ -271,19 +260,7 @@ async def table_retrieval(
             query_embedding=[],
             filters=base_filters,
         )
-        if result.get("documents") or not project_id:
-            return result
-        fallback_filters = {
-            "operator": "AND",
-            "conditions": [
-                {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
-                {"field": "name", "operator": "in", "value": tables},
-            ],
-        }
-        return await table_retriever.run(
-            query_embedding=[],
-            filters=fallback_filters,
-        )
+        return result
 
 
 @observe(capture_input=False)
@@ -316,35 +293,7 @@ async def dbschema_retrieval(
             )
 
         results = await dbschema_retriever.run(query_embedding=[], filters=filters)
-        if results.get("documents") or not project_id:
-            documents = results["documents"]
-            if project_id and _is_project_wide_analysis_query(query):
-                all_project_results = await dbschema_retriever.run(
-                    query_embedding=[],
-                    filters={
-                        "operator": "AND",
-                        "conditions": [
-                            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-                            {"field": "project_id", "operator": "==", "value": project_id},
-                        ],
-                    },
-                )
-                documents = _dedupe_documents(
-                    documents + all_project_results.get("documents", [])
-                )
-            return documents
-
-        fallback_filters = {
-            "operator": "AND",
-            "conditions": [
-                {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-                {"operator": "OR", "conditions": table_name_conditions},
-            ],
-        }
-        fallback_results = await dbschema_retriever.run(
-            query_embedding=[], filters=fallback_filters
-        )
-        documents = fallback_results["documents"]
+        documents = results["documents"]
         if project_id and _is_project_wide_analysis_query(query):
             all_project_results = await dbschema_retriever.run(
                 query_embedding=[],
@@ -377,19 +326,7 @@ async def dbschema_retrieval(
         project_id,
     )
     results = await dbschema_retriever.run(query_embedding=[], filters=filters)
-    if results.get("documents") or not project_id:
-        return results.get("documents", [])
-
-    fallback_results = await dbschema_retriever.run(
-        query_embedding=[],
-        filters={
-            "operator": "AND",
-            "conditions": [
-                {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-            ],
-        },
-    )
-    return fallback_results.get("documents", [])
+    return results.get("documents", [])
 
 
 @observe()
