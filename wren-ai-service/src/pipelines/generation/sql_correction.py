@@ -155,6 +155,7 @@ async def generate_sql_correction(
 async def post_process(
     generate_sql_correction: dict,
     post_processor: SQLGenPostProcessor,
+    documents: List[Document],
     data_source: str,
     project_id: str | None = None,
     use_dry_plan: bool = False,
@@ -166,6 +167,7 @@ async def post_process(
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
+        valid_table_names=construct_valid_table_names(documents),
     )
 
 

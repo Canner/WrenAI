@@ -180,6 +180,7 @@ async def generate_sql(
 async def post_process(
     generate_sql: dict,
     post_processor: SQLGenPostProcessor,
+    documents: list[str],
     data_source: str,
     project_id: str | None = None,
     use_dry_plan: bool = False,
@@ -193,6 +194,7 @@ async def post_process(
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
         allow_data_preview=allow_data_preview,
+        valid_table_names=construct_valid_table_names(documents),
     )
 
 

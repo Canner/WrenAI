@@ -1418,6 +1418,7 @@ class SQLGenPostProcessor:
         allow_dry_plan_fallback: bool = True,
         data_source: str = "",
         allow_data_preview: bool = False,
+        valid_table_names: list[str] | None = None,
     ) -> dict:
         try:
             cleaned_generation_result = extract_sql_generation_result(replies[0])
@@ -1434,6 +1435,29 @@ class SQLGenPostProcessor:
                         "original_sql": cleaned_generation_result,
                         "type": "DRY_RUN",
                         "error": "Generated response did not contain a SQL SELECT statement.",
+                        "correlation_id": "",
+                    },
+                }
+
+            invalid_table_references = find_invalid_table_references(
+                cleaned_generation_result,
+                valid_table_names or [],
+            )
+            if invalid_table_references:
+                valid_table_list = ", ".join(valid_table_names or [])
+                invalid_table_list = ", ".join(invalid_table_references)
+                return {
+                    "valid_generation_result": {},
+                    "invalid_generation_result": {
+                        "sql": cleaned_generation_result,
+                        "original_sql": cleaned_generation_result,
+                        "type": "SCHEMA_VALIDATION",
+                        "error": (
+                            "Generated SQL references table(s) not present in the "
+                            f"active datasource metadata: {invalid_table_list}. "
+                            "Use only these valid table names exactly as shown: "
+                            f"{valid_table_list}"
+                        ),
                         "correlation_id": "",
                     },
                 }
@@ -2102,6 +2126,73 @@ def construct_valid_table_names(documents: list[Any] | None = None) -> list[str]
             table_names.append(match.group(2))
 
     return sorted(set(table_names))
+
+
+_SQL_IDENTIFIER_PATTERN = (
+    r'(?:"[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_$]*)'
+)
+_SQL_TABLE_REFERENCE_PATTERN = re.compile(
+    rf"\b(?:FROM|JOIN)\s+"
+    rf"(?P<table>{_SQL_IDENTIFIER_PATTERN}(?:\s*\.\s*{_SQL_IDENTIFIER_PATTERN})*)",
+    flags=re.IGNORECASE,
+)
+_SQL_CTE_PATTERN = re.compile(
+    rf"(?:\bWITH\b|,)\s*(?P<cte>{_SQL_IDENTIFIER_PATTERN})\s+AS\s*\(",
+    flags=re.IGNORECASE,
+)
+
+
+def _normalize_sql_identifier(identifier: str) -> str:
+    identifier = identifier.strip()
+    if (
+        (identifier.startswith('"') and identifier.endswith('"'))
+        or (identifier.startswith("`") and identifier.endswith("`"))
+        or (identifier.startswith("[") and identifier.endswith("]"))
+    ):
+        return identifier[1:-1]
+    return identifier
+
+
+def _split_table_reference(table_reference: str) -> list[str]:
+    return [
+        _normalize_sql_identifier(part)
+        for part in re.split(r"\s*\.\s*", table_reference.strip())
+        if part.strip()
+    ]
+
+
+def extract_sql_table_references(sql: str) -> list[str]:
+    references = []
+    for match in _SQL_TABLE_REFERENCE_PATTERN.finditer(sql):
+        table_reference = match.group("table")
+        if table_reference.startswith("("):
+            continue
+        references.append(".".join(_split_table_reference(table_reference)))
+    return references
+
+
+def extract_cte_names(sql: str) -> set[str]:
+    return {
+        _normalize_sql_identifier(match.group("cte")).lower()
+        for match in _SQL_CTE_PATTERN.finditer(sql)
+    }
+
+
+def find_invalid_table_references(sql: str, valid_table_names: list[str]) -> list[str]:
+    if not valid_table_names:
+        return []
+
+    valid_tables = {table_name.lower() for table_name in valid_table_names}
+    cte_names = extract_cte_names(sql)
+    invalid_references = []
+
+    for table_reference in extract_sql_table_references(sql):
+        normalized_reference = table_reference.lower()
+        if normalized_reference in valid_tables or normalized_reference in cte_names:
+            continue
+        invalid_references.append(table_reference)
+
+    return sorted(set(invalid_references))
 
 
 def construct_ask_history_messages(

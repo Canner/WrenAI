@@ -14,6 +14,7 @@ from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.sql import (
     SQLGenPostProcessor,
     construct_instructions,
+    construct_valid_table_names,
     get_calculated_field_instructions,
     get_json_field_instructions,
     get_metric_instructions,
@@ -172,6 +173,7 @@ async def regenerate_sql(
 async def post_process(
     regenerate_sql: dict,
     post_processor: SQLGenPostProcessor,
+    documents: list[str],
     data_source: str,
     project_id: str | None = None,
 ) -> dict:
@@ -179,6 +181,7 @@ async def post_process(
         regenerate_sql.get("replies"),
         project_id=project_id,
         data_source=data_source,
+        valid_table_names=construct_valid_table_names(documents),
     )
 
 
