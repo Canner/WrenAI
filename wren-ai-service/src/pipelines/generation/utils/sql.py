@@ -1069,6 +1069,168 @@ def _split_top_level_select_items(select_body: str) -> list[str]:
     return items
 
 
+def _is_word_at(sql: str, index: int, word: str) -> bool:
+    end = index + len(word)
+    if sql[index:end].upper() != word:
+        return False
+    before = sql[index - 1] if index > 0 else ""
+    after = sql[end] if end < len(sql) else ""
+    return not (before.isalnum() or before == "_") and not (
+        after.isalnum() or after == "_"
+    )
+
+
+def _find_select_list_spans(sql: str) -> list[tuple[int, int]]:
+    spans: list[tuple[int, int]] = []
+    depth = 0
+    in_single_quote = False
+    in_double_quote = False
+    in_bracket = False
+    index = 0
+
+    while index < len(sql):
+        char = sql[index]
+        if char == "'" and not in_double_quote and not in_bracket:
+            in_single_quote = not in_single_quote
+        elif char == '"' and not in_single_quote and not in_bracket:
+            in_double_quote = not in_double_quote
+        elif char == "[" and not in_single_quote and not in_double_quote:
+            in_bracket = True
+        elif char == "]" and in_bracket:
+            in_bracket = False
+        elif not in_single_quote and not in_double_quote and not in_bracket:
+            if char == "(":
+                depth += 1
+            elif char == ")" and depth > 0:
+                depth -= 1
+            elif _is_word_at(sql, index, "SELECT"):
+                select_depth = depth
+                select_body_start = index + len("SELECT")
+                cursor = select_body_start
+                cursor_depth = depth
+                cursor_in_single_quote = False
+                cursor_in_double_quote = False
+                cursor_in_bracket = False
+
+                while cursor < len(sql):
+                    cursor_char = sql[cursor]
+                    if (
+                        cursor_char == "'"
+                        and not cursor_in_double_quote
+                        and not cursor_in_bracket
+                    ):
+                        cursor_in_single_quote = not cursor_in_single_quote
+                    elif (
+                        cursor_char == '"'
+                        and not cursor_in_single_quote
+                        and not cursor_in_bracket
+                    ):
+                        cursor_in_double_quote = not cursor_in_double_quote
+                    elif (
+                        cursor_char == "["
+                        and not cursor_in_single_quote
+                        and not cursor_in_double_quote
+                    ):
+                        cursor_in_bracket = True
+                    elif cursor_char == "]" and cursor_in_bracket:
+                        cursor_in_bracket = False
+                    elif (
+                        not cursor_in_single_quote
+                        and not cursor_in_double_quote
+                        and not cursor_in_bracket
+                    ):
+                        if cursor_char == "(":
+                            cursor_depth += 1
+                        elif cursor_char == ")" and cursor_depth > 0:
+                            cursor_depth -= 1
+                        elif cursor_depth == select_depth and _is_word_at(
+                            sql, cursor, "FROM"
+                        ):
+                            spans.append((select_body_start, cursor))
+                            break
+                    cursor += 1
+                index = cursor
+        index += 1
+
+    return spans
+
+
+def _strip_projection_alias(item: str) -> str:
+    alias_match = re.search(
+        r"\s+(?:AS\s+)?(?:\"[^\"]+\"|\[[^\]]+\]|`[^`]+`|[A-Za-z_][A-Za-z0-9_]*)\s*$",
+        item,
+        flags=re.IGNORECASE,
+    )
+    if not alias_match:
+        return item.strip()
+
+    expression = item[: alias_match.start()].strip()
+    if not expression:
+        return item.strip()
+    return expression
+
+
+def _simple_projection_key(item: str) -> str | None:
+    cleaned = re.sub(r"^\s*DISTINCT\s+", "", item, flags=re.IGNORECASE).strip()
+    cleaned = _strip_projection_alias(cleaned)
+    identifier_pattern = (
+        r'(?:"(?P<quoted>[^"]+)"|\[(?P<bracketed>[^\]]+)\]|'
+        r"`(?P<backticked>[^`]+)`|(?P<bare>[A-Za-z_][A-Za-z0-9_]*|\*))"
+    )
+    identifier_match_pattern = (
+        r'(?:"[^"]+"|\[[^\]]+\]|`[^`]+`|[A-Za-z_][A-Za-z0-9_]*|\*)'
+    )
+    qualified_identifier_pattern = rf"^\s*{identifier_match_pattern}(?:\s*\.\s*{identifier_match_pattern})*\s*$"
+    if not re.match(qualified_identifier_pattern, cleaned):
+        return None
+
+    parts = re.findall(identifier_pattern, cleaned)
+    if not parts:
+        return None
+    last_part = next(value for value in parts[-1] if value)
+    return last_part.lower()
+
+
+def _dedupe_duplicate_simple_select_items(sql: str) -> str:
+    spans = _find_select_list_spans(sql)
+    if not spans:
+        return sql
+
+    normalized = sql
+    for start, end in reversed(spans):
+        body = normalized[start:end]
+        items = _split_top_level_select_items(body)
+        if len(items) < 2:
+            continue
+
+        seen_simple_projection_keys: set[str] = set()
+        deduped_items: list[str] = []
+        changed = False
+        for item in items:
+            key = _simple_projection_key(item)
+            if key and key in seen_simple_projection_keys:
+                changed = True
+                logger.debug(
+                    'Removing duplicate simple projection "%s" from generated SQL',
+                    item,
+                )
+                continue
+            if key:
+                seen_simple_projection_keys.add(key)
+            deduped_items.append(item)
+
+        if changed:
+            normalized = (
+                normalized[:start]
+                + " "
+                + ", ".join(deduped_items)
+                + " "
+                + normalized[end:]
+            )
+
+    return normalized
+
+
 def _rewrite_mssql_temporal_bucket_alias_references(sql: str) -> str:
     select_match = re.search(
         r"\bSELECT\b(?P<body>.*?)(?=\bFROM\b)",
@@ -1233,6 +1395,8 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
         normalized = _rewrite_mssql_limit_clause(normalized)
     elif _references_known_hallucination_prone_schema(normalized):
         normalized = _rewrite_known_schema_hallucinations(normalized, datetime.now())
+
+    normalized = _dedupe_duplicate_simple_select_items(normalized)
 
     return re.sub(r"\s+", " ", normalized).strip()
 
