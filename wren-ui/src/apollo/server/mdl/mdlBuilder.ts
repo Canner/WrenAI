@@ -124,8 +124,7 @@ export class MDLBuilder implements IMDLBuilder {
         properties.displayName = model.displayName;
       }
       const tableReference = this.buildTableReference(model);
-
-      return {
+      const modelMdl = {
         name: model.referenceName,
         columns: [],
         tableReference,
@@ -143,6 +142,23 @@ export class MDLBuilder implements IMDLBuilder {
         },
         primaryKey: '', // will be modified in addColumn
       } as ModelMDL;
+
+      if (tableReference && this.hasDuplicateSourceColumns(model.id)) {
+        const refSql = this.buildDedupedTableReferenceSql(
+          model.id,
+          modelMdl,
+          tableReference,
+        );
+        if (refSql) {
+          logger.debug(
+            `Using deduped explicit projection for model "${model.referenceName}" because its source table contains duplicate column names.`,
+          );
+          modelMdl.tableReference = null;
+          modelMdl.refSql = refSql;
+        }
+      }
+
+      return modelMdl;
     });
   }
 
@@ -647,6 +663,73 @@ export class MDLBuilder implements IMDLBuilder {
           : null,
       table: underscoreQualifiedMatch[2],
     };
+  }
+  private hasDuplicateSourceColumns(modelId: number): boolean {
+    const sourceColumnNames = new Set<string>();
+    for (const column of this.columns.filter(
+      ({ isCalculated, modelId: columnModelId }) =>
+        !isCalculated && columnModelId === modelId,
+    )) {
+      const sourceColumnName = (
+        column.sourceColumnName || column.referenceName
+      ).toLowerCase();
+      if (sourceColumnNames.has(sourceColumnName)) {
+        return true;
+      }
+      sourceColumnNames.add(sourceColumnName);
+    }
+    return false;
+  }
+  private buildDedupedTableReferenceSql(
+    modelId: number,
+    model: Partial<ModelMDL>,
+    tableReference: TableReference,
+  ): string | null {
+    const sourceColumnNames = new Map<string, string>();
+    const projections: string[] = [];
+
+    this.columns
+      .filter(
+        ({ isCalculated, modelId: columnModelId }) =>
+          !isCalculated && columnModelId === modelId,
+      )
+      .forEach((column) => {
+        const sourceColumnName = column.sourceColumnName || column.referenceName;
+        const normalizedSourceColumnName = sourceColumnName.toLowerCase();
+        const existingColumnName = sourceColumnNames.get(
+          normalizedSourceColumnName,
+        );
+
+        if (existingColumnName) {
+          this.columnNameAliases.set(column.id, existingColumnName);
+          return;
+        }
+
+        const columnName = this.getManifestColumnName(column, model);
+        sourceColumnNames.set(normalizedSourceColumnName, columnName);
+        const sourceExpression = this.quoteSqlIdentifier(sourceColumnName);
+        projections.push(
+          sourceColumnName === columnName
+            ? sourceExpression
+            : `${sourceExpression} AS ${this.quoteSqlIdentifier(columnName)}`,
+        );
+      });
+
+    if (!projections.length) {
+      return null;
+    }
+
+    const tableParts = [
+      tableReference.catalog,
+      tableReference.schema,
+      tableReference.table,
+    ].filter((part): part is string => Boolean(part));
+    return `SELECT ${projections.join(', ')} FROM ${tableParts
+      .map((part) => this.quoteSqlIdentifier(part))
+      .join('.')}`;
+  }
+  private quoteSqlIdentifier(identifier: string): string {
+    return `"${identifier.replace(/"/g, '""')}"`;
   }
   private parseLineage(lineage?: string): number[] {
     if (!lineage) {
