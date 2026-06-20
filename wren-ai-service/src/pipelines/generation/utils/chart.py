@@ -13,8 +13,8 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger("wren-ai-service")
 
 
-def _humanize_title(name: str) -> str:
-    return name.replace("_", " ").strip().title()
+def _humanize_title(name: str | None) -> str:
+    return str(name or "").replace("_", " ").strip().title()
 
 
 def _detect_requested_chart_type(query: str | None) -> str:
@@ -36,7 +36,11 @@ def _detect_requested_chart_type(query: str | None) -> str:
     return ""
 
 
-def _match_column_name(field: str, columns: list[str]) -> str:
+def _match_column_name(field: str | None, columns: list[str]) -> str:
+    if field is None:
+        return ""
+    field = str(field)
+    columns = [str(column) for column in columns if column is not None]
     if field in columns:
         return field
 
@@ -118,7 +122,9 @@ def _build_fallback_chart_schema(
     if not sample_data:
         return {}
 
-    columns = list(sample_data[0].keys())
+    columns = [str(column) for column in sample_data[0].keys() if column is not None]
+    if not columns:
+        return {}
     inferred = _infer_column_types(sample_data)
     quantitative = inferred["quantitative"]
     temporal = inferred["temporal"]
@@ -157,7 +163,7 @@ def _build_fallback_chart_schema(
         y_encoding = (
             axis(quantitative[0], "quantitative") if quantitative else count_axis()
         )
-        if {"year", "month"}.issubset({c.lower() for c in columns}):
+        if {"year", "month"}.issubset({str(c).lower() for c in columns}):
             month_field = next(c for c in columns if c.lower() == "month")
             encoding = {
                 "x": axis(month_field, "ordinal"),

@@ -2,6 +2,8 @@ from src.pipelines.generation.utils.sql import (
     contains_unsupported_mssql_json_access,
     construct_valid_table_names,
     extract_sql_generation_result,
+    find_invalid_column_references,
+    find_invalid_table_references,
     get_json_field_instructions,
     get_metric_instructions,
     normalize_data_source,
@@ -18,6 +20,20 @@ def test_construct_valid_table_names_from_schema_documents():
     ]
 
     assert construct_valid_table_names(documents) == ["employees", "repair_logs"]
+
+
+def test_schema_validation_ignores_null_table_metadata():
+    assert find_invalid_table_references(
+        'SELECT * FROM "dbo_tblSales"',
+        [None, "dbo_tblSales"],
+    ) == []
+
+
+def test_schema_validation_ignores_null_column_metadata():
+    assert find_invalid_column_references(
+        'SELECT "dbo_tblSales"."Market" FROM "dbo_tblSales"',
+        {"dbo_tblSales": [None, "Market"]},
+    ) == []
 
 
 def test_sql_generation_system_prompt_rejects_stale_sales_sample_schema():

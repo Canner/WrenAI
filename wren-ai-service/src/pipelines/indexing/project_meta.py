@@ -32,7 +32,7 @@ def chunk(
     project_id: Optional[str] = None,
 ) -> dict[str, Any]:
     addition = {"project_id": project_id} if project_id else {}
-    data_source = mdl.get("dataSource", "local_file").lower()
+    data_source = str(mdl.get("dataSource") or "local_file").lower()
 
     if data_source == "duckdb":
         # fix duckdb to local_file due to wren-ibis implementation at the moment

@@ -2287,7 +2287,13 @@ def find_invalid_table_references(sql: str, valid_table_names: list[str]) -> lis
     if not valid_table_names:
         return []
 
-    valid_tables = {table_name.lower() for table_name in valid_table_names}
+    valid_tables = {
+        str(table_name).lower()
+        for table_name in valid_table_names
+        if table_name is not None
+    }
+    if not valid_tables:
+        return []
     cte_names = extract_cte_names(sql)
     invalid_references = []
 
@@ -2304,13 +2310,17 @@ def _extract_table_aliases(
     sql: str, valid_table_columns: dict[str, list[str]]
 ) -> dict[str, str]:
     valid_tables = {
-        table_name.lower(): table_name for table_name in valid_table_columns
+        str(table_name).lower(): table_name
+        for table_name in valid_table_columns
+        if table_name is not None
     }
     cte_names = extract_cte_names(sql)
     aliases: dict[str, str] = {}
 
     for table_name in valid_table_columns:
-        aliases[table_name.lower()] = table_name
+        if table_name is None:
+            continue
+        aliases[str(table_name).lower()] = table_name
 
     for match in _SQL_TABLE_WITH_ALIAS_PATTERN.finditer(sql):
         table_reference = ".".join(_split_table_reference(match.group("table")))
@@ -2322,7 +2332,7 @@ def _extract_table_aliases(
         if not alias:
             continue
 
-        normalized_alias = _normalize_sql_identifier(alias).lower()
+        normalized_alias = _normalize_sql_identifier(alias or "").lower()
         if normalized_alias in _SQL_RESERVED_ALIASES:
             continue
         aliases[normalized_alias] = valid_tables[normalized_table]
@@ -2353,7 +2363,9 @@ def find_invalid_column_references(
             continue
 
         valid_columns = {
-            col.lower() for col in valid_table_columns.get(table_name, [])
+            str(col).lower()
+            for col in valid_table_columns.get(table_name, [])
+            if col is not None
         }
         if column.lower() not in valid_columns:
             invalid_references.append(f"{qualifier}.{column}")
