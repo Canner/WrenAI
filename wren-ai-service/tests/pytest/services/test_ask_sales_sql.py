@@ -134,3 +134,58 @@ def test_build_schema_grounded_sales_sql_for_orders_by_dimensions():
         '"dbo_tblSales"."ProdType" '
         'ORDER BY SUM("dbo_tblSales"."SalesValue") DESC'
     )
+
+
+def test_build_schema_grounded_sales_sql_for_top_new_order_detail_rows():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "Show the Top 20 New Orders for Period X, including Business Unit, "
+        "Market, Customer, Product, and Order Value.",
+        [
+            """
+            CREATE TABLE dbo_tblSales (
+              BU VARCHAR,
+              Market VARCHAR,
+              Customer VARCHAR,
+              ProdName VARCHAR,
+              SalesValue DOUBLE,
+              OrdDate TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT TOP 20 "dbo_tblSales"."BU" AS "BU", '
+        '"dbo_tblSales"."Market" AS "Market", '
+        '"dbo_tblSales"."ProdName" AS "ProdName", '
+        '"dbo_tblSales"."Customer" AS "Customer", '
+        '"dbo_tblSales"."SalesValue" AS "SalesValue" '
+        'FROM "dbo_tblSales" '
+        'ORDER BY "dbo_tblSales"."SalesValue" DESC'
+    )
+
+
+def test_build_schema_grounded_sales_sql_ignores_missing_metadata_entries():
+    service = AskService.__new__(AskService)
+
+    assert (
+        service._build_schema_grounded_sales_sql(
+            "Show the Top 20 New Orders including Market and Customer.",
+            [
+                None,
+                """
+                CREATE TABLE dbo_tblSales (
+                  Market VARCHAR,
+                  Customer VARCHAR,
+                  SalesValue DOUBLE
+                );
+                """,
+            ],
+        )
+        == 'SELECT TOP 20 "dbo_tblSales"."Market" AS "Market", '
+        '"dbo_tblSales"."Customer" AS "Customer", '
+        '"dbo_tblSales"."SalesValue" AS "SalesValue" '
+        'FROM "dbo_tblSales" '
+        'ORDER BY "dbo_tblSales"."SalesValue" DESC'
+    )

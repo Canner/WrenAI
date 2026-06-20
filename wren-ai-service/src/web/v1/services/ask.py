@@ -304,6 +304,8 @@ class AskService:
         )
 
         for ddl in table_ddls:
+            if not isinstance(ddl, str):
+                continue
             for line in ddl.splitlines():
                 stripped = line.strip().rstrip(",")
                 if not stripped:
@@ -322,13 +324,15 @@ class AskService:
                 column_name = next(
                     value for value in column_match.groupdict().values() if value
                 )
-                column_names.append(column_name.lower())
+                column_names.append(str(column_name).lower())
 
         return column_names
 
     def _parse_schema_tables(self, table_ddls: list[str]) -> list[dict[str, Any]]:
         tables: list[dict[str, Any]] = []
         for ddl in table_ddls or []:
+            if not isinstance(ddl, str):
+                continue
             table_match = re.search(
                 r'\bCREATE\s+TABLE\s+(?:"(?P<quoted>[^"]+)"|'
                 r"\[(?P<bracketed>[^\]]+)\]|`(?P<backticked>[^`]+)`|"
@@ -340,8 +344,11 @@ class AskService:
                 continue
 
             table_name = next(
-                value for value in table_match.groupdict().values() if value
+                (value for value in table_match.groupdict().values() if value),
+                None,
             )
+            if not table_name:
+                continue
             body_start = table_match.end()
             depth = 1
             body_end = body_start
@@ -372,14 +379,19 @@ class AskService:
                 )
                 if column_match:
                     column_name = next(
-                        value
+                        (value
                         for key, value in column_match.groupdict().items()
                         if key != "type" and value
+                        ),
+                        None,
                     )
+                    if not column_name:
+                        continue
+                    column_type = column_match.group("type") or ""
                     columns.append(
                         {
-                            "name": column_name,
-                            "type": column_match.group("type").lower(),
+                            "name": str(column_name),
+                            "type": str(column_type).lower(),
                         }
                     )
 
@@ -414,14 +426,20 @@ class AskService:
         temporal: bool | None = None,
     ) -> str | None:
         normalized_candidates = [
-            re.sub(r"[^a-z0-9]", "", candidate.lower())
+            re.sub(r"[^a-z0-9]", "", str(candidate).lower())
             for candidate in candidates
+            if candidate is not None
         ]
+        if not normalized_candidates:
+            return None
         scored: list[tuple[int, str]] = []
         for column in table.get("columns", []):
-            column_name = column["name"]
+            column_name = column.get("name")
+            if not column_name:
+                continue
+            column_name = str(column_name)
             normalized_column = re.sub(r"[^a-z0-9]", "", column_name.lower())
-            column_type = column.get("type", "")
+            column_type = str(column.get("type") or "")
             if numeric is True and not self._is_numeric_schema_type(column_type):
                 continue
             if temporal is True and not self._is_temporal_schema_type(column_type):
@@ -448,7 +466,7 @@ class AskService:
             f"{self._quote_sql_identifier(table_name)}."
             f"{self._quote_sql_identifier(date_column)}"
         )
-        normalized_query = query.lower()
+        normalized_query = (query or "").lower()
         if "this year" in normalized_query or "current year" in normalized_query:
             return (
                 f" WHERE {date_ref} >= '2026-01-01 00:00:00' "
@@ -505,7 +523,9 @@ class AskService:
                 score += 8
             if date_column:
                 score += 4
-            table_name = table["name"].lower()
+            table_name = str(table.get("name") or "").lower()
+            if not table_name:
+                continue
             if "sales" in table_name:
                 score += 5
             if "stage" in table_name:
@@ -540,12 +560,18 @@ class AskService:
         dimension_candidates: list[tuple[str, ...]] = []
         if "salesperson" in normalized_query or "sales person" in normalized_query:
             dimension_candidates.append(("SalesPerson", "Sales Rep", "SalesRep"))
+        if "business unit" in normalized_query or "bu" in normalized_query:
+            dimension_candidates.append(("BusinessUnit", "Business Unit", "BU"))
         if "market" in normalized_query:
             dimension_candidates.append(("Market", "MarketType"))
         if "division" in normalized_query:
             dimension_candidates.append(("Division",))
         if "product type" in normalized_query or "prodtype" in normalized_query:
             dimension_candidates.append(("ProdType", "ProductType", "Product Type"))
+        elif "product" in normalized_query:
+            dimension_candidates.append(
+                ("ProdName", "Product", "ProductName", "Item", "ProdCode")
+            )
         if "customer" in normalized_query:
             dimension_candidates.append(("Customer", "CustName", "CustNo"))
 
@@ -567,6 +593,11 @@ class AskService:
         )
         wants_trend = "trend" in normalized_query or "line chart" in normalized_query
         wants_top = bool(re.search(r"\btop\s+\d+\b", normalized_query))
+        wants_detail_rows = (
+            wants_top
+            and ("new order" in normalized_query or "orders" in normalized_query)
+            and any(term in normalized_query for term in ("including", "include"))
+        )
         wants_date = wants_trend or "this year" in normalized_query or bool(
             re.search(r"\b20\d{2}\b", normalized_query)
         )
@@ -581,12 +612,39 @@ class AskService:
             return None
 
         table, dimensions, measure, date_column = selected
-        table_name = table["name"]
+        table_name = table.get("name")
+        if not table_name:
+            return None
+        table_name = str(table_name)
         table_ref = self._quote_sql_identifier(table_name)
         dimension_refs = [
             f"{table_ref}.{self._quote_sql_identifier(dimension)}"
             for dimension in dimensions
         ]
+
+        if wants_detail_rows:
+            if not measure:
+                return None
+            metric_ref = f"{table_ref}.{self._quote_sql_identifier(measure)}"
+            limit_match = re.search(r"\btop\s+(\d+)\b", normalized_query)
+            limit = int(limit_match.group(1)) if limit_match else 20
+            select_parts = [
+                f"{dimension_ref} AS {self._quote_sql_identifier(dimensions[index])}"
+                for index, dimension_ref in enumerate(dimension_refs)
+            ]
+            select_parts.append(
+                f"{metric_ref} AS {self._quote_sql_identifier(measure)}"
+            )
+            date_filter = (
+                self._build_date_filter(table_name, date_column, query)
+                if date_column
+                else ""
+            )
+            return (
+                f"SELECT TOP {limit} {', '.join(select_parts)} "
+                f"FROM {table_ref}{date_filter} "
+                f"ORDER BY {metric_ref} DESC"
+            )
 
         if wants_trend and date_column:
             date_ref = f"{table_ref}.{self._quote_sql_identifier(date_column)}"
@@ -1195,7 +1253,11 @@ class AskService:
         self, query: str, table_ddls: list[str]
     ) -> str | None:
         normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
-        normalized_schema = re.sub(r"\s+", " ", " ".join(table_ddls).lower())
+        normalized_schema = re.sub(
+            r"\s+",
+            " ",
+            " ".join(ddl for ddl in table_ddls if isinstance(ddl, str)).lower(),
+        )
         schema_column_names = self._extract_schema_column_names(table_ddls)
 
         if not normalized_query:
@@ -1272,7 +1334,9 @@ class AskService:
         self, query: str, table_ddls: list[str]
     ) -> str | None:
         normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
-        normalized_schema = "\n".join(table_ddls or []).lower()
+        normalized_schema = "\n".join(
+            ddl for ddl in table_ddls or [] if isinstance(ddl, str)
+        ).lower()
         if not normalized_query or not normalized_schema:
             return None
 
