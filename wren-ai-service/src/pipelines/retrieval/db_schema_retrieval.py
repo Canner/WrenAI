@@ -124,7 +124,7 @@ def _build_view_ddl(content: dict) -> str:
 ## Start of Pipeline
 def expand_business_terms_for_retrieval(query: str) -> str:
     normalized = (query or "").lower()
-    pcb_terms = {
+    analytics_terms = {
         "business unit",
         "pcb",
         "repair",
@@ -135,20 +135,58 @@ def expand_business_terms_for_retrieval(query: str) -> str:
         "failure category",
         "failure pattern",
         "resolved",
+        "trend",
+        "volume",
+        "count",
+        "counts",
+        "average",
+        "avg",
+        "chart",
+        "month",
+        "monthly",
+        "sales",
+        "sale",
+        "revenue",
+        "customer",
+        "customers",
+        "salesperson",
+        "sales person",
+        "sales rep",
+        "performance",
+        "ranking",
+        "rank",
+        "top",
+        "bottom",
+        "growth",
+        "fastest growing",
+        "order",
+        "orders",
+        "invoice",
+        "invoices",
+        "margin",
+        "profit",
+        "quantity",
+        "qty",
+        "amount",
+        "value",
+        "year",
+        "yearly",
     }
-    if not any(term in normalized for term in pcb_terms):
+    if not any(term in normalized for term in analytics_terms):
         return query
 
     return "\n".join(
         [
             query,
-            "PCB repair debug analytics aliases:",
+            "Business analytics aliases:",
             "repair trends repair volume repair counts debug entries debug fixes",
             "average debug hours turnaround time resolved entries failure category failure code",
             "monthly trend quarter grouped by month bar chart line chart",
             "top common pcb failures top 10 failures most common failure categories",
             "failure patterns category occurrences debugentryid failuresys material workorder serialnumber",
             "dbo_DebugEntries dbo_failure_patterns dbo_repair_logs created_at failedat datein dateout",
+            "sales revenue amount sales value sales performance salesperson ranking",
+            "customer sales top customers customer growth orders invoices margin quantity",
         ]
     )
 

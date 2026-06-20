@@ -2083,9 +2083,11 @@ Given user's question, database schema, etc., you should think deeply and carefu
 4. YOU MUST FOLLOW the reasoning plan step by step strictly to generate the SQL query if the section of REASONING PLAN is available in user's input.
 5. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 6. YOU MUST ONLY use table names and column names that are explicitly present in the DATABASE SCHEMA or VALID TABLE NAMES sections.
-7. NEVER invent generic table names such as repair_logs, repair_log, sales_data, orders, users, tickets, events, or transactions unless that exact table name is present in the DATABASE SCHEMA or VALID TABLE NAMES sections.
-8. If the user asks about a business concept such as repairs, PCB, cost, turnaround time, or volume, map it to the closest explicit table and column names from the provided schema. Do not create a new table name from the business concept.
-9. Do not prefix table names with catalog or schema names unless the DATABASE SCHEMA or VALID TABLE NAMES section shows the table name with that exact prefix.
+7. SQL SAMPLES are examples of style only. NEVER reuse a sample table or column name unless that exact table or column also appears in the active DATABASE SCHEMA or VALID TABLE NAMES sections.
+8. NEVER invent generic table names such as repair_logs, repair_log, sales_data, sales, orders, customers, users, tickets, events, or transactions unless that exact table name is present in the DATABASE SCHEMA or VALID TABLE NAMES sections.
+9. If the user asks about a business concept such as repairs, PCB, cost, turnaround time, volume, sales performance, salesperson ranking, customer growth, revenue, margin, orders, or invoices, map it to the closest explicit table and column names from the provided schema. Do not create a new table name from the business concept.
+10. Before applying SUM, AVG, MIN, MAX, or arithmetic to a column, verify that the chosen column is numeric in the DATABASE SCHEMA. Do not aggregate text/string columns as numeric values.
+11. Do not prefix table names with catalog or schema names unless the DATABASE SCHEMA or VALID TABLE NAMES section shows the table name with that exact prefix.
 
 {text_to_sql_rules}
 

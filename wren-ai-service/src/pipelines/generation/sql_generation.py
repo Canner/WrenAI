@@ -84,13 +84,15 @@ SQL:
 ### QUESTION ###
 User's Question: {{ query }}
 
-{% if has_pcb_context %}
-### PCB ANALYTICS TERM MAPPING ###
+### BUSINESS ANALYTICS TERM MAPPING ###
 If the user asks about PCB repair trends, repair volume, repair counts, debug hours,
-turnaround time, resolved entries, or failure category, map those business terms to
-the closest explicit table and column names in DATABASE SCHEMA and VALID TABLE NAMES.
+turnaround time, resolved entries, failure category, sales performance, salesperson
+ranking, top customers, customer growth, revenue, margin, orders, or invoices, map
+those business terms to the closest explicit table and column names in DATABASE SCHEMA
+and VALID TABLE NAMES.
 Do not answer with general guidance when a SQL aggregation, comparison, trend, or chart is requested.
-{% endif %}
+Never reuse table or column names from SQL SAMPLES unless those exact names also appear
+in DATABASE SCHEMA or VALID TABLE NAMES for the active datasource.
 
 {% if sql_generation_reasoning %}
 ### REASONING PLAN ###

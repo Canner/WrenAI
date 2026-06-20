@@ -105,6 +105,14 @@ Original SQL: {{ invalid_generation_result.original_sql }}
 Invalid SQL: {{ invalid_generation_result.sql }}
 Error Message: {{ invalid_generation_result.error }}
 
+### CORRECTION GROUNDING ###
+Use DATABASE SCHEMA and VALID TABLE NAMES as the source of truth. If the invalid SQL
+uses a table such as bookexamples.sales, sales, orders, or customers that is not listed
+above, replace it with an explicitly listed table only when the listed schema supports
+the user's request. For sales performance, salesperson ranking, customer growth, revenue,
+margin, orders, or invoices, use only the active datasource's exposed sales/customer
+tables and numeric columns. Do not SUM or AVG string columns.
+
 Let's think step by step.
 """
 

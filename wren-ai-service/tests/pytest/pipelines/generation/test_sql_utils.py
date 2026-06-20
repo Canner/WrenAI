@@ -20,6 +20,14 @@ def test_construct_valid_table_names_from_schema_documents():
     assert construct_valid_table_names(documents) == ["employees", "repair_logs"]
 
 
+def test_sql_generation_system_prompt_rejects_stale_sales_sample_schema():
+    prompt = get_sql_generation_system_prompt()
+
+    assert "SQL SAMPLES are examples of style only" in prompt
+    assert "sales performance" in prompt
+    assert "Do not SUM or AVG string columns" in prompt
+
+
 def test_extract_sql_generation_result_from_json_payload():
     result = '{"sql": "SELECT COUNT(*) AS repair_count FROM repairs;"}'
 

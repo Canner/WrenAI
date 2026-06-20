@@ -111,6 +111,7 @@ class AskService:
         enable_column_pruning: bool = False,
         max_sql_correction_retries: int = 3,
         pipeline_timeout_seconds: int = 90,
+        schema_retrieval_timeout_seconds: int = 180,
         max_histories: int = 5,
         maxsize: int = 1_000_000,
         ttl: int = 120,
@@ -129,6 +130,7 @@ class AskService:
         self._allow_sql_knowledge_retrieval = allow_sql_knowledge_retrieval
         self._enable_column_pruning = enable_column_pruning
         self._pipeline_timeout_seconds = pipeline_timeout_seconds
+        self._schema_retrieval_timeout_seconds = schema_retrieval_timeout_seconds
         self._max_histories = max_histories
         self._max_sql_correction_retries = max_sql_correction_retries
 
@@ -163,25 +165,54 @@ class AskService:
             return False
 
         analysis_terms = {
+            "amount",
             "average",
             "avg",
             "bar chart",
+            "bottom",
             "chart",
+            "common",
             "compare",
             "count",
             "cost",
+            "customer",
+            "customers",
+            "dashboard",
             "debug",
             "failure",
+            "fastest growing",
+            "growth",
             "group",
             "grouped",
+            "invoice",
+            "invoices",
+            "margin",
             "monthly",
+            "order",
+            "orders",
             "pcb",
+            "performance",
+            "profit",
             "quarter",
+            "quantity",
+            "rank",
+            "ranking",
             "repair",
             "resolved",
+            "revenue",
+            "sale",
+            "sales",
+            "sales person",
+            "sales rep",
+            "salesperson",
+            "sla",
+            "top",
             "trend",
             "turnaround",
+            "value",
             "volume",
+            "year",
+            "yearly",
         }
         return any(term in normalized for term in analysis_terms)
 
@@ -917,16 +948,20 @@ class AskService:
             "calculated fields, then ask again."
         )
 
-    async def _run_with_timeout(self, label: str, coroutine):
+    async def _run_with_timeout(
+        self,
+        label: str,
+        coroutine,
+        timeout_seconds: Optional[int] = None,
+    ):
+        timeout = timeout_seconds or self._pipeline_timeout_seconds
         try:
             return await asyncio.wait_for(
                 coroutine,
-                timeout=self._pipeline_timeout_seconds,
+                timeout=timeout,
             )
         except TimeoutError as exc:
-            raise TimeoutError(
-                f"{label} timed out after {self._pipeline_timeout_seconds} seconds"
-            ) from exc
+            raise TimeoutError(f"{label} timed out after {timeout} seconds") from exc
 
     def _build_greeting_response(self, query: str) -> str:
         return (
@@ -1423,6 +1458,7 @@ class AskService:
                             and not self._is_data_analysis_query(user_query)
                         ),
                     ),
+                    timeout_seconds=self._schema_retrieval_timeout_seconds,
                 )
                 _retrieval_result = retrieval_result.get(
                     "construct_retrieval_results", {}

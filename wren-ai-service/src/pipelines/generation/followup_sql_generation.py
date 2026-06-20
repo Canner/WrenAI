@@ -90,6 +90,16 @@ SQL:
 ### QUESTION ###
 User's Follow-up Question: {{ query }}
 
+### BUSINESS ANALYTICS TERM MAPPING ###
+If the user asks about PCB repair trends, repair volume, repair counts, debug hours,
+turnaround time, resolved entries, failure category, sales performance, salesperson
+ranking, top customers, customer growth, revenue, margin, orders, or invoices, map
+those business terms to the closest explicit table and column names in DATABASE SCHEMA
+and VALID TABLE NAMES.
+Never reuse table or column names from SQL SAMPLES or chat history unless those exact
+names also appear in DATABASE SCHEMA or VALID TABLE NAMES for the active datasource.
+Do not SUM or AVG string columns.
+
 ### REASONING PLAN ###
 {{ sql_generation_reasoning }}
 
