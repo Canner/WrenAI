@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.10.0](https://github.com/Canner/WrenAI/compare/wren-v0.9.0...wren-v0.10.0) (2026-06-18)
+
+
+### Features
+
+* **wren-core:** support composite (multi-column) primary keys ([#2345](https://github.com/Canner/WrenAI/issues/2345)) ([d33917f](https://github.com/Canner/WrenAI/commit/d33917f046f4ac0abddbbce9ce6c9c10b5adb10a))
+* **wren:** GenBI app build & deploy — semantic layer → shareable web app ([#2348](https://github.com/Canner/WrenAI/issues/2348)) ([67257bf](https://github.com/Canner/WrenAI/commit/67257bf2a867df8271c52e0aa352e9b4c3ae155e))
+
+
+### Bug Fixes
+
+* ensure UTF-8 encoding for YAML file operations on Windows ([#2357](https://github.com/Canner/WrenAI/issues/2357)) ([322bd79](https://github.com/Canner/WrenAI/commit/322bd798da9e50945af6bc2132622b908073ce7c))
+* **memory:** avoid identifier columns in aggregation seed queries ([#2358](https://github.com/Canner/WrenAI/issues/2358)) ([d5e7879](https://github.com/Canner/WrenAI/commit/d5e78790b95fe188e5e208cc7b794bdf550a44e8))
+* **mysql:** handle brackets in connection URLs ([#2367](https://github.com/Canner/WrenAI/issues/2367)) ([8850abe](https://github.com/Canner/WrenAI/commit/8850abe74d9442062354953d06136dfc3823955a))
+* **wren:** load cubes from folder-per-entity layout ([#2350](https://github.com/Canner/WrenAI/issues/2350)) ([6f2542e](https://github.com/Canner/WrenAI/commit/6f2542e117cd4d7b0631745cd400cbf3f5a948d7))
+
+
+### Performance Improvements
+
+* **cli:** use find_spec instead of eager import to detect memory extra ([#2352](https://github.com/Canner/WrenAI/issues/2352)) ([81d15fa](https://github.com/Canner/WrenAI/commit/81d15faa3cadc7c5bfeb716f1a241e16cac25c04))
+
+
+### Documentation
+
+* **wren:** document macOS memory first-run scan ([#2354](https://github.com/Canner/WrenAI/issues/2354)) ([40b1a97](https://github.com/Canner/WrenAI/commit/40b1a97caadd95dd5273519916c98578a210edda))
+* **wren:** fix cube quickstart and align YAML/CLI examples with implementation ([#2359](https://github.com/Canner/WrenAI/issues/2359)) ([be69509](https://github.com/Canner/WrenAI/commit/be69509f06506ad89f299af1eaf9025a90ca50c6))
+
 ## [0.9.0](https://github.com/Canner/WrenAI/compare/wren-v0.8.1...wren-v0.9.0) (2026-06-04)
 
 
