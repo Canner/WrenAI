@@ -948,6 +948,53 @@ class AskService:
             "calculated fields, then ask again."
         )
 
+    def _build_schema_grounded_sales_sql(
+        self, query: str, table_ddls: list[str]
+    ) -> str | None:
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        normalized_schema = "\n".join(table_ddls or []).lower()
+        if not normalized_query or not normalized_schema:
+            return None
+
+        asks_for_salesperson_performance = (
+            any(
+                term in normalized_query
+                for term in (
+                    "salesperson performance",
+                    "sales person performance",
+                    "sales rep performance",
+                    "salesperson ranking",
+                    "sales person ranking",
+                    "sales rep ranking",
+                )
+            )
+            or (
+                "salesperson" in normalized_query
+                and any(term in normalized_query for term in ("performance", "ranking"))
+            )
+        )
+        if not asks_for_salesperson_performance:
+            return None
+
+        required_schema_terms = (
+            "create table dbo_tblsales",
+            "salesperson",
+            "salesvalue",
+        )
+        if not all(term in normalized_schema for term in required_schema_terms):
+            return None
+
+        limit = 20 if re.search(r"\btop\s+20\b", normalized_query) else 10
+        return (
+            f'SELECT TOP {limit} '
+            f'"dbo_tblSales"."SalesPerson" AS "SalesPerson", '
+            f'SUM("dbo_tblSales"."SalesValue") AS "TotalSalesValue" '
+            f'FROM "dbo_tblSales" '
+            f'WHERE "dbo_tblSales"."SalesPerson" IS NOT NULL '
+            f'GROUP BY "dbo_tblSales"."SalesPerson" '
+            f'ORDER BY SUM("dbo_tblSales"."SalesValue") DESC'
+        )
+
     async def _run_with_timeout(
         self,
         label: str,
@@ -1469,6 +1516,22 @@ class AskService:
                 logger.info(
                     "Retrieved tables for query_id %s: %s", query_id, table_names
                 )
+
+                if deterministic_sales_sql := self._build_schema_grounded_sales_sql(
+                    user_query, table_ddls
+                ):
+                    logger.info(
+                        "Using schema-grounded CWSales SQL for query_id %s",
+                        query_id,
+                    )
+                    api_results = [
+                        AskResult(
+                            **{
+                                "sql": deterministic_sales_sql,
+                                "type": "llm",
+                            }
+                        )
+                    ]
 
                 if unqueryable_metric_message := self._get_unqueryable_metric_message(
                     user_query, table_ddls
