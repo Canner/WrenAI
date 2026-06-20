@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
 from cachetools import TTLCache
 from langfuse.decorators import observe
@@ -27,6 +27,7 @@ class ChartAdjustmentOption(BaseModel):
 class ChartAdjustmentRequest(BaseRequest):
     query: str
     sql: str
+    data: Optional[Dict[str, Any]] = None
     adjustment_option: ChartAdjustmentOption
     chart_schema: dict
 
@@ -117,15 +118,21 @@ class ChartAdjustmentService:
                 trace_id=trace_id,
             )
 
-            execute_sql_result = (
-                await self._pipelines["sql_executor"].run(
-                    sql=chart_adjustment_request.sql,
-                    project_id=chart_adjustment_request.project_id,
-                )
-            )["execute_sql"]
+            if not chart_adjustment_request.data:
+                execute_sql_result = (
+                    await self._pipelines["sql_executor"].run(
+                        sql=chart_adjustment_request.sql,
+                        project_id=chart_adjustment_request.project_id,
+                    )
+                )["execute_sql"]
 
-            sql_data = execute_sql_result["results"]
-            execute_sql_error_message = execute_sql_result.get("error_message", None)
+                sql_data = execute_sql_result["results"]
+                execute_sql_error_message = execute_sql_result.get(
+                    "error_message", None
+                )
+            else:
+                sql_data = chart_adjustment_request.data
+                execute_sql_error_message = None
 
             if execute_sql_error_message:
                 self._chart_adjustment_results[

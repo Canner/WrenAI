@@ -357,6 +357,49 @@ describe('QueryService', () => {
       service: undefined,
     });
   });
+
+  it('should reject sql that references tables outside the active manifest before ibis dry run', async () => {
+    await expect(
+      queryService.preview('SELECT * FROM dbo_failure_patterns', {
+        project: { type: DataSourceName.POSTGRES, connectionInfo: {} },
+        manifest: {
+          models: [
+            {
+              name: 'dbo_tblSales',
+              tableReference: { table: 'dbo_tblSales' },
+            },
+          ],
+        },
+        dryRun: true,
+      }),
+    ).rejects.toThrow(
+      'Generated SQL references table(s) not present in the active datasource metadata: dbo_failure_patterns',
+    );
+
+    expect(mockIbisAdaptor.dryRun).not.toHaveBeenCalled();
+  });
+
+  it('should allow active manifest table references before ibis dry run', async () => {
+    mockIbisAdaptor.dryRun.mockResolvedValue({
+      correlationId: '123',
+      processTime: '1s',
+    });
+
+    await queryService.preview('SELECT * FROM wrenai.public.dbo_tblSales', {
+      project: { type: DataSourceName.POSTGRES, connectionInfo: {} },
+      manifest: {
+        models: [
+          {
+            name: 'dbo_tblSales',
+            tableReference: { table: 'dbo_tblSales' },
+          },
+        ],
+      },
+      dryRun: true,
+    });
+
+    expect(mockIbisAdaptor.dryRun).toHaveBeenCalledTimes(1);
+  });
 });
 
 class MockTelemetry {

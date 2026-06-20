@@ -950,10 +950,20 @@ export class AskingService implements IAskingService {
       return threadResponse;
     }
 
+    const deployment = await this.deployService.getLastDeployment(project.id);
+    const chartData = (await this.queryService.preview(threadResponse.sql, {
+      project,
+      manifest: deployment.manifest,
+      modelingOnly: false,
+      limit: 500,
+    })) as PreviewDataResponse;
+
     // 1. create a task on AI service to generate the chart
     const response = await this.wrenAIAdaptor.generateChart({
       query: threadResponse.question,
       sql: threadResponse.sql,
+      data: chartData,
+      projectId: project.id.toString(),
       configurations,
     });
 
@@ -998,10 +1008,20 @@ export class AskingService implements IAskingService {
       return threadResponse;
     }
 
+    const deployment = await this.deployService.getLastDeployment(project.id);
+    const chartData = (await this.queryService.preview(threadResponse.sql, {
+      project,
+      manifest: deployment.manifest,
+      modelingOnly: false,
+      limit: 500,
+    })) as PreviewDataResponse;
+
     // 1. create a task on AI service to adjust the chart
     const response = await this.wrenAIAdaptor.adjustChart({
       query: threadResponse.question,
       sql: threadResponse.sql,
+      data: chartData,
+      projectId: project.id.toString(),
       adjustmentOption: input,
       chartSchema: threadResponse.chartDetail?.chartSchema,
       configurations,

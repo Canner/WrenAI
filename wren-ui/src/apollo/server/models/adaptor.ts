@@ -225,6 +225,7 @@ export enum ChartType {
 export interface ChartInput {
   query: string;
   sql: string;
+  data?: Record<string, any>;
   projectId?: string;
   configurations?: ProjectConfigurations;
 }
@@ -241,6 +242,7 @@ export interface ChartAdjustmentOption {
 export interface ChartAdjustmentInput {
   query: string;
   sql: string;
+  data?: Record<string, any>;
   adjustmentOption: ChartAdjustmentOption;
   chartSchema: Record<string, any>;
   projectId?: string;

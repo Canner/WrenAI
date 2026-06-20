@@ -292,6 +292,96 @@ const extractDboSchemaTableName = (sql: string): string | undefined => {
   return match ? match[2] : undefined;
 };
 
+const SQL_IDENTIFIER_PATTERN =
+  String.raw`(?:"[^"]+"|` +
+  '`[^`]+`' +
+  String.raw`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_$]*)`;
+
+const normalizeSqlIdentifier = (identifier: string) => {
+  const trimmed = identifier.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith('`') && trimmed.endsWith('`')) ||
+    (trimmed.startsWith('[') && trimmed.endsWith(']'))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+};
+
+const splitTableReference = (tableReference: string) =>
+  tableReference
+    .trim()
+    .split(/\s*\.\s*/)
+    .map(normalizeSqlIdentifier)
+    .filter(Boolean);
+
+const extractSqlTableReferences = (sql: string) => {
+  const references: string[] = [];
+  const tablePattern = new RegExp(
+    String.raw`\b(?:FROM|JOIN)\s+(${SQL_IDENTIFIER_PATTERN}(?:\s*\.\s*${SQL_IDENTIFIER_PATTERN})*)`,
+    'gi',
+  );
+  let match: RegExpExecArray | null;
+  while ((match = tablePattern.exec(sql))) {
+    references.push(splitTableReference(match[1]).join('.'));
+  }
+  return references;
+};
+
+const extractCteNames = (sql: string) => {
+  const cteNames = new Set<string>();
+  const ctePattern = new RegExp(
+    String.raw`(?:\bWITH\b|,)\s*(${SQL_IDENTIFIER_PATTERN})\s+AS\s*\(`,
+    'gi',
+  );
+  let match: RegExpExecArray | null;
+  while ((match = ctePattern.exec(sql))) {
+    cteNames.add(normalizeSqlIdentifier(match[1]).toLowerCase());
+  }
+  return cteNames;
+};
+
+const getManifestQueryableNames = (manifest?: Manifest) => {
+  const names = new Set<string>();
+  for (const model of manifest?.models || []) {
+    if (model.name) names.add(model.name.toLowerCase());
+    if (model.tableReference?.table) {
+      names.add(model.tableReference.table.toLowerCase());
+    }
+  }
+  for (const view of manifest?.views || []) {
+    if (view.name) names.add(view.name.toLowerCase());
+  }
+  return names;
+};
+
+const validateSqlReferencesManifest = (sql: string, manifest?: Manifest) => {
+  const validNames = getManifestQueryableNames(manifest);
+  if (!validNames.size) {
+    return;
+  }
+
+  const cteNames = extractCteNames(sql);
+  const invalidReferences = extractSqlTableReferences(sql).filter((reference) => {
+    const normalized = reference.toLowerCase();
+    const lastPart = splitTableReference(reference).pop()?.toLowerCase();
+    return (
+      !validNames.has(normalized) &&
+      !cteNames.has(normalized) &&
+      (!lastPart || !validNames.has(lastPart))
+    );
+  });
+
+  if (invalidReferences.length) {
+    throw new Error(
+      `Generated SQL references table(s) not present in the active datasource metadata: ${[
+        ...new Set(invalidReferences),
+      ].join(', ')}`,
+    );
+  }
+};
+
 export class QueryService implements IQueryService {
   private readonly ibisAdaptor: IIbisAdaptor;
   private readonly wrenEngineAdaptor: IWrenEngineAdaptor;
@@ -325,6 +415,7 @@ export class QueryService implements IQueryService {
     } = options;
     const mdl = normalizeDeployedManifestForDatasource(rawMdl, project);
     const { type: dataSource, connectionInfo } = project;
+    validateSqlReferencesManifest(sql, mdl);
     if (this.useEngine(dataSource)) {
       if (dryRun) {
         logger.debug('Using wren engine to dry run');
