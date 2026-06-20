@@ -4,7 +4,7 @@ sidebar_label: How does Wren AI keep agents from hallucinating?
 
 # How does Wren AI keep agents from hallucinating?
 
-Hallucinations on business data are rarely a "model is bad at SQL" problem. They are a missing-context problem — the agent writes a confident-looking query against data it does not actually understand. In GenBI that risk compounds: a dashboard built on a wrong query looks authoritative, so correctness is the whole game.
+Hallucinations on business data are rarely a "model is bad at SQL" problem. They are a missing-context problem. The agent writes a confident-looking query against data it does not actually understand. In GenBI that risk compounds: a dashboard built on a wrong query looks authoritative, so correctness is the whole game.
 
 Wren AI's architecture is designed to **give the agent the context it needs at every step**, and to **fail loudly when the agent guesses**. Here is how the pieces fit.
 
@@ -26,7 +26,7 @@ Five layers sit between the agent's question and the database:
 | Layer | What it does | How it prevents hallucination |
 |---|---|---|
 | **Skills** | Encode the workflow the agent must follow | The agent cannot skip "check memory" or "validate before execute" |
-| **MDL** | Declare every table, column, and relationship the agent is allowed to use | The agent can only name modeled objects — undeclared columns and legacy tables are invisible |
+| **MDL** | Declare every table, column, and relationship the agent is allowed to use | The agent can only name modeled objects, so undeclared columns and legacy tables are invisible |
 | **Memory** | Index MDL + instructions + past NL-SQL pairs; retrieve only what matters per question | The agent reads the relevant slice, not a generic schema dump |
 | **Plan + validate** | Expand modeled SQL into the exact SQL that will run, before any DB call | Bad references fail at plan time with a clear error, not silently in production |
 | **Connectors** | Execute the planned SQL against the source | Type, dialect, and permission checks happen here |
@@ -37,7 +37,7 @@ Five layers sit between the agent's question and the database:
 
 Raw warehouses give the agent ambiguous joins, near-duplicate tables (`customers` vs `customers_v3` vs `loyalty_v3`), and columns that overlap across schemas. MDL collapses those problems into one canonical surface.
 
-If `email` is not in the `customers` model, the agent cannot query it — it does not exist in Wren AI's view of your data. If the canonical join between `orders` and `customers` is declared once in MDL, the agent does not have to invent it.
+If `email` is not in the `customers` model, the agent cannot query it. It does not exist in Wren AI's view of your data. If the canonical join between `orders` and `customers` is declared once in MDL, the agent does not have to invent it.
 
 ### Memory: targeted retrieval beats dumping the schema
 
@@ -46,11 +46,11 @@ Two common failure modes:
 - **Dump the whole schema** into the prompt → the model gets confused by irrelevant tables.
 - **Let the model guess** which tables are relevant → it picks the wrong one.
 
-Memory does neither. It indexes MDL + `instructions.md` + confirmed NL-SQL pairs, and retrieves only the slice that matches the question. The agent reads `customers`, `orders`, and the approved revenue calculation — not 500 tables.
+Memory does neither. It indexes MDL + `instructions.md` + confirmed NL-SQL pairs, and retrieves only the slice that matches the question. The agent reads `customers`, `orders`, and the approved revenue calculation, not 500 tables.
 
 ### Plan + validate: errors fail visibly
 
-`wren dry-plan` takes the agent's modeled SQL and expands it into the exact SQL that will run against the database. The agent — and you — see:
+`wren dry-plan` takes the agent's modeled SQL and expands it into the exact SQL that will run against the database. The agent, and you, see:
 
 - Catalog and schema resolution
 - Relationship joins inlined as CTEs
@@ -91,10 +91,10 @@ For a question like "top 5 customers by lifetime value this quarter", the loop r
    → next similar question gets this as a recall
 ```
 
-Every step is a primitive the agent calls. The trace stays in the agent's reasoning where you review its work — there is no separate "correctness dashboard" you have to trust.
+Every step is a primitive the agent calls. The trace stays in the agent's reasoning where you review its work. There is no separate "correctness dashboard" you have to trust.
 
 ## See also
 
-- [Architecture](/oss/reference/architecture) — the full technical breakdown
-- [How does the agent learn from your context?](/oss/concepts/agent_learning) — the memory + skills loop
-- [What does MDL do for the agent?](/oss/concepts/what_is_mdl) — why MDL is the canonical surface
+- [Architecture](/oss/reference/architecture): the full technical breakdown
+- [How does the agent learn from your context?](/oss/concepts/agent_learning): the memory + skills loop
+- [What does MDL do for the agent?](/oss/concepts/what_is_mdl): why MDL is the canonical surface

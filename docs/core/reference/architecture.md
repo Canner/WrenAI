@@ -5,7 +5,7 @@ Wren AI is built as an open context layer for agents. Architecturally, that mean
 1. Business meaning is stored in explicit project artifacts: MDL, instructions, profiles, and memory.
 2. Correctness is handled as a system of primitives the agent can orchestrate, not as one hidden feature.
 
-The result is a stack where agents can generate governed BI — from a SQL answer to a deployed GenBI dashboard — through governed business context, while Wren AI handles modeling, planning, validation, execution, and recall.
+The result is a stack where agents can generate governed BI, from a SQL answer to a deployed GenBI dashboard, through governed business context, while Wren AI handles modeling, planning, validation, execution, and recall.
 
 ## Correctness is a system
 
@@ -113,7 +113,7 @@ See the [MDL schema reference](/oss/reference/mdl) for the full project structur
 
 ### Wren Python SDK
 
-The `wrenai` Python package exposes the same plan-and-execute pipeline that the CLI drives. The CLI is a thin Typer wrapper over the SDK — both share the orchestration code, both can be embedded in agent frameworks, notebooks, and applications.
+The `wrenai` Python package exposes the same plan-and-execute pipeline that the CLI drives. The CLI is a thin Typer wrapper over the SDK. Both share the orchestration code, and both can be embedded in agent frameworks, notebooks, and applications.
 
 When invoked (via CLI or SDK), the orchestrator:
 
@@ -123,7 +123,7 @@ When invoked (via CLI or SDK), the orchestrator:
 4. Sends planned SQL to the correct connector.
 5. Returns results as a PyArrow table.
 
-For higher-level integrations, see the [LangChain SDK](/oss/sdk/langchain) and [Pydantic AI SDK](/oss/sdk/pydantic) — both wrap this pipeline as agent tools.
+For higher-level integrations, see the [LangChain SDK](/oss/sdk/langchain) and [Pydantic AI SDK](/oss/sdk/pydantic). Both wrap this pipeline as agent tools.
 
 ### SQL planning
 

@@ -6,9 +6,9 @@
   </picture>
 </a>
 
-### Open-source GenBI — generative BI for AI agents.
+### Open-source GenBI: generative BI for AI agents.
 
-*Your agents generate, deploy, and govern dashboards from any database — grounded in a context layer they can actually trust.*
+*Your agents generate, deploy, and govern dashboards from any database, grounded in a context layer they can actually trust.*
 
 [Docs](https://docs.getwren.ai) · [Discord](https://discord.gg/5DvshJqG8Z) · [Vision](https://www.getwren.ai/post/the-missing-context-layer-for-ai-agents-over-business-data) · [Blog](https://www.getwren.ai/blog)
 
@@ -25,7 +25,7 @@
 
 </div>
 
-> 📣 **2026-05-07** — Wren Engine has merged into this repo under [`core/`](./core). The previous `Canner/wren-engine` repo is archived. The previous WrenAI GenBI app (the Docker-based chat-first BI product) is preserved on the [`legacy/v1`](https://github.com/Canner/WrenAI/tree/legacy/v1) branch (tag `v1-final`) and is now **Wren GenBI Classic** — see [What changed about "GenBI"](#a-note-on-the-genbi-name) below. [Read the announcement →](https://github.com/Canner/WrenAI/discussions/2205)
+> 📣 **2026-05-07**: Wren Engine has merged into this repo under [`core/`](./core). The previous `Canner/wren-engine` repo is archived. The previous WrenAI GenBI app (the Docker-based chat-first BI product) is preserved on the [`legacy/v1`](https://github.com/Canner/WrenAI/tree/legacy/v1) branch (tag `v1-final`) and is now **Wren GenBI Classic**; see [A note on the "GenBI" name](#a-note-on-the-genbi-name) below. [Read the announcement →](https://github.com/Canner/WrenAI/discussions/2205)
 
 <!--
   📺 HERO DEMO (place here)
@@ -33,7 +33,7 @@
   Suggested: a 10-second silent loop showing GenBI end to end:
     1. User asks their agent (in plain language) for a dashboard
     2. Agent writes governed SQL via the Wren context layer, builds the app
-    3. `wren genbi deploy` → a live, shareable dashboard URL opens
+    3. `wren genbi deploy` produces a live, shareable dashboard URL
   Format: .gif (≤2 MB) or .mp4 (autoplay-muted).
   Save under  /assets/wrenai-demo.gif  and use the line below:
 
@@ -44,25 +44,25 @@
 
 ## What WrenAI is
 
-WrenAI is the **open-source GenBI engine**: it lets AI agents **generate, deploy, and govern** business intelligence — from a SQL answer to a shareable dashboard — across 22+ data sources.
+WrenAI is the **open-source GenBI engine**: it lets AI agents **generate, deploy, and govern** business intelligence, from a SQL answer to a shareable dashboard, across 22+ data sources.
 
-What makes the output trustworthy is the layer underneath: an open **context layer** that gives agents what schemas don't — business semantics, approved definitions, examples, memory, and governance, plus the unstructured company knowledge that lives in your docs, wikis, and chat threads. Generative BI is only as good as the context it stands on; Wren is that context, made reviewable and reusable by every agent you already run.
+What makes the output trustworthy is the layer underneath: an open **context layer** that gives agents what schemas don't. That means business semantics, approved definitions, examples, memory, and governance, plus the unstructured company knowledge that lives in your docs, wikis, and chat threads. Generative BI is only as good as the context it stands on, and Wren is that context, made reviewable and reusable by every agent you already run.
 
 ![Wren AI architecture](./misc/wren-ai-architecture.png)
 
 ## GenBI in three beats: Generate · Deploy · Know
 
-- **Generate** — your agent turns a business question into *governed* SQL and charts: schema-aware retrieval, MDL planning, dry-plan validation, and structured errors keep it correct instead of confidently wrong.
-- **Deploy** — turn any answer into a shareable, browser-side dashboard powered by [`wren-core-wasm`](https://docs.getwren.ai/oss/sdk/wasm) and ship it to your own Vercel or Cloudflare Pages account with one command.
-- **Know** — the knowledge that makes all of this correct lives in versionable, evidence-linked files: semantic models (MDL), company definitions (`instructions.md`), and a memory of what worked. Reviewable. Git-friendly. Never locked inside someone else's UI.
+- **Generate.** Your agent turns a business question into *governed* SQL and charts. Schema-aware retrieval, MDL planning, dry-plan validation, and structured errors keep it correct instead of confidently wrong.
+- **Deploy.** Turn any answer into a shareable, browser-side dashboard powered by [`wren-core-wasm`](https://docs.getwren.ai/oss/sdk/wasm) and ship it to your own Vercel or Cloudflare Pages account with one command.
+- **Know.** The knowledge that makes all of this correct lives in versionable, evidence-linked files: semantic models (MDL), company definitions (`instructions.md`), and a memory of what worked. Reviewable. Git-friendly. Never locked inside someone else's UI.
 
 ## Why agent builders pick WrenAI
 
-- **Generative BI, end to end** — not just text-to-SQL. Generate the answer, deploy the dashboard, share the URL — all driven by the agents you already use.
-- **Knowledge management built in** — business meaning, approved definitions, and proven examples are captured as reviewable, version-controlled context, not buried in prompts.
-- **Open by default** — open-sourced core, SDK, and skills under the Apache-2.0 license.
-- **Correctness as primitives** — rich schema retrieval, dry-plan validation, structured errors with hints, value profiling, eval runner. The agent orchestrates; the trace lives in its reasoning.
-- **Sits on top of your existing stack** — warehouse, transformation pipelines, your existing semantic layer. Not another tool to maintain.
+- **Generative BI, end to end.** Not just text-to-SQL. Generate the answer, deploy the dashboard, share the URL, all driven by the agents you already use.
+- **Knowledge management built in.** Business meaning, approved definitions, and proven examples are captured as reviewable, version-controlled context, not buried in prompts.
+- **Open by default.** Open-sourced core, SDK, and skills under the Apache-2.0 license.
+- **Correctness as primitives.** Rich schema retrieval, dry-plan validation, structured errors with hints, value profiling, eval runner. The agent orchestrates; the trace lives in its reasoning.
+- **Sits on top of your existing stack.** Warehouse, transformation pipelines, your existing semantic layer. Not another tool to maintain.
 
 ## How Wren compares
 
@@ -77,9 +77,9 @@ What makes the output trustworthy is the layer underneath: an open **context lay
 
 ## Wren is for you if…
 
-- You want **AI agents to produce trustworthy BI** — answers *and* dashboards — not just plausible SQL.
+- You want **AI agents to produce trustworthy BI**, answers *and* dashboards, not just plausible SQL.
 - Your business logic (definitions, enums, units, approved joins) lives **outside the database** and your agents keep getting it wrong.
-- You want context that's **open, reviewable, and version-controlled**, usable by every agent and person — not gated behind one vendor's UI.
+- You want context that's **open, reviewable, and version-controlled**, usable by every agent and person, not gated behind one vendor's UI.
 
 **Skip Wren if** you only need a one-off chart from a single CSV, or you're happy letting an agent guess at SQL with no governance.
 
@@ -102,7 +102,6 @@ pip install "wrenai[postgres,memory]"   # add per-datasource and memory extras a
 > pip install wrenai -i https://pypi.tuna.tsinghua.edu.cn/simple
 > ```
 > If HuggingFace model downloads time out, add `export HF_ENDPOINT=https://hf-mirror.com` before running the CLI.
-```
 
 ### 2. Install the discovery stub for your AI client
 
@@ -112,7 +111,7 @@ npx skills add Canner/WrenAI            # auto-detects Claude Code, Cursor, Clin
 
 The stub is ~50 lines. It teaches your agent to fetch workflow guides via
 `wren skills get <name>` and shaped prompts via
-`wren ask "<question>" --guided|--direct` — everything else lives in the CLI.
+`wren ask "<question>" --guided|--direct`, and everything else lives in the CLI.
 
 ### 3. Ask your agent to set things up
 
@@ -124,7 +123,7 @@ The agent runs `wren skills get onboarding`, follows the guide step-by-step,
 checks your environment, creates a connection profile, scaffolds the project,
 and runs a first query.
 
-### 4. (Optional) Enrich the project — the *Know* beat
+### 4. (Optional) Enrich the project: the *Know* beat
 
 Once onboarding finishes, ask:
 
@@ -133,32 +132,32 @@ Once onboarding finishes, ask:
 The agent runs `wren skills get enrich-context` and follows the guide in
 **grill** mode (one question at a time) or **auto-pilot** mode (agent reads
 `<project>/raw/` and proposes). Both modes write to MDL, instructions,
-queries, and memory — all reviewable, all Git-friendly.
+queries, and memory, all reviewable, all Git-friendly.
 
-### 5. Ask questions — the *Generate* beat
+### 5. Ask questions: the *Generate* beat
 
 > "Who are our top 10 customers by sales this quarter?"
 
 Your agent fetches MDL context, recalls similar past queries, writes
 governed SQL, and executes via `wren query`.
 
-### 6. Build & deploy a dashboard — the *Deploy* beat
+### 6. Build & deploy a dashboard: the *Deploy* beat
 
 > "Turn that into an interactive dashboard I can filter and share, and deploy it to Vercel."
 
 The agent runs `wren skills get genbi`, builds a browser-side GenBI app from
 your project's context, previews it locally, and ships it to your own Vercel
-or Cloudflare Pages account — returning a live, shareable URL. See the
+or Cloudflare Pages account, returning a live, shareable URL. See the
 [Build & deploy a GenBI app guide](https://docs.getwren.ai/oss/guides/genbi).
 
 **Want to try it without your own database?** Ask your agent to use the
-bundled `jaffle_shop` sample dataset — same flow, querying a real warehouse
+bundled `jaffle_shop` sample dataset. Same flow, querying a real warehouse
 end-to-end in a couple of minutes.
 
 ## Two beats first, then the third
 
 ```bash
-# Day 1 — agent-driven
+# Day 1 (agent-driven)
 wren skills get onboarding         # workflow guide: set up project + first query  (Generate)
 wren skills get enrich-context     # workflow guide: add business context           (Know)
 wren skills get genbi              # workflow guide: build & deploy a dashboard      (Deploy)
@@ -173,20 +172,20 @@ Fast at first. Deep when you need it. Always reviewable and Git-friendly.
 
 ## What's Included
 
-- **Modeling Definition Language (MDL)** — models, columns, relationships, views, cubes, metrics, row-level / column-level access control (RLAC / CLAC)
-- **Engine** — Apache DataFusion based, 22+ data sources
-- **GenBI dashboards** — agent-built, browser-side apps powered by [`wren-core-wasm`](https://docs.getwren.ai/oss/sdk/wasm), deployable to Vercel / Cloudflare Pages
-- **Knowledge & memory** — LanceDB-backed, hybrid retrieval, versionable; business meaning captured in `instructions.md` and reusable examples
-- **Agent SDK** — `wren-langchain` (LangChain / LangGraph), `wren-pydantic`; reference Python integration for other stacks
-- **Governed execution primitives** — functions, dry-plan, row limits, access control
+- **Modeling Definition Language (MDL)**: models, columns, relationships, views, cubes, metrics, row-level / column-level access control (RLAC / CLAC)
+- **Engine**: Apache DataFusion based, 22+ data sources
+- **GenBI dashboards**: agent-built, browser-side apps powered by [`wren-core-wasm`](https://docs.getwren.ai/oss/sdk/wasm), deployable to Vercel / Cloudflare Pages
+- **Knowledge & memory**: LanceDB-backed, hybrid retrieval, versionable; business meaning captured in `instructions.md` and reusable examples
+- **Agent SDK**: `wren-langchain` (LangChain / LangGraph), `wren-pydantic`; reference Python integration for other stacks
+- **Governed execution primitives**: functions, dry-plan, row limits, access control
 
 ## What's next
 
-- **Context enrichment skill** — `/wren-enrich-context` (grill + auto-pilot modes) hardened across MDL, instructions, queries, and memory
-- **Richer GenBI** — more chart types, live-data dashboards, and templated apps
-- **End-to-end correctness primitives** — value profiling, rich retrieval, structured errors, golden eval runner
-- **Agent-native distribution** — first-class SDKs across major agent frameworks; see [GitHub Discussions](https://github.com/Canner/WrenAI/discussions) for what's prioritized next
-- **Full governed execution** — audit logs, rate limits, approval workflow, data-flow inspector
+- **Context enrichment skill**: `/wren-enrich-context` (grill + auto-pilot modes) hardened across MDL, instructions, queries, and memory
+- **Richer GenBI**: more chart types, live-data dashboards, and templated apps
+- **End-to-end correctness primitives**: value profiling, rich retrieval, structured errors, golden eval runner
+- **Agent-native distribution**: first-class SDKs across major agent frameworks; see [GitHub Discussions](https://github.com/Canner/WrenAI/discussions) for what's prioritized next
+- **Full governed execution**: audit logs, rate limits, approval workflow, data-flow inspector
 
 Full roadmap and design notes: see the [introduction](https://docs.getwren.ai/oss/introduction).
 
@@ -194,38 +193,38 @@ Full roadmap and design notes: see the [introduction](https://docs.getwren.ai/os
 
 "GenBI" now refers to this open-source generative-BI capability: agents that
 **generate** governed answers and **deploy** dashboards on top of Wren's context
-layer. The earlier **Wren AI GenBI** app — the Docker-based, chat-first BI
-product — is now **Wren GenBI Classic**, preserved on the
+layer. The earlier **Wren AI GenBI** app, the Docker-based chat-first BI
+product, is now **Wren GenBI Classic**, preserved on the
 [`legacy/v1`](https://github.com/Canner/WrenAI/tree/legacy/v1) branch (no new
 features or security fixes). For a maintained, hosted version of that classic
 experience, see [Wren AI Commercial](https://getwren.ai).
 
 ## Documentation
 
-- [Quickstart](https://docs.getwren.ai/oss/get_started/quickstart) — from skill install to first answer
-- [Build & deploy a GenBI app](https://docs.getwren.ai/oss/guides/genbi) — generate a dashboard and ship it
-- [Concepts](https://docs.getwren.ai/oss/concepts/what_is_context) — what context is, what MDL is, how memory works
-- [Connect a database](https://docs.getwren.ai/oss/guides/connect) — Postgres, BigQuery, Snowflake, DuckDB, and more
-- [Agent SDKs](https://docs.getwren.ai/oss/sdk/overview) — what's shipping today, what's next
+- [Quickstart](https://docs.getwren.ai/oss/get_started/quickstart): from skill install to first answer
+- [Build & deploy a GenBI app](https://docs.getwren.ai/oss/guides/genbi): generate a dashboard and ship it
+- [Concepts](https://docs.getwren.ai/oss/concepts/what_is_context): what context is, what MDL is, how memory works
+- [Connect a database](https://docs.getwren.ai/oss/guides/connect): Postgres, BigQuery, Snowflake, DuckDB, and more
+- [Agent SDKs](https://docs.getwren.ai/oss/sdk/overview): what's shipping today, what's next
 
 ## Community
 
-- 💬 [Discord](https://discord.gg/5DvshJqG8Z) — chat with the team and other builders
-- 🐙 [GitHub Discussions](https://github.com/Canner/WrenAI/discussions) — design conversations, RFCs, longer threads
-- 🐦 [Twitter / X](https://x.com/getwrenai) — release notes and short updates
-- 🗞 [Blog](https://www.getwren.ai/blog) — vision, post-mortems, deep dives
+- 💬 [Discord](https://discord.gg/5DvshJqG8Z): chat with the team and other builders
+- 🐙 [GitHub Discussions](https://github.com/Canner/WrenAI/discussions): design conversations, RFCs, longer threads
+- 🐦 [Twitter / X](https://x.com/getwrenai): release notes and short updates
+- 🗞 [Blog](https://www.getwren.ai/blog): vision, post-mortems, deep dives
 
 ## Contributing
 
-We build in the open. Issues, PRs, connector contributions, SDK integrations, docs fixes — all welcome.
+We build in the open. Issues, PRs, connector contributions, SDK integrations, docs fixes are all welcome.
 
 - [Contributor guide](./CONTRIBUTING.md)
-- [Connector ecosystem program](./docs/contributing-a-connector.md) — three-tier ownership: official, community-blessed, community-owned
-- [Architecture map](./docs/architecture.md) — find the right place to land your change
+- [Connector ecosystem program](./docs/contributing-a-connector.md): three-tier ownership (official, community-blessed, community-owned)
+- [Architecture map](./docs/architecture.md): find the right place to land your change
 - Looking for somewhere to start? Try the [`good first issue`](https://github.com/Canner/WrenAI/labels/good%20first%20issue) label.
 
 <details>
-<summary><strong>Project structure</strong> — click to expand</summary>
+<summary><strong>Project structure</strong> (click to expand)</summary>
 
 ```
 core/
@@ -260,7 +259,7 @@ Apache 2.0. See [LICENSE](./LICENSE).
 
 *Come build open GenBI with us.*
 
-**If WrenAI helps you, drop a ⭐ — it genuinely helps us grow!**
+**If WrenAI helps you, drop a ⭐, it genuinely helps us grow!**
 
 <p><a href="#top">⬆️ Back to top</a></p>
 
