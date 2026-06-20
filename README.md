@@ -181,8 +181,6 @@ Fast at first. Deep when you need it. Always reviewable and Git-friendly.
 
 ## What's next
 
-- **Context enrichment skill**: `/wren-enrich-context` (grill + auto-pilot modes) hardened across MDL, instructions, queries, and memory
-- **Richer GenBI**: more chart types, live-data dashboards, and templated apps
 - **End-to-end correctness primitives**: value profiling, rich retrieval, structured errors, golden eval runner
 - **Agent-native distribution**: first-class SDKs across major agent frameworks; see [GitHub Discussions](https://github.com/Canner/WrenAI/discussions) for what's prioritized next
 - **Full governed execution**: audit logs, rate limits, approval workflow, data-flow inspector
