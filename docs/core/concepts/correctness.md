@@ -4,7 +4,7 @@ sidebar_label: How does Wren AI keep agents from hallucinating?
 
 # How does Wren AI keep agents from hallucinating?
 
-Hallucinations on business data are rarely a "model is bad at SQL" problem. They are a missing-context problem — the agent writes a confident-looking query against data it does not actually understand.
+Hallucinations on business data are rarely a "model is bad at SQL" problem. They are a missing-context problem — the agent writes a confident-looking query against data it does not actually understand. In GenBI that risk compounds: a dashboard built on a wrong query looks authoritative, so correctness is the whole game.
 
 Wren AI's architecture is designed to **give the agent the context it needs at every step**, and to **fail loudly when the agent guesses**. Here is how the pieces fit.
 

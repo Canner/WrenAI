@@ -4,7 +4,7 @@ Modeling Definition Language (MDL) is the semantic contract at the center of Wre
 
 It is how you tell agents, applications, and humans what your business data means: which datasets exist, which fields are exposed, how entities relate, which calculations are reusable, and which query-shaped objects should be treated as stable interfaces.
 
-Raw schemas describe storage. MDL describes meaning.
+Raw schemas describe storage. MDL describes meaning. Every governed answer an agent generates — and every GenBI dashboard it deploys — is planned through this contract, which is why it sits at the center.
 
 ## Why MDL exists
 

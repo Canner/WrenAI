@@ -6,7 +6,7 @@ A schema tells an agent that a table has columns. Context tells it which table i
 
 That distinction matters because AI agents do not fail on business data only because they are not smart enough. They fail because the meaning they need is scattered across warehouses, dashboards, SQL files, docs, decks, Slack threads, and people's heads.
 
-Wren AI exists to turn that scattered meaning into an open, machine-readable context layer that humans, agents, dashboards, and applications can share.
+Wren AI exists to turn that scattered meaning into an open, machine-readable context layer that humans, agents, dashboards, and applications can share. It is the layer that makes **GenBI** — the answers and dashboards your agents generate — trustworthy instead of merely plausible.
 
 ## Why schema is not enough
 

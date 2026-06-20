@@ -5,7 +5,7 @@ Wren AI is built as an open context layer for agents. Architecturally, that mean
 1. Business meaning is stored in explicit project artifacts: MDL, instructions, profiles, and memory.
 2. Correctness is handled as a system of primitives the agent can orchestrate, not as one hidden feature.
 
-The result is a stack where agents can query through governed business context while Wren AI handles modeling, planning, validation, execution, and recall.
+The result is a stack where agents can generate governed BI — from a SQL answer to a deployed GenBI dashboard — through governed business context, while Wren AI handles modeling, planning, validation, execution, and recall.
 
 ## Correctness is a system
 

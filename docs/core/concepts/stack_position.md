@@ -4,7 +4,7 @@ sidebar_label: Where does Wren AI sit in my stack?
 
 # Where does Wren AI sit in my stack?
 
-> Wren AI does not replace your warehouse, your transformation pipeline, or your existing semantic layer. It sits **between** your data infrastructure and the agents querying it, providing the context they need to do it safely.
+> Wren AI does not replace your warehouse, your transformation pipeline, or your existing semantic layer. It sits **between** your data infrastructure and the agents querying it — providing the context they need to generate and deploy trustworthy BI safely.
 
 ## The short version
 

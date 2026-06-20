@@ -4,7 +4,7 @@ Memory is the behavioral layer of Wren AI's context system.
 
 MDL tells an agent what your data means. Instructions tell it how your team wants that data used. Memory tells it what has worked before: which schema items were relevant, which SQL answered a similar question, and which examples your team has already confirmed.
 
-Without memory, every question starts from zero. With memory, each accepted answer can make the next answer easier to ground.
+Without memory, every question starts from zero. With memory, each accepted answer can make the next answer — and the next dashboard — easier to ground. It is one half of how Wren manages your business knowledge (see [How Wren manages your business knowledge](/oss/concepts/knowledge_management)).
 
 ## Why memory matters
 

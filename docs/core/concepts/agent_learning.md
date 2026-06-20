@@ -4,7 +4,7 @@ sidebar_label: How does the agent learn from your context?
 
 # How does the agent learn from your context?
 
-> An agent that ships in production does not memorize your business — it reads structured context, recalls proven examples, and writes them back as it works. Wren AI is designed around that loop.
+> An agent that ships in production does not memorize your business — it reads structured context, recalls proven examples, and writes them back as it works. Wren AI is designed around that loop, and it is what lets the BI your agents generate get more correct over time.
 
 ## Why this matters
 

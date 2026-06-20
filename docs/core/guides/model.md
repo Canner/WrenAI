@@ -4,7 +4,7 @@ sidebar_label: Model your business
 
 # Model your business
 
-Turn your warehouse schema into an agent-readable MDL project that captures your business logic.
+Turn your warehouse schema into an agent-readable MDL project that captures your business logic — the foundation every generated answer and GenBI dashboard is planned through.
 
 ## What you'll end up with
 
