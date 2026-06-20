@@ -40,3 +40,97 @@ def test_build_schema_grounded_sales_sql_requires_sales_schema():
         )
         is None
     )
+
+
+def test_build_schema_grounded_sales_sql_for_top_markets():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "What are the Top 10 Markets by New Order Value this year?",
+        [
+            """
+            CREATE TABLE dbo_tblSales (
+              Market VARCHAR,
+              SalesValue DOUBLE,
+              OrdDate TIMESTAMP,
+              Division VARCHAR,
+              ProdType VARCHAR
+            );
+            """,
+            """
+            CREATE TABLE dbo_tblStageNewOrders (
+              Market VARCHAR,
+              NewOrderValue DOUBLE,
+              OrdDate TIMESTAMP
+            );
+            """,
+        ],
+    )
+
+    assert sql == (
+        'SELECT TOP 10 "dbo_tblSales"."Market" AS "Market", '
+        'SUM("dbo_tblSales"."SalesValue") AS "TotalSalesValue" '
+        'FROM "dbo_tblSales" '
+        'WHERE "dbo_tblSales"."OrdDate" >= \'2026-01-01 00:00:00\' '
+        'AND "dbo_tblSales"."OrdDate" < \'2027-01-01 00:00:00\' '
+        'GROUP BY "dbo_tblSales"."Market" '
+        'ORDER BY SUM("dbo_tblSales"."SalesValue") DESC'
+    )
+    assert "dbo_tblStageNewOrders" not in sql
+
+
+def test_build_schema_grounded_sales_sql_for_division_revenue_trend():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "Create a Division-wise revenue trend line chart.",
+        [
+            """
+            CREATE TABLE dbo_tblSales (
+              Division VARCHAR,
+              SalesValue DOUBLE,
+              OrdDate TIMESTAMP,
+              Market VARCHAR
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT DATEPART(YEAR, "dbo_tblSales"."OrdDate") AS "year", '
+        'DATEPART(MONTH, "dbo_tblSales"."OrdDate") AS "month", '
+        '"dbo_tblSales"."Division" AS "Division", '
+        'SUM("dbo_tblSales"."SalesValue") AS "TotalSalesValue" '
+        'FROM "dbo_tblSales" '
+        'GROUP BY DATEPART(YEAR, "dbo_tblSales"."OrdDate"), '
+        'DATEPART(MONTH, "dbo_tblSales"."OrdDate"), "dbo_tblSales"."Division" '
+        'ORDER BY DATEPART(YEAR, "dbo_tblSales"."OrdDate"), '
+        'DATEPART(MONTH, "dbo_tblSales"."OrdDate")'
+    )
+
+
+def test_build_schema_grounded_sales_sql_for_orders_by_dimensions():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "Show New Orders by Division, Market, and Product Type.",
+        [
+            """
+            CREATE TABLE dbo_tblSales (
+              Division VARCHAR,
+              Market VARCHAR,
+              ProdType VARCHAR,
+              SalesValue DOUBLE,
+              OrdDate TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_tblSales"."Market" AS "Market", '
+        '"dbo_tblSales"."Division" AS "Division", '
+        '"dbo_tblSales"."ProdType" AS "ProdType", '
+        'SUM("dbo_tblSales"."SalesValue") AS "TotalSalesValue" '
+        'FROM "dbo_tblSales" '
+        'GROUP BY "dbo_tblSales"."Market", "dbo_tblSales"."Division", '
+        '"dbo_tblSales"."ProdType" '
+        'ORDER BY SUM("dbo_tblSales"."SalesValue") DESC'
+    )

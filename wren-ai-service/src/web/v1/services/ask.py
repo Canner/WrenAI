@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import re
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from cachetools import TTLCache
 from langfuse.decorators import observe
@@ -325,6 +325,326 @@ class AskService:
                 column_names.append(column_name.lower())
 
         return column_names
+
+    def _parse_schema_tables(self, table_ddls: list[str]) -> list[dict[str, Any]]:
+        tables: list[dict[str, Any]] = []
+        for ddl in table_ddls or []:
+            table_match = re.search(
+                r'\bCREATE\s+TABLE\s+(?:"(?P<quoted>[^"]+)"|'
+                r"\[(?P<bracketed>[^\]]+)\]|`(?P<backticked>[^`]+)`|"
+                r"(?P<bare>[A-Za-z_][A-Za-z0-9_.$]*))\s*\(",
+                ddl,
+                flags=re.IGNORECASE,
+            )
+            if not table_match:
+                continue
+
+            table_name = next(
+                value for value in table_match.groupdict().values() if value
+            )
+            body_start = table_match.end()
+            depth = 1
+            body_end = body_start
+            while body_end < len(ddl) and depth > 0:
+                if ddl[body_end] == "(":
+                    depth += 1
+                elif ddl[body_end] == ")":
+                    depth -= 1
+                body_end += 1
+
+            columns: list[dict[str, str]] = []
+            for line in ddl[body_start : body_end - 1].splitlines():
+                stripped = line.strip().rstrip(",")
+                if not stripped or stripped.startswith(("--", "/*")):
+                    continue
+                if re.match(
+                    r"^(?:PRIMARY|FOREIGN|CONSTRAINT|UNIQUE|KEY)\b",
+                    stripped,
+                    flags=re.IGNORECASE,
+                ):
+                    continue
+
+                column_match = re.match(
+                    r'(?:"(?P<quoted>[^"]+)"|\[(?P<bracketed>[^\]]+)\]|'
+                    r"`(?P<backticked>[^`]+)`|(?P<bare>[A-Za-z_][A-Za-z0-9_$]*))"
+                    r"\s+(?P<type>[A-Za-z0-9_(),]+)",
+                    stripped,
+                )
+                if column_match:
+                    column_name = next(
+                        value
+                        for key, value in column_match.groupdict().items()
+                        if key != "type" and value
+                    )
+                    columns.append(
+                        {
+                            "name": column_name,
+                            "type": column_match.group("type").lower(),
+                        }
+                    )
+
+            tables.append({"name": table_name, "columns": columns})
+
+        return tables
+
+    def _is_numeric_schema_type(self, column_type: str) -> bool:
+        return bool(
+            re.search(
+                r"\b(?:int|bigint|smallint|tinyint|decimal|numeric|float|double|"
+                r"real|money|number)\b",
+                column_type,
+                flags=re.IGNORECASE,
+            )
+        )
+
+    def _is_temporal_schema_type(self, column_type: str) -> bool:
+        return bool(
+            re.search(
+                r"\b(?:date|time|timestamp|datetime|smalldatetime)\b",
+                column_type,
+                flags=re.IGNORECASE,
+            )
+        )
+
+    def _find_schema_column(
+        self,
+        table: dict[str, Any],
+        candidates: tuple[str, ...],
+        numeric: bool | None = None,
+        temporal: bool | None = None,
+    ) -> str | None:
+        normalized_candidates = [
+            re.sub(r"[^a-z0-9]", "", candidate.lower())
+            for candidate in candidates
+        ]
+        scored: list[tuple[int, str]] = []
+        for column in table.get("columns", []):
+            column_name = column["name"]
+            normalized_column = re.sub(r"[^a-z0-9]", "", column_name.lower())
+            column_type = column.get("type", "")
+            if numeric is True and not self._is_numeric_schema_type(column_type):
+                continue
+            if temporal is True and not self._is_temporal_schema_type(column_type):
+                continue
+
+            for candidate in normalized_candidates:
+                if normalized_column == candidate:
+                    scored.append((100, column_name))
+                elif candidate and candidate in normalized_column:
+                    scored.append((60 + len(candidate), column_name))
+                elif normalized_column and normalized_column in candidate:
+                    scored.append((40 + len(normalized_column), column_name))
+
+        if not scored:
+            return None
+
+        return sorted(scored, reverse=True)[0][1]
+
+    def _quote_sql_identifier(self, identifier: str) -> str:
+        return f'"{identifier.replace(chr(34), chr(34) + chr(34))}"'
+
+    def _build_date_filter(self, table_name: str, date_column: str, query: str) -> str:
+        date_ref = (
+            f"{self._quote_sql_identifier(table_name)}."
+            f"{self._quote_sql_identifier(date_column)}"
+        )
+        normalized_query = query.lower()
+        if "this year" in normalized_query or "current year" in normalized_query:
+            return (
+                f" WHERE {date_ref} >= '2026-01-01 00:00:00' "
+                f"AND {date_ref} < '2027-01-01 00:00:00'"
+            )
+        year_match = re.search(r"\b(20\d{2})\b", normalized_query)
+        if year_match:
+            year = int(year_match.group(1))
+            return (
+                f" WHERE {date_ref} >= '{year}-01-01 00:00:00' "
+                f"AND {date_ref} < '{year + 1}-01-01 00:00:00'"
+            )
+        return ""
+
+    def _select_best_analytics_table(
+        self,
+        tables: list[dict[str, Any]],
+        required_dimensions: list[tuple[str, ...]],
+        measure_candidates: tuple[str, ...],
+        wants_date: bool = False,
+    ) -> tuple[dict[str, Any], list[str], str | None, str | None] | None:
+        scored: list[
+            tuple[int, dict[str, Any], list[str], str | None, str | None]
+        ] = []
+        for table in tables:
+            dimensions = [
+                self._find_schema_column(table, candidates)
+                for candidates in required_dimensions
+            ]
+            if any(dimension is None for dimension in dimensions):
+                continue
+
+            measure = self._find_schema_column(
+                table, measure_candidates, numeric=True
+            )
+            date_column = self._find_schema_column(
+                table,
+                (
+                    "OrdDate",
+                    "InvDate",
+                    "OrderDate",
+                    "NewOrderDate",
+                    "Date",
+                    "CreatedAt",
+                    "created_at",
+                ),
+                temporal=True,
+            )
+            if wants_date and not date_column:
+                continue
+
+            score = 10 * len([dimension for dimension in dimensions if dimension])
+            if measure:
+                score += 8
+            if date_column:
+                score += 4
+            table_name = table["name"].lower()
+            if "sales" in table_name:
+                score += 5
+            if "stage" in table_name:
+                score -= 8
+
+            scored.append((score, table, dimensions, measure, date_column))
+
+        if not scored:
+            return None
+
+        _, table, dimensions, measure, date_column = sorted(
+            scored, key=lambda item: item[0], reverse=True
+        )[0]
+        return (
+            table,
+            [dimension for dimension in dimensions if dimension],
+            measure,
+            date_column,
+        )
+
+    def _build_schema_grounded_analytics_sql(
+        self, query: str, table_ddls: list[str]
+    ) -> str | None:
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized_query:
+            return None
+
+        tables = self._parse_schema_tables(table_ddls)
+        if not tables:
+            return None
+
+        dimension_candidates: list[tuple[str, ...]] = []
+        if "salesperson" in normalized_query or "sales person" in normalized_query:
+            dimension_candidates.append(("SalesPerson", "Sales Rep", "SalesRep"))
+        if "market" in normalized_query:
+            dimension_candidates.append(("Market", "MarketType"))
+        if "division" in normalized_query:
+            dimension_candidates.append(("Division",))
+        if "product type" in normalized_query or "prodtype" in normalized_query:
+            dimension_candidates.append(("ProdType", "ProductType", "Product Type"))
+        if "customer" in normalized_query:
+            dimension_candidates.append(("Customer", "CustName", "CustNo"))
+
+        if not dimension_candidates:
+            return None
+
+        measure_candidates = (
+            "NewOrderValue",
+            "NewOrdersValue",
+            "OrderValue",
+            "SalesValue",
+            "FXSalesValue",
+            "Revenue",
+            "Amount",
+            "Value",
+            "Cost",
+            "Qty",
+            "Quantity",
+        )
+        wants_trend = "trend" in normalized_query or "line chart" in normalized_query
+        wants_top = bool(re.search(r"\btop\s+\d+\b", normalized_query))
+        wants_date = wants_trend or "this year" in normalized_query or bool(
+            re.search(r"\b20\d{2}\b", normalized_query)
+        )
+
+        selected = self._select_best_analytics_table(
+            tables,
+            dimension_candidates,
+            measure_candidates,
+            wants_date=wants_date,
+        )
+        if not selected:
+            return None
+
+        table, dimensions, measure, date_column = selected
+        table_name = table["name"]
+        table_ref = self._quote_sql_identifier(table_name)
+        dimension_refs = [
+            f"{table_ref}.{self._quote_sql_identifier(dimension)}"
+            for dimension in dimensions
+        ]
+
+        if wants_trend and date_column:
+            date_ref = f"{table_ref}.{self._quote_sql_identifier(date_column)}"
+            metric_expr = (
+                f"SUM({table_ref}.{self._quote_sql_identifier(measure)})"
+                if measure
+                else "COUNT(*)"
+            )
+            metric_alias = f"Total{measure}" if measure else "OrderCount"
+            select_parts = [
+                f"DATEPART(YEAR, {date_ref}) AS \"year\"",
+                f"DATEPART(MONTH, {date_ref}) AS \"month\"",
+                *[
+                    f"{dimension_ref} AS {self._quote_sql_identifier(dimensions[index])}"
+                    for index, dimension_ref in enumerate(dimension_refs)
+                ],
+                f"{metric_expr} AS {self._quote_sql_identifier(metric_alias)}",
+            ]
+            group_parts = [
+                f"DATEPART(YEAR, {date_ref})",
+                f"DATEPART(MONTH, {date_ref})",
+                *dimension_refs,
+            ]
+            return (
+                f"SELECT {', '.join(select_parts)} FROM {table_ref}"
+                f"{self._build_date_filter(table_name, date_column, query)} "
+                f"GROUP BY {', '.join(group_parts)} "
+                f"ORDER BY DATEPART(YEAR, {date_ref}), "
+                f"DATEPART(MONTH, {date_ref})"
+            )
+
+        metric_expr = (
+            f"SUM({table_ref}.{self._quote_sql_identifier(measure)})"
+            if measure
+            else "COUNT(*)"
+        )
+        metric_alias = f"Total{measure}" if measure else "OrderCount"
+        limit_match = re.search(r"\btop\s+(\d+)\b", normalized_query)
+        limit = int(limit_match.group(1)) if limit_match else 10
+        top_clause = f"TOP {limit} " if wants_top else ""
+        date_filter = (
+            self._build_date_filter(table_name, date_column, query)
+            if date_column
+            else ""
+        )
+        select_parts = [
+            f"{dimension_ref} AS {self._quote_sql_identifier(dimensions[index])}"
+            for index, dimension_ref in enumerate(dimension_refs)
+        ]
+        select_parts.append(
+            f"{metric_expr} AS {self._quote_sql_identifier(metric_alias)}"
+        )
+        return (
+            f"SELECT {top_clause}{', '.join(select_parts)} "
+            f"FROM {table_ref}{date_filter} "
+            f"GROUP BY {', '.join(dimension_refs)} "
+            f"ORDER BY {metric_expr} DESC"
+        )
 
     def _extract_requested_top_n(self, query: str, default_value: int = 10) -> int:
         if match := re.search(r"\btop\s+(\d+)\b", query or "", flags=re.IGNORECASE):
@@ -974,7 +1294,7 @@ class AskService:
             )
         )
         if not asks_for_salesperson_performance:
-            return None
+            return self._build_schema_grounded_analytics_sql(query, table_ddls)
 
         required_schema_terms = (
             "create table dbo_tblsales",
