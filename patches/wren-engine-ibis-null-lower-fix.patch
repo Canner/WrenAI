@@ -1,0 +1,57 @@
+﻿From ec835849487e5300fe54b2a5cfd7db4f31b85e1d Mon Sep 17 00:00:00 2001
+From: Harshitha <hbalasubramanya@etag.in>
+Date: Sun, 21 Jun 2026 20:48:16 +0530
+Subject: [PATCH] Fallback raw SQL for Ibis null type query errors
+
+---
+ ibis-server/app/model/connector.py | 33 ++++++++++++++++++++++++++----
+ 1 file changed, 29 insertions(+), 4 deletions(-)
+
+diff --git a/ibis-server/app/model/connector.py b/ibis-server/app/model/connector.py
+index 397bb8c2..b4437159 100644
+--- a/ibis-server/app/model/connector.py
++++ b/ibis-server/app/model/connector.py
+@@ -344,11 +344,36 @@ class IbisConnector(ConnectorABC):
+ 
+     @tracer.start_as_current_span("connector_query", kind=trace.SpanKind.CLIENT)
+     def query(self, sql: str, limit: int | None = None) -> pa.Table:
+-        ibis_table = self.connection.sql(sql)
++        try:
++            ibis_table = self.connection.sql(sql)
++            if limit is not None:
++                ibis_table = ibis_table.limit(limit)
++            ibis_table = self._handle_pyarrow_unsupported_type(ibis_table)
++            return ibis_table.to_pyarrow()
++        except AttributeError as e:
++            if e.args and e.args[0] == "'NoneType' object has no attribute 'lower'":
++                return self._query_raw_sql(sql, limit)
++            raise
++
++    def _query_raw_sql(self, sql: str, limit: int | None = None) -> pa.Table:
++        with closing(self.connection.raw_sql(sql)) as cur:
++            rows = cur.fetchall()
++            columns = [
++                self._cursor_column_name(column, index)
++                for index, column in enumerate(cur.description or [])
++            ]
++
++        df = pd.DataFrame(rows, columns=columns)
+         if limit is not None:
+-            ibis_table = ibis_table.limit(limit)
+-        ibis_table = self._handle_pyarrow_unsupported_type(ibis_table)
+-        return ibis_table.to_pyarrow()
++            df = df.head(limit)
++        return pa.Table.from_pandas(df, preserve_index=False)
++
++    @staticmethod
++    def _cursor_column_name(column: Any, index: int) -> str:
++        name = getattr(column, "name", None)
++        if name is None and isinstance(column, (tuple, list)) and column:
++            name = column[0]
++        return str(name or f"column_{index + 1}")
+ 
+     def _handle_pyarrow_unsupported_type(self, ibis_table: Table, **kwargs) -> Table:
+         result_table = ibis_table
+-- 
+2.53.0.windows.2
+
