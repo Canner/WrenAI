@@ -189,3 +189,115 @@ def test_build_schema_grounded_sales_sql_ignores_missing_metadata_entries():
         'FROM "dbo_tblSales" '
         'ORDER BY "dbo_tblSales"."SalesValue" DESC'
     )
+
+
+def test_build_schema_grounded_sales_sql_for_order_invoice_conversion_rate():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "Show Order-to-Invoice conversion rate by Month.",
+        [
+            """
+            CREATE TABLE dbo_tblSales (
+              OrdNo VARCHAR,
+              InvoiceNo VARCHAR,
+              OrdDate TIMESTAMP,
+              SalesValue DOUBLE
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT DATEPART(YEAR, "dbo_tblSales"."OrdDate") AS "year", '
+        'DATEPART(MONTH, "dbo_tblSales"."OrdDate") AS "month", '
+        'COUNT(DISTINCT "dbo_tblSales"."OrdNo") AS "OrderCount", '
+        'COUNT(DISTINCT "dbo_tblSales"."InvoiceNo") AS "InvoiceCount", '
+        '(COUNT(DISTINCT "dbo_tblSales"."InvoiceNo") * 100.0 / '
+        'NULLIF(COUNT(DISTINCT "dbo_tblSales"."OrdNo"), 0)) AS "ConversionRate" '
+        'FROM "dbo_tblSales" '
+        'WHERE "dbo_tblSales"."OrdNo" IS NOT NULL '
+        'GROUP BY DATEPART(YEAR, "dbo_tblSales"."OrdDate"), '
+        'DATEPART(MONTH, "dbo_tblSales"."OrdDate") '
+        'ORDER BY DATEPART(YEAR, "dbo_tblSales"."OrdDate"), '
+        'DATEPART(MONTH, "dbo_tblSales"."OrdDate")'
+    )
+    assert "P-M" not in sql
+
+
+def test_build_schema_grounded_sales_sql_for_highest_invoice_value():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "Which Orders have the highest invoice value for by product and by customer",
+        [
+            """
+            CREATE TABLE dbo_tblSales (
+              Customer VARCHAR,
+              ProdName VARCHAR,
+              SalesValue DOUBLE,
+              InvoiceNo VARCHAR
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_tblSales"."ProdName" AS "ProdName", '
+        '"dbo_tblSales"."Customer" AS "Customer", '
+        'SUM("dbo_tblSales"."SalesValue") AS "TotalSalesValue" '
+        'FROM "dbo_tblSales" '
+        'GROUP BY "dbo_tblSales"."ProdName", "dbo_tblSales"."Customer" '
+        'ORDER BY SUM("dbo_tblSales"."SalesValue") DESC'
+    )
+
+
+def test_build_schema_grounded_sales_sql_for_product_type_contribution():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "Create a Product Type contribution pie chart.",
+        [
+            """
+            CREATE TABLE dbo_tblSales (
+              ProdType VARCHAR,
+              SalesValue DOUBLE
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_tblSales"."ProdType" AS "ProdType", '
+        'SUM("dbo_tblSales"."SalesValue") AS "TotalSalesValue" '
+        'FROM "dbo_tblSales" '
+        'GROUP BY "dbo_tblSales"."ProdType" '
+        'ORDER BY SUM("dbo_tblSales"."SalesValue") DESC'
+    )
+
+
+def test_build_schema_grounded_sales_sql_for_yoy_waterfall_dimensions():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "Show a waterfall of YOY changes by Customer, Product, and Market.",
+        [
+            """
+            CREATE TABLE dbo_tblSales (
+              YearInd INTEGER,
+              Customer VARCHAR,
+              ProdName VARCHAR,
+              Market VARCHAR,
+              SalesValue DOUBLE
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_tblSales"."YearInd" AS "year", '
+        '"dbo_tblSales"."Customer" AS "Customer", '
+        '"dbo_tblSales"."ProdName" AS "ProdName", '
+        '"dbo_tblSales"."Market" AS "Market", '
+        'SUM("dbo_tblSales"."SalesValue") AS "TotalSalesValue" '
+        'FROM "dbo_tblSales" '
+        'GROUP BY "dbo_tblSales"."YearInd", "dbo_tblSales"."Customer", '
+        '"dbo_tblSales"."ProdName", "dbo_tblSales"."Market" '
+        'ORDER BY "dbo_tblSales"."YearInd", SUM("dbo_tblSales"."SalesValue") DESC'
+    )

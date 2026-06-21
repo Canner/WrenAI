@@ -25,6 +25,7 @@ def _detect_requested_chart_type(query: str | None) -> str:
         ("multi_line", ["multi line", "multi-line"]),
         ("line", ["line chart", "line graph", "line plot"]),
         ("bar", ["bar chart", "bar graph", "column chart"]),
+        ("bar", ["waterfall", "waterfall chart"]),
         ("pie", ["pie chart", "donut chart", "doughnut chart"]),
         ("area", ["area chart", "area graph"]),
     ]

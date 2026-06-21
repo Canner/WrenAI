@@ -402,7 +402,7 @@ class AskService:
     def _is_numeric_schema_type(self, column_type: str) -> bool:
         return bool(
             re.search(
-                r"\b(?:int|bigint|smallint|tinyint|decimal|numeric|float|double|"
+                r"\b(?:int|integer|bigint|smallint|tinyint|decimal|numeric|float|double|"
                 r"real|money|number)\b",
                 column_type,
                 flags=re.IGNORECASE,
@@ -557,6 +557,19 @@ class AskService:
         if not tables:
             return None
 
+        compact_query = re.sub(r"[^a-z0-9]", "", normalized_query)
+
+        if conversion_sql := self._build_order_invoice_conversion_sql(
+            query, tables
+        ):
+            return conversion_sql
+
+        if yoy_sql := self._build_yoy_sales_change_sql(query, tables):
+            return yoy_sql
+
+        if contribution_sql := self._build_contribution_sql(query, tables):
+            return contribution_sql
+
         dimension_candidates: list[tuple[str, ...]] = []
         if "salesperson" in normalized_query or "sales person" in normalized_query:
             dimension_candidates.append(("SalesPerson", "Sales Rep", "SalesRep"))
@@ -566,7 +579,12 @@ class AskService:
             dimension_candidates.append(("Market", "MarketType"))
         if "division" in normalized_query:
             dimension_candidates.append(("Division",))
-        if "product type" in normalized_query or "prodtype" in normalized_query:
+        if (
+            "product type" in normalized_query
+            or "prodtype" in normalized_query
+            or "producttype" in compact_query
+            or "prodtype" in compact_query
+        ):
             dimension_candidates.append(("ProdType", "ProductType", "Product Type"))
         elif "product" in normalized_query:
             dimension_candidates.append(
@@ -581,6 +599,8 @@ class AskService:
         measure_candidates = (
             "NewOrderValue",
             "NewOrdersValue",
+            "InvoiceValue",
+            "InvoiceAmount",
             "OrderValue",
             "SalesValue",
             "FXSalesValue",
@@ -591,6 +611,15 @@ class AskService:
             "Qty",
             "Quantity",
         )
+        if "invoice" in normalized_query:
+            measure_candidates = (
+                "InvoiceValue",
+                "InvoiceAmount",
+                "SalesValue",
+                "FXSalesValue",
+                "Value",
+                "Amount",
+            )
         wants_trend = "trend" in normalized_query or "line chart" in normalized_query
         wants_top = bool(re.search(r"\btop\s+\d+\b", normalized_query))
         wants_detail_rows = (
@@ -702,6 +731,208 @@ class AskService:
             f"FROM {table_ref}{date_filter} "
             f"GROUP BY {', '.join(dimension_refs)} "
             f"ORDER BY {metric_expr} DESC"
+        )
+
+    def _build_contribution_sql(
+        self, query: str, tables: list[dict[str, Any]]
+    ) -> str | None:
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not any(term in normalized_query for term in ("contribution", "pie chart")):
+            return None
+
+        compact_query = re.sub(r"[^a-z0-9]", "", normalized_query)
+        dimension_candidates: tuple[str, ...] | None = None
+        if (
+            "product type" in normalized_query
+            or "prodtype" in normalized_query
+            or "producttype" in compact_query
+            or "prodtype" in compact_query
+        ):
+            dimension_candidates = ("ProdType", "ProductType", "Product Type")
+        elif "market" in normalized_query:
+            dimension_candidates = ("Market", "MarketType")
+        elif "division" in normalized_query:
+            dimension_candidates = ("Division",)
+        elif "customer" in normalized_query:
+            dimension_candidates = ("Customer", "CustName", "CustNo")
+
+        if not dimension_candidates:
+            return None
+
+        selected = self._select_best_analytics_table(
+            tables,
+            [dimension_candidates],
+            (
+                "SalesValue",
+                "FXSalesValue",
+                "OrderValue",
+                "NewOrderValue",
+                "Revenue",
+                "Value",
+                "Amount",
+            ),
+            wants_date=False,
+        )
+        if not selected:
+            return None
+
+        table, dimensions, measure, _date_column = selected
+        table_name = table.get("name")
+        if not (table_name and dimensions and measure):
+            return None
+
+        table_name = str(table_name)
+        table_ref = self._quote_sql_identifier(table_name)
+        dimension = dimensions[0]
+        dimension_ref = f"{table_ref}.{self._quote_sql_identifier(dimension)}"
+        metric_expr = f"SUM({table_ref}.{self._quote_sql_identifier(measure)})"
+        return (
+            f"SELECT {dimension_ref} AS {self._quote_sql_identifier(dimension)}, "
+            f"{metric_expr} AS \"Total{measure}\" "
+            f"FROM {table_ref} "
+            f"GROUP BY {dimension_ref} "
+            f"ORDER BY {metric_expr} DESC"
+        )
+
+    def _build_order_invoice_conversion_sql(
+        self, query: str, tables: list[dict[str, Any]]
+    ) -> str | None:
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not (
+            "conversion" in normalized_query
+            and "order" in normalized_query
+            and "invoice" in normalized_query
+        ):
+            return None
+
+        scored: list[tuple[int, dict[str, Any], str, str, str | None]] = []
+        for table in tables:
+            order_column = self._find_schema_column(
+                table, ("OrdNo", "OrderNo", "OrderNumber", "NewOrderNo")
+            )
+            invoice_column = self._find_schema_column(
+                table, ("InvoiceNo", "InvNo", "InvoiceNumber")
+            )
+            date_column = self._find_schema_column(
+                table,
+                ("OrdDate", "InvDate", "OrderDate", "InvoiceDate", "Date"),
+                temporal=True,
+            )
+            if not (order_column and invoice_column):
+                continue
+
+            score = 20
+            if date_column:
+                score += 5
+            if "sales" in str(table.get("name") or "").lower():
+                score += 5
+            scored.append((score, table, order_column, invoice_column, date_column))
+
+        if not scored:
+            return None
+
+        _, table, order_column, invoice_column, date_column = sorted(
+            scored, key=lambda item: item[0], reverse=True
+        )[0]
+        table_name = table.get("name")
+        if not table_name:
+            return None
+
+        table_name = str(table_name)
+        table_ref = self._quote_sql_identifier(table_name)
+        order_ref = f"{table_ref}.{self._quote_sql_identifier(order_column)}"
+        invoice_ref = f"{table_ref}.{self._quote_sql_identifier(invoice_column)}"
+        date_column = date_column or order_column
+        date_ref = f"{table_ref}.{self._quote_sql_identifier(date_column)}"
+        return (
+            f"SELECT DATEPART(YEAR, {date_ref}) AS \"year\", "
+            f"DATEPART(MONTH, {date_ref}) AS \"month\", "
+            f"COUNT(DISTINCT {order_ref}) AS \"OrderCount\", "
+            f"COUNT(DISTINCT {invoice_ref}) AS \"InvoiceCount\", "
+            f"(COUNT(DISTINCT {invoice_ref}) * 100.0 / "
+            f"NULLIF(COUNT(DISTINCT {order_ref}), 0)) AS \"ConversionRate\" "
+            f"FROM {table_ref} "
+            f"WHERE {order_ref} IS NOT NULL "
+            f"GROUP BY DATEPART(YEAR, {date_ref}), DATEPART(MONTH, {date_ref}) "
+            f"ORDER BY DATEPART(YEAR, {date_ref}), DATEPART(MONTH, {date_ref})"
+        )
+
+    def _build_yoy_sales_change_sql(
+        self, query: str, tables: list[dict[str, Any]]
+    ) -> str | None:
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not any(term in normalized_query for term in ("yoy", "year over year")):
+            return None
+
+        required_dimensions: list[tuple[str, ...]] = []
+        if "customer" in normalized_query:
+            required_dimensions.append(("Customer", "CustName", "CustNo"))
+        if "product" in normalized_query:
+            required_dimensions.append(
+                ("ProdName", "Product", "ProductName", "Item", "ProdCode")
+            )
+        if "market" in normalized_query:
+            required_dimensions.append(("Market", "MarketType"))
+
+        if not required_dimensions:
+            return None
+
+        selected = self._select_best_analytics_table(
+            tables,
+            required_dimensions,
+            (
+                "SalesValue",
+                "FXSalesValue",
+                "OrderValue",
+                "NewOrderValue",
+                "Revenue",
+                "Value",
+                "Amount",
+            ),
+            wants_date=False,
+        )
+        if not selected:
+            return None
+
+        table, dimensions, measure, date_column = selected
+        table_name = table.get("name")
+        if not (table_name and measure):
+            return None
+
+        year_column = self._find_schema_column(
+            table, ("YearInd", "Year", "OrderYear", "InvoiceYear"), numeric=True
+        )
+        table_name = str(table_name)
+        table_ref = self._quote_sql_identifier(table_name)
+        if year_column:
+            year_expr = f"{table_ref}.{self._quote_sql_identifier(year_column)}"
+        elif date_column:
+            year_expr = (
+                f"DATEPART(YEAR, "
+                f"{table_ref}.{self._quote_sql_identifier(date_column)})"
+            )
+        else:
+            return None
+
+        metric_expr = f"SUM({table_ref}.{self._quote_sql_identifier(measure)})"
+        dimension_refs = [
+            f"{table_ref}.{self._quote_sql_identifier(dimension)}"
+            for dimension in dimensions
+        ]
+        select_parts = [
+            f"{year_expr} AS \"year\"",
+            *[
+                f"{dimension_ref} AS {self._quote_sql_identifier(dimensions[index])}"
+                for index, dimension_ref in enumerate(dimension_refs)
+            ],
+            f"{metric_expr} AS \"Total{measure}\"",
+        ]
+        group_parts = [year_expr, *dimension_refs]
+        return (
+            f"SELECT {', '.join(select_parts)} "
+            f"FROM {table_ref} "
+            f"GROUP BY {', '.join(group_parts)} "
+            f"ORDER BY {year_expr}, {metric_expr} DESC"
         )
 
     def _extract_requested_top_n(self, query: str, default_value: int = 10) -> int:
