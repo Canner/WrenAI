@@ -125,6 +125,7 @@ export default async function handler(
     const task = await wrenAIAdaptor.generateChart({
       query: question,
       sql,
+      data: queryResult as unknown as Record<string, any>,
       projectId: project.id.toString(),
       configurations: {
         language: WrenAILanguage[project.language] || WrenAILanguage.EN,

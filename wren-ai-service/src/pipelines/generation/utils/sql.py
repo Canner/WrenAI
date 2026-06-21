@@ -780,6 +780,9 @@ def _rewrite_mssql_invented_knowledge_article_fields(sql: str) -> str:
         "dbo_knowledge_articles": {
             "article_id": '"id"',
             "knowledge_article_id": '"id"',
+            "article_content": '"content"',
+            "article_text": '"content"',
+            "article_body": '"content"',
             "effectiveness_score": '"helpful"',
             "created_by": '"author"',
             "created_by_user": '"author"',
@@ -789,6 +792,9 @@ def _rewrite_mssql_invented_knowledge_article_fields(sql: str) -> str:
         "dbo_kb_articles": {
             "article_id": '"id"',
             "knowledge_article_id": '"id"',
+            "article_content": '"content"',
+            "article_text": '"content"',
+            "article_body": '"content"',
             "category": '"category"',
             "section": '"category"',
             "article_section": '"category"',
@@ -1342,6 +1348,9 @@ def _rewrite_mssql_limit_clause(sql: str) -> str:
 
     limit = limit_match.group(1)
     without_limit = sql[: limit_match.start()].rstrip()
+    if re.search(r"\bUNION(?:\s+ALL)?\b", without_limit, flags=re.IGNORECASE):
+        return without_limit
+
     if re.search(
         r"\bSELECT\s+(?:DISTINCT\s+)?TOP\s*\(?\s*\d+\s*\)?",
         without_limit,

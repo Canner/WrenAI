@@ -1021,6 +1021,38 @@ def test_normalize_generation_result_sql_rewrites_knowledge_article_id_for_mssql
     assert 'COUNT("dbo_knowledge_articles"."id") AS "article_count"' in normalized
 
 
+def test_normalize_generation_result_sql_rewrites_article_content_for_mssql():
+    sql = """
+    SELECT
+      LENGTH("dbo_kb_articles"."article_text") AS "article_length"
+    FROM "dbo_kb_articles"
+    """
+
+    normalized = normalize_generation_result_sql(sql, data_source="MSSQL")
+
+    assert "article_text" not in normalized
+    assert 'LENGTH("dbo_kb_articles"."content") AS "article_length"' in normalized
+
+
+def test_normalize_generation_result_sql_keeps_union_limit_planner_safe_for_mssql():
+    sql = """
+    SELECT
+      LENGTH(article_text) AS article_length
+    FROM "dbo_kb_articles"
+    UNION ALL SELECT
+      LENGTH(article_text) AS article_length
+    FROM "dbo_knowledge_articles"
+    LIMIT 1
+    """
+
+    normalized = normalize_generation_result_sql(sql, data_source="MSSQL")
+
+    assert "LIMIT" not in normalized
+    assert "TOP 1" not in normalized
+    assert 'LENGTH("content") AS article_length' in normalized
+    assert "UNION ALL SELECT" in normalized
+
+
 def test_normalize_generation_result_sql_rewrites_kb_article_created_by_for_mssql():
     sql = """
     SELECT
