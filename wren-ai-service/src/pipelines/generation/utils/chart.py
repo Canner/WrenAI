@@ -216,6 +216,34 @@ def _build_fallback_chart_schema(
     }
 
 
+def build_fallback_chart_result(
+    query: str | None,
+    data: Dict[str, Any],
+    remove_data_from_chart_schema: bool = True,
+) -> dict:
+    processed = ChartDataPreprocessor().run(data)
+    sample_data = processed.get("sample_data", [])
+    chart_type = _detect_requested_chart_type(query) or "bar"
+    chart_schema = _build_fallback_chart_schema(query, chart_type, sample_data)
+    if not chart_schema:
+        return {
+            "chart_schema": {},
+            "reasoning": "",
+            "chart_type": "",
+        }
+
+    chart_schema["$schema"] = "https://vega.github.io/schema/vega-lite/v5.json"
+    chart_schema["data"] = {"values": sample_data}
+    if remove_data_from_chart_schema:
+        chart_schema["data"]["values"] = []
+
+    return {
+        "chart_schema": chart_schema,
+        "reasoning": "Generated from the preview data columns and requested chart type.",
+        "chart_type": chart_type,
+    }
+
+
 def _is_schema_compatible_with_sample_data(
     chart_schema: dict,
     sample_data: list[dict],
