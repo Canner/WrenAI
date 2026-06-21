@@ -2272,6 +2272,42 @@ def _compact_sql_identifier(identifier: str) -> str:
     return re.sub(r"[^a-z0-9]", "", str(identifier or "").lower())
 
 
+_SEMANTIC_COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
+    "source": (
+        "source",
+        "source_ticket_id",
+        "source_repair_ids",
+        "category",
+        "subcategory",
+        "author",
+        "created_by_user_id",
+        "status",
+    ),
+    "leadsource": ("source", "source_ticket_id", "source_repair_ids", "category"),
+    "articletype": ("article_type", "category", "subcategory", "type", "status"),
+    "type": ("type", "category", "subcategory", "status"),
+    "category": ("category", "subcategory", "status", "priority"),
+    "subcategory": ("subcategory", "category", "status", "priority"),
+    "author": ("author", "created_by_user_id", "owner", "assignee_user_id"),
+    "createdby": ("created_by", "created_by_user_id", "author"),
+    "createdbyuser": ("created_by_user", "created_by_user_id", "author"),
+    "createdbyuserid": ("created_by_user_id", "author"),
+}
+
+
+def _find_semantic_column_alias(
+    requested_column: str,
+    canonical_columns: dict[str, str],
+) -> str | None:
+    for alias in _SEMANTIC_COLUMN_ALIASES.get(
+        _compact_sql_identifier(requested_column), ()
+    ):
+        canonical = canonical_columns.get(_compact_sql_identifier(alias))
+        if canonical:
+            return canonical
+    return None
+
+
 def _split_table_reference(table_reference: str) -> list[str]:
     return [
         _normalize_sql_identifier(part)
@@ -2391,13 +2427,61 @@ def normalize_sql_column_references_to_schema(
         canonical_columns = canonical_columns_by_table.get(str(table_name), {})
         normalized_column = _normalize_sql_identifier(column)
         compact_column = _compact_sql_identifier(normalized_column)
-        canonical_column = canonical_columns.get(compact_column)
+        canonical_column = canonical_columns.get(
+            compact_column
+        ) or _find_semantic_column_alias(normalized_column, canonical_columns)
         if not canonical_column or canonical_column == normalized_column:
             return match.group(0)
 
         return f"{qualifier}.{_quote_sql_identifier(canonical_column)}"
 
-    return _SQL_QUALIFIED_COLUMN_PATTERN.sub(replace_column_reference, sql)
+    normalized_sql = _SQL_QUALIFIED_COLUMN_PATTERN.sub(replace_column_reference, sql)
+
+    referenced_tables = {
+        aliases.get(table_reference.lower())
+        for table_reference in extract_sql_table_references(normalized_sql)
+    }
+    referenced_tables = {table for table in referenced_tables if table}
+    if len(referenced_tables) != 1:
+        return normalized_sql
+
+    table_name = next(iter(referenced_tables))
+    canonical_columns = canonical_columns_by_table.get(str(table_name), {})
+    if not canonical_columns:
+        return normalized_sql
+
+    valid_compact_columns = set(canonical_columns)
+
+    def replace_unqualified_identifier(match: re.Match[str]) -> str:
+        identifier = next(
+            value
+            for value in (
+                match.group("quoted"),
+                match.group("bracketed"),
+                match.group("bare"),
+            )
+            if value
+        )
+        compact_identifier = _compact_sql_identifier(identifier)
+        if compact_identifier in valid_compact_columns:
+            return match.group(0)
+
+        canonical_column = _find_semantic_column_alias(identifier, canonical_columns)
+        if not canonical_column:
+            return match.group(0)
+
+        return _quote_sql_identifier(canonical_column)
+
+    unqualified_identifier_pattern = re.compile(
+        r'(?<![\.\w])(?:"(?P<quoted>source|article_type|type|category|subcategory|author|created_by|created_by_user)"'
+        r"|\[(?P<bracketed>source|article_type|type|category|subcategory|author|created_by|created_by_user)\]"
+        r"|(?P<bare>source|article_type|category|subcategory|author|created_by|created_by_user))(?!\w)",
+        flags=re.IGNORECASE,
+    )
+    return unqualified_identifier_pattern.sub(
+        replace_unqualified_identifier,
+        normalized_sql,
+    )
 
 
 def find_invalid_column_references(

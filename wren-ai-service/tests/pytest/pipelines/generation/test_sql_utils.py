@@ -68,6 +68,44 @@ def test_normalize_sql_column_references_to_schema_keeps_unknown_columns_invalid
     ) == ["dbo_qSales1.UnitPrice"]
 
 
+def test_normalize_sql_column_references_to_schema_maps_kb_article_aliases():
+    sql = (
+        'SELECT "dbo_kb_articles"."article_type", COUNT(*) AS "RecordCount" '
+        'FROM "dbo_kb_articles" '
+        'GROUP BY "dbo_kb_articles"."article_type"'
+    )
+
+    normalized = normalize_sql_column_references_to_schema(
+        sql,
+        {"dbo_kb_articles": ["id", "category", "source_ticket_id"]},
+    )
+
+    assert '"dbo_kb_articles"."category"' in normalized
+    assert "article_type" not in normalized
+    assert find_invalid_column_references(
+        normalized,
+        {"dbo_kb_articles": ["id", "category", "source_ticket_id"]},
+    ) == []
+
+
+def test_normalize_sql_column_references_to_schema_maps_unqualified_source():
+    sql = (
+        'SELECT source, COUNT(*) AS "RecordCount" '
+        'FROM "dbo_kb_articles" '
+        'GROUP BY source '
+        'ORDER BY COUNT(*) DESC'
+    )
+
+    normalized = normalize_sql_column_references_to_schema(
+        sql,
+        {"dbo_kb_articles": ["id", "category", "source_ticket_id"]},
+    )
+
+    assert '"source_ticket_id"' in normalized
+    assert " source" not in normalized
+    assert "GROUP BY source" not in normalized
+
+
 def test_sql_generation_system_prompt_rejects_stale_sales_sample_schema():
     prompt = get_sql_generation_system_prompt()
 
