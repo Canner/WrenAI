@@ -27,6 +27,7 @@ class EmbeddingRequestError(Exception):
 def _normalize_model_name(model: str, api_base_url: Optional[str]) -> str:
     # OpenAI-compatible local servers often expect the raw model name and will
     # reject litellm-style "openai/<model>" prefixes.
+    model = str(model or "")
     if api_base_url and model.startswith("openai/"):
         return model.split("/", 1)[1]
     return model
@@ -36,7 +37,7 @@ def _should_use_minimal_http_client(api_base_url: Optional[str]) -> bool:
     if not api_base_url:
         return False
 
-    return "api.openai.com" not in api_base_url.lower()
+    return "api.openai.com" not in str(api_base_url).lower()
 
 
 def _build_embedding_meta(response: Any) -> Dict[str, Any]:

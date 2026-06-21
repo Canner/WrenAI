@@ -71,7 +71,7 @@ class SemanticsPreparationService:
             if not model_name:
                 raise ValueError("MDL contains a model without a name")
 
-            normalized_model_name = model_name.lower()
+            normalized_model_name = str(model_name).lower()
             if normalized_model_name in model_names:
                 raise ValueError(f'MDL contains duplicate model name "{model_name}"')
             model_names.add(normalized_model_name)
@@ -84,7 +84,7 @@ class SemanticsPreparationService:
                         f'MDL model "{model_name}" contains a column without a name'
                     )
 
-                normalized_column_name = column_name.lower()
+                normalized_column_name = str(column_name).lower()
                 if normalized_column_name in column_names:
                     raise ValueError(
                         f'MDL model "{model_name}" contains duplicate column name "{column_name}"'
@@ -97,7 +97,7 @@ class SemanticsPreparationService:
                     raise ValueError(
                         f'MDL relationship "{relationship.get("name", "")}" references an empty model name'
                     )
-                if model_name.lower() not in model_names:
+                if str(model_name).lower() not in model_names:
                     raise ValueError(
                         f'MDL relationship "{relationship.get("name", "")}" references missing model "{model_name}"'
                     )

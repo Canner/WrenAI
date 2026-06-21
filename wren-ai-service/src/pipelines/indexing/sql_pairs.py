@@ -81,7 +81,7 @@ def boilerplates(
     mdl = orjson.loads(mdl_str)
 
     return {
-        boilerplate.lower()
+        str(boilerplate).lower()
         for model in mdl.get("models", [])
         if (boilerplate := model.get("properties", {}).get("boilerplate"))
     }

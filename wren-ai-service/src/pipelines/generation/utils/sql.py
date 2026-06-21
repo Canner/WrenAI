@@ -483,7 +483,7 @@ def _rewrite_mssql_timestamp_subtraction(sql: str) -> str:
         left = match.group(1).strip()
         right = match.group(2).strip()
         alias = match.group(3)
-        alias_text = alias.strip('"').lower()
+        alias_text = str(alias or "").strip('"').lower()
 
         if not any(token in alias_text for token in ("duration", "turnaround")):
             return match.group(0)
@@ -507,7 +507,7 @@ def _infer_mssql_timestamp_expression(sql: str) -> str | None:
     )
     if match := table_pattern.search(sql):
         table_name = match.group(1)
-        raw_table_name = table_name.strip('"[]')
+        raw_table_name = str(table_name or "").strip('"[]')
         normalized_table_name = raw_table_name.lower()
         quoted_table_name = f'"{raw_table_name}"'
         if normalized_table_name == "dbo_debugentries":
@@ -999,7 +999,8 @@ def _rewrite_mssql_datepart_alias_references(sql: str) -> str:
     for match in datepart_alias_pattern.finditer(sql):
         expression = match.group(1)
         alias = match.group(5) or match.group(6) or match.group(7)
-        aliases[alias.lower()] = expression
+        if alias:
+            aliases[str(alias).lower()] = expression
 
     if not aliases:
         return sql
@@ -1187,8 +1188,8 @@ def _simple_projection_key(item: str) -> str | None:
     parts = re.findall(identifier_pattern, cleaned)
     if not parts:
         return None
-    last_part = next(value for value in parts[-1] if value)
-    return last_part.lower()
+    last_part = next((value for value in parts[-1] if value), "")
+    return str(last_part).lower()
 
 
 def _dedupe_duplicate_simple_select_items(sql: str) -> str:
@@ -1257,7 +1258,8 @@ def _rewrite_mssql_temporal_bucket_alias_references(sql: str) -> str:
 
         alias = alias_match.group(1) or alias_match.group(2) or alias_match.group(3)
         expression = item[: alias_match.start()].strip()
-        aliases[alias.lower()] = expression
+        if alias:
+            aliases[str(alias).lower()] = expression
 
     if not aliases:
         return sql

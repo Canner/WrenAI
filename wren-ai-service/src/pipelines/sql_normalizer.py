@@ -291,7 +291,7 @@ def _rewrite_mssql_timestamp_subtraction(sql: str) -> str:
         left = match.group(1).strip()
         right = match.group(2).strip()
         alias = match.group(3)
-        alias_text = alias.strip('"').lower()
+        alias_text = str(alias or "").strip('"').lower()
 
         if not any(token in alias_text for token in ("duration", "turnaround")):
             return match.group(0)
@@ -315,7 +315,7 @@ def _infer_mssql_timestamp_expression(sql: str) -> str | None:
     )
     if match := table_pattern.search(sql):
         table_name = match.group(1)
-        normalized_table_name = table_name.strip('"[]').lower()
+        normalized_table_name = str(table_name or "").strip('"[]').lower()
         if "report" in normalized_table_name:
             return f'{table_name}."generated_at"'
         if any(
@@ -438,7 +438,8 @@ def _rewrite_mssql_datepart_alias_references(sql: str) -> str:
     for match in datepart_alias_pattern.finditer(sql):
         expression = match.group(1)
         alias = match.group(5) or match.group(6) or match.group(7)
-        aliases[alias.lower()] = expression
+        if alias:
+            aliases[str(alias).lower()] = expression
 
     if not aliases:
         return sql
