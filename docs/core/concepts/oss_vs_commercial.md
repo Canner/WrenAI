@@ -8,6 +8,14 @@ Wren AI open source is the full engine: free, self-hosted, and driven by one eng
 
 Wren AI Commercial is the same engine built for a team. It runs as a hosted cloud service or as a self-hosted enterprise deployment, and it adds a web UI, accounts, managed access control, integrations, and support. Full overview: [Wren AI Commercial](/cp/overview).
 
+## Which one fits
+
+**Solo, in the terminal.** One engineer or an AI agent, working through the CLI, SDK, and Git. Open source is all you need.
+
+**A data team.** Several people need governed access with roles and SSO, and non-technical teammates want to ask questions in a browser, Slack, or Teams. This is where Commercial earns its place.
+
+**Analytics for your customers.** You put analytics inside your own product, and each customer must see only their own data. Commercial enterprise gives you per-user RLS/CLS and multi-tenant isolation.
+
 ## Feature comparison
 
 | Capability | Open source | Commercial |
@@ -26,13 +34,6 @@ Wren AI Commercial is the same engine built for a team. It runs as a hosted clou
 | RLS/CLS per user, session properties, audit log | ❌ | ✅ |
 | Evaluation, AI Advisor, feedback tracing | ❌ | ✅ |
 | Vendor support | ❌ | ✅ |
-
-## Consider Commercial when
-
-- A team needs accounts, roles, and SSO, or LDAP/SCIM from your identity provider.
-- Non-technical users want to ask in a browser, Slack, or Teams.
-- You need RLS/CLS enforced per real user, or multi-tenant isolation for your own customers.
-- You want a managed cloud, scheduled dashboards, or vendor support.
 
 ## Talk to us
 
