@@ -37,7 +37,14 @@ Wren AI Commercial is the same engine built for a team. It runs as a hosted clou
 
 ## What Commercial adds
 
-Open source already gives you the engine: governed SQL, your MDL context layer, and GenBI dashboards you deploy yourself. Commercial takes that same engine and makes it usable by a whole team without anyone having to run it. You get a hosted web UI so non-technical people can ask questions, real accounts with roles and SSO (plus LDAP and SCIM on enterprise), and access control tied to actual users instead of policies you maintain by hand. It also brings the tools people already work in, like Slack and Teams, a hosted API and MCP server, dashboards that refresh on their own, quality tooling to track accuracy, and a team to call when something breaks. Your MDL and context carry over unchanged, so moving up means adding a team layer, not rebuilding.
+Open source is the full engine. Commercial adds the team layer on top:
+
+- **Runs itself.** Hosted cloud, or self-hosted enterprise, so no one has to operate the stack.
+- **Built for people, not just agents.** A web UI plus Slack and Teams, so non-technical teammates can ask questions.
+- **Real identity and access.** Accounts, roles, SSO, LDAP, and SCIM, with access control tied to actual users.
+- **More ways in.** A hosted API and MCP server, and dashboards that refresh on their own.
+- **Confidence.** Accuracy tracking, feedback tracing, and a team to call when something breaks.
+- **No rebuild.** Your MDL and context carry over unchanged.
 
 ## Talk to us
 
