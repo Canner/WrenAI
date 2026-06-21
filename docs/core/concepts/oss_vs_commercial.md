@@ -35,6 +35,10 @@ Wren AI Commercial is the same engine built for a team. It runs as a hosted clou
 | Evaluation, AI Advisor, feedback tracing | ❌ | ✅ |
 | Vendor support | ❌ | ✅ |
 
+## What Commercial adds
+
+Open source already gives you the engine: governed SQL, your MDL context layer, and GenBI dashboards you deploy yourself. Commercial takes that same engine and makes it usable by a whole team without anyone having to run it. You get a hosted web UI so non-technical people can ask questions, real accounts with roles and SSO (plus LDAP and SCIM on enterprise), and access control tied to actual users instead of policies you maintain by hand. It also brings the tools people already work in, like Slack and Teams, a hosted API and MCP server, dashboards that refresh on their own, quality tooling to track accuracy, and a team to call when something breaks. Your MDL and context carry over unchanged, so moving up means adding a team layer, not rebuilding.
+
 ## Talk to us
 
 See [Wren AI Commercial](/cp/overview) for details and to reach the team. Open source stays first-class either way.
