@@ -8,6 +8,7 @@ from src.pipelines.generation.utils.sql import (
     get_metric_instructions,
     normalize_data_source,
     normalize_generation_result_sql,
+    normalize_sql_column_references_to_schema,
     get_sql_generation_system_prompt,
     get_text_to_sql_rules,
 )
@@ -34,6 +35,37 @@ def test_schema_validation_ignores_null_column_metadata():
         'SELECT "dbo_tblSales"."Market" FROM "dbo_tblSales"',
         {"dbo_tblSales": [None, "Market"]},
     ) == []
+
+
+def test_normalize_sql_column_references_to_schema_uses_exact_schema_names():
+    sql = (
+        'SELECT "dbo_xStageLoad8_Test"."PH-BU", "dbo_xStageLoad8_Test"."P-M" '
+        'FROM "dbo_xStageLoad8_Test"'
+    )
+
+    normalized = normalize_sql_column_references_to_schema(
+        sql,
+        {"dbo_xStageLoad8_Test": ["PH_BU", "P_M"]},
+    )
+
+    assert '"dbo_xStageLoad8_Test"."PH_BU"' in normalized
+    assert '"dbo_xStageLoad8_Test"."P_M"' in normalized
+    assert "PH-BU" not in normalized
+    assert "P-M" not in normalized
+
+
+def test_normalize_sql_column_references_to_schema_keeps_unknown_columns_invalid():
+    sql = 'SELECT "dbo_qSales1"."UnitPrice" FROM "dbo_qSales1"'
+    normalized = normalize_sql_column_references_to_schema(
+        sql,
+        {"dbo_qSales1": ["SalesValue", "Cost"]},
+    )
+
+    assert normalized == sql
+    assert find_invalid_column_references(
+        normalized,
+        {"dbo_qSales1": ["SalesValue", "Cost"]},
+    ) == ["dbo_qSales1.UnitPrice"]
 
 
 def test_sql_generation_system_prompt_rejects_stale_sales_sample_schema():

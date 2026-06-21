@@ -1429,6 +1429,10 @@ class SQLGenPostProcessor:
             cleaned_generation_result = normalize_generation_result_sql(
                 cleaned_generation_result, data_source=data_source
             )
+            cleaned_generation_result = normalize_sql_column_references_to_schema(
+                cleaned_generation_result,
+                valid_table_columns or {},
+            )
 
             if not is_select_statement(cleaned_generation_result):
                 return {
@@ -2260,6 +2264,14 @@ def _normalize_sql_identifier(identifier: str) -> str:
     return identifier
 
 
+def _quote_sql_identifier(identifier: str) -> str:
+    return f'"{identifier.replace(chr(34), chr(34) + chr(34))}"'
+
+
+def _compact_sql_identifier(identifier: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(identifier or "").lower())
+
+
 def _split_table_reference(table_reference: str) -> list[str]:
     return [
         _normalize_sql_identifier(part)
@@ -2340,6 +2352,52 @@ def _extract_table_aliases(
         aliases[normalized_alias] = valid_tables[normalized_table]
 
     return aliases
+
+
+def normalize_sql_column_references_to_schema(
+    sql: str, valid_table_columns: dict[str, list[str]]
+) -> str:
+    if not valid_table_columns:
+        return sql
+
+    aliases = _extract_table_aliases(sql, valid_table_columns)
+    if not aliases:
+        return sql
+
+    canonical_columns_by_table: dict[str, dict[str, str]] = {}
+    for table_name, columns in valid_table_columns.items():
+        if table_name is None:
+            continue
+        compact_columns = {
+            _compact_sql_identifier(column): str(column)
+            for column in columns
+            if column is not None
+        }
+        compact_columns = {
+            compact: column
+            for compact, column in compact_columns.items()
+            if compact
+        }
+        canonical_columns_by_table[str(table_name)] = compact_columns
+
+    def replace_column_reference(match: re.Match[str]) -> str:
+        qualifier = match.group("qualifier")
+        column = match.group("column")
+        normalized_qualifier = _normalize_sql_identifier(qualifier).lower()
+        table_name = aliases.get(normalized_qualifier)
+        if not table_name:
+            return match.group(0)
+
+        canonical_columns = canonical_columns_by_table.get(str(table_name), {})
+        normalized_column = _normalize_sql_identifier(column)
+        compact_column = _compact_sql_identifier(normalized_column)
+        canonical_column = canonical_columns.get(compact_column)
+        if not canonical_column or canonical_column == normalized_column:
+            return match.group(0)
+
+        return f"{qualifier}.{_quote_sql_identifier(canonical_column)}"
+
+    return _SQL_QUALIFIED_COLUMN_PATTERN.sub(replace_column_reference, sql)
 
 
 def find_invalid_column_references(
