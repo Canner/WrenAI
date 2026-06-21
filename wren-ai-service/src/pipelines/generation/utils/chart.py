@@ -37,11 +37,15 @@ def _detect_requested_chart_type(query: str | None) -> str:
     return ""
 
 
+def _safe_column_names(columns: list[Any]) -> list[str]:
+    return [str(column) for column in columns if column is not None and str(column)]
+
+
 def _match_column_name(field: str | None, columns: list[str]) -> str:
     if field is None:
         return ""
     field = str(field)
-    columns = [str(column) for column in columns if column is not None]
+    columns = _safe_column_names(columns)
     if field in columns:
         return field
 
@@ -70,7 +74,9 @@ def _normalize_chart_schema_fields(chart_schema: dict, columns: list[str]) -> di
     for transform in normalized.get("transform", []) or []:
         if isinstance(transform, dict) and isinstance(transform.get("fold"), list):
             transform["fold"] = [
-                _match_column_name(field, columns) for field in transform["fold"]
+                _match_column_name(field, columns)
+                for field in transform["fold"]
+                if field is not None
             ]
 
     return normalized
@@ -86,9 +92,11 @@ def _infer_column_types(sample_data: list[dict]) -> dict[str, list[str]]:
     nominal: list[str] = []
 
     for column in df.columns:
+        if column is None or not str(column):
+            continue
+
         values = df[column].dropna()
         if values.empty:
-            nominal.append(column)
             continue
 
         column_name = str(column).lower()
@@ -102,11 +110,11 @@ def _infer_column_types(sample_data: list[dict]) -> dict[str, list[str]]:
         )
 
         if numeric_values.notna().all() and not is_temporal_name:
-            quantitative.append(column)
+            quantitative.append(str(column))
         elif temporal_values.notna().all() or is_temporal_name:
-            temporal.append(column)
+            temporal.append(str(column))
         else:
-            nominal.append(column)
+            nominal.append(str(column))
 
     return {
         "quantitative": quantitative,
@@ -123,7 +131,7 @@ def _build_fallback_chart_schema(
     if not sample_data:
         return {}
 
-    columns = [str(column) for column in sample_data[0].keys() if column is not None]
+    columns = _safe_column_names(list(sample_data[0].keys()))
     if not columns:
         return {}
     inferred = _infer_column_types(sample_data)
@@ -165,12 +173,12 @@ def _build_fallback_chart_schema(
             axis(quantitative[0], "quantitative") if quantitative else count_axis()
         )
         if {"year", "month"}.issubset({str(c).lower() for c in columns}):
-            month_field = next(c for c in columns if c.lower() == "month")
+            month_field = next(c for c in columns if str(c).lower() == "month")
             encoding = {
                 "x": axis(month_field, "ordinal"),
                 "y": y_encoding,
             }
-            years = [c for c in columns if c.lower() == "year"]
+            years = [c for c in columns if str(c).lower() == "year"]
             if years:
                 encoding["color"] = axis(years[0], "nominal")
             return {
@@ -251,17 +259,18 @@ def _is_schema_compatible_with_sample_data(
     if not chart_schema or not sample_data:
         return False
 
-    columns = set(sample_data[0].keys())
+    columns = set(_safe_column_names(list(sample_data[0].keys())))
     encoding = chart_schema.get("encoding", {})
     for key in ("x", "y", "x2", "y2", "color", "xOffset", "theta"):
         axis = encoding.get(key)
-        if isinstance(axis, dict) and axis.get("field") and axis["field"] not in columns:
+        field = axis.get("field") if isinstance(axis, dict) else None
+        if field and str(field) not in columns:
             return False
 
     for transform in chart_schema.get("transform", []) or []:
         if isinstance(transform, dict):
             for field in transform.get("fold", []) or []:
-                if field not in columns:
+                if field is not None and str(field) not in columns:
                     return False
 
     return True
@@ -564,10 +573,13 @@ class ChartDataPreprocessor:
         sample_data_count: int = 15,
         sample_column_size: int = 5,
     ):
-        columns = [
-            column.get("name", "") if isinstance(column, dict) else column
-            for column in data.get("columns", [])
-        ]
+        columns = []
+        for index, column in enumerate(data.get("columns", [])):
+            if isinstance(column, dict):
+                column_name = str(column.get("name") or "").strip()
+            else:
+                column_name = str(column or "").strip()
+            columns.append(column_name or f"column_{index + 1}")
         data = data.get("data", [])
 
         df = pd.DataFrame(data, columns=columns)
