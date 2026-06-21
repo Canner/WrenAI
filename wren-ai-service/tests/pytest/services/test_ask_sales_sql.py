@@ -301,3 +301,101 @@ def test_build_schema_grounded_sales_sql_for_yoy_waterfall_dimensions():
         '"dbo_tblSales"."ProdName", "dbo_tblSales"."Market" '
         'ORDER BY "dbo_tblSales"."YearInd", SUM("dbo_tblSales"."SalesValue") DESC'
     )
+
+
+def test_build_schema_grounded_sql_for_ticket_category_request_uses_existing_columns():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "Create a bar chart of tickets by category.",
+        [
+            """
+            CREATE TABLE dbo_tickets (
+              id VARCHAR,
+              org_id VARCHAR,
+              title VARCHAR,
+              description VARCHAR,
+              status VARCHAR,
+              priority VARCHAR,
+              assignee_user_id VARCHAR,
+              created_at TIMESTAMP,
+              updated_at TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_tickets"."status" AS "status", '
+        'COUNT(*) AS "RecordCount" '
+        'FROM "dbo_tickets" '
+        'GROUP BY "dbo_tickets"."status" '
+        'ORDER BY COUNT(*) DESC'
+    )
+    assert "category" not in sql
+
+
+def test_build_schema_grounded_sql_for_knowledge_source_request_uses_existing_columns():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "Show knowledge article count by source.",
+        [
+            """
+            CREATE TABLE dbo_knowledge_articles (
+              id VARCHAR,
+              org_id VARCHAR,
+              title VARCHAR,
+              category VARCHAR,
+              subcategory VARCHAR,
+              content VARCHAR,
+              author VARCHAR,
+              tags VARCHAR,
+              views INTEGER,
+              helpful INTEGER,
+              data VARCHAR,
+              created_at TIMESTAMP,
+              updated_at TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_knowledge_articles"."author" AS "author", '
+        'COUNT(*) AS "RecordCount" '
+        'FROM "dbo_knowledge_articles" '
+        'GROUP BY "dbo_knowledge_articles"."author" '
+        'ORDER BY COUNT(*) DESC'
+    )
+    assert "source" not in sql
+
+
+def test_build_schema_grounded_sql_for_ticket_throughput_trend():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "Show throughput trends across different manufacturing units.",
+        [
+            """
+            CREATE TABLE dbo_tickets (
+              id VARCHAR,
+              status VARCHAR,
+              priority VARCHAR,
+              assignee_user_id VARCHAR,
+              created_at TIMESTAMP,
+              updated_at TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT DATEPART(YEAR, "dbo_tickets"."created_at") AS "year", '
+        'DATEPART(MONTH, "dbo_tickets"."created_at") AS "month", '
+        '"dbo_tickets"."assignee_user_id" AS "assignee_user_id", '
+        'COUNT(*) AS "RecordCount" '
+        'FROM "dbo_tickets" '
+        'GROUP BY DATEPART(YEAR, "dbo_tickets"."created_at"), '
+        'DATEPART(MONTH, "dbo_tickets"."created_at"), '
+        '"dbo_tickets"."assignee_user_id" '
+        'ORDER BY DATEPART(YEAR, "dbo_tickets"."created_at"), '
+        'DATEPART(MONTH, "dbo_tickets"."created_at")'
+    )

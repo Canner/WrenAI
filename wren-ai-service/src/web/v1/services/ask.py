@@ -418,6 +418,15 @@ class AskService:
             )
         )
 
+    def _is_text_schema_type(self, column_type: str) -> bool:
+        return bool(
+            re.search(
+                r"\b(?:char|text|string|varchar|nvarchar|uuid|guid|json)\b",
+                column_type,
+                flags=re.IGNORECASE,
+            )
+        )
+
     def _find_schema_column(
         self,
         table: dict[str, Any],
@@ -457,6 +466,20 @@ class AskService:
             return None
 
         return sorted(scored, reverse=True)[0][1]
+
+    def _find_first_schema_column(
+        self,
+        table: dict[str, Any],
+        candidates: tuple[str, ...],
+        *,
+        avoid: set[str] | None = None,
+    ) -> str | None:
+        avoid = {str(column).lower() for column in avoid or set()}
+        for candidate_group in candidates:
+            column = self._find_schema_column(table, (candidate_group,))
+            if column and column.lower() not in avoid:
+                return column
+        return None
 
     def _quote_sql_identifier(self, identifier: str) -> str:
         return f'"{identifier.replace(chr(34), chr(34) + chr(34))}"'
@@ -558,6 +581,11 @@ class AskService:
             return None
 
         compact_query = re.sub(r"[^a-z0-9]", "", normalized_query)
+
+        if operational_sql := self._build_schema_grounded_operational_sql(
+            query, tables
+        ):
+            return operational_sql
 
         if conversion_sql := self._build_order_invoice_conversion_sql(
             query, tables
@@ -1479,6 +1507,198 @@ class AskService:
                 return True
 
         return False
+    def _build_schema_grounded_operational_sql(
+        self, query: str, tables: list[dict[str, Any]]
+    ) -> str | None:
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized_query:
+            return None
+
+        operational_terms = (
+            "ticket",
+            "repair",
+            "failure",
+            "component",
+            "board",
+            "throughput",
+            "manufacturing",
+            "unit",
+            "knowledge",
+            "article",
+            "source",
+            "category",
+            "priority",
+            "status",
+            "open",
+            "closed",
+            "aging",
+            "volume",
+            "count",
+        )
+        if not any(term in normalized_query for term in operational_terms):
+            return None
+
+        scored_tables: list[tuple[int, dict[str, Any]]] = []
+        for table in tables:
+            table_name = str(table.get("name") or "")
+            normalized_table = table_name.lower()
+            score = 0
+            if any(
+                token in normalized_table
+                for token in ("ticket", "repair", "debug", "knowledge", "article")
+            ):
+                score += 10
+            if "ticket" in normalized_query and "ticket" in normalized_table:
+                score += 8
+            if "knowledge" in normalized_query and "knowledge" in normalized_table:
+                score += 8
+            if "article" in normalized_query and "article" in normalized_table:
+                score += 5
+            if "repair" in normalized_query and "repair" in normalized_table:
+                score += 5
+            if self._find_schema_column(
+                table,
+                ("created_at", "updated_at", "DateIn", "DateOut", "created", "date"),
+                temporal=True,
+            ):
+                score += 3
+            if score:
+                scored_tables.append((score, table))
+
+        if not scored_tables:
+            return None
+
+        table = sorted(scored_tables, key=lambda item: item[0], reverse=True)[0][1]
+        table_name = str(table.get("name") or "")
+        if not table_name:
+            return None
+
+        table_ref = self._quote_sql_identifier(table_name)
+        date_column = self._find_schema_column(
+            table,
+            (
+                "created_at",
+                "created",
+                "DateIn",
+                "RepairDate",
+                "updated_at",
+                "DateOut",
+                "updated",
+                "date",
+            ),
+            temporal=True,
+        )
+
+        dimension_candidates: list[tuple[str, ...]] = []
+        if "manufacturing" in normalized_query or "unit" in normalized_query:
+            dimension_candidates.append(
+                (
+                    "manufacturing_unit",
+                    "manufacturing unit",
+                    "unit",
+                    "assignee_user_id",
+                    "created_by_user_id",
+                    "org_id",
+                    "status",
+                )
+            )
+        if "component" in normalized_query:
+            dimension_candidates.append(
+                ("component", "component_type", "board_type", "title", "status")
+            )
+        if "board" in normalized_query:
+            dimension_candidates.append(("board_type", "board", "title", "status"))
+        if "category" in normalized_query:
+            dimension_candidates.append(("category", "subcategory", "status", "priority"))
+        if "source" in normalized_query:
+            dimension_candidates.append(("source", "author", "category", "status"))
+        if "priority" in normalized_query:
+            dimension_candidates.append(("priority", "status"))
+        if (
+            "status" in normalized_query
+            or "open" in normalized_query
+            or "closed" in normalized_query
+        ):
+            dimension_candidates.append(("status", "priority"))
+        if "assignee" in normalized_query:
+            dimension_candidates.append(("assignee_user_id", "created_by_user_id"))
+
+        dimensions: list[str] = []
+        for candidates in dimension_candidates:
+            dimension = self._find_schema_column(table, candidates)
+            if dimension and dimension not in dimensions:
+                dimensions.append(dimension)
+
+        if not dimensions:
+            fallback_dimension = self._find_first_schema_column(
+                table,
+                (
+                    "status",
+                    "priority",
+                    "category",
+                    "subcategory",
+                    "author",
+                    "assignee_user_id",
+                    "created_by_user_id",
+                    "org_id",
+                    "title",
+                ),
+            )
+            if fallback_dimension:
+                dimensions.append(fallback_dimension)
+
+        wants_trend = any(
+            term in normalized_query
+            for term in ("trend", "monthly", "month", "line chart", "over time")
+        )
+        wants_top = bool(re.search(r"\btop\s+\d+\b", normalized_query))
+        limit_match = re.search(r"\btop\s+(\d+)\b", normalized_query)
+        limit = int(limit_match.group(1)) if limit_match else 10
+
+        if wants_trend and date_column:
+            date_ref = f"{table_ref}.{self._quote_sql_identifier(date_column)}"
+            select_parts = [
+                f"DATEPART(YEAR, {date_ref}) AS \"year\"",
+                f"DATEPART(MONTH, {date_ref}) AS \"month\"",
+            ]
+            group_parts = [
+                f"DATEPART(YEAR, {date_ref})",
+                f"DATEPART(MONTH, {date_ref})",
+            ]
+            for dimension in dimensions[:2]:
+                dimension_ref = f"{table_ref}.{self._quote_sql_identifier(dimension)}"
+                select_parts.append(
+                    f"{dimension_ref} AS {self._quote_sql_identifier(dimension)}"
+                )
+                group_parts.append(dimension_ref)
+            select_parts.append('COUNT(*) AS "RecordCount"')
+            return (
+                f"SELECT {', '.join(select_parts)} "
+                f"FROM {table_ref} "
+                f"GROUP BY {', '.join(group_parts)} "
+                f"ORDER BY DATEPART(YEAR, {date_ref}), "
+                f"DATEPART(MONTH, {date_ref})"
+            )
+
+        if dimensions:
+            top_clause = f"TOP {limit} " if wants_top else ""
+            dimension_refs = [
+                f"{table_ref}.{self._quote_sql_identifier(dimension)}"
+                for dimension in dimensions[:2]
+            ]
+            select_parts = [
+                f"{dimension_ref} AS {self._quote_sql_identifier(dimensions[index])}"
+                for index, dimension_ref in enumerate(dimension_refs)
+            ]
+            select_parts.append('COUNT(*) AS "RecordCount"')
+            return (
+                f"SELECT {top_clause}{', '.join(select_parts)} "
+                f"FROM {table_ref} "
+                f"GROUP BY {', '.join(dimension_refs)} "
+                f"ORDER BY COUNT(*) DESC"
+            )
+
+        return f'SELECT COUNT(*) AS "RecordCount" FROM {table_ref}'
 
     def _get_unqueryable_metric_message(
         self, query: str, table_ddls: list[str]
