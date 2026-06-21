@@ -8,8 +8,6 @@ from __future__ import annotations
 import contextlib
 import os
 
-from transformers.utils import logging as transformers_logging
-
 _DEFAULT_MODEL = os.getenv(
     "WREN_EMBEDDING_MODEL", "paraphrase-multilingual-MiniLM-L12-v2"
 )
@@ -17,6 +15,10 @@ _DEFAULT_DIM = 384
 
 
 def _disable_transformers_progress_bar() -> None:
+    # Imported lazily: transformers ships with the optional `memory` extra,
+    # so this module must stay importable when that extra is not installed.
+    from transformers.utils import logging as transformers_logging  # noqa: PLC0415
+
     transformers_logging.disable_progress_bar()
 
 
