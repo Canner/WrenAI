@@ -346,7 +346,8 @@ URL by default; say "ship it to production" to promote it.
 
 > **Heads-up:** new Vercel projects return HTTP 401 to logged-out visitors by
 > default. The deploy still succeeded; to make the URL public, disable Vercel
-> Authentication once at Project → Settings → Deployment Protection.
+> Authentication once at Project → Settings → Deployment Protection → Vercel
+> Authentication → Disabled.
 
 For the full walkthrough, see [Build and deploy a GenBI app](../guides/genbi.md).
 

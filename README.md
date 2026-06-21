@@ -175,7 +175,7 @@ Fast at first. Deep when you need it. Always reviewable and Git-friendly.
 - **Modeling Definition Language (MDL)**: models, columns, relationships, views, cubes, metrics, row-level / column-level access control (RLAC / CLAC)
 - **Engine**: Apache DataFusion based, 22+ data sources
 - **GenBI dashboards**: agent-built, browser-side apps powered by [`wren-core-wasm`](https://docs.getwren.ai/oss/sdk/wasm), deployable to Vercel / Cloudflare Pages
-- **Knowledge & memory**: LanceDB-backed, hybrid retrieval, versionable; business meaning captured in `instructions.md` and reusable examples
+- **Knowledge & memory**: business meaning in version-controlled `instructions.md` and `queries.yml`, plus a local LanceDB memory index (hybrid retrieval) for recall
 - **Agent SDK**: `wren-langchain` (LangChain / LangGraph), `wren-pydantic`; reference Python integration for other stacks
 - **Governed execution primitives**: functions, dry-plan, row limits, access control
 

@@ -14,19 +14,22 @@ and why it stays trustworthy.
 
 ## The four places knowledge lives
 
-Wren keeps business knowledge in explicit, version-controlled artifacts, never
-buried in a prompt or locked inside a UI:
+Wren keeps business knowledge in explicit, inspectable artifacts, not buried in
+a prompt or locked inside a UI:
 
 | Artifact | What it holds | Example |
 | --- | --- | --- |
 | **MDL** (semantic models) | Structure and semantics: models, columns, relationships, calculated fields, views, cubes | `loyalty_v3` is the canonical loyalty table; `revenue = price * qty - refunds` |
 | **`instructions.md`** | Business rules and operating policy the schema can't carry | "active customer excludes service accounts"; "always filter `is_deleted = false`" |
-| **Memory** | Behavioral knowledge: which schema items were relevant, which SQL answered a similar question, confirmed examples | a proven "top accounts by ARR this quarter" query, ready to reuse |
-| **`queries.yml`** | Curated, exported question→SQL pairs you want to keep and share | a reviewed library of canonical analyses |
+| **Memory index** | Behavioral retrieval state: which schema items were relevant, which SQL answered a similar question, confirmed examples | local runtime state under `.wren/memory/`, usually gitignored |
+| **`queries.yml`** | Curated question→SQL pairs exported from memory to keep and share | the version-controlled surface for shared examples |
 
 MDL says what the data *means*. Instructions say how your team wants it *used*.
-Memory says what has *worked*. Together they are the context layer the rest of
-the docs refer to. See [What does Wren AI mean by context?](/oss/concepts/what_is_context).
+Memory says what has *worked*. MDL, `instructions.md`, and `queries.yml` are
+version-controlled files in your repo; the memory index under `.wren/memory/` is
+local runtime state (usually gitignored), and you share what it learns by
+exporting curated pairs to `queries.yml`. Together they are the context layer the
+rest of the docs refer to. See [What does Wren AI mean by context?](/oss/concepts/what_is_context).
 
 ## How knowledge gets in: scaffold fast, enrich deep
 
