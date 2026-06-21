@@ -950,13 +950,22 @@ export class AskingService implements IAskingService {
       return threadResponse;
     }
 
+    const project = await this.projectService.getCurrentProject();
     const deployment = await this.deployService.getLastDeployment(project.id);
-    const chartData = (await this.queryService.preview(threadResponse.sql, {
-      project,
-      manifest: deployment.manifest,
-      modelingOnly: false,
-      limit: 500,
-    })) as PreviewDataResponse;
+    let chartData: PreviewDataResponse | undefined;
+    try {
+      chartData = (await this.queryService.preview(threadResponse.sql, {
+        project,
+        manifest: deployment.manifest,
+        modelingOnly: false,
+        limit: 500,
+      })) as PreviewDataResponse;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.warn(
+        `Preview failed before chart generation for response ${threadResponse.id}; falling back to AI service preview. ${message}`,
+      );
+    }
 
     // 1. create a task on AI service to generate the chart
     const response = await this.wrenAIAdaptor.generateChart({
@@ -1008,13 +1017,22 @@ export class AskingService implements IAskingService {
       return threadResponse;
     }
 
+    const project = await this.projectService.getCurrentProject();
     const deployment = await this.deployService.getLastDeployment(project.id);
-    const chartData = (await this.queryService.preview(threadResponse.sql, {
-      project,
-      manifest: deployment.manifest,
-      modelingOnly: false,
-      limit: 500,
-    })) as PreviewDataResponse;
+    let chartData: PreviewDataResponse | undefined;
+    try {
+      chartData = (await this.queryService.preview(threadResponse.sql, {
+        project,
+        manifest: deployment.manifest,
+        modelingOnly: false,
+        limit: 500,
+      })) as PreviewDataResponse;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.warn(
+        `Preview failed before chart adjustment for response ${threadResponse.id}; falling back to AI service preview. ${message}`,
+      );
+    }
 
     // 1. create a task on AI service to adjust the chart
     const response = await this.wrenAIAdaptor.adjustChart({

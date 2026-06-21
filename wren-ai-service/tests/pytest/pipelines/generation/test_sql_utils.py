@@ -821,6 +821,26 @@ def test_normalize_generation_result_sql_rewrites_report_hallucinated_fields_for
     assert '"dbo_reports"."size_bytes"' in normalized
 
 
+def test_normalize_generation_result_sql_rewrites_ticket_token_cost_for_mssql():
+    sql = """
+    SELECT
+      "status",
+      AVG(token_cost) average_token_cost
+    FROM "dbo_tickets"
+    GROUP BY "status"
+    ORDER BY average_token_cost DESC NULLS LAST
+    LIMIT 1
+    """
+
+    normalized = normalize_generation_result_sql(sql, data_source="MSSQL")
+
+    assert "token_cost" not in normalized
+    assert 'SELECT "dbo_tickets"."status" AS "status"' in normalized
+    assert 'COUNT("dbo_tickets"."id") AS "ticket_count"' in normalized
+    assert 'FROM "dbo_tickets"' in normalized
+    assert 'GROUP BY "dbo_tickets"."status"' in normalized
+
+
 def test_normalize_generation_result_sql_strips_to_unixtime_for_mssql():
     sql = """
     SELECT

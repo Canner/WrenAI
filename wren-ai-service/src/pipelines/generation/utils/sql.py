@@ -769,6 +769,32 @@ def _rewrite_mssql_invented_report_fields(sql: str) -> str:
     return rewritten
 
 
+def _rewrite_mssql_invented_ticket_metrics(sql: str) -> str:
+    if not re.search(r"\bdbo_tickets\b", sql, flags=re.IGNORECASE):
+        return sql
+
+    if not re.search(
+        r"\b(?:token_cost|average_token_cost|avg_token_cost|cost)\b",
+        sql,
+        flags=re.IGNORECASE,
+    ):
+        return sql
+
+    dimension = '"dbo_tickets"."status"'
+    alias = "status"
+    if re.search(r"\bpriority\b", sql, flags=re.IGNORECASE):
+        dimension = '"dbo_tickets"."priority"'
+        alias = "priority"
+
+    return (
+        f'SELECT {dimension} AS "{alias}", '
+        'COUNT("dbo_tickets"."id") AS "ticket_count" '
+        'FROM "dbo_tickets" '
+        f"GROUP BY {dimension} "
+        'ORDER BY "ticket_count" DESC'
+    )
+
+
 def _rewrite_mssql_invented_knowledge_article_fields(sql: str) -> str:
     if not re.search(
         r"\b(?:dbo_knowledge_articles|dbo_kb_articles)\b", sql, flags=re.IGNORECASE
@@ -1333,6 +1359,7 @@ def _rewrite_known_schema_hallucinations(sql: str, now: datetime) -> str:
     normalized = _rewrite_mssql_invented_pcb_throughput_identifiers(normalized)
     normalized = _rewrite_mssql_invented_failure_category(normalized)
     normalized = _rewrite_mssql_invented_report_fields(normalized)
+    normalized = _rewrite_mssql_invented_ticket_metrics(normalized)
     normalized = _rewrite_mssql_invented_knowledge_article_fields(normalized)
     normalized = _rewrite_mssql_bare_time_bucket_identifiers(normalized)
     normalized = _rewrite_temporal_bucket_functions(normalized)
@@ -1400,6 +1427,7 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
         normalized = _rewrite_mssql_invented_pcb_throughput_identifiers(normalized)
         normalized = _rewrite_mssql_invented_failure_category(normalized)
         normalized = _rewrite_mssql_invented_report_fields(normalized)
+        normalized = _rewrite_mssql_invented_ticket_metrics(normalized)
         normalized = _rewrite_mssql_invented_knowledge_article_fields(normalized)
         normalized = _rewrite_mssql_bare_time_bucket_identifiers(normalized)
         normalized = _rewrite_mssql_bucket_functions(normalized)
