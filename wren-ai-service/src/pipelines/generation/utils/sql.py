@@ -778,6 +778,8 @@ def _rewrite_mssql_invented_knowledge_article_fields(sql: str) -> str:
     rewritten = sql
     table_replacements = {
         "dbo_knowledge_articles": {
+            "article_id": '"id"',
+            "knowledge_article_id": '"id"',
             "effectiveness_score": '"helpful"',
             "created_by": '"author"',
             "created_by_user": '"author"',
@@ -785,6 +787,8 @@ def _rewrite_mssql_invented_knowledge_article_fields(sql: str) -> str:
             "author_id": '"author"',
         },
         "dbo_kb_articles": {
+            "article_id": '"id"',
+            "knowledge_article_id": '"id"',
             "category": '"category"',
             "section": '"category"',
             "article_section": '"category"',
@@ -2285,6 +2289,8 @@ _SEMANTIC_COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     ),
     "leadsource": ("source", "source_ticket_id", "source_repair_ids", "category"),
     "articletype": ("article_type", "category", "subcategory", "type", "status"),
+    "articleid": ("article_id", "id"),
+    "knowledgearticleid": ("knowledge_article_id", "id"),
     "type": ("type", "category", "subcategory", "status"),
     "category": ("category", "subcategory", "status", "priority"),
     "subcategory": ("subcategory", "category", "status", "priority"),
@@ -2473,9 +2479,9 @@ def normalize_sql_column_references_to_schema(
         return _quote_sql_identifier(canonical_column)
 
     unqualified_identifier_pattern = re.compile(
-        r'(?<![\.\w])(?:"(?P<quoted>source|article_type|type|category|subcategory|author|created_by|created_by_user)"'
-        r"|\[(?P<bracketed>source|article_type|type|category|subcategory|author|created_by|created_by_user)\]"
-        r"|(?P<bare>source|article_type|category|subcategory|author|created_by|created_by_user))(?!\w)",
+        r'(?<![\.\w])(?:"(?P<quoted>source|article_type|article_id|knowledge_article_id|type|category|subcategory|author|created_by|created_by_user)"'
+        r"|\[(?P<bracketed>source|article_type|article_id|knowledge_article_id|type|category|subcategory|author|created_by|created_by_user)\]"
+        r"|(?P<bare>source|article_type|article_id|knowledge_article_id|category|subcategory|author|created_by|created_by_user))(?!\w)",
         flags=re.IGNORECASE,
     )
     return unqualified_identifier_pattern.sub(

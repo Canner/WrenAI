@@ -106,6 +106,41 @@ def test_normalize_sql_column_references_to_schema_maps_unqualified_source():
     assert "GROUP BY source" not in normalized
 
 
+def test_normalize_sql_column_references_to_schema_maps_unqualified_article_id():
+    sql = (
+        'SELECT COUNT(article_id) AS "article_count" '
+        'FROM "dbo_knowledge_articles"'
+    )
+
+    normalized = normalize_sql_column_references_to_schema(
+        sql,
+        {
+            "dbo_knowledge_articles": [
+                "id",
+                "org_id",
+                "title",
+                "category",
+                "subcategory",
+                "content",
+                "author",
+                "tags",
+                "views",
+                "helpful",
+                "data",
+                "created_at",
+                "updated_at",
+            ]
+        },
+    )
+
+    assert 'COUNT("id") AS "article_count"' in normalized
+    assert "article_id" not in normalized
+    assert find_invalid_column_references(
+        normalized,
+        {"dbo_knowledge_articles": ["id", "org_id", "title"]},
+    ) == []
+
+
 def test_sql_generation_system_prompt_rejects_stale_sales_sample_schema():
     prompt = get_sql_generation_system_prompt()
 
@@ -971,6 +1006,19 @@ def test_normalize_generation_result_sql_rewrites_knowledge_article_hallucinated
     assert 'AVG("dbo_knowledge_articles"."helpful") AS "avg_effectiveness"' in normalized
     assert '"dbo_knowledge_articles"."author" AS "author"' in normalized
     assert 'GROUP BY "dbo_knowledge_articles"."author"' in normalized
+
+
+def test_normalize_generation_result_sql_rewrites_knowledge_article_id_for_mssql():
+    sql = """
+    SELECT
+      COUNT("dbo_knowledge_articles"."article_id") AS "article_count"
+    FROM "dbo_knowledge_articles"
+    """
+
+    normalized = normalize_generation_result_sql(sql, data_source="MSSQL")
+
+    assert "article_id" not in normalized
+    assert 'COUNT("dbo_knowledge_articles"."id") AS "article_count"' in normalized
 
 
 def test_normalize_generation_result_sql_rewrites_kb_article_created_by_for_mssql():
