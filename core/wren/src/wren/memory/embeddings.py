@@ -14,12 +14,22 @@ _DEFAULT_MODEL = os.getenv(
 _DEFAULT_DIM = 384
 
 
+def _disable_transformers_progress_bar() -> None:
+    # Imported lazily: transformers ships with the optional `memory` extra,
+    # so this module must stay importable when that extra is not installed.
+    from transformers.utils import logging as transformers_logging  # noqa: PLC0415
+
+    transformers_logging.disable_progress_bar()
+
+
 def get_embedding_function(model_name: str = _DEFAULT_MODEL):
     """Return a LanceDB sentence-transformers embedding function.
 
     The returned object implements ``compute_source_embeddings(texts)``
     and ``compute_query_embeddings(query)`` used by :class:`MemoryStore`.
     """
+    _disable_transformers_progress_bar()
+
     import lancedb.embeddings  # noqa: PLC0415
 
     registry = lancedb.embeddings.get_registry()
@@ -46,6 +56,7 @@ def suppress_stderr():
 
 def warm_up(embed_fn):
     """Trigger model loading silently and return the vector dimension."""
+    _disable_transformers_progress_bar()
     with suppress_stderr():
         probe = embed_fn.compute_source_embeddings(["probe"])
     return len(probe[0])
