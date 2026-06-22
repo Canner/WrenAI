@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/Canner/WrenAI/compare/wren-core-py-v0.7.0...wren-core-py-v0.7.1) (2026-06-22)
+
+
+### Bug Fixes
+
+* **core-py:** drop orphan cubes when their base model is pruned ([#2362](https://github.com/Canner/WrenAI/issues/2362)) ([6f65ec7](https://github.com/Canner/WrenAI/commit/6f65ec708955c5463506f52b35adf660d141650f))
+
 ## [0.7.0](https://github.com/Canner/WrenAI/compare/wren-core-py-v0.6.0...wren-core-py-v0.7.0) (2026-06-12)
 
 
