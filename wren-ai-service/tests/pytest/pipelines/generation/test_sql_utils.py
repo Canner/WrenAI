@@ -98,6 +98,48 @@ def test_normalize_sql_column_references_to_schema_maps_unqualified_underscore_t
     ) == []
 
 
+def test_normalize_sql_column_references_to_schema_maps_sales_business_aliases():
+    sql = (
+        'SELECT "dbo_qSales1"."Customer_Region", '
+        'SUM("dbo_qSales1"."InvoiceQuantity") AS "InvoiceQuantity" '
+        'FROM "dbo_qSales1" '
+        'GROUP BY "dbo_qSales1"."Customer_Region"'
+    )
+
+    normalized = normalize_sql_column_references_to_schema(
+        sql,
+        {"dbo_qSales1": ["Country", "Market", "Qty"]},
+    )
+
+    assert '"dbo_qSales1"."Country"' in normalized
+    assert '"dbo_qSales1"."Qty"' in normalized
+    assert "Customer_Region" not in normalized
+    assert "InvoiceQuantity" not in normalized
+    assert find_invalid_column_references(
+        normalized,
+        {"dbo_qSales1": ["Country", "Market", "Qty"]},
+    ) == []
+
+
+def test_normalize_sql_column_references_to_schema_maps_debug_business_aliases():
+    sql = (
+        'SELECT COUNT("FixLogId") AS "FixLogCount" '
+        'FROM "dbo_DebugEntries"'
+    )
+
+    normalized = normalize_sql_column_references_to_schema(
+        sql,
+        {"dbo_DebugEntries": ["DebugEntryId", "FixId"]},
+    )
+
+    assert 'COUNT("DebugEntryId") AS "FixLogCount"' in normalized
+    assert "FixLogId" not in normalized
+    assert find_invalid_column_references(
+        normalized,
+        {"dbo_DebugEntries": ["DebugEntryId", "FixId"]},
+    ) == []
+
+
 def test_normalize_sql_column_references_to_schema_keeps_unknown_columns_invalid():
     sql = 'SELECT "dbo_qSales1"."UnitPrice" FROM "dbo_qSales1"'
     normalized = normalize_sql_column_references_to_schema(

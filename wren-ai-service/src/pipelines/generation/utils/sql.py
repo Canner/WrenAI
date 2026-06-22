@@ -2344,6 +2344,9 @@ _SEMANTIC_COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     "createdby": ("created_by", "created_by_user_id", "author"),
     "createdbyuser": ("created_by_user", "created_by_user_id", "author"),
     "createdbyuserid": ("created_by_user_id", "author"),
+    "invoicequantity": ("Qty", "Quantity", "InvoiceQty", "InvoiceCount"),
+    "customerregion": ("Country", "Market", "Region", "CustomerRegion"),
+    "fixlogid": ("DebugEntryId", "FixId", "RepairItem", "id"),
 }
 
 
@@ -2535,6 +2538,13 @@ def normalize_sql_column_references_to_schema(
     }
     unqualified_candidates = sorted(
         schema_candidates
+        | {
+            alias_key
+            for alias_key in _SEMANTIC_COLUMN_ALIASES
+            if alias_key
+            and _normalize_sql_identifier(alias_key).lower()
+            not in _SQL_RESERVED_ALIASES
+        }
         | {
             alias
             for aliases in _SEMANTIC_COLUMN_ALIASES.values()
