@@ -1,0 +1,338 @@
+From 5d53b50cd4cf498192a695677d2054864e0391f7 Mon Sep 17 00:00:00 2001
+From: Harshitha <hbalasubramanya@etag.in>
+Date: Mon, 22 Jun 2026 13:35:44 +0530
+Subject: [PATCH] Fix MSSQL raw query execution
+
+---
+ ibis-server/app/model/connector.py            |  31 +++--
+ .../tests/model/test_mssql_connector.py       |  94 +++++++++++++++
+ wren/src/wren/connector/mssql.py              | 111 ++++++++++++++----
+ 3 files changed, 204 insertions(+), 32 deletions(-)
+ create mode 100644 ibis-server/tests/model/test_mssql_connector.py
+
+diff --git a/ibis-server/app/model/connector.py b/ibis-server/app/model/connector.py
+index f9dc009e..21bbb5a3 100644
+--- a/ibis-server/app/model/connector.py
++++ b/ibis-server/app/model/connector.py
+@@ -595,10 +595,20 @@ class MSSqlConnector(IbisConnector):
+         try:
+             with closing(self.connection.raw_sql(sql)) as cur:
+                 rows = cur.fetchall()
+-                columns = [column[0] for column in (cur.description or [])]
++                columns = [
++                    self._cursor_column_name(column, index)
++                    for index, column in enumerate(cur.description or [])
++                ]
++
++            df = pd.DataFrame(rows, columns=columns)
++            if limit is not None:
++                df = df.head(limit)
++            return pa.Table.from_pandas(df, preserve_index=False)
+         except AttributeError as e:
+-            # Workaround for ibis issue #10331 in the execution path.
+-            if e.args and e.args[0] == "'NoneType' object has no attribute 'lower'":
++            # Ibis' MSSQL schema probe can mask SQL Server describe errors by
++            # calling .lower() on a NULL system_type_name before checking
++            # error_message. Return the real database message when this leaks.
++            if self._is_none_lower_attribute_error(e):
+                 error_message = self._describe_sql_for_error_message(sql)
+                 raise WrenError(
+                     error_code=ErrorCode.INVALID_SQL,
+@@ -608,11 +618,6 @@ class MSSqlConnector(IbisConnector):
+                 ) from e
+             raise
+ 
+-        df = pd.DataFrame(rows, columns=columns)
+-        if limit is not None:
+-            df = df.head(limit)
+-        return pa.Table.from_pandas(df, preserve_index=False)
+-
+     def _round_decimal_columns(self, ibis_table: Table, scale: int = 9) -> pa.Table:
+         def round_decimal(val):
+             if val is None:
+@@ -688,8 +693,8 @@ class MSSqlConnector(IbisConnector):
+ 
+             return inner.sql(dialect="tsql")
+ 
+-        except Exception as e:
+-            return f"Error: {e!s}"
++        except Exception:
++            return sql_query
+ 
+     def _normalize_tsql_for_execution(self, sql: str) -> str:
+         replacements = (
+@@ -729,7 +734,7 @@ class MSSqlConnector(IbisConnector):
+             raise
+         except AttributeError as e:
+             # Workaround for ibis issue #10331
+-            if e.args[0] == "'NoneType' object has no attribute 'lower'":
++            if self._is_none_lower_attribute_error(e):
+                 error_message = self._describe_sql_for_error_message(normalized_sql)
+                 raise WrenError(
+                     error_code=ErrorCode.INVALID_SQL,
+@@ -765,6 +770,10 @@ class MSSqlConnector(IbisConnector):
+                 return ""
+             return rows[0][0] or ""
+ 
++    @staticmethod
++    def _is_none_lower_attribute_error(error: AttributeError) -> bool:
++        return "NoneType" in str(error) and "lower" in str(error)
++
+ 
+ class CannerConnector(IbisConnector):
+     def __init__(self, connection_info: ConnectionInfo):
+diff --git a/ibis-server/tests/model/test_mssql_connector.py b/ibis-server/tests/model/test_mssql_connector.py
+new file mode 100644
+index 00000000..7743afe1
+--- /dev/null
++++ b/ibis-server/tests/model/test_mssql_connector.py
+@@ -0,0 +1,94 @@
++from app.model.connector import MSSqlConnector
++from app.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
++
++
++class FakeCursor:
++    def __init__(self, rows, description):
++        self._rows = rows
++        self.description = description
++        self.closed = False
++
++    def fetchall(self):
++        return self._rows
++
++    def close(self):
++        self.closed = True
++
++
++class FakeConnection:
++    def __init__(self, cursors=None, error=None):
++        self.cursors = list(cursors or [])
++        self.error = error
++        self.queries = []
++
++    def raw_sql(self, sql):
++        self.queries.append(sql)
++        if self.error:
++            error = self.error
++            self.error = None
++            raise error
++        return self.cursors.pop(0)
++
++
++def _connector(connection):
++    connector = MSSqlConnector.__new__(MSSqlConnector)
++    connector.connection = connection
++    return connector
++
++
++def test_query_uses_raw_sql_for_grouped_aggregate_results():
++    connection = FakeConnection(
++        [
++            FakeCursor(
++                rows=[("Widgets", 12), ("Gadgets", 8)],
++                description=[("ProdType",), ("TotalQty",)],
++            )
++        ]
++    )
++    connector = _connector(connection)
++
++    result = connector.query(
++        'SELECT "ProdType", SUM("Qty") AS "TotalQty" '
++        'FROM "dbo_tblSalesHistory" '
++        'GROUP BY "ProdType" '
++        'ORDER BY SUM("Qty") DESC NULLS LAST'
++    )
++
++    assert connection.queries == [
++        'SELECT "ProdType", SUM("Qty") AS "TotalQty" '
++        'FROM "dbo_tblSalesHistory" '
++        'GROUP BY "ProdType" '
++        'ORDER BY SUM("Qty") DESC'
++    ]
++    assert result.column_names == ["ProdType", "TotalQty"]
++    assert result.to_pylist() == [
++        {"ProdType": "Widgets", "TotalQty": 12},
++        {"ProdType": "Gadgets", "TotalQty": 8},
++    ]
++
++
++def test_query_translates_masked_mssql_describe_error():
++    connection = FakeConnection(
++        cursors=[
++            FakeCursor(
++                rows=[("Invalid column name 'ProdType'.",)],
++                description=[("error_message",)],
++            )
++        ],
++        error=AttributeError("'NoneType' object has no attribute 'lower'"),
++    )
++    connector = _connector(connection)
++
++    try:
++        connector.query('SELECT "ProdType" FROM "dbo_tblSalesHistory"')
++    except WrenError as exc:
++        error = exc
++    else:
++        raise AssertionError("Expected WrenError")
++
++    assert error.error_code == ErrorCode.INVALID_SQL
++    assert error.phase == ErrorPhase.SQL_EXECUTION
++    assert error.metadata == {
++        DIALECT_SQL: 'SELECT "ProdType" FROM "dbo_tblSalesHistory"'
++    }
++    assert "Invalid column name 'ProdType'." in error.message
+diff --git a/wren/src/wren/connector/mssql.py b/wren/src/wren/connector/mssql.py
+index f7454676..1fd765d7 100644
+--- a/wren/src/wren/connector/mssql.py
++++ b/wren/src/wren/connector/mssql.py
+@@ -1,8 +1,9 @@
+ from contextlib import closing
+ from decimal import Decimal as PyDecimal
++import re
+ 
++import pandas as pd
+ import pyarrow as pa
+-import sqlglot.expressions as sge
+ from ibis.expr.datatypes import Decimal
+ from ibis.expr.types import Table
+ from sqlglot import exp, parse_one
+@@ -17,12 +18,29 @@ class MSSqlConnector(IbisConnector):
+         super().__init__(DataSource.mssql, connection_info)
+ 
+     def query(self, sql: str, limit: int | None = None) -> pa.Table:
+-        sql = self._flatten_pagination_limit(sql)
+-        ibis_table = self.connection.sql(sql)
+-        if limit is not None:
+-            ibis_table = ibis_table.limit(limit)
+-        ibis_table = self._handle_pyarrow_unsupported_type(ibis_table)
+-        return self._round_decimal_columns(ibis_table)
++        sql = self._flatten_pagination_limit(self._normalize_tsql_for_execution(sql))
++        try:
++            with closing(self.connection.raw_sql(sql)) as cur:
++                rows = cur.fetchall()
++                columns = [
++                    self._cursor_column_name(column, index)
++                    for index, column in enumerate(cur.description or [])
++                ]
++
++            df = pd.DataFrame(rows, columns=columns)
++            if limit is not None:
++                df = df.head(limit)
++            return pa.Table.from_pandas(df, preserve_index=False)
++        except AttributeError as e:
++            if self._is_none_lower_attribute_error(e):
++                error_message = self._describe_sql_for_error_message(sql)
++                raise WrenError(
++                    error_code=ErrorCode.INVALID_SQL,
++                    message=f"The sql query failed. {error_message or str(e)}.",
++                    phase=ErrorPhase.SQL_EXECUTION,
++                    metadata={DIALECT_SQL: sql},
++                ) from e
++            raise
+ 
+     def _round_decimal_columns(self, ibis_table: Table, scale: int = 9) -> pa.Table:
+         def round_decimal(val):
+@@ -78,35 +96,86 @@ class MSSqlConnector(IbisConnector):
+         except Exception:
+             return sql_query
+ 
++    def _normalize_tsql_for_execution(self, sql: str) -> str:
++        replacements = (
++            (r"DATE_PART\s*\(", "DATEPART("),
++            (r"DATEPART\(\s*YEAR\s*,", "DATEPART('YEAR',"),
++            (r"DATEPART\(\s*MONTH\s*,", "DATEPART('MONTH',"),
++            (r"DATEPART\(\s*DAY\s*,", "DATEPART('DAY',"),
++            (r"DATEDIFF\(\s*'SECOND'\s*,", "DATEDIFF(SECOND,"),
++            (r"DATEDIFF\(\s*'MINUTE'\s*,", "DATEDIFF(MINUTE,"),
++            (r"DATEDIFF\(\s*'HOUR'\s*,", "DATEDIFF(HOUR,"),
++            (r"DATEDIFF\(\s*'DAY'\s*,", "DATEDIFF(DAY,"),
++            (r"\s+NULLS\s+LAST\b", ""),
++            (r"\s+NULLS\s+FIRST\b", ""),
++        )
++
++        normalized = sql
++        for pattern, replacement in replacements:
++            normalized = re.sub(pattern, replacement, normalized, flags=re.IGNORECASE)
++
++        return normalized
++
++    def _quote_sql_literal(self, sql: str) -> str:
++        return "N'" + sql.replace("'", "''") + "'"
++
+     def dry_run(self, sql: str) -> None:
++        normalized_sql = self._normalize_tsql_for_execution(sql)
+         try:
+-            super().dry_run(sql)
++            error_message = self._describe_sql_for_error_message(normalized_sql)
++            if error_message:
++                raise WrenError(
++                    error_code=ErrorCode.INVALID_SQL,
++                    message=f"The sql dry run failed. {error_message}.",
++                    phase=ErrorPhase.SQL_DRY_RUN,
++                    metadata={DIALECT_SQL: normalized_sql},
++                )
++        except WrenError:
++            raise
+         except AttributeError as e:
+-            if "NoneType" in str(e) and "lower" in str(e):
+-                error_message = self._describe_sql_for_error_message(sql)
++            if self._is_none_lower_attribute_error(e):
++                error_message = self._describe_sql_for_error_message(normalized_sql)
+                 raise WrenError(
+                     error_code=ErrorCode.INVALID_SQL,
+                     message=f"The sql dry run failed. {error_message}.",
+                     phase=ErrorPhase.SQL_DRY_RUN,
+-                    metadata={DIALECT_SQL: sql},
++                    metadata={DIALECT_SQL: normalized_sql},
+                 ) from e
+             raise WrenError(
+                 error_code=ErrorCode.IBIS_PROJECT_ERROR,
+                 message=str(e),
+                 phase=ErrorPhase.SQL_DRY_RUN,
+             ) from e
++        except Exception as e:
++            raise WrenError(
++                error_code=ErrorCode.INVALID_SQL,
++                message=f"The sql dry run failed. {e!s}.",
++                phase=ErrorPhase.SQL_DRY_RUN,
++                metadata={DIALECT_SQL: normalized_sql},
++            ) from e
+ 
+     def _describe_sql_for_error_message(self, sql: str) -> str:
+-        try:
+-            tsql = sge.convert(sql).sql("mssql")
+-            describe_sql = f"SELECT error_message FROM sys.dm_exec_describe_first_result_set({tsql}, NULL, 0)"
+-            with closing(self.connection.raw_sql(describe_sql)) as cur:
+-                rows = cur.fetchall()
+-                if not rows:
+-                    return "Unknown reason"
+-                return rows[0][0]
+-        except Exception:
+-            return "Unknown reason"
++        describe_sql = (
++            "SELECT error_message "
++            "FROM sys.dm_exec_describe_first_result_set("
++            f"{self._quote_sql_literal(sql)}, NULL, 0)"
++        )
++        with closing(self.connection.raw_sql(describe_sql)) as cur:
++            rows = cur.fetchall()
++            if rows is None or len(rows) == 0:
++                return ""
++            return rows[0][0] or ""
++
++    @staticmethod
++    def _cursor_column_name(column, index: int) -> str:
++        name = getattr(column, "name", None)
++        if name is None and isinstance(column, (tuple, list)) and column:
++            name = column[0]
++        return str(name or f"column_{index + 1}")
++
++    @staticmethod
++    def _is_none_lower_attribute_error(error: AttributeError) -> bool:
++        return "NoneType" in str(error) and "lower" in str(error)
+ 
+ 
+ def create_connector(connection_info) -> MSSqlConnector:
+-- 
+2.53.0.windows.2
+
