@@ -20,7 +20,7 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-  "wren-core-py>=0.6",
+  "wren-core-py>=0.7.1",
   "duckdb>=1.5.0",
   "sqlglot>=27",
   "typer>=0.12",
