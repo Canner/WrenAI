@@ -4,151 +4,126 @@ sidebar_label: Build & deploy a GenBI app
 
 # Build & deploy a GenBI app
 
-`wren genbi` turns a project's context layer into a shareable, browser-side
-GenBI web app — powered by [`wren-core-wasm`](../sdk/wasm.md) — and deploys it
-to the user's Vercel or Cloudflare Pages account. The whole flow runs through
-an AI agent: the user describes the dashboard they want in natural language,
-and the agent drives the CLI to produce a public URL.
+GenBI turns your project's context layer into a shareable, browser-side
+dashboard, powered by [`wren-core-wasm`](../sdk/wasm.md), and ships it to your
+own Vercel or Cloudflare Pages account. You never type the `wren genbi`
+commands yourself: you describe the dashboard you want in plain language, and
+your agent drives the CLI to produce a public URL.
 
-## The CLI ↔ agent split
+This guide shows how to **talk to your agent** to get there: how to ask for a
+dashboard and how to ask it to deploy. For the underlying commands and every
+flag, see the [`wren genbi` CLI reference](../reference/cli.md#wren-genbi--build--deploy-genbi-apps).
 
-GenBI deliberately divides the work:
+## Before you start
 
-- **The CLI owns the deterministic parts** — the authoritative build
-  instruction (it knows the live project facts and the pinned wasm version),
-  the app index (`.wren/apps.yml`), `verify`, and `deploy`.
-- **The agent owns authoring** — it writes the app code by following the build
-  instruction, choosing the charts and layout that actually answer the user's
-  question.
+You need two things:
 
-`.wren/apps.yml` is always machine-written via `wren genbi register/remove` —
-never edited by hand.
+- **A Wren project**: the context layer the dashboard reads from. If you don't
+  have one yet, [connect a data source](connect.md) first.
+- **An agent with the `wren` CLI**: any coding agent that can run shell
+  commands. The agent loads its own GenBI playbook on demand via
+  `wren skills get genbi`, so you don't have to teach it the workflow.
 
-The matching agent workflow guide is served by the CLI: `wren skills get
-genbi`. For the full command/flag reference see the
+That's it. From here on you just have a conversation.
+
+## Create a dashboard
+
+Describe what you want in natural language. The agent figures out the queries,
+picks the charts, and assembles the app. Iterate with it the same way you would
+iterate with a teammate:
+
+```text
+User:  My project is in ~/forecast. Show me last week's forecast by product.
+User:  And the 8-week trend.
+User:  Turn this into an interactive dashboard I can filter by product and OSAT, then share.
+Agent: Built it and ran the checks. Want to preview locally or deploy?
+User:  Preview first.
+Agent: Serving at http://127.0.0.1:8848/
+User:  Make the OSAT chart a share-of-total, and lighten the palette.
+Agent: Updated. Refresh the preview.
+```
+
+Behind each turn, the agent is doing the deterministic work for you. You do not
+have to run any of it:
+
+- **Gets the authoritative build instruction** from the CLI (it knows your live
+  project facts and the pinned wasm version).
+- **Authors the app** under `apps/<name>/`, following that instruction,
+  choosing the charts and layout that answer your question.
+- **Records and checks the app** so it's deploy-ready, including a secret scan
+  that refuses to ship inlined credentials.
+- **Previews it locally** when you ask, so you can see it before anyone else
+  does.
+
+If you want to see exactly which commands these map to, they're all in the
 [CLI reference](../reference/cli.md#wren-genbi--build--deploy-genbi-apps).
 
-## Data modes
+## Snapshot vs live data
 
-Pick one at build time:
+This is the one real choice you'll make in the conversation. Tell the agent
+which you want (it defaults to **snapshot**):
 
 | Mode | Where the data lives | Use it for |
 |------|----------------------|------------|
-| **snapshot** (default) | Bundled with the app as `data/*.parquet`, queried client-side via wasm | Demos, reports, small data, dlt-pipeline output — fully serverless |
+| **snapshot** (default) | Bundled with the app and queried client-side via wasm | Demos, reports, small data, dlt-pipeline output, fully serverless |
 | **live** | The app calls back to your warehouse/API at view time | Production-scale or always-fresh data; needs a CORS-enabled endpoint and **never** inlined credentials |
 
-## The conversational flow
+A snapshot freezes the numbers at build time, so it's perfect for a report you
+hand off. Pick live when the dashboard has to stay current.
 
-The user never has to know the `wren genbi` commands — they describe intent and
-the agent translates it. A typical end-to-end conversation:
+## Preview before you share
+
+Just ask:
 
 ```text
-U: My project is in ~/forecast — last week's forecast by product?
-U: And the 8-week trend?
-U: Turn this into an interactive dashboard I can filter by product/OSAT and share.
-A: (build → author → register → verify) Done — preview locally or deploy?
-U: Preview first.            → A: http://127.0.0.1:8848/
-U: Make the OSAT chart a share-of-total; lighten the palette.
-U: Deploy it to Vercel.
-A: I need a VERCEL_TOKEN — add it to ~/.wren/.env, then tell me.
-U: Done.                     → A: Deployed <preview-url>
-A: Heads-up: the URL returns 401 — Vercel Deployment Protection is on.
-   Disable it at Project → Settings → Deployment Protection to make it public.
-U: Disabled.                 → A: Confirmed public ✅
-U: Ship it to production.    → A: (--prod) <production-url>
+User:  Preview it locally.
+Agent: Serving at http://127.0.0.1:8848/
 ```
 
-What the agent runs behind each turn:
+The agent serves the built app on your machine so you can click through it
+before deploying anything. Refine in the same breath ("make this a bar chart",
+"drop the OSAT filter") and the agent rebuilds.
 
-### 1. Build — get the instruction
+## Deploy it
 
-```bash
-wren genbi build forecast-dashboard --prompt "<the user's request, verbatim>" --data-mode snapshot
+GenBI ships to your own **Vercel** or **Cloudflare Pages** account, the two
+providers supported today (Vercel is the default). When you're happy, ask the
+agent to ship it:
+
+```text
+User:  Deploy it to Vercel.
+Agent: I need a VERCEL_TOKEN. Add it to ~/.wren/.env, then tell me.
+User:  Done.
+Agent: Deployed to <preview-url>
+User:  Ship it to production.
+Agent: Promoted to <production-url>
 ```
 
-Prints the authoritative build instruction (wasm wiring with the pinned
-`wren-core-wasm` version, the project's model/column inventory, data-mode
-guidance, acceptance criteria, and the target folder). It writes no app files;
-it only compiles `target/mdl.json` first if it's missing. Use `--prompt-file`
-or `--prompt -` for long prompts.
+A few things worth knowing so the conversation goes smoothly:
 
-### 2. Author the app
+- **You supply the deploy token, not the agent.** Add `VERCEL_TOKEN` (or
+  `CLOUDFLARE_API_TOKEN` plus `CLOUDFLARE_ACCOUNT_ID`) to your environment or a
+  `.env` file. Tokens are never passed on the command line, so they can't leak
+  into shell history.
+- **Preview vs production.** Deploys go to a preview URL by default; say "ship
+  it to production" when you want the agent to promote it.
+- **The deploy target is a public static host.** Anyone with the URL can read
+  every file the app ships, so never let the agent inline secrets. The
+  pre-deploy secret scan is a safety net, not a guarantee.
 
-The agent writes everything under `apps/<name>/`, following the instruction:
+### The Vercel 401 trap
 
-- copy the compiled MDL in as `apps/<name>/mdl.json`;
-- load `wren-core-wasm` from the CDN in the instruction (never bundle the
-  ~68 MB binary);
-- **snapshot:** export the data the dashboard needs to `apps/<name>/data/` as
-  parquet. A DuckDB-backed project (including anything loaded by the
-  [`dlt-connector`](../reference/skills.md#dlt-connector) skill) exports
-  trivially:
-
-  ```bash
-  python - <<'PY'
-  import duckdb
-  con = duckdb.connect("<db>.duckdb", read_only=True)
-  con.execute(
-      "COPY (SELECT * FROM <table>) "
-      "TO 'apps/<name>/data/<table>.parquet' (FORMAT parquet)"
-  )
-  PY
-  ```
-
-- **live:** write an endpoint-only connection config — never inline
-  credentials.
-
-### 3. Register & verify
-
-```bash
-wren genbi register forecast-dashboard --data-mode snapshot
-wren genbi verify forecast-dashboard
-```
-
-`verify` is a deterministic, no-browser preflight: required files exist,
-`mdl.json` parses, snapshot apps ship a `.parquet`/`.duckdb` asset, and a
-**default-deny secret scan** flags inlined credentials (and refuses any
-`.env*` file outright). `deploy` gates on `verify`.
-
-> The secret scan is best-effort defense-in-depth, **not** a guarantee — the
-> real rule is *never inline secrets into app files*. The deploy target is a
-> public static host: anyone with the URL can read every shipped file.
-
-### 4. Preview locally
-
-```bash
-wren genbi open forecast-dashboard --port 8848
-```
-
-### 5. Deploy
-
-```bash
-wren genbi deploy forecast-dashboard --provider vercel        # or cloudflare
-wren genbi deploy forecast-dashboard --provider vercel --prod # confirm with the user first
-```
-
-- **Preview by default;** `--prod` ships to production.
-- **Tokens** are discovered from the environment or `.env` files
-  (`VERCEL_TOKEN` / `CLOUDFLARE_API_TOKEN`, plus `CLOUDFLARE_ACCOUNT_ID`) —
-  never passed as CLI flags (they'd leak into shell history).
-- **Cloudflare** shells out to the [`wrangler`](https://developers.cloudflare.com/workers/wrangler/)
-  CLI (`npm install -g wrangler`, or have `npx` available) — Pages has no
-  single inline-upload REST endpoint.
-
-## Vercel Deployment Protection (the 401 trap)
-
-New Vercel projects ship with **Vercel Authentication** on by default, so every
-deployment — preview *and* production — returns **HTTP 401** to anyone not
-logged into the owning account. The deploy itself succeeded; the URL is just
-gated. To make the app publicly shareable, disable it in the Vercel dashboard:
-**Project → Settings → Deployment Protection → Vercel Authentication →
-Disabled**. This is a one-time per-project toggle, not controllable from
-`wren genbi deploy`. If you only need a private link (viewable while logged
-into your account), leaving it on is fine.
+New Vercel projects ship with **Vercel Authentication** turned on, so every
+deployment, preview *and* production, returns **HTTP 401** to anyone who
+isn't logged into your Vercel account. The deploy succeeded; the URL is just
+gated. To make the dashboard publicly shareable, disable it once in the Vercel
+dashboard: **Project → Settings → Deployment Protection → Vercel
+Authentication → Disabled**. If you only need a private link for yourself,
+leave it on.
 
 ## See also
 
-- [`wren genbi` CLI reference](../reference/cli.md#wren-genbi--build--deploy-genbi-apps)
-- [`genbi` skill](../reference/skills.md#genbi)
-- [`dlt-connector` skill](../reference/skills.md#dlt-connector) — load SaaS data first
-- [wren-core-wasm](../sdk/wasm.md) — the in-browser engine that powers the app
+- [`wren genbi` CLI reference](../reference/cli.md#wren-genbi--build--deploy-genbi-apps): every subcommand and flag
+- [`genbi` skill](../reference/skills.md#genbi): the agent's workflow playbook
+- [`dlt-connector` skill](../reference/skills.md#dlt-connector): load SaaS data before you build
+- [wren-core-wasm](../sdk/wasm.md): the in-browser engine that powers the app
