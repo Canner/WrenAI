@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1](https://github.com/Canner/WrenAI/compare/wren-v0.10.0...wren-v0.10.1) (2026-06-22)
+
+
+### Bug Fixes
+
+* disable transformers progress bar on Windows ([#2368](https://github.com/Canner/WrenAI/issues/2368)) ([f91529b](https://github.com/Canner/WrenAI/commit/f91529b62c6367440f0a6a87f894d3765663127f))
+
 ## [0.10.0](https://github.com/Canner/WrenAI/compare/wren-v0.9.0...wren-v0.10.0) (2026-06-18)
 
 
