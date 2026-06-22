@@ -54,6 +54,50 @@ def test_normalize_sql_column_references_to_schema_uses_exact_schema_names():
     assert "P-M" not in normalized
 
 
+def test_normalize_sql_column_references_to_schema_maps_underscore_to_camel_columns():
+    sql = (
+        'SELECT "dbo_tblSalesHistory"."OTD_Date", SUM("dbo_tblSalesHistory"."Sales_Value") '
+        'FROM "dbo_tblSalesHistory" '
+        'GROUP BY "dbo_tblSalesHistory"."OTD_Date"'
+    )
+
+    normalized = normalize_sql_column_references_to_schema(
+        sql,
+        {"dbo_tblSalesHistory": ["OTDDate", "SalesValue"]},
+    )
+
+    assert '"dbo_tblSalesHistory"."OTDDate"' in normalized
+    assert '"dbo_tblSalesHistory"."SalesValue"' in normalized
+    assert "OTD_Date" not in normalized
+    assert "Sales_Value" not in normalized
+    assert find_invalid_column_references(
+        normalized,
+        {"dbo_tblSalesHistory": ["OTDDate", "SalesValue"]},
+    ) == []
+
+
+def test_normalize_sql_column_references_to_schema_maps_unqualified_underscore_to_camel_columns():
+    sql = (
+        'SELECT DATEPART(YEAR, "OTD_Date") AS "Year", SUM(Sales_Value) '
+        'FROM "dbo_tblSalesHistory" '
+        'GROUP BY DATEPART(YEAR, "OTD_Date")'
+    )
+
+    normalized = normalize_sql_column_references_to_schema(
+        sql,
+        {"dbo_tblSalesHistory": ["OTDDate", "SalesValue"]},
+    )
+
+    assert 'DATEPART(YEAR, "OTDDate") AS "Year"' in normalized
+    assert 'SUM("SalesValue")' in normalized
+    assert "OTD_Date" not in normalized
+    assert "Sales_Value" not in normalized
+    assert find_invalid_column_references(
+        normalized,
+        {"dbo_tblSalesHistory": ["OTDDate", "SalesValue"]},
+    ) == []
+
+
 def test_normalize_sql_column_references_to_schema_keeps_unknown_columns_invalid():
     sql = 'SELECT "dbo_qSales1"."UnitPrice" FROM "dbo_qSales1"'
     normalized = normalize_sql_column_references_to_schema(

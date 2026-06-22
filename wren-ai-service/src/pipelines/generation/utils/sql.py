@@ -2313,6 +2313,15 @@ def _compact_sql_identifier(identifier: str) -> str:
     return re.sub(r"[^a-z0-9]", "", str(identifier or "").lower())
 
 
+def _sql_identifier_alias_candidates(identifier: str) -> set[str]:
+    normalized = _normalize_sql_identifier(identifier)
+    candidates = {normalized}
+    acronym_split = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", normalized)
+    snake_case = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", acronym_split)
+    candidates.add(snake_case)
+    return {candidate for candidate in candidates if candidate}
+
+
 _SEMANTIC_COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     "source": (
         "source",
@@ -2506,19 +2515,46 @@ def normalize_sql_column_references_to_schema(
             if value
         )
         compact_identifier = _compact_sql_identifier(identifier)
-        if compact_identifier in valid_compact_columns:
+        canonical_column = canonical_columns.get(
+            compact_identifier
+        ) or _find_semantic_column_alias(identifier, canonical_columns)
+        if not canonical_column:
             return match.group(0)
 
-        canonical_column = _find_semantic_column_alias(identifier, canonical_columns)
-        if not canonical_column:
+        if canonical_column == identifier:
             return match.group(0)
 
         return _quote_sql_identifier(canonical_column)
 
+    schema_candidates = {
+        candidate
+        for column in canonical_columns.values()
+        if column
+        and _normalize_sql_identifier(column).lower() not in _SQL_RESERVED_ALIASES
+        for candidate in _sql_identifier_alias_candidates(column)
+    }
+    unqualified_candidates = sorted(
+        schema_candidates
+        | {
+            alias
+            for aliases in _SEMANTIC_COLUMN_ALIASES.values()
+            for alias in aliases
+            if alias
+            and _normalize_sql_identifier(alias).lower() not in _SQL_RESERVED_ALIASES
+        },
+        key=len,
+        reverse=True,
+    )
+    if not unqualified_candidates:
+        return normalized_sql
+
+    candidate_pattern = "|".join(
+        re.escape(candidate) for candidate in unqualified_candidates
+    )
     unqualified_identifier_pattern = re.compile(
-        r'(?<![\.\w])(?:"(?P<quoted>source|article_type|article_id|knowledge_article_id|type|category|subcategory|author|created_by|created_by_user)"'
-        r"|\[(?P<bracketed>source|article_type|article_id|knowledge_article_id|type|category|subcategory|author|created_by|created_by_user)\]"
-        r"|(?P<bare>source|article_type|article_id|knowledge_article_id|category|subcategory|author|created_by|created_by_user))(?!\w)",
+        rf'(?<![\.\w])(?:"(?P<quoted>{candidate_pattern})"'
+        rf"|\[(?P<bracketed>{candidate_pattern})\]"
+        rf"|(?P<bare>{candidate_pattern}))(?!\w)",
         flags=re.IGNORECASE,
     )
     return unqualified_identifier_pattern.sub(
