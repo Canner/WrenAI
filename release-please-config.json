@@ -8,7 +8,12 @@
       "release-type": "python",
       "bump-minor-pre-major": true,
       "extra-files": [
-        "Cargo.toml"
+        "Cargo.toml",
+        {
+          "path": "uv.lock",
+          "type": "toml",
+          "jsonpath": "$.package[?(@.name.value=='wren-core-py')].version"
+        }
       ]
     },
     "core/wren": {
