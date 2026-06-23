@@ -10,7 +10,7 @@ from __future__ import annotations
 from typer.testing import CliRunner
 
 from wren.cli import app
-from wren.memory.index_backend import GrepIndex, resolve_backend
+from wren.memory.index_backend import GrepIndex, get_index, resolve_backend
 from wren.memory.markdown import write_query_markdown
 
 runner = CliRunner()
@@ -58,8 +58,18 @@ def test_grep_rebuild_and_status_and_reset(tmp_path):
 
 
 def test_resolve_backend_env_override():
+    from wren.memory.index_backend import _extra_available  # noqa: PLC0415
+
     assert resolve_backend("grep") == "grep"
-    assert resolve_backend("lancedb") == "lancedb"
+    # explicit lancedb is honored only when its extra is importable, else grep
+    assert resolve_backend("lancedb") == ("lancedb" if _extra_available() else "grep")
+    # unrecognized values fall back to auto-detection
+    assert resolve_backend("bogus") in {"grep", "lancedb"}
+
+
+def test_get_index_normalizes_explicit_backend(tmp_path):
+    # explicit backend is stripped/lowercased before selection
+    assert isinstance(get_index(tmp_path, "x", backend=" GREP "), GrepIndex)
 
 
 # ── CLI commands over the grep backend (no extra needed) ───────────────────

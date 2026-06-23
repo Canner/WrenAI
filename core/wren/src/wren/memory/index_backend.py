@@ -145,14 +145,21 @@ def _extra_available() -> bool:
 
 
 def resolve_backend(env: str | None = None) -> str:
-    """Return the backend name: explicit env override, else auto-detect."""
+    """Return the backend that will actually be used.
+
+    Honors an explicit ``WREN_MEMORY_BACKEND=grep|lancedb`` (or *env*) override,
+    else auto-detects. ``lancedb`` is downgraded to ``grep`` whenever its extra
+    is unavailable — so the result always reflects what ``get_index`` will build.
+    """
     choice = (
         (env if env is not None else os.environ.get("WREN_MEMORY_BACKEND", ""))
         .strip()
         .lower()
     )
-    if choice in {"grep", "lancedb"}:
-        return choice
+    if choice == "grep":
+        return "grep"
+    # explicit "lancedb", an unrecognized value, or empty → prefer lancedb when
+    # its extra is importable, otherwise grep.
     return "lancedb" if _extra_available() else "grep"
 
 
@@ -161,9 +168,13 @@ def get_index(
 ) -> MemoryIndex:
     """Construct the resolved MemoryIndex for *project_path*.
 
-    Falls back to GrepIndex if LanceDB is requested but its extra is missing.
+    An explicit *backend* is normalized (``" LanceDB "`` → ``lancedb``); an
+    unrecognized value falls back to auto-detection. LanceDB downgrades to
+    GrepIndex when its extra is missing.
     """
-    name = backend or resolve_backend()
+    name = (backend or "").strip().lower()
+    if name not in {"grep", "lancedb"}:
+        name = resolve_backend()
     if name == "lancedb" and _extra_available():
         return LanceDBIndex(project_path, path)
     return GrepIndex(project_path)

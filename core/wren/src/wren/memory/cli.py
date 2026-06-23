@@ -189,7 +189,8 @@ def index(
             f"grep backend: {n} pair(s) in knowledge/sql/ — no index build needed."
         )
         typer.echo(
-            "Semantic search (`wren memory fetch`/`recall`) needs `wren[memory]`.",
+            "`wren memory recall` works over grep; semantic schema search "
+            "(`wren memory fetch`) needs `wren[memory]`.",
             err=True,
         )
         return

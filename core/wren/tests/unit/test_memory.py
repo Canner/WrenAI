@@ -904,6 +904,10 @@ class TestMarkdownSourcedIndex:
 
     def test_lancedb_backend_via_get_index(self, tmp_path, monkeypatch):
         """With the extra, get_index resolves to LanceDBIndex and recalls semantically."""
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        pytest.importorskip(
+            "sentence_transformers", reason="wren[memory] extras not installed"
+        )
         monkeypatch.setenv("WREN_MEMORY_BACKEND", "lancedb")
         from wren.memory.index_backend import get_index  # noqa: PLC0415
         from wren.memory.markdown import write_query_markdown  # noqa: PLC0415
