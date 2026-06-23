@@ -326,6 +326,26 @@ def test_init_builds_knowledge_skeleton(tmp_path):
     assert not (tmp_path / "instructions.md").exists()
 
 
+def test_init_does_not_clobber_existing_rules(tmp_path):
+    """Re-running init must not overwrite existing business rules without --force."""
+    runner.invoke(app, ["context", "init", "--empty", "--path", str(tmp_path)])
+    general = tmp_path / "knowledge" / "rules" / "general.md"
+    general.write_text("My real rules.\n")
+    # init again with --force (clears the project-file conflict guard)
+    result = runner.invoke(
+        app, ["context", "init", "--empty", "--force", "--path", str(tmp_path)]
+    )
+    assert result.exit_code == 0, result.output
+    # --force intentionally re-seeds the starter content
+    assert "Add custom rules" in general.read_text()
+
+    # but without --force, an existing general.md is preserved
+    general.write_text("My real rules.\n")
+    (tmp_path / "wren_project.yml").unlink()  # avoid the conflict-guard early exit
+    runner.invoke(app, ["context", "init", "--empty", "--path", str(tmp_path)])
+    assert general.read_text() == "My real rules.\n"
+
+
 def test_instructions_cmd_reads_knowledge_rules(tmp_path):
     runner.invoke(app, ["context", "init", "--empty", "--path", str(tmp_path)])
     (tmp_path / "knowledge" / "rules" / "units.md").write_text("Amounts are USD.\n")

@@ -715,7 +715,10 @@ def load_rules(project_path: Path) -> tuple[str | None, bool]:
     if legacy:
         parts.append(legacy)
     content = "\n\n".join(parts) if parts else None
-    return content, legacy is not None
+    # Presence-based: an existing (even empty) instructions.md is the deprecated
+    # pattern worth flagging, regardless of whether it currently has content.
+    used_legacy = (project_path / "instructions.md").exists()
+    return content, used_legacy
 
 
 def load_knowledge_config(project_path: Path) -> dict:

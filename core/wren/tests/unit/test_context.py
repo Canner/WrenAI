@@ -326,6 +326,17 @@ def test_load_rules_knowledge_only_no_legacy_flag(tmp_path):
     assert used_legacy is False
 
 
+def test_load_rules_flags_empty_legacy_file(tmp_path):
+    """An existing-but-empty instructions.md still flags the deprecated pattern."""
+    from wren.context import load_rules  # noqa: PLC0415
+
+    _make_v2_project(tmp_path)
+    (tmp_path / "instructions.md").write_text("")
+    content, used_legacy = load_rules(tmp_path)
+    assert content is None  # empty file contributes no content
+    assert used_legacy is True
+
+
 def test_get_knowledge_schema_version(tmp_path):
     from wren.context import create_knowledge_skeleton, get_knowledge_schema_version  # noqa: PLC0415
 

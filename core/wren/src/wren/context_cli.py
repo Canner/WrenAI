@@ -349,10 +349,12 @@ def init(
     )
 
     create_knowledge_skeleton(project_path)
-    (project_path / "knowledge" / "rules" / "general.md").write_text(
-        "# Business rules\n\n"
-        "Add custom rules or guidelines for LLM-based query generation here.\n"
-    )
+    general_rules = project_path / "knowledge" / "rules" / "general.md"
+    if force or not general_rules.exists():
+        general_rules.write_text(
+            "# Business rules\n\n"
+            "Add custom rules or guidelines for LLM-based query generation here.\n"
+        )
 
     # ── AGENTS.md ──
     (project_path / "AGENTS.md").write_text(_AGENTS_MD_TEMPLATE)
