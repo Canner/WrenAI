@@ -707,9 +707,7 @@ def test_build_json_view_dialect_preserved(tmp_path):
     d = tmp_path / "views" / "summary"
     d.mkdir(parents=True)
     (d / "metadata.yml").write_text(
-        "name: summary\n"
-        "statement: SELECT 1\n"
-        "dialect: postgres\n"
+        "name: summary\nstatement: SELECT 1\ndialect: postgres\n"
     )
     result = build_json(tmp_path)
     assert result["views"][0]["dialect"] == "postgres"
@@ -724,6 +722,69 @@ def test_v3_models_load_same_as_v2(tmp_path):
     models = load_models(tmp_path)
     assert len(models) == 1
     assert models[0]["name"] == "orders"
+
+
+# ── Schema version 5 / unified layout (U0.1) ────────────────────────────────
+
+# Golden fixture shared with the SaaS encoder (Track S) as the v5 layout contract.
+V5_GOLDEN = Path(__file__).resolve().parents[4] / "examples" / "v5-jaffle"
+
+
+def test_schema_version_5_recognized(tmp_path):
+    """v5 wren_project.yml is supported, not reported as unsupported."""
+    (tmp_path / "wren_project.yml").write_text(
+        "schema_version: 5\nname: test\ndata_source: postgres\ncatalog: wren\nschema: public\n"
+    )
+    assert get_schema_version(tmp_path) == 5
+    assert require_schema_version(tmp_path) == 5
+
+
+def test_build_json_layout_version_v5_project(tmp_path):
+    """schema_version 5 → layoutVersion 3 (reuses v4 engine wire format)."""
+    _make_v2_project(tmp_path, schema_version=5)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: orders\n"
+        "table_reference:\n  table: orders\n"
+        "columns:\n  - name: id\n    type: INTEGER\n"
+    )
+    result = build_json(tmp_path)
+    assert result["layoutVersion"] == 3
+
+
+def test_v5_models_load_same_as_v2(tmp_path):
+    """schema_version 5 uses the same per-folder reader as v2."""
+    _make_v2_project(tmp_path, schema_version=5)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text("name: orders\ntable_reference:\n  table: orders\n")
+    models = load_models(tmp_path)
+    assert len(models) == 1
+    assert models[0]["name"] == "orders"
+
+
+def test_v5_golden_has_no_structural_errors():
+    """The shipped v5 golden fixture validates clean (no errors)."""
+    assert V5_GOLDEN.exists(), f"missing golden fixture at {V5_GOLDEN}"
+    errors = [e for e in validate_project(V5_GOLDEN) if e.level == "error"]
+    assert errors == [], "\n".join(str(e) for e in errors)
+
+
+def test_v5_golden_builds():
+    """build_json on the v5 golden fixture succeeds and stamps layoutVersion 3."""
+    assert get_schema_version(V5_GOLDEN) == 5
+    result = build_json(V5_GOLDEN)
+    assert result["layoutVersion"] == 3
+    model_names = {m["name"] for m in result["models"]}
+    assert {"customers", "orders"} <= model_names
+    # ref_sql.sql is merged into the orders model
+    orders = next(m for m in result["models"] if m["name"] == "orders")
+    assert "raw_orders" in orders["refSql"]
+    # relationships, views, and cubes flow through
+    assert any(r["name"] == "orders_customer" for r in result["relationships"])
+    assert any(v["name"] == "customer_orders" for v in result["views"])
+    assert any(c["name"] == "order_metrics" for c in result["cubes"])
 
 
 def test_convert_mdl_preserves_dialect(tmp_path):
@@ -901,7 +962,7 @@ def test_load_cubes_v2_parses_metadata_yaml(tmp_path):
         "measures:\n"
         "  - name: revenue\n    expression: SUM(o_totalprice)\n    type: DOUBLE\n"
         "dimensions:\n"
-        "  - name: status\n    expression: o_orderstatus\n    type: VARCHAR\n"
+        "  - name: status\n    expression: o_orderstatus\n    type: VARCHAR\n",
     )
     cubes = load_cubes(tmp_path)
     assert len(cubes) == 1
@@ -934,7 +995,7 @@ def test_load_cubes_v3_uses_v2_layout(tmp_path):
         "name: order_metrics\n"
         "base_object: orders\n"
         "measures:\n"
-        "  - name: revenue\n    expression: SUM(o_totalprice)\n    type: DOUBLE\n"
+        "  - name: revenue\n    expression: SUM(o_totalprice)\n    type: DOUBLE\n",
     )
     cubes = load_cubes(tmp_path)
     assert len(cubes) == 1
@@ -949,7 +1010,7 @@ def test_build_manifest_includes_cubes(tmp_path):
         "name: order_metrics\n"
         "base_object: orders\n"
         "measures:\n"
-        "  - name: revenue\n    expression: SUM(o_totalprice)\n    type: DOUBLE\n"
+        "  - name: revenue\n    expression: SUM(o_totalprice)\n    type: DOUBLE\n",
     )
     manifest = build_manifest(tmp_path)
     assert "cubes" in manifest
@@ -967,7 +1028,7 @@ def test_build_json_cube_camel_case(tmp_path):
         "measures:\n"
         "  - name: revenue\n    expression: SUM(o_totalprice)\n    type: DOUBLE\n"
         "time_dimensions:\n"
-        "  - name: created_at\n    expression: o_orderdate\n    type: DATE\n"
+        "  - name: created_at\n    expression: o_orderdate\n    type: DATE\n",
     )
     result = build_json(tmp_path)
     cube = result["cubes"][0]
@@ -980,7 +1041,7 @@ def test_validate_cube_unknown_base_object(tmp_path):
     _write_cube(
         tmp_path,
         "bad",
-        "name: bad\nbase_object: nosuch\nmeasures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
+        "name: bad\nbase_object: nosuch\nmeasures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n",
     )
     errors = validate_project(tmp_path)
     assert any("base_object 'nosuch'" in e.message for e in errors)
@@ -1005,7 +1066,7 @@ def test_validate_cube_missing_base_object_uses_snake_case(tmp_path):
         tmp_path,
         "om",
         "name: order_metrics\n"
-        "measures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
+        "measures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n",
     )
     errors = validate_project(tmp_path)
     assert any("'base_object'" in e.message for e in errors)
@@ -1025,7 +1086,7 @@ def test_validate_cube_non_string_hierarchy_level(tmp_path):
         "hierarchies:\n"
         "  drill:\n"
         "    - status\n"
-        "    - [nested, list]\n"
+        "    - [nested, list]\n",
     )
     errors = validate_project(tmp_path)
     assert any("hierarchy levels must be strings" in e.message for e in errors)
@@ -1041,7 +1102,7 @@ def test_validate_cube_bad_hierarchy(tmp_path):
         "measures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
         "dimensions: [{name: status, expression: o_orderstatus, type: VARCHAR}]\n"
         "hierarchies:\n"
-        "  drill: [status, nonexistent_dim]\n"
+        "  drill: [status, nonexistent_dim]\n",
     )
     errors = validate_project(tmp_path)
     assert any("nonexistent_dim" in e.message for e in errors)
@@ -1055,7 +1116,7 @@ def test_validate_cube_ok(tmp_path):
         "name: order_metrics\n"
         "base_object: orders\n"
         "measures: [{name: c, expression: 'COUNT(*)', type: BIGINT}]\n"
-        "dimensions: [{name: status, expression: o_orderstatus, type: VARCHAR}]\n"
+        "dimensions: [{name: status, expression: o_orderstatus, type: VARCHAR}]\n",
     )
     errors = validate_project(tmp_path)
     # No cube-specific errors.
@@ -1170,9 +1231,11 @@ def test_plan_upgrade_above_target(tmp_path):
 
 
 def test_plan_upgrade_default_to_latest(tmp_path):
+    from wren.context import _LATEST_SCHEMA_VERSION  # noqa: PLC0415
+
     _make_v1_project(tmp_path)
     result = plan_upgrade(tmp_path)
-    assert result.to_version == 4
+    assert result.to_version == _LATEST_SCHEMA_VERSION == 5
 
 
 def test_apply_upgrade_v1_to_v2(tmp_path):
@@ -1337,7 +1400,11 @@ def test_validate_manifest_empty_statement():
 
 @pytest.mark.unit
 def test_validate_manifest_model_no_description():
-    manifest = {"catalog": "wren", "schema": "public", "models": [_SEM_MODEL_WITHOUT_DESC]}
+    manifest = {
+        "catalog": "wren",
+        "schema": "public",
+        "models": [_SEM_MODEL_WITHOUT_DESC],
+    }
     result = validate_manifest(_b64(manifest), DataSource.duckdb)
     assert result["errors"] == []
     assert any("accounts" in w for w in result["warnings"])
@@ -1353,14 +1420,22 @@ def test_validate_manifest_view_no_description():
 
 @pytest.mark.unit
 def test_validate_manifest_level_error_suppresses_warnings():
-    manifest = {"catalog": "wren", "schema": "public", "models": [_SEM_MODEL_WITHOUT_DESC]}
+    manifest = {
+        "catalog": "wren",
+        "schema": "public",
+        "models": [_SEM_MODEL_WITHOUT_DESC],
+    }
     result = validate_manifest(_b64(manifest), DataSource.duckdb, level="error")
     assert result["warnings"] == []
 
 
 @pytest.mark.unit
 def test_validate_manifest_strict_column_warnings():
-    manifest = {"catalog": "wren", "schema": "public", "models": [_SEM_MODEL_WITHOUT_DESC]}
+    manifest = {
+        "catalog": "wren",
+        "schema": "public",
+        "models": [_SEM_MODEL_WITHOUT_DESC],
+    }
     result = validate_manifest(_b64(manifest), DataSource.duckdb, level="strict")
     text = " ".join(result["warnings"])
     assert "plan_cd" in text
@@ -1369,7 +1444,9 @@ def test_validate_manifest_strict_column_warnings():
 
 @pytest.mark.unit
 def test_validate_manifest_invalid_level():
-    result = validate_manifest(_b64(_SEM_BASE_MANIFEST), DataSource.duckdb, level="nope")
+    result = validate_manifest(
+        _b64(_SEM_BASE_MANIFEST), DataSource.duckdb, level="nope"
+    )
     assert any("nope" in e for e in result["errors"])
 
 
