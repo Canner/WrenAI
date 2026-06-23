@@ -47,18 +47,20 @@ def parse_query_markdown(path: Path) -> dict:
     Returns the frontmatter mapping with an extra ``_body`` key (stripped
     markdown body). Returns {} when the file has no frontmatter.
     """
-    text = path.read_text(encoding="utf-8")
-    if not text.startswith("---"):
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    if not lines or lines[0].strip() != "---":
         return {}
-    # Split: ---\n<frontmatter>\n---\n<body>
-    parts = text.split("---", 2)
-    if len(parts) < 3:
-        return {}
-    data = yaml.safe_load(parts[1]) or {}
-    if not isinstance(data, dict):
-        return {}
-    data["_body"] = parts[2].strip()
-    return data
+    # The closing delimiter is a line that is exactly "---" at column 0.
+    # Frontmatter values are indented (e.g. block-scalar sql), so a "---" line
+    # inside a value is indented and never matches here.
+    for i in range(1, len(lines)):
+        if lines[i].rstrip("\n") == "---":
+            data = yaml.safe_load("".join(lines[1:i])) or {}
+            if not isinstance(data, dict):
+                return {}
+            data["_body"] = "".join(lines[i + 1 :]).strip()
+            return data
+    return {}
 
 
 def _resolve_slug(base: str, nl: str, sql_dir: Path) -> str:
@@ -111,6 +113,7 @@ def write_query_markdown(
     Deterministic: the same NL updates the same file; a different NL that
     slugs to an existing name gets a numeric suffix.
     """
+    nl = nl.strip()  # canonical form — stored, slugged, and matched consistently
     sql_dir = knowledge_sql_dir(project_path)
     sql_dir.mkdir(parents=True, exist_ok=True)
     slug = _resolve_slug(slugify(nl), nl, sql_dir)

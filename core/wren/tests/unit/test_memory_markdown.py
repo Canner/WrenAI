@@ -64,6 +64,23 @@ def test_same_nl_updates_same_file(tmp_path):
     assert "SUM(amount)" in parse_query_markdown(b)["sql"]
 
 
+def test_same_nl_with_whitespace_reuses_file(tmp_path):
+    """NLs differing only by surrounding whitespace map to the same file."""
+    a = write_query_markdown(tmp_path, "Total revenue?", "SELECT 1")
+    b = write_query_markdown(tmp_path, "  Total revenue?  ", "SELECT 2")
+    assert a == b
+    assert len(list((tmp_path / "knowledge" / "sql").glob("*.md"))) == 1
+
+
+def test_sql_containing_dashes_roundtrips(tmp_path):
+    """SQL whose body contains a '---' line must not break frontmatter parsing."""
+    sql = "SELECT 1\n---\nUNION ALL\nSELECT 2"
+    dest = write_query_markdown(tmp_path, "Dashy query", sql)
+    fm = parse_query_markdown(dest)
+    assert fm["nl"] == "Dashy query"
+    assert fm["sql"] == sql
+
+
 def test_slug_collision_gets_suffix(tmp_path):
     a = write_query_markdown(tmp_path, "Revenue?!", "SELECT 1")
     b = write_query_markdown(tmp_path, "Revenue???", "SELECT 2")  # same slug base
