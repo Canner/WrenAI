@@ -6,13 +6,12 @@ dependency-free and `wren memory store` must work without LanceDB.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import yaml
 from typer.testing import CliRunner
 
 from wren.cli import app
 from wren.memory.markdown import (
+    load_query_pairs,
     parse_query_markdown,
     slugify,
     write_query_markdown,
@@ -87,6 +86,37 @@ def test_slug_collision_gets_suffix(tmp_path):
     assert a != b
     assert b.name == "revenue-2.md"
     assert len(list((tmp_path / "knowledge" / "sql").glob("*.md"))) == 2
+
+
+def test_load_query_pairs(tmp_path):
+    write_query_markdown(
+        tmp_path,
+        "Total revenue",
+        "SELECT SUM(amount) FROM orders",
+        datasource="postgres",
+        tags=["revenue"],
+    )
+    write_query_markdown(tmp_path, "Count orders", "SELECT COUNT(*) FROM orders")
+    pairs = load_query_pairs(tmp_path)
+    assert len(pairs) == 2
+    by_nl = {p["nl"]: p for p in pairs}
+    assert by_nl["Total revenue"]["sql"].startswith("SELECT SUM")
+    assert by_nl["Total revenue"]["datasource"] == "postgres"
+    assert by_nl["Total revenue"]["tags"] == ["revenue"]
+    assert by_nl["Total revenue"]["source"] == "user"
+    assert by_nl["Count orders"]["path"] == "knowledge/sql/count-orders.md"
+
+
+def test_load_query_pairs_empty(tmp_path):
+    assert load_query_pairs(tmp_path) == []
+
+
+def test_load_query_pairs_skips_unparseable(tmp_path):
+    sql_dir = tmp_path / "knowledge" / "sql"
+    sql_dir.mkdir(parents=True)
+    (sql_dir / "notes.md").write_text("# just a note, no frontmatter\n")
+    (sql_dir / "partial.md").write_text("---\nnl: only nl, no sql\n---\n")
+    assert load_query_pairs(tmp_path) == []
 
 
 def test_cli_store_writes_markdown_without_extra(tmp_path, monkeypatch):

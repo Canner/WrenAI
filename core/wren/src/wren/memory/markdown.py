@@ -63,6 +63,33 @@ def parse_query_markdown(path: Path) -> dict:
     return {}
 
 
+def load_query_pairs(project_path: Path) -> list[dict]:
+    """Load every NL→SQL pair from ``knowledge/sql/*.md`` (the source of truth).
+
+    Returns dicts shaped for ``MemoryStore.load_queries``: ``nl``, ``sql``,
+    plus ``datasource`` / ``tags`` / ``source`` when present and ``path`` (the
+    source file, relative to the project). Files without a parseable ``nl``+``sql``
+    frontmatter are skipped.
+    """
+    sql_dir = knowledge_sql_dir(project_path)
+    if not sql_dir.is_dir():
+        return []
+    pairs: list[dict] = []
+    for md in sorted(sql_dir.glob("*.md")):
+        fm = parse_query_markdown(md)
+        nl, sql = fm.get("nl"), fm.get("sql")
+        if not nl or not sql:
+            continue
+        pair: dict = {"nl": nl, "sql": sql, "source": fm.get("source", "user")}
+        if fm.get("datasource"):
+            pair["datasource"] = fm["datasource"]
+        if fm.get("tags"):
+            pair["tags"] = fm["tags"]
+        pair["path"] = str(md.relative_to(project_path))
+        pairs.append(pair)
+    return pairs
+
+
 def _resolve_slug(base: str, nl: str, sql_dir: Path) -> str:
     """Deterministic slug; reuse the file for the same NL, suffix on collision."""
     candidate = base

@@ -857,3 +857,47 @@ class TestYamlRoundTrip:
         # All should be skipped as duplicates
         assert result["skipped"] == 2
         assert result["loaded"] == 0
+
+
+# ── O5: knowledge/sql markdown is the source of truth for the index ────────
+
+
+@pytest.mark.unit
+class TestMarkdownSourcedIndex:
+    """index/recall/reset treat LanceDB as a derived index over knowledge/sql/."""
+
+    def test_load_query_pairs_index_is_convergent(self, memory_store, tmp_path):
+        from wren.memory.markdown import (  # noqa: PLC0415
+            load_query_pairs,
+            write_query_markdown,
+        )
+
+        write_query_markdown(tmp_path, "Total revenue", "SELECT SUM(amount) FROM o")
+        write_query_markdown(tmp_path, "Count orders", "SELECT COUNT(*) FROM o")
+        pairs = load_query_pairs(tmp_path)
+
+        memory_store.load_queries(pairs, upsert=True)
+        first, _ = memory_store.list_queries(limit=100)
+        # re-running index converges (no duplication)
+        memory_store.load_queries(load_query_pairs(tmp_path), upsert=True)
+        second, _ = memory_store.list_queries(limit=100)
+        assert len(first) == len(second) == 2
+
+    def test_reset_then_reindex_restores_from_markdown(self, memory_store, tmp_path):
+        from wren.memory.markdown import (  # noqa: PLC0415
+            load_query_pairs,
+            write_query_markdown,
+        )
+
+        write_query_markdown(tmp_path, "Total revenue", "SELECT SUM(amount) FROM o")
+        memory_store.load_queries(load_query_pairs(tmp_path), upsert=True)
+
+        memory_store.reset()  # derived index dropped
+        assert memory_store.status()["tables"] == {}
+        # markdown source survives the reset
+        assert (tmp_path / "knowledge" / "sql" / "total-revenue.md").exists()
+
+        # rebuild from markdown → recall works again
+        memory_store.load_queries(load_query_pairs(tmp_path), upsert=True)
+        hits = memory_store.recall_queries("revenue", limit=3)
+        assert any("SUM(amount)" in h["sql_query"] for h in hits)
