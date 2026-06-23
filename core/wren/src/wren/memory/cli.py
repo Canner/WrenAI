@@ -464,12 +464,16 @@ def check(
     indexed_nls = {r.get("nl_query") for r in indexed}
     # Only user-sourced pairs come from markdown; seeds/views are derived from
     # the manifest and are not expected to have a knowledge/sql/ file.
-    indexed_user = {r.get("nl_query") for r in indexed if r.get("tags") == "source:user"}
+    indexed_user = {
+        r.get("nl_query") for r in indexed if r.get("tags") == "source:user"
+    }
 
     missing = md_nls - indexed_nls  # in markdown but not indexed
     stale = indexed_user - md_nls  # user-indexed but no longer in markdown
 
-    typer.echo(f"knowledge/sql: {len(md_nls)} pair(s); index: {len(indexed_nls)} pair(s)")
+    typer.echo(
+        f"knowledge/sql: {len(md_nls)} pair(s); index: {len(indexed_nls)} pair(s)"
+    )
     if not missing and not stale:
         typer.echo("In sync.")
         return
