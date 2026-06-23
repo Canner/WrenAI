@@ -107,6 +107,39 @@ const rewriteMssqlDatepartFunctions = (sql: string): string =>
       `EXTRACT(${String(part).toUpperCase()} FROM ${String(expression).trim()})`,
   );
 
+const replaceCwSalesAliases = (sql: string): string => {
+  if (!/\bdbo_(?:qSales1|tblSalesHistory|tblSales)\b/i.test(sql)) {
+    return sql;
+  }
+
+  const salesTable = String.raw`(?:"dbo_(?:qSales1|tblSalesHistory|tblSales)"|\[dbo_(?:qSales1|tblSalesHistory|tblSales)\]|dbo_(?:qSales1|tblSalesHistory|tblSales))`;
+  const otdDate = String.raw`(?:"OTD_Date"|"OTDDate"|\[OTD_Date\]|\[OTDDate\]|OTD_Date|OTDDate)`;
+  const fixLogId = String.raw`(?:"FixLogId"|"FixLogID"|\[FixLogId\]|\[FixLogID\]|FixLogId|FixLogID)`;
+
+  sql = sql.replace(
+    new RegExp(String.raw`(${salesTable})\s*\.\s*${otdDate}`, 'gi'),
+    '$1."InvDate"',
+  );
+  sql = sql.replace(
+    new RegExp(String.raw`(${salesTable})\s*\.\s*${fixLogId}`, 'gi'),
+    '$1."InvoiceNo"',
+  );
+
+  const tableReferences = sql.match(new RegExp(salesTable, 'gi')) || [];
+  if (new Set(tableReferences.map((table) => table.toLowerCase())).size === 1) {
+    sql = sql.replace(
+      new RegExp(String.raw`(?<![\.\w])${otdDate}(?!\w)`, 'gi'),
+      '"InvDate"',
+    );
+    sql = sql.replace(
+      new RegExp(String.raw`(?<![\.\w])${fixLogId}(?!\w)`, 'gi'),
+      '"InvoiceNo"',
+    );
+  }
+
+  return sql;
+};
+
 const replaceInventedTimeBuckets = (sql: string): string => {
   const timestampExpression = inferMssqlTimestampExpression(sql);
   const bucketExpressions: Record<string, string> = {
@@ -478,6 +511,7 @@ export const normalizeMssqlGeneratedSqlFields = (
   sql = normalizeMssqlGeneratedSqlSyntax(sql);
   sql = rewriteMssqlDatepartFunctions(sql);
   sql = replaceRelativeCurrentDateCalls(sql);
+  sql = replaceCwSalesAliases(sql);
   sql = replaceInventedDateFields(sql);
   sql = replaceRepairLogThroughputShape(sql);
   sql = replaceTicketCycleTurnaroundShape(sql);

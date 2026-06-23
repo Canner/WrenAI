@@ -2,6 +2,55 @@ import { DataSourceName } from '../../types';
 import { normalizeMssqlSqlForIbis } from '../mssqlSqlNormalizer';
 
 describe('mssqlSqlNormalizer', () => {
+  it('rewrites CWSales OTD date aliases before MSSQL preview execution', () => {
+    const normalized = normalizeMssqlSqlForIbis(
+      `
+      SELECT
+        DATEPART(YEAR, "dbo_tblSalesHistory"."OTD_Date") AS "year",
+        DATEPART(MONTH, "dbo_tblSalesHistory"."OTD_Date") AS "month",
+        "dbo_tblSalesHistory"."MarketType" AS "MarketType",
+        SUM("dbo_tblSalesHistory"."Qty") AS "TotalQty"
+      FROM "dbo_tblSalesHistory"
+      GROUP BY
+        DATEPART(YEAR, "dbo_tblSalesHistory"."OTD_Date"),
+        DATEPART(MONTH, "dbo_tblSalesHistory"."OTD_Date"),
+        "dbo_tblSalesHistory"."MarketType"
+      ORDER BY
+        DATEPART(YEAR, "dbo_tblSalesHistory"."OTD_Date"),
+        DATEPART(MONTH, "dbo_tblSalesHistory"."OTD_Date")
+      `,
+      DataSourceName.MSSQL,
+    );
+
+    expect(normalized).not.toContain('OTD_Date');
+    expect(normalized).toContain('"dbo_tblSalesHistory"."InvDate"');
+  });
+
+  it('rewrites CWSales FixLogId aliases before MSSQL preview execution', () => {
+    const normalized = normalizeMssqlSqlForIbis(
+      `
+      SELECT
+        "SalesPerson",
+        Country,
+        COUNT("dbo_qSales1"."FixLogId") AS NumberOfInvoices
+      FROM "dbo_qSales1"
+      GROUP BY "SalesPerson", Country
+      ORDER BY NumberOfInvoices DESC
+      LIMIT 1
+      `,
+      DataSourceName.MSSQL,
+    );
+
+    expect(normalized).not.toContain('FixLogId');
+    expect(normalized).toContain('"dbo_qSales1"."InvoiceNo"');
+  });
+
+  it('does not rewrite CWSales aliases for non-MSSQL datasources', () => {
+    const sql = 'SELECT "dbo_tblSalesHistory"."OTD_Date" FROM "dbo_tblSalesHistory"';
+
+    expect(normalizeMssqlSqlForIbis(sql, DataSourceName.POSTGRES)).toBe(sql);
+  });
+
   it('rewrites aliased repair log time buckets', () => {
     const normalized = normalizeMssqlSqlForIbis(
       `
