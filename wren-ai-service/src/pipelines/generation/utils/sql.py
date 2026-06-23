@@ -2345,6 +2345,7 @@ _SEMANTIC_COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     "createdbyuser": ("created_by_user", "created_by_user_id", "author"),
     "createdbyuserid": ("created_by_user_id", "author"),
     "invoicequantity": ("Qty", "Quantity", "InvoiceQty", "InvoiceCount"),
+    "otddate": ("InvDate", "OrdDate", "OrderDate", "InvoiceDate", "Date"),
     "customerregion": ("Country", "Market", "Region", "CustomerRegion"),
     "fixlogid": ("DebugEntryId", "FixId", "RepairItem", "id"),
 }

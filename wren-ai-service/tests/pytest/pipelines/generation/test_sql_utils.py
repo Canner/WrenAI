@@ -98,6 +98,27 @@ def test_normalize_sql_column_references_to_schema_maps_unqualified_underscore_t
     ) == []
 
 
+def test_normalize_sql_column_references_to_schema_maps_otd_date_to_invoice_date():
+    sql = (
+        'SELECT DATEPART(YEAR, "dbo_tblSalesHistory"."OTD_Date") AS "Year", '
+        'SUM("dbo_tblSalesHistory"."SalesValue") AS "TotalSalesValue" '
+        'FROM "dbo_tblSalesHistory" '
+        'GROUP BY DATEPART(YEAR, "dbo_tblSalesHistory"."OTD_Date")'
+    )
+
+    normalized = normalize_sql_column_references_to_schema(
+        sql,
+        {"dbo_tblSalesHistory": ["InvDate", "SalesValue"]},
+    )
+
+    assert 'DATEPART(YEAR, "dbo_tblSalesHistory"."InvDate") AS "Year"' in normalized
+    assert "OTD_Date" not in normalized
+    assert find_invalid_column_references(
+        normalized,
+        {"dbo_tblSalesHistory": ["InvDate", "SalesValue"]},
+    ) == []
+
+
 def test_normalize_sql_column_references_to_schema_maps_sales_business_aliases():
     sql = (
         'SELECT "dbo_qSales1"."Customer_Region", '
