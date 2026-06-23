@@ -200,12 +200,25 @@ def index(
         + "."
     )
 
-    # ── Auto-load project queries.yml ──
+    # ── Rebuild query history from knowledge/sql/*.md (source of truth) ──
+    # Legacy queries.yml is still loaded when present, for the transition.
     if not no_queries:
         try:
             from wren.context import discover_project_path  # noqa: PLC0415
+            from wren.memory.markdown import load_query_pairs  # noqa: PLC0415
 
             project_path = discover_project_path(explicit=None)
+
+            md_pairs = load_query_pairs(project_path)
+            if md_pairs:
+                # upsert → re-running index converges on the markdown content.
+                res = mem_store.load_queries(md_pairs, upsert=True)
+                typer.echo(
+                    f"Indexed {res['loaded'] + res['updated']} pair(s) from "
+                    f"knowledge/sql/.",
+                    err=True,
+                )
+
             queries_file = project_path / "queries.yml"
             if queries_file.exists():
                 raw = queries_file.read_text(encoding="utf-8")
@@ -216,7 +229,7 @@ def index(
                     skipped = load_result["skipped"]
                     if loaded:
                         typer.echo(
-                            f"Loaded {loaded} pair(s) from queries.yml"
+                            f"Loaded {loaded} pair(s) from queries.yml (legacy)"
                             f" ({skipped} skipped).",
                             err=True,
                         )
@@ -366,7 +379,28 @@ def recall(
     """Search past NL→SQL pairs by semantic similarity."""
     mem_store = _get_store(path)
     results = mem_store.recall_queries(query, limit=limit, datasource=datasource)
+    _annotate_markdown_paths(results)
     _print_results(results, output)
+
+
+def _annotate_markdown_paths(results: list[dict]) -> None:
+    """Best-effort: point each recall result at its knowledge/sql/*.md source.
+
+    Matches on the exact NL (not a derived slug), so collision-suffixed files
+    are attributed correctly.
+    """
+    try:
+        from wren.context import discover_project_path  # noqa: PLC0415
+        from wren.memory.markdown import load_query_pairs  # noqa: PLC0415
+
+        project = discover_project_path()
+    except (SystemExit, Exception):  # noqa: BLE001 — annotation is optional
+        return
+    nl_to_path = {p["nl"]: p["path"] for p in load_query_pairs(project)}
+    for r in results:
+        nl = r.get("nl_query") or r.get("nl")
+        if nl and nl in nl_to_path:
+            r["path"] = nl_to_path[nl]
 
 
 @memory_app.command()
@@ -392,14 +426,66 @@ def reset(
         bool, typer.Option("--force", "-f", help="Skip confirmation")
     ] = False,
 ) -> None:
-    """Drop all memory tables and start fresh."""
+    """Drop the derived memory index. knowledge/sql/*.md is preserved.
+
+    The LanceDB index is a derived artifact — after reset, run `wren memory
+    index` to rebuild it from the markdown source of truth.
+    """
     if not force:
-        confirm = typer.confirm("This will delete all indexed memory. Continue?")
+        confirm = typer.confirm(
+            "This drops the derived memory index. Your knowledge/sql/*.md "
+            "source files are kept. Continue?"
+        )
         if not confirm:
             raise typer.Abort()
     mem_store = _get_store(path)
     mem_store.reset()
-    typer.echo("Memory reset.")
+    typer.echo(
+        "Memory index reset. Run `wren memory index` to rebuild from knowledge/sql/."
+    )
+
+
+@memory_app.command()
+def check(
+    path: PathOpt = None,
+) -> None:
+    """Report drift between knowledge/sql/*.md (source) and the LanceDB index."""
+    from wren.context import discover_project_path  # noqa: PLC0415
+    from wren.memory.markdown import load_query_pairs  # noqa: PLC0415
+
+    try:
+        project = discover_project_path()
+    except SystemExit as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1)
+
+    md_nls = {p["nl"] for p in load_query_pairs(project)}
+    mem_store = _get_store(path)
+    indexed, _ = mem_store.list_queries(limit=1_000_000)
+    indexed_nls = {r.get("nl_query") for r in indexed}
+    # Only user-sourced pairs come from markdown; seeds/views are derived from
+    # the manifest and are not expected to have a knowledge/sql/ file.
+    indexed_user = {
+        r.get("nl_query") for r in indexed if r.get("tags") == "source:user"
+    }
+
+    # Compare user pairs only — seed/view rows aren't markdown-backed.
+    missing = md_nls - indexed_user  # in markdown but not indexed as a user pair
+    stale = indexed_user - md_nls  # user-indexed but no longer in markdown
+
+    typer.echo(
+        f"knowledge/sql: {len(md_nls)} pair(s); index: {len(indexed_nls)} pair(s)"
+    )
+    if not missing and not stale:
+        typer.echo("In sync.")
+        return
+    if missing:
+        typer.echo(f"  {len(missing)} not indexed — run `wren memory index`.")
+    if stale:
+        typer.echo(
+            f"  {len(stale)} user pair(s) indexed without markdown — "
+            "stale index, run `wren memory index`."
+        )
 
 
 # ── List / Forget / Dump / Load ──────────────────────────────────────────
