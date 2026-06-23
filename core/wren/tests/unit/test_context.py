@@ -280,6 +280,72 @@ def test_load_instructions_missing(tmp_path):
     assert load_instructions(tmp_path) is None
 
 
+# ── knowledge/ rules + version axis (O3) ──────────────────────────────────
+
+
+def test_load_knowledge_rules_concatenates_sorted(tmp_path):
+    from wren.context import load_knowledge_rules  # noqa: PLC0415
+
+    _make_v2_project(tmp_path)
+    rdir = tmp_path / "knowledge" / "rules"
+    rdir.mkdir(parents=True)
+    (rdir / "b_units.md").write_text("Amounts are USD.\n")
+    (rdir / "a_filters.md").write_text("Exclude soft-deleted rows.\n")
+    result = load_knowledge_rules(tmp_path)
+    # sorted by filename: a_filters before b_units
+    assert result == "Exclude soft-deleted rows.\n\nAmounts are USD."
+
+
+def test_load_knowledge_rules_missing(tmp_path):
+    from wren.context import load_knowledge_rules  # noqa: PLC0415
+
+    _make_v2_project(tmp_path)
+    assert load_knowledge_rules(tmp_path) is None
+
+
+def test_load_rules_combines_knowledge_and_legacy(tmp_path):
+    from wren.context import load_rules  # noqa: PLC0415
+
+    _make_v2_project(tmp_path)
+    (tmp_path / "knowledge" / "rules").mkdir(parents=True)
+    (tmp_path / "knowledge" / "rules" / "general.md").write_text("From knowledge.\n")
+    (tmp_path / "instructions.md").write_text("From legacy.\n")
+    content, used_legacy = load_rules(tmp_path)
+    assert content == "From knowledge.\n\nFrom legacy."
+    assert used_legacy is True
+
+
+def test_load_rules_knowledge_only_no_legacy_flag(tmp_path):
+    from wren.context import load_rules  # noqa: PLC0415
+
+    _make_v2_project(tmp_path)
+    (tmp_path / "knowledge" / "rules").mkdir(parents=True)
+    (tmp_path / "knowledge" / "rules" / "general.md").write_text("Only knowledge.\n")
+    content, used_legacy = load_rules(tmp_path)
+    assert content == "Only knowledge."
+    assert used_legacy is False
+
+
+def test_get_knowledge_schema_version(tmp_path):
+    from wren.context import create_knowledge_skeleton, get_knowledge_schema_version  # noqa: PLC0415
+
+    _make_v2_project(tmp_path)
+    assert get_knowledge_schema_version(tmp_path) == 0  # no knowledge/ yet
+    create_knowledge_skeleton(tmp_path)
+    assert get_knowledge_schema_version(tmp_path) == 1
+
+
+def test_validate_rejects_unsupported_knowledge_version(tmp_path):
+    _make_v2_project(tmp_path, schema_version=5)
+    (tmp_path / "knowledge").mkdir()
+    (tmp_path / "knowledge" / "knowledge.yml").write_text("schema_version: 99\n")
+    errors = validate_project(tmp_path)
+    assert any(
+        "knowledge" in e.path and "unsupported knowledge schema_version" in e.message
+        for e in errors
+    )
+
+
 # ── build_manifest / build_json ───────────────────────────────────────────
 
 

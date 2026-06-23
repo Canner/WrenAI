@@ -174,11 +174,11 @@ def index(
         try:
             from wren.context import (  # noqa: I001, PLC0415
                 discover_project_path,
-                load_instructions,
+                load_rules,
             )
 
             project_path = discover_project_path()
-            instr = load_instructions(project_path)
+            instr, _ = load_rules(project_path)
             if instr:
                 manifest["_instructions"] = instr
         except (
