@@ -467,12 +467,14 @@ def _make_v1_project(tmp_path: Path) -> Path:
 
 
 def test_upgrade_cli_default_to_latest(tmp_path):
+    from wren.context import _LATEST_SCHEMA_VERSION  # noqa: PLC0415
+
     _make_valid_project(tmp_path)
     result = runner.invoke(app, ["context", "upgrade", "--path", str(tmp_path)])
     assert result.exit_code == 0, result.output
     assert "Upgrade complete" in result.output
     config = yaml.safe_load((tmp_path / "wren_project.yml").read_text())
-    assert config["schema_version"] == 4
+    assert config["schema_version"] == _LATEST_SCHEMA_VERSION == 5
 
 
 def test_upgrade_cli_dry_run(tmp_path):
@@ -491,7 +493,7 @@ def test_upgrade_cli_dry_run(tmp_path):
 
 def test_upgrade_cli_already_current(tmp_path):
     (tmp_path / "wren_project.yml").write_text(
-        "schema_version: 4\nname: test\ndata_source: postgres\n"
+        "schema_version: 5\nname: test\ndata_source: postgres\n"
     )
     result = runner.invoke(app, ["context", "upgrade", "--path", str(tmp_path)])
     assert result.exit_code == 0
