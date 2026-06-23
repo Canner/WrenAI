@@ -432,10 +432,12 @@ def save_project_config(project_path: Path, config: dict) -> None:
     )
 
 
-_SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4}
+_SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5}
 
-# schema_version → layoutVersion mapping for the engine
-_LAYOUT_VERSION_MAP = {1: 1, 2: 1, 3: 2, 4: 3}
+# schema_version → layoutVersion mapping for the engine.
+# v5 is the unified OSS/SaaS layout (knowledge/ as first-class project-layout);
+# it adds no engine-facing MDL JSON, so it reuses v4's engine layoutVersion 3.
+_LAYOUT_VERSION_MAP = {1: 1, 2: 1, 3: 2, 4: 3, 5: 3}
 
 # Valid dialect values (matches Rust DataSource enum)
 _VALID_DIALECTS = {
