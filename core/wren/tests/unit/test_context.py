@@ -1308,6 +1308,73 @@ def test_upgrade_preserves_instructions(tmp_path):
     assert "Rule 1" in content
 
 
+# ── v4 → v5 (knowledge/ skeleton) ─────────────────────────────────────────
+
+_KNOWLEDGE_SKELETON = [
+    "knowledge/rules/.gitkeep",
+    "knowledge/glossary/.gitkeep",
+    "knowledge/metrics/.gitkeep",
+    "knowledge/caveats/.gitkeep",
+    "knowledge/sql/.gitkeep",
+    "knowledge/knowledge.yml",
+]
+
+
+def test_plan_upgrade_v4_to_v5_lists_knowledge(tmp_path):
+    _make_v2_project(tmp_path, schema_version=4)
+    result = plan_upgrade(tmp_path, target_version=5)
+    assert result.from_version == 4
+    assert result.to_version == 5
+    assert set(result.files_created) == set(_KNOWLEDGE_SKELETON)
+    assert "wren_project.yml" in result.files_modified
+    # plan must not touch disk
+    assert not (tmp_path / "knowledge").exists()
+
+
+def test_apply_upgrade_v4_to_v5_creates_knowledge(tmp_path):
+    _make_v2_project(tmp_path, schema_version=4)
+    apply_upgrade(tmp_path, plan_upgrade(tmp_path, target_version=5))
+    assert get_schema_version(tmp_path) == 5
+    for rel in _KNOWLEDGE_SKELETON:
+        assert (tmp_path / rel).exists(), rel
+    # knowledge axis has its own schema_version, decoupled from MDL
+    import yaml as _yaml  # noqa: PLC0415
+
+    kcfg = _yaml.safe_load((tmp_path / "knowledge" / "knowledge.yml").read_text())
+    assert kcfg["schema_version"] == 1
+
+
+def test_upgrade_v4_to_v5_idempotent(tmp_path):
+    _make_v2_project(tmp_path, schema_version=4)
+    apply_upgrade(tmp_path, plan_upgrade(tmp_path, target_version=5))
+    # second pass: already at latest → no-op plan, knowledge untouched
+    again = plan_upgrade(tmp_path, target_version=5)
+    assert again.from_version == again.to_version == 5
+    assert again.files_created == []
+
+
+def test_upgrade_v4_to_v5_preserves_existing_knowledge(tmp_path):
+    """An existing knowledge file is never overwritten by the upgrade."""
+    _make_v2_project(tmp_path, schema_version=4)
+    (tmp_path / "knowledge" / "rules").mkdir(parents=True)
+    (tmp_path / "knowledge" / "rules" / "house.md").write_text("# keep me\n")
+    apply_upgrade(tmp_path, plan_upgrade(tmp_path, target_version=5))
+    assert (tmp_path / "knowledge" / "rules" / "house.md").read_text() == "# keep me\n"
+    assert (tmp_path / "knowledge" / "knowledge.yml").exists()
+
+
+def test_apply_upgrade_v2_to_v5_full_chain(tmp_path):
+    """v2 → v5 restamps through and builds the knowledge skeleton; models still load."""
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text("name: orders\ntable_reference:\n  table: orders\n")
+    apply_upgrade(tmp_path, plan_upgrade(tmp_path, target_version=5))
+    assert get_schema_version(tmp_path) == 5
+    assert (tmp_path / "knowledge" / "knowledge.yml").exists()
+    assert load_models(tmp_path)[0]["name"] == "orders"
+
+
 _PROJECT_FILE = "wren_project.yml"
 
 
