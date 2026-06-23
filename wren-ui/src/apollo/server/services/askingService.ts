@@ -952,7 +952,7 @@ export class AskingService implements IAskingService {
 
     const project = await this.projectService.getCurrentProject();
     const deployment = await this.deployService.getLastDeployment(project.id);
-    let chartData: PreviewDataResponse | undefined;
+    let chartData: PreviewDataResponse;
     try {
       chartData = (await this.queryService.preview(threadResponse.sql, {
         project,
@@ -963,8 +963,9 @@ export class AskingService implements IAskingService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       logger.warn(
-        `Preview failed before chart generation for response ${threadResponse.id}; falling back to AI service preview. ${message}`,
+        `Preview failed before chart generation for response ${threadResponse.id}. ${message}`,
       );
+      throw error;
     }
 
     // 1. create a task on AI service to generate the chart
@@ -1019,7 +1020,7 @@ export class AskingService implements IAskingService {
 
     const project = await this.projectService.getCurrentProject();
     const deployment = await this.deployService.getLastDeployment(project.id);
-    let chartData: PreviewDataResponse | undefined;
+    let chartData: PreviewDataResponse;
     try {
       chartData = (await this.queryService.preview(threadResponse.sql, {
         project,
@@ -1030,8 +1031,9 @@ export class AskingService implements IAskingService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       logger.warn(
-        `Preview failed before chart adjustment for response ${threadResponse.id}; falling back to AI service preview. ${message}`,
+        `Preview failed before chart adjustment for response ${threadResponse.id}. ${message}`,
       );
+      throw error;
     }
 
     // 1. create a task on AI service to adjust the chart
