@@ -383,6 +383,33 @@ def test_normalize_generation_result_sql_rewrites_common_mssql_time_patterns():
     assert 'DATEPART(MONTH, "created_at")' in normalized
 
 
+def test_normalize_generation_result_sql_rewrites_cwsales_otd_date_for_mssql():
+    sql = (
+        'SELECT DATEPART(YEAR, "dbo_tblSalesHistory"."OTD_Date") AS "Year", '
+        'SUM("dbo_tblSalesHistory"."SalesValue") AS "TotalSalesValue" '
+        'FROM "dbo_tblSalesHistory" '
+        'GROUP BY DATEPART(YEAR, "dbo_tblSalesHistory"."OTD_Date")'
+    )
+
+    normalized = normalize_generation_result_sql(sql, data_source="MSSQL")
+
+    assert "OTD_Date" not in normalized
+    assert 'DATEPART(YEAR, "dbo_tblSalesHistory"."InvDate") AS "Year"' in normalized
+    assert 'GROUP BY DATEPART(YEAR, "dbo_tblSalesHistory"."InvDate")' in normalized
+
+
+def test_normalize_generation_result_sql_rewrites_cwsales_fix_log_id_for_mssql():
+    sql = (
+        'SELECT COUNT("dbo_qSales1"."FixLogId") AS "NumberOfInvoices" '
+        'FROM "dbo_qSales1"'
+    )
+
+    normalized = normalize_generation_result_sql(sql, data_source="MSSQL")
+
+    assert "FixLogId" not in normalized
+    assert 'COUNT("dbo_qSales1"."InvoiceNo") AS "NumberOfInvoices"' in normalized
+
+
 def test_normalize_generation_result_sql_rewrites_common_mssql_dateadd_patterns():
     sql = """
     SELECT

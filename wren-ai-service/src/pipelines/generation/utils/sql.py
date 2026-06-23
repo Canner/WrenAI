@@ -548,6 +548,50 @@ def _rewrite_mssql_invented_date_identifiers(sql: str) -> str:
     return invented_date_identifier_pattern.sub(timestamp_expression, rewritten)
 
 
+def _rewrite_mssql_sales_schema_aliases(sql: str) -> str:
+    sales_table_identifier = (
+        r'(?:"dbo_(?:qSales1|tblSalesHistory|tblSales)"'
+        r"|\[dbo_(?:qSales1|tblSalesHistory|tblSales)\]"
+        r"|dbo_(?:qSales1|tblSalesHistory|tblSales))"
+    )
+
+    def replace_qualified_column(column_pattern: str, canonical_column: str) -> None:
+        nonlocal sql
+        sql = re.sub(
+            rf"(?P<table>{sales_table_identifier})\s*\.\s*{column_pattern}",
+            lambda match: f'{match.group("table")}."{canonical_column}"',
+            sql,
+            flags=re.IGNORECASE,
+        )
+
+    otd_date_pattern = (
+        r'(?:"OTD_Date"|"OTDDate"|\[OTD_Date\]|\[OTDDate\]|OTD_Date|OTDDate)'
+    )
+    fix_log_id_pattern = (
+        r'(?:"FixLogId"|"FixLogID"|\[FixLogId\]|\[FixLogID\]|FixLogId|FixLogID)'
+    )
+    replace_qualified_column(otd_date_pattern, "InvDate")
+    replace_qualified_column(fix_log_id_pattern, "InvoiceNo")
+
+    if len(extract_sql_table_references(sql)) == 1 and re.search(
+        rf"\bFROM\s+{sales_table_identifier}\b", sql, flags=re.IGNORECASE
+    ):
+        sql = re.sub(
+            rf"(?<![\.\w]){otd_date_pattern}(?!\w)",
+            '"InvDate"',
+            sql,
+            flags=re.IGNORECASE,
+        )
+        sql = re.sub(
+            rf"(?<![\.\w]){fix_log_id_pattern}(?!\w)",
+            '"InvoiceNo"',
+            sql,
+            flags=re.IGNORECASE,
+        )
+
+    return sql
+
+
 def _rewrite_mssql_invented_repair_relationship_identifiers(sql: str) -> str:
     rewritten = sql
 
@@ -1417,6 +1461,7 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
         normalized = _rewrite_mssql_timestamp_subtraction(normalized)
         normalized = _rewrite_mssql_to_date_buckets(normalized)
         normalized = _rewrite_mssql_timestamp_casts(normalized)
+        normalized = _rewrite_mssql_sales_schema_aliases(normalized)
         normalized = _rewrite_mssql_invented_date_identifiers(normalized)
         normalized = _rewrite_mssql_invented_repair_relationship_identifiers(
             normalized
