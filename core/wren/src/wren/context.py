@@ -439,6 +439,13 @@ _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5}
 # it adds no engine-facing MDL JSON, so it reuses v4's engine layoutVersion 3.
 _LAYOUT_VERSION_MAP = {1: 1, 2: 1, 3: 2, 4: 3, 5: 3}
 
+# knowledge/ layout (v5). Single source of truth — reused by the v4→v5 upgrade
+# step and by project init. The knowledge axis has its own schema_version in
+# knowledge.yml, decoupled from the MDL schema_version in wren_project.yml.
+_KNOWLEDGE_SUBDIRS = ("rules", "glossary", "metrics", "caveats", "sql")
+_KNOWLEDGE_CONFIG_FILE = "knowledge/knowledge.yml"
+_KNOWLEDGE_SCHEMA_VERSION = 1
+
 # Valid dialect values (matches Rust DataSource enum)
 _VALID_DIALECTS = {
     "athena",
@@ -1163,6 +1170,36 @@ class UpgradeError(Exception):
     """Raised when a project upgrade cannot proceed."""
 
 
+def _knowledge_skeleton_targets() -> list[str]:
+    """Canonical relative paths of a fresh knowledge/ skeleton.
+
+    Empty subdirectories carry a .gitkeep so the layout survives in git.
+    """
+    paths = [f"knowledge/{sub}/.gitkeep" for sub in _KNOWLEDGE_SUBDIRS]
+    paths.append(_KNOWLEDGE_CONFIG_FILE)
+    return paths
+
+
+def create_knowledge_skeleton(project_path: Path) -> list[str]:
+    """Create any missing parts of the knowledge/ skeleton. Idempotent.
+
+    Returns the relative paths actually created (empty if already complete).
+    Existing files are never overwritten.
+    """
+    created: list[str] = []
+    for rel in _knowledge_skeleton_targets():
+        dest = project_path / rel
+        if dest.exists():
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if rel == _KNOWLEDGE_CONFIG_FILE:
+            dest.write_text(f"schema_version: {_KNOWLEDGE_SCHEMA_VERSION}\n")
+        else:
+            dest.write_text("")  # .gitkeep
+        created.append(rel)
+    return created
+
+
 def plan_upgrade(
     project_path: Path,
     target_version: int | None = None,
@@ -1197,6 +1234,10 @@ def plan_upgrade(
     for version in range(current, target):
         if version == 1:
             created, deleted = _plan_v1_to_v2(project_path)
+            files_created.extend(created)
+            files_deleted.extend(deleted)
+        elif version == 4:
+            created, deleted = _plan_v4_to_v5(project_path)
             files_created.extend(created)
             files_deleted.extend(deleted)
         # v2→v3 (dialect) and v3→v4 (composite primary_key): no file layout
@@ -1270,13 +1311,28 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
     return created, deleted
 
 
+def _plan_v4_to_v5(project_path: Path) -> tuple[list[str], list[str]]:
+    """Plan v4→v5: create the knowledge/ skeleton if absent.
+
+    First file-creating step since v1→v2. Idempotent — lists only the
+    skeleton paths that don't already exist.
+    """
+    created = [
+        rel
+        for rel in _knowledge_skeleton_targets()
+        if not (project_path / rel).exists()
+    ]
+    return created, []
+
+
 def apply_upgrade(project_path: Path, result: UpgradeResult) -> None:
-    """Write upgrade changes to disk."""
-    if not result.files_created and not result.files_deleted:
-        # No-op (e.g. v2→v3, only wren_project.yml changes)
-        pass
-    else:
-        _apply_v1_to_v2(project_path)
+    """Write upgrade changes to disk, replaying each version step in order."""
+    for version in range(result.from_version, result.to_version):
+        if version == 1:
+            _apply_v1_to_v2(project_path)
+        elif version == 4:
+            _apply_v4_to_v5(project_path)
+        # v2→v3, v3→v4: only the wren_project.yml stamp changes (handled below)
 
     # Update wren_project.yml
     config = load_project_config(project_path)
@@ -1369,6 +1425,11 @@ def _apply_v1_to_v2(project_path: Path) -> None:
             old_file = project_path / "cubes" / source_file
             if old_file.exists():
                 old_file.unlink()
+
+
+def _apply_v4_to_v5(project_path: Path) -> None:
+    """Execute v4→v5: create the knowledge/ skeleton (idempotent)."""
+    create_knowledge_skeleton(project_path)
 
 
 # ── Semantic validation (view dry-plan + description completeness) ─────────

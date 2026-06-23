@@ -564,6 +564,35 @@ def test_upgrade_cli_explicit_to_version(tmp_path):
     assert config["schema_version"] == 2
 
 
+def test_upgrade_cli_v4_to_v5_builds_knowledge(tmp_path):
+    """Upgrading a v4 project to latest creates the knowledge/ skeleton."""
+    (tmp_path / "wren_project.yml").write_text(
+        "schema_version: 4\nname: test\ndata_source: postgres\n"
+    )
+    result = runner.invoke(app, ["context", "upgrade", "--path", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "Upgrade complete" in result.output
+    config = yaml.safe_load((tmp_path / "wren_project.yml").read_text())
+    assert config["schema_version"] == 5
+    assert (tmp_path / "knowledge" / "knowledge.yml").exists()
+    assert (tmp_path / "knowledge" / "rules" / ".gitkeep").exists()
+
+
+def test_upgrade_cli_v4_to_v5_dry_run_no_write(tmp_path):
+    """Dry-run lists the knowledge skeleton but writes nothing."""
+    (tmp_path / "wren_project.yml").write_text(
+        "schema_version: 4\nname: test\ndata_source: postgres\n"
+    )
+    result = runner.invoke(
+        app, ["context", "upgrade", "--path", str(tmp_path), "--dry-run"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "knowledge/knowledge.yml" in result.output
+    assert not (tmp_path / "knowledge").exists()
+    config = yaml.safe_load((tmp_path / "wren_project.yml").read_text())
+    assert config["schema_version"] == 4
+
+
 # ── wren context import dbt ───────────────────────────────────────────────
 
 
