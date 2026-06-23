@@ -317,10 +317,42 @@ def store(
     tags: Annotated[Optional[str], typer.Option("--tags")] = None,
     path: PathOpt = None,
 ) -> None:
-    """Store a NL→SQL pair for future few-shot retrieval."""
-    mem_store = _get_store(path)
-    mem_store.store_query(nl, sql, datasource=datasource, tags=tags)
-    typer.echo("Query stored.")
+    """Store a NL→SQL pair as knowledge/sql/<slug>.md (source of truth), then index it.
+
+    The markdown file is always written (no extra required). When the ``memory``
+    extra is installed, the pair is also indexed into LanceDB for semantic recall.
+    """
+    from wren.context import discover_project_path  # noqa: PLC0415
+    from wren.memory.markdown import write_query_markdown  # noqa: PLC0415
+
+    try:
+        project_path = discover_project_path()
+    except SystemExit as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1)
+
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
+    md_path = write_query_markdown(
+        project_path, nl, sql, datasource=datasource, tags=tag_list
+    )
+    typer.echo(f"Stored: {md_path}")
+
+    # Best-effort: index into LanceDB when the memory extra is available.
+    try:
+        from wren.memory.store import MemoryStore  # noqa: PLC0415
+
+        resolved = path or str(_default_memory_path())
+        MemoryStore(path=resolved).store_query(
+            nl, sql, datasource=datasource, tags=tags
+        )
+    except ModuleNotFoundError as e:
+        if (e.name or "").split(".")[0] not in {
+            "lancedb",
+            "sentence_transformers",
+            "pyarrow",
+        }:
+            raise
+        # memory extra not installed — markdown-only; run `wren memory index` later.
 
 
 @memory_app.command()

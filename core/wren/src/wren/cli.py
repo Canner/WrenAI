@@ -607,14 +607,14 @@ app.add_typer(cube_app)
 app.add_typer(utils_app)
 app.add_typer(skills_app)
 
-from importlib.util import find_spec  # noqa: E402
+# The `memory` subcommand group is always registered: `wren memory store`
+# writes knowledge/sql/*.md without the optional `memory` extra, and the
+# lancedb-backed commands degrade with a clear "install wren[memory]" message.
+# Importing memory_app stays light — lancedb / the heavy ML stack are imported
+# lazily inside the commands that need them, never at CLI startup.
+from wren.memory.cli import memory_app  # noqa: E402
 
-# Detect the optional `memory` extra without importing it: a real import would
-# eagerly pull lancedb (and the heavy ML stack it loads) into every CLI startup.
-if find_spec("lancedb") and find_spec("sentence_transformers"):
-    from wren.memory.cli import memory_app  # noqa: PLC0415
-
-    app.add_typer(memory_app)
+app.add_typer(memory_app)
 
 from wren.genbi.cli import genbi_app  # noqa: PLC0415, E402
 from wren.profile_cli import profile_app  # noqa: PLC0415, E402
