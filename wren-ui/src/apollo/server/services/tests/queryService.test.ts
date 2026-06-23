@@ -379,6 +379,105 @@ describe('QueryService', () => {
     expect(mockIbisAdaptor.dryRun).not.toHaveBeenCalled();
   });
 
+  it('should reject sql that references columns outside the active manifest before ibis dry run', async () => {
+    await expect(
+      queryService.preview('SELECT "orders"."OTD_Date" FROM "orders"', {
+        project: { type: DataSourceName.POSTGRES, connectionInfo: {} },
+        manifest: {
+          models: [
+            {
+              name: 'orders',
+              tableReference: { table: 'orders' },
+              columns: [
+                { name: 'order_date', type: 'timestamp', isCalculated: false },
+                { name: 'quantity', type: 'integer', isCalculated: false },
+              ],
+            },
+          ],
+        },
+        dryRun: true,
+      }),
+    ).rejects.toThrow(
+      'Generated SQL references column(s) or expressions not valid for the active datasource metadata: orders.OTD_Date',
+    );
+
+    expect(mockIbisAdaptor.dryRun).not.toHaveBeenCalled();
+  });
+
+  it('should reject unqualified projected columns outside a single active manifest table', async () => {
+    await expect(
+      queryService.preview('SELECT tools_required FROM "knowledge_articles"', {
+        project: { type: DataSourceName.POSTGRES, connectionInfo: {} },
+        manifest: {
+          models: [
+            {
+              name: 'knowledge_articles',
+              tableReference: { table: 'knowledge_articles' },
+              columns: [
+                { name: 'id', type: 'integer', isCalculated: false },
+                { name: 'content', type: 'string', isCalculated: false },
+              ],
+            },
+          ],
+        },
+        dryRun: true,
+      }),
+    ).rejects.toThrow(
+      'Generated SQL references column(s) or expressions not valid for the active datasource metadata: tools_required',
+    );
+
+    expect(mockIbisAdaptor.dryRun).not.toHaveBeenCalled();
+  });
+
+  it('should reject numeric aggregates on non-numeric manifest columns before ibis planning', async () => {
+    await expect(
+      queryService.preview('SELECT AVG("orders"."quantity") FROM "orders"', {
+        project: { type: DataSourceName.POSTGRES, connectionInfo: {} },
+        manifest: {
+          models: [
+            {
+              name: 'orders',
+              tableReference: { table: 'orders' },
+              columns: [
+                { name: 'quantity', type: 'string', isCalculated: false },
+              ],
+            },
+          ],
+        },
+        dryRun: true,
+      }),
+    ).rejects.toThrow(
+      'Generated SQL references column(s) or expressions not valid for the active datasource metadata: AVG(orders.quantity) uses a non-numeric column',
+    );
+
+    expect(mockIbisAdaptor.dryRun).not.toHaveBeenCalled();
+  });
+
+  it('should allow numeric aggregates on numeric manifest columns before ibis planning', async () => {
+    mockIbisAdaptor.dryRun.mockResolvedValue({
+      correlationId: '123',
+      processTime: '1s',
+    });
+
+    await queryService.preview('SELECT AVG("orders"."quantity") FROM "orders"', {
+      project: { type: DataSourceName.POSTGRES, connectionInfo: {} },
+      manifest: {
+        models: [
+          {
+            name: 'orders',
+            tableReference: { table: 'orders' },
+            columns: [
+              { name: 'quantity', type: 'integer', isCalculated: false },
+            ],
+          },
+        ],
+      },
+      dryRun: true,
+    });
+
+    expect(mockIbisAdaptor.dryRun).toHaveBeenCalledTimes(1);
+  });
+
   it('should allow active manifest table references before ibis dry run', async () => {
     mockIbisAdaptor.dryRun.mockResolvedValue({
       correlationId: '123',

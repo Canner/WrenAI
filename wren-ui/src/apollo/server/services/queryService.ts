@@ -1,5 +1,5 @@
 import { DataSourceName } from '@server/types';
-import { Manifest, TableReference } from '@server/mdl/type';
+import { ColumnMDL, Manifest, TableReference } from '@server/mdl/type';
 import { IWrenEngineAdaptor } from '../adaptors/wrenEngineAdaptor';
 import {
   SupportedDataSource,
@@ -316,6 +316,9 @@ const splitTableReference = (tableReference: string) =>
     .map(normalizeSqlIdentifier)
     .filter(Boolean);
 
+const compactSqlIdentifier = (identifier: string) =>
+  normalizeSqlIdentifier(identifier).replace(/[^A-Za-z0-9]/g, '').toLowerCase();
+
 const extractSqlTableReferences = (sql: string) => {
   const references: string[] = [];
   const tablePattern = new RegExp(
@@ -356,6 +359,283 @@ const getManifestQueryableNames = (manifest?: Manifest) => {
   return names;
 };
 
+interface ManifestModelSchema {
+  name: string;
+  columns: Map<string, ColumnMDL>;
+}
+
+const addManifestModelSchemaAlias = (
+  schemas: Map<string, ManifestModelSchema>,
+  alias: string | undefined,
+  schema: ManifestModelSchema,
+) => {
+  if (!alias) {
+    return;
+  }
+  schemas.set(alias.toLowerCase(), schema);
+  schemas.set(compactSqlIdentifier(alias), schema);
+};
+
+const getManifestModelSchemas = (manifest?: Manifest) => {
+  const schemas = new Map<string, ManifestModelSchema>();
+
+  for (const model of manifest?.models || []) {
+    if (!model.name || !model.columns?.length) {
+      continue;
+    }
+
+    const columns = new Map<string, ColumnMDL>();
+    model.columns
+      .filter((column) => column?.name)
+      .forEach((column) => {
+        columns.set(column.name.toLowerCase(), column);
+        columns.set(compactSqlIdentifier(column.name), column);
+      });
+
+    const schema: ManifestModelSchema = {
+      name: model.name,
+      columns,
+    };
+
+    addManifestModelSchemaAlias(schemas, model.name, schema);
+    addManifestModelSchemaAlias(schemas, model.tableReference?.table, schema);
+
+    const referenceParts = [
+      model.tableReference?.catalog,
+      model.tableReference?.schema,
+      model.tableReference?.table,
+    ].filter(Boolean);
+    if (referenceParts.length) {
+      addManifestModelSchemaAlias(schemas, referenceParts.join('.'), schema);
+    }
+  }
+
+  return schemas;
+};
+
+const extractSqlTableAliases = (
+  sql: string,
+  schemas: Map<string, ManifestModelSchema>,
+) => {
+  const aliases = new Map<string, ManifestModelSchema>();
+  const tablePattern = new RegExp(
+    String.raw`\b(?:FROM|JOIN)\s+(${SQL_IDENTIFIER_PATTERN}(?:\s*\.\s*${SQL_IDENTIFIER_PATTERN})*)(?:\s+(?:AS\s+)?(${SQL_IDENTIFIER_PATTERN}))?`,
+    'gi',
+  );
+  const clauseWords = new Set([
+    'where',
+    'join',
+    'inner',
+    'left',
+    'right',
+    'full',
+    'cross',
+    'group',
+    'order',
+    'having',
+    'limit',
+    'offset',
+    'fetch',
+    'union',
+    'on',
+  ]);
+
+  let match: RegExpExecArray | null;
+  while ((match = tablePattern.exec(sql))) {
+    const reference = splitTableReference(match[1]).join('.');
+    const lastPart = splitTableReference(reference).pop();
+    const schema =
+      schemas.get(reference.toLowerCase()) ||
+      schemas.get(compactSqlIdentifier(reference)) ||
+      (lastPart
+        ? schemas.get(lastPart.toLowerCase()) ||
+          schemas.get(compactSqlIdentifier(lastPart))
+        : undefined);
+
+    if (!schema) {
+      continue;
+    }
+
+    aliases.set(reference.toLowerCase(), schema);
+    if (lastPart) {
+      aliases.set(lastPart.toLowerCase(), schema);
+    }
+
+    const alias = match[2] ? normalizeSqlIdentifier(match[2]) : null;
+    if (alias && !clauseWords.has(alias.toLowerCase())) {
+      aliases.set(alias.toLowerCase(), schema);
+    }
+  }
+
+  return aliases;
+};
+
+const isNumericColumnType = (type?: string) =>
+  !!type &&
+  /(?:int|integer|bigint|smallint|tinyint|float|double|decimal|numeric|number|real|money)/i.test(
+    type,
+  );
+
+const isDefined = <T>(value: T | undefined | null): value is T =>
+  value !== undefined && value !== null;
+
+const splitTopLevelSqlList = (body: string) => {
+  const items: string[] = [];
+  let current = '';
+  let depth = 0;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inBracket = false;
+
+  for (const char of body) {
+    if (char === "'" && !inDoubleQuote && !inBracket) {
+      inSingleQuote = !inSingleQuote;
+    } else if (char === '"' && !inSingleQuote && !inBracket) {
+      inDoubleQuote = !inDoubleQuote;
+    } else if (char === '[' && !inSingleQuote && !inDoubleQuote) {
+      inBracket = true;
+    } else if (char === ']' && inBracket) {
+      inBracket = false;
+    } else if (!inSingleQuote && !inDoubleQuote && !inBracket) {
+      if (char === '(') depth += 1;
+      if (char === ')' && depth > 0) depth -= 1;
+      if (char === ',' && depth === 0) {
+        items.push(current.trim());
+        current = '';
+        continue;
+      }
+    }
+    current += char;
+  }
+
+  if (current.trim()) {
+    items.push(current.trim());
+  }
+  return items;
+};
+
+const stripProjectionAlias = (item: string) => {
+  const aliasMatch = item.match(
+    /\s+(?:AS\s+)?(?:"[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)\s*$/i,
+  );
+  if (!aliasMatch || aliasMatch.index === undefined) {
+    return item.trim();
+  }
+
+  const expression = item.slice(0, aliasMatch.index).trim();
+  return expression || item.trim();
+};
+
+const extractSimpleProjectionColumns = (sql: string) => {
+  const columns: string[] = [];
+  const selectPattern = /\bSELECT\b(?<body>.*?)(?=\bFROM\b)/gis;
+  let match: RegExpExecArray | null;
+  while ((match = selectPattern.exec(sql))) {
+    const body = match.groups?.body || '';
+    splitTopLevelSqlList(body).forEach((item) => {
+      const expression = stripProjectionAlias(
+        item.replace(/^\s*DISTINCT\s+/i, ''),
+      );
+      const identifierMatch = expression.match(
+        new RegExp(String.raw`^${SQL_IDENTIFIER_PATTERN}$`, 'i'),
+      );
+      if (identifierMatch && normalizeSqlIdentifier(expression) !== '*') {
+        columns.push(normalizeSqlIdentifier(expression));
+      }
+    });
+  }
+  return columns;
+};
+
+const findSqlReferenceValidationErrors = (
+  sql: string,
+  manifest?: Manifest,
+) => {
+  const schemas = getManifestModelSchemas(manifest);
+  if (!schemas.size) {
+    return [];
+  }
+
+  const aliases = extractSqlTableAliases(sql, schemas);
+  const errors: string[] = [];
+  const qualifiedColumnPattern = new RegExp(
+    String.raw`(${SQL_IDENTIFIER_PATTERN})\s*\.\s*(${SQL_IDENTIFIER_PATTERN})`,
+    'gi',
+  );
+
+  let match: RegExpExecArray | null;
+  while ((match = qualifiedColumnPattern.exec(sql))) {
+    const qualifier = normalizeSqlIdentifier(match[1]);
+    const column = normalizeSqlIdentifier(match[2]);
+    const schema = aliases.get(qualifier.toLowerCase());
+
+    if (!schema || column === '*') {
+      continue;
+    }
+
+    if (
+      !schema.columns.has(column.toLowerCase()) &&
+      !schema.columns.has(compactSqlIdentifier(column))
+    ) {
+      errors.push(`${qualifier}.${column}`);
+    }
+  }
+
+  const aggregatePattern = new RegExp(
+    String.raw`\b(AVG|SUM)\s*\(\s*(?:DISTINCT\s+)?(${SQL_IDENTIFIER_PATTERN})(?:\s*\.\s*(${SQL_IDENTIFIER_PATTERN}))?\s*\)`,
+    'gi',
+  );
+  while ((match = aggregatePattern.exec(sql))) {
+    const functionName = match[1].toUpperCase();
+    const qualifier = match[3] ? normalizeSqlIdentifier(match[2]) : null;
+    const column = normalizeSqlIdentifier(match[3] || match[2]);
+    if (column === '*') {
+      continue;
+    }
+
+    const candidateSchemas = qualifier
+      ? [aliases.get(qualifier.toLowerCase())].filter(isDefined)
+      : [...new Set(aliases.values())];
+    const matchingColumns = candidateSchemas
+      .map(
+        (schema) =>
+          schema?.columns.get(column.toLowerCase()) ||
+          schema?.columns.get(compactSqlIdentifier(column)),
+      )
+      .filter(isDefined);
+
+    if (!matchingColumns.length) {
+      errors.push(qualifier ? `${qualifier}.${column}` : column);
+      continue;
+    }
+
+    if (
+      matchingColumns.some(
+        (columnSchema) => !isNumericColumnType(columnSchema.type),
+      )
+    ) {
+      errors.push(
+        `${functionName}(${qualifier ? `${qualifier}.` : ''}${column}) uses a non-numeric column`,
+      );
+    }
+  }
+
+  const activeSchemas = [...new Set(aliases.values())];
+  if (activeSchemas.length === 1) {
+    const [schema] = activeSchemas;
+    extractSimpleProjectionColumns(sql).forEach((column) => {
+      if (
+        !schema.columns.has(column.toLowerCase()) &&
+        !schema.columns.has(compactSqlIdentifier(column))
+      ) {
+        errors.push(column);
+      }
+    });
+  }
+
+  return [...new Set(errors)];
+};
+
 const validateSqlReferencesManifest = (sql: string, manifest?: Manifest) => {
   const validNames = getManifestQueryableNames(manifest);
   if (!validNames.size) {
@@ -378,6 +658,16 @@ const validateSqlReferencesManifest = (sql: string, manifest?: Manifest) => {
       `Generated SQL references table(s) not present in the active datasource metadata: ${[
         ...new Set(invalidReferences),
       ].join(', ')}`,
+    );
+  }
+
+  const invalidColumnReferences = findSqlReferenceValidationErrors(
+    sql,
+    manifest,
+  );
+  if (invalidColumnReferences.length) {
+    throw new Error(
+      `Generated SQL references column(s) or expressions not valid for the active datasource metadata: ${invalidColumnReferences.join(', ')}`,
     );
   }
 };
@@ -415,32 +705,42 @@ export class QueryService implements IQueryService {
     } = options;
     const mdl = normalizeDeployedManifestForDatasource(rawMdl, project);
     const { type: dataSource, connectionInfo } = project;
-    validateSqlReferencesManifest(sql, mdl);
+    const normalizedPreview = normalizePreviewSqlForIbis(sql, dataSource, limit);
+    validateSqlReferencesManifest(normalizedPreview.sql, mdl);
     if (this.useEngine(dataSource)) {
       if (dryRun) {
         logger.debug('Using wren engine to dry run');
-        await this.wrenEngineAdaptor.dryRun(sql, {
+        await this.wrenEngineAdaptor.dryRun(normalizedPreview.sql, {
           manifest: mdl,
-          limit,
+          limit: normalizedPreview.limit,
         });
         return true;
       } else {
         logger.debug('Using wren engine to preview');
-        const data = await this.wrenEngineAdaptor.previewData(sql, mdl, limit);
+        const data = await this.wrenEngineAdaptor.previewData(
+          normalizedPreview.sql,
+          mdl,
+          normalizedPreview.limit,
+        );
         return data as PreviewDataResponse;
       }
     } else {
       this.checkDataSourceIsSupported(dataSource);
       logger.debug('Use ibis adaptor to preview');
       if (dryRun) {
-        return await this.ibisDryRun(sql, dataSource, connectionInfo, mdl);
-      } else {
-        return await this.ibisQuery(
-          sql,
+        return await this.ibisDryRun(
+          normalizedPreview.sql,
           dataSource,
           connectionInfo,
           mdl,
-          limit,
+        );
+      } else {
+        return await this.ibisQuery(
+          normalizedPreview.sql,
+          dataSource,
+          connectionInfo,
+          mdl,
+          normalizedPreview.limit,
           refresh,
           cacheEnabled,
         );
