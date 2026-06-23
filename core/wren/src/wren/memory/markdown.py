@@ -55,7 +55,10 @@ def parse_query_markdown(path: Path) -> dict:
     # inside a value is indented and never matches here.
     for i in range(1, len(lines)):
         if lines[i].rstrip("\n") == "---":
-            data = yaml.safe_load("".join(lines[1:i])) or {}
+            try:
+                data = yaml.safe_load("".join(lines[1:i])) or {}
+            except yaml.YAMLError:
+                return {}  # malformed frontmatter — treat as no pair, don't crash callers
             if not isinstance(data, dict):
                 return {}
             data["_body"] = "".join(lines[i + 1 :]).strip()

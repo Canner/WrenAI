@@ -384,22 +384,23 @@ def recall(
 
 
 def _annotate_markdown_paths(results: list[dict]) -> None:
-    """Best-effort: point each recall result at its knowledge/sql/*.md source."""
+    """Best-effort: point each recall result at its knowledge/sql/*.md source.
+
+    Matches on the exact NL (not a derived slug), so collision-suffixed files
+    are attributed correctly.
+    """
     try:
         from wren.context import discover_project_path  # noqa: PLC0415
-        from wren.memory.markdown import knowledge_sql_dir, slugify  # noqa: PLC0415
+        from wren.memory.markdown import load_query_pairs  # noqa: PLC0415
 
         project = discover_project_path()
     except (SystemExit, Exception):  # noqa: BLE001 — annotation is optional
         return
-    sql_dir = knowledge_sql_dir(project)
+    nl_to_path = {p["nl"]: p["path"] for p in load_query_pairs(project)}
     for r in results:
         nl = r.get("nl_query") or r.get("nl")
-        if not nl:
-            continue
-        candidate = sql_dir / f"{slugify(nl)}.md"
-        if candidate.exists():
-            r["path"] = str(candidate.relative_to(project))
+        if nl and nl in nl_to_path:
+            r["path"] = nl_to_path[nl]
 
 
 @memory_app.command()
@@ -468,7 +469,8 @@ def check(
         r.get("nl_query") for r in indexed if r.get("tags") == "source:user"
     }
 
-    missing = md_nls - indexed_nls  # in markdown but not indexed
+    # Compare user pairs only — seed/view rows aren't markdown-backed.
+    missing = md_nls - indexed_user  # in markdown but not indexed as a user pair
     stale = indexed_user - md_nls  # user-indexed but no longer in markdown
 
     typer.echo(

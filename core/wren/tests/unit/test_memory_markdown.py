@@ -116,7 +116,23 @@ def test_load_query_pairs_skips_unparseable(tmp_path):
     sql_dir.mkdir(parents=True)
     (sql_dir / "notes.md").write_text("# just a note, no frontmatter\n")
     (sql_dir / "partial.md").write_text("---\nnl: only nl, no sql\n---\n")
-    assert load_query_pairs(tmp_path) == []
+    # malformed YAML frontmatter must be skipped, not crash the whole load
+    (sql_dir / "broken.md").write_text("---\nnl: [unterminated\nsql: x\n---\n")
+    write_query_markdown(tmp_path, "Good one", "SELECT 1")
+    pairs = load_query_pairs(tmp_path)
+    assert [p["nl"] for p in pairs] == ["Good one"]
+
+
+def test_recall_path_annotation_handles_collisions(tmp_path, monkeypatch):
+    """recall path annotation matches on exact NL, not a derived slug."""
+    from wren.memory.cli import _annotate_markdown_paths  # noqa: PLC0415
+
+    monkeypatch.setenv("WREN_PROJECT_HOME", str(tmp_path))
+    write_query_markdown(tmp_path, "Revenue?!", "SELECT 1")  # -> revenue.md
+    write_query_markdown(tmp_path, "Revenue???", "SELECT 2")  # -> revenue-2.md
+    results = [{"nl_query": "Revenue???", "sql_query": "SELECT 2"}]
+    _annotate_markdown_paths(results)
+    assert results[0]["path"] == "knowledge/sql/revenue-2.md"
 
 
 def test_cli_store_writes_markdown_without_extra(tmp_path, monkeypatch):
