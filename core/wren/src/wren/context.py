@@ -494,11 +494,12 @@ def load_models(project_path: Path) -> list[dict]:
     """Load models — dispatches on schema_version.
 
     v1 (legacy): models/*.yml (flat files)
-    v2: models/<name>/metadata.yml + optional ref_sql.sql
+    v2-v5: models/<name>/metadata.yml + optional ref_sql.sql (directory-per-model)
     """
     sv = get_schema_version(project_path)
     if sv == 1:
         return _load_models_v1(project_path)
+    # sv in {2, 3, 4, 5}: directory-per-model layout
     return _load_models_v2(project_path)
 
 
@@ -553,11 +554,12 @@ def load_views(project_path: Path) -> list[dict]:
     """Load views — dispatches on schema_version.
 
     v1 (legacy): views.yml (single file with `views:` list)
-    v2: views/<name>/metadata.yml + optional sql.yml
+    v2-v5: views/<name>/metadata.yml + optional sql.yml (directory-per-view)
     """
     sv = get_schema_version(project_path)
     if sv == 1:
         return _load_views_v1(project_path)
+    # sv in {2, 3, 4, 5}: directory-per-view layout
     return _load_views_v2(project_path)
 
 
@@ -607,11 +609,12 @@ def load_cubes(project_path: Path) -> list[dict]:
     """Load cubes — dispatches on schema_version.
 
     v1 (legacy): cubes/*.yml
-    v2: cubes/<name>/metadata.yml
+    v2-v5: cubes/<name>/metadata.yml (directory-per-cube)
     """
     sv = get_schema_version(project_path)
     if sv == 1:
         return _load_cubes_v1(project_path)
+    # sv in {2, 3, 4, 5}: directory-per-cube layout
     return _load_cubes_v2(project_path)
 
 

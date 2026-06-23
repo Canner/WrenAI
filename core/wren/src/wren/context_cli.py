@@ -272,7 +272,7 @@ def init(
 
     # wren_project.yml
     project_yml = (
-        "schema_version: 3\n"
+        "schema_version: 5\n"
         "name: my_project\n"
         'version: "1.0"\n'
         "\n"

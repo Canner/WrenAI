@@ -309,6 +309,59 @@ def test_init_empty_skips_example_model_and_view(tmp_path):
     assert "empty" in result.output
 
 
+# ── v5 is the default init layout (O1) ───────────────────────────────────
+
+
+def test_init_writes_v5(tmp_path):
+    """`wren context init` stamps the latest layout, schema_version 5."""
+    result = runner.invoke(app, ["context", "init", "--path", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    config = yaml.safe_load((tmp_path / "wren_project.yml").read_text())
+    assert config["schema_version"] == 5
+    # per-model / per-view directory layout (unchanged since v2)
+    assert (tmp_path / "models" / "example" / "metadata.yml").exists()
+    assert (tmp_path / "views" / "example_view" / "metadata.yml").exists()
+
+
+def test_v5_build_roundtrip(tmp_path):
+    """init → build produces a valid mdl.json stamped layoutVersion 3."""
+    assert (
+        runner.invoke(app, ["context", "init", "--path", str(tmp_path)]).exit_code == 0
+    )
+    result = runner.invoke(app, ["context", "build", "--path", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    mdl = json.loads((tmp_path / "target" / "mdl.json").read_text())
+    assert mdl["layoutVersion"] == 3
+    assert any(m["name"] == "example" for m in mdl["models"])
+
+
+def test_v5_uses_v2_reader(tmp_path):
+    """A v5 project reads models/views identically to the same project at v3."""
+    from wren.context import load_models, load_views  # noqa: PLC0415
+
+    def _populate(root: Path, sv: int) -> Path:
+        root.mkdir(parents=True)
+        (root / "wren_project.yml").write_text(
+            f"schema_version: {sv}\nname: t\ndata_source: postgres\n"
+            "catalog: wren\nschema: public\n"
+        )
+        md = root / "models" / "orders"
+        md.mkdir(parents=True)
+        (md / "metadata.yml").write_text(
+            "name: orders\ntable_reference:\n  table: orders\n"
+            "columns:\n  - name: id\n    type: INTEGER\n"
+        )
+        vd = root / "views" / "summary"
+        vd.mkdir(parents=True)
+        (vd / "metadata.yml").write_text("name: summary\nstatement: SELECT 1\n")
+        return root
+
+    v3 = _populate(tmp_path / "v3", 3)
+    v5 = _populate(tmp_path / "v5", 5)
+    assert load_models(v5) == load_models(v3)
+    assert load_views(v5) == load_views(v3)
+
+
 # ── wren context validate ─────────────────────────────────────────────────
 
 
@@ -852,7 +905,7 @@ def test_set_profile_preserves_other_fields(tmp_path, monkeypatch):
     assert config["name"] == "my_project"
     assert config["catalog"] == "wren"
     assert config["schema"] == "public"
-    assert config["schema_version"] == 3
+    assert config["schema_version"] == 5
 
 
 def test_set_profile_preserves_custom_fields(tmp_path, monkeypatch):
