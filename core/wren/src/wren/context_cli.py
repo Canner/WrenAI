@@ -342,15 +342,21 @@ def init(
             "statement: >\n  SELECT * FROM example LIMIT 100\n"
         )
 
-    # Instructions placeholder
-    (project_path / "instructions.md").write_text(
-        "# User Instructions\n\n"
-        "Add custom rules or guidelines for LLM-based query generation here.\n"
+    # ── knowledge/ skeleton (first-class business context) ──
+    from wren.context import (  # noqa: PLC0415
+        _AGENTS_MD_TEMPLATE,
+        create_knowledge_skeleton,
     )
 
-    # ── AGENTS.md ──
-    from wren.context import _AGENTS_MD_TEMPLATE  # noqa: PLC0415
+    create_knowledge_skeleton(project_path)
+    general_rules = project_path / "knowledge" / "rules" / "general.md"
+    if force or not general_rules.exists():
+        general_rules.write_text(
+            "# Business rules\n\n"
+            "Add custom rules or guidelines for LLM-based query generation here.\n"
+        )
 
+    # ── AGENTS.md ──
     (project_path / "AGENTS.md").write_text(_AGENTS_MD_TEMPLATE)
 
     # Curated NL-SQL pairs (auto-loaded by `wren memory index`)
@@ -374,7 +380,9 @@ def init(
         typer.echo("  models/                     — (empty; add your own models)")
         typer.echo("  views/                      — (empty; add your own views)")
     typer.echo("  relationships.yml           — define joins between models")
-    typer.echo("  instructions.md             — LLM instructions")
+    typer.echo(
+        "  knowledge/rules/            — business rules for LLM query generation"
+    )
     typer.echo("  AGENTS.md                   — AI agent workflow guidance")
     typer.echo("  queries.yml                 — curated NL-SQL pairs for memory")
     typer.echo("")
@@ -693,8 +701,8 @@ def show(
         build_json,
         build_manifest,
         discover_project_path,
-        load_instructions,
         load_project_config,
+        load_rules,
     )
 
     try:
@@ -722,7 +730,7 @@ def show(
         models = manifest.get("models", [])
         views = manifest.get("views", [])
         rels = manifest.get("relationships", [])
-        instr_content = load_instructions(project_path)
+        instr_content, used_legacy_instructions = load_rules(project_path)
 
         typer.echo(
             f"Project: {config.get('name', '?')} (v{config.get('version', '?')})"
@@ -752,7 +760,11 @@ def show(
 
         if instr_content:
             lines = instr_content.strip().split("\n")
-            typer.echo(f"\nInstructions: {len(lines)} lines")
+            typer.echo(f"\nBusiness rules: {len(lines)} lines")
+        if used_legacy_instructions:
+            typer.echo(
+                "  (instructions.md is deprecated — move it into knowledge/rules/*.md)"
+            )
 
         if not models and not views:
             typer.echo("Empty project. Run `wren context init` to get started.")
@@ -762,8 +774,8 @@ def show(
 def instructions(
     path: ProjectPathOpt = None,
 ) -> None:
-    """Print user instructions for LLM consumption."""
-    from wren.context import discover_project_path, load_instructions  # noqa: PLC0415
+    """Print business rules (knowledge/rules/ + legacy instructions.md) for LLM consumption."""
+    from wren.context import discover_project_path, load_rules  # noqa: PLC0415
 
     try:
         project_path = discover_project_path(path)
@@ -771,7 +783,13 @@ def instructions(
         typer.echo(str(e), err=True)
         raise typer.Exit(1)
 
-    content = load_instructions(project_path)
+    content, used_legacy = load_rules(project_path)
+    if used_legacy:
+        typer.echo(
+            "Warning: instructions.md is deprecated — move its content into "
+            "knowledge/rules/*.md.",
+            err=True,
+        )
     if content:
         typer.echo(content)
 

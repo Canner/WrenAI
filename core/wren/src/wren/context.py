@@ -445,6 +445,7 @@ _LAYOUT_VERSION_MAP = {1: 1, 2: 1, 3: 2, 4: 3, 5: 3}
 _KNOWLEDGE_SUBDIRS = ("rules", "glossary", "metrics", "caveats", "sql")
 _KNOWLEDGE_CONFIG_FILE = "knowledge/knowledge.yml"
 _KNOWLEDGE_SCHEMA_VERSION = 1
+_SUPPORTED_KNOWLEDGE_VERSIONS = {1}
 
 # Valid dialect values (matches Rust DataSource enum)
 _VALID_DIALECTS = {
@@ -677,11 +678,74 @@ def load_relationships(project_path: Path) -> list[dict]:
 
 
 def load_instructions(project_path: Path) -> str | None:
-    """Load instructions.md as a string."""
+    """Load the legacy instructions.md as a string.
+
+    Deprecated in favour of knowledge/rules/ — see load_rules().
+    """
     inst_file = project_path / "instructions.md"
     if not inst_file.exists():
         return None
     return inst_file.read_text(encoding="utf-8").strip() or None
+
+
+def load_knowledge_rules(project_path: Path) -> str | None:
+    """Concatenate knowledge/rules/*.md (sorted). None if there are none."""
+    rules_dir = project_path / "knowledge" / "rules"
+    if not rules_dir.is_dir():
+        return None
+    parts = [
+        text
+        for f in sorted(rules_dir.glob("*.md"))
+        if (text := f.read_text(encoding="utf-8").strip())
+    ]
+    return "\n\n".join(parts) if parts else None
+
+
+def load_rules(project_path: Path) -> tuple[str | None, bool]:
+    """Load business rules from knowledge/rules/ and the legacy instructions.md.
+
+    Returns ``(content, used_legacy)`` where ``used_legacy`` is True when the
+    deprecated instructions.md contributed content, so callers can warn.
+    """
+    parts: list[str] = []
+    rules = load_knowledge_rules(project_path)
+    if rules:
+        parts.append(rules)
+    legacy = load_instructions(project_path)
+    if legacy:
+        parts.append(legacy)
+    content = "\n\n".join(parts) if parts else None
+    # Presence-based: an existing (even empty) instructions.md is the deprecated
+    # pattern worth flagging, regardless of whether it currently has content.
+    used_legacy = (project_path / "instructions.md").exists()
+    return content, used_legacy
+
+
+def load_knowledge_config(project_path: Path) -> dict:
+    """Load knowledge/knowledge.yml (knowledge version axis). Empty dict if absent."""
+    kfile = project_path / _KNOWLEDGE_CONFIG_FILE
+    if not kfile.exists():
+        return {}
+    data = yaml.safe_load(kfile.read_text(encoding="utf-8")) or {}
+    return data if isinstance(data, dict) else {}
+
+
+def get_knowledge_schema_version(project_path: Path) -> int:
+    """Return the knowledge-axis schema_version (default 1). Decoupled from MDL.
+
+    Returns 0 when there is no knowledge/ at all.
+    """
+    if not (project_path / "knowledge").is_dir():
+        return 0
+    cfg = load_knowledge_config(project_path)
+    raw = cfg.get("schema_version", _KNOWLEDGE_SCHEMA_VERSION)
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        raise SystemExit(
+            f"Error: invalid schema_version {raw!r} in {_KNOWLEDGE_CONFIG_FILE}. "
+            "Expected an integer."
+        )
 
 
 # ── Build ─────────────────────────────────────────────────────────────────
@@ -813,6 +877,30 @@ def validate_project(project_path: Path) -> list[ValidationError]:
 
     if any(e.path == PROJECT_FILE and "schema_version" in e.message for e in errors):
         return errors
+
+    # knowledge/ version axis — independent of the MDL schema_version above.
+    if (project_path / "knowledge").is_dir():
+        kcfg = load_knowledge_config(project_path)
+        raw_kv = kcfg.get("schema_version", _KNOWLEDGE_SCHEMA_VERSION)
+        try:
+            kv = int(raw_kv)
+        except (TypeError, ValueError):
+            errors.append(
+                ValidationError(
+                    "error",
+                    _KNOWLEDGE_CONFIG_FILE,
+                    f"schema_version must be an integer, got {raw_kv!r}",
+                )
+            )
+        else:
+            if kv not in _SUPPORTED_KNOWLEDGE_VERSIONS:
+                errors.append(
+                    ValidationError(
+                        "error",
+                        _KNOWLEDGE_CONFIG_FILE,
+                        f"unsupported knowledge schema_version {kv} — please upgrade wren CLI",
+                    )
+                )
 
     # Load data (snake_case)
     models = load_models(project_path)
