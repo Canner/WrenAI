@@ -356,7 +356,7 @@ def convert_dbt_project_to_wren_project(
 
     dbt_binding_dir = _relative_or_absolute_path(target.project_dir, project_root)
     project_config = {
-        "schema_version": 2,
+        "schema_version": 5,
         "name": artifacts.manifest.get("metadata", {}).get(
             "project_name", target.project.get("name", "dbt_project")
         ),
@@ -391,7 +391,7 @@ def convert_dbt_project_to_wren_project(
             ),
         ),
         ProjectFile(
-            relative_path="instructions.md",
+            relative_path="knowledge/rules/general.md",
             content=_build_base_instructions(
                 target,
                 model_count,
@@ -401,17 +401,31 @@ def convert_dbt_project_to_wren_project(
                 artifacts.run_results is not None,
             ),
         ),
-        ProjectFile(relative_path="AGENTS.md", content=_AGENTS_MD_TEMPLATE),
         ProjectFile(
-            relative_path="queries.yml",
-            content=yaml.dump(
-                {"version": 1, "pairs": query_pairs},
-                default_flow_style=False,
-                sort_keys=False,
-                allow_unicode=True,
-            ),
+            relative_path="knowledge/knowledge.yml", content="schema_version: 1\n"
         ),
+        ProjectFile(relative_path="AGENTS.md", content=_AGENTS_MD_TEMPLATE),
     ]
+
+    # NL→SQL pairs live one-per-file under knowledge/sql/ (v5 source of truth).
+    from wren.memory.markdown import render_query_markdown, slugify  # noqa: PLC0415
+
+    used_slugs: set[str] = set()
+    for pair in query_pairs:
+        base = slugify(pair["nl"])
+        slug, n = base, 1
+        while slug in used_slugs:
+            n += 1
+            slug = f"{base}-{n}"
+        used_slugs.add(slug)
+        files.append(
+            ProjectFile(
+                relative_path=f"knowledge/sql/{slug}.md",
+                content=render_query_markdown(
+                    pair["nl"], pair["sql"], source=pair.get("source", "dbt")
+                ),
+            )
+        )
 
     files.extend(
         ProjectFile(

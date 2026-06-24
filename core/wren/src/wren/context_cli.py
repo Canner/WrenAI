@@ -255,8 +255,7 @@ def init(
 
     project_file = project_path / PROJECT_FILE
     agents_file = project_path / "AGENTS.md"
-    queries_file = project_path / "queries.yml"
-    conflicts = [f for f in (project_file, agents_file, queries_file) if f.exists()]
+    conflicts = [f for f in (project_file, agents_file) if f.exists()]
     if conflicts and not force:
         names = ", ".join(f"'{c.name}'" for c in conflicts)
         typer.echo(
@@ -359,15 +358,8 @@ def init(
     # ── AGENTS.md ──
     (project_path / "AGENTS.md").write_text(_AGENTS_MD_TEMPLATE)
 
-    # Curated NL-SQL pairs (auto-loaded by `wren memory index`)
-    (project_path / "queries.yml").write_text(
-        "# Curated NL-SQL pairs for this project.\n"
-        "# These are auto-loaded into memory on `wren memory index`.\n"
-        "# Use `wren memory dump` to export pairs from memory to this file.\n"
-        "# Format: same as `wren memory dump` output.\n"
-        "version: 1\n"
-        "pairs: []\n"
-    )
+    # NL→SQL pairs live in knowledge/sql/ (written by `wren memory store`),
+    # so no queries.yml is scaffolded.
 
     typer.echo(f"Wren project initialized: {project_path}")
     typer.echo("  wren_project.yml            — project metadata (edit data_source)")
@@ -383,8 +375,10 @@ def init(
     typer.echo(
         "  knowledge/rules/            — business rules for LLM query generation"
     )
+    typer.echo(
+        "  knowledge/sql/              — confirmed NL-SQL pairs (wren memory store)"
+    )
     typer.echo("  AGENTS.md                   — AI agent workflow guidance")
-    typer.echo("  queries.yml                 — curated NL-SQL pairs for memory")
     typer.echo("")
     typer.echo(
         "Next: Install agent skills via "
@@ -609,7 +603,7 @@ def build(
     """Build into target/mdl.json for the engine.
 
     Default mode: reads wren_project.yml, models/*/metadata.yml (+ref_sql.sql),
-    views/*/metadata.yml (+sql.yml), relationships.yml, and instructions.md.
+    views/*/metadata.yml (+sql.yml), relationships.yml, and knowledge/.
 
     With --from-osi: reads an Open Semantic Interchange YAML file and emits
     MDL JSON directly. The OSI file stays as the single source of truth; no
