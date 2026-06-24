@@ -499,6 +499,28 @@ describe('QueryService', () => {
 
     expect(mockIbisAdaptor.dryRun).toHaveBeenCalledTimes(1);
   });
+
+  it('should allow source tables referenced by active manifest refSql before ibis dry run', async () => {
+    mockIbisAdaptor.dryRun.mockResolvedValue({
+      correlationId: '123',
+      processTime: '1s',
+    });
+
+    await queryService.preview('SELECT * FROM dbo_repair_logs', {
+      project: { type: DataSourceName.POSTGRES, connectionInfo: {} },
+      manifest: {
+        models: [
+          {
+            name: 'repair_logs',
+            refSql: 'SELECT created_at, ticket_id FROM dbo_repair_logs',
+          },
+        ],
+      },
+      dryRun: true,
+    });
+
+    expect(mockIbisAdaptor.dryRun).toHaveBeenCalledTimes(1);
+  });
 });
 
 class MockTelemetry {

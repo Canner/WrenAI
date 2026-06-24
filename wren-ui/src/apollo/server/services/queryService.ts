@@ -332,6 +332,22 @@ const extractSqlTableReferences = (sql: string) => {
   return references;
 };
 
+const addTableReferenceName = (
+  names: Set<string>,
+  parts: Array<string | null | undefined>,
+) => {
+  const normalizedParts = parts
+    .filter((part): part is string => Boolean(part))
+    .map((part) => part.toLowerCase());
+  if (!normalizedParts.length) {
+    return;
+  }
+
+  for (let index = 0; index < normalizedParts.length; index += 1) {
+    names.add(normalizedParts.slice(index).join('.'));
+  }
+};
+
 const extractCteNames = (sql: string) => {
   const cteNames = new Set<string>();
   const ctePattern = new RegExp(
@@ -350,7 +366,16 @@ const getManifestQueryableNames = (manifest?: Manifest) => {
   for (const model of manifest?.models || []) {
     if (model.name) names.add(model.name.toLowerCase());
     if (model.tableReference?.table) {
-      names.add(model.tableReference.table.toLowerCase());
+      addTableReferenceName(names, [
+        model.tableReference.catalog,
+        model.tableReference.schema,
+        model.tableReference.table,
+      ]);
+    }
+    if (model.refSql) {
+      for (const reference of extractSqlTableReferences(model.refSql)) {
+        addTableReferenceName(names, splitTableReference(reference));
+      }
     }
   }
   for (const view of manifest?.views || []) {

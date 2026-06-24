@@ -2217,6 +2217,14 @@ def get_sql_generation_model_kwargs(llm_provider: LLMProvider) -> dict:
     return SQL_GENERATION_MODEL_KWARGS
 
 
+_SCHEMA_IDENTIFIER_PATTERN = (
+    r'(?:"[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_$]*)'
+)
+_SCHEMA_TABLE_REFERENCE_PATTERN = (
+    rf"{_SCHEMA_IDENTIFIER_PATTERN}(?:\s*\.\s*{_SCHEMA_IDENTIFIER_PATTERN})*"
+)
+
+
 def construct_instructions(
     instructions: list[dict] | None = None,
 ):
@@ -2230,20 +2238,25 @@ def construct_instructions(
 
 
 def construct_valid_table_names(documents: list[Any] | None = None) -> list[str]:
-    table_names = []
+    table_names: set[str] = set()
     for document in documents or []:
         content = getattr(document, "content", document)
         if not isinstance(content, str):
             continue
 
         for match in re.finditer(
-            r"\bCREATE\s+TABLE\s+([`\"\[]?)([A-Za-z_][A-Za-z0-9_.$]*)\1",
+            rf"\bCREATE\s+TABLE\s+(?P<table>{_SCHEMA_TABLE_REFERENCE_PATTERN})",
             content,
             flags=re.IGNORECASE,
         ):
-            table_names.append(match.group(2))
+            for table_name in _table_reference_suffixes(match.group("table")):
+                table_names.add(table_name)
 
-    return sorted(set(table_names))
+        for table_reference in extract_sql_table_references(content):
+            for table_name in _table_reference_suffixes(table_reference):
+                table_names.add(table_name)
+
+    return sorted(table_names)
 
 
 def construct_valid_table_columns(
@@ -2256,11 +2269,11 @@ def construct_valid_table_columns(
             continue
 
         for table_match in re.finditer(
-            r"\bCREATE\s+TABLE\s+([`\"\[]?)(?P<table>[A-Za-z_][A-Za-z0-9_.$]*)\1\s*\(",
+            rf"\bCREATE\s+TABLE\s+(?P<table>{_SCHEMA_TABLE_REFERENCE_PATTERN})\s*\(",
             content,
             flags=re.IGNORECASE,
         ):
-            table_name = table_match.group("table")
+            table_names = _table_reference_suffixes(table_match.group("table"))
             body_start = table_match.end()
             depth = 1
             body_end = body_start
@@ -2273,7 +2286,10 @@ def construct_valid_table_columns(
                 body_end += 1
 
             table_body = content[body_start : body_end - 1]
-            columns = table_columns.setdefault(table_name, set())
+            columns_by_table = [
+                table_columns.setdefault(table_name, set())
+                for table_name in table_names
+            ]
             for line in table_body.splitlines():
                 line = line.strip()
                 if not line or line.startswith("--"):
@@ -2291,7 +2307,8 @@ def construct_valid_table_columns(
                     line,
                 )
                 if column_match:
-                    columns.add(column_match.group("column"))
+                    for columns in columns_by_table:
+                        columns.add(column_match.group("column"))
 
     return {
         table_name: sorted(columns)
@@ -2417,6 +2434,11 @@ def _split_table_reference(table_reference: str) -> list[str]:
     ]
 
 
+def _table_reference_suffixes(table_reference: str) -> list[str]:
+    parts = _split_table_reference(table_reference)
+    return [".".join(parts[index:]) for index in range(len(parts))]
+
+
 def extract_sql_table_references(sql: str) -> list[str]:
     references = []
     for match in _SQL_TABLE_REFERENCE_PATTERN.finditer(sql):
@@ -2450,7 +2472,15 @@ def find_invalid_table_references(sql: str, valid_table_names: list[str]) -> lis
 
     for table_reference in extract_sql_table_references(sql):
         normalized_reference = table_reference.lower()
-        if normalized_reference in valid_tables or normalized_reference in cte_names:
+        reference_suffixes = {
+            suffix.lower() for suffix in _table_reference_suffixes(table_reference)
+        }
+        if (
+            normalized_reference in valid_tables
+            or normalized_reference in cte_names
+            or reference_suffixes.intersection(valid_tables)
+            or reference_suffixes.intersection(cte_names)
+        ):
             continue
         invalid_references.append(table_reference)
 
@@ -2476,7 +2506,13 @@ def _extract_table_aliases(
     for match in _SQL_TABLE_WITH_ALIAS_PATTERN.finditer(sql):
         table_reference = ".".join(_split_table_reference(match.group("table")))
         normalized_table = table_reference.lower()
-        if normalized_table not in valid_tables or normalized_table in cte_names:
+        matched_table = valid_tables.get(normalized_table)
+        if not matched_table:
+            for suffix in _table_reference_suffixes(table_reference):
+                matched_table = valid_tables.get(suffix.lower())
+                if matched_table:
+                    break
+        if not matched_table or normalized_table in cte_names:
             continue
 
         alias = match.group("alias")
@@ -2486,7 +2522,7 @@ def _extract_table_aliases(
         normalized_alias = _normalize_sql_identifier(alias or "").lower()
         if normalized_alias in _SQL_RESERVED_ALIASES:
             continue
-        aliases[normalized_alias] = valid_tables[normalized_table]
+        aliases[normalized_alias] = matched_table
 
     return aliases
 

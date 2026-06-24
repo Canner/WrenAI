@@ -4,7 +4,11 @@ import {
   TextBasedAnswerResult,
   TextBasedAnswerStatus,
 } from '../models/adaptor';
-import { ThreadResponse, IThreadResponseRepository } from '../repositories';
+import {
+  ThreadResponse,
+  IThreadRepository,
+  IThreadResponseRepository,
+} from '../repositories';
 import {
   IProjectService,
   IDeployService,
@@ -24,6 +28,7 @@ export class TextBasedAnswerBackgroundTracker {
   private tasks: Record<number, ThreadResponse> = {};
   private intervalTime: number;
   private wrenAIAdaptor: IWrenAIAdaptor;
+  private threadRepository: IThreadRepository;
   private threadResponseRepository: IThreadResponseRepository;
   private projectService: IProjectService;
   private deployService: IDeployService;
@@ -32,18 +37,21 @@ export class TextBasedAnswerBackgroundTracker {
 
   constructor({
     wrenAIAdaptor,
+    threadRepository,
     threadResponseRepository,
     projectService,
     deployService,
     queryService,
   }: {
     wrenAIAdaptor: IWrenAIAdaptor;
+    threadRepository: IThreadRepository;
     threadResponseRepository: IThreadResponseRepository;
     projectService: IProjectService;
     deployService: IDeployService;
     queryService: IQueryService;
   }) {
     this.wrenAIAdaptor = wrenAIAdaptor;
+    this.threadRepository = threadRepository;
     this.threadResponseRepository = threadResponseRepository;
     this.projectService = projectService;
     this.deployService = deployService;
@@ -79,7 +87,15 @@ export class TextBasedAnswerBackgroundTracker {
             });
             threadResponse.answerDetail = fetchingDetail;
 
-            const project = await this.projectService.getCurrentProject();
+            const thread = await this.threadRepository.findOneBy({
+              id: threadResponse.threadId,
+            });
+            if (!thread) {
+              throw new Error(`Thread ${threadResponse.threadId} not found`);
+            }
+            const project = await this.projectService.getProjectById(
+              thread.projectId,
+            );
             const deployment = await this.deployService.getLastDeployment(
               project.id,
             );

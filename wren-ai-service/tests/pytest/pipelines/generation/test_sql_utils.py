@@ -1,5 +1,6 @@
 from src.pipelines.generation.utils.sql import (
     contains_unsupported_mssql_json_access,
+    construct_valid_table_columns,
     construct_valid_table_names,
     extract_sql_generation_result,
     find_invalid_column_references,
@@ -21,6 +22,53 @@ def test_construct_valid_table_names_from_schema_documents():
     ]
 
     assert construct_valid_table_names(documents) == ["employees", "repair_logs"]
+
+
+def test_construct_valid_table_names_includes_ref_sql_source_tables():
+    documents = [
+        '''
+        CREATE TABLE repair_logs ("id" INTEGER);
+        refSql: SELECT "created_at", "warning_signals" FROM "wrenai"."public"."dbo_repair_logs"
+        ''',
+    ]
+
+    assert construct_valid_table_names(documents) == [
+        "dbo_repair_logs",
+        "public.dbo_repair_logs",
+        "repair_logs",
+        "wrenai.public.dbo_repair_logs",
+    ]
+
+
+def test_schema_validation_allows_qualified_suffix_table_references():
+    assert find_invalid_table_references(
+        'SELECT * FROM "wrenai"."public"."dbo_repair_logs"',
+        ["dbo_repair_logs"],
+    ) == []
+
+
+def test_column_validation_allows_qualified_suffix_table_references():
+    sql = (
+        'SELECT "wrenai"."public"."dbo_repair_logs"."warning_signals" '
+        'FROM "wrenai"."public"."dbo_repair_logs"'
+    )
+
+    assert find_invalid_column_references(
+        sql,
+        {"dbo_repair_logs": ["warning_signals"]},
+    ) == []
+
+
+def test_construct_valid_table_columns_adds_qualified_suffix_tables():
+    documents = [
+        'CREATE TABLE "wrenai"."public"."dbo_repair_logs" ("warning_signals" INTEGER);',
+    ]
+
+    assert construct_valid_table_columns(documents) == {
+        "dbo_repair_logs": ["warning_signals"],
+        "public.dbo_repair_logs": ["warning_signals"],
+        "wrenai.public.dbo_repair_logs": ["warning_signals"],
+    }
 
 
 def test_schema_validation_ignores_null_table_metadata():

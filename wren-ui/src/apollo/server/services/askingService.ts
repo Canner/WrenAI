@@ -488,6 +488,7 @@ export class AskingService implements IAskingService {
     this.textBasedAnswerBackgroundTracker =
       new TextBasedAnswerBackgroundTracker({
         wrenAIAdaptor,
+        threadRepository,
         threadResponseRepository,
         projectService,
         deployService,
@@ -586,8 +587,8 @@ export class AskingService implements IAskingService {
       return;
     }
 
-    const project = await this.projectService.getCurrentProject();
-    const { manifest } = await this.mdlService.makeCurrentModelMDL();
+    const project = await this.projectService.getProjectById(thread.projectId);
+    const { manifest } = await this.mdlService.makeModelMDL(project);
 
     const threadResponses = await this.threadResponseRepository.findAllBy({
       threadId,
@@ -950,7 +951,7 @@ export class AskingService implements IAskingService {
       return threadResponse;
     }
 
-    const project = await this.projectService.getCurrentProject();
+    const project = await this.getProjectForThreadResponse(threadResponse);
     const deployment = await this.deployService.getLastDeployment(project.id);
     let chartData: PreviewDataResponse;
     try {
@@ -1018,7 +1019,7 @@ export class AskingService implements IAskingService {
       return threadResponse;
     }
 
-    const project = await this.projectService.getCurrentProject();
+    const project = await this.getProjectForThreadResponse(threadResponse);
     const deployment = await this.deployService.getLastDeployment(project.id);
     let chartData: PreviewDataResponse;
     try {
@@ -1086,7 +1087,7 @@ export class AskingService implements IAskingService {
     if (!response) {
       throw new Error(`Thread response ${responseId} not found`);
     }
-    const project = await this.projectService.getCurrentProject();
+    const project = await this.getProjectForThreadResponse(response);
     const deployment = await this.deployService.getLastDeployment(project.id);
     const mdl = deployment.manifest;
     const eventName = TelemetryEvent.HOME_PREVIEW_ANSWER;
@@ -1126,7 +1127,7 @@ export class AskingService implements IAskingService {
     if (!response) {
       throw new Error(`Thread response ${responseId} not found`);
     }
-    const project = await this.projectService.getCurrentProject();
+    const project = await this.getProjectForThreadResponse(response);
     const deployment = await this.deployService.getLastDeployment(project.id);
     const mdl = deployment.manifest;
     const steps = response?.breakdownDetail?.steps;
@@ -1236,10 +1237,21 @@ export class AskingService implements IAskingService {
     return updatedResponse;
   }
 
-  private async getDeployId() {
-    const { id } = await this.projectService.getCurrentProject();
+  private async getDeployId(projectId?: number) {
+    const id = projectId ?? (await this.projectService.getCurrentProject()).id;
     const lastDeploy = await this.deployService.getLastDeployment(id);
     return lastDeploy.hash;
+  }
+
+  private async getProjectForThreadResponse(threadResponse: ThreadResponse) {
+    const thread = await this.threadRepository.findOneBy({
+      id: threadResponse.threadId,
+    });
+    if (!thread) {
+      throw new Error(`Thread ${threadResponse.threadId} not found`);
+    }
+
+    return this.projectService.getProjectById(thread.projectId);
   }
 
   public async adjustThreadResponseWithSQL(
