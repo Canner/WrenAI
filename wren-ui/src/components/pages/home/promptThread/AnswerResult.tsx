@@ -179,6 +179,11 @@ const AdjustmentInformation = (props: {
 const isNeedGenerateAnswer = (answerDetail: ThreadResponseAnswerDetail) => {
   if (!answerDetail) return true;
 
+  const isFinishedWithoutContent =
+    answerDetail?.status === ThreadResponseAnswerStatus.FINISHED &&
+    !answerDetail?.content?.trim();
+  if (isFinishedWithoutContent) return true;
+
   const isFinished = getAnswerIsFinished(answerDetail?.status);
   // it means the background task has not started yet, but answer is pending for generating
   const isProcessing = [
@@ -289,6 +294,7 @@ export default function AnswerResult(props: Props) {
     askingTask?.status,
     adjustmentTask?.status,
     answerDetail?.status,
+    answerDetail?.content,
   ]);
 
   useEffect(() => {
