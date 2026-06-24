@@ -73,6 +73,56 @@ describe('DeployService', () => {
     expect(mockWrenAIAdaptor.deploy).not.toHaveBeenCalled();
   });
 
+  it('should treat equivalent deployed manifests as the same deployment', () => {
+    const manifest = {
+      models: [
+        {
+          name: 'orders',
+          columns: [{ name: 'id' }, { name: 'amount' }],
+        },
+        {
+          name: 'customers',
+          columns: [{ name: 'id' }, { name: 'name' }],
+        },
+      ],
+    };
+    const reorderedManifest = {
+      models: [
+        {
+          columns: [{ name: 'name' }, { name: 'id' }],
+          name: 'customers',
+        },
+        {
+          columns: [{ name: 'amount' }, { name: 'id' }],
+          name: 'orders',
+        },
+      ],
+    };
+
+    expect(
+      deployService.isSameDeployment(manifest, 1, {
+        hash: 'different-hash-version',
+        manifest: reorderedManifest,
+      }),
+    ).toBe(true);
+  });
+
+  it('should not treat changed deployed manifests as the same deployment', () => {
+    const manifest = {
+      models: [{ name: 'orders', columns: [{ name: 'id' }] }],
+    };
+    const changedManifest = {
+      models: [{ name: 'orders', columns: [{ name: 'id' }, { name: 'amount' }] }],
+    };
+
+    expect(
+      deployService.isSameDeployment(manifest, 1, {
+        hash: 'different-hash-version',
+        manifest: changedManifest,
+      }),
+    ).toBe(false);
+  });
+
   it('should clear stale in-progress deployments', async () => {
     const oldDate = new Date(Date.now() - 11 * 60 * 1000);
     mockDeployLogRepository.findInProgressProjectDeployLog.mockResolvedValue({

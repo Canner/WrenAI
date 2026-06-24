@@ -37,6 +37,11 @@ export interface IDeployService {
   getLastDeployment(projectId: number): Promise<Deploy>;
   getInProgressDeployment(projectId: number): Promise<Deploy>;
   createMDLHash(manifest: Manifest, projectId: number): string;
+  isSameDeployment(
+    manifest: Manifest,
+    projectId: number,
+    deployment?: Deploy | null,
+  ): boolean;
   getMDLByHash(hash: string): Promise<string>;
   deleteAllByProjectId(projectId: number): Promise<void>;
 }
@@ -185,6 +190,44 @@ export class DeployService implements IDeployService {
     const content = `${projectId} ${manifestStr}`;
     const hash = createHash('sha1').update(content).digest('hex');
     return hash;
+  }
+
+  public isSameDeployment(
+    manifest: Manifest,
+    projectId: number,
+    deployment?: Deploy | null,
+  ) {
+    if (!deployment) {
+      return false;
+    }
+
+    if (deployment.hash === this.createMDLHash(manifest, projectId)) {
+      return true;
+    }
+
+    return (
+      this.canonicalStringify(deployment.manifest) ===
+      this.canonicalStringify(manifest)
+    );
+  }
+
+  private canonicalStringify(value: any): string {
+    if (Array.isArray(value)) {
+      const serializedItems = value.map((item) => this.canonicalStringify(item));
+      if (value.every((item) => item && typeof item === 'object')) {
+        serializedItems.sort();
+      }
+      return `[${serializedItems.join(',')}]`;
+    }
+
+    if (value && typeof value === 'object') {
+      return `{${Object.keys(value)
+        .sort()
+        .map((key) => `${JSON.stringify(key)}:${this.canonicalStringify(value[key])}`)
+        .join(',')}}`;
+    }
+
+    return JSON.stringify(value);
   }
 
   public async getMDLByHash(hash: string) {
