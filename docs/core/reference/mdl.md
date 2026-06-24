@@ -4,7 +4,7 @@ sidebar_label: MDL schema
 
 # MDL schema reference
 
-This page documents every YAML artifact in a Wren project — `wren_project.yml`, models, relationships, views, cubes, and `instructions.md` — with the full field surface for each.
+This page documents every YAML artifact in a Wren project — `wren_project.yml`, models, relationships, views, cubes, and the `knowledge/` files — with the full field surface for each.
 
 > For the conceptual framing of MDL, see [What does MDL do for the agent?](/oss/concepts/what_is_mdl). For the project lifecycle commands, see [Manage project](/oss/guides/manage_project). For the canonical YAML compilation flow, run `wren context build` after editing.
 
@@ -289,9 +289,11 @@ hierarchies:
 
 Cubes are queried structurally via `wren cube query`, not by writing raw `GROUP BY` SQL. See [Pre-aggregate with cubes](/oss/guides/cubes) for the agent-facing recipe.
 
-## Instructions (`instructions.md`)
+## Business rules (`knowledge/rules/`)
 
-Free-form markdown with business and operational guidance for AI agents. Organized by topic with `##` headings — each heading and its body becomes a retrievable chunk in memory.
+Free-form markdown with business and operational guidance for AI agents — one file per
+topic under `knowledge/rules/`. Each file (and `##` heading within it) becomes a retrievable
+chunk in memory.
 
 ```markdown
 ## Business rules
@@ -306,28 +308,35 @@ Free-form markdown with business and operational guidance for AI agents. Organiz
 - Timestamps are stored in UTC.
 ```
 
-Instructions are consumed by agents, not by the engine. They are intentionally excluded from `target/mdl.json`. Agents access them via:
+Rules are consumed by agents, not by the engine — they are excluded from `target/mdl.json`.
+Agents access them via:
 
 - `wren context instructions` — full text, run once at session start
 - `wren memory fetch -q "..."` — relevant chunks per query
 
-## `queries.yml` (optional)
+> A top-level `instructions.md` is still read (alongside `knowledge/rules/`) but is
+> **deprecated** — move it into `knowledge/rules/`. See [Migration](./migration.md).
 
-Curated natural-language-to-SQL pairs that seed memory. Same format as `wren memory dump` output:
+## NL→SQL pairs (`knowledge/sql/`)
 
-```yaml
-version: 1
-pairs:
-  - nl: "monthly revenue by product category"
-    sql: |
-      SELECT category, DATE_TRUNC('month', order_date) AS month, SUM(amount)
-      FROM orders
-      GROUP BY 1, 2
-    source: user
-    datasource: postgres-prod
+Confirmed natural-language-to-SQL pairs — one markdown file per pair under `knowledge/sql/`,
+the source of truth for memory recall. YAML frontmatter plus an optional body:
+
+```markdown
+---
+nl: monthly revenue by product category
+sql: |
+  SELECT category, DATE_TRUNC('month', order_date) AS month, SUM(amount)
+  FROM orders
+  GROUP BY 1, 2
+source: user
+datasource: postgres-prod
+---
 ```
 
-`wren memory index` auto-loads `queries.yml` after indexing the schema. Pairs added through `wren memory store` can be exported back to `queries.yml` with `wren memory dump`.
+`wren memory store` writes these files; `wren memory index` (re)builds the index from them.
+A legacy top-level `queries.yml` is still auto-loaded on `index` for the transition, but new
+pairs land in `knowledge/sql/`. See [Migration](./migration.md).
 
 ## Snake_case to camelCase mapping
 
