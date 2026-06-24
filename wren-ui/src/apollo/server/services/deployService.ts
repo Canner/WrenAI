@@ -235,7 +235,11 @@ export class DeployService implements IDeployService {
 
   private stableStringify(value: any): string {
     if (Array.isArray(value)) {
-      return `[${value.map((item) => this.stableStringify(item)).join(',')}]`;
+      const serializedItems = value.map((item) => this.stableStringify(item));
+      if (value.every((item) => item && typeof item === 'object')) {
+        serializedItems.sort();
+      }
+      return `[${serializedItems.join(',')}]`;
     }
 
     if (value && typeof value === 'object') {

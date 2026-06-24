@@ -149,6 +149,54 @@ describe('DeployService', () => {
     );
   });
 
+  it('should create the same deployment hash for equivalent manifest ordering', () => {
+    const project = {
+      id: 1,
+      type: 'mssql',
+      version: '16',
+      catalog: 'catalog',
+      schema: 'dbo',
+      sampleDataset: null,
+      connectionInfo: {},
+    };
+    const manifest = {
+      models: [
+        {
+          name: 'orders',
+          columns: [{ name: 'id' }, { name: 'amount' }],
+        },
+        {
+          name: 'customers',
+          columns: [{ name: 'name' }, { name: 'id' }],
+        },
+      ],
+      relationships: [
+        { name: 'orders_customer', from: 'orders', to: 'customers' },
+        { name: 'customers_region', from: 'customers', to: 'regions' },
+      ],
+    };
+    const reorderedManifest = {
+      relationships: [
+        { to: 'regions', from: 'customers', name: 'customers_region' },
+        { to: 'customers', from: 'orders', name: 'orders_customer' },
+      ],
+      models: [
+        {
+          columns: [{ name: 'id' }, { name: 'name' }],
+          name: 'customers',
+        },
+        {
+          columns: [{ name: 'amount' }, { name: 'id' }],
+          name: 'orders',
+        },
+      ],
+    };
+
+    expect(deployService.createMDLHash(manifest, project)).toEqual(
+      deployService.createMDLHash(reorderedManifest, project),
+    );
+  });
+
   it('should not change deployment hash for connection or version refreshes', () => {
     const manifest = { models: [{ name: 'orders', columns: [] }] };
     const project = {
