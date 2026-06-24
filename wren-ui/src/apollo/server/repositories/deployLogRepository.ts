@@ -21,6 +21,7 @@ export enum DeployStatusEnum {
 
 export interface IDeployLogRepository extends IBasicRepository<Deploy> {
   findLastProjectDeployLog(projectId: number): Promise<Deploy | null>;
+  findLatestProjectDeployLog(projectId: number): Promise<Deploy | null>;
   findInProgressProjectDeployLog(projectId: number): Promise<Deploy | null>;
 }
 
@@ -57,6 +58,16 @@ export class DeployLogRepository
       .where(
         this.transformToDBData({ projectId, status: DeployStatusEnum.SUCCESS }),
       )
+      .orderBy('created_at', 'desc')
+      .first();
+    return (res && this.transformFromDBData(res)) || null;
+  }
+
+  public async findLatestProjectDeployLog(projectId: number) {
+    const res = await this.knex
+      .select('*')
+      .from(this.tableName)
+      .where(this.transformToDBData({ projectId }))
       .orderBy('created_at', 'desc')
       .first();
     return (res && this.transformFromDBData(res)) || null;

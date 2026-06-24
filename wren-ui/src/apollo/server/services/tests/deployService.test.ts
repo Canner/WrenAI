@@ -13,6 +13,7 @@ describe('DeployService', () => {
     mockWrenAIAdaptor = { deploy: jest.fn(), delete: jest.fn() };
     mockDeployLogRepository = {
       findLastProjectDeployLog: jest.fn(),
+      findLatestProjectDeployLog: jest.fn(),
       createOne: jest.fn(),
       updateOne: jest.fn(),
     };
@@ -105,5 +106,69 @@ describe('DeployService', () => {
     );
   });
 
-  // Add more tests here to cover other scenarios and error handling
+  it('should not report in-progress when the latest deployment is successful', async () => {
+    mockDeployLogRepository.findLatestProjectDeployLog.mockResolvedValue({
+      id: 2,
+      status: DeployStatusEnum.SUCCESS,
+    });
+
+    const deployment = await deployService.getInProgressDeployment(1);
+
+    expect(deployment).toBeNull();
+    expect(
+      mockDeployLogRepository.findLatestProjectDeployLog,
+    ).toHaveBeenCalledWith(1);
+    expect(mockDeployLogRepository.updateOne).not.toHaveBeenCalled();
+  });
+
+  it('should mark stale in-progress deployments failed', async () => {
+    const oldDate = new Date(Date.now() - 11 * 60 * 1000);
+    mockDeployLogRepository.findLatestProjectDeployLog.mockResolvedValue({
+      id: 3,
+      status: DeployStatusEnum.IN_PROGRESS,
+      updatedAt: oldDate,
+    });
+
+    const deployment = await deployService.getInProgressDeployment(1);
+
+    expect(deployment).toBeNull();
+    expect(mockDeployLogRepository.updateOne).toHaveBeenCalledWith(3, {
+      status: DeployStatusEnum.FAILED,
+      error: 'Deployment timed out before completion.',
+    });
+  });
+
+  it('should keep recent in-progress deployments active', async () => {
+    const recentDate = new Date();
+    const inProgressDeployment = {
+      id: 4,
+      status: DeployStatusEnum.IN_PROGRESS,
+      updatedAt: recentDate,
+    };
+    mockDeployLogRepository.findLatestProjectDeployLog.mockResolvedValue(
+      inProgressDeployment,
+    );
+
+    const deployment = await deployService.getInProgressDeployment(1);
+
+    expect(deployment).toBe(inProgressDeployment);
+    expect(mockDeployLogRepository.updateOne).not.toHaveBeenCalled();
+  });
+
+  it('should mark created deployment failed when deployment throws', async () => {
+    const manifest = { key: 'value' };
+    const projectId = 1;
+
+    mockDeployLogRepository.findLastProjectDeployLog.mockResolvedValue(null);
+    mockDeployLogRepository.createOne.mockResolvedValue({ id: 123 });
+    mockWrenAIAdaptor.deploy.mockRejectedValue(new Error('network error'));
+
+    const response = await deployService.deploy(manifest, projectId);
+
+    expect(response.status).toEqual(DeployStatusEnum.FAILED);
+    expect(mockDeployLogRepository.updateOne).toHaveBeenCalledWith(123, {
+      status: DeployStatusEnum.FAILED,
+      error: 'network error',
+    });
+  });
 });

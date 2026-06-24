@@ -18,6 +18,8 @@ import {
 const logger = getLogger('DeployService');
 logger.level = 'debug';
 
+const STALE_DEPLOYMENT_MS = 10 * 60 * 1000;
+
 export interface DeployResponse {
   status: DeployStatusEnum;
   error?: string;
@@ -69,9 +71,26 @@ export class DeployService implements IDeployService {
   }
 
   public async getInProgressDeployment(projectId: number) {
-    return await this.deployLogRepository.findInProgressProjectDeployLog(
-      projectId,
-    );
+    const latestDeploy =
+      await this.deployLogRepository.findLatestProjectDeployLog(projectId);
+    if (latestDeploy?.status !== DeployStatusEnum.IN_PROGRESS) {
+      return null;
+    }
+
+    const updatedAt = latestDeploy.updatedAt || latestDeploy.createdAt;
+    const updatedAtTime = updatedAt ? new Date(updatedAt).getTime() : 0;
+    const isStale =
+      updatedAtTime > 0 && Date.now() - updatedAtTime > STALE_DEPLOYMENT_MS;
+
+    if (isStale) {
+      await this.deployLogRepository.updateOne(latestDeploy.id, {
+        status: DeployStatusEnum.FAILED,
+        error: 'Deployment timed out before completion.',
+      });
+      return null;
+    }
+
+    return latestDeploy;
   }
 
   public async deploy(
@@ -81,6 +100,7 @@ export class DeployService implements IDeployService {
   ) {
     const eventName = TelemetryEvent.MODELING_DEPLOY_MDL;
     const projectId = typeof project === 'number' ? project : project.id;
+    let deploy: Deploy | null = null;
     try {
       // generate hash of manifest
       const hash = this.createMDLHash(manifest, project);
@@ -101,7 +121,7 @@ export class DeployService implements IDeployService {
         projectId,
         status: DeployStatusEnum.IN_PROGRESS,
       } as Deploy;
-      const deploy = await this.deployLogRepository.createOne(deployData);
+      deploy = await this.deployLogRepository.createOne(deployData);
 
       // deploy to AI-service
       const { status: aiStatus, error: aiError } =
@@ -135,6 +155,16 @@ export class DeployService implements IDeployService {
       return { status, error: aiError };
     } catch (err: any) {
       logger.error(`Error deploying model: ${err.message}`);
+      if (deploy?.id) {
+        try {
+          await this.deployLogRepository.updateOne(deploy.id, {
+            status: DeployStatusEnum.FAILED,
+            error: err.message,
+          });
+        } catch (updateErr: any) {
+          logger.error(`Error marking deployment failed: ${updateErr.message}`);
+        }
+      }
       this.telemetry.sendEvent(
         eventName,
         { mdl: manifest, error: err.message },
