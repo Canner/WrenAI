@@ -17,6 +17,8 @@ import {
 const logger = getLogger('DeployService');
 logger.level = 'debug';
 
+const STALE_DEPLOYMENT_MS = 10 * 60 * 1000;
+
 export interface DeployResponse {
   status: DeployStatusEnum;
   error?: string;
@@ -68,13 +70,29 @@ export class DeployService implements IDeployService {
   }
 
   public async getInProgressDeployment(projectId) {
-    return await this.deployLogRepository.findInProgressProjectDeployLog(
+    const inProgressDeploy = await this.deployLogRepository.findInProgressProjectDeployLog(
       projectId,
     );
+    if (!inProgressDeploy) {
+      return null;
+    }
+
+    const updatedAt = inProgressDeploy.updatedAt || inProgressDeploy.createdAt;
+    const updatedAtTime = updatedAt ? new Date(updatedAt).getTime() : 0;
+    if (updatedAtTime > 0 && Date.now() - updatedAtTime > STALE_DEPLOYMENT_MS) {
+      await this.markDeploymentFailed(
+        inProgressDeploy,
+        'Deployment timed out before completion.',
+      );
+      return null;
+    }
+
+    return inProgressDeploy;
   }
 
   public async deploy(manifest, projectId, force = false) {
     const eventName = TelemetryEvent.MODELING_DEPLOY_MDL;
+    let deploy: Deploy | null = null;
     try {
       // generate hash of manifest
       const hash = this.createMDLHash(manifest, projectId);
@@ -89,13 +107,22 @@ export class DeployService implements IDeployService {
           return { status: DeployStatusEnum.SUCCESS };
         }
       }
+      const previousInProgressDeploy =
+        await this.deployLogRepository.findInProgressProjectDeployLog(projectId);
+      if (previousInProgressDeploy) {
+        await this.markDeploymentFailed(
+          previousInProgressDeploy,
+          'Deployment was superseded by a new deployment.',
+        );
+      }
+
       const deployData = {
         manifest,
         hash,
         projectId,
         status: DeployStatusEnum.IN_PROGRESS,
       } as Deploy;
-      const deploy = await this.deployLogRepository.createOne(deployData);
+      deploy = await this.deployLogRepository.createOne(deployData);
 
       // deploy to AI-service
       const { status: aiStatus, error: aiError } =
@@ -129,6 +156,13 @@ export class DeployService implements IDeployService {
       return { status, error: aiError };
     } catch (err: any) {
       logger.error(`Error deploying model: ${err.message}`);
+      if (deploy?.id) {
+        try {
+          await this.markDeploymentFailed(deploy, err.message);
+        } catch (updateErr: any) {
+          logger.error(`Error marking deployment failed: ${updateErr.message}`);
+        }
+      }
       this.telemetry.sendEvent(
         eventName,
         { mdl: manifest, error: err.message },
@@ -137,6 +171,13 @@ export class DeployService implements IDeployService {
       );
       return { status: DeployStatusEnum.FAILED, error: err.message };
     }
+  }
+
+  private async markDeploymentFailed(deploy: Deploy, error: string) {
+    await this.deployLogRepository.updateOne(deploy.id, {
+      status: DeployStatusEnum.FAILED,
+      error,
+    });
   }
 
   public createMDLHash(manifest: Manifest, projectId: number) {
