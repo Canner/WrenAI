@@ -422,7 +422,10 @@ def convert_dbt_project_to_wren_project(
             ProjectFile(
                 relative_path=f"knowledge/sql/{slug}.md",
                 content=render_query_markdown(
-                    pair["nl"], pair["sql"], source=pair.get("source", "dbt")
+                    pair["nl"],
+                    pair["sql"],
+                    source=pair.get("source", "dbt"),
+                    datasource=pair.get("datasource"),
                 ),
             )
         )

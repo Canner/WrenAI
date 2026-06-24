@@ -379,6 +379,15 @@ def init(
         "  knowledge/sql/              — confirmed NL-SQL pairs (wren memory store)"
     )
     typer.echo("  AGENTS.md                   — AI agent workflow guidance")
+    # A pre-existing legacy queries.yml is still auto-loaded by `wren memory
+    # index`; surface it so v4 and v5 pair sources don't silently mix.
+    if (project_path / "queries.yml").exists():
+        typer.echo(
+            "Note: a legacy queries.yml is present. It's still loaded on "
+            "`wren memory index`, but is deprecated — migrate its pairs into "
+            "knowledge/sql/ (see the migration reference).",
+            err=True,
+        )
     typer.echo("")
     typer.echo(
         "Next: Install agent skills via "
