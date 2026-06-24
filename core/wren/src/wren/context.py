@@ -43,6 +43,10 @@ When the user wants to add models, change schema, or onboard a new table:
 3. `wren context build` — compile to `target/mdl.json`
 4. `wren memory index` — re-index schema for search
 
+## Capturing business context
+
+Rules the schema can't express — canonical tables, default filters, units, enum meanings — go in `knowledge/rules/*.md` (read by `wren context instructions`). Confirmed NL→SQL examples are saved with `wren memory store` (step 5 above), which writes them to `knowledge/sql/`. Both live in the project and are committed with it.
+
 ## Prerequisites
 
 This project requires the `wren` CLI. Install with your data source extra:
@@ -51,7 +55,7 @@ This project requires the `wren` CLI. Install with your data source extra:
 pip install "wrenai[postgres,memory,ui]"
 ```
 
-Replace `postgres` with your data source (`mysql`, `bigquery`, `snowflake`, `clickhouse`, `trino`, `mssql`, `databricks`, `redshift`, `spark`, `athena`, `oracle`). The `memory` extra enables semantic search; `ui` enables the interactive UI.
+Replace `postgres` with your data source (`mysql`, `bigquery`, `snowflake`, `clickhouse`, `trino`, `mssql`, `databricks`, `redshift`, `spark`, `athena`, `oracle`). The `memory` extra upgrades recall to semantic (embedding) search — without it, `memory store` / `index` / `recall` still work over the `knowledge/` files. `ui` enables the interactive UI.
 
 See https://docs.getwren.ai/oss/engine/get_started/installation for full setup.
 
