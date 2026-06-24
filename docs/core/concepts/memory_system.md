@@ -37,6 +37,21 @@ The index covers two kinds of content:
 | Schema items — models, columns, relationships, views, cubes, business rules | MDL + `knowledge/rules/` | Lets the agent retrieve the right context for a question without sending the entire project into the prompt. |
 | NL→SQL pairs | `knowledge/sql/*.md` | Gives the agent few-shot examples from your actual business, not generic examples. |
 
+## With and without the `memory` extra
+
+The source of truth is the same either way — only the retrieval engine differs:
+
+| | With `memory` extra (LanceDB) | Without it (grep, default) |
+| --- | --- | --- |
+| NL→SQL `recall` | **Semantic** — embedding similarity, so paraphrases match (store *"monthly revenue"*, recall *"sales per month"*) | **Lexical** — token overlap + substring over `knowledge/sql/*.md`, read directly at query time. Paraphrases with no shared words won't match |
+| Persistent index | LanceDB under `.wren/memory/` (built by `index`/`store`) | None — the markdown *is* the index, so `index` is a no-op |
+| Schema search (`fetch`) | Available (embedding retrieval over schema items) | **Not available** — needs embeddings; large schemas should install the extra |
+
+The grep backend is the zero-dependency fallback: it works out of the box and keeps
+`store`/`recall` available, at lower recall quality. Install the extra (or set
+`WREN_MEMORY_BACKEND=lancedb`) for semantic recall and schema search; nothing about your
+`knowledge/` files changes when you switch.
+
 ## How memory is used
 
 When an agent answers a question through Wren AI, memory usually participates before SQL is written:
