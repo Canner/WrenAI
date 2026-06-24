@@ -153,11 +153,13 @@ def convert_mdl_to_project(mdl_json: dict) -> list[ProjectFile]:
     files: list[ProjectFile] = []
 
     # ── wren_project.yml ──────────────────────────────────────
-    # Map layoutVersion back to schema_version
+    # Map engine layoutVersion to the schema_version an import should land on.
+    # layoutVersion 3 covers both v4 (composite PK) and v5; a fresh import
+    # targets the current layout (5, knowledge/-native).
     layout_version = mdl_json.get("layoutVersion", 1)
-    _LAYOUT_TO_SCHEMA = {1: 2, 2: 3, 3: 4}
+    _LAYOUT_TO_SCHEMA = {1: 2, 2: 3, 3: 5}
     schema_version = _LAYOUT_TO_SCHEMA.get(
-        layout_version, 4 if layout_version >= 3 else (3 if layout_version >= 2 else 2)
+        layout_version, 5 if layout_version >= 3 else (3 if layout_version >= 2 else 2)
     )
     project_config: dict[str, Any] = {"schema_version": schema_version}
     if "name" in mdl_json:
@@ -264,12 +266,17 @@ def convert_mdl_to_project(mdl_json: dict) -> list[ProjectFile]:
             )
         )
 
-    # ── Instructions ──────────────────────────────────────────
+    # ── knowledge/ (v5: business rules under knowledge/rules/) ──
+    files.append(
+        ProjectFile(
+            relative_path="knowledge/knowledge.yml", content="schema_version: 1\n"
+        )
+    )
     instructions = mdl_json.get("_instructions")
     if instructions:
         files.append(
             ProjectFile(
-                relative_path="instructions.md",
+                relative_path="knowledge/rules/general.md",
                 content=instructions.strip() + "\n",
             )
         )

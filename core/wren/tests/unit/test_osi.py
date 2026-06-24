@@ -774,7 +774,7 @@ def test_cli_init_from_osi_scaffolds_project(tmp_path: Path):
     assert (proj / "models" / "orders" / "metadata.yml").exists()
     assert (proj / "models" / "customers" / "metadata.yml").exists()
     assert (proj / "relationships.yml").exists()
-    assert (proj / "instructions.md").exists()
+    assert (proj / "knowledge" / "rules" / "general.md").exists()
     assert (proj / "AGENTS.md").exists()
     # The OSI semantic_model.name flowed into wren_project.yml
     import yaml as _yaml  # noqa: PLC0415

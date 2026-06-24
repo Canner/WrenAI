@@ -307,7 +307,9 @@ def test_init_empty_skips_example_model_and_view(tmp_path):
     assert (tmp_path / "wren_project.yml").exists()
     assert (tmp_path / "relationships.yml").exists()
     assert (tmp_path / "AGENTS.md").exists()
-    assert (tmp_path / "queries.yml").exists()
+    assert (tmp_path / "knowledge" / "knowledge.yml").exists()
+    # v5 no longer scaffolds a legacy queries.yml (pairs live in knowledge/sql/)
+    assert not (tmp_path / "queries.yml").exists()
     # Summary mentions empty rather than the example paths
     assert "empty" in result.output
 
@@ -324,6 +326,14 @@ def test_init_builds_knowledge_skeleton(tmp_path):
     assert (tmp_path / "knowledge" / "rules" / "general.md").exists()
     # legacy single-file instructions.md is no longer scaffolded
     assert not (tmp_path / "instructions.md").exists()
+
+
+def test_init_warns_on_legacy_queries_yml(tmp_path):
+    """A pre-existing legacy queries.yml is surfaced as deprecated at init."""
+    (tmp_path / "queries.yml").write_text("version: 1\npairs: []\n")
+    result = runner.invoke(app, ["context", "init", "--empty", "--path", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "queries.yml" in result.output and "deprecated" in result.output
 
 
 def test_init_does_not_clobber_existing_rules(tmp_path):
@@ -700,10 +710,13 @@ def test_import_dbt_writes_project_and_builds(tmp_path):
     assert (output_dir / "wren_project.yml").exists()
     assert (output_dir / "models" / "fct_orders" / "metadata.yml").exists()
     assert (output_dir / "relationships.yml").exists()
-    assert (output_dir / "queries.yml").exists()
+    assert (output_dir / "knowledge" / "rules" / "general.md").exists()
+    assert list((output_dir / "knowledge" / "sql").glob("*.md"))  # seeded NL→SQL pairs
+    assert not (output_dir / "queries.yml").exists()
     assert "skipped 1 ephemeral" in result.output
 
     config = yaml.safe_load((output_dir / "wren_project.yml").read_text())
+    assert config["schema_version"] == 5
     assert config["data_source"] == "duckdb"
     assert config["dbt"]["profile"] == "jaffle_shop"
     relationships = yaml.safe_load((output_dir / "relationships.yml").read_text())
@@ -730,7 +743,6 @@ def test_import_dbt_force_overwrites_managed_files(tmp_path):
     output_dir = tmp_path / "wren_project"
     output_dir.mkdir()
     (output_dir / "wren_project.yml").write_text("name: old\n")
-    (output_dir / "queries.yml").write_text("version: 1\npairs: []\n")
 
     result = runner.invoke(
         app,
@@ -766,7 +778,10 @@ def test_import_dbt_force_overwrites_managed_files(tmp_path):
     )
     assert forced.exit_code == 0, forced.output
     assert "jaffle_shop" in (output_dir / "wren_project.yml").read_text()
-    assert "source: dbt" in (output_dir / "queries.yml").read_text()
+    sql_files = list((output_dir / "knowledge" / "sql").glob("*.md"))
+    contents = [f.read_text() for f in sql_files]
+    assert any("source: dbt" in c for c in contents)
+    assert any("datasource: duckdb" in c for c in contents)  # metadata preserved
 
 
 def test_write_project_files_force_preserves_queries_without_replacement(tmp_path):

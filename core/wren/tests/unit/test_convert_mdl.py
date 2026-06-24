@@ -150,7 +150,7 @@ def test_convert_mdl_to_project():
     assert "views/monthly_revenue/metadata.yml" in file_map
     assert "views/monthly_revenue/sql.yml" in file_map
     assert "relationships.yml" in file_map
-    assert "instructions.md" in file_map
+    assert "knowledge/rules/general.md" in file_map
     assert "AGENTS.md" in file_map
     assert file_map["AGENTS.md"] == _AGENTS_MD_TEMPLATE
 
@@ -192,8 +192,8 @@ def test_convert_mdl_to_project():
     assert rels["relationships"][0]["join_type"] == "MANY_TO_ONE"
     assert rels["relationships"][0]["name"] == "orders_customers"
 
-    # Instructions
-    assert "Always use UTC" in file_map["instructions.md"]
+    # Business rules → knowledge/rules/
+    assert "Always use UTC" in file_map["knowledge/rules/general.md"]
 
 
 # ── write_project_files ────────────────────────────────────────────────────
@@ -208,7 +208,7 @@ def test_write_project_files(tmp_path: Path):
     assert (tmp_path / "models" / "revenue_summary" / "ref_sql.sql").exists()
     assert (tmp_path / "views" / "monthly_revenue" / "sql.yml").exists()
     assert (tmp_path / "relationships.yml").exists()
-    assert (tmp_path / "instructions.md").exists()
+    assert (tmp_path / "knowledge" / "rules" / "general.md").exists()
     assert (tmp_path / "AGENTS.md").exists()
     assert (tmp_path / "AGENTS.md").read_text() == _AGENTS_MD_TEMPLATE
 
@@ -256,11 +256,11 @@ def test_convert_then_build_roundtrip(tmp_path: Path):
 
 
 def test_empty_mdl():
-    """Empty models/views/relationships — only wren_project.yml and AGENTS.md are produced."""
+    """Empty models/views/relationships — only the project, AGENTS.md, and the knowledge marker."""
     mdl = {"catalog": "wren", "schema": "public"}
     files = convert_mdl_to_project(mdl)
     paths = {f.relative_path for f in files}
-    assert paths == {"wren_project.yml", "AGENTS.md"}
+    assert paths == {"wren_project.yml", "AGENTS.md", "knowledge/knowledge.yml"}
     assert "instructions.md" not in paths
 
 
@@ -273,10 +273,11 @@ def test_no_data_source():
 
 
 def test_no_instructions():
-    """No _instructions — instructions.md is not produced."""
+    """No _instructions — no business-rules file is produced."""
     mdl = {"catalog": "wren", "schema": "public"}
     files = convert_mdl_to_project(mdl)
     assert not any(f.relative_path == "instructions.md" for f in files)
+    assert not any(f.relative_path == "knowledge/rules/general.md" for f in files)
 
 
 def test_unknown_camel_key_preserved():
