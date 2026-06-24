@@ -275,7 +275,7 @@ def generate_project_files(
 
     # -- wren_project.yml --
     project_config = {
-        "schema_version": 2,
+        "schema_version": 5,
         "name": project_name,
         "version": "1.0",
         "catalog": "",
@@ -342,10 +342,10 @@ def generate_project_files(
     else:
         files["relationships.yml"] = "relationships: []\n"
 
-    # -- instructions.md --
+    # -- knowledge/ (v5: business rules live under knowledge/rules/) --
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    instructions = (
-        "# Instructions\n\n"
+    rules = (
+        "# Project rules\n\n"
         f"This Wren project was auto-generated from a dlt DuckDB pipeline.\n\n"
         f"- **Source DuckDB:** `{duckdb_path}`\n"
         f"- **Generated:** {timestamp}\n"
@@ -354,7 +354,9 @@ def generate_project_files(
         "dlt metadata columns (`_dlt_id`, `_dlt_parent_id`, etc.) are hidden from models\n"
         "but still present in the underlying DuckDB tables.\n"
     )
-    files["instructions.md"] = instructions
+    files["knowledge/rules/general.md"] = rules
+    # knowledge axis version marker (decoupled from the MDL schema_version)
+    files["knowledge/knowledge.yml"] = "schema_version: 1\n"
 
     return files
 

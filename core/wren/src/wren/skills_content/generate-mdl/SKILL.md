@@ -31,7 +31,7 @@ Check whether `wren_project.yml` exists in the current working directory
 1. Tell the user that an existing wren project was detected and show its path.
 2. Ask:
    - **Reset** — wipe the existing project (`models/`, `views/`,
-     `relationships.yml`, `instructions.md`, and rebuild `wren_project.yml`)
+     `relationships.yml`, `knowledge/`, and rebuild `wren_project.yml`)
      and regenerate from scratch in the same directory.
    - **New path** — keep the existing project untouched and choose a
      different directory for the new project. Ask the user for the new path,
@@ -160,7 +160,7 @@ project/
 ├── views/               # named SQL statements
 ├── cubes/               # pre-aggregation cubes (measures + dimensions)
 ├── relationships.yml
-└── instructions.md
+└── knowledge/           # business rules (rules/) + NL→SQL pairs (sql/)
 ```
 
 > **When to define cubes:** If the user asks aggregation questions like

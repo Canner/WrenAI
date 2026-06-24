@@ -146,7 +146,7 @@ This script:
 - Filters out dlt metadata columns (`_dlt_id`, `_dlt_load_id`, `_dlt_list_idx`) from model definitions
 - Detects parent-child relationships from `_dlt_parent_id` columns and table naming conventions
 - **Normalizes column types using `wren.type_mapping.parse_type()`** (sqlglot-based)
-- Generates a complete v2 YAML project (wren_project.yml, models/, relationships.yml, instructions.md)
+- Generates a complete v5 YAML project (wren_project.yml, models/, relationships.yml, knowledge/rules/)
 
 After running, show the user what was generated:
 

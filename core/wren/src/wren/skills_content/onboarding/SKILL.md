@@ -113,7 +113,7 @@ Validation runs automatically. The CLI overwrites profiles silently — there is
 wren context init --empty
 ```
 
-Refuses to overwrite an existing `wren_project.yml`. Creates the project directory layout (`models/`, `views/`, `relationships.yml`, `instructions.md`, `AGENTS.md`, `queries.yml`).
+Refuses to overwrite an existing `wren_project.yml`. Creates the project directory layout (`models/`, `views/`, `relationships.yml`, `knowledge/` (rules + sql), `AGENTS.md`).
 
 ## Step 3.6 — Bind the profile to the project
 
