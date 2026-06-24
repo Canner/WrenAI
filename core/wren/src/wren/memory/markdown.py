@@ -117,8 +117,12 @@ def render_query_markdown(
     tags: list[str] | None = None,
     source: str = "user",
     created_at: str | None = None,
+    body: str | None = None,
 ) -> str:
-    """Render the frontmatter document for a NL→SQL pair."""
+    """Render the frontmatter document for a NL→SQL pair.
+
+    An optional *body* (user notes below the frontmatter) is preserved verbatim.
+    """
     front: dict = {"nl": nl.strip(), "sql": sql.strip(), "source": source}
     if created_at:
         front["created_at"] = created_at
@@ -126,10 +130,13 @@ def render_query_markdown(
         front["datasource"] = datasource
     if tags:
         front["tags"] = tags
-    body = yaml.safe_dump(
+    front_yaml = yaml.safe_dump(
         front, sort_keys=False, allow_unicode=True, default_flow_style=False
     )
-    return f"---\n{body}---\n"
+    doc = f"---\n{front_yaml}---\n"
+    if body:
+        doc += f"\n{body.strip()}\n"
+    return doc
 
 
 def write_query_markdown(
@@ -152,6 +159,8 @@ def write_query_markdown(
     sql_dir.mkdir(parents=True, exist_ok=True)
     slug = _resolve_slug(slugify(nl), nl, sql_dir)
     dest = sql_dir / f"{slug}.md"
+    # Preserve any user-authored notes below the frontmatter when updating in place.
+    existing_body = parse_query_markdown(dest).get("_body") if dest.exists() else None
     dest.write_text(
         render_query_markdown(
             nl,
@@ -160,6 +169,7 @@ def write_query_markdown(
             tags=tags,
             source=source,
             created_at=created_at,
+            body=existing_body or None,
         ),
         encoding="utf-8",
     )

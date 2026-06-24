@@ -91,15 +91,15 @@ From this point on, **every command and file path in this skill is relative to t
 ### Step 2 — Detect semantic-memory availability
 
 ```bash
-wren memory fetch -q probe >/dev/null 2>&1
+wren memory status 2>/dev/null | grep -q "Backend: lancedb"
 ```
 
 Writing NL→SQL pairs (`wren memory store` → `knowledge/sql/*.md`) works **regardless** — that
-sink is always open. This probe only tells you whether the optional `memory` extra is
-installed, which gates the *embedding* features used while reading:
+sink is always open. This checks which recall backend is active, i.e. whether the optional
+`memory` extra is installed (LanceDB = semantic; grep = dependency-free fallback):
 
-- Exit 0 → set `MEMORY_AVAILABLE = true`. Semantic recall and `wren memory fetch` are usable, and `wren memory index` will build an embedding index in Step 8.
-- Exit non-zero → set `MEMORY_AVAILABLE = false`. Skip the semantic read/index paths below; pair writeback still happens via `wren memory store`.
+- Match (`Backend: lancedb`) → set `MEMORY_AVAILABLE = true`. Semantic recall and `wren memory fetch` are usable, and `wren memory index` builds an embedding index in Step 8.
+- No match (grep backend) → set `MEMORY_AVAILABLE = false`. Skip the semantic read/index paths below; pair writeback still happens via `wren memory store`, and grep recall still works.
 
 ### Step 3 — Ensure raw/ folder exists
 
@@ -321,7 +321,8 @@ If `MEMORY_AVAILABLE = true`:
 wren memory index
 ```
 
-This re-embeds the new schema items, the updated `knowledge/rules/`, and the new `knowledge/sql/` pairs.
+This rebuilds the index from the MDL schema items and the `knowledge/sql/` pairs. (Business
+rules in `knowledge/rules/` are read by `wren context instructions`, not embedded by `index`.)
 
 ## Step 9 — Summary
 

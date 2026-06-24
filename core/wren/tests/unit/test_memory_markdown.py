@@ -71,6 +71,16 @@ def test_same_nl_with_whitespace_reuses_file(tmp_path):
     assert len(list((tmp_path / "knowledge" / "sql").glob("*.md"))) == 1
 
 
+def test_update_preserves_user_body(tmp_path):
+    """Re-storing the same NL keeps user-authored notes below the frontmatter."""
+    dest = write_query_markdown(tmp_path, "Total revenue", "SELECT 1")
+    dest.write_text(dest.read_text() + "\nNote: excludes refunds.\n")
+    write_query_markdown(tmp_path, "Total revenue", "SELECT SUM(amount) FROM o")
+    text = dest.read_text()
+    assert "SUM(amount)" in text  # sql updated
+    assert "Note: excludes refunds." in text  # body preserved
+
+
 def test_sql_containing_dashes_roundtrips(tmp_path):
     """SQL whose body contains a '---' line must not break frontmatter parsing."""
     sql = "SELECT 1\n---\nUNION ALL\nSELECT 2"

@@ -535,7 +535,9 @@ def check(
     # Only user-sourced pairs come from markdown; seeds/views are derived from
     # the manifest and are not expected to have a knowledge/sql/ file.
     indexed_user = {
-        r.get("nl_query") for r in indexed if r.get("tags") == "source:user"
+        r.get("nl_query")
+        for r in indexed
+        if _parse_source(r.get("tags")) not in ("seed", "view")
     }
 
     # Compare user pairs only — seed/view rows aren't markdown-backed.

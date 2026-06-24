@@ -748,7 +748,10 @@ def get_knowledge_schema_version(project_path: Path) -> int:
     """
     if not (project_path / "knowledge").is_dir():
         return 0
-    cfg = load_knowledge_config(project_path)
+    try:
+        cfg = load_knowledge_config(project_path)
+    except yaml.YAMLError as e:
+        raise SystemExit(f"Error: invalid YAML in {_KNOWLEDGE_CONFIG_FILE}: {e}")
     raw = cfg.get("schema_version", _KNOWLEDGE_SCHEMA_VERSION)
     try:
         return int(raw)
@@ -891,16 +894,19 @@ def validate_project(project_path: Path) -> list[ValidationError]:
 
     # knowledge/ version axis — independent of the MDL schema_version above.
     if (project_path / "knowledge").is_dir():
-        kcfg = load_knowledge_config(project_path)
-        raw_kv = kcfg.get("schema_version", _KNOWLEDGE_SCHEMA_VERSION)
         try:
-            kv = int(raw_kv)
-        except (TypeError, ValueError):
+            kcfg = load_knowledge_config(project_path)
+            kv = int(kcfg.get("schema_version", _KNOWLEDGE_SCHEMA_VERSION))
+        except yaml.YAMLError as e:
+            errors.append(
+                ValidationError("error", _KNOWLEDGE_CONFIG_FILE, f"invalid YAML: {e}")
+            )
+        except (TypeError, ValueError) as e:
             errors.append(
                 ValidationError(
                     "error",
                     _KNOWLEDGE_CONFIG_FILE,
-                    f"schema_version must be an integer, got {raw_kv!r}",
+                    f"schema_version must be an integer ({e})",
                 )
             )
         else:

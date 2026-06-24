@@ -346,6 +346,17 @@ def test_get_knowledge_schema_version(tmp_path):
     assert get_knowledge_schema_version(tmp_path) == 1
 
 
+def test_validate_reports_malformed_knowledge_yml(tmp_path):
+    """A malformed knowledge.yml surfaces as a ValidationError, not a crash."""
+    _make_v2_project(tmp_path, schema_version=5)
+    (tmp_path / "knowledge").mkdir()
+    (tmp_path / "knowledge" / "knowledge.yml").write_text(
+        "schema_version: [unterminated\n"
+    )
+    errors = validate_project(tmp_path)
+    assert any("knowledge" in e.path and "invalid YAML" in e.message for e in errors)
+
+
 def test_validate_rejects_unsupported_knowledge_version(tmp_path):
     _make_v2_project(tmp_path, schema_version=5)
     (tmp_path / "knowledge").mkdir()
