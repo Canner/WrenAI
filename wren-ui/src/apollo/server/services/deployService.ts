@@ -71,40 +71,55 @@ export class DeployService implements IDeployService {
   }
 
   public async getInProgressDeployment(projectId: number) {
-    const latestDeploy = await this.findLatestOrInProgressDeployment(projectId);
-    if (latestDeploy?.status !== DeployStatusEnum.IN_PROGRESS) {
+    const inProgressDeploy =
+      await this.deployLogRepository.findInProgressProjectDeployLog(projectId);
+    if (!inProgressDeploy) {
       return null;
     }
 
-    const updatedAt = latestDeploy.updatedAt || latestDeploy.createdAt;
+    const lastSuccessfulDeploy =
+      await this.deployLogRepository.findLastProjectDeployLog(projectId);
+    const successTime = lastSuccessfulDeploy
+      ? this.getDeployTime(lastSuccessfulDeploy)
+      : 0;
+    const inProgressTime = this.getDeployTime(inProgressDeploy);
+    if (
+      lastSuccessfulDeploy &&
+      successTime >= inProgressTime
+    ) {
+      await this.markDeploymentFailed(
+        inProgressDeploy,
+        'Deployment was superseded by a successful deployment.',
+      );
+      return null;
+    }
+
+    const updatedAt = inProgressDeploy.updatedAt || inProgressDeploy.createdAt;
     const updatedAtTime = updatedAt ? new Date(updatedAt).getTime() : 0;
     const isStale =
       updatedAtTime > 0 && Date.now() - updatedAtTime > STALE_DEPLOYMENT_MS;
 
     if (isStale) {
-      await this.deployLogRepository.updateOne(latestDeploy.id, {
-        status: DeployStatusEnum.FAILED,
-        error: 'Deployment timed out before completion.',
-      });
+      await this.markDeploymentFailed(
+        inProgressDeploy,
+        'Deployment timed out before completion.',
+      );
       return null;
     }
 
-    return latestDeploy;
+    return inProgressDeploy;
   }
 
-  private async findLatestOrInProgressDeployment(projectId: number) {
-    const repository = this.deployLogRepository as IDeployLogRepository & {
-      findLatestProjectDeployLog?: (projectId: number) => Promise<Deploy | null>;
-    };
+  private getDeployTime(deploy: Deploy) {
+    const deployTime = deploy.updatedAt || deploy.createdAt;
+    return deployTime ? new Date(deployTime).getTime() : 0;
+  }
 
-    if (typeof repository.findLatestProjectDeployLog === 'function') {
-      return await repository.findLatestProjectDeployLog(projectId);
-    }
-
-    logger.warn(
-      'DeployLogRepository.findLatestProjectDeployLog is unavailable; falling back to in-progress deployment lookup.',
-    );
-    return await repository.findInProgressProjectDeployLog(projectId);
+  private async markDeploymentFailed(deploy: Deploy, error: string) {
+    await this.deployLogRepository.updateOne(deploy.id, {
+      status: DeployStatusEnum.FAILED,
+      error,
+    });
   }
 
   public async deploy(
@@ -129,6 +144,16 @@ export class DeployService implements IDeployService {
           return { status: DeployStatusEnum.SUCCESS };
         }
       }
+
+      const previousInProgressDeploy =
+        await this.deployLogRepository.findInProgressProjectDeployLog(projectId);
+      if (previousInProgressDeploy) {
+        await this.markDeploymentFailed(
+          previousInProgressDeploy,
+          'Deployment was superseded by a new deployment.',
+        );
+      }
+
       const deployData = {
         manifest,
         hash,

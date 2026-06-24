@@ -179,28 +179,37 @@ describe('DeployService', () => {
     );
   });
 
-  it('should not report in-progress when the latest deployment is successful', async () => {
-    mockDeployLogRepository.findLatestProjectDeployLog.mockResolvedValue({
+  it('should not report in-progress when a successful deployment supersedes it', async () => {
+    const oldDate = new Date(Date.now() - 60 * 1000);
+    const newDate = new Date();
+    mockDeployLogRepository.findInProgressProjectDeployLog.mockResolvedValue({
+      id: 1,
+      status: DeployStatusEnum.IN_PROGRESS,
+      updatedAt: oldDate,
+    });
+    mockDeployLogRepository.findLastProjectDeployLog.mockResolvedValue({
       id: 2,
       status: DeployStatusEnum.SUCCESS,
+      updatedAt: newDate,
     });
 
     const deployment = await deployService.getInProgressDeployment(1);
 
     expect(deployment).toBeNull();
-    expect(
-      mockDeployLogRepository.findLatestProjectDeployLog,
-    ).toHaveBeenCalledWith(1);
-    expect(mockDeployLogRepository.updateOne).not.toHaveBeenCalled();
+    expect(mockDeployLogRepository.updateOne).toHaveBeenCalledWith(1, {
+      status: DeployStatusEnum.FAILED,
+      error: 'Deployment was superseded by a successful deployment.',
+    });
   });
 
   it('should mark stale in-progress deployments failed', async () => {
     const oldDate = new Date(Date.now() - 11 * 60 * 1000);
-    mockDeployLogRepository.findLatestProjectDeployLog.mockResolvedValue({
+    mockDeployLogRepository.findInProgressProjectDeployLog.mockResolvedValue({
       id: 3,
       status: DeployStatusEnum.IN_PROGRESS,
       updatedAt: oldDate,
     });
+    mockDeployLogRepository.findLastProjectDeployLog.mockResolvedValue(null);
 
     const deployment = await deployService.getInProgressDeployment(1);
 
@@ -218,34 +227,15 @@ describe('DeployService', () => {
       status: DeployStatusEnum.IN_PROGRESS,
       updatedAt: recentDate,
     };
-    mockDeployLogRepository.findLatestProjectDeployLog.mockResolvedValue(
+    mockDeployLogRepository.findInProgressProjectDeployLog.mockResolvedValue(
       inProgressDeployment,
     );
+    mockDeployLogRepository.findLastProjectDeployLog.mockResolvedValue(null);
 
     const deployment = await deployService.getInProgressDeployment(1);
 
     expect(deployment).toBe(inProgressDeployment);
     expect(mockDeployLogRepository.updateOne).not.toHaveBeenCalled();
-  });
-
-  it('should fall back when latest deployment lookup is unavailable', async () => {
-    const recentDate = new Date();
-    const inProgressDeployment = {
-      id: 5,
-      status: DeployStatusEnum.IN_PROGRESS,
-      updatedAt: recentDate,
-    };
-    delete mockDeployLogRepository.findLatestProjectDeployLog;
-    mockDeployLogRepository.findInProgressProjectDeployLog.mockResolvedValue(
-      inProgressDeployment,
-    );
-
-    const deployment = await deployService.getInProgressDeployment(1);
-
-    expect(deployment).toBe(inProgressDeployment);
-    expect(
-      mockDeployLogRepository.findInProgressProjectDeployLog,
-    ).toHaveBeenCalledWith(1);
   });
 
   it('should mark created deployment failed when deployment throws', async () => {
@@ -263,5 +253,33 @@ describe('DeployService', () => {
       status: DeployStatusEnum.FAILED,
       error: 'network error',
     });
+  });
+
+  it('should clear previous in-progress deployment before creating a new one', async () => {
+    const manifest = { key: 'value' };
+    const projectId = 1;
+
+    mockDeployLogRepository.findLastProjectDeployLog.mockResolvedValue(null);
+    mockDeployLogRepository.findInProgressProjectDeployLog.mockResolvedValue({
+      id: 122,
+      status: DeployStatusEnum.IN_PROGRESS,
+      updatedAt: new Date(),
+    });
+    mockDeployLogRepository.createOne.mockResolvedValue({ id: 123 });
+    mockWrenAIAdaptor.deploy.mockResolvedValue({ status: 'SUCCESS' });
+
+    const response = await deployService.deploy(manifest, projectId);
+
+    expect(response.status).toEqual(DeployStatusEnum.SUCCESS);
+    expect(mockDeployLogRepository.updateOne).toHaveBeenCalledWith(122, {
+      status: DeployStatusEnum.FAILED,
+      error: 'Deployment was superseded by a new deployment.',
+    });
+    expect(mockDeployLogRepository.createOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId,
+        status: DeployStatusEnum.IN_PROGRESS,
+      }),
+    );
   });
 });
