@@ -201,13 +201,13 @@ export class ModelResolver {
 
   public async checkModelSync(_root: any, _args: any, ctx: IContext) {
     try {
-      const project = await ctx.projectService.getCurrentProject();
+      const { id } = await ctx.projectService.getCurrentProject();
       const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-      const currentHash = ctx.deployService.createMDLHash(manifest, project);
-      const lastDeploy = await ctx.deployService.getLastDeployment(project.id);
+      const currentHash = ctx.deployService.createMDLHash(manifest, id);
+      const lastDeploy = await ctx.deployService.getLastDeployment(id);
       const lastDeployHash = lastDeploy?.hash;
       const inProgressDeployment =
-        await ctx.deployService.getInProgressDeployment(project.id);
+        await ctx.deployService.getInProgressDeployment(id);
       if (inProgressDeployment) {
         return { status: SyncStatusEnum.IN_PROGRESS };
       }
@@ -225,19 +225,18 @@ export class ModelResolver {
     args: { force: boolean },
     ctx: IContext,
   ): Promise<DeployResponse> {
-    let project = await ctx.projectService.getCurrentProject();
+    const project = await ctx.projectService.getCurrentProject();
     if (!project.version && project.type !== DataSourceName.DUCKDB) {
       const version =
         await ctx.projectService.getProjectDataSourceVersion(project);
       await ctx.projectService.updateProject(project.id, {
         version,
       });
-      project = { ...project, version };
     }
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     const deployRes = await ctx.deployService.deploy(
       manifest,
-      project,
+      project.id,
       args.force,
     );
 
