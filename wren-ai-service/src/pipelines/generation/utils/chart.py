@@ -14,7 +14,10 @@ logger = logging.getLogger("wren-ai-service")
 
 
 def _humanize_title(name: str | None) -> str:
-    return str(name or "").replace("_", " ").strip().title()
+    text = str(name or "")
+    text = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", text)
+    text = re.sub(r"[_\s]+", " ", text)
+    return text.strip().title()
 
 
 def _detect_requested_chart_type(query: str | None) -> str:
@@ -39,6 +42,153 @@ def _detect_requested_chart_type(query: str | None) -> str:
 
 def _safe_column_names(columns: list[Any]) -> list[str]:
     return [str(column) for column in columns if column is not None and str(column)]
+
+
+def _normalize_identifier(value: str | None) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
+
+
+def _identifier_tokens(value: str | None) -> set[str]:
+    text = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", str(value or ""))
+    return {
+        token
+        for token in re.split(r"[^a-zA-Z0-9]+", text.lower())
+        if len(token) > 1
+    }
+
+
+def _query_relevant_columns(query: str | None, columns: list[str]) -> list[str]:
+    normalized_query = str(query or "").lower()
+    compact_query = _normalize_identifier(normalized_query)
+    query_tokens = _identifier_tokens(normalized_query)
+
+    scored_columns: list[tuple[int, int, str]] = []
+    for index, column in enumerate(columns):
+        tokens = _identifier_tokens(column)
+        compact_column = _normalize_identifier(column)
+        score = 0
+
+        if compact_column and compact_column in compact_query:
+            score += 100
+
+        matched_tokens = tokens.intersection(query_tokens)
+        score += len(matched_tokens) * 20
+
+        # Prefer multi-word business dimensions that the user explicitly asks
+        # for, e.g. "Business Unit" matching BusinessUnit.
+        if tokens and tokens.issubset(query_tokens):
+            score += 40
+
+        if score:
+            scored_columns.append((-score, index, column))
+
+    return [column for _, _, column in sorted(scored_columns)]
+
+
+def _select_measure_column(query: str | None, quantitative: list[str]) -> str | None:
+    if not quantitative:
+        return None
+
+    relevant = _query_relevant_columns(query, quantitative)
+    if relevant:
+        return relevant[0]
+
+    metric_keywords = (
+        "count",
+        "total",
+        "sum",
+        "amount",
+        "value",
+        "volume",
+        "order",
+        "sales",
+        "revenue",
+        "quantity",
+        "workload",
+        "throughput",
+        "failure",
+        "repair",
+    )
+    for column in quantitative:
+        normalized = str(column).lower()
+        if any(keyword in normalized for keyword in metric_keywords):
+            return column
+
+    return quantitative[0]
+
+
+def _count_axis_title(query: str | None) -> str:
+    normalized = str(query or "").lower()
+    if "new order" in normalized:
+        return "New Orders Count"
+    if "order" in normalized:
+        return "Order Count"
+    if "repair" in normalized:
+        return "Repair Count"
+    if "failure" in normalized:
+        return "Failure Count"
+    if "ticket" in normalized:
+        return "Ticket Count"
+    return "Count"
+
+
+def _wants_time_axis(query: str | None, chart_type: str) -> bool:
+    normalized = str(query or "").lower()
+    time_pattern = (
+        r"\b(trend|over time|timeline|monthly|weekly|daily|yearly|"
+        r"by month|by week|by day|by year)\b"
+    )
+    return chart_type in {"line", "area", "multi_line"} or bool(
+        re.search(time_pattern, normalized)
+    )
+
+
+def _select_dimension_columns(
+    query: str | None,
+    chart_type: str,
+    nominal: list[str],
+    temporal: list[str],
+    columns: list[str],
+) -> list[str]:
+    relevant = _query_relevant_columns(query, columns)
+    relevant_nominal = [column for column in relevant if column in nominal]
+    relevant_temporal = [column for column in relevant if column in temporal]
+
+    if _wants_time_axis(query, chart_type):
+        ordered = relevant_temporal + [
+            column for column in temporal if column not in relevant_temporal
+        ]
+        ordered += relevant_nominal + [
+            column for column in nominal if column not in relevant_nominal
+        ]
+        return ordered
+
+    ordered = relevant_nominal + [
+        column for column in nominal if column not in relevant_nominal
+    ]
+    ordered += relevant_temporal + [
+        column for column in temporal if column not in relevant_temporal
+    ]
+    return ordered
+
+
+def _refine_chart_type_for_columns(
+    query: str | None,
+    chart_type: str,
+    sample_data: list[dict],
+) -> str:
+    if chart_type != "bar" or not sample_data:
+        return chart_type
+
+    columns = _safe_column_names(list(sample_data[0].keys()))
+    inferred = _infer_column_types(sample_data)
+    dimensions = _select_dimension_columns(
+        query, chart_type, inferred["nominal"], inferred["temporal"], columns
+    )
+    if len([column for column in dimensions if column in inferred["nominal"]]) > 1:
+        return "grouped_bar"
+
+    return chart_type
 
 
 def _match_column_name(field: str | None, columns: list[str]) -> str:
@@ -104,14 +254,24 @@ def _infer_column_types(sample_data: list[dict]) -> dict[str, list[str]]:
             values.astype(str).str.replace(",", "", regex=False),
             errors="coerce",
         )
-        temporal_values = pd.to_datetime(values, errors="coerce")
         is_temporal_name = bool(
             re.search(r"(date|time|month|year|day|created|updated)", column_name)
+        )
+        string_values = values.astype(str)
+        looks_temporal = string_values.str.match(
+            r"^\d{4}[-/]\d{1,2}([-/]\d{1,2})?"
+        ).all()
+        temporal_values = (
+            pd.to_datetime(values, errors="coerce")
+            if is_temporal_name or looks_temporal
+            else None
         )
 
         if numeric_values.notna().all() and not is_temporal_name:
             quantitative.append(str(column))
-        elif temporal_values.notna().all() or is_temporal_name:
+        elif is_temporal_name or (
+            temporal_values is not None and temporal_values.notna().all()
+        ):
             temporal.append(str(column))
         else:
             nominal.append(str(column))
@@ -138,6 +298,10 @@ def _build_fallback_chart_schema(
     quantitative = inferred["quantitative"]
     temporal = inferred["temporal"]
     nominal = inferred["nominal"]
+    dimensions = _select_dimension_columns(
+        query, chart_type, nominal, temporal, columns
+    )
+    measure = _select_measure_column(query, quantitative)
 
     title = _humanize_title(query or "Chart")
 
@@ -151,14 +315,12 @@ def _build_fallback_chart_schema(
         return {
             "aggregate": "count",
             "type": "quantitative",
-            "title": "Count",
+            "title": _count_axis_title(query),
         }
 
     if chart_type == "pie":
-        color_field = nominal[0] if nominal else columns[0]
-        theta_encoding = (
-            axis(quantitative[0], "quantitative") if quantitative else count_axis()
-        )
+        color_field = dimensions[0] if dimensions else columns[0]
+        theta_encoding = axis(measure, "quantitative") if measure else count_axis()
         return {
             "title": title,
             "mark": {"type": "arc"},
@@ -169,9 +331,7 @@ def _build_fallback_chart_schema(
         }
 
     if chart_type in {"line", "area", "multi_line"}:
-        y_encoding = (
-            axis(quantitative[0], "quantitative") if quantitative else count_axis()
-        )
+        y_encoding = axis(measure, "quantitative") if measure else count_axis()
         if {"year", "month"}.issubset({str(c).lower() for c in columns}):
             month_field = next(c for c in columns if str(c).lower() == "month")
             encoding = {
@@ -187,31 +347,46 @@ def _build_fallback_chart_schema(
                 "encoding": encoding,
             }
 
-        x_field = temporal[0] if temporal else (nominal[0] if nominal else columns[0])
+        x_field = dimensions[0] if dimensions else columns[0]
         x_type = "temporal" if x_field in temporal else "ordinal"
+        encoding = {
+            "x": axis(x_field, x_type),
+            "y": y_encoding,
+        }
+        series_field = next(
+            (column for column in dimensions[1:] if column in nominal),
+            None,
+        )
+        if series_field:
+            encoding["color"] = axis(series_field, "nominal")
         return {
             "title": title,
             "mark": {"type": "area" if chart_type == "area" else "line"},
-            "encoding": {
-                "x": axis(x_field, x_type),
-                "y": y_encoding,
-            },
+            "encoding": encoding,
         }
 
-    x_field = nominal[0] if nominal else (temporal[0] if temporal else columns[0])
-    x_type = "nominal" if x_field in nominal else ("temporal" if x_field in temporal else "ordinal")
-    y_encoding = (
-        axis(quantitative[0], "quantitative") if quantitative else count_axis()
+    x_field = dimensions[0] if dimensions else columns[0]
+    x_type = (
+        "nominal"
+        if x_field in nominal
+        else ("temporal" if x_field in temporal else "ordinal")
     )
+    y_encoding = axis(measure, "quantitative") if measure else count_axis()
     encoding = {
         "x": axis(x_field, x_type),
         "y": y_encoding,
     }
-    if chart_type == "grouped_bar" and len(nominal) > 1:
-        encoding["xOffset"] = axis(nominal[1], "nominal")
-        encoding["color"] = axis(nominal[1], "nominal")
-    elif nominal:
-        encoding["color"] = axis(nominal[0], "nominal")
+    comparison_field = next(
+        (column for column in dimensions[1:] if column in nominal),
+        None,
+    )
+    if comparison_field:
+        encoding["color"] = axis(comparison_field, "nominal")
+        nominal_dimension_count = len([c for c in dimensions if c in nominal])
+        if chart_type == "grouped_bar" or nominal_dimension_count > 1:
+            encoding["xOffset"] = axis(comparison_field, "nominal")
+    elif x_field in nominal:
+        encoding["color"] = axis(x_field, "nominal")
 
     mark = {"type": "bar"}
     if chart_type == "stacked_bar":
@@ -232,6 +407,7 @@ def build_fallback_chart_result(
     processed = ChartDataPreprocessor().run(data)
     sample_data = processed.get("sample_data", [])
     chart_type = _detect_requested_chart_type(query) or "bar"
+    chart_type = _refine_chart_type_for_columns(query, chart_type, sample_data)
     chart_schema = _build_fallback_chart_schema(query, chart_type, sample_data)
     if not chart_schema:
         return {
