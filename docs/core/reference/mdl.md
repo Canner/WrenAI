@@ -46,14 +46,14 @@ my_project/
 
 `wren_project.yml` carries a `schema_version`; **version 5** is the current layout. To
 upgrade an older project — and migrate `instructions.md` / memory into `knowledge/` — see
-[Migrate to v5](../guides/migrate-to-v5.md).
+[Migration](./migration.md).
 
 YAML files use **snake_case** field names. The compiled `target/mdl.json` uses **camelCase** — the wire format expected by the engine.
 
 ## `wren_project.yml`
 
 ```yaml
-schema_version: 3
+schema_version: 5
 name: my_project
 version: "1.0"
 catalog: wren
@@ -64,7 +64,7 @@ profile: my-pg
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `schema_version` | int | yes | Directory layout version. `2` = folder-per-entity, `3` = adds `dialect` field support (current). Owned by the CLI — bump with `wren context upgrade`. |
+| `schema_version` | int | yes | Project layout version (current: `5` — adds first-class `knowledge/`). `2` = folder-per-entity, `3` = `dialect` support, `4` = composite primary keys, `5` = `knowledge/`. Owned by the CLI — bump with `wren context upgrade` (see [Migration](./migration.md)). |
 | `name` | string | yes | Project identifier. |
 | `version` | string | no | User-defined project version (free-form, no parsing effect). |
 | `catalog` | string | no | **Wren AI namespace** — not your database catalog. Defaults to `wren`. |

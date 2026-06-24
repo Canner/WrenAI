@@ -208,11 +208,11 @@ For `--from-osi`, see the dedicated [OSI guide](./osi.md) — it covers the alte
 
 ## Upgrade an existing project
 
-When new MDL features ship (the `dialect` field, new cube semantics), upgrade with:
+When a new layout `schema_version` ships, upgrade with:
 
 ```bash
 wren context upgrade            # bumps to the latest schema_version
-wren context upgrade --to 3     # bump to a specific version
+wren context upgrade --to 5     # bump to a specific version
 wren context upgrade --dry-run  # preview without writing
 ```
 
@@ -222,6 +222,11 @@ After upgrade, re-validate and re-build:
 wren context validate
 wren context build
 ```
+
+Some versions add content beyond the automatic restamp — e.g. **v5** introduces
+`knowledge/` and makes it the home for business rules and NL→SQL memory, so there are extra
+steps to move `instructions.md` and an existing LanceDB index across. Per-version steps live
+in the [Migration reference](/oss/reference/migration).
 
 ## When to come back here
 

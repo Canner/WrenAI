@@ -108,7 +108,7 @@ wren context upgrade --to 5      # target a specific version
 ```
 
 To migrate `instructions.md` and the LanceDB memory into `knowledge/`, see
-[Migrate to v5](../guides/migrate-to-v5.md).
+[Migration](./migration.md).
 
 ---
 
@@ -244,7 +244,7 @@ wren memory recall -q "monthly revenue" --datasource mysql --limit 5 --output js
 
 One-time migration: export an existing LanceDB `query_history` into `knowledge/sql/*.md`
 (source, timestamp, and dedup preserved). Requires the `memory` extra to read LanceDB;
-leaves LanceDB intact. See [Migrate to v5](../guides/migrate-to-v5.md).
+leaves LanceDB intact. See [Migration](./migration.md).
 
 ```bash
 wren memory export                 # query_history → knowledge/sql/*.md
