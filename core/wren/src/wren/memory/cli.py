@@ -167,7 +167,34 @@ def index(
         typer.Option("--no-queries", help="Skip auto-loading project queries.yml."),
     ] = False,
 ) -> None:
-    """Index MDL schema into LanceDB (and optionally seed example queries)."""
+    """Index the project for recall.
+
+    With the ``memory`` extra: builds the LanceDB semantic index (schema + seed
+    + knowledge/sql pairs). Without it: the grep backend reads knowledge/sql/*.md
+    directly, so there is nothing to build.
+    """
+    from wren.memory.index_backend import resolve_backend  # noqa: PLC0415
+
+    if resolve_backend() == "grep":
+        from wren.context import discover_project_path  # noqa: PLC0415
+        from wren.memory.markdown import load_query_pairs  # noqa: PLC0415
+
+        try:
+            project_path = discover_project_path()
+        except SystemExit as e:
+            typer.echo(str(e), err=True)
+            raise typer.Exit(1)
+        n = len(load_query_pairs(project_path))
+        typer.echo(
+            f"grep backend: {n} pair(s) in knowledge/sql/ — no index build needed."
+        )
+        typer.echo(
+            "`wren memory recall` works over grep; semantic schema search "
+            "(`wren memory fetch`) needs `wren[memory]`.",
+            err=True,
+        )
+        return
+
     manifest = _load_manifest(mdl)
 
     if include_instructions and mdl is None:
@@ -376,9 +403,21 @@ def recall(
     path: PathOpt = None,
     output: OutputOpt = "table",
 ) -> None:
-    """Search past NL→SQL pairs by semantic similarity."""
-    mem_store = _get_store(path)
-    results = mem_store.recall_queries(query, limit=limit, datasource=datasource)
+    """Search past NL→SQL pairs over knowledge/sql/.
+
+    Uses semantic search with the ``memory`` extra, or dependency-free token
+    matching (grep backend) without it.
+    """
+    from wren.context import discover_project_path  # noqa: PLC0415
+    from wren.memory.index_backend import get_index  # noqa: PLC0415
+
+    try:
+        project = discover_project_path()
+    except SystemExit as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1)
+    idx = get_index(project, path or str(_default_memory_path()))
+    results = idx.search(query, limit=limit, datasource=datasource)
     _annotate_markdown_paths(results)
     _print_results(results, output)
 
@@ -407,10 +446,20 @@ def _annotate_markdown_paths(results: list[dict]) -> None:
 def status(
     path: PathOpt = None,
 ) -> None:
-    """Show memory index statistics."""
-    mem_store = _get_store(path)
-    info = mem_store.status()
-    typer.echo(f"Path: {info['path']}")
+    """Show memory backend and index statistics."""
+    from wren.context import discover_project_path  # noqa: PLC0415
+    from wren.memory.index_backend import get_index  # noqa: PLC0415
+
+    try:
+        project = discover_project_path()
+    except SystemExit as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1)
+    info = get_index(project, path or str(_default_memory_path())).status()
+    typer.echo(f"Backend: {info['backend']}")
+    if info["backend"] == "grep":
+        typer.echo(f"  knowledge/sql: {info['pairs']} pair(s)")
+        return
     tables = info.get("tables", {})
     if not tables:
         typer.echo("No tables indexed yet.")
@@ -431,6 +480,18 @@ def reset(
     The LanceDB index is a derived artifact — after reset, run `wren memory
     index` to rebuild it from the markdown source of truth.
     """
+    from wren.context import discover_project_path  # noqa: PLC0415
+    from wren.memory.index_backend import get_index  # noqa: PLC0415
+
+    try:
+        project = discover_project_path()
+    except SystemExit as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1)
+    idx = get_index(project, path or str(_default_memory_path()))
+    if idx.name == "grep":
+        typer.echo("grep backend has no derived index — knowledge/sql/ is the source.")
+        return
     if not force:
         confirm = typer.confirm(
             "This drops the derived memory index. Your knowledge/sql/*.md "
@@ -438,8 +499,7 @@ def reset(
         )
         if not confirm:
             raise typer.Abort()
-    mem_store = _get_store(path)
-    mem_store.reset()
+    idx.reset()
     typer.echo(
         "Memory index reset. Run `wren memory index` to rebuild from knowledge/sql/."
     )
@@ -449,8 +509,9 @@ def reset(
 def check(
     path: PathOpt = None,
 ) -> None:
-    """Report drift between knowledge/sql/*.md (source) and the LanceDB index."""
+    """Report drift between knowledge/sql/*.md (source) and the derived index."""
     from wren.context import discover_project_path  # noqa: PLC0415
+    from wren.memory.index_backend import get_index  # noqa: PLC0415
     from wren.memory.markdown import load_query_pairs  # noqa: PLC0415
 
     try:
@@ -459,8 +520,16 @@ def check(
         typer.echo(str(e), err=True)
         raise typer.Exit(1)
 
+    idx = get_index(project, path or str(_default_memory_path()))
+    if idx.name == "grep":
+        n = len(load_query_pairs(project))
+        typer.echo(
+            f"grep backend: knowledge/sql/ is the index ({n} pair(s)) — always in sync."
+        )
+        return
+
     md_nls = {p["nl"] for p in load_query_pairs(project)}
-    mem_store = _get_store(path)
+    mem_store = idx.store
     indexed, _ = mem_store.list_queries(limit=1_000_000)
     indexed_nls = {r.get("nl_query") for r in indexed}
     # Only user-sourced pairs come from markdown; seeds/views are derived from

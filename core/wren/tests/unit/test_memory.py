@@ -901,3 +901,20 @@ class TestMarkdownSourcedIndex:
         memory_store.load_queries(load_query_pairs(tmp_path), upsert=True)
         hits = memory_store.recall_queries("revenue", limit=3)
         assert any("SUM(amount)" in h["sql_query"] for h in hits)
+
+    def test_lancedb_backend_via_get_index(self, tmp_path, monkeypatch):
+        """With the extra, get_index resolves to LanceDBIndex and recalls semantically."""
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        pytest.importorskip(
+            "sentence_transformers", reason="wren[memory] extras not installed"
+        )
+        monkeypatch.setenv("WREN_MEMORY_BACKEND", "lancedb")
+        from wren.memory.index_backend import get_index  # noqa: PLC0415
+        from wren.memory.markdown import write_query_markdown  # noqa: PLC0415
+
+        write_query_markdown(tmp_path, "Total revenue", "SELECT SUM(amount) FROM o")
+        idx = get_index(tmp_path, str(tmp_path / ".wren" / "memory"))
+        assert idx.name == "lancedb"
+        idx.rebuild()
+        hits = idx.search("revenue", limit=3)
+        assert any("SUM(amount)" in h["sql_query"] for h in hits)
