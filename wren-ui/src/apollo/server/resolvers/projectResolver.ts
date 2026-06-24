@@ -640,7 +640,7 @@ export class ProjectResolver {
   private async deploy(ctx: IContext) {
     const project = await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-    const deployRes = await ctx.deployService.deploy(manifest, project.id);
+    const deployRes = await ctx.deployService.deploy(manifest, project);
 
     // Recommendation generation depends on a successful deployment because
     // question validation calls previewSql against the deployed manifest.

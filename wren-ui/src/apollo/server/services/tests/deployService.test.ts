@@ -10,7 +10,7 @@ describe('DeployService', () => {
 
   beforeEach(() => {
     mockTelemetry = { sendEvent: jest.fn() };
-    mockWrenAIAdaptor = { deploy: jest.fn() };
+    mockWrenAIAdaptor = { deploy: jest.fn(), delete: jest.fn() };
     mockDeployLogRepository = {
       findLastProjectDeployLog: jest.fn(),
       createOne: jest.fn(),
@@ -70,6 +70,39 @@ describe('DeployService', () => {
 
     expect(response.status).toEqual(DeployStatusEnum.SUCCESS);
     expect(mockWrenAIAdaptor.deploy).not.toHaveBeenCalled();
+  });
+
+  it('should include datasource identity in deployment hash', () => {
+    const manifest = { models: [{ name: 'orders', columns: [] }] };
+    const project = {
+      id: 1,
+      type: 'mssql',
+      version: '16',
+      catalog: 'catalog',
+      schema: 'dbo',
+      sampleDataset: null,
+      connectionInfo: {
+        host: 'db-a',
+        port: 1433,
+        database: 'sales_a',
+      },
+    };
+
+    const sameMdlDifferentDatabaseHash = deployService.createMDLHash(
+      manifest,
+      {
+        ...project,
+        connectionInfo: {
+          ...project.connectionInfo,
+          host: 'db-b',
+          database: 'sales_b',
+        },
+      },
+    );
+
+    expect(deployService.createMDLHash(manifest, project)).not.toEqual(
+      sameMdlDifferentDatabaseHash,
+    );
   });
 
   // Add more tests here to cover other scenarios and error handling

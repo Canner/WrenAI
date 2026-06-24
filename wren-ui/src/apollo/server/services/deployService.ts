@@ -5,6 +5,7 @@ import {
   DeployStatusEnum,
   IDeployLogRepository,
 } from '../repositories/deployLogRepository';
+import { Project } from '../repositories/projectRepository';
 import { Manifest } from '../mdl/type';
 import { createHash } from 'node:crypto';
 import { getLogger } from '@server/utils';
@@ -29,12 +30,12 @@ export interface MDLSyncResponse {
 export interface IDeployService {
   deploy(
     manifest: Manifest,
-    projectId: number,
+    project: Project | number,
     force?: boolean,
   ): Promise<DeployResponse>;
   getLastDeployment(projectId: number): Promise<Deploy>;
   getInProgressDeployment(projectId: number): Promise<Deploy>;
-  createMDLHash(manifest: Manifest, projectId: number): string;
+  createMDLHash(manifest: Manifest, project: Project | number): string;
   getMDLByHash(hash: string): Promise<string>;
   deleteAllByProjectId(projectId: number): Promise<void>;
 }
@@ -58,7 +59,7 @@ export class DeployService implements IDeployService {
     this.telemetry = telemetry;
   }
 
-  public async getLastDeployment(projectId) {
+  public async getLastDeployment(projectId: number) {
     const lastDeploy =
       await this.deployLogRepository.findLastProjectDeployLog(projectId);
     if (!lastDeploy) {
@@ -67,17 +68,22 @@ export class DeployService implements IDeployService {
     return lastDeploy;
   }
 
-  public async getInProgressDeployment(projectId) {
+  public async getInProgressDeployment(projectId: number) {
     return await this.deployLogRepository.findInProgressProjectDeployLog(
       projectId,
     );
   }
 
-  public async deploy(manifest, projectId, force = false) {
+  public async deploy(
+    manifest: Manifest,
+    project: Project | number,
+    force = false,
+  ) {
     const eventName = TelemetryEvent.MODELING_DEPLOY_MDL;
+    const projectId = typeof project === 'number' ? project : project.id;
     try {
       // generate hash of manifest
-      const hash = this.createMDLHash(manifest, projectId);
+      const hash = this.createMDLHash(manifest, project);
       logger.debug(`Deploying model, hash: ${hash}`);
 
       if (!force) {
@@ -139,9 +145,23 @@ export class DeployService implements IDeployService {
     }
   }
 
-  public createMDLHash(manifest: Manifest, projectId: number) {
-    const manifestStr = JSON.stringify(manifest);
-    const content = `${projectId} ${manifestStr}`;
+  public createMDLHash(manifest: Manifest, project: Project | number) {
+    const projectFingerprint =
+      typeof project === 'number'
+        ? { id: project }
+        : {
+            id: project.id,
+            type: project.type,
+            version: project.version,
+            catalog: project.catalog,
+            schema: project.schema,
+            sampleDataset: project.sampleDataset,
+            connectionInfo: project.connectionInfo,
+          };
+    const content = JSON.stringify({
+      project: projectFingerprint,
+      manifest,
+    });
     const hash = createHash('sha1').update(content).digest('hex');
     return hash;
   }

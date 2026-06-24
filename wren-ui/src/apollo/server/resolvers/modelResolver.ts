@@ -201,13 +201,13 @@ export class ModelResolver {
 
   public async checkModelSync(_root: any, _args: any, ctx: IContext) {
     try {
-      const { id } = await ctx.projectService.getCurrentProject();
+      const project = await ctx.projectService.getCurrentProject();
       const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-      const currentHash = ctx.deployService.createMDLHash(manifest, id);
-      const lastDeploy = await ctx.deployService.getLastDeployment(id);
+      const currentHash = ctx.deployService.createMDLHash(manifest, project);
+      const lastDeploy = await ctx.deployService.getLastDeployment(project.id);
       const lastDeployHash = lastDeploy?.hash;
       const inProgressDeployment =
-        await ctx.deployService.getInProgressDeployment(id);
+        await ctx.deployService.getInProgressDeployment(project.id);
       if (inProgressDeployment) {
         return { status: SyncStatusEnum.IN_PROGRESS };
       }
@@ -236,7 +236,7 @@ export class ModelResolver {
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     const deployRes = await ctx.deployService.deploy(
       manifest,
-      project.id,
+      project,
       args.force,
     );
 
