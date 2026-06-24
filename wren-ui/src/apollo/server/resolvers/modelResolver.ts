@@ -225,13 +225,14 @@ export class ModelResolver {
     args: { force: boolean },
     ctx: IContext,
   ): Promise<DeployResponse> {
-    const project = await ctx.projectService.getCurrentProject();
+    let project = await ctx.projectService.getCurrentProject();
     if (!project.version && project.type !== DataSourceName.DUCKDB) {
       const version =
         await ctx.projectService.getProjectDataSourceVersion(project);
       await ctx.projectService.updateProject(project.id, {
         version,
       });
+      project = { ...project, version };
     }
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     const deployRes = await ctx.deployService.deploy(

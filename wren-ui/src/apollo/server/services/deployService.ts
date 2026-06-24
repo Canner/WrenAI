@@ -182,18 +182,31 @@ export class DeployService implements IDeployService {
         : {
             id: project.id,
             type: project.type,
-            version: project.version,
             catalog: project.catalog,
             schema: project.schema,
             sampleDataset: project.sampleDataset,
-            connectionInfo: project.connectionInfo,
           };
-    const content = JSON.stringify({
+    const content = this.stableStringify({
       project: projectFingerprint,
       manifest,
     });
     const hash = createHash('sha1').update(content).digest('hex');
     return hash;
+  }
+
+  private stableStringify(value: any): string {
+    if (Array.isArray(value)) {
+      return `[${value.map((item) => this.stableStringify(item)).join(',')}]`;
+    }
+
+    if (value && typeof value === 'object') {
+      return `{${Object.keys(value)
+        .sort()
+        .map((key) => `${JSON.stringify(key)}:${this.stableStringify(value[key])}`)
+        .join(',')}}`;
+    }
+
+    return JSON.stringify(value);
   }
 
   public async getMDLByHash(hash: string) {

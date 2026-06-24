@@ -73,7 +73,7 @@ describe('DeployService', () => {
     expect(mockWrenAIAdaptor.deploy).not.toHaveBeenCalled();
   });
 
-  it('should include datasource identity in deployment hash', () => {
+  it('should include project schema identity in deployment hash', () => {
     const manifest = { models: [{ name: 'orders', columns: [] }] };
     const project = {
       id: 1,
@@ -89,20 +89,92 @@ describe('DeployService', () => {
       },
     };
 
-    const sameMdlDifferentDatabaseHash = deployService.createMDLHash(
-      manifest,
-      {
-        ...project,
-        connectionInfo: {
-          ...project.connectionInfo,
-          host: 'db-b',
-          database: 'sales_b',
-        },
-      },
-    );
-
     expect(deployService.createMDLHash(manifest, project)).not.toEqual(
-      sameMdlDifferentDatabaseHash,
+      deployService.createMDLHash(manifest, {
+        ...project,
+        id: 2,
+      }),
+    );
+    expect(deployService.createMDLHash(manifest, project)).not.toEqual(
+      deployService.createMDLHash(manifest, {
+        ...project,
+        schema: 'analytics',
+      }),
+    );
+  });
+
+  it('should create the same deployment hash for equivalent project objects', () => {
+    const manifest = {
+      models: [
+        {
+          name: 'orders',
+          columns: [{ name: 'id' }, { name: 'amount' }],
+        },
+      ],
+    };
+    const project = {
+      id: 1,
+      type: 'mssql',
+      version: '16',
+      catalog: 'catalog',
+      schema: 'dbo',
+      sampleDataset: null,
+      connectionInfo: {
+        host: 'db-a',
+        port: 1433,
+        database: 'sales_a',
+      },
+    };
+
+    const reorderedProject = {
+      ...project,
+      connectionInfo: {
+        database: 'sales_a',
+        port: 1433,
+        host: 'db-a',
+      },
+    };
+    const reorderedManifest = {
+      models: [
+        {
+          columns: [{ name: 'id' }, { name: 'amount' }],
+          name: 'orders',
+        },
+      ],
+    };
+
+    expect(deployService.createMDLHash(manifest, project)).toEqual(
+      deployService.createMDLHash(reorderedManifest, reorderedProject),
+    );
+  });
+
+  it('should not change deployment hash for connection or version refreshes', () => {
+    const manifest = { models: [{ name: 'orders', columns: [] }] };
+    const project = {
+      id: 1,
+      type: 'mssql',
+      version: null,
+      catalog: 'catalog',
+      schema: 'dbo',
+      sampleDataset: null,
+      connectionInfo: {
+        host: 'db-a',
+        port: 1433,
+        database: 'sales_a',
+      },
+    };
+    const refreshedProject = {
+      ...project,
+      version: '16',
+      connectionInfo: {
+        ...project.connectionInfo,
+        host: 'db-b',
+        database: 'sales_b',
+      },
+    };
+
+    expect(deployService.createMDLHash(manifest, project)).toEqual(
+      deployService.createMDLHash(manifest, refreshedProject),
     );
   });
 
