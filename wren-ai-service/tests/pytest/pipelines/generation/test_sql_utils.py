@@ -71,6 +71,21 @@ def test_construct_valid_table_columns_adds_qualified_suffix_tables():
     }
 
 
+def test_normalize_generation_result_sql_standardizes_identifier_quotes():
+    sql = (
+        'SELECT COUNT(*) AS `num_tags`, SUM(`tokenCost`) AS `popularity` '
+        'FROM `dbo_kb_articles` WHERE (""""category"""" = \'Ticket Sourcing\')'
+    )
+
+    normalized = normalize_generation_result_sql(sql, data_source="mssql")
+
+    assert "`" not in normalized
+    assert '""""category""""' not in normalized
+    assert '"num_tags"' in normalized
+    assert '"tokenCost"' in normalized
+    assert '"category" = \'Ticket Sourcing\'' in normalized
+
+
 def test_schema_validation_ignores_null_table_metadata():
     assert find_invalid_table_references(
         'SELECT * FROM "dbo_tblSales"',

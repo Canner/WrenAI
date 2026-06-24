@@ -664,14 +664,22 @@ export class AskingService implements IAskingService {
   ): Promise<Task> {
     const { threadId, language } = payload;
     const currentProject = await this.projectService.getCurrentProject();
-    const projectId = payload.projectId ?? currentProject.id;
-    if (projectId !== currentProject.id) {
+    let projectId = payload.projectId ?? currentProject.id;
+    if (threadId) {
+      const thread = await this.threadRepository.findOneBy({ id: threadId });
+      if (!thread) {
+        throw new Error(`Thread ${threadId} not found`);
+      }
+      if (payload.projectId && payload.projectId !== thread.projectId) {
+        throw new Error(
+          `Thread ${threadId} does not belong to project ${payload.projectId}`,
+        );
+      }
+      projectId = thread.projectId;
+    } else if (projectId !== currentProject.id) {
       throw new Error(`Project ${projectId} is not the active project`);
     }
-    if (threadId) {
-      await this.ensureThreadInCurrentProject(threadId);
-    }
-    const deployId = await this.getDeployId();
+    const deployId = await this.getDeployId(projectId);
 
     // if it's a follow-up question, then the input will have a threadId
     // then use the threadId to get the sql and get the steps of last thread response
@@ -705,7 +713,6 @@ export class AskingService implements IAskingService {
     if (!threadResponse) {
       throw new Error(`Thread response ${threadResponseId} not found`);
     }
-    await this.ensureThreadInCurrentProject(threadResponse.threadId);
 
     // get the original question and ask again
     const question = threadResponse.question;
@@ -869,7 +876,6 @@ export class AskingService implements IAskingService {
     if (!threadResponse) {
       throw new Error(`Thread response ${threadResponseId} not found`);
     }
-    await this.ensureThreadInCurrentProject(threadResponse.threadId);
 
     // 1. create a task on AI service to generate the detail
     const response = await this.wrenAIAdaptor.generateAskDetail({
@@ -906,7 +912,6 @@ export class AskingService implements IAskingService {
     if (!threadResponse) {
       throw new Error(`Thread response ${threadResponseId} not found`);
     }
-    await this.ensureThreadInCurrentProject(threadResponse.threadId);
 
     if (isAnswerGenerationInProgress(threadResponse.answerDetail?.status)) {
       logger.debug(
@@ -942,7 +947,6 @@ export class AskingService implements IAskingService {
     if (!threadResponse) {
       throw new Error(`Thread response ${threadResponseId} not found`);
     }
-    await this.ensureThreadInCurrentProject(threadResponse.threadId);
 
     if (isChartGenerationInProgress(threadResponse.chartDetail?.status)) {
       logger.debug(
@@ -1007,7 +1011,6 @@ export class AskingService implements IAskingService {
     if (!threadResponse) {
       throw new Error(`Thread response ${threadResponseId} not found`);
     }
-    await this.ensureThreadInCurrentProject(threadResponse.threadId);
 
     if (
       isChartGenerationInProgress(threadResponse.chartDetail?.status) &&
@@ -1078,7 +1081,6 @@ export class AskingService implements IAskingService {
     if (!response) {
       return null;
     }
-    await this.ensureThreadInCurrentProject(response.threadId);
     return response;
   }
 
@@ -1360,7 +1362,6 @@ export class AskingService implements IAskingService {
     if (!threadId) {
       return [];
     }
-    await this.ensureThreadInCurrentProject(threadId);
     let responses = await this.threadResponseRepository.getResponsesWithThread(
       threadId,
       10,

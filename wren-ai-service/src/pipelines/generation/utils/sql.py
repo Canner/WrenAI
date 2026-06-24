@@ -1438,8 +1438,27 @@ def _rewrite_mssql_limit_clause(sql: str) -> str:
     )
 
 
+def _normalize_identifier_quote_syntax(sql: str) -> str:
+    normalized = re.sub(
+        r"`([^`]+)`",
+        lambda match: _quote_sql_identifier(match.group(1)),
+        sql,
+    )
+    normalized = re.sub(
+        r"\[([^\]]+)\]",
+        lambda match: _quote_sql_identifier(match.group(1)),
+        normalized,
+    )
+    normalized = re.sub(
+        r'"{2,}([A-Za-z_][A-Za-z0-9_$]*)"{2,}',
+        lambda match: _quote_sql_identifier(match.group(1)),
+        normalized,
+    )
+    return normalized
+
+
 def normalize_generation_result_sql(sql: str, data_source: str | None = None) -> str:
-    normalized = sql
+    normalized = _normalize_identifier_quote_syntax(sql)
     normalized_data_source = normalize_data_source(data_source)
 
     if normalized_data_source == "MSSQL":
