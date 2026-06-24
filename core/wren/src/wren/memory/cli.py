@@ -557,6 +557,61 @@ def check(
         )
 
 
+@memory_app.command()
+def export(
+    path: PathOpt = None,
+    include_seed: Annotated[
+        bool,
+        typer.Option(
+            "--include-seed",
+            help="Also export auto-generated seed pairs (normally regenerated on index).",
+        ),
+    ] = False,
+) -> None:
+    """One-time migration: export the LanceDB query_history into knowledge/sql/*.md.
+
+    Reads the existing index (requires the ``memory`` extra) and writes each
+    NL→SQL pair to the markdown source of truth, preserving source and
+    timestamp. The same NL updates one file (dedup). LanceDB is left intact —
+    run `wren memory index` to rebuild, then `wren memory reset` once verified.
+    """
+    from wren.context import discover_project_path  # noqa: PLC0415
+    from wren.memory.markdown import write_query_markdown  # noqa: PLC0415
+
+    try:
+        project = discover_project_path()
+    except SystemExit as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1)
+
+    mem_store = _get_store(path)  # requires the memory extra to read LanceDB
+    rows = mem_store.dump_queries()
+    exported, skipped = 0, 0
+    for r in rows:
+        source = _parse_source(r.get("tags", "")) or "user"
+        nl, sql = r.get("nl_query"), r.get("sql_query")
+        if (source == "seed" and not include_seed) or not nl or not sql:
+            skipped += 1
+            continue
+        created = r.get("created_at")
+        created_at = created.isoformat() if hasattr(created, "isoformat") else None
+        write_query_markdown(
+            project,
+            nl,
+            sql,
+            datasource=r.get("datasource") or None,
+            source=source,
+            created_at=created_at,
+        )
+        exported += 1
+
+    typer.echo(f"Exported {exported} pair(s) to knowledge/sql/ ({skipped} skipped).")
+    typer.echo(
+        "Run `wren memory index` to rebuild, then `wren memory reset` once verified.",
+        err=True,
+    )
+
+
 # ── List / Forget / Dump / Load ──────────────────────────────────────────
 
 

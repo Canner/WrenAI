@@ -918,3 +918,30 @@ class TestMarkdownSourcedIndex:
         idx.rebuild()
         hits = idx.search("revenue", limit=3)
         assert any("SUM(amount)" in h["sql_query"] for h in hits)
+
+    def test_cli_export_migrates_query_history_to_markdown(self, tmp_path, monkeypatch):
+        """`wren memory export` writes existing LanceDB pairs to knowledge/sql/."""
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        pytest.importorskip(
+            "sentence_transformers", reason="wren[memory] extras not installed"
+        )
+        from typer.testing import CliRunner  # noqa: PLC0415
+
+        from wren.cli import app  # noqa: PLC0415
+        from wren.memory.markdown import parse_query_markdown  # noqa: PLC0415
+        from wren.memory.store import MemoryStore  # noqa: PLC0415
+
+        monkeypatch.setenv("WREN_PROJECT_HOME", str(tmp_path))
+        store = MemoryStore(path=str(tmp_path / ".wren" / "memory"))
+        store.store_query("Top revenue", "SELECT SUM(amount) FROM o", tags="source:user")
+        store.store_query("A seed query", "SELECT 1", tags="source:seed")
+
+        result = CliRunner().invoke(app, ["memory", "export"])
+        assert result.exit_code == 0, result.output
+
+        user_md = tmp_path / "knowledge" / "sql" / "top-revenue.md"
+        assert user_md.exists()
+        assert not (tmp_path / "knowledge" / "sql" / "a-seed-query.md").exists()  # seed skipped
+        fm = parse_query_markdown(user_md)
+        assert fm["source"] == "user"
+        assert "created_at" in fm  # timestamp preserved
