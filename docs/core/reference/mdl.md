@@ -31,13 +31,22 @@ my_project/
 │   └── revenue/
 │       └── metadata.yml
 ├── relationships.yml              # all relationships
-├── instructions.md                # business and operational guidance for agents
-├── queries.yml                    # curated NL-SQL pairs (optional)
+├── knowledge/                     # business context (schema_version 5+)
+│   ├── rules/                     # business rules for agents (supersedes instructions.md)
+│   ├── glossary/  metrics/  caveats/
+│   ├── sql/                       # NL→SQL pairs — source of truth for memory
+│   └── knowledge.yml              # knowledge-axis schema_version (decoupled from MDL)
+├── instructions.md                # deprecated — move into knowledge/rules/ (still read)
+├── queries.yml                    # legacy NL-SQL pairs — superseded by knowledge/sql/
 ├── .wren/                         # runtime state (gitignored)
-│   └── memory/                    # LanceDB index files
+│   └── memory/                    # derived LanceDB index (optional; rebuilt from knowledge/sql/)
 └── target/
     └── mdl.json                   # build output (gitignored)
 ```
+
+`wren_project.yml` carries a `schema_version`; **version 5** is the current layout. To
+upgrade an older project — and migrate `instructions.md` / memory into `knowledge/` — see
+[Migrate to v5](../guides/migrate-to-v5.md).
 
 YAML files use **snake_case** field names. The compiled `target/mdl.json` uses **camelCase** — the wire format expected by the engine.
 
