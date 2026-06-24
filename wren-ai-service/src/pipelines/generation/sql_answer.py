@@ -32,6 +32,9 @@ Please answer the user's question in concise and clear manner in Markdown format
 6. Answer must be in the same language user specified.
 7. Do not include ```markdown or ``` in the answer.
 8. If the user provides a custom instruction, it should be followed strictly and you should use it to change the style of response.
+9. Always produce a narrative answer. Never return an empty response.
+10. If the user asks for a chart or trend, still summarize the result in words and mention the chart-ready fields.
+11. If the data contains only raw rows or a single column, summarize what those rows show, mention the visible date/category range when possible, and state that the result table contains the detailed rows.
 
 ### OUTPUT FORMAT
 

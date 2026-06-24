@@ -29,6 +29,24 @@ class ContentMap {
 
 const contentMap = new ContentMap();
 
+const parseSSEMessages = (chunk: Buffer): string[] => {
+  return chunk
+    .toString('utf-8')
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith('data: '))
+    .map((line) => line.slice('data: '.length).trim())
+    .filter(Boolean)
+    .flatMap((payload) => {
+      try {
+        const eventData = JSON.parse(payload);
+        return eventData?.message ? [String(eventData.message)] : [];
+      } catch (error) {
+        console.error(`Failed to parse streaming answer payload: ${payload}`);
+        return [];
+      }
+    });
+};
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
@@ -69,22 +87,17 @@ export default async function handler(
     }
 
     const stream = await wrenAIAdaptor.streamTextBasedAnswer(queryId);
+    let streamEnded = false;
 
     stream.on('data', (chunk) => {
-      // pass the chunk directly to the client
-      const chunkString = chunk.toString('utf-8');
-      let message = '';
-      const match = chunkString.match(/data: {"message":"([\s\S]*?)"}/);
-      if (match && match[1]) {
-        message = match[1];
-      } else {
-        console.log(`not able to match: ${chunkString}`);
+      for (const message of parseSSEMessages(chunk)) {
+        contentMap.appendContent(queryId, message);
       }
-      contentMap.appendContent(queryId, message);
       res.write(chunk);
     });
 
     stream.on('end', () => {
+      streamEnded = true;
       res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
       res.end();
       askingService
@@ -122,6 +135,9 @@ export default async function handler(
 
     // destroy the stream if the client closes the connection
     req.on('close', () => {
+      if (streamEnded) {
+        return;
+      }
       stream.destroy();
       askingService
         .changeThreadResponseAnswerDetailStatus(

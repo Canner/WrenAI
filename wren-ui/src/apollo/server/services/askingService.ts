@@ -1221,8 +1221,11 @@ export class AskingService implements IAskingService {
       throw new Error(`Thread response ${responseId} not found`);
     }
 
-    if (response.answerDetail?.status === status) {
-      return;
+    if (
+      response.answerDetail?.status === status &&
+      (!content || response.answerDetail?.content === content)
+    ) {
+      return response;
     }
 
     const updatedResponse = await this.threadResponseRepository.updateOne(
@@ -1231,7 +1234,7 @@ export class AskingService implements IAskingService {
         answerDetail: {
           ...response.answerDetail,
           status,
-          content,
+          content: content ?? response.answerDetail?.content,
         },
       },
     );
