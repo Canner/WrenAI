@@ -88,6 +88,15 @@ def test_slug_collision_gets_suffix(tmp_path):
     assert len(list((tmp_path / "knowledge" / "sql").glob("*.md"))) == 2
 
 
+def test_parse_source_handles_null_tags():
+    """A null/empty tags value must not crash export's source parsing."""
+    from wren.memory.cli import _parse_source  # noqa: PLC0415
+
+    assert _parse_source(None) == "user"
+    assert _parse_source("") == "user"
+    assert _parse_source("source:seed") == "seed"
+
+
 def test_write_query_markdown_created_at(tmp_path):
     """created_at is written when provided and ignored by the pair loader."""
     dest = write_query_markdown(

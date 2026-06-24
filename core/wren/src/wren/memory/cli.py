@@ -748,9 +748,9 @@ def forget(
 # ── Dump / Load helpers ──────────────────────────────────────────────────
 
 
-def _parse_source(tags: str) -> str:
-    """Extract source value from tags string."""
-    for part in tags.split():
+def _parse_source(tags: str | None) -> str:
+    """Extract source value from a (possibly null/empty) tags string."""
+    for part in (tags or "").split():
         if part.startswith("source:"):
             return part[len("source:") :]
     return "user"
