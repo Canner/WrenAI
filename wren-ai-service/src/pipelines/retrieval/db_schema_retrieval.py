@@ -179,12 +179,12 @@ def expand_business_terms_for_retrieval(query: str) -> str:
         [
             query,
             "Business analytics aliases:",
-            "repair trends repair volume repair counts debug entries debug fixes",
-            "average debug hours turnaround time resolved entries failure category failure code",
+            "throughput trend volume count counts average total ranking top bottom grouped distribution",
+            "business unit manufacturing unit department location site plant team region category status",
+            "repair trends repair volume repair counts debug entries debug fixes failure code",
             "monthly trend quarter grouped by month bar chart line chart",
-            "top common pcb failures top 10 failures most common failure categories",
-            "failure patterns category occurrences debugentryid failuresys material workorder serialnumber",
-            "dbo_DebugEntries dbo_failure_patterns dbo_repair_logs created_at failedat datein dateout",
+            "top common failures most common failure categories",
+            "failure patterns category occurrences material workorder serial number",
             "sales revenue amount sales value sales performance salesperson ranking",
             "customer sales top customers customer growth orders invoices margin quantity",
         ]

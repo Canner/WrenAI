@@ -59,6 +59,27 @@ def test_column_validation_allows_qualified_suffix_table_references():
     ) == []
 
 
+def test_column_validation_rejects_invalid_unqualified_projection_for_single_table():
+    assert find_invalid_column_references(
+        'SELECT warning_signals FROM "dbo_repair_logs"',
+        {"dbo_repair_logs": ["id", "created_at", "status"]},
+    ) == ["warning_signals"]
+
+
+def test_column_validation_rejects_invalid_unqualified_projection_alias():
+    assert find_invalid_column_references(
+        'SELECT categories AS category_count FROM "dbo_repair_logs"',
+        {"dbo_repair_logs": ["id", "created_at", "status"]},
+    ) == ["categories"]
+
+
+def test_column_validation_allows_valid_unqualified_projection_for_single_table():
+    assert find_invalid_column_references(
+        'SELECT status AS repair_status FROM "dbo_repair_logs"',
+        {"dbo_repair_logs": ["id", "created_at", "status"]},
+    ) == []
+
+
 def test_construct_valid_table_columns_adds_qualified_suffix_tables():
     documents = [
         'CREATE TABLE "wrenai"."public"."dbo_repair_logs" ("warning_signals" INTEGER);',

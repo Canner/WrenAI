@@ -2826,6 +2826,39 @@ def find_invalid_column_references(
         if column.lower() not in valid_columns:
             invalid_references.append(f"{qualifier}.{column}")
 
+    referenced_tables = {
+        aliases.get(table_reference.lower())
+        for table_reference in extract_sql_table_references(sql)
+    }
+    referenced_tables = {table for table in referenced_tables if table}
+    if len(referenced_tables) == 1:
+        table_name = next(iter(referenced_tables))
+        valid_columns = {
+            str(col).lower()
+            for col in valid_table_columns.get(table_name, [])
+            if col is not None
+        }
+        valid_compact_columns = {
+            _compact_sql_identifier(col)
+            for col in valid_table_columns.get(table_name, [])
+            if col is not None
+        }
+        for start, end in _find_select_list_spans(sql):
+            for item in _split_top_level_select_items(sql[start:end]):
+                expression = _strip_projection_alias(
+                    re.sub(r"^\s*DISTINCT\s+", "", item, flags=re.IGNORECASE)
+                )
+                if not re.fullmatch(_SQL_IDENTIFIER_PATTERN, expression.strip()):
+                    continue
+                column = _normalize_sql_identifier(expression)
+                if column == "*":
+                    continue
+                if (
+                    column.lower() not in valid_columns
+                    and _compact_sql_identifier(column) not in valid_compact_columns
+                ):
+                    invalid_references.append(column)
+
     return sorted(set(invalid_references))
 
 

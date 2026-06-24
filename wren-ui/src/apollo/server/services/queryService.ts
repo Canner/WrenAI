@@ -670,10 +670,17 @@ const validateSqlReferencesManifest = (sql: string, manifest?: Manifest) => {
   const cteNames = extractCteNames(sql);
   const invalidReferences = extractSqlTableReferences(sql).filter((reference) => {
     const normalized = reference.toLowerCase();
-    const lastPart = splitTableReference(reference).pop()?.toLowerCase();
+    const parts = splitTableReference(reference);
+    const lastPart = parts[parts.length - 1]?.toLowerCase();
+    const firstPart = parts[0]?.toLowerCase();
+    const suffixes = parts.map((_, index) =>
+      parts.slice(index).join('.').toLowerCase(),
+    );
     return (
       !validNames.has(normalized) &&
       !cteNames.has(normalized) &&
+      !suffixes.some((suffix) => validNames.has(suffix)) &&
+      !(parts.length === 2 && firstPart && validNames.has(firstPart)) &&
       (!lastPart || !validNames.has(lastPart))
     );
   });

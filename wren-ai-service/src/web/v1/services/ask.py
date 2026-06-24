@@ -8,6 +8,12 @@ from langfuse.decorators import observe
 from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
+from src.pipelines.generation.utils.sql import (
+    construct_valid_table_columns,
+    construct_valid_table_names,
+    find_invalid_column_references,
+    find_invalid_table_references,
+)
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest, SSEEvent
 
@@ -1919,6 +1925,35 @@ class AskService:
             return None
         return AskResult(sql=sql.strip(), type="llm")
 
+    def _build_validated_ask_result_from_sql(
+        self,
+        sql: Optional[str],
+        table_ddls: list[str],
+    ) -> Optional[AskResult]:
+        ask_result = self._build_ask_result_from_sql(sql)
+        if not ask_result:
+            return None
+
+        invalid_tables = find_invalid_table_references(
+            ask_result.sql,
+            construct_valid_table_names(table_ddls),
+        )
+        invalid_columns = find_invalid_column_references(
+            ask_result.sql,
+            construct_valid_table_columns(table_ddls),
+        )
+        if invalid_tables or invalid_columns:
+            logger.warning(
+                "Ignoring heuristic SQL because it is not valid for active schema. "
+                "invalid_tables=%s invalid_columns=%s sql=%s",
+                invalid_tables,
+                invalid_columns,
+                ask_result.sql,
+            )
+            return None
+
+        return ask_result
+
     def _build_failed_text_to_sql_response(
         self,
         trace_id: Optional[str],
@@ -2068,8 +2103,9 @@ class AskService:
                             query_id,
                             user_query,
                         )
-                        if ask_result := self._build_ask_result_from_sql(
-                            heuristic_sql
+                        if ask_result := self._build_validated_ask_result_from_sql(
+                            heuristic_sql,
+                            table_ddls,
                         ):
                             api_results = [ask_result]
                             if not self._is_stopped(query_id, self._ask_results):
@@ -2086,7 +2122,7 @@ class AskService:
                             results["metadata"]["type"] = "TEXT_TO_SQL"
                             return results
                         invalid_sql = heuristic_sql
-                        error_message = "Heuristic SQL fallback did not produce a valid SELECT statement."
+                        error_message = "Heuristic SQL fallback was not valid for the active datasource schema."
 
                 historical_question = await self._run_with_timeout(
                     "Historical question retrieval",
@@ -2403,10 +2439,13 @@ class AskService:
                             query_id,
                             user_query,
                         )
-                        ask_result = self._build_ask_result_from_sql(heuristic_sql)
+                        ask_result = self._build_validated_ask_result_from_sql(
+                            heuristic_sql,
+                            table_ddls,
+                        )
                         if not ask_result:
                             invalid_sql = heuristic_sql
-                            error_message = "Heuristic SQL fallback did not produce a valid SELECT statement."
+                            error_message = "Heuristic SQL fallback was not valid for the active datasource schema."
                             if not self._is_stopped(query_id, self._ask_results):
                                 self._ask_results[query_id] = (
                                     self._build_failed_text_to_sql_response(
@@ -2737,10 +2776,13 @@ class AskService:
                         query_id,
                         user_query,
                     )
-                    ask_result = self._build_ask_result_from_sql(heuristic_sql)
+                    ask_result = self._build_validated_ask_result_from_sql(
+                        heuristic_sql,
+                        table_ddls,
+                    )
                     if not ask_result:
                         invalid_sql = heuristic_sql
-                        error_message = "Heuristic SQL fallback did not produce a valid SELECT statement."
+                        error_message = "Heuristic SQL fallback was not valid for the active datasource schema."
                     else:
                         api_results = [ask_result]
                         if not self._is_stopped(query_id, self._ask_results):

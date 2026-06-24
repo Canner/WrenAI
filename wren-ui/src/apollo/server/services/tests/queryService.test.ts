@@ -404,6 +404,34 @@ describe('QueryService', () => {
     expect(mockIbisAdaptor.dryRun).not.toHaveBeenCalled();
   });
 
+  it('should not treat model column expressions as missing table references', async () => {
+    mockIbisAdaptor.dryRun.mockResolvedValue({
+      correlationId: '123',
+      processTime: '1s',
+    });
+
+    await queryService.preview(
+      'SELECT DATEPART(WEEK, "dbo_DebugEntries"."DateIn") AS "week" FROM "dbo_DebugEntries"',
+      {
+        project: { type: DataSourceName.MSSQL, connectionInfo: {} },
+        manifest: {
+          models: [
+            {
+              name: 'dbo_DebugEntries',
+              tableReference: { table: 'dbo_DebugEntries' },
+              columns: [
+                { name: 'DateIn', type: 'timestamp', isCalculated: false },
+              ],
+            },
+          ],
+        },
+        dryRun: true,
+      },
+    );
+
+    expect(mockIbisAdaptor.dryRun).toHaveBeenCalled();
+  });
+
   it('should reject unqualified projected columns outside a single active manifest table', async () => {
     await expect(
       queryService.preview('SELECT tools_required FROM "knowledge_articles"', {
