@@ -2242,6 +2242,27 @@ _SCHEMA_IDENTIFIER_PATTERN = (
 _SCHEMA_TABLE_REFERENCE_PATTERN = (
     rf"{_SCHEMA_IDENTIFIER_PATTERN}(?:\s*\.\s*{_SCHEMA_IDENTIFIER_PATTERN})*"
 )
+_SEMANTIC_TABLE_NAME_KEYS = (
+    "name",
+    "referenceName",
+    "sourceTableName",
+    "tableName",
+    "table",
+)
+_SEMANTIC_COLUMN_CONTAINER_KEYS = (
+    "columns",
+    "fields",
+    "calculatedFields",
+    "dimensions",
+    "measures",
+)
+_SEMANTIC_COLUMN_NAME_KEYS = (
+    "name",
+    "referenceName",
+    "sourceColumnName",
+    "columnName",
+    "fieldName",
+)
 
 
 def construct_instructions(
@@ -2256,12 +2277,108 @@ def construct_instructions(
     return _instructions
 
 
+def _parse_semantic_metadata_content(content: str) -> Any | None:
+    content = content.strip()
+    if not content:
+        return None
+
+    if content.startswith("```"):
+        content = re.sub(r"^```(?:json|mdl)?\s*", "", content, flags=re.IGNORECASE)
+        content = re.sub(r"\s*```$", "", content)
+
+    candidates = [content]
+    object_start = content.find("{")
+    object_end = content.rfind("}")
+    if object_start >= 0 and object_end > object_start:
+        candidates.append(content[object_start : object_end + 1])
+    array_start = content.find("[")
+    array_end = content.rfind("]")
+    if array_start >= 0 and array_end > array_start:
+        candidates.append(content[array_start : array_end + 1])
+
+    for candidate in candidates:
+        try:
+            return orjson.loads(candidate)
+        except orjson.JSONDecodeError:
+            continue
+
+    return None
+
+
+def _semantic_name_values(metadata: dict[str, Any], keys: tuple[str, ...]) -> list[str]:
+    values = []
+    for key in keys:
+        value = metadata.get(key)
+        if isinstance(value, str) and value.strip():
+            values.append(value.strip())
+    return values
+
+
+def _semantic_column_names(metadata: Any) -> set[str]:
+    columns: set[str] = set()
+    if isinstance(metadata, dict):
+        for column_name in _semantic_name_values(metadata, _SEMANTIC_COLUMN_NAME_KEYS):
+            columns.add(column_name)
+        for key in _SEMANTIC_COLUMN_CONTAINER_KEYS:
+            value = metadata.get(key)
+            if value is not None:
+                columns.update(_semantic_column_names(value))
+    elif isinstance(metadata, list):
+        for item in metadata:
+            columns.update(_semantic_column_names(item))
+
+    return columns
+
+
+def _construct_semantic_table_columns(content: str) -> dict[str, set[str]]:
+    parsed_content = _parse_semantic_metadata_content(content)
+    if parsed_content is None:
+        return {}
+
+    table_columns: dict[str, set[str]] = {}
+
+    def collect(metadata: Any) -> None:
+        if isinstance(metadata, list):
+            for item in metadata:
+                collect(item)
+            return
+
+        if not isinstance(metadata, dict):
+            return
+
+        column_containers = [
+            metadata.get(key)
+            for key in _SEMANTIC_COLUMN_CONTAINER_KEYS
+            if metadata.get(key) is not None
+        ]
+        if column_containers:
+            columns = set()
+            for container in column_containers:
+                columns.update(_semantic_column_names(container))
+
+            if columns:
+                for table_reference in _semantic_name_values(
+                    metadata, _SEMANTIC_TABLE_NAME_KEYS
+                ):
+                    for table_name in _table_reference_suffixes(table_reference):
+                        table_columns.setdefault(table_name, set()).update(columns)
+
+        for value in metadata.values():
+            collect(value)
+
+    collect(parsed_content)
+    return table_columns
+
+
 def construct_valid_table_names(documents: list[Any] | None = None) -> list[str]:
     table_names: set[str] = set()
     for document in documents or []:
         content = getattr(document, "content", document)
         if not isinstance(content, str):
             continue
+
+        for table_name in _construct_semantic_table_columns(content):
+            table_names.add(table_name)
 
         for match in re.finditer(
             rf"\bCREATE\s+TABLE\s+(?P<table>{_SCHEMA_TABLE_REFERENCE_PATTERN})",
@@ -2286,6 +2403,11 @@ def construct_valid_table_columns(
         content = getattr(document, "content", document)
         if not isinstance(content, str):
             continue
+
+        for table_name, columns in _construct_semantic_table_columns(
+            content
+        ).items():
+            table_columns.setdefault(table_name, set()).update(columns)
 
         for table_match in re.finditer(
             rf"\bCREATE\s+TABLE\s+(?P<table>{_SCHEMA_TABLE_REFERENCE_PATTERN})\s*\(",

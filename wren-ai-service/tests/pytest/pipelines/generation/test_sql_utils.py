@@ -71,6 +71,86 @@ def test_construct_valid_table_columns_adds_qualified_suffix_tables():
     }
 
 
+def test_construct_valid_table_columns_from_semantic_metadata_document():
+    documents = [
+        """
+        {
+          "models": [
+            {
+              "name": "dbo_new_orders",
+              "referenceName": "sales.dbo_new_orders",
+              "columns": [
+                {"name": "business"},
+                {"name": "market"},
+                {"name": "customer_name"},
+                {"name": "product_name"},
+                {"name": "order_value"}
+              ],
+              "calculatedFields": [
+                {"name": "order_month"}
+              ]
+            }
+          ]
+        }
+        """,
+    ]
+
+    assert construct_valid_table_names(documents) == [
+        "dbo_new_orders",
+        "sales.dbo_new_orders",
+    ]
+    assert construct_valid_table_columns(documents) == {
+        "dbo_new_orders": [
+            "business",
+            "customer_name",
+            "market",
+            "order_month",
+            "order_value",
+            "product_name",
+        ],
+        "sales.dbo_new_orders": [
+            "business",
+            "customer_name",
+            "market",
+            "order_month",
+            "order_value",
+            "product_name",
+        ],
+    }
+
+
+def test_column_validation_uses_semantic_metadata_document_columns():
+    documents = [
+        """
+        {
+          "models": [
+            {
+              "name": "dbo_new_orders",
+              "columns": [
+                {"name": "customer_name"},
+                {"name": "product_name"},
+                {"name": "order_value"}
+              ]
+            }
+          ]
+        }
+        """,
+    ]
+    valid_table_columns = construct_valid_table_columns(documents)
+
+    assert find_invalid_column_references(
+        'SELECT "dbo_new_orders"."customer_name", '
+        '"dbo_new_orders"."product_name", '
+        '"dbo_new_orders"."order_value" '
+        'FROM "dbo_new_orders"',
+        valid_table_columns,
+    ) == []
+    assert find_invalid_column_references(
+        'SELECT "dbo_new_orders"."missing_value" FROM "dbo_new_orders"',
+        valid_table_columns,
+    ) == ["dbo_new_orders.missing_value"]
+
+
 def test_normalize_generation_result_sql_standardizes_identifier_quotes():
     sql = (
         'SELECT COUNT(*) AS `num_tags`, SUM(`tokenCost`) AS `popularity` '
