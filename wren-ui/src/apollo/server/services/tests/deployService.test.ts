@@ -14,6 +14,7 @@ describe('DeployService', () => {
     mockDeployLogRepository = {
       findLastProjectDeployLog: jest.fn(),
       findLatestProjectDeployLog: jest.fn(),
+      findInProgressProjectDeployLog: jest.fn(),
       createOne: jest.fn(),
       updateOne: jest.fn(),
     };
@@ -225,6 +226,26 @@ describe('DeployService', () => {
 
     expect(deployment).toBe(inProgressDeployment);
     expect(mockDeployLogRepository.updateOne).not.toHaveBeenCalled();
+  });
+
+  it('should fall back when latest deployment lookup is unavailable', async () => {
+    const recentDate = new Date();
+    const inProgressDeployment = {
+      id: 5,
+      status: DeployStatusEnum.IN_PROGRESS,
+      updatedAt: recentDate,
+    };
+    delete mockDeployLogRepository.findLatestProjectDeployLog;
+    mockDeployLogRepository.findInProgressProjectDeployLog.mockResolvedValue(
+      inProgressDeployment,
+    );
+
+    const deployment = await deployService.getInProgressDeployment(1);
+
+    expect(deployment).toBe(inProgressDeployment);
+    expect(
+      mockDeployLogRepository.findInProgressProjectDeployLog,
+    ).toHaveBeenCalledWith(1);
   });
 
   it('should mark created deployment failed when deployment throws', async () => {

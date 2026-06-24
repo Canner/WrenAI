@@ -71,8 +71,7 @@ export class DeployService implements IDeployService {
   }
 
   public async getInProgressDeployment(projectId: number) {
-    const latestDeploy =
-      await this.deployLogRepository.findLatestProjectDeployLog(projectId);
+    const latestDeploy = await this.findLatestOrInProgressDeployment(projectId);
     if (latestDeploy?.status !== DeployStatusEnum.IN_PROGRESS) {
       return null;
     }
@@ -91,6 +90,21 @@ export class DeployService implements IDeployService {
     }
 
     return latestDeploy;
+  }
+
+  private async findLatestOrInProgressDeployment(projectId: number) {
+    const repository = this.deployLogRepository as IDeployLogRepository & {
+      findLatestProjectDeployLog?: (projectId: number) => Promise<Deploy | null>;
+    };
+
+    if (typeof repository.findLatestProjectDeployLog === 'function') {
+      return await repository.findLatestProjectDeployLog(projectId);
+    }
+
+    logger.warn(
+      'DeployLogRepository.findLatestProjectDeployLog is unavailable; falling back to in-progress deployment lookup.',
+    );
+    return await repository.findInProgressProjectDeployLog(projectId);
   }
 
   public async deploy(
