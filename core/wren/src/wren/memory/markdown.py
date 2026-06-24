@@ -116,9 +116,12 @@ def render_query_markdown(
     datasource: str | None = None,
     tags: list[str] | None = None,
     source: str = "user",
+    created_at: str | None = None,
 ) -> str:
     """Render the frontmatter document for a NL→SQL pair."""
     front: dict = {"nl": nl.strip(), "sql": sql.strip(), "source": source}
+    if created_at:
+        front["created_at"] = created_at
     if datasource:
         front["datasource"] = datasource
     if tags:
@@ -137,6 +140,7 @@ def write_query_markdown(
     datasource: str | None = None,
     tags: list[str] | None = None,
     source: str = "user",
+    created_at: str | None = None,
 ) -> Path:
     """Write a NL→SQL pair to ``knowledge/sql/<slug>.md``. Returns the path.
 
@@ -149,7 +153,14 @@ def write_query_markdown(
     slug = _resolve_slug(slugify(nl), nl, sql_dir)
     dest = sql_dir / f"{slug}.md"
     dest.write_text(
-        render_query_markdown(nl, sql, datasource=datasource, tags=tags, source=source),
+        render_query_markdown(
+            nl,
+            sql,
+            datasource=datasource,
+            tags=tags,
+            source=source,
+            created_at=created_at,
+        ),
         encoding="utf-8",
     )
     return dest
