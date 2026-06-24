@@ -31,7 +31,7 @@ wren cube describe <cube_name>       # measures + expressions per cube
 
 For each measure you're about to propose:
 
-- **Same expression already exists in another cube** (e.g. `SUM(amount)` for the same `base_object`) → do **not** propose a new cube. Add a `queries.yml` example pointing at the existing cube instead, so the agent learns to reach for it.
+- **Same expression already exists in another cube** (e.g. `SUM(amount)` for the same `base_object`) → do **not** propose a new cube. Store a `knowledge/sql/` example (via `wren memory store`) pointing at the existing cube instead, so the agent learns to reach for it.
 - **Same name in `wren cube list`** but different `base_object` → name collision. Either fall back to `<name>_v2` (auto-pilot) or grill the user for a better name (grill mode).
 - **Old MDL `metrics:` already defines this** (visible in `wren context show --output json` under each model's `metrics:` array) → do not propose. Surface on the Step 9 "please fix manually" list with the note "old metrics: entry — consider migrating to a cube".
 
@@ -155,22 +155,18 @@ properties:
 
 Note no `time_dimensions` because raw didn't ask for time-bucketing. Add one when raw also says "monthly ARR trend" or similar.
 
-### Example 2 — raw mentions a measure already covered (skip, write queries.yml)
+### Example 2 — raw mentions a measure already covered (skip, store an NL→SQL pair)
 
 Raw `support_handbook.md`: *"DAU = distinct active users per day."*
 
 Existing cube `daily_engagement` already has measure `dau` with expression `COUNT(DISTINCT user_id)`.
 
-Action: skip the cube proposal. Add to `queries.yml`:
+Action: skip the cube proposal. Store a pair pointing at the existing cube (lands in `knowledge/sql/`):
 
-```yaml
-- nl: "daily active users for last week"
-  sql: |
-    -- via cube
-    SELECT day, dau FROM (
-      <result of: wren cube query --cube daily_engagement --measures dau --time-dimension "day:day:2024-01-01,2024-01-08">
-    )
-  source: enrich
+```bash
+wren memory store --tags "source:enrich" \
+  --nl "daily active users for last week" \
+  --sql "SELECT day, dau FROM (<result of: wren cube query --cube daily_engagement --measures dau --time-dimension 'day:day:2024-01-01,2024-01-08'>)"
 ```
 
 (Or simpler — log it in the Step 9 audit and let the agent reach for `wren cube query` directly at usage time.)

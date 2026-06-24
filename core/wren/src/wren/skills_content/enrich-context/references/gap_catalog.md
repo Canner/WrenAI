@@ -10,7 +10,7 @@ Ten business-semantic categories that the schema alone cannot carry. The main `S
 | **Lane 2** (claim-diff) | For each atomic claim extracted from raw, classify it under one of the 10 categories before deciding the sink. |
 | **Lane 3** (inference) | If raw is silent but a trigger from this catalog fires AND the slot is empty, propose an inference (open with "I'm guessing — " in grill mode, tag `agent inference` in auto-pilot). |
 
-Categories 1, 2, 3, 5, 7 write to **column `properties.description`** (prose + `[tag]` line). Categories 4, 6, 8, 9, 10 write to **`instructions.md`** (new `##` section appended). All sinks are append-only — never modify what's there.
+Categories 1, 2, 3, 5, 7 write to **column `properties.description`** (prose + `[tag]` line). Categories 4, 6, 8, 9, 10 write to **`knowledge/rules/`** (new `##` section appended in a topic file). All sinks are append-only — never modify what's there.
 
 ## Description write format (column-local categories)
 
@@ -59,7 +59,7 @@ Use lowercase tag names exactly as listed below — Lane 1 greps these for re-en
 ### 4. Soft-delete / active filters
 
 - **Trigger:** model has any of `deleted_at`, `is_deleted`, `archived_at`, `is_active`, `is_internal`, `tombstone_at` column OR raw mentions "soft delete", "tombstone", "active rows only", "exclude internal".
-- **Sink:** `instructions.md` under heading `## Default filters` (create if absent, append rule if present).
+- **Sink:** `knowledge/rules/` under heading `## Default filters` (create if absent, append rule if present).
 - **Write format:**
   ```markdown
   ## Default filters
@@ -80,7 +80,7 @@ Use lowercase tag names exactly as listed below — Lane 1 greps these for re-en
 
 - **Trigger:** raw uses a business term that maps to a model / column / metric, but the term doesn't appear verbatim in MDL names or descriptions.
   - Examples: "customer" → `customers` (vs `accounts`, `customers_v3`); "ARR" → `mrr * 12`; "DAU" → distinct active users per day.
-- **Sink:** `instructions.md` under heading `## Naming conventions`.
+- **Sink:** `knowledge/rules/` under heading `## Naming conventions`.
 - **Write format:**
   ```markdown
   ## Naming conventions
@@ -102,7 +102,7 @@ Use lowercase tag names exactly as listed below — Lane 1 greps these for re-en
 ### 8. Cross-system identifiers
 
 - **Trigger:** column name contains an external-system tag (`stripe_*`, `salesforce_*`, `intercom_*`, `hubspot_*`, `*_external_id`, `*_external_ref`) OR raw maps an internal ID to an external system.
-- **Sink:** `instructions.md` under heading `## External identifiers`.
+- **Sink:** `knowledge/rules/` under heading `## External identifiers`.
 - **Write format:**
   ```markdown
   ## External identifiers
@@ -114,7 +114,7 @@ Use lowercase tag names exactly as listed below — Lane 1 greps these for re-en
 ### 9. Currency / locale
 
 - **Trigger:** any model has `currency`, `locale`, `country`, `region`, `fx_rate`, `original_amount` column OR raw mentions FX rates, multi-currency, or non-USD reporting.
-- **Sink:** `instructions.md` under heading `## Currency`.
+- **Sink:** `knowledge/rules/` under heading `## Currency`.
 - **Write format:**
   ```markdown
   ## Currency
@@ -126,7 +126,7 @@ Use lowercase tag names exactly as listed below — Lane 1 greps these for re-en
 ### 10. Canonical table preferences
 
 - **Trigger:** schema has lookalike tables (`users` / `users_v3`, `orders` / `orders_archive` / `orders_summary`) OR raw says "use X not Y" / "deprecated" / "raw mirror".
-- **Sink:** `instructions.md` under heading `## Canonical tables`.
+- **Sink:** `knowledge/rules/` under heading `## Canonical tables`.
 - **Write format:**
   ```markdown
   ## Canonical tables
@@ -143,8 +143,8 @@ To check what a previous enrich run already covered before adding more:
 # Column-local tags
 grep -rE '\[(enum|unit|null|magic|time|pii)\]' models/
 
-# instructions.md section headings written by enrich
-grep -E '^## (Default filters|Naming conventions|External identifiers|Currency|Canonical tables)' instructions.md
+# knowledge/rules/ section headings written by enrich
+grep -rE '^## (Default filters|Naming conventions|External identifiers|Currency|Canonical tables)' knowledge/rules/
 ```
 
 Any existing `[tag]` line or `##` section means that category has been touched on that target — **do not rewrite by Universal Rule 1**. Surface contradictions on the manual-fix list instead.
