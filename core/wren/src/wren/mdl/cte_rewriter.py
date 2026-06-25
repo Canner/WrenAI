@@ -56,10 +56,12 @@ class CTERewriter:
     data_source:
         The target data source (determines sqlglot dialect).
     fallback:
-        When ``True`` (default), if no model references are detected in the
-        SQL, fall back to ``session_context.transform_sql()`` directly.
-        Set to ``False`` in tests to ensure the CTE path is always exercised
-        and silent fallbacks don't mask bugs.
+        Controls SQL that references a table which is not an MDL model or
+        view. When ``True`` (default), fall back to
+        ``session_context.transform_sql()`` directly. Set to ``False`` in
+        tests so such a query raises instead of silently masking a rewriter
+        miss. (Pure scalar / TVF SQL with no base-table reference always
+        passes through, regardless of this flag.)
     """
 
     def __init__(
@@ -122,9 +124,11 @@ class CTERewriter:
         statement references are expanded as model CTEs placed before it.
 
         Returns the transformed SQL string in the target sqlglot dialect.
-        If no model or view references are found, falls back to
-        ``session_context.transform_sql(sql)`` directly (when ``fallback``
-        is ``True``); otherwise raises ``ValueError``.
+        Pure scalar / TVF SQL (no model, view, or base-table reference, e.g.
+        ``SELECT 1``) is passed through transpiled to that dialect. A
+        reference to a table that is not an MDL model or view falls back to
+        ``session_context.transform_sql(sql)`` when ``fallback`` is ``True``;
+        otherwise it raises ``ValueError``.
         """
         ast = parse_one(sql, dialect=self.dialect)
 
@@ -136,9 +140,30 @@ class CTERewriter:
         # they get model CTEs placed before the (verbatim) view CTEs.
         self._collect_view_model_usage(view_refs, used_columns, user_table_refs)
 
-        # No model or view references detected — either fall back to the
-        # legacy whole-query transform, or raise so tests can catch the miss.
+        # Oracle uppercases unquoted identifiers. Without forcing quoting on
+        # output, the user's ``SELECT o_orderkey FROM orders`` would land as
+        # ``SELECT O_ORDERKEY FROM ORDERS`` — both the table reference and the
+        # result column name. The injected CTE projects quoted lowercase
+        # columns, so the lookup misses (ORA-00904) and any caller asserting on
+        # result-column casing breaks. Forcing quoting on Oracle keeps the
+        # dialect's output deterministic.
+        identify = self.data_source == DataSource.oracle
+
         if not used_columns and not view_refs:
+            # Nothing resolved to a model or view. If the query also has no
+            # base-table reference at all, it is pure scalar / TVF SQL
+            # (``SELECT 1`` or a standalone ``SELECT * FROM UNNEST([...])``)
+            # with nothing to expand — pass it through transpiled to the
+            # target dialect rather than rejecting it.
+            base_tables = [
+                t for t in ast.find_all(exp.Table) if t.name not in user_cte_names
+            ]
+            if not base_tables:
+                return ast.sql(dialect=self.dialect, identify=identify)
+            # Otherwise the query references a table that is not an MDL model
+            # or view. Fall back to the legacy whole-query transform (so a
+            # broken/stale reference still surfaces an error), or raise when
+            # ``fallback=False`` so tests catch a rewriter miss.
             if self.fallback:
                 wren_sql = self.session_context.transform_sql(sql)
                 return sqlglot.transpile(wren_sql, read="wren", write=self.dialect)[0]
@@ -147,16 +172,6 @@ class CTERewriter:
         model_ctes = self._build_model_ctes(used_columns, user_table_refs)
         view_ctes = self._build_view_ctes(view_refs)
         self._inject_ctes(ast, model_ctes + view_ctes)
-        # Oracle uppercases unquoted identifiers. Without forcing quoting
-        # on output, the user's ``SELECT o_orderkey FROM orders`` would
-        # land as ``SELECT O_ORDERKEY FROM ORDERS`` — both the table
-        # reference and the result column name. The injected CTE projects
-        # quoted lowercase columns, so the lookup misses (ORA-00904), and
-        # any caller asserting on result-column casing breaks. Forcing
-        # quoting on Oracle makes the dialect's output deterministic and
-        # matches the pre-fallback path where wren-core's whole-query
-        # transform had quoted everything implicitly.
-        identify = self.data_source == DataSource.oracle
         return ast.sql(dialect=self.dialect, identify=identify)
 
     # ------------------------------------------------------------------

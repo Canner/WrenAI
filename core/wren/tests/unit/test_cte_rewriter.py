@@ -316,12 +316,52 @@ class TestCTEEdgeCases:
         ast = sqlglot.parse_one(result, dialect="duckdb")
         assert ast.args["with_"].args.get("recursive")
 
-    def test_no_model_references_fallback(self):
-        """Query referencing no models falls back to direct transform_sql."""
-        rw = _make_rewriter(_SINGLE_MODEL_MANIFEST, fallback=True)
-        # This should raise because 'unknown_table' is not in the manifest,
-        # and the fallback transform_sql will also fail.
-        with pytest.raises(Exception):
+    @pytest.mark.parametrize(
+        ("sql", "data_source"),
+        [
+            ("SELECT 1", DataSource.postgres),
+            ("SELECT 1 + 1 AS two", DataSource.postgres),
+            ("SELECT CURRENT_DATE", DataSource.postgres),
+            # Oracle forces identifier quoting (identify=True) on output; the
+            # passthrough must still round-trip a scalar query cleanly.
+            ("SELECT 1", DataSource.oracle),
+            # A pure inline-row STRUCT spine — no model reference.
+            (
+                "SELECT stage, sort_order FROM UNNEST(["
+                "STRUCT('Prospecting' AS stage, 1 AS sort_order), "
+                "('Qualification', 2), ('Proposal', 3)])",
+                DataSource.bigquery,
+            ),
+        ],
+    )
+    def test_scalar_or_pure_tvf_passes_through(self, sql, data_source):
+        """SQL with no model/view reference is passed through, never rejected."""
+        rw = _make_rewriter(_SINGLE_MODEL_MANIFEST, data_source, fallback=True)
+        out = rw.rewrite(sql)
+
+        # Nothing to expand — no model CTE is injected.
+        assert "with" not in out.lower()
+        # It round-trips to the same AST in the target dialect.
+        dialect = get_sqlglot_dialect(data_source)
+        assert sqlglot.parse_one(out, dialect=dialect) == sqlglot.parse_one(
+            sql, dialect=dialect
+        )
+
+    def test_scalar_passes_through_without_fallback(self):
+        """Pure scalar SQL passes through even when fallback is disabled."""
+        rw = _make_rewriter(_SINGLE_MODEL_MANIFEST, fallback=False)
+        out = rw.rewrite("SELECT 1")
+        assert "with" not in out.lower()
+
+    def test_unresolved_table_raises_without_fallback(self):
+        """A non-model table reference raises when fallback is disabled.
+
+        Only pure scalar / TVF SQL passes through unconditionally; a table
+        reference that resolves to no MDL model or view is still a rewriter
+        miss and must surface, not be silently passed on.
+        """
+        rw = _make_rewriter(_SINGLE_MODEL_MANIFEST, fallback=False)
+        with pytest.raises(ValueError):
             rw.rewrite("SELECT * FROM unknown_table")
 
 
