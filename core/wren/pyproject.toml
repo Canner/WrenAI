@@ -22,7 +22,9 @@ classifiers = [
 dependencies = [
   "wren-core-py>=0.7.1",
   "duckdb>=1.5.0",
-  "sqlglot>=27",
+  # >=29 required: the CTE rewriter and policy read the ``with_`` / ``from_``
+  # Expression arg keys, which sqlglot renamed from ``with`` / ``from`` in 28.
+  "sqlglot>=29",
   "typer>=0.12",
   "pydantic>=2",
   "pyarrow>=14",
