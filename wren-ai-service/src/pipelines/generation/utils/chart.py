@@ -370,6 +370,8 @@ def _build_fallback_chart_schema(
         query, chart_type, nominal, temporal, columns
     )
     measure = _select_measure_column(query, quantitative)
+    if not measure:
+        return {}
 
     title = _humanize_title(query or "Chart")
 
@@ -379,27 +381,19 @@ def _build_fallback_chart_schema(
             base["timeUnit"] = "yearmonth"
         return base
 
-    def count_axis() -> dict:
-        return {
-            "aggregate": "count",
-            "type": "quantitative",
-            "title": _count_axis_title(query),
-        }
-
     if chart_type == "pie":
         color_field = dimensions[0] if dimensions else columns[0]
-        theta_encoding = axis(measure, "quantitative") if measure else count_axis()
         return {
             "title": title,
             "mark": {"type": "arc"},
             "encoding": {
-                "theta": theta_encoding,
+                "theta": axis(measure, "quantitative"),
                 "color": axis(color_field, "nominal"),
             },
         }
 
     if chart_type in {"line", "area", "multi_line"}:
-        y_encoding = axis(measure, "quantitative") if measure else count_axis()
+        y_encoding = axis(measure, "quantitative")
         if {"year", "month"}.issubset({str(c).lower() for c in columns}):
             month_field = next(c for c in columns if str(c).lower() == "month")
             encoding = {
@@ -439,7 +433,7 @@ def _build_fallback_chart_schema(
         if x_field in nominal
         else ("temporal" if x_field in temporal else "ordinal")
     )
-    y_encoding = axis(measure, "quantitative") if measure else count_axis()
+    y_encoding = axis(measure, "quantitative")
     encoding = {
         "x": axis(x_field, x_type),
         "y": y_encoding,
@@ -513,6 +507,8 @@ def _is_schema_compatible_with_sample_data(
     encoding = chart_schema.get("encoding", {})
     for key in ("x", "y", "x2", "y2", "color", "xOffset", "theta"):
         axis = encoding.get(key)
+        if isinstance(axis, dict) and axis.get("aggregate"):
+            return False
         field = axis.get("field") if isinstance(axis, dict) else None
         if field and str(field) not in columns:
             return False
@@ -521,7 +517,6 @@ def _is_schema_compatible_with_sample_data(
             field
             and _is_quantitative_encoding(axis)
             and str(field) not in quantitative
-            and axis.get("aggregate") != "count"
         ):
             return False
 
@@ -540,7 +535,6 @@ def _is_schema_compatible_with_sample_data(
     theta_axis = encoding.get("theta")
     has_quantitative_measure = any(
         _is_quantitative_encoding(axis)
-        or (isinstance(axis, dict) and axis.get("aggregate") == "count")
         for axis in (x_axis, y_axis, theta_axis)
     )
 
@@ -600,11 +594,7 @@ def _needs_deterministic_bar_fallback(
             return True
 
     if len(quantitative) == 0 and len(nominal) >= 1:
-        y_axis = encoding.get("y")
-        if isinstance(y_axis, dict) and y_axis.get("field") in nominal:
-            return True
-        if not isinstance(y_axis, dict) or y_axis.get("aggregate") != "count":
-            return True
+        return True
 
     return False
 
@@ -636,6 +626,7 @@ chart_generation_instructions = """
     - Default time unit is "yearmonth".
 - For each axis, generate the corresponding human-readable title based on the language provided by the user.
 - Make sure all of the fields(x, y, xOffset, color, etc.) in the encoding section of the chart schema are present in the column names of the data.
+- Do not use Vega-Lite aggregate count or calculate new measures in the chart schema. The SQL must return the metric column, and the chart must encode that returned metric field.
 
 ### GUIDELINES TO PLOT CHART ###
 

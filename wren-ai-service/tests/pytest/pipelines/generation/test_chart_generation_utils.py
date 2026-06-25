@@ -2,6 +2,7 @@ import pytest
 
 from src.pipelines.generation.utils.chart import (
     ChartDataPreprocessor,
+    _is_schema_compatible_with_sample_data,
     build_fallback_chart_result,
 )
 from src.web.v1.services.chart import ChartRequest, ChartService
@@ -32,6 +33,19 @@ def test_fallback_chart_requires_a_real_quantitative_measure():
     )
 
     assert result == {"chart_schema": {}, "reasoning": "", "chart_type": ""}
+
+
+def test_chart_schema_rejects_vega_aggregate_count_without_sql_metric():
+    assert not _is_schema_compatible_with_sample_data(
+        {
+            "mark": {"type": "bar"},
+            "encoding": {
+                "x": {"field": "Inv Date", "type": "temporal"},
+                "y": {"aggregate": "count", "type": "quantitative"},
+            },
+        },
+        [{"Inv Date": "2026-01-01"}, {"Inv Date": "2026-07-01"}],
+    )
 
 
 @pytest.mark.asyncio
