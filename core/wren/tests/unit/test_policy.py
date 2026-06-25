@@ -109,6 +109,20 @@ def test_builtin_function_on_denied_list():
     assert exc_info.value.error_code == ErrorCode.BLOCKED_FUNCTION
 
 
+def test_denied_function_reclassified_by_sqlglot():
+    """A denied name still matches when sqlglot maps it to a concrete subclass.
+
+    sqlglot >=29 parses ``version()`` on postgres into ``exp.CurrentVersion``
+    (``type(node).key == "currentversion"``), not ``exp.Anonymous``. Denying
+    ``"version"`` must still block it via the canonical-key expansion.
+    """
+    ast = parse_one("SELECT version()", dialect="postgres")
+    config = WrenConfig(denied_functions=frozenset(["version"]))
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, config)
+    assert exc_info.value.error_code == ErrorCode.BLOCKED_FUNCTION
+
+
 def test_nested_denied_function():
     sql = "SELECT * FROM (SELECT dblink('host=evil', 'SELECT 1') AS x) AS t"
     ast = parse_one(sql, dialect="postgres")
