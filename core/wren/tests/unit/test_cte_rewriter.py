@@ -11,6 +11,7 @@ import sqlglot
 from wren.mdl import get_session_context
 from wren.mdl.cte_rewriter import CTERewriter, get_sqlglot_dialect
 from wren.model.data_source import DataSource
+from wren.model.error import ErrorCode, WrenError
 
 pytestmark = pytest.mark.unit
 
@@ -471,3 +472,105 @@ class TestDialectMapping:
 
     def test_local_file_maps_to_duckdb(self):
         assert get_sqlglot_dialect(DataSource.local_file) == "duckdb"
+
+
+# ---------------------------------------------------------------------------
+# Tests: case-insensitive column & model binding
+# ---------------------------------------------------------------------------
+
+_MIXED_CASE_COL_MANIFEST = {
+    "catalog": "wren",
+    "schema": "public",
+    "models": [
+        {
+            "name": "events",
+            "tableReference": {"schema": "main", "table": "events"},
+            "columns": [
+                {"name": "id", "type": "integer"},
+                {"name": "Amount", "type": "integer"},
+            ],
+            "primaryKey": "id",
+        }
+    ],
+}
+
+_MIXED_CASE_MODEL_MANIFEST = {
+    "catalog": "wren",
+    "schema": "public",
+    "models": [
+        {
+            "name": "CaseModel",
+            "tableReference": {"schema": "main", "table": "case_model"},
+            "columns": [{"name": "id", "type": "integer"}],
+            "primaryKey": "id",
+        }
+    ],
+}
+
+_CASE_COLLISION_MANIFEST = {
+    "catalog": "wren",
+    "schema": "public",
+    "models": [
+        {
+            "name": "clash",
+            "tableReference": {"schema": "main", "table": "clash"},
+            "columns": [
+                {"name": "Year", "type": "integer"},
+                {"name": "year", "type": "integer"},
+            ],
+        }
+    ],
+}
+
+
+class TestCaseSensitiveBinding:
+    def test_force_identify_detected_from_dialect(self):
+        """Upper-folding dialects force-quote output; others do not."""
+        assert _make_rewriter(_SINGLE_MODEL_MANIFEST, DataSource.oracle)._force_identify
+        assert _make_rewriter(
+            _SINGLE_MODEL_MANIFEST, DataSource.snowflake
+        )._force_identify
+        assert not _make_rewriter(
+            _SINGLE_MODEL_MANIFEST, DataSource.postgres
+        )._force_identify
+        assert not _make_rewriter(
+            _SINGLE_MODEL_MANIFEST, DataSource.bigquery
+        )._force_identify
+
+    def test_case_only_column_collision_rejected(self):
+        """A model with columns differing only in case is rejected at build."""
+        with pytest.raises(WrenError) as exc:
+            _make_rewriter(_CASE_COLLISION_MANIFEST, DataSource.postgres)
+        assert exc.value.error_code == ErrorCode.INVALID_MDL
+
+    def test_quoted_mixed_case_column_binds(self):
+        """A quoted mixed-case column reference binds to the model CTE."""
+        rw = _make_rewriter(_MIXED_CASE_COL_MANIFEST, DataSource.postgres)
+        out = rw.rewrite('SELECT "Amount" FROM events')
+        assert _has_cte(out, "events", dialect="postgres")
+        # The CTE exposes the column with the user's quoting and does not
+        # collapse to a column-less SELECT 1.
+        assert "Amount" in out
+        assert "select 1" not in out.lower()
+
+    def test_unquoted_mixed_case_column_binds(self):
+        """An unquoted mixed-case column reference binds via dialect folding."""
+        rw = _make_rewriter(_MIXED_CASE_COL_MANIFEST, DataSource.postgres)
+        out = rw.rewrite("SELECT Amount FROM events")
+        assert _has_cte(out, "events", dialect="postgres")
+        assert "select 1" not in out.lower()
+
+    def test_quoted_mixed_case_model_binds(self):
+        """A quoted mixed-case model name binds to its CTE (not SELECT 1)."""
+        rw = _make_rewriter(_MIXED_CASE_MODEL_MANIFEST, DataSource.postgres)
+        out = rw.rewrite('SELECT id FROM "CaseModel"')
+        assert _has_cte(out, "CaseModel", dialect="postgres")
+        assert "select 1" not in out.lower()
+
+    def test_case_insensitive_ref_on_upper_folding_dialect(self):
+        """Oracle: a lower-case ref to a mixed-case column is canonicalized."""
+        rw = _make_rewriter(_MIXED_CASE_COL_MANIFEST, DataSource.oracle)
+        out = rw.rewrite("SELECT amount FROM events")
+        # Output is force-quoted; the manifest-case column survives.
+        assert "Amount" in out
+        assert "select 1" not in out.lower()

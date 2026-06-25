@@ -18,6 +18,7 @@ import json
 
 import sqlglot
 from sqlglot import exp, parse_one
+from sqlglot.dialects.dialect import Dialect, NormalizationStrategy
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify_columns import qualify_columns
 from sqlglot.optimizer.qualify_tables import qualify_tables
@@ -26,6 +27,7 @@ from sqlglot.schema import MappingSchema
 # Ensure the Wren dialect is registered with sqlglot on import.
 import wren.mdl.wren_dialect as _wren_dialect  # noqa: F401
 from wren.model.data_source import DataSource
+from wren.model.error import ErrorCode, ErrorPhase, WrenError
 from wren.policy import resolve_model_name
 
 _SQLGLOT_DIALECT_MAP: dict[DataSource, str] = {
@@ -76,6 +78,15 @@ class CTERewriter:
         self.data_source = data_source
         self.fallback = fallback
         self.dialect = get_sqlglot_dialect(data_source)
+        # Upper-folding dialects (Oracle, Snowflake, …) uppercase every unquoted
+        # identifier, which would change result-set column names (aggregate
+        # aliases, cube columns, …). Render those with ``identify=True`` so the
+        # output is fully quoted and result casing stays as authored. Detected
+        # from the dialect's normalization strategy rather than hard-coded.
+        self._force_identify = (
+            Dialect.get_or_raise(self.dialect).NORMALIZATION_STRATEGY
+            == NormalizationStrategy.UPPERCASE
+        )
         self.manifest = json.loads(base64.b64decode(manifest_str))
 
         self.model_dict: dict[str, dict] = {}
@@ -94,6 +105,23 @@ class CTERewriter:
                 if col.get("relationship"):
                     continue
                 col_name = col["name"]
+                # Wren's logical layer keys columns case-insensitively (this
+                # ``orig`` map, the qualify schema, and column resolution all
+                # fold case). Two columns that differ only in case (e.g.
+                # ``Year`` / ``year``) would silently collide — one shadows the
+                # other and references bind to the wrong physical column. Reject
+                # loudly instead of producing wrong results.
+                if col_name.lower() in orig:
+                    raise WrenError(
+                        error_code=ErrorCode.INVALID_MDL,
+                        message=(
+                            f"Model '{name}' has columns that differ only in "
+                            f"case ('{orig[col_name.lower()]}' and '{col_name}'). "
+                            "Wren resolves column names case-insensitively and "
+                            "cannot distinguish them; rename one of the columns."
+                        ),
+                        phase=ErrorPhase.MDL_EXTRACTION,
+                    )
                 cols[col_name] = col.get("type", "TEXT")
                 orig[col_name.lower()] = col_name
             # ``qualify_columns`` runs against the post-``normalize_identifiers``
@@ -133,21 +161,44 @@ class CTERewriter:
         ast = parse_one(sql, dialect=self.dialect)
 
         user_cte_names = self._collect_user_cte_names(ast)
-        used_columns, user_table_refs = self._collect_model_columns(ast, user_cte_names)
+
+        # Upper-folding dialects render force-quoted (identify=True, below), so a
+        # case-insensitive user reference (``mixedcase`` for a manifest
+        # ``MixedCase``) would be quoted verbatim and never bind. Canonicalize
+        # model-column references to the manifest case first so the input is
+        # accepted case-insensitively while result-set casing stays stable.
+        if self._force_identify:
+            self._normalize_model_column_case(ast, user_cte_names)
+
+        used_columns, user_table_refs, col_quoting = self._collect_model_columns(
+            ast, user_cte_names
+        )
         view_refs = self._collect_view_refs(ast, user_cte_names)
 
         # A view's native-SQL statement references models; collect those so
         # they get model CTEs placed before the (verbatim) view CTEs.
-        self._collect_view_model_usage(view_refs, used_columns, user_table_refs)
+        self._collect_view_model_usage(
+            view_refs, used_columns, user_table_refs, col_quoting
+        )
 
-        # Oracle uppercases unquoted identifiers. Without forcing quoting on
-        # output, the user's ``SELECT o_orderkey FROM orders`` would land as
-        # ``SELECT O_ORDERKEY FROM ORDERS`` — both the table reference and the
-        # result column name. The injected CTE projects quoted lowercase
-        # columns, so the lookup misses (ORA-00904) and any caller asserting on
-        # result-column casing breaks. Forcing quoting on Oracle keeps the
-        # dialect's output deterministic.
-        identify = self.data_source == DataSource.oracle
+        # The user's SQL is never rewritten — we only append CTEs. To bind the
+        # user's column references to the injected CTE on dialects that
+        # case-fold unquoted identifiers, each model CTE *exposes* its columns
+        # with the same quoting the user wrote (see ``_collect_model_columns`` /
+        # ``_alias_projection_to_user_quoting``): both the user's reference and
+        # the CTE alias share the same quoting, so the dialect folds them
+        # identically and they match.
+        #
+        # Upper-folding dialects (Oracle, Snowflake, …) are the exception: they
+        # render with ``identify=True``. They uppercase every unquoted
+        # identifier, so without forced quoting the result-set column names
+        # (aggregate aliases like ``cnt``, cube columns like
+        # ``order_date__month``) would come back uppercased — a breaking change
+        # for callers that read columns by name. Forcing quoting keeps result
+        # casing stable; case-insensitive references there are accepted by the
+        # ``_normalize_model_column_case`` fold above. ``identify`` is purely an
+        # output-rendering flag — the input AST is otherwise left as authored.
+        identify = self._force_identify
 
         if not used_columns and not view_refs:
             # Nothing resolved to a model or view. If the query also has no
@@ -169,7 +220,7 @@ class CTERewriter:
                 return sqlglot.transpile(wren_sql, read="wren", write=self.dialect)[0]
             raise ValueError(f"No model or view references found in SQL: {sql}")
 
-        model_ctes = self._build_model_ctes(used_columns, user_table_refs)
+        model_ctes = self._build_model_ctes(used_columns, user_table_refs, col_quoting)
         view_ctes = self._build_view_ctes(view_refs)
         self._inject_ctes(ast, model_ctes + view_ctes)
         return ast.sql(dialect=self.dialect, identify=identify)
@@ -180,8 +231,10 @@ class CTERewriter:
 
     def _collect_model_columns(
         self, ast: exp.Expression, user_cte_names: set[str]
-    ) -> tuple[dict[str, list[str] | None], dict[str, tuple[str, bool]]]:
-        """Return ``(used_columns, user_table_refs)`` for all referenced models.
+    ) -> tuple[
+        dict[str, list[str] | None], dict[str, tuple[str, bool]], dict[str, bool]
+    ]:
+        """Return ``(used_columns, user_table_refs, col_quoting)``.
 
         ``used_columns``: ``{model_name: [col1, col2, ...]}``. A value of
         ``None`` means the model was referenced via ``SELECT *`` and should
@@ -193,6 +246,15 @@ class CTERewriter:
         so dialects with case-folding (Oracle uppercases unquoted ⇒ the
         emitted CTE must fold to the same form) bind the user's outer
         reference to the injected CTE.
+
+        ``col_quoting``: ``{column_lower: was_quoted}`` capturing whether the
+        user quoted each column reference. The model CTE then exposes that
+        column with the same quoting, so the user's (untouched) reference binds
+        regardless of how the dialect folds unquoted identifiers. When a column
+        is referenced both quoted and unquoted, quoted wins (preserves the
+        manifest case); the rare unquoted ref of that same column would then not
+        bind, but mixing quoting for one column in one query is already
+        inconsistent and would fail natively too.
 
         Uses sqlglot's ``qualify_columns`` to fully resolve all column
         references (including ``SELECT *`` expansion and correlated
@@ -215,6 +277,60 @@ class CTERewriter:
         # expands the star.  These will use SELECT * in transform_sql so
         # that wren-core controls column visibility (CLAC).
         star_models = self._detect_star_models(copy, alias_to_model)
+
+        # Unquote model table refs on the collection-only copy so a quoted
+        # mixed-case model name (e.g. ``"WREN_AI_CaseTest"``) folds to the
+        # dialect's natural case during ``normalize_identifiers`` and matches
+        # the dialect-folded qualify schema key. This mirrors the column
+        # unquoting below: without it, the quoted reference preserves its case,
+        # never matches the schema, ``qualify_columns`` leaves the column
+        # unqualified, and the model CTE collapses to ``SELECT 1``.
+        #
+        # Only table refs that resolved to a model are unquoted (user CTEs are
+        # excluded by ``_build_alias_map``), so a user CTE's case matching
+        # between its definition and reference is untouched. ``user_table_refs``
+        # has already captured the original quoting for CTE-alias mirroring, and
+        # this copy is never emitted — the user's SQL is not mutated.
+        model_refs = set(alias_to_model)
+        for tbl in copy.find_all(exp.Table):
+            ident = tbl.this
+            if (
+                isinstance(ident, exp.Identifier)
+                and ident.quoted
+                and ident.name in model_refs
+            ):
+                ident.set("quoted", False)
+
+        # Capture each column reference's quoting, then unquote it on the copy.
+        # - Capturing quoting lets the model CTE expose the column with the same
+        #   quoting the user wrote (mirroring), so the untouched user reference
+        #   binds. Quoted-wins on conflict.
+        # - Unquoting on the copy makes a quoted mixed-case ref (e.g. ``"Year"``)
+        #   fold to the dialect's natural case during ``normalize_identifiers``
+        #   so it matches the dialect-folded qualify schema. Wren resolves column
+        #   names case-insensitively (see ``_col_orig_name``); the copy is only
+        #   used for collection, so the fold is safe. Without it a quoted
+        #   ``"Year"`` never binds and the model CTE collapses to ``SELECT 1``.
+        #
+        # Quoting is captured from *every* column reference (SELECT, WHERE,
+        # JOIN, GROUP BY, ORDER BY, ...), not just the SELECT list — a column
+        # used only in WHERE still needs its CTE alias to mirror it. The flip
+        # side: if one query references the same column both quoted and unquoted
+        # across clauses (e.g. ``SELECT Year ... WHERE "Year" > 0``), quoted-wins
+        # means the unquoted ref won't bind on a folding dialect. That input is
+        # already inconsistent and would fail natively; users should pick one
+        # style per column.
+        col_quoting: dict[str, bool] = {}
+        for col in copy.find_all(exp.Column):
+            ident = col.this
+            if not isinstance(ident, exp.Identifier):
+                continue
+            low = ident.name.lower()
+            if ident.quoted:
+                col_quoting[low] = True
+                ident.set("quoted", False)
+            else:
+                col_quoting.setdefault(low, False)
 
         copy = normalize_identifiers(copy, dialect=self.dialect)
         qualified = qualify_columns(
@@ -243,6 +359,7 @@ class CTERewriter:
         return (
             {m: None if m in star_models else list(cols) for m, cols in used.items()},
             user_table_refs,
+            col_quoting,
         )
 
     def _build_alias_map(
@@ -279,6 +396,110 @@ class CTERewriter:
             alias_to_model[name] = model_name
             user_table_refs.setdefault(model_name, (name, quoted))
         return alias_to_model, user_table_refs
+
+    def _normalize_model_column_case(
+        self, ast: exp.Expression, user_cte_names: set[str]
+    ) -> None:
+        """Rewrite model-column references in *ast* to their manifest case.
+
+        Only invoked on upper-folding dialects (Oracle, Snowflake), where the
+        output is rendered with ``identify=True`` (force-quoted) and the
+        mirroring aliases are a no-op. There, a case-insensitive user reference
+        (``mixedcase`` for a manifest ``MixedCase``) would be quoted verbatim
+        (``"mixedcase"``) and never bind the manifest-case CTE column — stricter
+        than the native database, which folds unquoted identifiers. Rewriting
+        the reference to the manifest case lets it bind while ``identify=True``
+        keeps result-set column names (aggregate aliases, cube columns) stable.
+
+        Scope guards keep this from rebinding non-model columns:
+
+        - a column qualified by a user CTE (or any non-model alias) is left
+          untouched;
+        - an unqualified column is only rewritten when the query has no user
+          CTEs, so it cannot shadow a CTE-exposed column.
+
+        The manifest's case-ambiguity guard (see ``__init__``) guarantees each
+        model's lower→manifest map has no collisions. A *qualified* reference is
+        resolved against its specific model's map (``self._col_orig_name`` is
+        keyed per model), so two models whose columns share a lowercase form but
+        differ in manifest case (``A.year`` vs ``B.Year``) each canonicalize
+        correctly. An unqualified reference (only rewritten when there are no
+        user CTEs) falls back to the merged map. Mutates *ast* in place; only
+        column identifiers are touched (SELECT aliases, function names, etc. are
+        left as the user wrote them).
+        """
+        merged: dict[str, str] = {}
+        for cols in self._col_orig_name.values():
+            merged.update(cols)
+        if not merged:
+            return
+
+        alias_to_model, _ = self._build_alias_map(
+            qualify_tables(ast.copy(), dialect=self.dialect), user_cte_names
+        )
+        alias_to_model_lower = {a.lower(): m for a, m in alias_to_model.items()}
+        has_user_ctes = bool(user_cte_names)
+
+        for col in ast.find_all(exp.Column):
+            ident = col.this
+            if not isinstance(ident, exp.Identifier):
+                continue
+            table = col.table
+            if table:
+                model_name = alias_to_model_lower.get(table.lower())
+                if model_name is None:
+                    # qualified by something that isn't a model (e.g. a user CTE)
+                    continue
+                # resolve against the specific model to avoid cross-model
+                # lowercase-name collisions
+                col_canon = self._col_orig_name.get(model_name, {})
+            elif has_user_ctes:
+                # unqualified + user CTEs present → could be a CTE column; skip
+                continue
+            else:
+                col_canon = merged
+            canonical = col_canon.get(ident.name.lower())
+            if canonical and ident.name != canonical:
+                ident.set("this", canonical)
+
+    @staticmethod
+    def _alias_projection_to_user_quoting(
+        expanded_ast: exp.Expression, col_quoting: dict[str, bool]
+    ) -> None:
+        """Alias the model CTE's outermost projection to mirror user quoting.
+
+        wren-core projects manifest-case columns (e.g. ``"Year"``). We add an
+        explicit alias to each so the CTE *exposes* the column with the same
+        quoting the user wrote it with:
+
+        - user wrote ``"Year"`` (quoted)  → expose ``... AS "Year"`` (the
+          column stays case-sensitive ``Year``; the user's ``"Year"`` binds).
+        - user wrote ``Year`` (unquoted) → expose ``... AS Year`` (the dialect
+          folds it, e.g. Postgres → ``year``; the user's folded ``Year`` binds).
+
+        Columns with no captured reference (``SELECT *`` / introspection)
+        default to quoted so the result preserves the manifest case. This keeps
+        the user's SQL untouched — only the CTE projection carries the mirror.
+        """
+        # wren-core's single-model expansion is always a ``SELECT``; guard
+        # defensively so an unexpected shape can't crash the rewrite (it would
+        # just skip mirroring and expose manifest-case columns).
+        if not isinstance(expanded_ast, exp.Select):
+            return
+        new_exprs = []
+        for proj in expanded_ast.expressions:
+            if isinstance(proj, exp.Alias):
+                name, inner = proj.alias, proj.this
+            elif isinstance(proj, exp.Column):
+                # Bare column with no alias wrapper. wren-core normally emits an
+                # Alias, so this is defensive — handled the same way.
+                name, inner = proj.name, proj
+            else:
+                new_exprs.append(proj)
+                continue
+            quoted = col_quoting.get(name.lower(), True)
+            new_exprs.append(exp.alias_(inner, exp.to_identifier(name, quoted=quoted)))
+        expanded_ast.set("expressions", new_exprs)
 
     def _collect_view_refs(
         self, ast: exp.Expression, user_cte_names: set[str]
@@ -321,6 +542,7 @@ class CTERewriter:
         self,
         used_columns: dict[str, list[str] | None],
         user_table_refs: dict[str, tuple[str, bool]],
+        col_quoting: dict[str, bool],
     ) -> list[exp.CTE]:
         """Generate one CTE per model via wren-core transform_sql."""
         ctes: list[exp.CTE] = []
@@ -354,6 +576,10 @@ class CTERewriter:
             # the shadow chain breaks at the top scope.
             self._rename_outer_alias(expanded_ast, model_name)
 
+            # Expose each column with the quoting the user wrote it with, so the
+            # (untouched) user reference binds regardless of dialect folding.
+            self._alias_projection_to_user_quoting(expanded_ast, col_quoting)
+
             # Match the user's literal identifier (case + quoting) for the
             # CTE alias so dialects with case-folding still bind the user's
             # outer ``FROM <model>`` to the CTE. Oracle uppercases unquoted
@@ -377,9 +603,11 @@ class CTERewriter:
         view_refs: dict[str, tuple[str, bool]],
         used_columns: dict[str, list[str] | None],
         user_table_refs: dict[str, tuple[str, bool]],
+        col_quoting: dict[str, bool],
     ) -> None:
         """Merge the models each referenced view's statement uses into
-        *used_columns* / *user_table_refs*, so those models get CTEs.
+        *used_columns* / *user_table_refs* / *col_quoting*, so those models get
+        CTEs whose columns mirror how the view's statement quotes them.
 
         A view's statement is native SQL referencing models by name. Parsing
         it through the same model-collection path captures which model columns
@@ -392,10 +620,18 @@ class CTERewriter:
                 self.view_dict[view_name]["statement"], dialect=self.dialect
             )
             view_cte_names = self._collect_user_cte_names(view_ast)
-            v_cols, v_refs = self._collect_model_columns(view_ast, view_cte_names)
+            v_cols, v_refs, v_quoting = self._collect_model_columns(
+                view_ast, view_cte_names
+            )
             self._merge_used_columns(used_columns, v_cols)
             for model_name, ref in v_refs.items():
                 user_table_refs.setdefault(model_name, ref)
+            for low, quoted in v_quoting.items():
+                # quoted-wins, consistent with _collect_model_columns
+                if quoted:
+                    col_quoting[low] = True
+                else:
+                    col_quoting.setdefault(low, False)
 
     @staticmethod
     def _merge_used_columns(
