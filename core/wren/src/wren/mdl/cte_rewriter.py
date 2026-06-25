@@ -326,7 +326,9 @@ class CTERewriter:
     def _collect_model_columns(
         self, ast: exp.Expression, user_cte_names: set[str]
     ) -> tuple[
-        dict[str, list[str] | None], dict[str, tuple[str, bool]], dict[str, bool]
+        dict[str, list[str] | None],
+        dict[str, tuple[str, bool]],
+        dict[str, dict[str, bool]],
     ]:
         """Return ``(used_columns, user_table_refs, col_quoting)``.
 
@@ -341,14 +343,15 @@ class CTERewriter:
         emitted CTE must fold to the same form) bind the user's outer
         reference to the injected CTE.
 
-        ``col_quoting``: ``{column_lower: was_quoted}`` capturing whether the
-        user quoted each column reference. The model CTE then exposes that
-        column with the same quoting, so the user's (untouched) reference binds
-        regardless of how the dialect folds unquoted identifiers. When a column
-        is referenced both quoted and unquoted, quoted wins (preserves the
-        manifest case); the rare unquoted ref of that same column would then not
-        bind, but mixing quoting for one column in one query is already
-        inconsistent and would fail natively too.
+        ``col_quoting``: ``{model_name: {column_lower: was_quoted}}`` capturing
+        whether the user quoted each column reference, scoped to the model the
+        reference resolved to. The model CTE then exposes that column with the
+        same quoting, so the user's (untouched) reference binds regardless of
+        how the dialect folds unquoted identifiers. Scoping per model keeps a
+        quoted reference to one source (a user CTE, or another model's
+        same-named column) from flipping an unrelated model's CTE alias. When a
+        model's column is referenced both quoted and unquoted, quoted wins
+        (preserves the manifest case).
 
         Uses sqlglot's ``qualify_columns`` to fully resolve all column
         references (including ``SELECT *`` expansion and correlated
@@ -403,10 +406,13 @@ class CTERewriter:
             ):
                 ident.set("quoted", False)
 
-        # Capture each column reference's quoting, then unquote it on the copy.
-        # - Capturing quoting lets the model CTE expose the column with the same
+        # Record each column reference's quoting (by node identity), then unquote
+        # it on the copy. The quoting drives CTE-alias mirroring; it is attributed
+        # to a resolved model *after* qualification (below) so a quoted reference
+        # to one source can't flip an unrelated model's CTE alias.
+        # - Recording quoting lets the model CTE expose the column with the same
         #   quoting the user wrote (mirroring), so the untouched user reference
-        #   binds. Quoted-wins on conflict.
+        #   binds.
         # - Unquoting on the copy makes a quoted mixed-case ref (e.g. ``"Year"``)
         #   fold to the dialect's natural case during ``normalize_identifiers``
         #   so it matches the dialect-folded qualify schema. Wren resolves column
@@ -414,25 +420,19 @@ class CTERewriter:
         #   used for collection, so the fold is safe. Without it a quoted
         #   ``"Year"`` never binds and the model CTE collapses to ``SELECT 1``.
         #
-        # Quoting is captured from *every* column reference (SELECT, WHERE,
-        # JOIN, GROUP BY, ORDER BY, ...), not just the SELECT list — a column
-        # used only in WHERE still needs its CTE alias to mirror it. The flip
-        # side: if one query references the same column both quoted and unquoted
-        # across clauses (e.g. ``SELECT Year ... WHERE "Year" > 0``), quoted-wins
-        # means the unquoted ref won't bind on a folding dialect. That input is
-        # already inconsistent and would fail natively; users should pick one
-        # style per column.
-        col_quoting: dict[str, bool] = {}
+        # Quoting is recorded from *every* column reference (SELECT, WHERE, JOIN,
+        # GROUP BY, ORDER BY, ...), not just the SELECT list — a column used only
+        # in WHERE still needs its CTE alias to mirror it. The node identities
+        # survive ``normalize_identifiers`` / ``qualify_columns``, so each
+        # reference can be matched back to its resolved model afterwards.
+        quoting_by_id: dict[int, bool] = {}
         for col in copy.find_all(exp.Column):
             ident = col.this
             if not isinstance(ident, exp.Identifier):
                 continue
-            low = ident.name.lower()
+            quoting_by_id[id(col)] = ident.quoted
             if ident.quoted:
-                col_quoting[low] = True
                 ident.set("quoted", False)
-            else:
-                col_quoting.setdefault(low, False)
 
         copy = normalize_identifiers(copy, dialect=self.dialect)
         qualified = qualify_columns(
@@ -450,13 +450,28 @@ class CTERewriter:
         # been normalized (lowercased) by qualify_columns even though we built
         # the alias map from the pre-normalize AST.
         alias_lookup = {k.lower(): v for k, v in alias_to_model.items()}
+        # Quoting recorded *per resolved model* (``{model: {col_lower: quoted}}``)
+        # so a quoted reference to one source can't flip another model's CTE
+        # alias. Quoted-wins within a model. A column referenced only via a
+        # non-model source (user CTE, external table) is never attributed here.
+        col_quoting: dict[str, dict[str, bool]] = {}
         for col in qualified.find_all(exp.Column):
             table_ref = col.table
             if not table_ref:
                 continue
             model_name = alias_lookup.get(table_ref.lower())
-            if model_name:
-                used[model_name][col.name] = None
+            if not model_name:
+                continue
+            used[model_name][col.name] = None
+            quoted = quoting_by_id.get(id(col))
+            if quoted is None:
+                continue
+            per = col_quoting.setdefault(model_name, {})
+            low = col.name.lower()
+            if quoted:
+                per[low] = True
+            else:
+                per.setdefault(low, False)
 
         return (
             {m: None if m in star_models else list(cols) for m, cols in used.items()},
@@ -471,7 +486,9 @@ class CTERewriter:
         user_table_refs: dict[str, tuple[str, bool]],
         star_models: set[str],
     ) -> tuple[
-        dict[str, list[str] | None], dict[str, tuple[str, bool]], dict[str, bool]
+        dict[str, list[str] | None],
+        dict[str, tuple[str, bool]],
+        dict[str, dict[str, bool]],
     ]:
         """Collect model→columns on the case-sensitive path (no folding).
 
@@ -828,7 +845,7 @@ class CTERewriter:
         self,
         used_columns: dict[str, list[str] | None],
         user_table_refs: dict[str, tuple[str, bool]],
-        col_quoting: dict[str, bool],
+        col_quoting: dict[str, dict[str, bool]],
     ) -> list[exp.CTE]:
         """Generate one CTE per model via wren-core transform_sql."""
         ctes: list[exp.CTE] = []
@@ -870,7 +887,10 @@ class CTERewriter:
 
             # Expose each column with the quoting the user wrote it with, so the
             # (untouched) user reference binds regardless of dialect folding.
-            self._alias_projection_to_user_quoting(expanded_ast, col_quoting)
+            # Use this model's own quoting map only.
+            self._alias_projection_to_user_quoting(
+                expanded_ast, col_quoting.get(model_name, {})
+            )
 
             # Match the user's literal identifier (case + quoting) for the
             # CTE alias so dialects with case-folding still bind the user's
@@ -895,7 +915,7 @@ class CTERewriter:
         view_refs: dict[str, tuple[str, bool]],
         used_columns: dict[str, list[str] | None],
         user_table_refs: dict[str, tuple[str, bool]],
-        col_quoting: dict[str, bool],
+        col_quoting: dict[str, dict[str, bool]],
     ) -> None:
         """Merge the models each referenced view's statement uses into
         *used_columns* / *user_table_refs* / *col_quoting*, so those models get
@@ -927,12 +947,15 @@ class CTERewriter:
             self._merge_used_columns(used_columns, v_cols)
             for model_name, ref in v_refs.items():
                 user_table_refs.setdefault(model_name, ref)
-            for low, quoted in v_quoting.items():
-                # quoted-wins, consistent with _collect_model_columns
-                if quoted:
-                    col_quoting[low] = True
-                else:
-                    col_quoting.setdefault(low, False)
+            for model_name, qmap in v_quoting.items():
+                # merge per-model, quoted-wins (consistent with
+                # _collect_model_columns)
+                dest = col_quoting.setdefault(model_name, {})
+                for low, quoted in qmap.items():
+                    if quoted:
+                        dest[low] = True
+                    else:
+                        dest.setdefault(low, False)
 
     @staticmethod
     def _merge_used_columns(

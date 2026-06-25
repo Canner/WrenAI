@@ -590,6 +590,30 @@ class TestCaseSensitiveBinding:
         assert _has_cte(out, "CaseModel", dialect="postgres")
         assert "select 1" not in out.lower()
 
+    def test_quoting_does_not_leak_across_sources(self):
+        """A quoted same-name column elsewhere must not flip a model CTE alias.
+
+        ``events`` has a mixed-case ``Amount`` and is referenced unquoted; a
+        user CTE also exposes ``amount`` referenced quoted. Quoting is scoped
+        per model, so the ``events`` CTE still mirrors the unquoted reference
+        (``AS Amount``) and the user's ``e.Amount`` binds on Postgres — the
+        CTE's quoted ``"amount"`` does not force-quote it.
+        """
+        rw = _make_rewriter(_MIXED_CASE_COL_MANIFEST, DataSource.postgres)
+        out = rw.rewrite(
+            "WITH c AS (SELECT 1 AS amount) "
+            'SELECT e.Amount, c."amount" FROM events e JOIN c ON 1=1'
+        )
+        ast = sqlglot.parse_one(out, dialect="postgres")
+        events_cte = next(
+            cte for cte in ast.args["with_"].expressions if cte.alias == "events"
+        )
+        proj = events_cte.this.expressions[0]
+        assert isinstance(proj, sqlglot.exp.Alias)
+        assert not proj.args["alias"].quoted, (
+            f"events CTE alias should be unquoted (mirroring e.Amount), got: {out}"
+        )
+
     def test_case_insensitive_ref_on_upper_folding_dialect(self):
         """Oracle: a lower-case ref to a mixed-case column is canonicalized."""
         rw = _make_rewriter(_MIXED_CASE_COL_MANIFEST, DataSource.oracle)
