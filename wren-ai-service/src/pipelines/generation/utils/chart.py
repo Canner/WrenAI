@@ -283,6 +283,70 @@ def _infer_column_types(sample_data: list[dict]) -> dict[str, list[str]]:
     }
 
 
+def _chart_mark_type(chart_schema: dict) -> str:
+    mark = chart_schema.get("mark", {})
+    if isinstance(mark, str):
+        return mark
+    if isinstance(mark, dict):
+        return str(mark.get("type") or "")
+    return ""
+
+
+def _chart_type_from_schema(chart_schema: dict, default: str = "") -> str:
+    mark_type = _chart_mark_type(chart_schema)
+    encoding = chart_schema.get("encoding", {})
+
+    if mark_type == "arc":
+        return "pie"
+    if mark_type == "area":
+        return "area"
+    if mark_type == "line":
+        return "multi_line" if chart_schema.get("transform") else "line"
+    if mark_type == "bar":
+        if encoding.get("xOffset"):
+            return "grouped_bar"
+        if isinstance(encoding.get("y"), dict) and encoding["y"].get("stack"):
+            return "stacked_bar"
+        return "bar"
+
+    return default
+
+
+def _is_quantitative_encoding(axis: Any) -> bool:
+    return isinstance(axis, dict) and axis.get("type") == "quantitative"
+
+
+def _is_categorical_encoding(axis: Any) -> bool:
+    return isinstance(axis, dict) and axis.get("type") in {
+        "nominal",
+        "ordinal",
+        "temporal",
+    }
+
+
+def _fallback_chart_type(
+    requested_chart_type: str,
+    quantitative: list[str],
+    temporal: list[str],
+    nominal: list[str],
+) -> str:
+    if not quantitative:
+        return ""
+
+    chart_type = requested_chart_type or "bar"
+
+    if chart_type == "pie":
+        return "pie" if nominal else ""
+
+    if chart_type in {"line", "area", "multi_line"}:
+        return chart_type if temporal or nominal else ""
+
+    if chart_type in {"grouped_bar", "stacked_bar"}:
+        return chart_type if len(nominal) > 1 else ""
+
+    return "bar" if nominal or temporal else ""
+
+
 def _build_fallback_chart_schema(
     query: str | None,
     chart_type: str,
@@ -298,6 +362,10 @@ def _build_fallback_chart_schema(
     quantitative = inferred["quantitative"]
     temporal = inferred["temporal"]
     nominal = inferred["nominal"]
+    chart_type = _fallback_chart_type(chart_type, quantitative, temporal, nominal)
+    if not chart_type:
+        return {}
+
     dimensions = _select_dimension_columns(
         query, chart_type, nominal, temporal, columns
     )
@@ -415,6 +483,7 @@ def build_fallback_chart_result(
             "reasoning": "",
             "chart_type": "",
         }
+    chart_type = _chart_type_from_schema(chart_schema, chart_type)
 
     chart_schema["$schema"] = "https://vega.github.io/schema/vega-lite/v5.json"
     chart_schema["data"] = {"values": sample_data}
@@ -423,7 +492,7 @@ def build_fallback_chart_result(
 
     return {
         "chart_schema": chart_schema,
-        "reasoning": "Generated from the preview data columns and requested chart type.",
+        "reasoning": "Generated from the SQL result columns and requested chart type.",
         "chart_type": chart_type,
     }
 
@@ -436,6 +505,11 @@ def _is_schema_compatible_with_sample_data(
         return False
 
     columns = set(_safe_column_names(list(sample_data[0].keys())))
+    inferred = _infer_column_types(sample_data)
+    quantitative = set(inferred["quantitative"])
+    temporal = set(inferred["temporal"])
+    nominal = set(inferred["nominal"])
+    categorical = nominal | temporal
     encoding = chart_schema.get("encoding", {})
     for key in ("x", "y", "x2", "y2", "color", "xOffset", "theta"):
         axis = encoding.get(key)
@@ -443,11 +517,42 @@ def _is_schema_compatible_with_sample_data(
         if field and str(field) not in columns:
             return False
 
+        if (
+            field
+            and _is_quantitative_encoding(axis)
+            and str(field) not in quantitative
+            and axis.get("aggregate") != "count"
+        ):
+            return False
+
+        if field and key in {"color", "xOffset"} and str(field) not in categorical:
+            return False
+
     for transform in chart_schema.get("transform", []) or []:
         if isinstance(transform, dict):
             for field in transform.get("fold", []) or []:
                 if field is not None and str(field) not in columns:
                     return False
+
+    mark_type = _chart_mark_type(chart_schema)
+    x_axis = encoding.get("x")
+    y_axis = encoding.get("y")
+    theta_axis = encoding.get("theta")
+    has_quantitative_measure = any(
+        _is_quantitative_encoding(axis)
+        or (isinstance(axis, dict) and axis.get("aggregate") == "count")
+        for axis in (x_axis, y_axis, theta_axis)
+    )
+
+    if mark_type == "arc":
+        return _is_quantitative_encoding(theta_axis) and _is_categorical_encoding(
+            encoding.get("color")
+        )
+
+    if mark_type in {"bar", "line", "area"}:
+        return has_quantitative_measure and (
+            _is_categorical_encoding(x_axis) or _is_categorical_encoding(y_axis)
+        )
 
     return True
 
@@ -763,10 +868,7 @@ class ChartDataPreprocessor:
             col: list(df[col].unique())[:sample_column_size] for col in df.columns
         }
 
-        if len(df) > sample_data_count:
-            sample_data = df.sample(n=sample_data_count).to_dict(orient="records")
-        else:
-            sample_data = df.to_dict(orient="records")
+        sample_data = df.head(sample_data_count).to_dict(orient="records")
 
         return {
             "sample_data": sample_data,
@@ -810,6 +912,16 @@ class ChartGenerationPostProcessor:
                     chart_schema = _build_fallback_chart_schema(
                         query, chart_type or "bar", sample_data
                     )
+                    chart_type = _chart_type_from_schema(chart_schema, chart_type)
+
+                if not chart_schema:
+                    return {
+                        "results": {
+                            "chart_schema": {},
+                            "reasoning": reasoning,
+                            "chart_type": "",
+                        }
+                    }
 
                 chart_schema[
                     "$schema"
@@ -829,13 +941,18 @@ class ChartGenerationPostProcessor:
                     }
                 }
 
+            fallback_schema = _build_fallback_chart_schema(
+                query, chart_type or "bar", sample_data
+            )
+            fallback_chart_type = _chart_type_from_schema(fallback_schema, chart_type)
+            if not fallback_schema:
+                fallback_chart_type = ""
+
             return {
                 "results": {
-                    "chart_schema": _build_fallback_chart_schema(
-                        query, chart_type or "bar", sample_data
-                    ),
+                    "chart_schema": fallback_schema,
                     "reasoning": reasoning,
-                    "chart_type": chart_type,
+                    "chart_type": fallback_chart_type,
                 }
             }
         except ValidationError as e:
@@ -850,7 +967,11 @@ class ChartGenerationPostProcessor:
                 "results": {
                     "chart_schema": fallback_schema,
                     "reasoning": "",
-                    "chart_type": _detect_requested_chart_type(query) or "",
+                    "chart_type": _chart_type_from_schema(
+                        fallback_schema, _detect_requested_chart_type(query) or ""
+                    )
+                    if fallback_schema
+                    else "",
                 }
             }
         except Exception as e:
@@ -864,7 +985,11 @@ class ChartGenerationPostProcessor:
                 "results": {
                     "chart_schema": fallback_schema,
                     "reasoning": "",
-                    "chart_type": fallback_chart_type,
+                    "chart_type": _chart_type_from_schema(
+                        fallback_schema, fallback_chart_type
+                    )
+                    if fallback_schema
+                    else "",
                 }
             }
 
