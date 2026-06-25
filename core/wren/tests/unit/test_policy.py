@@ -6,7 +6,7 @@ These tests use sqlglot parsing only and do not require a database or wren-core.
 from __future__ import annotations
 
 import pytest
-from sqlglot import parse_one
+from sqlglot import exp, parse_one
 
 from wren.config import WrenConfig
 from wren.model.error import ErrorCode, WrenError
@@ -117,6 +117,13 @@ def test_denied_function_reclassified_by_sqlglot():
     ``"version"`` must still block it via the canonical-key expansion.
     """
     ast = parse_one("SELECT version()", dialect="postgres")
+    # Guard the premise: the test only exercises the canonical-key expansion if
+    # sqlglot actually reclassified version() off exp.Anonymous.
+    func = next(ast.find_all(exp.Func))
+    assert not isinstance(func, exp.Anonymous), (
+        "version() should be reclassified to a concrete subclass in this "
+        "sqlglot version"
+    )
     config = WrenConfig(denied_functions=frozenset(["version"]))
     with pytest.raises(WrenError) as exc_info:
         validate_sql_policy(ast, _MODELS, config)

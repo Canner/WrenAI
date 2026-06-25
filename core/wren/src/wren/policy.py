@@ -10,7 +10,7 @@ from functools import lru_cache
 from typing import Iterable
 
 from sqlglot import exp, parse_one
-from sqlglot.errors import ParseError
+from sqlglot.errors import SqlglotError
 
 from wren.config import WrenConfig
 from wren.model.error import ErrorCode, ErrorPhase, WrenError
@@ -170,7 +170,10 @@ def _canonical_denied(denied: frozenset[str]) -> frozenset[str]:
         for dialect in _CANONICALISE_DIALECTS:
             try:
                 ast = parse_one(f"SELECT {name}()", dialect=dialect)
-            except ParseError:
+            except SqlglotError:
+                # A malformed denylist entry can fail tokenizing or parsing on
+                # some dialects; skip it for this dialect rather than crashing
+                # validation (SqlglotError covers ParseError and TokenError).
                 continue
             first_func = next(ast.find_all(exp.Func), None)
             if first_func is not None and not isinstance(first_func, exp.Anonymous):

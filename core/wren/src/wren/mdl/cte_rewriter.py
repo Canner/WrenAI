@@ -299,7 +299,9 @@ class CTERewriter:
             # with nothing to expand — pass it through transpiled to the
             # target dialect rather than rejecting it.
             base_tables = [
-                t for t in ast.find_all(exp.Table) if t.name not in user_cte_names
+                t
+                for t in ast.find_all(exp.Table)
+                if (t.name or "").lower() not in user_cte_names
             ]
             if not base_tables:
                 return ast.sql(dialect=self.dialect, identify=identify)
@@ -692,12 +694,16 @@ class CTERewriter:
                     continue
                 candidates = self._model_cols.get(model_name, [])
                 where = f"{table}"
-            elif has_user_ctes:
-                # Unqualified + user CTEs present → the column could belong to a
-                # CTE rather than a model, and we can't tell without full scope
-                # analysis, so skip (no canonicalization, no error). Known
-                # limitation: an unqualified model-column ref in a query that
-                # also defines CTEs is not force-quoted and bypasses the
+            elif has_user_ctes or not alias_to_model:
+                # Skip canonicalization (and the case-sensitive existence check)
+                # when the column can't be attributed to a model:
+                #   * user CTEs present → it could be a CTE column, and we can't
+                #     tell without full scope analysis;
+                #   * no model table resolved at all → it belongs to an external
+                #     table or a pure-TVF projection, which ``rewrite()`` handles
+                #     via its passthrough/fallback branch.
+                # Known limitation: an unqualified model-column ref in a query
+                # that also defines CTEs is not force-quoted and bypasses the
                 # case-sensitive "column does not exist" check — it falls back to
                 # the old behavior (may collapse to ``SELECT 1``). Qualify the
                 # column (``model.col``) to get strict checking.
