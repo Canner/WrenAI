@@ -46,6 +46,24 @@ def get_sqlglot_dialect(data_source: DataSource) -> str:
     return _SQLGLOT_DIALECT_MAP.get(data_source, data_source.name)
 
 
+# sqlglot dialects whose *physical column names* are case-sensitive — i.e. the
+# backing database can hold two columns differing only in case (``Year`` and
+# ``year``) and address them via quoting. Only these allow a model to declare
+# case-distinct columns; everywhere else such a model is physically
+# unrepresentable and is rejected at build time (see ``CTERewriter.__init__``).
+#
+# This is an explicit allow-list rather than a derivation from sqlglot's
+# ``NORMALIZATION_STRATEGY``, because the strategy is about identifier *folding*,
+# not column-name uniqueness, and the two disagree: MySQL/Doris report
+# CASE_SENSITIVE yet their column names are case-insensitive, and Athena
+# (LOWERCASE) lowercases columns in the Glue catalog. Postgres/Oracle/Snowflake
+# fold unquoted identifiers but compare the stored (quoted) name
+# case-sensitively; ClickHouse is case-sensitive throughout.
+_CASE_SENSITIVE_COLUMN_DIALECTS: frozenset[str] = frozenset(
+    {"postgres", "oracle", "snowflake", "clickhouse"}
+)
+
+
 class CTERewriter:
     """Rewrite user SQL by expanding MDL model references into CTEs.
 
@@ -89,10 +107,33 @@ class CTERewriter:
         )
         self.manifest = json.loads(base64.b64decode(manifest_str))
 
+        # A model may declare case-distinct columns (``Year`` and ``year``) only
+        # on dialects whose physical column names are case-sensitive AND only
+        # when the manifest actually contains such a collision. We engage the
+        # case-sensitive resolution path *only then*, so the well-trodden
+        # case-insensitive path (and its result-column casing) is unchanged for
+        # every existing manifest. On the case-sensitive path quoted refs match
+        # exactly and unquoted refs match exact-then-case-insensitively, erroring
+        # only when ambiguous (see ``_resolve_column`` /
+        # ``_normalize_model_column_case``).
+        has_case_distinct = self._manifest_has_case_distinct_columns()
+        if has_case_distinct and self.dialect not in _CASE_SENSITIVE_COLUMN_DIALECTS:
+            self._raise_case_collision()
+        self._case_sensitive_columns = has_case_distinct
+
         self.model_dict: dict[str, dict] = {}
-        self.schema = MappingSchema(dialect=self.dialect)
+        # On the case-sensitive path the qualify schema must NOT fold identifiers
+        # (``normalize=False``) so a quoted ``"year"`` matches the stored ``year``
+        # and not ``Year``; column keys are kept in manifest case.
+        self.schema = MappingSchema(
+            dialect=self.dialect, normalize=not self._case_sensitive_columns
+        )
         # normalized column name → original manifest column name, per model
+        # (only used on the case-insensitive path).
         self._col_orig_name: dict[str, dict[str, str]] = {}
+        # manifest-case column names, per model (used on the case-sensitive path
+        # for exact-then-CI resolution).
+        self._model_cols: dict[str, list[str]] = {}
 
         for model in self.manifest.get("models", []):
             name = model["name"]
@@ -105,35 +146,35 @@ class CTERewriter:
                 if col.get("relationship"):
                     continue
                 col_name = col["name"]
-                # Wren's logical layer keys columns case-insensitively (this
-                # ``orig`` map, the qualify schema, and column resolution all
-                # fold case). Two columns that differ only in case (e.g.
-                # ``Year`` / ``year``) would silently collide — one shadows the
-                # other and references bind to the wrong physical column. Reject
-                # loudly instead of producing wrong results.
-                if col_name.lower() in orig:
-                    raise WrenError(
-                        error_code=ErrorCode.INVALID_MDL,
-                        message=(
-                            f"Model '{name}' has columns that differ only in "
-                            f"case ('{orig[col_name.lower()]}' and '{col_name}'). "
-                            "Wren resolves column names case-insensitively and "
-                            "cannot distinguish them; rename one of the columns."
-                        ),
-                        phase=ErrorPhase.MDL_EXTRACTION,
-                    )
+                # Case-only collisions were already vetted by the pre-scan: on
+                # case-insensitive-column dialects they raised INVALID_MDL; on
+                # case-sensitive-column dialects they are kept distinct here and
+                # resolved case-sensitively at query time.
                 cols[col_name] = col.get("type", "TEXT")
                 orig[col_name.lower()] = col_name
-            # ``qualify_columns`` runs against the post-``normalize_identifiers``
-            # AST, so the schema must be keyed under the same normalized form
-            # of the model name. BigQuery / DuckDB lowercase, Oracle uppercases —
-            # registering the literal manifest name leaves a mismatch and the
-            # column qualification silently produces an empty CTE body.
-            schema_name = normalize_identifiers(
-                exp.to_identifier(name, quoted=True), dialect=self.dialect
-            ).name
-            self.schema.add_table(schema_name, cols, dialect=self.dialect)
+            self._model_cols[name] = list(cols)
+            if self._case_sensitive_columns:
+                # Keep manifest case as the schema key (``normalize=False``) so
+                # quoted refs resolve exactly and case-distinct columns coexist.
+                self.schema.add_table(name, cols)
+            else:
+                # ``qualify_columns`` runs against the post-``normalize_identifiers``
+                # AST, so the schema must be keyed under the same normalized form
+                # of the model name. BigQuery / DuckDB lowercase, Oracle uppercases
+                # — registering the literal manifest name leaves a mismatch and the
+                # column qualification silently produces an empty CTE body.
+                schema_name = normalize_identifiers(
+                    exp.to_identifier(name, quoted=True), dialect=self.dialect
+                ).name
+                self.schema.add_table(schema_name, cols, dialect=self.dialect)
             self._col_orig_name[name] = orig
+
+        # Flat union of every model's columns, for resolving *unqualified*
+        # column references on the case-sensitive path. Computed once here
+        # rather than per ``_normalize_model_column_case`` call.
+        self._all_model_cols: list[str] = [
+            c for cols in self._model_cols.values() for c in cols
+        ]
 
         # A view's ``statement`` is native-dialect SQL that references models.
         # It is NOT expanded by wren-core — it becomes a CTE kept verbatim,
@@ -143,6 +184,54 @@ class CTERewriter:
             view["name"]: view for view in self.manifest.get("views", [])
         }
         self.view_names: set[str] = set(self.view_dict)
+
+    @staticmethod
+    def _iter_model_column_names(model: dict):
+        """Yield the visible column names of *model* (skips hidden / relationship).
+
+        Mirrors the column filter used when populating the schema so the
+        case-collision pre-scan sees exactly the columns that get registered.
+        """
+        for col in model.get("columns", []):
+            if col.get("isHidden") or col.get("relationship"):
+                continue
+            yield col["name"]
+
+    def _manifest_has_case_distinct_columns(self) -> bool:
+        """True if any model has two visible columns differing only in case."""
+        for model in self.manifest.get("models", []):
+            seen: set[str] = set()
+            for col_name in self._iter_model_column_names(model):
+                low = col_name.lower()
+                if low in seen:
+                    return True
+                seen.add(low)
+        return False
+
+    def _raise_case_collision(self) -> None:
+        """Raise ``INVALID_MDL`` for the first case-only column collision.
+
+        Used on case-insensitive-column dialects, where Wren resolves column
+        names case-insensitively and two columns differing only in case would
+        silently collide — and the backing database cannot represent them.
+        """
+        for model in self.manifest.get("models", []):
+            seen: dict[str, str] = {}
+            for col_name in self._iter_model_column_names(model):
+                low = col_name.lower()
+                if low in seen:
+                    raise WrenError(
+                        error_code=ErrorCode.INVALID_MDL,
+                        message=(
+                            f"Model '{model['name']}' has columns that differ "
+                            f"only in case ('{seen[low]}' and '{col_name}'). Wren "
+                            f"resolves column names case-insensitively on "
+                            f"{self.dialect} and cannot distinguish them; rename "
+                            "one of the columns."
+                        ),
+                        phase=ErrorPhase.MDL_EXTRACTION,
+                    )
+                seen[low] = col_name
 
     def rewrite(self, sql: str) -> str:
         """Rewrite *sql* by injecting model and view CTEs.
@@ -162,12 +251,15 @@ class CTERewriter:
 
         user_cte_names = self._collect_user_cte_names(ast)
 
-        # Upper-folding dialects render force-quoted (identify=True, below), so a
-        # case-insensitive user reference (``mixedcase`` for a manifest
-        # ``MixedCase``) would be quoted verbatim and never bind. Canonicalize
-        # model-column references to the manifest case first so the input is
-        # accepted case-insensitively while result-set casing stays stable.
-        if self._force_identify:
+        # Two situations need model-column references canonicalized to the
+        # manifest case before collection:
+        #   * Upper-folding dialects (Oracle/Snowflake) render force-quoted
+        #     (identify=True, below); a case-insensitive ref (``mixedcase`` for a
+        #     manifest ``MixedCase``) would be quoted verbatim and never bind.
+        #   * The case-sensitive path (manifest declares case-distinct columns)
+        #     resolves quoted refs exactly and unquoted refs exact-then-CI, then
+        #     force-quotes the resolved name so the dialect can't re-fold it.
+        if self._force_identify or self._case_sensitive_columns:
             self._normalize_model_column_case(ast, user_cte_names)
 
         used_columns, user_table_refs, col_quoting = self._collect_model_columns(
@@ -278,6 +370,14 @@ class CTERewriter:
         # that wren-core controls column visibility (CLAC).
         star_models = self._detect_star_models(copy, alias_to_model)
 
+        if self._case_sensitive_columns:
+            # Columns were already canonicalized + force-quoted to manifest case
+            # by ``_normalize_model_column_case``; resolve them case-sensitively
+            # against the ``normalize=False`` schema with no folding.
+            return self._collect_columns_case_sensitive(
+                copy, alias_to_model, user_table_refs, star_models
+            )
+
         # Unquote model table refs on the collection-only copy so a quoted
         # mixed-case model name (e.g. ``"WREN_AI_CaseTest"``) folds to the
         # dialect's natural case during ``normalize_identifiers`` and matches
@@ -362,6 +462,58 @@ class CTERewriter:
             col_quoting,
         )
 
+    def _collect_columns_case_sensitive(
+        self,
+        copy: exp.Expression,
+        alias_to_model: dict[str, str],
+        user_table_refs: dict[str, tuple[str, bool]],
+        star_models: set[str],
+    ) -> tuple[
+        dict[str, list[str] | None], dict[str, tuple[str, bool]], dict[str, bool]
+    ]:
+        """Collect model→columns on the case-sensitive path (no folding).
+
+        The schema is keyed in manifest case (``normalize=False``) and column
+        refs were already canonicalized + force-quoted to manifest case, so
+        ``qualify_columns`` matches each ref exactly and ``SELECT *`` expands to
+        the manifest-case columns. Returns an empty ``col_quoting`` map: the
+        model CTE exposes *every* column quoted in manifest case (the default in
+        ``_alias_projection_to_user_quoting``), matching the force-quoted refs.
+        """
+        alias_lower = {k.lower(): v for k, v in alias_to_model.items()}
+
+        # Rewrite each model table ref to its manifest-case name (quoted) so it
+        # matches the manifest-case schema key without folding. Only the table
+        # *name* is touched; SQL aliases are left intact.
+        for tbl in copy.find_all(exp.Table):
+            ident = tbl.this
+            if isinstance(ident, exp.Identifier):
+                model_name = alias_lower.get(ident.name.lower())
+                if model_name:
+                    tbl.set("this", exp.to_identifier(model_name, quoted=True))
+
+        qualified = qualify_columns(
+            copy,
+            schema=self.schema,
+            dialect=self.dialect,
+            allow_partial_qualification=True,
+        )
+
+        used: dict[str, dict[str, None]] = {m: {} for m in alias_to_model.values()}
+        for col in qualified.find_all(exp.Column):
+            table_ref = col.table
+            if not table_ref:
+                continue
+            model_name = alias_lower.get(table_ref.lower())
+            if model_name:
+                used[model_name][col.name] = None
+
+        return (
+            {m: None if m in star_models else list(cols) for m, cols in used.items()},
+            user_table_refs,
+            {},
+        )
+
     def _build_alias_map(
         self, ast: exp.Expression, user_cte_names: set[str]
     ) -> tuple[dict[str, str], dict[str, tuple[str, bool]]]:
@@ -397,19 +549,101 @@ class CTERewriter:
             user_table_refs.setdefault(model_name, (name, quoted))
         return alias_to_model, user_table_refs
 
+    def _resolve_column(
+        self, candidates: list[str], name: str, quoted: bool, where: str
+    ) -> str | None:
+        """Resolve a column reference to its manifest-case name.
+
+        SQL identifier semantics, mirroring ``resolve_model_name`` one level
+        down: a **quoted** reference must match a manifest column exactly
+        (case-sensitive); an **unquoted** reference prefers an exact match, then
+        falls back to a case-insensitive scan. Returns the manifest-case name,
+        or ``None`` if nothing matches (the ref then fails to bind, surfacing as
+        a "column not found" from wren-core).
+
+        Raises ``INVALID_SQL`` only when an unquoted reference is genuinely
+        **ambiguous** — two or more candidates differ only in case and none
+        matches exactly (e.g. ``YEAR`` against ``Year`` and ``year``).
+        """
+        # Single pass: an exact match wins immediately (quoted-exact or
+        # unquoted-exact); otherwise an unquoted ref collects case-insensitive
+        # candidates for the exact-then-CI fallback.
+        low = name.lower()
+        ci = []
+        for c in candidates:
+            if c == name:
+                return name
+            if not quoted and c.lower() == low:
+                ci.append(c)
+        if quoted:  # quoted is strict — no case-insensitive fallback
+            return None
+        if len(ci) == 1:
+            return ci[0]
+        if len(ci) > 1:
+            raise WrenError(
+                error_code=ErrorCode.INVALID_SQL,
+                message=(
+                    f"Column reference '{name}' in {where} is ambiguous: it "
+                    f"matches case-distinct columns {sorted(ci)}. Quote it to "
+                    "select one exactly."
+                ),
+                phase=ErrorPhase.SQL_PARSING,
+            )
+        return None
+
+    @staticmethod
+    def _collect_output_alias_refs(ast: exp.Expression) -> set[int]:
+        """Return ``id()`` of column nodes that reference a SELECT output alias.
+
+        An output alias (``SELECT x AS yr``) is referenceable by name only from
+        its own SELECT's ``ORDER BY`` / ``GROUP BY`` / ``HAVING`` / ``QUALIFY``
+        clauses — not from WHERE/JOIN, and not from another (e.g. outer) scope.
+        Resolving this per scope (rather than with a query-wide alias-name set)
+        avoids mis-skipping an outer column ref whose name merely coincides with
+        a subquery's alias. Returns node identities so the caller can skip the
+        exact references without re-deriving scope.
+        """
+        refs: set[int] = set()
+        for select in ast.find_all(exp.Select):
+            proj_aliases = {
+                proj.alias.lower()
+                for proj in select.expressions
+                if isinstance(proj, exp.Alias) and proj.alias
+            }
+            if not proj_aliases:
+                continue
+            for clause_key in ("order", "group", "having", "qualify"):
+                clause = select.args.get(clause_key)
+                if clause is None:
+                    continue
+                for col in clause.find_all(exp.Column):
+                    ident = col.this
+                    if (
+                        isinstance(ident, exp.Identifier)
+                        and not col.table
+                        and ident.name.lower() in proj_aliases
+                    ):
+                        refs.add(id(col))
+        return refs
+
     def _normalize_model_column_case(
         self, ast: exp.Expression, user_cte_names: set[str]
     ) -> None:
         """Rewrite model-column references in *ast* to their manifest case.
 
-        Only invoked on upper-folding dialects (Oracle, Snowflake), where the
-        output is rendered with ``identify=True`` (force-quoted) and the
-        mirroring aliases are a no-op. There, a case-insensitive user reference
-        (``mixedcase`` for a manifest ``MixedCase``) would be quoted verbatim
-        (``"mixedcase"``) and never bind the manifest-case CTE column — stricter
-        than the native database, which folds unquoted identifiers. Rewriting
-        the reference to the manifest case lets it bind while ``identify=True``
-        keeps result-set column names (aggregate aliases, cube columns) stable.
+        Invoked when the output is force-quoted (Oracle/Snowflake, ``identify=
+        True``) or the manifest declares case-distinct columns (the
+        case-sensitive path). In both, a user reference whose case differs from
+        the manifest would otherwise be emitted quoted-verbatim and never bind
+        the manifest-case CTE column. Canonicalizing it lets the input stay
+        case-insensitive (for unambiguous refs) while result-set casing is the
+        manifest case.
+
+        On the **case-sensitive path** resolution is strict per SQL rules
+        (``_resolve_column``): quoted refs match exactly, unquoted refs match
+        exact-then-CI, ambiguous unquoted refs raise. The resolved identifier is
+        force-quoted so a folding dialect (Postgres) cannot re-fold it and so
+        two case-distinct columns stay distinct in the output.
 
         Scope guards keep this from rebinding non-model columns:
 
@@ -418,20 +652,15 @@ class CTERewriter:
         - an unqualified column is only rewritten when the query has no user
           CTEs, so it cannot shadow a CTE-exposed column.
 
-        The manifest's case-ambiguity guard (see ``__init__``) guarantees each
-        model's lower→manifest map has no collisions. A *qualified* reference is
-        resolved against its specific model's map (``self._col_orig_name`` is
-        keyed per model), so two models whose columns share a lowercase form but
-        differ in manifest case (``A.year`` vs ``B.Year``) each canonicalize
-        correctly. An unqualified reference (only rewritten when there are no
-        user CTEs) falls back to the merged map. Mutates *ast* in place; only
-        column identifiers are touched (SELECT aliases, function names, etc. are
-        left as the user wrote them).
+        A *qualified* reference is resolved against its specific model, so two
+        models whose columns share a lowercase form but differ in manifest case
+        (``A.year`` vs ``B.Year``) each canonicalize correctly. An unqualified
+        reference (only rewritten when there are no user CTEs) resolves against
+        the union of all models' columns. Mutates *ast* in place; only column
+        identifiers are touched (SELECT aliases, function names, etc. are left
+        as the user wrote them).
         """
-        merged: dict[str, str] = {}
-        for cols in self._col_orig_name.values():
-            merged.update(cols)
-        if not merged:
+        if not self._model_cols:
             return
 
         alias_to_model, _ = self._build_alias_map(
@@ -439,10 +668,21 @@ class CTERewriter:
         )
         alias_to_model_lower = {a.lower(): m for a, m in alias_to_model.items()}
         has_user_ctes = bool(user_cte_names)
+        cs = self._case_sensitive_columns
+        # A SELECT-list output alias (``SELECT x AS yr ... ORDER BY yr``) parses
+        # as a bare column but is not a model column — never canonicalize or
+        # error on it. It is only referenceable by name from its *own* SELECT's
+        # ORDER BY / GROUP BY / HAVING / QUALIFY clauses, so resolve this
+        # precisely per scope: collect the exact ``exp.Column`` *nodes* in those
+        # clauses that match a projection alias of the same SELECT.
+        alias_ref_cols = self._collect_output_alias_refs(ast)
 
         for col in ast.find_all(exp.Column):
             ident = col.this
             if not isinstance(ident, exp.Identifier):
+                continue
+            if id(col) in alias_ref_cols:
+                # references a SELECT output alias, not a model column; skip
                 continue
             table = col.table
             if table:
@@ -450,17 +690,57 @@ class CTERewriter:
                 if model_name is None:
                     # qualified by something that isn't a model (e.g. a user CTE)
                     continue
-                # resolve against the specific model to avoid cross-model
-                # lowercase-name collisions
-                col_canon = self._col_orig_name.get(model_name, {})
+                candidates = self._model_cols.get(model_name, [])
+                where = f"{table}"
             elif has_user_ctes:
-                # unqualified + user CTEs present → could be a CTE column; skip
+                # Unqualified + user CTEs present → the column could belong to a
+                # CTE rather than a model, and we can't tell without full scope
+                # analysis, so skip (no canonicalization, no error). Known
+                # limitation: an unqualified model-column ref in a query that
+                # also defines CTEs is not force-quoted and bypasses the
+                # case-sensitive "column does not exist" check — it falls back to
+                # the old behavior (may collapse to ``SELECT 1``). Qualify the
+                # column (``model.col``) to get strict checking.
                 continue
             else:
-                col_canon = merged
-            canonical = col_canon.get(ident.name.lower())
-            if canonical and ident.name != canonical:
+                candidates = self._all_model_cols
+                where = "the query"
+            # On the case-sensitive path a quoted ref is strict (must match
+            # exactly). On the force-identify-only path (no case-distinct
+            # columns) preserve the existing lenient behavior: resolve every ref
+            # case-insensitively — the candidate list has no case collisions, so
+            # this lookup is unambiguous and never raises.
+            canonical = self._resolve_column(
+                candidates, ident.name, ident.quoted if cs else False, where
+            )
+            if canonical is None:
+                if cs:
+                    # Case-sensitive path: the ref is model-attributable but
+                    # matches no manifest column — a quoted wrong-case ref
+                    # (``"YEAR"`` vs ``Year``/``year``) or a genuine typo. Fail
+                    # loudly here instead of dropping the column and emitting a
+                    # ``SELECT 1`` CTE that explodes later as an opaque database
+                    # "column does not exist" at execution.
+                    quoted_hint = (
+                        " (quoted references are matched case-sensitively)"
+                        if ident.quoted
+                        else ""
+                    )
+                    raise WrenError(
+                        error_code=ErrorCode.INVALID_SQL,
+                        message=(
+                            f"Column '{ident.name}' in {where} does not exist"
+                            f"{quoted_hint}. Available columns: {sorted(candidates)}."
+                        ),
+                        phase=ErrorPhase.SQL_PARSING,
+                    )
+                continue
+            if ident.name != canonical:
                 ident.set("this", canonical)
+            if cs:
+                # force-quote so a folding dialect cannot re-fold the resolved
+                # name and case-distinct columns stay distinct in the output
+                ident.set("quoted", True)
 
     @staticmethod
     def _alias_projection_to_user_quoting(
@@ -551,13 +831,19 @@ class CTERewriter:
                 # SELECT * — let wren-core handle column visibility (CLAC)
                 model_sql = f'SELECT * FROM "{model_name}"'
             elif columns:
-                # ``_col_orig_name`` is keyed by lowercase column names; the
-                # column refs come from the post-normalize AST whose case
-                # depends on the dialect (Oracle uppercases unquoted idents,
-                # Postgres lowercases them). Lower-case before lookup so the
-                # original manifest casing is restored either way.
-                orig = self._col_orig_name.get(model_name, {})
-                resolved = [orig.get(c.lower(), c) for c in columns]
+                if self._case_sensitive_columns:
+                    # Collected names are already in manifest case (the schema is
+                    # not folded), and ``_col_orig_name`` would collide for
+                    # case-distinct columns — use the names as collected.
+                    resolved = columns
+                else:
+                    # ``_col_orig_name`` is keyed by lowercase column names; the
+                    # column refs come from the post-normalize AST whose case
+                    # depends on the dialect (Oracle uppercases unquoted idents,
+                    # Postgres lowercases them). Lower-case before lookup so the
+                    # original manifest casing is restored either way.
+                    orig = self._col_orig_name.get(model_name, {})
+                    resolved = [orig.get(c.lower(), c) for c in columns]
                 col_list = ", ".join(f'"{model_name}"."{c}"' for c in resolved)
                 model_sql = f'SELECT {col_list} FROM "{model_name}"'
             else:
@@ -620,6 +906,15 @@ class CTERewriter:
                 self.view_dict[view_name]["statement"], dialect=self.dialect
             )
             view_cte_names = self._collect_user_cte_names(view_ast)
+            # Resolve the view body's column refs the same way as the user query,
+            # so a case-distinct model referenced from a view statement gets the
+            # same strict treatment (quoted = exact, unquoted = exact-then-CI,
+            # ambiguous / not-found raise cleanly) rather than silently
+            # mis-resolving or collapsing to ``SELECT 1``. Mutating this AST is
+            # safe: it is used only to collect columns here; the view body is
+            # emitted verbatim from a fresh parse in ``_build_view_ctes``.
+            if self._force_identify or self._case_sensitive_columns:
+                self._normalize_model_column_case(view_ast, view_cte_names)
             v_cols, v_refs, v_quoting = self._collect_model_columns(
                 view_ast, view_cte_names
             )

@@ -537,11 +537,34 @@ class TestCaseSensitiveBinding:
             _SINGLE_MODEL_MANIFEST, DataSource.bigquery
         )._force_identify
 
-    def test_case_only_column_collision_rejected(self):
-        """A model with columns differing only in case is rejected at build."""
+    def test_case_only_column_collision_rejected_on_ci_dialect(self):
+        """Case-distinct columns are rejected on a case-insensitive dialect."""
         with pytest.raises(WrenError) as exc:
-            _make_rewriter(_CASE_COLLISION_MANIFEST, DataSource.postgres)
+            _make_rewriter(_CASE_COLLISION_MANIFEST, DataSource.bigquery)
         assert exc.value.error_code == ErrorCode.INVALID_MDL
+
+    def test_case_distinct_columns_allowed_on_case_sensitive_dialect(self):
+        """Postgres can hold case-distinct columns — build succeeds, refs bind."""
+        rw = _make_rewriter(_CASE_COLLISION_MANIFEST, DataSource.postgres)
+        assert rw._case_sensitive_columns
+        # Quoted refs select each case-distinct column exactly.
+        out = rw.rewrite('SELECT "Year", "year" FROM clash')
+        assert _has_cte(out, "clash", dialect="postgres")
+        assert "select 1" not in out.lower()
+
+    def test_quoted_wrong_case_column_rejected_on_case_sensitive_dialect(self):
+        """A quoted ref to a non-existent case variant fails loudly."""
+        rw = _make_rewriter(_CASE_COLLISION_MANIFEST, DataSource.postgres)
+        with pytest.raises(WrenError) as exc:
+            rw.rewrite('SELECT "YEAR" FROM clash')
+        assert exc.value.error_code == ErrorCode.INVALID_SQL
+
+    def test_ambiguous_unquoted_ref_rejected_on_case_sensitive_dialect(self):
+        """An unquoted ref matching multiple case-distinct columns is ambiguous."""
+        rw = _make_rewriter(_CASE_COLLISION_MANIFEST, DataSource.postgres)
+        with pytest.raises(WrenError) as exc:
+            rw.rewrite("SELECT YEAR FROM clash")
+        assert exc.value.error_code == ErrorCode.INVALID_SQL
 
     def test_quoted_mixed_case_column_binds(self):
         """A quoted mixed-case column reference binds to the model CTE."""
