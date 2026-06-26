@@ -162,6 +162,8 @@ def create_service_container(
             max_histories=settings.max_histories,
             enable_column_pruning=settings.enable_column_pruning,
             max_sql_correction_retries=settings.max_sql_correction_retries,
+            pipeline_timeout_seconds=settings.pipeline_timeout_seconds,
+            schema_retrieval_timeout_seconds=settings.schema_retrieval_timeout_seconds,
             **query_cache,
         ),
         ask_feedback_service=services.AskFeedbackService(
