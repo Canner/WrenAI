@@ -44,9 +44,9 @@ def test_memory_subcommand_registered_when_extra_present():
     assert "memory" in names, "memory subcommand not registered despite extra installed"
 
 
-@pytest.mark.skipif(MEMORY_INSTALLED, reason="memory extra IS installed")
-def test_memory_subcommand_absent_when_extra_missing():
-    """The `memory` subcommand group is not registered when the extra is missing."""
+def test_memory_subcommand_always_registered():
+    """`memory` is always registered — `wren memory store` writes knowledge/sql/*.md
+    without the extra; lancedb-backed commands degrade with a clear message."""
     cli = importlib.import_module("wren.cli")
     names = {g.typer_instance.info.name for g in cli.app.registered_groups}
-    assert "memory" not in names, "memory subcommand registered without the extra"
+    assert "memory" in names, "memory subcommand should always be registered"

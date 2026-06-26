@@ -255,8 +255,7 @@ def init(
 
     project_file = project_path / PROJECT_FILE
     agents_file = project_path / "AGENTS.md"
-    queries_file = project_path / "queries.yml"
-    conflicts = [f for f in (project_file, agents_file, queries_file) if f.exists()]
+    conflicts = [f for f in (project_file, agents_file) if f.exists()]
     if conflicts and not force:
         names = ", ".join(f"'{c.name}'" for c in conflicts)
         typer.echo(
@@ -272,7 +271,7 @@ def init(
 
     # wren_project.yml
     project_yml = (
-        "schema_version: 3\n"
+        "schema_version: 5\n"
         "name: my_project\n"
         'version: "1.0"\n'
         "\n"
@@ -342,26 +341,25 @@ def init(
             "statement: >\n  SELECT * FROM example LIMIT 100\n"
         )
 
-    # Instructions placeholder
-    (project_path / "instructions.md").write_text(
-        "# User Instructions\n\n"
-        "Add custom rules or guidelines for LLM-based query generation here.\n"
+    # ── knowledge/ skeleton (first-class business context) ──
+    from wren.context import (  # noqa: PLC0415
+        _AGENTS_MD_TEMPLATE,
+        create_knowledge_skeleton,
     )
+
+    create_knowledge_skeleton(project_path)
+    general_rules = project_path / "knowledge" / "rules" / "general.md"
+    if force or not general_rules.exists():
+        general_rules.write_text(
+            "# Business rules\n\n"
+            "Add custom rules or guidelines for LLM-based query generation here.\n"
+        )
 
     # ── AGENTS.md ──
-    from wren.context import _AGENTS_MD_TEMPLATE  # noqa: PLC0415
-
     (project_path / "AGENTS.md").write_text(_AGENTS_MD_TEMPLATE)
 
-    # Curated NL-SQL pairs (auto-loaded by `wren memory index`)
-    (project_path / "queries.yml").write_text(
-        "# Curated NL-SQL pairs for this project.\n"
-        "# These are auto-loaded into memory on `wren memory index`.\n"
-        "# Use `wren memory dump` to export pairs from memory to this file.\n"
-        "# Format: same as `wren memory dump` output.\n"
-        "version: 1\n"
-        "pairs: []\n"
-    )
+    # NL→SQL pairs live in knowledge/sql/ (written by `wren memory store`),
+    # so no queries.yml is scaffolded.
 
     typer.echo(f"Wren project initialized: {project_path}")
     typer.echo("  wren_project.yml            — project metadata (edit data_source)")
@@ -374,9 +372,22 @@ def init(
         typer.echo("  models/                     — (empty; add your own models)")
         typer.echo("  views/                      — (empty; add your own views)")
     typer.echo("  relationships.yml           — define joins between models")
-    typer.echo("  instructions.md             — LLM instructions")
+    typer.echo(
+        "  knowledge/rules/            — business rules for LLM query generation"
+    )
+    typer.echo(
+        "  knowledge/sql/              — confirmed NL-SQL pairs (wren memory store)"
+    )
     typer.echo("  AGENTS.md                   — AI agent workflow guidance")
-    typer.echo("  queries.yml                 — curated NL-SQL pairs for memory")
+    # A pre-existing legacy queries.yml is still auto-loaded by `wren memory
+    # index`; surface it so v4 and v5 pair sources don't silently mix.
+    if (project_path / "queries.yml").exists():
+        typer.echo(
+            "Note: a legacy queries.yml is present. It's still loaded on "
+            "`wren memory index`, but is deprecated — migrate its pairs into "
+            "knowledge/sql/ (see the migration reference).",
+            err=True,
+        )
     typer.echo("")
     typer.echo(
         "Next: Install agent skills via "
@@ -601,7 +612,7 @@ def build(
     """Build into target/mdl.json for the engine.
 
     Default mode: reads wren_project.yml, models/*/metadata.yml (+ref_sql.sql),
-    views/*/metadata.yml (+sql.yml), relationships.yml, and instructions.md.
+    views/*/metadata.yml (+sql.yml), relationships.yml, and knowledge/.
 
     With --from-osi: reads an Open Semantic Interchange YAML file and emits
     MDL JSON directly. The OSI file stays as the single source of truth; no
@@ -693,8 +704,8 @@ def show(
         build_json,
         build_manifest,
         discover_project_path,
-        load_instructions,
         load_project_config,
+        load_rules,
     )
 
     try:
@@ -722,7 +733,7 @@ def show(
         models = manifest.get("models", [])
         views = manifest.get("views", [])
         rels = manifest.get("relationships", [])
-        instr_content = load_instructions(project_path)
+        instr_content, used_legacy_instructions = load_rules(project_path)
 
         typer.echo(
             f"Project: {config.get('name', '?')} (v{config.get('version', '?')})"
@@ -752,7 +763,11 @@ def show(
 
         if instr_content:
             lines = instr_content.strip().split("\n")
-            typer.echo(f"\nInstructions: {len(lines)} lines")
+            typer.echo(f"\nBusiness rules: {len(lines)} lines")
+        if used_legacy_instructions:
+            typer.echo(
+                "  (instructions.md is deprecated — move it into knowledge/rules/*.md)"
+            )
 
         if not models and not views:
             typer.echo("Empty project. Run `wren context init` to get started.")
@@ -762,8 +777,8 @@ def show(
 def instructions(
     path: ProjectPathOpt = None,
 ) -> None:
-    """Print user instructions for LLM consumption."""
-    from wren.context import discover_project_path, load_instructions  # noqa: PLC0415
+    """Print business rules (knowledge/rules/ + legacy instructions.md) for LLM consumption."""
+    from wren.context import discover_project_path, load_rules  # noqa: PLC0415
 
     try:
         project_path = discover_project_path(path)
@@ -771,7 +786,13 @@ def instructions(
         typer.echo(str(e), err=True)
         raise typer.Exit(1)
 
-    content = load_instructions(project_path)
+    content, used_legacy = load_rules(project_path)
+    if used_legacy:
+        typer.echo(
+            "Warning: instructions.md is deprecated — move its content into "
+            "knowledge/rules/*.md.",
+            err=True,
+        )
     if content:
         typer.echo(content)
 

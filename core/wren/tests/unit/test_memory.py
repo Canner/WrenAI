@@ -857,3 +857,91 @@ class TestYamlRoundTrip:
         # All should be skipped as duplicates
         assert result["skipped"] == 2
         assert result["loaded"] == 0
+
+
+# ── O5: knowledge/sql markdown is the source of truth for the index ────────
+
+
+@pytest.mark.unit
+class TestMarkdownSourcedIndex:
+    """index/recall/reset treat LanceDB as a derived index over knowledge/sql/."""
+
+    def test_load_query_pairs_index_is_convergent(self, memory_store, tmp_path):
+        from wren.memory.markdown import (  # noqa: PLC0415
+            load_query_pairs,
+            write_query_markdown,
+        )
+
+        write_query_markdown(tmp_path, "Total revenue", "SELECT SUM(amount) FROM o")
+        write_query_markdown(tmp_path, "Count orders", "SELECT COUNT(*) FROM o")
+        pairs = load_query_pairs(tmp_path)
+
+        memory_store.load_queries(pairs, upsert=True)
+        first, _ = memory_store.list_queries(limit=100)
+        # re-running index converges (no duplication)
+        memory_store.load_queries(load_query_pairs(tmp_path), upsert=True)
+        second, _ = memory_store.list_queries(limit=100)
+        assert len(first) == len(second) == 2
+
+    def test_reset_then_reindex_restores_from_markdown(self, memory_store, tmp_path):
+        from wren.memory.markdown import (  # noqa: PLC0415
+            load_query_pairs,
+            write_query_markdown,
+        )
+
+        write_query_markdown(tmp_path, "Total revenue", "SELECT SUM(amount) FROM o")
+        memory_store.load_queries(load_query_pairs(tmp_path), upsert=True)
+
+        memory_store.reset()  # derived index dropped
+        assert memory_store.status()["tables"] == {}
+        # markdown source survives the reset
+        assert (tmp_path / "knowledge" / "sql" / "total-revenue.md").exists()
+
+        # rebuild from markdown → recall works again
+        memory_store.load_queries(load_query_pairs(tmp_path), upsert=True)
+        hits = memory_store.recall_queries("revenue", limit=3)
+        assert any("SUM(amount)" in h["sql_query"] for h in hits)
+
+    def test_lancedb_backend_via_get_index(self, tmp_path, monkeypatch):
+        """With the extra, get_index resolves to LanceDBIndex and recalls semantically."""
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        pytest.importorskip(
+            "sentence_transformers", reason="wren[memory] extras not installed"
+        )
+        monkeypatch.setenv("WREN_MEMORY_BACKEND", "lancedb")
+        from wren.memory.index_backend import get_index  # noqa: PLC0415
+        from wren.memory.markdown import write_query_markdown  # noqa: PLC0415
+
+        write_query_markdown(tmp_path, "Total revenue", "SELECT SUM(amount) FROM o")
+        idx = get_index(tmp_path, str(tmp_path / ".wren" / "memory"))
+        assert idx.name == "lancedb"
+        idx.rebuild()
+        hits = idx.search("revenue", limit=3)
+        assert any("SUM(amount)" in h["sql_query"] for h in hits)
+
+    def test_cli_export_migrates_query_history_to_markdown(self, tmp_path, monkeypatch):
+        """`wren memory export` writes existing LanceDB pairs to knowledge/sql/."""
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        pytest.importorskip(
+            "sentence_transformers", reason="wren[memory] extras not installed"
+        )
+        from typer.testing import CliRunner  # noqa: PLC0415
+
+        from wren.cli import app  # noqa: PLC0415
+        from wren.memory.markdown import parse_query_markdown  # noqa: PLC0415
+        from wren.memory.store import MemoryStore  # noqa: PLC0415
+
+        monkeypatch.setenv("WREN_PROJECT_HOME", str(tmp_path))
+        store = MemoryStore(path=str(tmp_path / ".wren" / "memory"))
+        store.store_query("Top revenue", "SELECT SUM(amount) FROM o", tags="source:user")
+        store.store_query("A seed query", "SELECT 1", tags="source:seed")
+
+        result = CliRunner().invoke(app, ["memory", "export"])
+        assert result.exit_code == 0, result.output
+
+        user_md = tmp_path / "knowledge" / "sql" / "top-revenue.md"
+        assert user_md.exists()
+        assert not (tmp_path / "knowledge" / "sql" / "a-seed-query.md").exists()  # seed skipped
+        fm = parse_query_markdown(user_md)
+        assert fm["source"] == "user"
+        assert "created_at" in fm  # timestamp preserved

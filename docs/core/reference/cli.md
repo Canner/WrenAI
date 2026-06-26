@@ -96,6 +96,22 @@ Requires `target/manifest.json` and `target/catalog.json`; run `dbt build` and `
 
 ---
 
+## `wren context upgrade`
+
+Upgrade a project to the latest layout (`schema_version` 5). Forward-only and idempotent;
+the v4→v5 step creates the `knowledge/` skeleton.
+
+```bash
+wren context upgrade --dry-run   # preview created/modified files
+wren context upgrade             # apply
+wren context upgrade --to 5      # target a specific version
+```
+
+To migrate `instructions.md` and the LanceDB memory into `knowledge/`, see
+[Migration](./migration.md).
+
+---
+
 ## `wren docs` — Connection Info
 
 ### `wren docs connection-info <datasource>`
@@ -114,7 +130,12 @@ Use this to check which fields are needed before creating a profile.
 
 ## `wren memory` — Schema & Query Memory
 
-LanceDB-backed semantic memory for MDL schema search and NL-SQL retrieval. Install with the `memory` extra (separate from `main`):
+Schema and NL-SQL memory. NL→SQL pairs live in `knowledge/sql/*.md` (the source of truth);
+the LanceDB index is a derived artifact rebuilt from them.
+
+`store`, `index`, and `recall` work **without** any extra — pairs are written to and
+searched over `knowledge/sql/` directly (token/substring matching). Install the `memory`
+extra only for **semantic** (embedding) recall and schema search (`wren memory fetch`):
 
 ```bash
 pip install 'wrenai[memory]'
@@ -122,7 +143,10 @@ pip install 'wrenai[memory]'
 pip install 'wrenai[memory,main]'
 ```
 
-All `memory` subcommands accept `--path DIR` to override the default storage location (`~/.wren/memory/`).
+The backend is chosen automatically — LanceDB when the extra is installed, otherwise the
+dependency-free grep backend. Force one with `WREN_MEMORY_BACKEND=grep|lancedb`. All
+`memory` subcommands accept `--path DIR` to override the LanceDB storage location
+(`~/.wren/memory/`).
 
 > **Note:** The `memory` extra bundles ~800MB of large unsigned native libraries (lancedb plus sentence-transformers/torch). On macOS, the first command that loads the memory stack can trigger a one-time XProtect/Gatekeeper scan and pause for up to about a minute before it finishes; this is normal macOS behavior, not a Wren error, and happens once per install or fresh virtual environment. With lazy memory loading, lightweight non-`memory` commands are unaffected — the scan is deferred to your first real memory use, not eliminated.
 
@@ -146,7 +170,10 @@ The default threshold (30,000 chars) can be overridden with `--threshold`.
 
 ### `wren memory index`
 
-Parse the MDL manifest and index all schema items (models, columns, relationships, views) into LanceDB with local embeddings.
+Build the semantic index: schema items (models, columns, relationships, views) plus the
+NL→SQL pairs from `knowledge/sql/*.md` (re-running converges on the markdown). Requires the
+`memory` extra. Without it, the grep backend reads `knowledge/sql/` directly, so there is
+nothing to build and this command is a no-op.
 
 ```bash
 wren memory index                          # uses ~/.wren/mdl.json
@@ -186,7 +213,8 @@ wren memory fetch -q "order date" --threshold 50000 --output json
 
 ### `wren memory store`
 
-Store a natural-language-to-SQL pair for future few-shot retrieval.
+Store a natural-language-to-SQL pair. Writes `knowledge/sql/<slug>.md` (the source of
+truth, no extra required), then indexes it into LanceDB when the `memory` extra is present.
 
 ```bash
 wren memory store \
@@ -197,7 +225,8 @@ wren memory store \
 
 ### `wren memory recall`
 
-Search stored NL-SQL pairs by semantic similarity to a query.
+Search stored NL-SQL pairs — semantic similarity with the `memory` extra, token/substring
+matching (grep) without it. Each hit is annotated with its `knowledge/sql/*.md` path.
 
 ```bash
 wren memory recall -q "best customers"
@@ -210,6 +239,26 @@ wren memory recall -q "monthly revenue" --datasource mysql --limit 5 --output js
 | `-l, --limit` | Max results (default: 3) |
 | `-d, --datasource` | Filter by data source |
 | `-o, --output` | Output format: `table` (default), `json` |
+
+### `wren memory export`
+
+One-time migration: export an existing LanceDB `query_history` into `knowledge/sql/*.md`
+(source, timestamp, and dedup preserved). Requires the `memory` extra to read LanceDB;
+leaves LanceDB intact. See [Migration](./migration.md).
+
+```bash
+wren memory export                 # query_history → knowledge/sql/*.md
+wren memory export --include-seed   # also export auto-generated seed pairs
+```
+
+### `wren memory check`
+
+Report drift between `knowledge/sql/*.md` and the derived index (which user pairs are not
+indexed, or indexed without a markdown source).
+
+```bash
+wren memory check
+```
 
 ### `wren memory status`
 
@@ -224,7 +273,8 @@ wren memory status
 
 ### `wren memory reset`
 
-Drop all memory tables and start fresh.
+Drop the derived LanceDB index. Your `knowledge/sql/*.md` source files are **preserved** —
+rebuild the index any time with `wren memory index`.
 
 ```bash
 wren memory reset          # prompts for confirmation

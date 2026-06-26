@@ -20,16 +20,16 @@ a prompt or locked inside a UI:
 | Artifact | What it holds | Example |
 | --- | --- | --- |
 | **MDL** (semantic models) | Structure and semantics: models, columns, relationships, calculated fields, views, cubes | `loyalty_v3` is the canonical loyalty table; `revenue = price * qty - refunds` |
-| **`instructions.md`** | Business rules and operating policy the schema can't carry | "active customer excludes service accounts"; "always filter `is_deleted = false`" |
-| **Memory index** | Behavioral retrieval state: which schema items were relevant, which SQL answered a similar question, confirmed examples | local runtime state under `.wren/memory/`, usually gitignored |
-| **`queries.yml`** | Curated question→SQL pairs exported from memory to keep and share | the version-controlled surface for shared examples |
+| **`knowledge/rules/`** | Business rules and operating policy the schema can't carry | "active customer excludes service accounts"; "always filter `is_deleted = false`" |
+| **`knowledge/sql/`** | Confirmed question→SQL pairs, one markdown file each — kept and shared | the version-controlled source of truth for recall |
+| **Memory index** | Derived retrieval state over MDL + `knowledge/`: which items were relevant, which SQL answered a similar question | local, rebuildable index under `.wren/memory/`, gitignored |
 
-MDL says what the data *means*. Instructions say how your team wants it *used*.
-Memory says what has *worked*. MDL, `instructions.md`, and `queries.yml` are
-version-controlled files in your repo; the memory index under `.wren/memory/` is
-local runtime state (usually gitignored), and you share what it learns by
-exporting curated pairs to `queries.yml`. Together they are the context layer the
-rest of the docs refer to. See [What does Wren AI mean by context?](/oss/concepts/what_is_context).
+MDL says what the data *means*. `knowledge/rules/` says how your team wants it *used*.
+`knowledge/sql/` records what has *worked*. MDL and everything under `knowledge/` are
+version-controlled files in your repo; the memory index under `.wren/memory/` is a
+derived artifact (usually gitignored) that is rebuilt from them with `wren memory index`.
+Together they are the context layer the rest of the docs refer to. See
+[What does Wren AI mean by context?](/oss/concepts/what_is_context).
 
 ## How knowledge gets in: scaffold fast, enrich deep
 

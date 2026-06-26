@@ -30,10 +30,13 @@ Override the entire global directory with `WREN_HOME`.
 | `views/<name>/sql.yml` | Optional separate `statement` file for views. | ✅ yes |
 | `cubes/<name>/metadata.yml` | Cube definitions. | ✅ yes |
 | `relationships.yml` | All relationships. | ✅ yes |
-| `instructions.md` | LLM-facing natural-language guidance. | ✅ yes |
-| `queries.yml` | Curated NL-SQL pairs (seed for memory). | ✅ yes |
+| `knowledge/rules/` | LLM-facing business rules (supersedes `instructions.md`). | ✅ yes |
+| `knowledge/sql/` | Confirmed NL→SQL pairs — source of truth for memory. | ✅ yes |
+| `knowledge/knowledge.yml` | Knowledge-axis `schema_version`. | ✅ yes |
+| `instructions.md` | Deprecated — move into `knowledge/rules/` (still read if present). | ⚠️ legacy |
+| `queries.yml` | Legacy NL-SQL pairs — superseded by `knowledge/sql/`. | ⚠️ legacy |
 | `.env` | Per-project `.env` for `${VAR}` interpolation. | ❌ gitignore |
-| `.wren/memory/` | LanceDB index files (schema + query history). | ❌ gitignore |
+| `.wren/memory/` | Derived LanceDB index (rebuilt from `knowledge/sql/`). | ❌ gitignore |
 | `target/mdl.json` | Compiled MDL manifest (rebuildable). | ❌ gitignore |
 
 ## Environment variables

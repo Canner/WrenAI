@@ -223,7 +223,10 @@ def test_init_creates_scaffold(tmp_path):
     assert (tmp_path / "views" / "example_view" / "metadata.yml").exists()
     assert (tmp_path / "views" / "example_view" / "sql.yml").exists()
     assert (tmp_path / "relationships.yml").exists()
-    assert (tmp_path / "instructions.md").exists()
+    # knowledge/ is first-class: rules live here, not in the legacy instructions.md
+    assert (tmp_path / "knowledge" / "knowledge.yml").exists()
+    assert (tmp_path / "knowledge" / "rules" / "general.md").exists()
+    assert not (tmp_path / "instructions.md").exists()
 
     # Verify wren_project.yml contains namespace clarification comments and defaults
     project_yml = (tmp_path / "wren_project.yml").read_text()
@@ -304,9 +307,123 @@ def test_init_empty_skips_example_model_and_view(tmp_path):
     assert (tmp_path / "wren_project.yml").exists()
     assert (tmp_path / "relationships.yml").exists()
     assert (tmp_path / "AGENTS.md").exists()
-    assert (tmp_path / "queries.yml").exists()
+    assert (tmp_path / "knowledge" / "knowledge.yml").exists()
+    # v5 no longer scaffolds a legacy queries.yml (pairs live in knowledge/sql/)
+    assert not (tmp_path / "queries.yml").exists()
     # Summary mentions empty rather than the example paths
     assert "empty" in result.output
+
+
+# ── knowledge/ as first-class (O3) ────────────────────────────────────────
+
+
+def test_init_builds_knowledge_skeleton(tmp_path):
+    result = runner.invoke(app, ["context", "init", "--path", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    for sub in ("rules", "glossary", "metrics", "caveats", "sql"):
+        assert (tmp_path / "knowledge" / sub).is_dir()
+    assert (tmp_path / "knowledge" / "knowledge.yml").exists()
+    assert (tmp_path / "knowledge" / "rules" / "general.md").exists()
+    # legacy single-file instructions.md is no longer scaffolded
+    assert not (tmp_path / "instructions.md").exists()
+
+
+def test_init_warns_on_legacy_queries_yml(tmp_path):
+    """A pre-existing legacy queries.yml is surfaced as deprecated at init."""
+    (tmp_path / "queries.yml").write_text("version: 1\npairs: []\n")
+    result = runner.invoke(app, ["context", "init", "--empty", "--path", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "queries.yml" in result.output and "deprecated" in result.output
+
+
+def test_init_does_not_clobber_existing_rules(tmp_path):
+    """Re-running init must not overwrite existing business rules without --force."""
+    runner.invoke(app, ["context", "init", "--empty", "--path", str(tmp_path)])
+    general = tmp_path / "knowledge" / "rules" / "general.md"
+    general.write_text("My real rules.\n")
+    # init again with --force (clears the project-file conflict guard)
+    result = runner.invoke(
+        app, ["context", "init", "--empty", "--force", "--path", str(tmp_path)]
+    )
+    assert result.exit_code == 0, result.output
+    # --force intentionally re-seeds the starter content
+    assert "Add custom rules" in general.read_text()
+
+    # but without --force, an existing general.md is preserved
+    general.write_text("My real rules.\n")
+    (tmp_path / "wren_project.yml").unlink()  # avoid the conflict-guard early exit
+    runner.invoke(app, ["context", "init", "--empty", "--path", str(tmp_path)])
+    assert general.read_text() == "My real rules.\n"
+
+
+def test_instructions_cmd_reads_knowledge_rules(tmp_path):
+    runner.invoke(app, ["context", "init", "--empty", "--path", str(tmp_path)])
+    (tmp_path / "knowledge" / "rules" / "units.md").write_text("Amounts are USD.\n")
+    result = runner.invoke(app, ["context", "instructions", "--path", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "Amounts are USD." in result.output
+
+
+def test_instructions_cmd_warns_on_legacy(tmp_path):
+    runner.invoke(app, ["context", "init", "--empty", "--path", str(tmp_path)])
+    (tmp_path / "instructions.md").write_text("Legacy rule.\n")
+    result = runner.invoke(app, ["context", "instructions", "--path", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "Legacy rule." in result.output
+    assert "deprecated" in result.output
+
+
+# ── v5 is the default init layout (O1) ───────────────────────────────────
+
+
+def test_init_writes_v5(tmp_path):
+    """`wren context init` stamps the latest layout, schema_version 5."""
+    result = runner.invoke(app, ["context", "init", "--path", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    config = yaml.safe_load((tmp_path / "wren_project.yml").read_text())
+    assert config["schema_version"] == 5
+    # per-model / per-view directory layout (unchanged since v2)
+    assert (tmp_path / "models" / "example" / "metadata.yml").exists()
+    assert (tmp_path / "views" / "example_view" / "metadata.yml").exists()
+
+
+def test_v5_build_roundtrip(tmp_path):
+    """init → build produces a valid mdl.json stamped layoutVersion 3."""
+    assert (
+        runner.invoke(app, ["context", "init", "--path", str(tmp_path)]).exit_code == 0
+    )
+    result = runner.invoke(app, ["context", "build", "--path", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    mdl = json.loads((tmp_path / "target" / "mdl.json").read_text())
+    assert mdl["layoutVersion"] == 3
+    assert any(m["name"] == "example" for m in mdl["models"])
+
+
+def test_v5_uses_v2_reader(tmp_path):
+    """A v5 project reads models/views identically to the same project at v3."""
+    from wren.context import load_models, load_views  # noqa: PLC0415
+
+    def _populate(root: Path, sv: int) -> Path:
+        root.mkdir(parents=True)
+        (root / "wren_project.yml").write_text(
+            f"schema_version: {sv}\nname: t\ndata_source: postgres\n"
+            "catalog: wren\nschema: public\n"
+        )
+        md = root / "models" / "orders"
+        md.mkdir(parents=True)
+        (md / "metadata.yml").write_text(
+            "name: orders\ntable_reference:\n  table: orders\n"
+            "columns:\n  - name: id\n    type: INTEGER\n"
+        )
+        vd = root / "views" / "summary"
+        vd.mkdir(parents=True)
+        (vd / "metadata.yml").write_text("name: summary\nstatement: SELECT 1\n")
+        return root
+
+    v3 = _populate(tmp_path / "v3", 3)
+    v5 = _populate(tmp_path / "v5", 5)
+    assert load_models(v5) == load_models(v3)
+    assert load_views(v5) == load_views(v3)
 
 
 # ── wren context validate ─────────────────────────────────────────────────
@@ -511,6 +628,35 @@ def test_upgrade_cli_explicit_to_version(tmp_path):
     assert config["schema_version"] == 2
 
 
+def test_upgrade_cli_v4_to_v5_builds_knowledge(tmp_path):
+    """Upgrading a v4 project to latest creates the knowledge/ skeleton."""
+    (tmp_path / "wren_project.yml").write_text(
+        "schema_version: 4\nname: test\ndata_source: postgres\n"
+    )
+    result = runner.invoke(app, ["context", "upgrade", "--path", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "Upgrade complete" in result.output
+    config = yaml.safe_load((tmp_path / "wren_project.yml").read_text())
+    assert config["schema_version"] == 5
+    assert (tmp_path / "knowledge" / "knowledge.yml").exists()
+    assert (tmp_path / "knowledge" / "rules" / ".gitkeep").exists()
+
+
+def test_upgrade_cli_v4_to_v5_dry_run_no_write(tmp_path):
+    """Dry-run lists the knowledge skeleton but writes nothing."""
+    (tmp_path / "wren_project.yml").write_text(
+        "schema_version: 4\nname: test\ndata_source: postgres\n"
+    )
+    result = runner.invoke(
+        app, ["context", "upgrade", "--path", str(tmp_path), "--dry-run"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "knowledge/knowledge.yml" in result.output
+    assert not (tmp_path / "knowledge").exists()
+    config = yaml.safe_load((tmp_path / "wren_project.yml").read_text())
+    assert config["schema_version"] == 4
+
+
 # ── wren context import dbt ───────────────────────────────────────────────
 
 
@@ -564,10 +710,13 @@ def test_import_dbt_writes_project_and_builds(tmp_path):
     assert (output_dir / "wren_project.yml").exists()
     assert (output_dir / "models" / "fct_orders" / "metadata.yml").exists()
     assert (output_dir / "relationships.yml").exists()
-    assert (output_dir / "queries.yml").exists()
+    assert (output_dir / "knowledge" / "rules" / "general.md").exists()
+    assert list((output_dir / "knowledge" / "sql").glob("*.md"))  # seeded NL→SQL pairs
+    assert not (output_dir / "queries.yml").exists()
     assert "skipped 1 ephemeral" in result.output
 
     config = yaml.safe_load((output_dir / "wren_project.yml").read_text())
+    assert config["schema_version"] == 5
     assert config["data_source"] == "duckdb"
     assert config["dbt"]["profile"] == "jaffle_shop"
     relationships = yaml.safe_load((output_dir / "relationships.yml").read_text())
@@ -594,7 +743,6 @@ def test_import_dbt_force_overwrites_managed_files(tmp_path):
     output_dir = tmp_path / "wren_project"
     output_dir.mkdir()
     (output_dir / "wren_project.yml").write_text("name: old\n")
-    (output_dir / "queries.yml").write_text("version: 1\npairs: []\n")
 
     result = runner.invoke(
         app,
@@ -630,7 +778,10 @@ def test_import_dbt_force_overwrites_managed_files(tmp_path):
     )
     assert forced.exit_code == 0, forced.output
     assert "jaffle_shop" in (output_dir / "wren_project.yml").read_text()
-    assert "source: dbt" in (output_dir / "queries.yml").read_text()
+    sql_files = list((output_dir / "knowledge" / "sql").glob("*.md"))
+    contents = [f.read_text() for f in sql_files]
+    assert any("source: dbt" in c for c in contents)
+    assert any("datasource: duckdb" in c for c in contents)  # metadata preserved
 
 
 def test_write_project_files_force_preserves_queries_without_replacement(tmp_path):
@@ -852,7 +1003,7 @@ def test_set_profile_preserves_other_fields(tmp_path, monkeypatch):
     assert config["name"] == "my_project"
     assert config["catalog"] == "wren"
     assert config["schema"] == "public"
-    assert config["schema_version"] == 3
+    assert config["schema_version"] == 5
 
 
 def test_set_profile_preserves_custom_fields(tmp_path, monkeypatch):

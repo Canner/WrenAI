@@ -588,7 +588,10 @@ def _process_metrics(
     wren_cfg: WrenConfig,
     dataset_names: set[str],
 ) -> tuple[str | None, list[ValidationError]]:
-    """Render OSI top-level metrics as a markdown block for instructions.md.
+    """Render OSI top-level metrics as a markdown block of business rules.
+
+    Surfaced via the manifest's ``_instructions`` carrier, which the importer
+    writes to ``knowledge/rules/`` (or indexes as rules on build).
 
     Wren has no first-class equivalent of OSI's free-floating metrics
     (cubes are bound to a single base_object). For v1 we surface them as

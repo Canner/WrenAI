@@ -21,22 +21,36 @@ That is what Wren AI memory provides.
 
 ## What memory stores
 
-Memory is local to a Wren project. It is stored under `.wren/memory/`, indexed with [LanceDB](https://lancedb.com/), and never leaves your machine unless you choose to share or commit it.
+The **source of truth is markdown in your project**: confirmed natural-language-to-SQL
+pairs live in `knowledge/sql/*.md`, and business rules in `knowledge/rules/`. These are
+plain files you commit and review like any other source.
 
-The memory layer has two main collections:
+On top of that markdown, Wren builds a **derived index** for retrieval. With the optional
+`memory` extra it's a [LanceDB](https://lancedb.com/) embedding index under `.wren/memory/`
+(gitignored, rebuildable any time); without it, a dependency-free grep backend searches the
+markdown directly. Either way the index is disposable — `knowledge/` is the durable layer.
 
-| Collection | What it stores | Why it matters |
+The index covers two kinds of content:
+
+| Content | Source | Why it matters |
 | --- | --- | --- |
-| `schema_items` | Models, columns, relationships, views, cubes, and indexed instructions | Lets the agent retrieve the right context for a question without sending the entire project into the prompt. |
-| `query_history` | Confirmed natural-language-to-SQL pairs | Gives the agent few-shot examples from your actual business, not generic examples. |
+| Schema items — models, columns, relationships, views, cubes, business rules | MDL + `knowledge/rules/` | Lets the agent retrieve the right context for a question without sending the entire project into the prompt. |
+| NL→SQL pairs | `knowledge/sql/*.md` | Gives the agent few-shot examples from your actual business, not generic examples. |
 
-Memory may include:
+## With and without the `memory` extra
 
-- schema and column descriptions extracted from MDL
-- relevant content from `instructions.md`
-- successful natural-language-to-SQL pairs
-- imported examples from `queries.yml`
-- query history stored after successful agent workflows
+The source of truth is the same either way — only the retrieval engine differs:
+
+| | With `memory` extra (LanceDB) | Without it (grep, default) |
+| --- | --- | --- |
+| NL→SQL `recall` | **Semantic** — embedding similarity, so paraphrases match (store *"monthly revenue"*, recall *"sales per month"*) | **Lexical** — token overlap + substring over `knowledge/sql/*.md`, read directly at query time. Paraphrases with no shared words won't match |
+| Persistent index | LanceDB under `.wren/memory/` (built by `index`/`store`) | None — the markdown *is* the index, so `index` is a no-op |
+| Schema search (`fetch`) | Available (embedding retrieval over schema items) | **Not available** — needs embeddings; large schemas should install the extra |
+
+The grep backend is the zero-dependency fallback: it works out of the box and keeps
+`store`/`recall` available, at lower recall quality. Install the extra (or set
+`WREN_MEMORY_BACKEND=lancedb`) for semantic recall and schema search; nothing about your
+`knowledge/` files changes when you switch.
 
 ## How memory is used
 
@@ -61,7 +75,7 @@ This loop gives the agent two kinds of grounding:
 
 Memory does not define your semantic layer. MDL does.
 
-Memory helps agents find and reuse context, but the durable contract still lives in project files: models, relationships, views, cubes, and instructions. If a definition is important enough to govern future behavior, put it in MDL or `instructions.md`, then re-index memory.
+Memory helps agents find and reuse context, but the durable contract still lives in project files: models, relationships, views, cubes, and `knowledge/`. If a definition is important enough to govern future behavior, put it in MDL or `knowledge/rules/`, then re-index memory.
 
 Think of memory as the retrieval and learning layer on top of the contract.
 
@@ -75,13 +89,14 @@ Wren AI memory lets the system compound:
 - recurring metrics reuse accepted SQL patterns
 - schema retrieval becomes more targeted on large projects
 - corrections can become future grounding instead of disappearing after the chat
-- teams can seed memory with known-good `queries.yml` examples
+- teams can seed memory by committing known-good `knowledge/sql/*.md` pairs
 
 The goal is not to memorize every answer. The goal is to make the agent better at finding the right context before it reasons.
 
 ## When to re-index
 
-`wren memory store` adds a new confirmed NL-SQL pair to query history. But the schema and instruction index is rebuilt with:
+`wren memory store` writes the confirmed NL→SQL pair to `knowledge/sql/` and indexes it. The
+schema/rules side of the index is rebuilt with:
 
 ```bash
 wren memory index
@@ -90,22 +105,27 @@ wren memory index
 Re-index after:
 
 - editing model descriptions, columns, relationships, views, or cubes
-- changing `instructions.md`
-- importing or editing seed examples in `queries.yml`
+- changing `knowledge/rules/`
+- adding or editing pairs in `knowledge/sql/`
 - running a major context enrichment pass
 
 See the [Refine answer quality](/oss/guides/refine) recipe and [CLI reference](/oss/reference/cli#wren-memory--schema--query-memory) for command details.
 
 ## Sharing memory
 
-By default, `.wren/memory/` is local runtime state and is usually gitignored.
+Sharing is just committing `knowledge/`. The NL→SQL pairs in `knowledge/sql/*.md` are
+plain, reviewable files — commit them and every environment picks them up; the next
+`wren memory index` rebuilds the local index from them. The derived index under
+`.wren/memory/` stays gitignored, because it's reproducible from the markdown rather than
+the collaboration surface itself.
 
-If your team wants to share confirmed examples, prefer exporting them to `queries.yml` with `wren memory dump`, reviewing them like source files, and loading them back into memory in each environment. This keeps the useful behavioral context portable without turning binary index files into the main collaboration surface.
+(Have an older project whose history is still in a LanceDB index? `wren memory export`
+writes it out to `knowledge/sql/*.md` — see [Migration](/oss/reference/migration).)
 
 ## In short
 
 - **MDL** defines the business meaning.
-- **Instructions** define guidance and policy.
-- **Memory** retrieves relevant context and recalls proven examples.
+- **`knowledge/`** captures business rules and confirmed NL→SQL pairs — committed and reviewable.
+- **Memory** is the derived index that retrieves relevant context and recalls proven examples.
 
 Memory is how Wren AI gets better with use while keeping the source of truth inspectable and versionable.

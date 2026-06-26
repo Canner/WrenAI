@@ -43,6 +43,10 @@ When the user wants to add models, change schema, or onboard a new table:
 3. `wren context build` — compile to `target/mdl.json`
 4. `wren memory index` — re-index schema for search
 
+## Capturing business context
+
+Rules the schema can't express — canonical tables, default filters, units, enum meanings — go in `knowledge/rules/*.md` (read by `wren context instructions`). Confirmed NL→SQL examples are saved with `wren memory store` (step 5 above), which writes them to `knowledge/sql/`. Both live in the project and are committed with it.
+
 ## Prerequisites
 
 This project requires the `wren` CLI. Install with your data source extra:
@@ -51,7 +55,7 @@ This project requires the `wren` CLI. Install with your data source extra:
 pip install "wrenai[postgres,memory,ui]"
 ```
 
-Replace `postgres` with your data source (`mysql`, `bigquery`, `snowflake`, `clickhouse`, `trino`, `mssql`, `databricks`, `redshift`, `spark`, `athena`, `oracle`). The `memory` extra enables semantic search; `ui` enables the interactive UI.
+Replace `postgres` with your data source (`mysql`, `bigquery`, `snowflake`, `clickhouse`, `trino`, `mssql`, `databricks`, `redshift`, `spark`, `athena`, `oracle`). The `memory` extra upgrades recall to semantic (embedding) search — without it, `memory store` / `index` / `recall` still work over the `knowledge/` files. `ui` enables the interactive UI.
 
 See https://docs.getwren.ai/oss/engine/get_started/installation for full setup.
 
@@ -149,11 +153,13 @@ def convert_mdl_to_project(mdl_json: dict) -> list[ProjectFile]:
     files: list[ProjectFile] = []
 
     # ── wren_project.yml ──────────────────────────────────────
-    # Map layoutVersion back to schema_version
+    # Map engine layoutVersion to the schema_version an import should land on.
+    # layoutVersion 3 covers both v4 (composite PK) and v5; a fresh import
+    # targets the current layout (5, knowledge/-native).
     layout_version = mdl_json.get("layoutVersion", 1)
-    _LAYOUT_TO_SCHEMA = {1: 2, 2: 3, 3: 4}
+    _LAYOUT_TO_SCHEMA = {1: 2, 2: 3, 3: 5}
     schema_version = _LAYOUT_TO_SCHEMA.get(
-        layout_version, 4 if layout_version >= 3 else (3 if layout_version >= 2 else 2)
+        layout_version, 5 if layout_version >= 3 else (3 if layout_version >= 2 else 2)
     )
     project_config: dict[str, Any] = {"schema_version": schema_version}
     if "name" in mdl_json:
@@ -260,12 +266,17 @@ def convert_mdl_to_project(mdl_json: dict) -> list[ProjectFile]:
             )
         )
 
-    # ── Instructions ──────────────────────────────────────────
+    # ── knowledge/ (v5: business rules under knowledge/rules/) ──
+    files.append(
+        ProjectFile(
+            relative_path="knowledge/knowledge.yml", content="schema_version: 1\n"
+        )
+    )
     instructions = mdl_json.get("_instructions")
     if instructions:
         files.append(
             ProjectFile(
-                relative_path="instructions.md",
+                relative_path="knowledge/rules/general.md",
                 content=instructions.strip() + "\n",
             )
         )
@@ -439,6 +450,14 @@ _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5}
 # it adds no engine-facing MDL JSON, so it reuses v4's engine layoutVersion 3.
 _LAYOUT_VERSION_MAP = {1: 1, 2: 1, 3: 2, 4: 3, 5: 3}
 
+# knowledge/ layout (v5). Single source of truth — reused by the v4→v5 upgrade
+# step and by project init. The knowledge axis has its own schema_version in
+# knowledge.yml, decoupled from the MDL schema_version in wren_project.yml.
+_KNOWLEDGE_SUBDIRS = ("rules", "glossary", "metrics", "caveats", "sql")
+_KNOWLEDGE_CONFIG_FILE = "knowledge/knowledge.yml"
+_KNOWLEDGE_SCHEMA_VERSION = 1
+_SUPPORTED_KNOWLEDGE_VERSIONS = {1}
+
 # Valid dialect values (matches Rust DataSource enum)
 _VALID_DIALECTS = {
     "athena",
@@ -494,11 +513,12 @@ def load_models(project_path: Path) -> list[dict]:
     """Load models — dispatches on schema_version.
 
     v1 (legacy): models/*.yml (flat files)
-    v2: models/<name>/metadata.yml + optional ref_sql.sql
+    v2-v5: models/<name>/metadata.yml + optional ref_sql.sql (directory-per-model)
     """
     sv = get_schema_version(project_path)
     if sv == 1:
         return _load_models_v1(project_path)
+    # sv in {2, 3, 4, 5}: directory-per-model layout
     return _load_models_v2(project_path)
 
 
@@ -553,11 +573,12 @@ def load_views(project_path: Path) -> list[dict]:
     """Load views — dispatches on schema_version.
 
     v1 (legacy): views.yml (single file with `views:` list)
-    v2: views/<name>/metadata.yml + optional sql.yml
+    v2-v5: views/<name>/metadata.yml + optional sql.yml (directory-per-view)
     """
     sv = get_schema_version(project_path)
     if sv == 1:
         return _load_views_v1(project_path)
+    # sv in {2, 3, 4, 5}: directory-per-view layout
     return _load_views_v2(project_path)
 
 
@@ -607,11 +628,12 @@ def load_cubes(project_path: Path) -> list[dict]:
     """Load cubes — dispatches on schema_version.
 
     v1 (legacy): cubes/*.yml
-    v2: cubes/<name>/metadata.yml
+    v2-v5: cubes/<name>/metadata.yml (directory-per-cube)
     """
     sv = get_schema_version(project_path)
     if sv == 1:
         return _load_cubes_v1(project_path)
+    # sv in {2, 3, 4, 5}: directory-per-cube layout
     return _load_cubes_v2(project_path)
 
 
@@ -667,11 +689,77 @@ def load_relationships(project_path: Path) -> list[dict]:
 
 
 def load_instructions(project_path: Path) -> str | None:
-    """Load instructions.md as a string."""
+    """Load the legacy instructions.md as a string.
+
+    Deprecated in favour of knowledge/rules/ — see load_rules().
+    """
     inst_file = project_path / "instructions.md"
     if not inst_file.exists():
         return None
     return inst_file.read_text(encoding="utf-8").strip() or None
+
+
+def load_knowledge_rules(project_path: Path) -> str | None:
+    """Concatenate knowledge/rules/*.md (sorted). None if there are none."""
+    rules_dir = project_path / "knowledge" / "rules"
+    if not rules_dir.is_dir():
+        return None
+    parts = [
+        text
+        for f in sorted(rules_dir.glob("*.md"))
+        if (text := f.read_text(encoding="utf-8").strip())
+    ]
+    return "\n\n".join(parts) if parts else None
+
+
+def load_rules(project_path: Path) -> tuple[str | None, bool]:
+    """Load business rules from knowledge/rules/ and the legacy instructions.md.
+
+    Returns ``(content, used_legacy)`` where ``used_legacy`` is True when the
+    deprecated instructions.md contributed content, so callers can warn.
+    """
+    parts: list[str] = []
+    rules = load_knowledge_rules(project_path)
+    if rules:
+        parts.append(rules)
+    legacy = load_instructions(project_path)
+    if legacy:
+        parts.append(legacy)
+    content = "\n\n".join(parts) if parts else None
+    # Presence-based: an existing (even empty) instructions.md is the deprecated
+    # pattern worth flagging, regardless of whether it currently has content.
+    used_legacy = (project_path / "instructions.md").exists()
+    return content, used_legacy
+
+
+def load_knowledge_config(project_path: Path) -> dict:
+    """Load knowledge/knowledge.yml (knowledge version axis). Empty dict if absent."""
+    kfile = project_path / _KNOWLEDGE_CONFIG_FILE
+    if not kfile.exists():
+        return {}
+    data = yaml.safe_load(kfile.read_text(encoding="utf-8")) or {}
+    return data if isinstance(data, dict) else {}
+
+
+def get_knowledge_schema_version(project_path: Path) -> int:
+    """Return the knowledge-axis schema_version (default 1). Decoupled from MDL.
+
+    Returns 0 when there is no knowledge/ at all.
+    """
+    if not (project_path / "knowledge").is_dir():
+        return 0
+    try:
+        cfg = load_knowledge_config(project_path)
+    except yaml.YAMLError as e:
+        raise SystemExit(f"Error: invalid YAML in {_KNOWLEDGE_CONFIG_FILE}: {e}")
+    raw = cfg.get("schema_version", _KNOWLEDGE_SCHEMA_VERSION)
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        raise SystemExit(
+            f"Error: invalid schema_version {raw!r} in {_KNOWLEDGE_CONFIG_FILE}. "
+            "Expected an integer."
+        )
 
 
 # ── Build ─────────────────────────────────────────────────────────────────
@@ -803,6 +891,33 @@ def validate_project(project_path: Path) -> list[ValidationError]:
 
     if any(e.path == PROJECT_FILE and "schema_version" in e.message for e in errors):
         return errors
+
+    # knowledge/ version axis — independent of the MDL schema_version above.
+    if (project_path / "knowledge").is_dir():
+        try:
+            kcfg = load_knowledge_config(project_path)
+            kv = int(kcfg.get("schema_version", _KNOWLEDGE_SCHEMA_VERSION))
+        except yaml.YAMLError as e:
+            errors.append(
+                ValidationError("error", _KNOWLEDGE_CONFIG_FILE, f"invalid YAML: {e}")
+            )
+        except (TypeError, ValueError) as e:
+            errors.append(
+                ValidationError(
+                    "error",
+                    _KNOWLEDGE_CONFIG_FILE,
+                    f"schema_version must be an integer ({e})",
+                )
+            )
+        else:
+            if kv not in _SUPPORTED_KNOWLEDGE_VERSIONS:
+                errors.append(
+                    ValidationError(
+                        "error",
+                        _KNOWLEDGE_CONFIG_FILE,
+                        f"unsupported knowledge schema_version {kv} — please upgrade wren CLI",
+                    )
+                )
 
     # Load data (snake_case)
     models = load_models(project_path)
@@ -1160,6 +1275,36 @@ class UpgradeError(Exception):
     """Raised when a project upgrade cannot proceed."""
 
 
+def _knowledge_skeleton_targets() -> list[str]:
+    """Canonical relative paths of a fresh knowledge/ skeleton.
+
+    Empty subdirectories carry a .gitkeep so the layout survives in git.
+    """
+    paths = [f"knowledge/{sub}/.gitkeep" for sub in _KNOWLEDGE_SUBDIRS]
+    paths.append(_KNOWLEDGE_CONFIG_FILE)
+    return paths
+
+
+def create_knowledge_skeleton(project_path: Path) -> list[str]:
+    """Create any missing parts of the knowledge/ skeleton. Idempotent.
+
+    Returns the relative paths actually created (empty if already complete).
+    Existing files are never overwritten.
+    """
+    created: list[str] = []
+    for rel in _knowledge_skeleton_targets():
+        dest = project_path / rel
+        if dest.exists():
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if rel == _KNOWLEDGE_CONFIG_FILE:
+            dest.write_text(f"schema_version: {_KNOWLEDGE_SCHEMA_VERSION}\n")
+        else:
+            dest.write_text("")  # .gitkeep
+        created.append(rel)
+    return created
+
+
 def plan_upgrade(
     project_path: Path,
     target_version: int | None = None,
@@ -1194,6 +1339,10 @@ def plan_upgrade(
     for version in range(current, target):
         if version == 1:
             created, deleted = _plan_v1_to_v2(project_path)
+            files_created.extend(created)
+            files_deleted.extend(deleted)
+        elif version == 4:
+            created, deleted = _plan_v4_to_v5(project_path)
             files_created.extend(created)
             files_deleted.extend(deleted)
         # v2→v3 (dialect) and v3→v4 (composite primary_key): no file layout
@@ -1267,13 +1416,28 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
     return created, deleted
 
 
+def _plan_v4_to_v5(project_path: Path) -> tuple[list[str], list[str]]:
+    """Plan v4→v5: create the knowledge/ skeleton if absent.
+
+    First file-creating step since v1→v2. Idempotent — lists only the
+    skeleton paths that don't already exist.
+    """
+    created = [
+        rel
+        for rel in _knowledge_skeleton_targets()
+        if not (project_path / rel).exists()
+    ]
+    return created, []
+
+
 def apply_upgrade(project_path: Path, result: UpgradeResult) -> None:
-    """Write upgrade changes to disk."""
-    if not result.files_created and not result.files_deleted:
-        # No-op (e.g. v2→v3, only wren_project.yml changes)
-        pass
-    else:
-        _apply_v1_to_v2(project_path)
+    """Write upgrade changes to disk, replaying each version step in order."""
+    for version in range(result.from_version, result.to_version):
+        if version == 1:
+            _apply_v1_to_v2(project_path)
+        elif version == 4:
+            _apply_v4_to_v5(project_path)
+        # v2→v3, v3→v4: only the wren_project.yml stamp changes (handled below)
 
     # Update wren_project.yml
     config = load_project_config(project_path)
@@ -1366,6 +1530,11 @@ def _apply_v1_to_v2(project_path: Path) -> None:
             old_file = project_path / "cubes" / source_file
             if old_file.exists():
                 old_file.unlink()
+
+
+def _apply_v4_to_v5(project_path: Path) -> None:
+    """Execute v4→v5: create the knowledge/ skeleton (idempotent)."""
+    create_knowledge_skeleton(project_path)
 
 
 # ── Semantic validation (view dry-plan + description completeness) ─────────

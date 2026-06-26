@@ -102,10 +102,9 @@ A Wren project is the portable context package for one business data layer.
 It includes:
 
 - **MDL source files** - models, relationships, views, cubes, and project metadata.
-- **`instructions.md`** - business and operational guidance for agents.
-- **`queries.yml`** - reviewed natural-language-to-SQL examples that can seed memory.
+- **`knowledge/`** - business rules (`rules/`) and confirmed NL→SQL pairs (`sql/`), the source of truth for memory.
 - **`target/mdl.json`** - compiled MDL manifest used by the engine.
-- **`.wren/memory/`** - local LanceDB indexes for schema retrieval and query recall.
+- **`.wren/memory/`** - derived, optional LanceDB index rebuilt from `knowledge/` for semantic retrieval.
 
 Connection profiles live separately in `~/.wren/profiles.yml` so credentials stay environment-specific.
 

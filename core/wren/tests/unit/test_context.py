@@ -280,6 +280,94 @@ def test_load_instructions_missing(tmp_path):
     assert load_instructions(tmp_path) is None
 
 
+# ── knowledge/ rules + version axis (O3) ──────────────────────────────────
+
+
+def test_load_knowledge_rules_concatenates_sorted(tmp_path):
+    from wren.context import load_knowledge_rules  # noqa: PLC0415
+
+    _make_v2_project(tmp_path)
+    rdir = tmp_path / "knowledge" / "rules"
+    rdir.mkdir(parents=True)
+    (rdir / "b_units.md").write_text("Amounts are USD.\n")
+    (rdir / "a_filters.md").write_text("Exclude soft-deleted rows.\n")
+    result = load_knowledge_rules(tmp_path)
+    # sorted by filename: a_filters before b_units
+    assert result == "Exclude soft-deleted rows.\n\nAmounts are USD."
+
+
+def test_load_knowledge_rules_missing(tmp_path):
+    from wren.context import load_knowledge_rules  # noqa: PLC0415
+
+    _make_v2_project(tmp_path)
+    assert load_knowledge_rules(tmp_path) is None
+
+
+def test_load_rules_combines_knowledge_and_legacy(tmp_path):
+    from wren.context import load_rules  # noqa: PLC0415
+
+    _make_v2_project(tmp_path)
+    (tmp_path / "knowledge" / "rules").mkdir(parents=True)
+    (tmp_path / "knowledge" / "rules" / "general.md").write_text("From knowledge.\n")
+    (tmp_path / "instructions.md").write_text("From legacy.\n")
+    content, used_legacy = load_rules(tmp_path)
+    assert content == "From knowledge.\n\nFrom legacy."
+    assert used_legacy is True
+
+
+def test_load_rules_knowledge_only_no_legacy_flag(tmp_path):
+    from wren.context import load_rules  # noqa: PLC0415
+
+    _make_v2_project(tmp_path)
+    (tmp_path / "knowledge" / "rules").mkdir(parents=True)
+    (tmp_path / "knowledge" / "rules" / "general.md").write_text("Only knowledge.\n")
+    content, used_legacy = load_rules(tmp_path)
+    assert content == "Only knowledge."
+    assert used_legacy is False
+
+
+def test_load_rules_flags_empty_legacy_file(tmp_path):
+    """An existing-but-empty instructions.md still flags the deprecated pattern."""
+    from wren.context import load_rules  # noqa: PLC0415
+
+    _make_v2_project(tmp_path)
+    (tmp_path / "instructions.md").write_text("")
+    content, used_legacy = load_rules(tmp_path)
+    assert content is None  # empty file contributes no content
+    assert used_legacy is True
+
+
+def test_get_knowledge_schema_version(tmp_path):
+    from wren.context import create_knowledge_skeleton, get_knowledge_schema_version  # noqa: PLC0415
+
+    _make_v2_project(tmp_path)
+    assert get_knowledge_schema_version(tmp_path) == 0  # no knowledge/ yet
+    create_knowledge_skeleton(tmp_path)
+    assert get_knowledge_schema_version(tmp_path) == 1
+
+
+def test_validate_reports_malformed_knowledge_yml(tmp_path):
+    """A malformed knowledge.yml surfaces as a ValidationError, not a crash."""
+    _make_v2_project(tmp_path, schema_version=5)
+    (tmp_path / "knowledge").mkdir()
+    (tmp_path / "knowledge" / "knowledge.yml").write_text(
+        "schema_version: [unterminated\n"
+    )
+    errors = validate_project(tmp_path)
+    assert any("knowledge" in e.path and "invalid YAML" in e.message for e in errors)
+
+
+def test_validate_rejects_unsupported_knowledge_version(tmp_path):
+    _make_v2_project(tmp_path, schema_version=5)
+    (tmp_path / "knowledge").mkdir()
+    (tmp_path / "knowledge" / "knowledge.yml").write_text("schema_version: 99\n")
+    errors = validate_project(tmp_path)
+    assert any(
+        "knowledge" in e.path and "unsupported knowledge schema_version" in e.message
+        for e in errors
+    )
+
+
 # ── build_manifest / build_json ───────────────────────────────────────────
 
 
@@ -1306,6 +1394,73 @@ def test_upgrade_preserves_instructions(tmp_path):
     assert (tmp_path / "instructions.md").exists()
     content = load_instructions(tmp_path)
     assert "Rule 1" in content
+
+
+# ── v4 → v5 (knowledge/ skeleton) ─────────────────────────────────────────
+
+_KNOWLEDGE_SKELETON = [
+    "knowledge/rules/.gitkeep",
+    "knowledge/glossary/.gitkeep",
+    "knowledge/metrics/.gitkeep",
+    "knowledge/caveats/.gitkeep",
+    "knowledge/sql/.gitkeep",
+    "knowledge/knowledge.yml",
+]
+
+
+def test_plan_upgrade_v4_to_v5_lists_knowledge(tmp_path):
+    _make_v2_project(tmp_path, schema_version=4)
+    result = plan_upgrade(tmp_path, target_version=5)
+    assert result.from_version == 4
+    assert result.to_version == 5
+    assert set(result.files_created) == set(_KNOWLEDGE_SKELETON)
+    assert "wren_project.yml" in result.files_modified
+    # plan must not touch disk
+    assert not (tmp_path / "knowledge").exists()
+
+
+def test_apply_upgrade_v4_to_v5_creates_knowledge(tmp_path):
+    _make_v2_project(tmp_path, schema_version=4)
+    apply_upgrade(tmp_path, plan_upgrade(tmp_path, target_version=5))
+    assert get_schema_version(tmp_path) == 5
+    for rel in _KNOWLEDGE_SKELETON:
+        assert (tmp_path / rel).exists(), rel
+    # knowledge axis has its own schema_version, decoupled from MDL
+    import yaml as _yaml  # noqa: PLC0415
+
+    kcfg = _yaml.safe_load((tmp_path / "knowledge" / "knowledge.yml").read_text())
+    assert kcfg["schema_version"] == 1
+
+
+def test_upgrade_v4_to_v5_idempotent(tmp_path):
+    _make_v2_project(tmp_path, schema_version=4)
+    apply_upgrade(tmp_path, plan_upgrade(tmp_path, target_version=5))
+    # second pass: already at latest → no-op plan, knowledge untouched
+    again = plan_upgrade(tmp_path, target_version=5)
+    assert again.from_version == again.to_version == 5
+    assert again.files_created == []
+
+
+def test_upgrade_v4_to_v5_preserves_existing_knowledge(tmp_path):
+    """An existing knowledge file is never overwritten by the upgrade."""
+    _make_v2_project(tmp_path, schema_version=4)
+    (tmp_path / "knowledge" / "rules").mkdir(parents=True)
+    (tmp_path / "knowledge" / "rules" / "house.md").write_text("# keep me\n")
+    apply_upgrade(tmp_path, plan_upgrade(tmp_path, target_version=5))
+    assert (tmp_path / "knowledge" / "rules" / "house.md").read_text() == "# keep me\n"
+    assert (tmp_path / "knowledge" / "knowledge.yml").exists()
+
+
+def test_apply_upgrade_v2_to_v5_full_chain(tmp_path):
+    """v2 → v5 restamps through and builds the knowledge skeleton; models still load."""
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text("name: orders\ntable_reference:\n  table: orders\n")
+    apply_upgrade(tmp_path, plan_upgrade(tmp_path, target_version=5))
+    assert get_schema_version(tmp_path) == 5
+    assert (tmp_path / "knowledge" / "knowledge.yml").exists()
+    assert load_models(tmp_path)[0]["name"] == "orders"
 
 
 _PROJECT_FILE = "wren_project.yml"

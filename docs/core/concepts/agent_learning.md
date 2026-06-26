@@ -20,7 +20,7 @@ Wren AI runs the agent through two beats whenever you set up a new project.
 
 **Beat 2: Enrich deep.** Structure is only the start. The hard business meaning lives in docs, decks, Slack threads, and analyst SQL. The `enrich-context` workflow brings that meaning in through two modes:
 
-- **Grill mode**: the agent asks one focused question at a time ("which is the canonical `orders` table?", "what does `status = 4` mean?", "should `active customer` exclude internal users?"). You answer; the agent patches MDL, `instructions.md`, `queries.yml`, or memory.
+- **Grill mode**: the agent asks one focused question at a time ("which is the canonical `orders` table?", "what does `status = 4` mean?", "should `active customer` exclude internal users?"). You answer; the agent patches MDL or `knowledge/` (rules and NL→SQL pairs).
 - **Auto-pilot mode**: drop PDFs, glossaries, handbooks, and SQL history into `<project>/raw/`. The agent reads them, proposes context changes with evidence, and waits for review.
 
 Both modes write to reviewable, version-controlled artifacts. Nothing is silently absorbed into a black box.
@@ -32,11 +32,12 @@ Four artifacts capture different layers of learning:
 | Artifact | What it stores | Updated by |
 |---|---|---|
 | **MDL** (`models/`, `views/`, `relationships.yml`) | Structural and semantic contract: what data exists, how it relates, which calculations are reusable | `wren context build`, manual edits, agent-proposed changes |
-| **`instructions.md`** | Operational guidance: preferred terminology, default filters, table selection rules, caveats | Manual edits or agent-proposed changes |
-| **Memory** (`.wren/memory/`) | Retrieval index over MDL + instructions, plus a record of confirmed natural-language-to-SQL pairs | `wren memory index`, `wren memory store` |
-| **`queries.yml`** | Curated, committable seed of natural-language-to-SQL examples | `wren memory dump` from accumulated memory |
+| **`knowledge/rules/`** | Operational guidance: preferred terminology, default filters, table selection rules, caveats | Manual edits or agent-proposed changes |
+| **`knowledge/sql/`** | Confirmed natural-language-to-SQL pairs — committable, the source of truth for recall | `wren memory store`, manual edits |
+| **Memory index** (`.wren/memory/`) | Derived retrieval index over MDL + `knowledge/` (optional LanceDB, else grep) | `wren memory index` |
 
-The agent reads from all four when it gathers context for a new question. The first three change rarely; memory and queries grow with use.
+The agent reads from all of these when it gathers context for a new question. MDL and rules
+change rarely; the NL→SQL pairs grow with use, and the index is rebuilt from them.
 
 ## The query workflow in practice
 
@@ -66,7 +67,7 @@ Wren AI lets the system compound:
 - Recurring metrics reuse accepted SQL patterns.
 - Schema retrieval narrows as the project grows.
 - Corrections become future grounding instead of disappearing at session end.
-- Teams can commit `queries.yml` so new environments inherit the learning.
+- Teams can commit `knowledge/sql/` so new environments inherit the learning.
 
 The agent is not getting smarter. The context layer it reads from is getting richer, and it is reviewable every step of the way.
 
