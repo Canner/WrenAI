@@ -378,6 +378,8 @@ Valid dialect values: `athena`, `bigquery`, `canner`, `clickhouse`, `databricks`
 | 1 | 1 | Legacy flat-file project format. |
 | 2 | 1 | Folder-per-entity project format. |
 | 3 | 2 | Adds the `dialect` field on models and views. |
+| 4 | 3 | Adds composite (list-form) primary keys. |
+| 5 | 3 | Adds the first-class `knowledge/` base. Current. |
 
 Use `wren context upgrade` to bump. The upgrade is dry-runnable with `--dry-run`.
 
@@ -388,7 +390,7 @@ target/
 .wren/memory/
 ```
 
-Source YAML and `instructions.md` are committed. `target/mdl.json` is derived; `.wren/memory/` is binary LanceDB data — share confirmed NL-SQL pairs through `queries.yml` instead.
+Source YAML and the `knowledge/` base (rules, glossary, metrics, caveats, and the NL→SQL pairs under `knowledge/sql/`) are committed. `target/mdl.json` is derived; `.wren/memory/` is a binary LanceDB index rebuilt from `knowledge/sql/` — commit the `knowledge/sql/*.md` pairs, not the index.
 
 ## See also
 
