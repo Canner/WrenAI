@@ -21,7 +21,7 @@ wren context validate          # check YAML structure (no DB required)
 wren context build             # compile YAML to target/mdl.json
 wren context upgrade           # upgrade to the latest schema_version
 wren context set-profile pg    # bind a connection profile to the project
-wren memory index              # index schema + instructions into .wren/memory/
+wren memory index              # index schema + knowledge/ for recall
 ```
 
 A typical first-time setup:
@@ -29,7 +29,7 @@ A typical first-time setup:
 ```bash
 mkdir my_project && cd my_project
 wren context init
-# (edit models/, relationships.yml, instructions.md — usually agent-driven)
+# (edit models/, relationships.yml, knowledge/ — usually agent-driven)
 wren context validate
 wren context build
 wren profile add pg-dev --from-file dev.yml --activate
@@ -48,7 +48,7 @@ wren memory index
 ## `wren_project.yml` at the project root
 
 ```yaml
-schema_version: 3
+schema_version: 5
 name: my_project
 version: "1.0"
 catalog: wren
@@ -59,7 +59,7 @@ profile: pg-dev
 
 | Field | Purpose |
 |---|---|
-| `schema_version` | Directory layout version. Owned by the CLI — use `wren context upgrade` to bump. |
+| `schema_version` | Project layout version (current: **5** — the layout below). Owned by the CLI — bump with `wren context upgrade`. The `knowledge/` base tracks its own version in `knowledge/knowledge.yml`, independent of this one. |
 | `name` | Project identifier. |
 | `version` | Your own project version (free-form). |
 | `catalog` / `schema` | **Wren AI namespace**, not your database catalog/schema. Defaults: `wren` / `public`. |
@@ -70,24 +70,48 @@ profile: pg-dev
 
 ## Project layout
 
-Everything below lives **in the project** (version-controlled); connection credentials and global CLI state live separately under `~/.wren/` (see [Where profiles live](#where-profiles-live)).
+`wren context init` scaffolds the current layout (**v5**): per-model and per-view folders, `cubes/` for pre-aggregated semantic objects, a first-class `knowledge/` base, and (added later) GenBI `apps/`.
+
+Everything below lives **in the project** (version-controlled), except `target/` (build output) and `.wren/` (project-local runtime state), which are gitignore-able. Connection credentials and global CLI state live separately under `~/.wren/` (see [Where profiles live](#where-profiles-live)).
 
 ```text
 my_project/
-├── wren_project.yml      # project manifest (fields above)
-├── models/               # one YAML file per model
-├── relationships.yml     # relationships between models
-├── cubes/                # (optional) pre-aggregation cubes
-├── views/                # (optional) saved views
-├── instructions.md       # business context for the agent
-├── apps/                 # (optional) generated GenBI apps, one dir per app
-│   └── <name>/           #   built by an agent via `wren genbi` — see the GenBI guide
+├── wren_project.yml          # project manifest (fields above)
+│
+├── models/<name>/            # MDL — one folder per model
+│   ├── metadata.yml          #   columns, primary_key, table_reference, …
+│   └── ref_sql.sql           #   (optional) SQL-defined model body
+├── views/<name>/             # MDL — one folder per view
+│   ├── metadata.yml          #   view definition
+│   └── sql.yml               #   (optional) statement in a separate file
+├── relationships.yml         # MDL — all relationships between models
+├── cubes/<name>/             # (optional) pre-aggregation cubes
+│   └── metadata.yml          #   base_object, measures, dimensions, …
+│
+├── knowledge/                # knowledge base (committed)
+│   ├── rules/                #   business rules — read by `wren context instructions`
+│   ├── glossary/             #   business-term definitions
+│   ├── metrics/              #   named metric definitions
+│   ├── caveats/              #   data caveats / gotchas
+│   ├── sql/                  #   NL→SQL pairs — source of truth for memory
+│   └── knowledge.yml         #   knowledge-axis schema_version (decoupled from MDL)
+│
+├── AGENTS.md                 # AI agent workflow guidance for this project
+│
+├── apps/<name>/              # (optional) generated GenBI apps — see the GenBI guide
+│   ├── index.html            #   app entry point
+│   └── mdl.json              #   compiled MDL copied into the app
+│
 ├── target/
-│   └── mdl.json          # compiled MDL — `wren context build`
-└── .wren/                # project-local CLI state (gitignore-able)
-    ├── memory/           # indexed schema + NL→SQL pairs — `wren memory index`
-    └── apps.yml          # GenBI app index — written by `wren genbi register`
+│   └── mdl.json              # compiled MDL — `wren context build`
+└── .wren/                    # project-local runtime state (gitignore-able)
+    ├── memory/               #   LanceDB semantic index over knowledge/sql/ — `wren memory index`
+    └── apps.yml              #   GenBI app index — written by `wren genbi register`
 ```
+
+`knowledge/` carries what the database schema cannot — business rules, glossary terms, named metrics, caveats, and the NL→SQL pairs under `knowledge/sql/` (written by `wren memory store`). It tracks its **own** `schema_version` in `knowledge.yml`, decoupled from the MDL layout version because knowledge and the data model evolve on different cadences. `knowledge/rules/` supersedes the older single-file `instructions.md`, and `knowledge/sql/` supersedes `queries.yml`; both legacy files are still read for back-compat but are no longer scaffolded.
+
+The `memory` extra builds a semantic (embedding) index under `.wren/memory/`; without it, recall falls back to reading `knowledge/sql/*.md` directly — so `knowledge/sql/`, not the index, is the source of truth.
 
 `apps/<name>/` and `.wren/apps.yml` are added by the [GenBI workflow](genbi.md); `.wren/apps.yml` is machine-written via `wren genbi register/remove` — never edit it by hand.
 
