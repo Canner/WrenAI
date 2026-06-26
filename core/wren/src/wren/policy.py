@@ -6,12 +6,33 @@ manifest and does not use any denied functions.
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Iterable
 
-from sqlglot import exp
+from sqlglot import exp, parse_one
+from sqlglot.errors import SqlglotError
 
 from wren.config import WrenConfig
 from wren.model.error import ErrorCode, ErrorPhase, WrenError
+
+# Dialects we probe when canonicalising the user's denylist. sqlglot can map
+# the same function name (e.g. ``version()``) onto different concrete AST
+# subclasses depending on the dialect — postgres/mysql/duckdb/trino/clickhouse
+# normalise to ``CurrentVersion`` while tsql/oracle/bigquery/snowflake keep it
+# as ``Anonymous``. Probing each dialect ensures the canonical class key is
+# captured regardless of which one the user's SQL ends up parsed with.
+_CANONICALISE_DIALECTS: tuple[str | None, ...] = (
+    None,
+    "postgres",
+    "mysql",
+    "tsql",
+    "oracle",
+    "bigquery",
+    "snowflake",
+    "clickhouse",
+    "trino",
+    "duckdb",
+)
 
 
 def resolve_model_name(
@@ -131,16 +152,46 @@ def _check_tables(
             )
 
 
+@lru_cache(maxsize=128)
+def _canonical_denied(denied: frozenset[str]) -> frozenset[str]:
+    """Expand the user's denylist to also cover sqlglot's canonical keys.
+
+    sqlglot >=29 maps several common functions onto concrete subclasses —
+    e.g. ``version()`` becomes ``exp.CurrentVersion`` in
+    postgres/mysql/duckdb/trino/clickhouse (with ``type(node).key ==
+    "currentversion"``), while in tsql/oracle/bigquery/snowflake it stays
+    as ``exp.Anonymous(name="version")``. A user denylist entry of
+    ``"version"`` would only match the anonymous case without this
+    expansion. Probing each known dialect collects every class key the
+    name might land on at parse time and adds them all to the result.
+    """
+    expanded: set[str] = {d.lower() for d in denied}
+    for name in list(expanded):
+        for dialect in _CANONICALISE_DIALECTS:
+            try:
+                ast = parse_one(f"SELECT {name}()", dialect=dialect)
+            except SqlglotError:
+                # A malformed denylist entry can fail tokenizing or parsing on
+                # some dialects; skip it for this dialect rather than crashing
+                # validation (SqlglotError covers ParseError and TokenError).
+                continue
+            first_func = next(ast.find_all(exp.Func), None)
+            if first_func is not None and not isinstance(first_func, exp.Anonymous):
+                expanded.add(type(first_func).key.lower())
+    return frozenset(expanded)
+
+
 def _check_functions(
     ast: exp.Expression,
     denied: frozenset[str],
 ) -> None:
+    canonical = _canonical_denied(denied)
     for func in ast.find_all(exp.Func):
         if isinstance(func, exp.Anonymous):
             name = func.name
         else:
             name = type(func).key
-        if name.lower() in denied:
+        if name.lower() in canonical:
             raise WrenError(
                 ErrorCode.BLOCKED_FUNCTION,
                 f"Function '{name}' is not allowed. "

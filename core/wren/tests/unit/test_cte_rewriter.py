@@ -11,6 +11,7 @@ import sqlglot
 from wren.mdl import get_session_context
 from wren.mdl.cte_rewriter import CTERewriter, get_sqlglot_dialect
 from wren.model.data_source import DataSource
+from wren.model.error import ErrorCode, WrenError
 
 pytestmark = pytest.mark.unit
 
@@ -316,12 +317,52 @@ class TestCTEEdgeCases:
         ast = sqlglot.parse_one(result, dialect="duckdb")
         assert ast.args["with_"].args.get("recursive")
 
-    def test_no_model_references_fallback(self):
-        """Query referencing no models falls back to direct transform_sql."""
-        rw = _make_rewriter(_SINGLE_MODEL_MANIFEST, fallback=True)
-        # This should raise because 'unknown_table' is not in the manifest,
-        # and the fallback transform_sql will also fail.
-        with pytest.raises(Exception):
+    @pytest.mark.parametrize(
+        ("sql", "data_source"),
+        [
+            ("SELECT 1", DataSource.postgres),
+            ("SELECT 1 + 1 AS two", DataSource.postgres),
+            ("SELECT CURRENT_DATE", DataSource.postgres),
+            # Oracle forces identifier quoting (identify=True) on output; the
+            # passthrough must still round-trip a scalar query cleanly.
+            ("SELECT 1", DataSource.oracle),
+            # A pure inline-row STRUCT spine — no model reference.
+            (
+                "SELECT stage, sort_order FROM UNNEST(["
+                "STRUCT('Prospecting' AS stage, 1 AS sort_order), "
+                "('Qualification', 2), ('Proposal', 3)])",
+                DataSource.bigquery,
+            ),
+        ],
+    )
+    def test_scalar_or_pure_tvf_passes_through(self, sql, data_source):
+        """SQL with no model/view reference is passed through, never rejected."""
+        rw = _make_rewriter(_SINGLE_MODEL_MANIFEST, data_source, fallback=True)
+        out = rw.rewrite(sql)
+
+        # Nothing to expand — no model CTE is injected.
+        assert "with" not in out.lower()
+        # It round-trips to the same AST in the target dialect.
+        dialect = get_sqlglot_dialect(data_source)
+        assert sqlglot.parse_one(out, dialect=dialect) == sqlglot.parse_one(
+            sql, dialect=dialect
+        )
+
+    def test_scalar_passes_through_without_fallback(self):
+        """Pure scalar SQL passes through even when fallback is disabled."""
+        rw = _make_rewriter(_SINGLE_MODEL_MANIFEST, fallback=False)
+        out = rw.rewrite("SELECT 1")
+        assert "with" not in out.lower()
+
+    def test_unresolved_table_raises_without_fallback(self):
+        """A non-model table reference raises when fallback is disabled.
+
+        Only pure scalar / TVF SQL passes through unconditionally; a table
+        reference that resolves to no MDL model or view is still a rewriter
+        miss and must surface, not be silently passed on.
+        """
+        rw = _make_rewriter(_SINGLE_MODEL_MANIFEST, fallback=False)
+        with pytest.raises(ValueError):
             rw.rewrite("SELECT * FROM unknown_table")
 
 
@@ -431,3 +472,152 @@ class TestDialectMapping:
 
     def test_local_file_maps_to_duckdb(self):
         assert get_sqlglot_dialect(DataSource.local_file) == "duckdb"
+
+
+# ---------------------------------------------------------------------------
+# Tests: case-insensitive column & model binding
+# ---------------------------------------------------------------------------
+
+_MIXED_CASE_COL_MANIFEST = {
+    "catalog": "wren",
+    "schema": "public",
+    "models": [
+        {
+            "name": "events",
+            "tableReference": {"schema": "main", "table": "events"},
+            "columns": [
+                {"name": "id", "type": "integer"},
+                {"name": "Amount", "type": "integer"},
+            ],
+            "primaryKey": "id",
+        }
+    ],
+}
+
+_MIXED_CASE_MODEL_MANIFEST = {
+    "catalog": "wren",
+    "schema": "public",
+    "models": [
+        {
+            "name": "CaseModel",
+            "tableReference": {"schema": "main", "table": "case_model"},
+            "columns": [{"name": "id", "type": "integer"}],
+            "primaryKey": "id",
+        }
+    ],
+}
+
+_CASE_COLLISION_MANIFEST = {
+    "catalog": "wren",
+    "schema": "public",
+    "models": [
+        {
+            "name": "clash",
+            "tableReference": {"schema": "main", "table": "clash"},
+            "columns": [
+                {"name": "Year", "type": "integer"},
+                {"name": "year", "type": "integer"},
+            ],
+        }
+    ],
+}
+
+
+class TestCaseSensitiveBinding:
+    def test_force_identify_detected_from_dialect(self):
+        """Upper-folding dialects force-quote output; others do not."""
+        assert _make_rewriter(_SINGLE_MODEL_MANIFEST, DataSource.oracle)._force_identify
+        assert _make_rewriter(
+            _SINGLE_MODEL_MANIFEST, DataSource.snowflake
+        )._force_identify
+        assert not _make_rewriter(
+            _SINGLE_MODEL_MANIFEST, DataSource.postgres
+        )._force_identify
+        assert not _make_rewriter(
+            _SINGLE_MODEL_MANIFEST, DataSource.bigquery
+        )._force_identify
+
+    def test_case_only_column_collision_rejected_on_ci_dialect(self):
+        """Case-distinct columns are rejected on a case-insensitive dialect."""
+        with pytest.raises(WrenError) as exc:
+            _make_rewriter(_CASE_COLLISION_MANIFEST, DataSource.bigquery)
+        assert exc.value.error_code == ErrorCode.INVALID_MDL
+
+    def test_case_distinct_columns_allowed_on_case_sensitive_dialect(self):
+        """Postgres can hold case-distinct columns — build succeeds, refs bind."""
+        rw = _make_rewriter(_CASE_COLLISION_MANIFEST, DataSource.postgres)
+        assert rw._case_sensitive_columns
+        # Quoted refs select each case-distinct column exactly.
+        out = rw.rewrite('SELECT "Year", "year" FROM clash')
+        assert _has_cte(out, "clash", dialect="postgres")
+        assert "select 1" not in out.lower()
+
+    def test_quoted_wrong_case_column_rejected_on_case_sensitive_dialect(self):
+        """A quoted ref to a non-existent case variant fails loudly."""
+        rw = _make_rewriter(_CASE_COLLISION_MANIFEST, DataSource.postgres)
+        with pytest.raises(WrenError) as exc:
+            rw.rewrite('SELECT "YEAR" FROM clash')
+        assert exc.value.error_code == ErrorCode.INVALID_SQL
+
+    def test_ambiguous_unquoted_ref_rejected_on_case_sensitive_dialect(self):
+        """An unquoted ref matching multiple case-distinct columns is ambiguous."""
+        rw = _make_rewriter(_CASE_COLLISION_MANIFEST, DataSource.postgres)
+        with pytest.raises(WrenError) as exc:
+            rw.rewrite("SELECT YEAR FROM clash")
+        assert exc.value.error_code == ErrorCode.INVALID_SQL
+
+    def test_quoted_mixed_case_column_binds(self):
+        """A quoted mixed-case column reference binds to the model CTE."""
+        rw = _make_rewriter(_MIXED_CASE_COL_MANIFEST, DataSource.postgres)
+        out = rw.rewrite('SELECT "Amount" FROM events')
+        assert _has_cte(out, "events", dialect="postgres")
+        # The CTE exposes the column with the user's quoting and does not
+        # collapse to a column-less SELECT 1.
+        assert "Amount" in out
+        assert "select 1" not in out.lower()
+
+    def test_unquoted_mixed_case_column_binds(self):
+        """An unquoted mixed-case column reference binds via dialect folding."""
+        rw = _make_rewriter(_MIXED_CASE_COL_MANIFEST, DataSource.postgres)
+        out = rw.rewrite("SELECT Amount FROM events")
+        assert _has_cte(out, "events", dialect="postgres")
+        assert "select 1" not in out.lower()
+
+    def test_quoted_mixed_case_model_binds(self):
+        """A quoted mixed-case model name binds to its CTE (not SELECT 1)."""
+        rw = _make_rewriter(_MIXED_CASE_MODEL_MANIFEST, DataSource.postgres)
+        out = rw.rewrite('SELECT id FROM "CaseModel"')
+        assert _has_cte(out, "CaseModel", dialect="postgres")
+        assert "select 1" not in out.lower()
+
+    def test_quoting_does_not_leak_across_sources(self):
+        """A quoted same-name column elsewhere must not flip a model CTE alias.
+
+        ``events`` has a mixed-case ``Amount`` and is referenced unquoted; a
+        user CTE also exposes ``amount`` referenced quoted. Quoting is scoped
+        per model, so the ``events`` CTE still mirrors the unquoted reference
+        (``AS Amount``) and the user's ``e.Amount`` binds on Postgres — the
+        CTE's quoted ``"amount"`` does not force-quote it.
+        """
+        rw = _make_rewriter(_MIXED_CASE_COL_MANIFEST, DataSource.postgres)
+        out = rw.rewrite(
+            "WITH c AS (SELECT 1 AS amount) "
+            'SELECT e.Amount, c."amount" FROM events e JOIN c ON 1=1'
+        )
+        ast = sqlglot.parse_one(out, dialect="postgres")
+        events_cte = next(
+            cte for cte in ast.args["with_"].expressions if cte.alias == "events"
+        )
+        proj = events_cte.this.expressions[0]
+        assert isinstance(proj, sqlglot.exp.Alias)
+        assert not proj.args["alias"].quoted, (
+            f"events CTE alias should be unquoted (mirroring e.Amount), got: {out}"
+        )
+
+    def test_case_insensitive_ref_on_upper_folding_dialect(self):
+        """Oracle: a lower-case ref to a mixed-case column is canonicalized."""
+        rw = _make_rewriter(_MIXED_CASE_COL_MANIFEST, DataSource.oracle)
+        out = rw.rewrite("SELECT amount FROM events")
+        # Output is force-quoted; the manifest-case column survives.
+        assert "Amount" in out
+        assert "select 1" not in out.lower()

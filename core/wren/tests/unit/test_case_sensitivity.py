@@ -183,7 +183,7 @@ def test_cte_rewriter_quoted_preserves_case(
     sql = f"SELECT u.id FROM {table_ref} AS u"
     ast = parse_one(sql, dialect="bigquery")
     user_ctes = rewriter._collect_user_cte_names(ast)
-    used, _refs = rewriter._collect_model_columns(ast, user_ctes)
+    used, _refs, _quoting = rewriter._collect_model_columns(ast, user_ctes)
 
     assert list(used.keys()) == [expected_model], (
         f"expected the rewriter to bind {expected_model!r} for {table_ref}, "
@@ -202,7 +202,7 @@ def test_cte_rewriter_unquoted_ci_fallback(dual_case_manifest_b64):
     # Unquoted ``Users`` matches the ``Users`` model (exact case) — not
     # ``users`` even though both exist.
     ast = parse_one("SELECT u.id FROM Users AS u", dialect="bigquery")
-    used, _refs = rewriter._collect_model_columns(ast, set())
+    used, _refs, _quoting = rewriter._collect_model_columns(ast, set())
     assert list(used.keys()) == ["Users"]
 
 

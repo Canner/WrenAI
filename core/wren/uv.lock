@@ -3449,7 +3449,7 @@ requires-dist = [
     { name = "requests", specifier = ">=2.33.0" },
     { name = "sentence-transformers", marker = "extra == 'memory'", specifier = ">=2.2" },
     { name = "snowflake-connector-python", extras = ["pandas"], marker = "extra == 'snowflake'", specifier = ">=3.10" },
-    { name = "sqlglot", specifier = ">=27" },
+    { name = "sqlglot", specifier = ">=29" },
     { name = "starlette", marker = "extra == 'ui'", specifier = ">=0.37" },
     { name = "trino", marker = "extra == 'trino'", specifier = ">=0.333,<1" },
     { name = "typer", specifier = ">=0.12" },
