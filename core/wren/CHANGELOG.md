@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.11.0](https://github.com/Canner/WrenAI/compare/wren-v0.10.1...wren-v0.11.0) (2026-06-26)
+
+
+### Features
+
+* **wren:** add v5 project layout (schema_version 5) ([#2386](https://github.com/Canner/WrenAI/issues/2386)) ([d50b9bc](https://github.com/Canner/WrenAI/commit/d50b9bcc58d4242e39b3d728c328b446e074997d))
+* **wren:** case-aware column & model binding in the CTE rewriter ([#2400](https://github.com/Canner/WrenAI/issues/2400)) ([58f3f51](https://github.com/Canner/WrenAI/commit/58f3f5113ef2da7189541e4ad2b89182e6f86a48))
+* **wren:** v5 project layout — knowledge/ first-class, memory decoupled from LanceDB ([#2399](https://github.com/Canner/WrenAI/issues/2399)) ([3e34906](https://github.com/Canner/WrenAI/commit/3e34906e4b690f454e0435e57fda8ec60a1b1595))
+
+
+### Bug Fixes
+
+* **wren:** run full unit suite in CI and fix upgrade tests for schema_version 5 ([#2388](https://github.com/Canner/WrenAI/issues/2388)) ([c36e56e](https://github.com/Canner/WrenAI/commit/c36e56ebd285c0c07444ce7deb900055fe7cf538))
+
 ## [0.10.1](https://github.com/Canner/WrenAI/compare/wren-v0.10.0...wren-v0.10.1) (2026-06-22)
 
 
