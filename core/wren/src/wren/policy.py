@@ -137,10 +137,13 @@ def _check_tables(
             phase=ErrorPhase.SQL_POLICY_CHECK,
         )
 
-    # Func subclasses used as FROM sources (e.g. UNNEST) produce no exp.Table
-    # node at all. Scan for Func nodes inside From clauses.
-    for from_clause in ast.find_all(exp.From):
-        source = from_clause.this
+    # Func subclasses used as query sources (e.g. UNNEST, generate_series)
+    # produce no exp.Table node at all. They can appear both as the FROM
+    # source AND as a JOIN source (e.g. ``orders CROSS JOIN UNNEST(items)``),
+    # so scan both — checking only FROM let a table-valued function slip
+    # through strict mode whenever it was reached via a JOIN.
+    for clause in ast.find_all(exp.From, exp.Join):
+        source = clause.this
         if isinstance(source, exp.Alias):
             source = source.this
         if isinstance(source, exp.Func):

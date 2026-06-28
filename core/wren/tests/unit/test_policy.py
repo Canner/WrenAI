@@ -227,3 +227,34 @@ def test_tvf_allowed_when_not_strict():
     ast = parse_one("SELECT * FROM read_csv('file.csv')", dialect="duckdb")
     config = WrenConfig(strict_mode=False)
     validate_sql_policy(ast, _MODELS, config)
+
+
+def test_tvf_unnest_in_join_blocked():
+    # Regression: a table-valued function reached via a JOIN (rather than the
+    # FROM source) must still be blocked in strict mode. UNNEST parses to an
+    # exp.Unnest (an exp.Func subclass) with no exp.Table node, so the table
+    # scan misses it and only the FROM/JOIN func scan can catch it.
+    sql = "SELECT * FROM orders CROSS JOIN UNNEST(orders.items) AS t(item)"
+    ast = parse_one(sql, dialect="trino")
+    config = WrenConfig(strict_mode=True)
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, config)
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+
+
+def test_tvf_generate_series_in_join_blocked():
+    sql = "SELECT * FROM orders JOIN generate_series(1, 10) AS g(x) ON true"
+    ast = parse_one(sql, dialect="postgres")
+    config = WrenConfig(strict_mode=True)
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, config)
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+
+
+def test_join_between_two_mdl_models_allowed():
+    # Guard against over-blocking: a plain JOIN between two manifest models
+    # must still pass.
+    sql = "SELECT * FROM orders o JOIN customers c ON o.customer_id = c.id"
+    ast = parse_one(sql, dialect="trino")
+    config = WrenConfig(strict_mode=True)
+    validate_sql_policy(ast, _MODELS, config)
