@@ -181,3 +181,14 @@ def test_load_index_raises_on_non_mapping_apps(tmp_path: Path) -> None:
 
     with pytest.raises(MalformedIndexError):
         load_index(tmp_path)
+
+
+def test_load_index_preserves_falsy_schema_version(tmp_path: Path) -> None:
+    # A literal 0 is a real value, not a missing one — it must be preserved
+    # rather than coerced to the default, so only explicit null normalises.
+    path = index_path(tmp_path)
+    path.parent.mkdir(parents=True)
+    path.write_text("schema_version: 0\napps: {}\n")
+
+    data = load_index(tmp_path)
+    assert data["schema_version"] == 0
