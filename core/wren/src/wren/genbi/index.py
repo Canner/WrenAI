@@ -50,8 +50,19 @@ def load_index(project_path: Path) -> dict:
             f"{path} is malformed — expected a mapping at the top level, "
             f"got {type(data).__name__}."
         )
-    data.setdefault("schema_version", INDEX_SCHEMA_VERSION)
-    data.setdefault("apps", {})
+    # Use ``or`` rather than ``setdefault`` so an explicit null value
+    # (``apps:`` / ``schema_version:`` with no value, e.g. from a hand-edit or
+    # a truncated write) is normalised too. ``setdefault`` is a no-op when the
+    # key already exists, which left ``apps: None`` in place and made every
+    # accessor crash with an opaque ``AttributeError`` deep in a command.
+    data["schema_version"] = data.get("schema_version") or INDEX_SCHEMA_VERSION
+    apps = data.get("apps") or {}
+    if not isinstance(apps, dict):
+        raise MalformedIndexError(
+            f"{path} is malformed — 'apps' must be a mapping, "
+            f"got {type(apps).__name__}."
+        )
+    data["apps"] = apps
     return data
 
 

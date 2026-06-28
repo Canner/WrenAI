@@ -145,3 +145,39 @@ def test_register_rejects_path_traversal_name(tmp_path: Path) -> None:
     result = runner.invoke(app, ["genbi", "register", "../evil", "-p", str(project)])
     assert result.exit_code != 0
     assert "invalid app name" in result.output
+
+
+def test_load_index_normalises_null_apps(tmp_path: Path) -> None:
+    # Regression: an explicit ``apps:`` with no value (hand-edit / truncated
+    # write) is valid YAML and parses to None. setdefault() was a no-op since
+    # the key existed, leaving ``apps: None`` so every accessor crashed with an
+    # opaque AttributeError. load_index must normalise it to an empty dict.
+    path = index_path(tmp_path)
+    path.parent.mkdir(parents=True)
+    path.write_text("schema_version: 1\napps:\n")
+
+    data = load_index(tmp_path)
+    assert data["apps"] == {}
+    assert data["schema_version"] == 1
+    # And the normal accessor must not crash on it.
+    from wren.genbi.index import get_app
+
+    assert get_app(tmp_path, "missing") is None
+
+
+def test_load_index_normalises_null_schema_version(tmp_path: Path) -> None:
+    path = index_path(tmp_path)
+    path.parent.mkdir(parents=True)
+    path.write_text("schema_version:\napps: {}\n")
+
+    data = load_index(tmp_path)
+    assert data["schema_version"] == 1
+
+
+def test_load_index_raises_on_non_mapping_apps(tmp_path: Path) -> None:
+    path = index_path(tmp_path)
+    path.parent.mkdir(parents=True)
+    path.write_text("apps:\n  - one\n  - two\n")  # apps is a list, not a mapping
+
+    with pytest.raises(MalformedIndexError):
+        load_index(tmp_path)
