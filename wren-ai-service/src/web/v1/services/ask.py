@@ -8,12 +8,6 @@ from langfuse.decorators import observe
 from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
-from src.pipelines.generation.utils.sql import (
-    construct_valid_table_columns,
-    construct_valid_table_names,
-    find_invalid_column_references,
-    find_invalid_table_references,
-)
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest, SSEEvent
 
@@ -1987,6 +1981,13 @@ class AskService:
         ask_result = self._build_ask_result_from_sql(sql)
         if not ask_result:
             return None
+
+        from src.pipelines.generation.utils.sql import (
+            construct_valid_table_columns,
+            construct_valid_table_names,
+            find_invalid_column_references,
+            find_invalid_table_references,
+        )
 
         invalid_tables = find_invalid_table_references(
             ask_result.sql,
