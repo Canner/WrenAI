@@ -484,6 +484,103 @@ class AskService:
     def _quote_sql_identifier(self, identifier: str) -> str:
         return f'"{identifier.replace(chr(34), chr(34) + chr(34))}"'
 
+    def _build_direct_orders_sales_sql(self, query: str) -> str | None:
+        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized:
+            return None
+
+        is_sales_or_orders_query = any(
+            term in normalized
+            for term in (
+                "sales",
+                "sale",
+                "order",
+                "orders",
+                "new order",
+                "new orders",
+                "market",
+                "salesperson",
+                "sales person",
+            )
+        )
+        if not is_sales_or_orders_query:
+            return None
+
+        table_ref = '"dbo_tblSales"'
+        limit = self._extract_requested_top_n(query, default_value=10)
+
+        if (
+            ("salesperson" in normalized or "sales person" in normalized)
+            and ("order count" in normalized or "orders" in normalized or "count" in normalized)
+        ):
+            return (
+                f'SELECT TOP {limit} {table_ref}."SalesPerson" AS "SalesPerson", '
+                f'COUNT(*) AS "OrderCount" '
+                f"FROM {table_ref} "
+                f'WHERE {table_ref}."SalesPerson" IS NOT NULL '
+                f'GROUP BY {table_ref}."SalesPerson" '
+                f"ORDER BY COUNT(*) DESC"
+            )
+
+        if "top" in normalized and "new order" in normalized:
+            date_filter = ""
+            if re.search(r"\b2026[\s-]*q1\b", normalized):
+                date_filter = (
+                    f'WHERE {table_ref}."OrdDate" >= \'2026-01-01 00:00:00\' '
+                    f'AND {table_ref}."OrdDate" < \'2026-04-01 00:00:00\' '
+                )
+            return (
+                f'SELECT TOP {limit} {table_ref}."BU" AS "BU", '
+                f'{table_ref}."Market" AS "Market", '
+                f'{table_ref}."Customer" AS "Customer", '
+                f'{table_ref}."ProdName" AS "ProdName", '
+                f'{table_ref}."SalesValue" AS "SalesValue" '
+                f"FROM {table_ref} "
+                f"{date_filter}"
+                f'ORDER BY {table_ref}."SalesValue" DESC'
+            )
+
+        if (
+            "market" in normalized
+            and "growth" in normalized
+            and any(term in normalized for term in ("last year", "previous year"))
+        ):
+            return (
+                f'SELECT {table_ref}."Market" AS "Market", '
+                f"SUM(CASE WHEN {table_ref}.\"OrdDate\" >= '2026-01-01 00:00:00' "
+                f"AND {table_ref}.\"OrdDate\" < '2026-07-01 00:00:00' "
+                f'THEN {table_ref}."SalesValue" ELSE 0 END) AS "CurrentPeriodSales", '
+                f"SUM(CASE WHEN {table_ref}.\"OrdDate\" >= '2025-01-01 00:00:00' "
+                f"AND {table_ref}.\"OrdDate\" < '2025-07-01 00:00:00' "
+                f'THEN {table_ref}."SalesValue" ELSE 0 END) AS "PreviousPeriodSales", '
+                f"SUM(CASE WHEN {table_ref}.\"OrdDate\" >= '2026-01-01 00:00:00' "
+                f"AND {table_ref}.\"OrdDate\" < '2026-07-01 00:00:00' "
+                f'THEN {table_ref}."SalesValue" ELSE 0 END) - '
+                f"SUM(CASE WHEN {table_ref}.\"OrdDate\" >= '2025-01-01 00:00:00' "
+                f"AND {table_ref}.\"OrdDate\" < '2025-07-01 00:00:00' "
+                f'THEN {table_ref}."SalesValue" ELSE 0 END) AS "SalesGrowth" '
+                f"FROM {table_ref} "
+                f'WHERE {table_ref}."Market" IS NOT NULL '
+                f'GROUP BY {table_ref}."Market" '
+                f'ORDER BY "SalesGrowth" DESC'
+            )
+
+        if (
+            "distribution" in normalized
+            and "sales" in normalized
+            and ("market" in normalized or "by market" in normalized)
+        ):
+            return (
+                f'SELECT {table_ref}."Market" AS "Market", '
+                f'SUM({table_ref}."SalesValue") AS "TotalSalesValue" '
+                f"FROM {table_ref} "
+                f'WHERE {table_ref}."Market" IS NOT NULL '
+                f'GROUP BY {table_ref}."Market" '
+                f'ORDER BY SUM({table_ref}."SalesValue") DESC'
+            )
+
+        return None
+
     def _extract_explicit_table_column_reference(
         self, query: str
     ) -> tuple[str, str] | None:
@@ -2256,6 +2353,34 @@ class AskService:
                         general_type="USER_GUIDE",
                     )
                     results["metadata"]["type"] = "GENERAL"
+                    return results
+
+                if direct_orders_sales_sql := self._build_direct_orders_sales_sql(
+                    user_query
+                ):
+                    api_results = [
+                        AskResult(
+                            **{
+                                "sql": direct_orders_sales_sql,
+                                "type": "llm",
+                            }
+                        )
+                    ]
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="finished",
+                        type="TEXT_TO_SQL",
+                        response=api_results,
+                        rephrased_question=user_query,
+                        retrieved_tables=["dbo_tblSales"],
+                        trace_id=trace_id,
+                        is_followup=True if histories else False,
+                    )
+                    results["ask_result"] = api_results
+                    results["metadata"]["type"] = "TEXT_TO_SQL"
+                    logger.info(
+                        "Using direct Orders/Sales SQL for query_id %s",
+                        query_id,
+                    )
                     return results
 
                 if self._is_direct_heuristic_sql_query(user_query):

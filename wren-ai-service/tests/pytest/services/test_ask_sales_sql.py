@@ -30,6 +30,56 @@ def test_build_schema_grounded_sales_sql_for_salesperson_performance():
     assert "CustID" not in sql
 
 
+def test_build_direct_orders_sales_sql_for_salesperson_order_count():
+    service = AskService.__new__(AskService)
+    sql = service._build_direct_orders_sales_sql(
+        "Create a bar chart of top 10 SalesPerson by order count"
+    )
+
+    assert sql == (
+        'SELECT TOP 10 "dbo_tblSales"."SalesPerson" AS "SalesPerson", '
+        'COUNT(*) AS "OrderCount" '
+        'FROM "dbo_tblSales" '
+        'WHERE "dbo_tblSales"."SalesPerson" IS NOT NULL '
+        'GROUP BY "dbo_tblSales"."SalesPerson" '
+        'ORDER BY COUNT(*) DESC'
+    )
+
+
+def test_build_direct_orders_sales_sql_for_top_new_orders_q1():
+    service = AskService.__new__(AskService)
+    sql = service._build_direct_orders_sales_sql(
+        "Show the top 20 new orders for period 2026-Q1"
+    )
+
+    assert sql == (
+        'SELECT TOP 20 "dbo_tblSales"."BU" AS "BU", '
+        '"dbo_tblSales"."Market" AS "Market", '
+        '"dbo_tblSales"."Customer" AS "Customer", '
+        '"dbo_tblSales"."ProdName" AS "ProdName", '
+        '"dbo_tblSales"."SalesValue" AS "SalesValue" '
+        'FROM "dbo_tblSales" '
+        'WHERE "dbo_tblSales"."OrdDate" >= \'2026-01-01 00:00:00\' '
+        'AND "dbo_tblSales"."OrdDate" < \'2026-04-01 00:00:00\' '
+        'ORDER BY "dbo_tblSales"."SalesValue" DESC'
+    )
+
+
+def test_build_direct_orders_sales_sql_for_market_growth_comparison():
+    service = AskService.__new__(AskService)
+    sql = service._build_direct_orders_sales_sql(
+        "Which markets had the highest growth in the first 6 months of this year compared with the same period last year?"
+    )
+
+    assert sql is not None
+    assert '"dbo_tblSales"."Market" AS "Market"' in sql
+    assert '"CurrentPeriodSales"' in sql
+    assert '"PreviousPeriodSales"' in sql
+    assert '"SalesGrowth"' in sql
+    assert "2026-01-01" in sql
+    assert "2025-01-01" in sql
+
+
 def test_build_schema_grounded_sales_sql_requires_sales_schema():
     service = AskService.__new__(AskService)
 
