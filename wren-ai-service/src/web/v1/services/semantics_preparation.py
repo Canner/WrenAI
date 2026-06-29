@@ -55,7 +55,6 @@ class SemanticsPreparationService:
         self._prepare_semantics_statuses: Dict[
             str, SemanticsPreparationStatusResponse
         ] = TTLCache(maxsize=maxsize, ttl=ttl)
-        self._mdl_hash_project_ids: Dict[str, str] = TTLCache(maxsize=maxsize, ttl=ttl)
 
     def _parse_mdl(self, mdl: str) -> dict[str, Any]:
         parsed = orjson.loads(mdl)
@@ -215,10 +214,6 @@ class SemanticsPreparationService:
             ] = SemanticsPreparationStatusResponse(
                 status="finished",
             )
-            if prepare_semantics_request.project_id:
-                self._mdl_hash_project_ids[prepare_semantics_request.mdl_hash] = str(
-                    prepare_semantics_request.project_id
-                )
         except Exception as e:
             logger.exception(f"Failed to prepare semantics: {e}")
 
@@ -236,11 +231,6 @@ class SemanticsPreparationService:
             results["metadata"]["error_message"] = str(e)
 
         return results
-
-    def get_project_id(self, mdl_hash: Optional[str]) -> Optional[str]:
-        if not mdl_hash:
-            return None
-        return self._mdl_hash_project_ids.get(mdl_hash)
 
     def get_prepare_semantics_status(
         self, prepare_semantics_status_request: SemanticsPreparationStatusRequest

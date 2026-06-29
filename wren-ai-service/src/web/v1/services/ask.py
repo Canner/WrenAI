@@ -2070,22 +2070,6 @@ class AskService:
                     results["metadata"]["type"] = "GENERAL"
                     return results
 
-                if not ask_request.project_id:
-                    error_message = (
-                        "project_id is required for scoped schema retrieval. "
-                        "Pass the active project_id with the ask request."
-                    )
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="failed",
-                        type="TEXT_TO_SQL",
-                        error=AskError(code="OTHERS", message=error_message),
-                        trace_id=trace_id,
-                        is_followup=True if histories else False,
-                    )
-                    results["metadata"]["error_type"] = "OTHERS"
-                    results["metadata"]["error_message"] = error_message
-                    return results
-
                 if self._is_direct_heuristic_sql_query(user_query):
                     self._ask_results[query_id] = AskResultResponse(
                         status="searching",
@@ -2400,7 +2384,7 @@ class AskService:
                 documents, table_names, table_ddls = (
                     self._extract_retrieval_metadata(retrieval_result)
                 )
-                logger.debug(
+                logger.info(
                     "Retrieved tables for query_id %s: %s", query_id, table_names
                 )
 

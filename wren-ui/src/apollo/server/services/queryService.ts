@@ -361,43 +361,6 @@ const extractCteNames = (sql: string) => {
   return cteNames;
 };
 
-const extractSqlTableAliases = (sql: string) => {
-  const aliases = new Map<string, string>();
-  const tablePattern = new RegExp(
-    String.raw`\b(?:FROM|JOIN)\s+(${SQL_IDENTIFIER_PATTERN}(?:\s*\.\s*${SQL_IDENTIFIER_PATTERN})*)(?:\s+(?:AS\s+)?(${SQL_IDENTIFIER_PATTERN}))?`,
-    'gi',
-  );
-  let match: RegExpExecArray | null;
-  while ((match = tablePattern.exec(sql))) {
-    const tableReference = splitTableReference(match[1]).join('.').toLowerCase();
-    const alias = match[2] ? normalizeSqlIdentifier(match[2]).toLowerCase() : '';
-
-    if (
-      alias &&
-      ![
-        'on',
-        'where',
-        'join',
-        'left',
-        'right',
-        'inner',
-        'outer',
-        'full',
-        'cross',
-      ].includes(alias)
-    ) {
-      aliases.set(alias, tableReference);
-    }
-    aliases.set(tableReference, tableReference);
-
-    const lastPart = splitTableReference(match[1]).pop()?.toLowerCase();
-    if (lastPart) {
-      aliases.set(lastPart, tableReference);
-    }
-  }
-  return aliases;
-};
-
 const getManifestQueryableNames = (manifest?: Manifest) => {
   const names = new Set<string>();
   for (const model of manifest?.models || []) {
@@ -740,9 +703,6 @@ const validateSqlReferencesManifest = (sql: string, manifest?: Manifest) => {
     );
   }
 };
-
-export const isPreviewDataEmpty = (data?: Partial<PreviewDataResponse> | null) =>
-  !data || !Array.isArray(data.data) || data.data.length === 0;
 
 export class QueryService implements IQueryService {
   private readonly ibisAdaptor: IIbisAdaptor;

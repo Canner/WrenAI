@@ -12,7 +12,7 @@ import {
 } from '@server/telemetry/telemetry';
 
 const logger = getLogger('ChartBackgroundTracker');
-logger.level = 'info';
+logger.level = 'debug';
 
 const isFinalized = (status: ChartStatus) => {
   return (
@@ -96,6 +96,9 @@ export class ChartBackgroundTracker {
           // check if status change
           if (!statusChanged) {
             // mark the job as finished
+            logger.debug(
+              `Job ${threadResponse.id} chart status not changed, finished`,
+            );
             this.runningJobs.delete(threadResponse.id);
             return;
           }
@@ -273,6 +276,9 @@ export class ChartAdjustmentBackgroundTracker {
           // check if status change
           if (!statusChanged) {
             // mark the job as finished
+            logger.debug(
+              `Job ${threadResponse.id} chart status not changed, finished`,
+            );
             this.runningJobs.delete(threadResponse.id);
             return;
           }

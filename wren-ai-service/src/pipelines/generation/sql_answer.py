@@ -160,7 +160,7 @@ class SQLAnswer(BasicPipeline):
         query_id: Optional[str] = None,
         custom_instruction: Optional[str] = None,
     ) -> dict:
-        logger.debug("Sql_Answer Generation pipeline is running...")
+        logger.info("Sql_Answer Generation pipeline is running...")
         return await self._pipe.execute(
             ["generate_answer"],
             inputs={

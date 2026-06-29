@@ -185,7 +185,7 @@ class ChartAdjustment(BasicPipeline):
         data: dict,
         language: str,
     ) -> dict:
-        logger.debug("Chart Adjustment pipeline is running...")
+        logger.info("Chart Adjustment pipeline is running...")
 
         return await self._pipe.execute(
             ["post_process"],

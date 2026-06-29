@@ -16,7 +16,7 @@ import { TelemetryEvent, WrenService } from '../telemetry/telemetry';
 import { PostHogTelemetry } from '../telemetry/telemetry';
 
 const logger = getLogger('AdjustmentTaskTracker');
-logger.level = 'info';
+logger.level = 'debug';
 
 interface TrackedTask {
   queryId: string;
@@ -332,6 +332,8 @@ export class AdjustmentBackgroundTaskTracker
             // Mark the job as running
             this.runningJobs.add(queryId);
 
+            // Poll for updates
+            logger.info(`Polling for updates for task ${queryId}`);
             const result =
               await this.wrenAIAdaptor.getAskFeedbackResult(queryId);
             task.lastPolled = now;

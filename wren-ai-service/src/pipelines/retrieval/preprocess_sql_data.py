@@ -100,7 +100,7 @@ class PreprocessSqlData(BasicPipeline):
         self,
         sql_data: Dict,
     ):
-        logger.debug("Preprocess SQL Data pipeline is running...")
+        logger.info("Preprocess SQL Data pipeline is running...")
         return self._pipe.execute(
             ["preprocess"],
             inputs={
