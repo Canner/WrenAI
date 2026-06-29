@@ -242,6 +242,27 @@ def test_unnest_model_column_allowed():
     validate_sql_policy(ast, _MODELS, config)
 
 
+def test_unnest_over_reader_tvf_allowed_known_gap():
+    # Regression anchor for CodeRabbit's nested-reader question.
+    #
+    # ``UNNEST(read_csv(...))`` is currently ALLOWED, and intentionally so for
+    # this PR. The row-expansion allow-list keys on the wrapper class
+    # (exp.Unnest/exp.Explode), and the inner reader contributes no exp.Table
+    # node, so the data-source guard never sees ``read_csv``. This is NOT a
+    # regression introduced here: strict mode only governs the *top-level*
+    # source position, so readers in non-source positions (projection, WHERE
+    # subqueries, and now a row-expansion argument) were already reachable on
+    # main. The collaborator (goldmedal) confirmed this and filed the broader
+    # non-source-reader gap as a separate issue rather than blocking it here.
+    #
+    # This test pins the agreed behavior so the gap is explicit and any future
+    # tightening is a deliberate, reviewed change rather than a silent flip.
+    sql = "SELECT * FROM orders CROSS JOIN UNNEST(read_csv('s3://b/f.csv')) AS t(c)"
+    ast = parse_one(sql, dialect="duckdb")
+    config = WrenConfig(strict_mode=True)
+    validate_sql_policy(ast, _MODELS, config)
+
+
 def test_tvf_generate_series_in_join_blocked():
     sql = "SELECT * FROM orders JOIN generate_series(1, 10) AS g(x) ON true"
     ast = parse_one(sql, dialect="postgres")
