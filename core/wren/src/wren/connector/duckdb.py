@@ -98,6 +98,14 @@ class DuckDBConnector(ConnectorABC):
                 )
 
     def _list_duckdb_files(self, connection_info) -> list[str]:
+        """List DuckDB database files in the configured directory.
+
+        Walks the connection's root directory and returns the full paths of
+        all non-directory entries whose name ends with ``.duckdb``. The
+        extension comparison is case-insensitive so files exported or renamed
+        with upper/mixed-case extensions (e.g. ``WAREHOUSE.DUCKDB``) are still
+        discovered. Raises ``WrenError`` if the directory cannot be listed.
+        """
         op = opendal.Operator("fs", root=connection_info.url)
         files = []
         try:
