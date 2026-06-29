@@ -455,3 +455,22 @@ def test_build_audit_log_activity_sql_uses_existing_condition_columns():
     )
     assert "condition_name" not in sql
     assert "timestamp" not in sql
+
+
+def test_build_validated_ask_result_from_sql_uses_local_schema_validation():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        'SELECT "dbo_tblSales"."SalesPerson" FROM "dbo_tblSales"',
+        [
+            """
+            CREATE TABLE dbo_tblSales (
+              SalesPerson VARCHAR,
+              SalesValue INTEGER
+            );
+            """
+        ],
+    )
+
+    assert result is not None
+    assert result.sql == 'SELECT "dbo_tblSales"."SalesPerson" FROM "dbo_tblSales"'
