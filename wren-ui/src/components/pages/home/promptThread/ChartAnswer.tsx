@@ -100,12 +100,14 @@ export default function ChartAnswer(props: AnswerResultProps) {
     },
   });
 
-  // initial trigger when render
+  // Fetch preview data after the chart task has a terminal schema/result.
   useEffect(() => {
+    if (!getIsChartFinished(status)) return;
+
     previewData({
       variables: { where: { responseId: threadResponse.id } },
     });
-  }, []);
+  }, [previewData, status, threadResponse.id]);
 
   const chartSpec = useMemo(() => {
     if (
