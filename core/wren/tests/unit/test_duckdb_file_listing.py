@@ -79,6 +79,7 @@ def test_attach_database_uniquifies_case_colliding_aliases():
     executed = [c.args[0] for c in connector.connection.execute.call_args_list]
     aliases = [stmt.split(' AS "')[1].split('"')[0] for stmt in executed]
     assert len(aliases) == len(set(aliases)), aliases
-    assert aliases[0] == "warehouse"
-    assert aliases[1] == "warehouse_1"
-    assert aliases[2] == "data"
+    # _attach_database sorts files for deterministic alias assignment, so the
+    # alphabetically-first basename ("data") attaches first; the two
+    # case-colliding "warehouse" files get "warehouse" and "warehouse_1".
+    assert aliases == ["data", "warehouse", "warehouse_1"]
