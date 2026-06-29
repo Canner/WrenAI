@@ -274,6 +274,33 @@ def test_build_schema_grounded_sales_sql_for_order_invoice_conversion_rate():
     assert "P-M" not in sql
 
 
+def test_build_schema_grounded_sales_sql_for_monthly_order_count_by_invdate():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "Show monthly order count by InvDate.",
+        [
+            """
+            CREATE TABLE dbo_tblSales (
+              OrdNo VARCHAR,
+              InvDate TIMESTAMP,
+              OrdDate TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT DATEPART(YEAR, "dbo_tblSales"."InvDate") AS "year", '
+        'DATEPART(MONTH, "dbo_tblSales"."InvDate") AS "month", '
+        'COUNT(*) AS "OrderCount" '
+        'FROM "dbo_tblSales" '
+        'GROUP BY DATEPART(YEAR, "dbo_tblSales"."InvDate"), '
+        'DATEPART(MONTH, "dbo_tblSales"."InvDate") '
+        'ORDER BY DATEPART(YEAR, "dbo_tblSales"."InvDate"), '
+        'DATEPART(MONTH, "dbo_tblSales"."InvDate")'
+    )
+
+
 def test_build_schema_grounded_sales_sql_for_highest_invoice_value():
     service = AskService.__new__(AskService)
     sql = service._build_schema_grounded_sales_sql(

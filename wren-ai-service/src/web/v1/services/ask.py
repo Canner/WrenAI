@@ -749,6 +749,64 @@ class AskService:
         if contribution_sql := self._build_contribution_sql(query, tables):
             return contribution_sql
 
+        wants_monthly_count = (
+            "monthly" in normalized_query
+            and any(term in normalized_query for term in ("count", "volume"))
+            and any(term in normalized_query for term in ("order", "orders"))
+        )
+        if wants_monthly_count:
+            date_candidates = (
+                ("InvDate", "InvoiceDate", "Invoice Date")
+                if "invdate" in compact_query or "invoice" in normalized_query
+                else (
+                    "OrdDate",
+                    "OrderDate",
+                    "NewOrderDate",
+                    "InvDate",
+                    "InvoiceDate",
+                    "Date",
+                )
+            )
+            scored_tables: list[tuple[int, dict[str, Any], str]] = []
+            for table in tables:
+                date_column = self._find_schema_column(
+                    table, date_candidates, temporal=True
+                )
+                if not date_column:
+                    continue
+                table_name = str(table.get("name") or "")
+                score = 10
+                if "sales" in table_name.lower() or "order" in table_name.lower():
+                    score += 5
+                if self._find_schema_column(
+                    table, ("OrdNo", "OrderNo", "OrderId", "InvoiceNo")
+                ):
+                    score += 3
+                scored_tables.append((score, table, date_column))
+
+            if scored_tables:
+                _, table, date_column = sorted(
+                    scored_tables, key=lambda item: item[0], reverse=True
+                )[0]
+                table_name = table.get("name")
+                if table_name and date_column:
+                    table_name = str(table_name)
+                    table_ref = self._quote_sql_identifier(table_name)
+                    date_ref = (
+                        f"{table_ref}.{self._quote_sql_identifier(date_column)}"
+                    )
+                    return (
+                        f"SELECT DATEPART(YEAR, {date_ref}) AS \"year\", "
+                        f"DATEPART(MONTH, {date_ref}) AS \"month\", "
+                        f'COUNT(*) AS "OrderCount" '
+                        f"FROM {table_ref}"
+                        f"{self._build_date_filter(table_name, date_column, query)} "
+                        f"GROUP BY DATEPART(YEAR, {date_ref}), "
+                        f"DATEPART(MONTH, {date_ref}) "
+                        f"ORDER BY DATEPART(YEAR, {date_ref}), "
+                        f"DATEPART(MONTH, {date_ref})"
+                    )
+
         dimension_candidates: list[tuple[str, ...]] = []
         if "salesperson" in normalized_query or "sales person" in normalized_query:
             dimension_candidates.append(("SalesPerson", "Sales Rep", "SalesRep"))
