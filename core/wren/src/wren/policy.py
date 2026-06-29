@@ -15,6 +15,21 @@ from sqlglot.errors import SqlglotError
 from wren.config import WrenConfig
 from wren.model.error import ErrorCode, ErrorPhase, WrenError
 
+# Row-expansion operators (UNNEST / FLATTEN / EXPLODE) are not data sources —
+# they restructure an array/struct expression that is already in query scope
+# (e.g. a governed model column like ``orders.items``), so they never read data
+# outside the manifest and must not be treated as a disallowed table-valued
+# function. The class mapping is stable across dialects: ``UNNEST`` ->
+# ``exp.Unnest`` (trino/postgres/duckdb), Snowflake ``FLATTEN`` -> ``exp.Explode``,
+# so no per-dialect name matching is needed.
+#
+# Note: ``UNNEST(read_csv(...))`` is therefore also allowed, but that is an
+# instance of the broader pre-existing gap (data-reading TVFs in non-source
+# positions — already reachable today via projection/WHERE subqueries, since
+# strict mode only governs the top-level source position) and is tracked
+# separately. It is not a regression introduced here.
+_ROW_EXPANSION_FUNCS: tuple[type[exp.Func], ...] = (exp.Unnest, exp.Explode)
+
 # Dialects we probe when canonicalising the user's denylist. sqlglot can map
 # the same function name (e.g. ``version()``) onto different concrete AST
 # subclasses depending on the dialect — postgres/mysql/duckdb/trino/clickhouse
@@ -137,12 +152,28 @@ def _check_tables(
             phase=ErrorPhase.SQL_POLICY_CHECK,
         )
 
-    # Func subclasses used as FROM sources (e.g. UNNEST) produce no exp.Table
-    # node at all. Scan for Func nodes inside From clauses.
-    for from_clause in ast.find_all(exp.From):
-        source = from_clause.this
+    # Func subclasses used as query sources (e.g. UNNEST, generate_series)
+    # produce no exp.Table node at all. They can appear both as the FROM
+    # source AND as a JOIN source (e.g. ``orders CROSS JOIN UNNEST(items)``),
+    # so scan both — checking only FROM let a table-valued function slip
+    # through strict mode whenever it was reached via a JOIN.
+    for clause in ast.find_all(exp.From, exp.Join):
+        source = clause.this
         if isinstance(source, exp.Alias):
             source = source.this
+        # LATERAL-wrapped TVFs (e.g. ``LATERAL FLATTEN(...)`` /
+        # ``LATERAL generate_series(...)``) parse to an exp.Lateral node that
+        # *wraps* the function rather than being an exp.Func itself, so the
+        # bare-Func check below would miss them. Unwrap to inspect the inner
+        # source — this is the same "TVF reached via JOIN" bug class.
+        if isinstance(source, exp.Lateral):
+            source = source.this
+            if isinstance(source, exp.Alias):
+                source = source.this
+        if isinstance(source, _ROW_EXPANSION_FUNCS):
+            # Row-expansion over an in-scope expression (e.g. a governed model
+            # column) reads nothing outside the manifest — allow it.
+            continue
         if isinstance(source, exp.Func):
             raise WrenError(
                 ErrorCode.MODEL_NOT_FOUND,
