@@ -73,14 +73,25 @@ class DuckDBConnector(ConnectorABC):
             raise
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
+        """Execute ``sql`` and return the result as an Arrow table.
+
+        When ``limit`` is provided the query is wrapped in a ``LIMIT`` clause
+        so only that many rows are fetched.
+        """
         if limit is not None:
             sql = f"SELECT * FROM ({sql}) AS _q LIMIT {int(limit)}"
         return self.connection.execute(sql).fetch_arrow_table()
 
     def dry_run(self, sql: str) -> None:
+        """Validate ``sql`` without returning rows via ``EXPLAIN``."""
         self.connection.execute(f"EXPLAIN {sql}")
 
     def _attach_database(self, connection_info) -> None:
+        """Attach every discovered DuckDB file as a read-only database.
+
+        Each file is attached under an alias derived from its base name.
+        Raises ``WrenError`` if no files are found or an attach fails.
+        """
         db_files = self._list_duckdb_files(connection_info)
         if not db_files:
             raise WrenError(ErrorCode.DUCKDB_FILE_NOT_FOUND, "No DuckDB files found.")
@@ -123,6 +134,7 @@ class DuckDBConnector(ConnectorABC):
         return files
 
     def close(self) -> None:
+        """Close the underlying DuckDB connection, logging any error."""
         try:
             self.connection.close()
         except Exception as e:
