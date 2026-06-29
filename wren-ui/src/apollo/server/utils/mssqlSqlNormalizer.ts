@@ -83,6 +83,13 @@ const replaceInventedDateFields = (sql: string): string => {
     'Repair_Date',
     'EventDate',
     'event_date',
+    'last_update_date',
+    'last_updated_date',
+    'last_updated_at',
+    'lastUpdateDate',
+    'lastUpdatedDate',
+    'updated_date',
+    'updated_at',
     'Date',
     'date',
   ];
@@ -95,6 +102,12 @@ const replaceInventedDateFields = (sql: string): string => {
     );
     sql = sql.replace(new RegExp(String.raw`"${escaped}"`, 'gi'), timestampExpression);
     sql = sql.replace(new RegExp(String.raw`\[${escaped}\]`, 'gi'), timestampExpression);
+    if (field.toLowerCase() !== 'date') {
+      sql = sql.replace(
+        new RegExp(String.raw`(?<![\.\w])${escaped}(?!\w)`, 'gi'),
+        timestampExpression,
+      );
+    }
   });
 
   return sql;

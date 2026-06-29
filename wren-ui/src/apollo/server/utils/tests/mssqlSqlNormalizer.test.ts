@@ -117,6 +117,31 @@ describe('mssqlSqlNormalizer', () => {
     );
   });
 
+  it('rewrites stale last_update_date references for debug entry trends', () => {
+    const normalized = normalizeMssqlSqlForIbis(
+      `
+      SELECT
+        DATEPART(YEAR, last_update_date) AS "year",
+        DATEPART(MONTH, last_update_date) AS "month",
+        "dbo_DebugEntries"."BusinessUnit" AS "manufacturing_unit",
+        COUNT("dbo_DebugEntries"."DebugEntryId") AS "throughput"
+      FROM "dbo_DebugEntries"
+      GROUP BY
+        DATEPART(YEAR, last_update_date),
+        DATEPART(MONTH, last_update_date),
+        "dbo_DebugEntries"."BusinessUnit"
+      ORDER BY
+        DATEPART(YEAR, last_update_date),
+        DATEPART(MONTH, last_update_date)
+      `,
+      DataSourceName.MSSQL,
+    );
+
+    expect(normalized).not.toContain('last_update_date');
+    expect(normalized).toContain('DATEPART(YEAR, "dbo_DebugEntries"."DateIn")');
+    expect(normalized).toContain('DATEPART(MONTH, "dbo_DebugEntries"."DateIn")');
+  });
+
   it('rewrites hallucinated knowledge article fields', () => {
     const normalized = normalizeMssqlSqlForIbis(
       `
