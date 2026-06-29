@@ -3,8 +3,11 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 import wren.connector.duckdb as duckdb_mod
 from wren.connector.duckdb import DuckDBConnector
+from wren.model.error import WrenError
 
 
 def _entry(path):
@@ -83,3 +86,39 @@ def test_attach_database_uniquifies_case_colliding_aliases():
     # alphabetically-first basename ("data") attaches first; the two
     # case-colliding "warehouse" files get "warehouse" and "warehouse_1".
     assert aliases == ["data", "warehouse", "warehouse_1"]
+
+
+def test_query_strips_trailing_semicolon_before_limit_wrap():
+    # A semicolon-terminated statement must not produce invalid SQL such as
+    # ``SELECT * FROM (SELECT 1;) AS _q LIMIT 5`` when a limit is applied.
+    connector = DuckDBConnector.__new__(DuckDBConnector)
+    connector.connection = MagicMock()
+    connector.connection.execute.return_value.fetch_arrow_table.return_value = "tbl"
+
+    result = connector.query("SELECT 1;", limit=5)
+
+    executed = connector.connection.execute.call_args.args[0]
+    assert executed == "SELECT * FROM (SELECT 1) AS _q LIMIT 5"
+    assert result == "tbl"
+
+
+def test_dry_run_rejects_multi_statement_sql():
+    # ``duckdb.execute`` runs semicolon-separated batches, so dry_run must not
+    # let a trailing statement slip past EXPLAIN and cause side effects.
+    connector = DuckDBConnector.__new__(DuckDBConnector)
+    connector.connection = MagicMock()
+
+    with pytest.raises(WrenError):
+        connector.dry_run("SELECT 1; DROP TABLE t;")
+
+    connector.connection.execute.assert_not_called()
+
+
+def test_dry_run_allows_single_trailing_semicolon():
+    connector = DuckDBConnector.__new__(DuckDBConnector)
+    connector.connection = MagicMock()
+
+    connector.dry_run("SELECT 1;")
+
+    executed = connector.connection.execute.call_args.args[0]
+    assert executed == "EXPLAIN SELECT 1"

@@ -79,12 +79,30 @@ class DuckDBConnector(ConnectorABC):
         so only that many rows are fetched.
         """
         if limit is not None:
+            # Strip any trailing semicolon so the wrapped subquery stays valid
+            # SQL (e.g. ``SELECT 1;`` must not become ``SELECT * FROM (SELECT
+            # 1;) AS _q LIMIT ...``).
+            sql = sql.rstrip().rstrip(";")
             sql = f"SELECT * FROM ({sql}) AS _q LIMIT {int(limit)}"
         return self.connection.execute(sql).fetch_arrow_table()
 
     def dry_run(self, sql: str) -> None:
-        """Validate ``sql`` without returning rows via ``EXPLAIN``."""
-        self.connection.execute(f"EXPLAIN {sql}")
+        """Validate ``sql`` without returning rows via ``EXPLAIN``.
+
+        Only a single statement is permitted: ``duckdb.execute`` runs
+        semicolon-separated batches, so an ``EXPLAIN`` prefix would still
+        execute any trailing statements and violate the no-side-effects
+        contract. Multi-statement input is rejected before execution.
+        """
+        # Ignore a single trailing terminator, then reject anything that still
+        # contains a statement separator.
+        stripped = sql.rstrip().rstrip(";")
+        if ";" in stripped:
+            raise WrenError(
+                ErrorCode.INVALID_SQL,
+                "dry_run only accepts a single SQL statement.",
+            )
+        self.connection.execute(f"EXPLAIN {stripped}")
 
     def _attach_database(self, connection_info) -> None:
         """Attach every discovered DuckDB file as a read-only database.
