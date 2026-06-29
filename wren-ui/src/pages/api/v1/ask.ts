@@ -22,9 +22,12 @@ import {
   WrenAIError,
 } from '@/apollo/server/models/adaptor';
 import { getLogger } from '@server/utils';
+import { isPreviewDataEmpty } from '@/apollo/server/services';
 
 const logger = getLogger('API_ASK');
 logger.level = 'debug';
+const EMPTY_RESULT_SUMMARY =
+  'The SQL query ran successfully, but it returned no rows for the current filters and datasource. Review the SQL or broaden the question if you expected matching records.';
 
 const {
   apiHistoryRepository,
@@ -205,6 +208,25 @@ export default async function handler(
         400,
         Errors.GeneralErrorCodes.INVALID_SQL_ERROR,
       );
+    }
+
+    if (isPreviewDataEmpty(sqlData as any)) {
+      await respondWith({
+        res,
+        statusCode: 200,
+        responsePayload: {
+          sql,
+          summary: EMPTY_RESULT_SUMMARY,
+          threadId: newThreadId,
+        },
+        projectId: project.id,
+        apiType: ApiType.ASK,
+        startTime,
+        requestPayload: req.body,
+        threadId: newThreadId,
+        headers: req.headers as Record<string, string>,
+      });
+      return;
     }
 
     // Step 3: Generate summary using text-based answer

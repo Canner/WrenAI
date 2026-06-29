@@ -16,7 +16,7 @@ import { IWrenAIAdaptor } from '../adaptors';
 import * as Errors from '@server/utils/error';
 
 const logger = getLogger('AskingTaskTracker');
-logger.level = 'debug';
+logger.level = 'info';
 
 interface TrackedTask {
   queryId: string;
@@ -320,7 +320,6 @@ export class AskingTaskTracker implements IAskingTaskTracker {
             this.runningJobs.add(queryId);
 
             // Poll for updates
-            logger.debug(`Polling for updates for task ${queryId}`);
             const result = await this.wrenAIAdaptor.getAskResult(queryId);
             task.lastPolled = now;
             const resultChanged = this.isResultChanged(task.result, result);

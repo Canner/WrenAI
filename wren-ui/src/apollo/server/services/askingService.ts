@@ -32,7 +32,11 @@ import {
   IViewRepository,
   Project,
 } from '../repositories';
-import { IQueryService, PreviewDataResponse } from './queryService';
+import {
+  IQueryService,
+  PreviewDataResponse,
+  isPreviewDataEmpty,
+} from './queryService';
 import { IMDLService } from './mdlService';
 import {
   ThreadRecommendQuestionBackgroundTracker,
@@ -44,11 +48,12 @@ import {
 import { getConfig } from '@server/config';
 import { TextBasedAnswerBackgroundTracker } from '../backgrounds/textBasedAnswerBackgroundTracker';
 import { IAskingTaskTracker, TrackedAskingResult } from './askingTaskTracker';
+import * as Errors from '@server/utils/error';
 
 const config = getConfig();
 
 const logger = getLogger('AskingService');
-logger.level = 'debug';
+logger.level = 'info';
 
 // const QUERY_ID_PLACEHOLDER = '0';
 
@@ -120,6 +125,13 @@ const isChartGenerationInProgress = (status?: ChartStatus | string | null) =>
   ([ChartStatus.FETCHING, ChartStatus.GENERATING] as string[]).includes(
     status || '',
   );
+
+const emptyResultChartError = {
+  code: Errors.GeneralErrorCodes.NO_CHART,
+  message:
+    'The SQL query ran successfully, but it returned no rows to visualize.',
+  shortMessage: 'No chart data',
+};
 
 // adjustment input
 export interface AdjustmentReasoningInput {
@@ -349,9 +361,6 @@ class BreakdownBackgroundTracker {
           // check if status change
           if (breakdownDetail.status === result.status) {
             // mark the job as finished
-            logger.debug(
-              `Job ${threadResponse.id} status not changed, finished`,
-            );
             this.runningJobs.delete(threadResponse.id);
             return;
           }
@@ -965,6 +974,16 @@ export class AskingService implements IAskingService {
         modelingOnly: false,
         limit: 500,
       })) as PreviewDataResponse;
+
+      if (isPreviewDataEmpty(chartData)) {
+        return await this.threadResponseRepository.updateOne(threadResponse.id, {
+          chartDetail: {
+            status: ChartStatus.FAILED,
+            error: emptyResultChartError,
+            chartSchema: {},
+          },
+        });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       logger.warn(
@@ -1032,6 +1051,17 @@ export class AskingService implements IAskingService {
         modelingOnly: false,
         limit: 500,
       })) as PreviewDataResponse;
+
+      if (isPreviewDataEmpty(chartData)) {
+        return await this.threadResponseRepository.updateOne(threadResponse.id, {
+          chartDetail: {
+            status: ChartStatus.FAILED,
+            error: emptyResultChartError,
+            chartSchema: {},
+            adjustment: true,
+          },
+        });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       logger.warn(

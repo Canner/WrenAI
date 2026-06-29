@@ -12,6 +12,7 @@ from src.globals import (
     get_service_metadata,
 )
 from src.web.v1.services.ask import (
+    AskError,
     AskRequest,
     AskResponse,
     AskResultRequest,
@@ -32,9 +33,6 @@ async def ask(
     query_id = str(uuid.uuid4())
     ask_request.query_id = query_id
     ask_service = service_container.ask_service
-    ask_service._ask_results[query_id] = AskResultResponse(
-        status="understanding",
-    )
 
     if ask_service._is_greeting_query(ask_request.query):
         ask_service._general_streaming_results[query_id] = (
@@ -45,6 +43,32 @@ async def ask(
             type="GENERAL",
         )
         return AskResponse(query_id=query_id)
+
+    if not ask_request.project_id and ask_request.mdl_hash:
+        ask_request.project_id = (
+            service_container.semantics_preparation_service.get_project_id(
+                ask_request.mdl_hash
+            )
+        )
+
+    if not ask_request.project_id:
+        ask_service._ask_results[query_id] = AskResultResponse(
+            status="failed",
+            type="TEXT_TO_SQL",
+            error=AskError(
+                code="OTHERS",
+                message=(
+                    "project_id is required for /v1/asks. Include the project_id "
+                    "used for semantics preparation, or run semantics preparation "
+                    "again so project_id can be inferred from mdl_hash."
+                ),
+            ),
+        )
+        return AskResponse(query_id=query_id)
+
+    ask_service._ask_results[query_id] = AskResultResponse(
+        status="understanding",
+    )
 
     task = asyncio.create_task(
         ask_service.ask(

@@ -47,7 +47,7 @@ export class ProjectRecommendQuestionBackgroundTracker {
     projectRepository: IProjectRepository;
   }) {
     this.logger = getLogger('PRQ Background Tracker');
-    this.logger.level = 'debug';
+    this.logger.level = 'info';
     this.telemetry = telemetry;
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.projectRepository = projectRepository;
@@ -96,9 +96,6 @@ export class ProjectRecommendQuestionBackgroundTracker {
         // check if status change
         if (!changed) {
           // mark the job as finished
-          this.logger.debug(
-            `${loggerPrefix}job ${this.taskKey(project)} status not changed, returning question count: ${result.response?.questions.length || 0}`,
-          );
           this.runningJobs.delete(this.taskKey(project));
           return;
         }
@@ -257,7 +254,7 @@ export class ThreadRecommendQuestionBackgroundTracker {
     threadRepository: IThreadRepository;
   }) {
     this.logger = getLogger('TRQ Background Tracker');
-    this.logger.level = 'debug';
+    this.logger.level = 'info';
     this.telemetry = telemetry;
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.threadRepository = threadRepository;
@@ -305,9 +302,6 @@ export class ThreadRecommendQuestionBackgroundTracker {
         // check if status change
         if (!changed) {
           // mark the job as finished
-          this.logger.debug(
-            `${loggerPrefix}job ${this.taskKey(thread)} status not changed, returning question count: ${result.response?.questions.length || 0}`,
-          );
           this.runningJobs.delete(this.taskKey(thread));
           return;
         }

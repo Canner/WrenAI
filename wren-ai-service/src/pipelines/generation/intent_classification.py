@@ -384,7 +384,7 @@ class IntentClassification(BasicPipeline):
         instructions: Optional[list[dict]] = None,
         configuration: Configuration = Configuration(),
     ):
-        logger.info("Intent Classification pipeline is running...")
+        logger.debug("Intent Classification pipeline is running...")
         return await self._pipe.execute(
             ["post_process"],
             inputs={

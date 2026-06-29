@@ -15,6 +15,7 @@ import {
   IQueryService,
   ThreadResponseAnswerStatus,
   PreviewDataResponse,
+  isPreviewDataEmpty,
 } from '../services';
 import { getLogger } from '@server/utils';
 
@@ -22,6 +23,8 @@ const logger = getLogger('TextBasedAnswerBackgroundTracker');
 logger.level = 'debug';
 
 const ANSWER_PREVIEW_LIMIT = 200;
+const EMPTY_RESULT_ANSWER =
+  'The SQL query ran successfully, but it returned no rows for the current filters and datasource. Review the SQL or broaden the question if you expected matching records.';
 
 export class TextBasedAnswerBackgroundTracker {
   // tasks is a kv pair of task id and thread response
@@ -120,6 +123,22 @@ export class TextBasedAnswerBackgroundTracker {
               });
               threadResponse.answerDetail = failedDetail;
               throw error;
+            }
+
+            if (isPreviewDataEmpty(data)) {
+              const finishedDetail = {
+                ...threadResponse.answerDetail,
+                status: ThreadResponseAnswerStatus.FINISHED,
+                content: EMPTY_RESULT_ANSWER,
+                numRowsUsedInLLM: 0,
+              };
+              await this.threadResponseRepository.updateOne(threadResponse.id, {
+                answerDetail: finishedDetail,
+              });
+              threadResponse.answerDetail = finishedDetail;
+              delete this.tasks[threadResponse.id];
+              this.runningJobs.delete(threadResponse.id);
+              return;
             }
 
             const response = await this.wrenAIAdaptor.createTextBasedAnswer({

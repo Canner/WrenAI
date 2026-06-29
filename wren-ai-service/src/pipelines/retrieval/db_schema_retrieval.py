@@ -668,7 +668,7 @@ class DbSchemaRetrieval(BasicPipeline):
         histories: Optional[list[AskHistory]] = None,
         enable_column_pruning: bool = False,
     ):
-        logger.info("Ask Retrieval pipeline is running...")
+        logger.debug("Ask Retrieval pipeline is running...")
         return await self._pipe.execute(
             ["construct_retrieval_results"],
             inputs={

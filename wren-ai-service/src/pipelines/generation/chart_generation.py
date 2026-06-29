@@ -161,7 +161,7 @@ class ChartGeneration(BasicPipeline):
         remove_data_from_chart_schema: bool = True,
         custom_instruction: Optional[str] = None,
     ) -> dict:
-        logger.info("Chart Generation pipeline is running...")
+        logger.debug("Chart Generation pipeline is running...")
         return await self._pipe.execute(
             ["post_process"],
             inputs={

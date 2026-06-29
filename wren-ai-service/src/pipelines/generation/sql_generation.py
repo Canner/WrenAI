@@ -251,7 +251,7 @@ class SQLGeneration(BasicPipeline):
         allow_data_preview: bool = False,
         sql_knowledge: SqlKnowledge | None = None,
     ):
-        logger.info("SQL Generation pipeline is running...")
+        logger.debug("SQL Generation pipeline is running...")
 
         metadata = await retrieve_metadata(project_id or "", self._retriever)
 
