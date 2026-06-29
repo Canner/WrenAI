@@ -96,10 +96,22 @@ class DuckDBConnector(ConnectorABC):
         if not db_files:
             raise WrenError(ErrorCode.DUCKDB_FILE_NOT_FOUND, "No DuckDB files found.")
 
+        used_aliases: set[str] = set()
         for file in db_files:
             try:
                 escaped_file = file.replace("'", "''")
-                alias = os.path.splitext(os.path.basename(file))[0].replace('"', '""')
+                base_alias = os.path.splitext(os.path.basename(file))[0]
+                # Case-insensitive discovery can surface files whose names differ
+                # only by case (e.g. warehouse.duckdb / warehouse.DUCKDB), which
+                # would otherwise derive the same attach alias and collide. Make
+                # each alias unique deterministically.
+                unique_alias = base_alias
+                suffix = 1
+                while unique_alias.lower() in used_aliases:
+                    unique_alias = f"{base_alias}_{suffix}"
+                    suffix += 1
+                used_aliases.add(unique_alias.lower())
+                alias = unique_alias.replace('"', '""')
                 self.connection.execute(
                     f"ATTACH DATABASE '{escaped_file}' AS \"{alias}\" (READ_ONLY);"
                 )

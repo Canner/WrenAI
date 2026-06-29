@@ -56,3 +56,29 @@ def test_list_duckdb_files_matches_uppercase_extension():
         "/tmp/dbs/WAREHOUSE.DUCKDB",
         "/tmp/dbs/Mixed.DuckDB",
     ]
+
+
+def test_attach_database_uniquifies_case_colliding_aliases():
+    # Case-insensitive discovery can surface files whose basenames differ only
+    # by case (warehouse.duckdb / warehouse.DUCKDB). Each must attach under a
+    # distinct alias so the second ATTACH does not collide.
+    connector = DuckDBConnector.__new__(DuckDBConnector)
+    connector._IOException = RuntimeError
+    connector._HTTPException = RuntimeError
+    connector.connection = MagicMock()
+
+    files = [
+        "/tmp/dbs/warehouse.duckdb",
+        "/tmp/dbs/warehouse.DUCKDB",
+        "/tmp/dbs/data.duckdb",
+    ]
+
+    with patch.object(connector, "_list_duckdb_files", return_value=files):
+        connector._attach_database(SimpleNamespace(url="/tmp/dbs"))
+
+    executed = [c.args[0] for c in connector.connection.execute.call_args_list]
+    aliases = [stmt.split(' AS "')[1].split('"')[0] for stmt in executed]
+    assert len(aliases) == len(set(aliases)), aliases
+    assert aliases[0] == "warehouse"
+    assert aliases[1] == "warehouse_1"
+    assert aliases[2] == "data"
