@@ -251,6 +251,27 @@ def test_tvf_generate_series_in_join_blocked():
     assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
 
 
+def test_tvf_lateral_flatten_in_join_blocked():
+    # Regression: a LATERAL-wrapped TVF reached via JOIN parses to an
+    # exp.Lateral node *wrapping* the func (not a bare exp.Func), so the
+    # FROM/JOIN func scan must unwrap exp.Lateral to catch it.
+    sql = "SELECT * FROM orders, LATERAL FLATTEN(input => orders.items) f"
+    ast = parse_one(sql, dialect="snowflake")
+    config = WrenConfig(strict_mode=True)
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, config)
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+
+
+def test_tvf_lateral_generate_series_in_join_blocked():
+    sql = "SELECT * FROM orders CROSS JOIN LATERAL generate_series(1, 3) g"
+    ast = parse_one(sql, dialect="snowflake")
+    config = WrenConfig(strict_mode=True)
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, config)
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+
+
 def test_join_between_two_mdl_models_allowed():
     # Guard against over-blocking: a plain JOIN between two manifest models
     # must still pass.

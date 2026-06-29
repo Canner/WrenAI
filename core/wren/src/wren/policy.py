@@ -146,6 +146,15 @@ def _check_tables(
         source = clause.this
         if isinstance(source, exp.Alias):
             source = source.this
+        # LATERAL-wrapped TVFs (e.g. ``LATERAL FLATTEN(...)`` /
+        # ``LATERAL generate_series(...)``) parse to an exp.Lateral node that
+        # *wraps* the function rather than being an exp.Func itself, so the
+        # bare-Func check below would miss them. Unwrap to inspect the inner
+        # source — this is the same "TVF reached via JOIN" bug class.
+        if isinstance(source, exp.Lateral):
+            source = source.this
+            if isinstance(source, exp.Alias):
+                source = source.this
         if isinstance(source, exp.Func):
             raise WrenError(
                 ErrorCode.MODEL_NOT_FOUND,
