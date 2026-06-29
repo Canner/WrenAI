@@ -64,7 +64,10 @@ _SCHEMA = "default"
         # Decimal
         ("decimal(10,2)", pa.decimal128(10, 2)),
         ("decimal(38,9)", pa.decimal128(38, 9)),
-        ("decimal", pa.decimal128(38, 9)),
+        # DECIMAL(p) is scale 0 and bare DECIMAL is DECIMAL(38, 0) in Trino.
+        ("decimal", pa.decimal128(38, 0)),
+        ("decimal(10)", pa.decimal128(10, 0)),
+        ("decimal(5)", pa.decimal128(5, 0)),
         # Time / timestamp
         ("time", pa.time64("us")),
         ("time(3)", pa.time64("us")),
