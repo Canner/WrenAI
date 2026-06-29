@@ -1,7 +1,7 @@
 import ast
 import logging
 import sys
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import orjson
 import tiktoken
@@ -21,7 +21,10 @@ from src.pipelines.common import (
     normalize_data_type,
 )
 from src.utils import trace_cost
-from src.web.v1.services.ask import AskHistory
+if TYPE_CHECKING:
+    from src.web.v1.services.ask import AskHistory
+else:
+    AskHistory = Any
 
 logger = logging.getLogger("wren-ai-service")
 
