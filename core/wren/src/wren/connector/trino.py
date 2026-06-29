@@ -101,7 +101,12 @@ def _trino_data_type_to_arrow(node) -> pa.DataType:
         return _TRINO_DATA_TYPE_TO_ARROW[kind]
 
     if kind == T.DECIMAL:
-        precision, scale = 38, 9
+        # Trino DECIMAL semantics: DECIMAL(p) is precision p with scale 0, and
+        # bare DECIMAL is DECIMAL(38, 0). Defaulting the scale to a non-zero
+        # value mistyped precision-only DECIMAL columns and, for small
+        # precisions (e.g. DECIMAL(5)), produced scale > precision, which
+        # PyArrow rejects with an ArrowInvalid.
+        precision, scale = 38, 0
         params = node.expressions
         if len(params) >= 1:
             with contextlib.suppress(AttributeError, ValueError):

@@ -74,8 +74,20 @@ def test_parse_athena_type_primitives(type_str, expected):
     assert _parse_athena_type(type_str) == expected
 
 
-def test_parse_athena_type_decimal():
-    assert _parse_athena_type("decimal(12,4)") == pa.decimal128(12, 4)
+@pytest.mark.parametrize(
+    ("type_str", "expected"),
+    [
+        ("decimal(12,4)", pa.decimal128(12, 4)),
+        # bare DECIMAL and precision-only DECIMAL(p) default to scale 0
+        # (kept aligned with the Trino parser).
+        ("decimal", pa.decimal128(38, 0)),
+        ("decimal(10)", pa.decimal128(10, 0)),
+        # small precision must not produce scale > precision (ArrowInvalid).
+        ("decimal(5)", pa.decimal128(5, 0)),
+    ],
+)
+def test_parse_athena_type_decimal(type_str, expected):
+    assert _parse_athena_type(type_str) == expected
 
 
 def test_parse_athena_type_decimal_precision_only_is_scale_zero():
@@ -91,6 +103,21 @@ def test_parse_athena_type_decimal_bare_defaults():
 def test_parse_athena_type_decimal_small_precision_only():
     # Regression: DECIMAL(5) must not yield scale > precision. A non-zero
     # default scale (e.g. 9) produced decimal128(5, 9), which PyArrow rejects.
+    assert _parse_athena_type("decimal(5)") == pa.decimal128(5, 0)
+
+
+def test_parse_athena_type_decimal_bare_defaults_to_scale_0():
+    # Bare DECIMAL is DECIMAL(38, 0) in Athena/Trino semantics.
+    assert _parse_athena_type("decimal") == pa.decimal128(38, 0)
+
+
+def test_parse_athena_type_decimal_precision_only_has_scale_0():
+    # DECIMAL(p) is precision p with scale 0, not a default non-zero scale.
+    assert _parse_athena_type("decimal(10)") == pa.decimal128(10, 0)
+
+
+def test_parse_athena_type_decimal_small_precision_only():
+    # Small precision-only case must not produce scale > precision (ArrowInvalid).
     assert _parse_athena_type("decimal(5)") == pa.decimal128(5, 0)
 
 
