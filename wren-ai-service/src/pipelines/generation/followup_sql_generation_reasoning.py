@@ -1,9 +1,7 @@
-from __future__ import annotations
-
 import asyncio
 import logging
 import sys
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -19,9 +17,7 @@ from src.pipelines.generation.utils.sql import (
 )
 from src.utils import trace_cost
 from src.web.v1.services import Configuration
-
-if TYPE_CHECKING:
-    from src.web.v1.services.ask import AskHistory
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 

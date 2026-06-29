@@ -1,9 +1,7 @@
-from __future__ import annotations
-
 import ast
 import logging
 import sys
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
 import orjson
 import tiktoken
@@ -23,9 +21,7 @@ from src.pipelines.common import (
     normalize_data_type,
 )
 from src.utils import trace_cost
-
-if TYPE_CHECKING:
-    from src.web.v1.services.ask import AskHistory
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -129,11 +125,15 @@ def _build_view_ddl(content: dict) -> str:
 def expand_business_terms_for_retrieval(query: str) -> str:
     normalized = (query or "").lower()
     analytics_terms = {
+        "business unit",
         "pcb",
         "repair",
         "debug",
         "turnaround",
         "failure",
+        "failure code",
+        "failure category",
+        "failure pattern",
         "resolved",
         "trend",
         "volume",
@@ -179,13 +179,76 @@ def expand_business_terms_for_retrieval(query: str) -> str:
         [
             query,
             "Business analytics aliases:",
-            "repair trends repair volume repair counts debug entries debug fixes",
-            "average debug hours turnaround time resolved entries failure category failure code",
+            "throughput trend volume count counts average total ranking top bottom grouped distribution",
+            "business unit manufacturing unit department location site plant team region category status",
+            "repair trends repair volume repair counts debug entries debug fixes failure code",
             "monthly trend quarter grouped by month bar chart line chart",
+            "top common failures most common failure categories",
+            "failure patterns category occurrences material workorder serial number",
             "sales revenue amount sales value sales performance salesperson ranking",
             "customer sales top customers customer growth orders invoices margin quantity",
         ]
     )
+
+
+def _is_project_wide_analysis_query(query: str) -> bool:
+    normalized = (query or "").lower()
+    if not normalized:
+        return False
+
+    analysis_terms = {
+        "average",
+        "avg",
+        "bar chart",
+        "breakdown",
+        "chart",
+        "completed",
+        "compare",
+        "count",
+        "counts",
+        "distribution",
+        "group by",
+        "grouped",
+        "highest",
+        "line chart",
+        "lowest",
+        "maximum",
+        "minimum",
+        "monthly",
+        "most common",
+        "number of",
+        "pie chart",
+        "quarter",
+        "rank",
+        "ranking",
+        "recommend",
+        "recommended",
+        "show",
+        "status",
+        "sum",
+        "total",
+        "totals",
+        "top",
+        "trend",
+        "volume",
+    }
+    return any(term in normalized for term in analysis_terms)
+
+
+def _dedupe_documents(documents: list[Document]) -> list[Document]:
+    deduped: list[Document] = []
+    seen: set[tuple[str, str, str]] = set()
+    for document in documents:
+        key = (
+            str(document.meta.get("name", "")),
+            str(document.meta.get("type", "")),
+            document.content,
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(document)
+    return deduped
 
 
 @observe(capture_input=False, capture_output=False)
@@ -268,7 +331,22 @@ async def dbschema_retrieval(
             )
 
         results = await dbschema_retriever.run(query_embedding=[], filters=filters)
-        return results["documents"]
+        documents = results["documents"]
+        if project_id and _is_project_wide_analysis_query(query):
+            all_project_results = await dbschema_retriever.run(
+                query_embedding=[],
+                filters={
+                    "operator": "AND",
+                    "conditions": [
+                        {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+                        {"field": "project_id", "operator": "==", "value": project_id},
+                    ],
+                },
+            )
+            documents = _dedupe_documents(
+                documents + all_project_results.get("documents", [])
+            )
+        return documents
 
     filters = {
         "operator": "AND",

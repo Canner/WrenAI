@@ -1,9 +1,7 @@
-from __future__ import annotations
-
 import ast
 import logging
 import sys
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from typing import Any, Literal, Optional
 
 import orjson
 from hamilton import base
@@ -19,9 +17,7 @@ from src.pipelines.common import build_table_ddl, clean_up_new_lines
 from src.pipelines.generation.utils.sql import construct_instructions
 from src.utils import trace_cost
 from src.web.v1.services import Configuration
-
-if TYPE_CHECKING:
-    from src.web.v1.services.ask import AskHistory
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
