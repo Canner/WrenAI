@@ -51,7 +51,12 @@ def parse_types_cmd(
             if not path.exists():
                 typer.echo(f"Error: file not found: {input_file}", err=True)
                 raise typer.Exit(1)
-            data = json.loads(path.read_text(encoding="utf-8"))
+            try:
+                raw = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as e:
+                typer.echo(f"Error: could not read file {input_file}: {e}", err=True)
+                raise typer.Exit(1)
+            data = json.loads(raw)
         else:
             data = json.load(sys.stdin)
     except json.JSONDecodeError as e:
@@ -106,7 +111,12 @@ def translate_types_cmd(
             if not path.exists():
                 typer.echo(f"Error: file not found: {input_file}", err=True)
                 raise typer.Exit(1)
-            data = json.loads(path.read_text(encoding="utf-8"))
+            try:
+                raw = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as e:
+                typer.echo(f"Error: could not read file {input_file}: {e}", err=True)
+                raise typer.Exit(1)
+            data = json.loads(raw)
         else:
             data = json.load(sys.stdin)
     except json.JSONDecodeError as e:

@@ -268,3 +268,38 @@ def test_cli_translate_types_stdin() -> None:
     assert len(data) == 2
     assert data[0]["type"] == "INT64"
     assert data[0]["column"] == "id"
+
+
+def test_cli_translate_types_missing_file() -> None:
+    result = _run_wren(
+        "utils",
+        "translate-types",
+        "--source",
+        "postgres",
+        "--target",
+        "bigquery",
+        "--input",
+        "/nonexistent/does_not_exist.json",
+    )
+    assert result.returncode == 1
+    assert "file not found" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_cli_translate_types_unreadable_file_is_clean(tmp_path) -> None:
+    # A directory path is readable-as-path but raises OSError on read_text.
+    bad = tmp_path / "a_directory"
+    bad.mkdir()
+    result = _run_wren(
+        "utils",
+        "translate-types",
+        "--source",
+        "postgres",
+        "--target",
+        "bigquery",
+        "--input",
+        str(bad),
+    )
+    assert result.returncode == 1
+    assert "could not read file" in result.stderr
+    assert "Traceback" not in result.stderr
