@@ -22,8 +22,6 @@ from src.web.v1.services import Configuration
 
 if TYPE_CHECKING:
     from src.web.v1.services.ask import AskHistory
-else:
-    AskHistory = Any
 
 logger = logging.getLogger("wren-ai-service")
 

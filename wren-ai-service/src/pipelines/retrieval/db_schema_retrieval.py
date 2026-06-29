@@ -26,8 +26,6 @@ from src.utils import trace_cost
 
 if TYPE_CHECKING:
     from src.web.v1.services.ask import AskHistory
-else:
-    AskHistory = Any
 
 logger = logging.getLogger("wren-ai-service")
 
