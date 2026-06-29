@@ -8,10 +8,12 @@ from wren.connector.duckdb import DuckDBConnector
 
 
 def _entry(path):
+    """Build a fake opendal list entry exposing only a ``path`` attribute."""
     return SimpleNamespace(path=path)
 
 
 def _stat(is_dir):
+    """Build a fake opendal stat result whose ``mode.is_dir()`` returns ``is_dir``."""
     mode = MagicMock()
     mode.is_dir.return_value = is_dir
     return SimpleNamespace(mode=mode)
