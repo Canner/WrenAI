@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { groupBy, orderBy, flatMap } from 'lodash';
 import { message } from 'antd';
 import Icon from '@/import/icon';
@@ -19,6 +19,9 @@ export interface GroupedQuestion {
   question: string;
   sql: string;
 }
+
+const RECOMMENDATION_POLL_INTERVAL_MS = 2000;
+const RECOMMENDATION_POLL_MAX_INTERVAL_MS = 10000;
 
 const getGroupedQuestions = (
   questions: ResultQuestion[],
@@ -42,12 +45,16 @@ export default function useRecommendedQuestionsInstruction() {
   const [recommendedQuestions, setRecommendedQuestions] = useState<
     GroupedQuestion[]
   >([]);
+  const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollingSessionRef = useRef(0);
+  const pollingRequestRef = useRef<Promise<void> | null>(null);
+  const pollingDelayRef = useRef(RECOMMENDATION_POLL_INTERVAL_MS);
+  const lastFingerprintRef = useRef<string | null>(null);
 
   const [fetchRecommendationQuestions, recommendationQuestionsResult] =
     useGetProjectRecommendationQuestionsLazyQuery({
       fetchPolicy: 'network-only',
       nextFetchPolicy: 'network-only',
-      pollInterval: 2000,
     });
 
   // Handle errors via try/catch blocks rather than onError callback
@@ -61,6 +68,47 @@ export default function useRecommendedQuestionsInstruction() {
     [recommendationQuestionsResult.data],
   );
 
+  const stopPolling = useCallback(() => {
+    pollingSessionRef.current += 1;
+    if (pollingRef.current) {
+      clearTimeout(pollingRef.current);
+      pollingRef.current = null;
+    }
+    pollingDelayRef.current = RECOMMENDATION_POLL_INTERVAL_MS;
+  }, []);
+
+  const startPolling = useCallback(async () => {
+    if (pollingRequestRef.current || pollingRef.current) {
+      return;
+    }
+
+    stopPolling();
+    const pollingSessionId = pollingSessionRef.current;
+
+    const run = async () => {
+      if (pollingSessionRef.current !== pollingSessionId) return;
+      if (pollingRequestRef.current) {
+        await pollingRequestRef.current;
+        if (pollingSessionRef.current !== pollingSessionId) return;
+      }
+
+      try {
+        const request = fetchRecommendationQuestions().then(() => undefined);
+        pollingRequestRef.current = request;
+        await request;
+      } catch (error) {
+        console.error(error);
+      } finally {
+        pollingRequestRef.current = null;
+        if (pollingSessionRef.current === pollingSessionId) {
+          pollingRef.current = setTimeout(run, pollingDelayRef.current);
+        }
+      }
+    };
+
+    await run();
+  }, [fetchRecommendationQuestions, stopPolling]);
+
   useEffect(() => {
     const fetchRecommendationQuestionsData = async () => {
       const result = await fetchRecommendationQuestions();
@@ -69,7 +117,6 @@ export default function useRecommendedQuestionsInstruction() {
         return;
       }
 
-      // for existing projects that do not have to generate recommended questions yet
       if (isRecommendedFinished(data.status)) {
         if (data.questions.length > 0) {
           // for regenerate then leave and go back to the home page
@@ -77,12 +124,15 @@ export default function useRecommendedQuestionsInstruction() {
 
           setShowRecommendedQuestionsPromptMode(true);
         }
+      } else {
+        setGenerating(true);
+        await startPolling();
       }
     };
 
     fetchRecommendationQuestionsData();
-    return () => recommendationQuestionsResult.stopPolling();
-  }, []);
+    return () => stopPolling();
+  }, [fetchRecommendationQuestions, startPolling, stopPolling]);
 
   useEffect(() => {
     if (!recommendedQuestionsTask) {
@@ -90,7 +140,7 @@ export default function useRecommendedQuestionsInstruction() {
     }
 
     if (isRecommendedFinished(recommendedQuestionsTask?.status)) {
-      recommendationQuestionsResult.stopPolling();
+      stopPolling();
 
       if (recommendedQuestionsTask.questions.length === 0) {
         isRegenerate && setShowRetry(true);
@@ -116,14 +166,41 @@ export default function useRecommendedQuestionsInstruction() {
 
       setGenerating(false);
     }
-  }, [recommendedQuestionsTask]);
+  }, [
+    isRegenerate,
+    recommendedQuestionsTask,
+    showRecommendedQuestionsPromptMode,
+    stopPolling,
+  ]);
+
+  useEffect(() => {
+    const fingerprint = JSON.stringify({
+      status: recommendedQuestionsTask?.status || null,
+      count: recommendedQuestionsTask?.questions?.length || 0,
+      errorCode: recommendedQuestionsTask?.error?.code || null,
+    });
+
+    if (lastFingerprintRef.current === fingerprint) {
+      pollingDelayRef.current = Math.min(
+        pollingDelayRef.current * 2,
+        RECOMMENDATION_POLL_MAX_INTERVAL_MS,
+      );
+    } else {
+      pollingDelayRef.current = RECOMMENDATION_POLL_INTERVAL_MS;
+      lastFingerprintRef.current = fingerprint;
+    }
+  }, [
+    recommendedQuestionsTask?.status,
+    recommendedQuestionsTask?.questions?.length,
+    recommendedQuestionsTask?.error?.code,
+  ]);
 
   const onGetRecommendationQuestions = async () => {
     setGenerating(true);
     setIsRegenerate(true);
     try {
       await generateProjectRecommendationQuestions();
-      fetchRecommendationQuestions();
+      await startPolling();
     } catch (error) {
       console.error(error);
     }
