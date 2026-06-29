@@ -135,9 +135,7 @@ class DuckDBConnector(ConnectorABC):
             for file in op.list("/"):
                 if file.path != "/":
                     stat = op.stat(file.path)
-                    if not stat.mode.is_dir() and file.path.lower().endswith(
-                        ".duckdb"
-                    ):
+                    if not stat.mode.is_dir() and file.path.lower().endswith(".duckdb"):
                         files.append(f"{connection_info.url}/{file.path}")
         except Exception as e:
             raise WrenError(
