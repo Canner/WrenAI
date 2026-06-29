@@ -78,6 +78,22 @@ def test_parse_athena_type_decimal():
     assert _parse_athena_type("decimal(12,4)") == pa.decimal128(12, 4)
 
 
+def test_parse_athena_type_decimal_precision_only_is_scale_zero():
+    # Trino/Athena: DECIMAL(p) means scale 0, not an unspecified/default scale.
+    assert _parse_athena_type("decimal(10)") == pa.decimal128(10, 0)
+
+
+def test_parse_athena_type_decimal_bare_defaults():
+    # Bare DECIMAL is DECIMAL(38, 0) per the SQL standard / Trino.
+    assert _parse_athena_type("decimal") == pa.decimal128(38, 0)
+
+
+def test_parse_athena_type_decimal_small_precision_only():
+    # Regression: DECIMAL(5) must not yield scale > precision. A non-zero
+    # default scale (e.g. 9) produced decimal128(5, 9), which PyArrow rejects.
+    assert _parse_athena_type("decimal(5)") == pa.decimal128(5, 0)
+
+
 def test_parse_athena_type_array():
     assert _parse_athena_type("array(varchar)") == pa.list_(pa.string())
 
