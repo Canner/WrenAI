@@ -15,7 +15,17 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from wren.connector.postgres import PostgresConnector, _strip_trailing_semicolon
+# The postgres connector imports psycopg at module load. The lightweight
+# ``unit tests`` CI job does not install the psycopg/postgres extra (only the
+# dedicated ``postgres tests`` job does), so importing the connector there
+# raises ModuleNotFoundError at collection time and fails the whole suite.
+# Skip cleanly when psycopg is unavailable; the postgres job still runs these.
+pytest.importorskip("psycopg")
+
+from wren.connector.postgres import (  # noqa: E402
+    PostgresConnector,
+    _strip_trailing_semicolon,
+)
 
 pytestmark = pytest.mark.unit
 
