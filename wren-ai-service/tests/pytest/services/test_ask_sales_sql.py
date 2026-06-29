@@ -414,3 +414,44 @@ def test_build_schema_grounded_sql_for_ticket_throughput_trend():
         'ORDER BY DATEPART(YEAR, "dbo_tickets"."created_at"), '
         'DATEPART(MONTH, "dbo_tickets"."created_at")'
     )
+
+
+def test_build_audit_log_activity_sql_uses_existing_condition_columns():
+    service = AskService.__new__(AskService)
+    sql = service._build_audit_log_activity_sql(
+        "Show audit log activity by condition name over time.",
+        [
+            """
+            CREATE TABLE dbo_audit_log (
+              id VARCHAR,
+              action VARCHAR,
+              actor_name VARCHAR,
+              actor_user_id VARCHAR,
+              after_state VARCHAR,
+              before_state VARCHAR,
+              created_at TIMESTAMP,
+              entity_type VARCHAR,
+              is_name_condition BOOLEAN,
+              name VARCHAR
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT DATEPART(YEAR, "dbo_audit_log"."created_at") AS "year", '
+        'DATEPART(MONTH, "dbo_audit_log"."created_at") AS "month", '
+        '"dbo_audit_log"."is_name_condition" AS "is_name_condition", '
+        'COUNT(*) AS "activity_count" '
+        'FROM "dbo_audit_log" '
+        'WHERE "dbo_audit_log"."created_at" IS NOT NULL '
+        'AND "dbo_audit_log"."is_name_condition" IS NOT NULL '
+        'GROUP BY DATEPART(YEAR, "dbo_audit_log"."created_at"), '
+        'DATEPART(MONTH, "dbo_audit_log"."created_at"), '
+        '"dbo_audit_log"."is_name_condition" '
+        'ORDER BY DATEPART(YEAR, "dbo_audit_log"."created_at"), '
+        'DATEPART(MONTH, "dbo_audit_log"."created_at"), '
+        '"activity_count" DESC'
+    )
+    assert "condition_name" not in sql
+    assert "timestamp" not in sql

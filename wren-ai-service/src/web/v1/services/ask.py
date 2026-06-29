@@ -1094,6 +1094,83 @@ class AskService:
             'ORDER BY "throughput" DESC'
         )
 
+    def _build_audit_log_activity_sql(
+        self,
+        query: str,
+        table_ddls: list[str],
+        table_names: Optional[list[str]] = None,
+    ) -> str | None:
+        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized:
+            return None
+
+        if not (
+            "audit" in normalized
+            and "log" in normalized
+            and any(term in normalized for term in ("activity", "over time", "trend"))
+        ):
+            return None
+
+        table_name = "dbo_audit_log"
+        timestamp_column = "created_at"
+        if not self._schema_has_table_column(
+            table_ddls,
+            table_name,
+            timestamp_column,
+            table_names=table_names,
+        ):
+            return None
+
+        dimension_column = None
+        condition_candidates = (
+            "is_name_condition",
+            "name",
+            "action",
+            "entity_type",
+        )
+        activity_candidates = (
+            "action",
+            "entity_type",
+            "actor_name",
+            "actor_user_id",
+            "name",
+        )
+        candidates = (
+            condition_candidates
+            if "condition" in normalized
+            else activity_candidates
+        )
+        for candidate in candidates:
+            if self._schema_has_table_column(
+                table_ddls,
+                table_name,
+                candidate,
+                table_names=table_names,
+            ):
+                dimension_column = candidate
+                break
+
+        if not dimension_column:
+            return None
+
+        timestamp_expression = f'"{table_name}"."{timestamp_column}"'
+        dimension_expression = f'"{table_name}"."{dimension_column}"'
+        return (
+            f"SELECT DATEPART(YEAR, {timestamp_expression}) AS \"year\", "
+            f"DATEPART(MONTH, {timestamp_expression}) AS \"month\", "
+            f"{dimension_expression} AS \"{dimension_column}\", "
+            f'COUNT(*) AS "activity_count" '
+            f'FROM "{table_name}" '
+            f"WHERE {timestamp_expression} IS NOT NULL "
+            f"AND {dimension_expression} IS NOT NULL "
+            f"GROUP BY DATEPART(YEAR, {timestamp_expression}), "
+            f"DATEPART(MONTH, {timestamp_expression}), "
+            f"{dimension_expression} "
+            f"ORDER BY DATEPART(YEAR, {timestamp_expression}), "
+            f"DATEPART(MONTH, {timestamp_expression}), "
+            f'"activity_count" DESC'
+        )
+
     def _build_repair_failure_count_sql(
         self,
         query: str,
@@ -2468,8 +2545,26 @@ class AskService:
                     "Retrieved tables for query_id %s: %s", query_id, table_names
                 )
 
-                if deterministic_sales_sql := self._build_schema_grounded_sales_sql(
-                    user_query, table_ddls
+                if audit_log_activity_sql := self._build_audit_log_activity_sql(
+                    user_query, table_ddls, table_names=table_names
+                ):
+                    logger.info(
+                        "Using schema-grounded audit log activity SQL for query_id %s",
+                        query_id,
+                    )
+                    api_results = [
+                        AskResult(
+                            **{
+                                "sql": audit_log_activity_sql,
+                                "type": "llm",
+                            }
+                        )
+                    ]
+
+                if not api_results and (
+                    deterministic_sales_sql := self._build_schema_grounded_sales_sql(
+                        user_query, table_ddls
+                    )
                 ):
                     logger.info(
                         "Using schema-grounded CWSales SQL for query_id %s",
