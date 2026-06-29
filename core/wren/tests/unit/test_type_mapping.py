@@ -8,7 +8,12 @@ import sys
 
 import pytest
 
-from wren.type_mapping import parse_type, parse_types
+from wren.type_mapping import (
+    parse_type,
+    parse_types,
+    translate_type,
+    translate_types,
+)
 
 # ── parse_type unit tests ──────────────────────────────────────────────────
 
@@ -87,6 +92,64 @@ def test_parse_types_empty_list() -> None:
     assert parse_types([], dialect="postgres") == []
 
 
+# ── translate_type cross-dialect tests ──────────────────────────
+
+
+@pytest.mark.parametrize(
+    "type_str, source, target, expected",
+    [
+        # postgres → bigquery
+        ("int8", "postgres", "bigquery", "INT64"),
+        ("TIMESTAMP WITH TIME ZONE", "postgres", "bigquery", "TIMESTAMP"),
+        # bigquery → postgres round-trip
+        ("INT64", "bigquery", "postgres", "BIGINT"),
+        # mysql → snowflake keeps precision/scale
+        ("DECIMAL(10,2)", "mysql", "snowflake", "DECIMAL(10, 2)"),
+        # same dialect is an identity-ish normalization
+        ("int8", "postgres", "postgres", "BIGINT"),
+        # graceful fallback for unknown types
+        ("my_custom_type", "postgres", "bigquery", "my_custom_type"),
+        # empty string passthrough
+        ("", "postgres", "bigquery", ""),
+    ],
+)
+def test_translate_type(
+    type_str: str, source: str, target: str, expected: str
+) -> None:
+    assert translate_type(type_str, source, target) == expected
+
+
+def test_translate_types_adds_type_field() -> None:
+    columns = [
+        {"column": "id", "raw_type": "int8"},
+        {"column": "total", "raw_type": "numeric(10,2)"},
+    ]
+    results = translate_types(columns, "postgres", "bigquery")
+
+    assert len(results) == 2
+    assert results[0]["type"] == "INT64"
+    assert results[1]["type"] == "NUMERIC(10, 2)"
+
+
+def test_translate_types_does_not_mutate_input() -> None:
+    original = {"column": "id", "raw_type": "int8"}
+    columns = [original]
+    translate_types(columns, "postgres", "bigquery")
+    assert "type" not in original
+
+
+def test_translate_types_custom_type_field() -> None:
+    columns = [{"col": "x", "data_type": "int8"}]
+    results = translate_types(
+        columns, "postgres", "bigquery", type_field="data_type"
+    )
+    assert results[0]["type"] == "INT64"
+
+
+def test_translate_types_empty_list() -> None:
+    assert translate_types([], "postgres", "bigquery") == []
+
+
 # ── CLI integration tests ─────────────────────────────────────────────────
 
 
@@ -154,3 +217,54 @@ def test_cli_parse_types_batch() -> None:
     assert len(data) == 2
     assert data[0]["type"] == "BIGINT"
     assert data[1]["type"] == "VARCHAR"
+
+
+def test_cli_translate_type_single() -> None:
+    result = _run_wren(
+        "utils",
+        "translate-type",
+        "--type",
+        "int8",
+        "--source",
+        "postgres",
+        "--target",
+        "bigquery",
+    )
+    _assert_success(result)
+    assert result.stdout.strip() == "INT64"
+
+
+def test_cli_translate_type_fallback() -> None:
+    result = _run_wren(
+        "utils",
+        "translate-type",
+        "--type",
+        "my_custom_type",
+        "--source",
+        "postgres",
+        "--target",
+        "bigquery",
+    )
+    _assert_success(result)
+    assert result.stdout.strip() == "my_custom_type"
+
+
+def test_cli_translate_types_stdin() -> None:
+    columns = [
+        {"column": "id", "raw_type": "int8"},
+        {"column": "name", "raw_type": "character varying"},
+    ]
+    result = _run_wren(
+        "utils",
+        "translate-types",
+        "--source",
+        "postgres",
+        "--target",
+        "bigquery",
+        stdin=json.dumps(columns),
+    )
+    _assert_success(result)
+    data = json.loads(result.stdout)
+    assert len(data) == 2
+    assert data[0]["type"] == "INT64"
+    assert data[0]["column"] == "id"
