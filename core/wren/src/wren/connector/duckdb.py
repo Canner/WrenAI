@@ -96,8 +96,11 @@ class DuckDBConnector(ConnectorABC):
         if not db_files:
             raise WrenError(ErrorCode.DUCKDB_FILE_NOT_FOUND, "No DuckDB files found.")
 
+        # Sort for deterministic alias assignment: OpenDAL listing order is not
+        # guaranteed, so without this the bare alias could attach to a different
+        # file across runs when case-colliding names are present.
         used_aliases: set[str] = set()
-        for file in db_files:
+        for file in sorted(db_files):
             try:
                 escaped_file = file.replace("'", "''")
                 base_alias = os.path.splitext(os.path.basename(file))[0]
