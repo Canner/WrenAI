@@ -214,13 +214,14 @@ def test_tvf_generate_series_blocked():
     assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
 
 
-def test_tvf_unnest_blocked():
+def test_unnest_row_expansion_allowed():
+    # UNNEST is a row-expansion operator, not a data source: it restructures an
+    # array/struct already in query scope, so it reads nothing outside the
+    # manifest and must not be blocked in strict mode.
     sql = "SELECT * FROM unnest(ARRAY[1,2,3]) AS t(x)"
     ast = parse_one(sql, dialect="duckdb")
     config = WrenConfig(strict_mode=True)
-    with pytest.raises(WrenError) as exc_info:
-        validate_sql_policy(ast, _MODELS, config)
-    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+    validate_sql_policy(ast, _MODELS, config)
 
 
 def test_tvf_allowed_when_not_strict():
@@ -229,17 +230,16 @@ def test_tvf_allowed_when_not_strict():
     validate_sql_policy(ast, _MODELS, config)
 
 
-def test_tvf_unnest_in_join_blocked():
-    # Regression: a table-valued function reached via a JOIN (rather than the
-    # FROM source) must still be blocked in strict mode. UNNEST parses to an
-    # exp.Unnest (an exp.Func subclass) with no exp.Table node, so the table
-    # scan misses it and only the FROM/JOIN func scan can catch it.
+def test_unnest_model_column_allowed():
+    # UNNEST over a governed model column reached via JOIN is row-expansion of
+    # an in-scope column (RLAC/CLAC already apply to ``orders.items``); it must
+    # NOT be false-blocked as a non-model source. UNNEST parses to exp.Unnest
+    # (an exp.Func subclass) with no exp.Table node, so the FROM/JOIN func scan
+    # sees it — the row-expansion allow-list lets it through.
     sql = "SELECT * FROM orders CROSS JOIN UNNEST(orders.items) AS t(item)"
     ast = parse_one(sql, dialect="trino")
     config = WrenConfig(strict_mode=True)
-    with pytest.raises(WrenError) as exc_info:
-        validate_sql_policy(ast, _MODELS, config)
-    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+    validate_sql_policy(ast, _MODELS, config)
 
 
 def test_tvf_generate_series_in_join_blocked():
@@ -251,19 +251,22 @@ def test_tvf_generate_series_in_join_blocked():
     assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
 
 
-def test_tvf_lateral_flatten_in_join_blocked():
-    # Regression: a LATERAL-wrapped TVF reached via JOIN parses to an
-    # exp.Lateral node *wrapping* the func (not a bare exp.Func), so the
-    # FROM/JOIN func scan must unwrap exp.Lateral to catch it.
+def test_lateral_flatten_model_column_allowed():
+    # Snowflake FLATTEN over a governed model column, reached via a LATERAL
+    # comma-join, parses to exp.Lateral wrapping exp.Explode. After unwrapping
+    # the LATERAL, it is a row-expansion operator over an in-scope column — it
+    # restructures ``orders.items`` rather than reading a new source, so it
+    # must be allowed rather than false-blocked.
     sql = "SELECT * FROM orders, LATERAL FLATTEN(input => orders.items) f"
     ast = parse_one(sql, dialect="snowflake")
     config = WrenConfig(strict_mode=True)
-    with pytest.raises(WrenError) as exc_info:
-        validate_sql_policy(ast, _MODELS, config)
-    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+    validate_sql_policy(ast, _MODELS, config)
 
 
 def test_tvf_lateral_generate_series_in_join_blocked():
+    # generate_series IS a data-generating source (not row-expansion of an
+    # in-scope column), so a LATERAL-wrapped generate_series reached via JOIN
+    # must still be blocked.
     sql = "SELECT * FROM orders CROSS JOIN LATERAL generate_series(1, 3) g"
     ast = parse_one(sql, dialect="snowflake")
     config = WrenConfig(strict_mode=True)

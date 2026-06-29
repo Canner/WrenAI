@@ -15,6 +15,21 @@ from sqlglot.errors import SqlglotError
 from wren.config import WrenConfig
 from wren.model.error import ErrorCode, ErrorPhase, WrenError
 
+# Row-expansion operators (UNNEST / FLATTEN / EXPLODE) are not data sources —
+# they restructure an array/struct expression that is already in query scope
+# (e.g. a governed model column like ``orders.items``), so they never read data
+# outside the manifest and must not be treated as a disallowed table-valued
+# function. The class mapping is stable across dialects: ``UNNEST`` ->
+# ``exp.Unnest`` (trino/postgres/duckdb), Snowflake ``FLATTEN`` -> ``exp.Explode``,
+# so no per-dialect name matching is needed.
+#
+# Note: ``UNNEST(read_csv(...))`` is therefore also allowed, but that is an
+# instance of the broader pre-existing gap (data-reading TVFs in non-source
+# positions — already reachable today via projection/WHERE subqueries, since
+# strict mode only governs the top-level source position) and is tracked
+# separately. It is not a regression introduced here.
+_ROW_EXPANSION_FUNCS: tuple[type[exp.Func], ...] = (exp.Unnest, exp.Explode)
+
 # Dialects we probe when canonicalising the user's denylist. sqlglot can map
 # the same function name (e.g. ``version()``) onto different concrete AST
 # subclasses depending on the dialect — postgres/mysql/duckdb/trino/clickhouse
@@ -155,6 +170,10 @@ def _check_tables(
             source = source.this
             if isinstance(source, exp.Alias):
                 source = source.this
+        if isinstance(source, _ROW_EXPANSION_FUNCS):
+            # Row-expansion over an in-scope expression (e.g. a governed model
+            # column) reads nothing outside the manifest — allow it.
+            continue
         if isinstance(source, exp.Func):
             raise WrenError(
                 ErrorCode.MODEL_NOT_FOUND,
