@@ -334,6 +334,21 @@ def test_build_schema_grounded_sql_for_ticket_category_request_uses_existing_col
     assert "category" not in sql
 
 
+def test_build_explicit_group_count_sql_for_schema_table_column_reference():
+    service = AskService.__new__(AskService)
+    sql = service._build_explicit_group_count_sql(
+        "Show a pie chart grouped by dbo.tickets.status."
+    )
+
+    assert sql == (
+        'SELECT "dbo_tickets"."status" AS "status", '
+        'COUNT(*) AS "RecordCount" '
+        'FROM "dbo_tickets" '
+        'GROUP BY "dbo_tickets"."status" '
+        'ORDER BY COUNT(*) DESC'
+    )
+
+
 def test_build_schema_grounded_sql_for_knowledge_source_request_uses_existing_columns():
     service = AskService.__new__(AskService)
     sql = service._build_schema_grounded_sales_sql(

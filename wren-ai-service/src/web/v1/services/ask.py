@@ -490,6 +490,60 @@ class AskService:
     def _quote_sql_identifier(self, identifier: str) -> str:
         return f'"{identifier.replace(chr(34), chr(34) + chr(34))}"'
 
+    def _extract_explicit_table_column_reference(
+        self, query: str
+    ) -> tuple[str, str] | None:
+        normalized_query = query or ""
+        reference_match = re.search(
+            r"\b(?P<schema>[A-Za-z_][A-Za-z0-9_]*)[._]"
+            r"(?P<table>[A-Za-z_][A-Za-z0-9_]*)[._]"
+            r"(?P<column>[A-Za-z_][A-Za-z0-9_]*)\b",
+            normalized_query,
+        )
+        if not reference_match:
+            return None
+
+        schema = reference_match.group("schema")
+        table = reference_match.group("table")
+        column = reference_match.group("column")
+        table_name = f"{schema}_{table}"
+        return table_name, column
+
+    def _build_explicit_group_count_sql(self, query: str) -> str | None:
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized_query:
+            return None
+
+        if not any(
+            term in normalized_query
+            for term in (
+                "group by",
+                "grouped by",
+                "by ",
+                "pie chart",
+                "donut chart",
+                "bar chart",
+                "count",
+                "counts",
+            )
+        ):
+            return None
+
+        explicit_reference = self._extract_explicit_table_column_reference(query)
+        if not explicit_reference:
+            return None
+
+        table_name, column = explicit_reference
+        table_ref = self._quote_sql_identifier(table_name)
+        column_ref = f"{table_ref}.{self._quote_sql_identifier(column)}"
+        return (
+            f"SELECT {column_ref} AS {self._quote_sql_identifier(column)}, "
+            f'COUNT(*) AS "RecordCount" '
+            f"FROM {table_ref} "
+            f"GROUP BY {column_ref} "
+            f"ORDER BY COUNT(*) DESC"
+        )
+
     def _build_date_filter(self, table_name: str, date_column: str, query: str) -> str:
         date_ref = (
             f"{self._quote_sql_identifier(table_name)}."
@@ -2124,18 +2178,43 @@ class AskService:
                         invalid_sql = heuristic_sql
                         error_message = "Heuristic SQL fallback was not valid for the active datasource schema."
 
-                historical_question = await self._run_with_timeout(
-                    "Historical question retrieval",
-                    self._pipelines["historical_question"].run(
-                        query=user_query,
-                        project_id=ask_request.project_id,
-                    ),
-                )
+                if explicit_group_count_sql := self._build_explicit_group_count_sql(
+                    user_query
+                ):
+                    table_column_reference = (
+                        self._extract_explicit_table_column_reference(user_query)
+                    )
+                    table_names = (
+                        [table_column_reference[0]] if table_column_reference else []
+                    )
+                    api_results = [
+                        AskResult(
+                            **{
+                                "sql": explicit_group_count_sql,
+                                "type": "llm",
+                            }
+                        )
+                    ]
+                    rephrased_question = user_query
+                    logger.info(
+                        "Using explicit table-column grouped count SQL for query_id %s",
+                        query_id,
+                    )
 
-                # we only return top 1 result
-                historical_question_result = historical_question.get(
-                    "formatted_output", {}
-                ).get("documents", [])[:1]
+                historical_question_result = []
+                if not api_results:
+                    historical_question = await self._run_with_timeout(
+                        "Historical question retrieval",
+                        self._pipelines["historical_question"].run(
+                            query=user_query,
+                            project_id=ask_request.project_id,
+                        ),
+                    )
+
+                    # we only return top 1 result
+                    historical_question_result = historical_question.get(
+                        "formatted_output", {}
+                    ).get("documents", [])[:1]
 
                 valid_historical_results = []
                 for result in historical_question_result:
@@ -2159,7 +2238,7 @@ class AskService:
                 if valid_historical_results:
                     api_results = valid_historical_results
                     sql_generation_reasoning = ""
-                else:
+                elif not api_results:
                     original_user_query = user_query
                     # Run both pipeline operations concurrently
                     sql_samples_task, instructions_task = await self._run_with_timeout(
