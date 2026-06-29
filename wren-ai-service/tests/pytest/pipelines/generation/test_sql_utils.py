@@ -325,6 +325,30 @@ def test_normalize_sql_column_references_to_schema_maps_debug_business_aliases()
     ) == []
 
 
+def test_normalize_sql_column_references_to_schema_maps_last_update_date_alias():
+    sql = (
+        'SELECT DATEPART(YEAR, last_update_date) AS "year", '
+        'DATEPART(MONTH, last_update_date) AS "month", '
+        'COUNT(*) AS "throughput" '
+        'FROM "dbo_DebugEntries" '
+        'GROUP BY DATEPART(YEAR, last_update_date), '
+        'DATEPART(MONTH, last_update_date)'
+    )
+
+    normalized = normalize_sql_column_references_to_schema(
+        sql,
+        {"dbo_DebugEntries": ["DebugEntryId", "BusinessUnit", "DateIn", "FailedAt"]},
+    )
+
+    assert "last_update_date" not in normalized
+    assert 'DATEPART(YEAR, "DateIn") AS "year"' in normalized
+    assert 'DATEPART(MONTH, "DateIn") AS "month"' in normalized
+    assert find_invalid_column_references(
+        normalized,
+        {"dbo_DebugEntries": ["DebugEntryId", "BusinessUnit", "DateIn", "FailedAt"]},
+    ) == []
+
+
 def test_normalize_sql_column_references_to_schema_keeps_unknown_columns_invalid():
     sql = 'SELECT "dbo_qSales1"."UnitPrice" FROM "dbo_qSales1"'
     normalized = normalize_sql_column_references_to_schema(
