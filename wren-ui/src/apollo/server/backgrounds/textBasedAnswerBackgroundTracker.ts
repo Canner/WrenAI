@@ -72,111 +72,124 @@ export class TextBasedAnswerBackgroundTracker {
           }
           this.runningJobs.add(threadResponse.id);
 
-          const answerDetail = threadResponse.answerDetail;
+          try {
+            const answerDetail = threadResponse.answerDetail;
 
-          if (
-            !answerDetail.queryId &&
-            answerDetail.status !== ThreadResponseAnswerStatus.FETCHING_DATA
-          ) {
-            const fetchingDetail = {
-              ...answerDetail,
-              status: ThreadResponseAnswerStatus.FETCHING_DATA,
-            };
-            await this.threadResponseRepository.updateOne(threadResponse.id, {
-              answerDetail: fetchingDetail,
-            });
-            threadResponse.answerDetail = fetchingDetail;
-
-            const thread = await this.threadRepository.findOneBy({
-              id: threadResponse.threadId,
-            });
-            if (!thread) {
-              throw new Error(`Thread ${threadResponse.threadId} not found`);
-            }
-            const project = await this.projectService.getProjectById(
-              thread.projectId,
-            );
-            const deployment = await this.deployService.getLastDeployment(
-              project.id,
-            );
-            const mdl = deployment.manifest;
-            let data: PreviewDataResponse;
-            try {
-              data = (await this.queryService.preview(threadResponse.sql, {
-                project,
-                manifest: mdl,
-                modelingOnly: false,
-                limit: ANSWER_PREVIEW_LIMIT,
-              })) as PreviewDataResponse;
-            } catch (error) {
-              logger.error(`Error when query sql data: ${error}`);
-              const failedDetail = {
-                ...threadResponse.answerDetail,
-                status: ThreadResponseAnswerStatus.FAILED,
-                error: error?.extensions || error,
+            if (
+              !answerDetail.queryId &&
+              answerDetail.status !== ThreadResponseAnswerStatus.FETCHING_DATA
+            ) {
+              const fetchingDetail = {
+                ...answerDetail,
+                status: ThreadResponseAnswerStatus.FETCHING_DATA,
               };
               await this.threadResponseRepository.updateOne(threadResponse.id, {
-                answerDetail: failedDetail,
+                answerDetail: fetchingDetail,
               });
-              threadResponse.answerDetail = failedDetail;
-              throw error;
-            }
+              threadResponse.answerDetail = fetchingDetail;
 
-            const response = await this.wrenAIAdaptor.createTextBasedAnswer({
-              query: threadResponse.question,
-              sql: threadResponse.sql,
-              sqlData: data,
-              threadId: threadResponse.threadId.toString(),
-              configurations: {
-                language: WrenAILanguage[project.language] || WrenAILanguage.EN,
-              },
-            });
-
-            const preprocessingDetail = {
-              ...threadResponse.answerDetail,
-              queryId: response.queryId,
-              status: ThreadResponseAnswerStatus.PREPROCESSING,
-            };
-            await this.threadResponseRepository.updateOne(threadResponse.id, {
-              answerDetail: preprocessingDetail,
-            });
-            threadResponse.answerDetail = preprocessingDetail;
-            this.runningJobs.delete(threadResponse.id);
-            return;
-          }
-
-          if (
-            answerDetail.queryId &&
-            answerDetail.status === ThreadResponseAnswerStatus.PREPROCESSING
-          ) {
-            const result: TextBasedAnswerResult =
-              await this.wrenAIAdaptor.getTextBasedAnswerResult(
-                answerDetail.queryId,
+              const thread = await this.threadRepository.findOneBy({
+                id: threadResponse.threadId,
+              });
+              if (!thread) {
+                throw new Error(`Thread ${threadResponse.threadId} not found`);
+              }
+              const project = await this.projectService.getProjectById(
+                thread.projectId,
               );
+              const deployment = await this.deployService.getLastDeployment(
+                project.id,
+              );
+              const mdl = deployment.manifest;
+              let data: PreviewDataResponse;
+              try {
+                data = (await this.queryService.preview(threadResponse.sql, {
+                  project,
+                  manifest: mdl,
+                  modelingOnly: false,
+                  limit: ANSWER_PREVIEW_LIMIT,
+                })) as PreviewDataResponse;
+              } catch (error) {
+                logger.error(`Error when query sql data: ${error}`);
+                const failedDetail = {
+                  ...threadResponse.answerDetail,
+                  status: ThreadResponseAnswerStatus.FAILED,
+                  error: error?.extensions || error,
+                };
+                await this.threadResponseRepository.updateOne(threadResponse.id, {
+                  answerDetail: failedDetail,
+                });
+                threadResponse.answerDetail = failedDetail;
+                delete this.tasks[threadResponse.id];
+                throw error;
+              }
 
-            if (result.status === TextBasedAnswerStatus.PREPROCESSING) {
-              this.runningJobs.delete(threadResponse.id);
+              const response = await this.wrenAIAdaptor.createTextBasedAnswer({
+                query: threadResponse.question,
+                sql: threadResponse.sql,
+                sqlData: data,
+                threadId: threadResponse.threadId.toString(),
+                configurations: {
+                  language: WrenAILanguage[project.language] || WrenAILanguage.EN,
+                },
+              });
+
+              const preprocessingDetail = {
+                ...threadResponse.answerDetail,
+                queryId: response.queryId,
+                status: ThreadResponseAnswerStatus.PREPROCESSING,
+              };
+              await this.threadResponseRepository.updateOne(threadResponse.id, {
+                answerDetail: preprocessingDetail,
+              });
+              threadResponse.answerDetail = preprocessingDetail;
               return;
             }
 
-            const updatedAnswerDetail = {
-              queryId: answerDetail.queryId,
-              status:
-                result.status === TextBasedAnswerStatus.SUCCEEDED
-                  ? ThreadResponseAnswerStatus.STREAMING
-                  : ThreadResponseAnswerStatus.FAILED,
-              numRowsUsedInLLM: result.numRowsUsedInLLM,
-              error: result.error,
+            if (
+              answerDetail.queryId &&
+              answerDetail.status === ThreadResponseAnswerStatus.PREPROCESSING
+            ) {
+              const result: TextBasedAnswerResult =
+                await this.wrenAIAdaptor.getTextBasedAnswerResult(
+                  answerDetail.queryId,
+                );
+
+              if (result.status === TextBasedAnswerStatus.PREPROCESSING) {
+                return;
+              }
+
+              const updatedAnswerDetail = {
+                queryId: answerDetail.queryId,
+                status:
+                  result.status === TextBasedAnswerStatus.SUCCEEDED
+                    ? ThreadResponseAnswerStatus.STREAMING
+                    : ThreadResponseAnswerStatus.FAILED,
+                numRowsUsedInLLM: result.numRowsUsedInLLM,
+                error: result.error,
+              };
+              await this.threadResponseRepository.updateOne(threadResponse.id, {
+                answerDetail: updatedAnswerDetail,
+              });
+              threadResponse.answerDetail = updatedAnswerDetail;
+              delete this.tasks[threadResponse.id];
+            }
+          } catch (error) {
+            logger.error(`Answer job ${threadResponse.id} failed: ${error}`);
+            const failedDetail = {
+              ...threadResponse.answerDetail,
+              status: ThreadResponseAnswerStatus.FAILED,
+              error: error?.extensions || error,
             };
             await this.threadResponseRepository.updateOne(threadResponse.id, {
-              answerDetail: updatedAnswerDetail,
+              answerDetail: failedDetail,
             });
-            threadResponse.answerDetail = updatedAnswerDetail;
+            threadResponse.answerDetail = failedDetail;
             delete this.tasks[threadResponse.id];
+            throw error;
+          } finally {
+            this.runningJobs.delete(threadResponse.id);
           }
-
-          // Mark the job as finished
-          this.runningJobs.delete(threadResponse.id);
         },
       );
 

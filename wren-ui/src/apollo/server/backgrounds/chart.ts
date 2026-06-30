@@ -72,61 +72,76 @@ export class ChartBackgroundTracker {
           // mark the job as running
           this.runningJobs.add(threadResponse.id);
 
-          // get the chart detail
-          const chartDetail = threadResponse.chartDetail;
+          try {
+            // get the chart detail
+            const chartDetail = threadResponse.chartDetail;
 
-          // get the latest result from AI service
-          const result = await this.wrenAIAdaptor.getChartResult(
-            chartDetail.queryId,
-          );
-
-          const statusChanged = chartDetail.status !== result.status;
-          this.scheduleNextPoll(
-            threadResponse.id,
-            result.status,
-            statusChanged,
-          );
-
-          if (isFinalized(result.status) && !statusChanged) {
-            this.finalizeTask(threadResponse, result);
-            this.runningJobs.delete(threadResponse.id);
-            return;
-          }
-
-          // check if status change
-          if (!statusChanged) {
-            // mark the job as finished
-            logger.debug(
-              `Job ${threadResponse.id} chart status not changed, finished`,
+            // get the latest result from AI service
+            const result = await this.wrenAIAdaptor.getChartResult(
+              chartDetail.queryId,
             );
+
+            const statusChanged = chartDetail.status !== result.status;
+            this.scheduleNextPoll(
+              threadResponse.id,
+              result.status,
+              statusChanged,
+            );
+
+            if (isFinalized(result.status) && !statusChanged) {
+              this.finalizeTask(threadResponse, result);
+              return;
+            }
+
+            // check if status change
+            if (!statusChanged) {
+              // mark the job as finished
+              logger.debug(
+                `Job ${threadResponse.id} chart status not changed, finished`,
+              );
+              return;
+            }
+
+            // update database
+            const updatedChartDetail = {
+              queryId: chartDetail.queryId,
+              status: result?.status,
+              error: result?.error,
+              description: result?.response?.reasoning,
+              chartType: result?.response?.chartType?.toUpperCase() || null,
+              chartSchema: result?.response?.chartSchema,
+            };
+            logger.debug(
+              `Job ${threadResponse.id} chart status changed, updating`,
+            );
+            await this.threadResponseRepository.updateOne(threadResponse.id, {
+              chartDetail: updatedChartDetail,
+            });
+            threadResponse.chartDetail = updatedChartDetail;
+
+            // remove the task from tracker if it is finalized
+            if (isFinalized(result.status)) {
+              this.finalizeTask(threadResponse, result);
+            }
+          } catch (error) {
+            logger.error(`Chart job ${threadResponse.id} failed: ${error}`);
+            const failedChartDetail = {
+              ...threadResponse.chartDetail,
+              status: ChartStatus.FAILED,
+              error: error?.extensions || error,
+            };
+            await this.threadResponseRepository.updateOne(threadResponse.id, {
+              chartDetail: failedChartDetail,
+            });
+            threadResponse.chartDetail = failedChartDetail;
+            this.finalizeTask(threadResponse, {
+              status: ChartStatus.FAILED,
+              error,
+            });
+            throw error;
+          } finally {
             this.runningJobs.delete(threadResponse.id);
-            return;
           }
-
-          // update database
-          const updatedChartDetail = {
-            queryId: chartDetail.queryId,
-            status: result?.status,
-            error: result?.error,
-            description: result?.response?.reasoning,
-            chartType: result?.response?.chartType?.toUpperCase() || null,
-            chartSchema: result?.response?.chartSchema,
-          };
-          logger.debug(
-            `Job ${threadResponse.id} chart status changed, updating`,
-          );
-          await this.threadResponseRepository.updateOne(threadResponse.id, {
-            chartDetail: updatedChartDetail,
-          });
-          threadResponse.chartDetail = updatedChartDetail;
-
-          // remove the task from tracker if it is finalized
-          if (isFinalized(result.status)) {
-            this.finalizeTask(threadResponse, result);
-          }
-
-          // mark the job as finished
-          this.runningJobs.delete(threadResponse.id);
         },
       );
 
@@ -252,62 +267,80 @@ export class ChartAdjustmentBackgroundTracker {
           // mark the job as running
           this.runningJobs.add(threadResponse.id);
 
-          // get the chart detail
-          const chartDetail = threadResponse.chartDetail;
+          try {
+            // get the chart detail
+            const chartDetail = threadResponse.chartDetail;
 
-          // get the latest result from AI service
-          const result = await this.wrenAIAdaptor.getChartAdjustmentResult(
-            chartDetail.queryId,
-          );
-
-          const statusChanged = chartDetail.status !== result.status;
-          this.scheduleNextPoll(
-            threadResponse.id,
-            result.status,
-            statusChanged,
-          );
-
-          if (isFinalized(result.status) && !statusChanged) {
-            this.finalizeTask(threadResponse, result);
-            this.runningJobs.delete(threadResponse.id);
-            return;
-          }
-
-          // check if status change
-          if (!statusChanged) {
-            // mark the job as finished
-            logger.debug(
-              `Job ${threadResponse.id} chart status not changed, finished`,
+            // get the latest result from AI service
+            const result = await this.wrenAIAdaptor.getChartAdjustmentResult(
+              chartDetail.queryId,
             );
+
+            const statusChanged = chartDetail.status !== result.status;
+            this.scheduleNextPoll(
+              threadResponse.id,
+              result.status,
+              statusChanged,
+            );
+
+            if (isFinalized(result.status) && !statusChanged) {
+              this.finalizeTask(threadResponse, result);
+              return;
+            }
+
+            // check if status change
+            if (!statusChanged) {
+              // mark the job as finished
+              logger.debug(
+                `Job ${threadResponse.id} chart status not changed, finished`,
+              );
+              return;
+            }
+
+            // update database
+            const updatedChartDetail = {
+              queryId: chartDetail.queryId,
+              status: result?.status,
+              error: result?.error,
+              description: result?.response?.reasoning,
+              chartType: result?.response?.chartType?.toUpperCase() || null,
+              chartSchema: result?.response?.chartSchema,
+              adjustment: true,
+            };
+            logger.debug(
+              `Job ${threadResponse.id} chart status changed, updating`,
+            );
+            await this.threadResponseRepository.updateOne(threadResponse.id, {
+              chartDetail: updatedChartDetail,
+            });
+            threadResponse.chartDetail = updatedChartDetail;
+
+            // remove the task from tracker if it is finalized
+            if (isFinalized(result.status)) {
+              this.finalizeTask(threadResponse, result);
+            }
+          } catch (error) {
+            logger.error(
+              `Chart adjustment job ${threadResponse.id} failed: ${error}`,
+            );
+            const failedChartDetail = {
+              ...threadResponse.chartDetail,
+              status: ChartStatus.FAILED,
+              error: error?.extensions || error,
+              adjustment: true,
+            };
+            await this.threadResponseRepository.updateOne(threadResponse.id, {
+              chartDetail: failedChartDetail,
+            });
+            threadResponse.chartDetail = failedChartDetail;
+            this.finalizeTask(threadResponse, {
+              status: ChartStatus.FAILED,
+              error,
+            });
+            throw error;
+          } finally {
             this.runningJobs.delete(threadResponse.id);
-            return;
           }
-
-          // update database
-          const updatedChartDetail = {
-            queryId: chartDetail.queryId,
-            status: result?.status,
-            error: result?.error,
-            description: result?.response?.reasoning,
-            chartType: result?.response?.chartType?.toUpperCase() || null,
-            chartSchema: result?.response?.chartSchema,
-            adjustment: true,
-          };
-          logger.debug(
-            `Job ${threadResponse.id} chart status changed, updating`,
-          );
-          await this.threadResponseRepository.updateOne(threadResponse.id, {
-            chartDetail: updatedChartDetail,
-          });
-          threadResponse.chartDetail = updatedChartDetail;
-
-          // remove the task from tracker if it is finalized
-          if (isFinalized(result.status)) {
-            this.finalizeTask(threadResponse, result);
-          }
-
-          // mark the job as finished
-          this.runningJobs.delete(threadResponse.id);
         },
       );
 
