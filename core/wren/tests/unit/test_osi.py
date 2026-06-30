@@ -241,6 +241,30 @@ def test_pick_expression_falls_back_to_first():
     assert _pick_expression(expr, "SNOWFLAKE") == "[x]"
 
 
+def test_pick_expression_skips_empty_preferred_and_uses_ansi():
+    # An empty preferred-dialect expression must not shadow a real ANSI_SQL one.
+    expr = {
+        "dialects": [
+            {"dialect": "SNOWFLAKE", "expression": ""},
+            {"dialect": "ANSI_SQL", "expression": "SUM(x)"},
+        ]
+    }
+    assert _pick_expression(expr, "SNOWFLAKE") == "SUM(x)"
+
+
+def test_pick_expression_skips_empty_ansi_and_uses_first_nonempty():
+    # Empty preferred AND empty ANSI_SQL must fall through to the next
+    # non-empty expression rather than returning "".
+    expr = {
+        "dialects": [
+            {"dialect": "SNOWFLAKE", "expression": ""},
+            {"dialect": "ANSI_SQL", "expression": ""},
+            {"dialect": "MDX", "expression": "[x]"},
+        ]
+    }
+    assert _pick_expression(expr, "SNOWFLAKE") == "[x]"
+
+
 def test_pick_expression_shorthand_string():
     assert _pick_expression("x", "ANSI_SQL") == "x"
 

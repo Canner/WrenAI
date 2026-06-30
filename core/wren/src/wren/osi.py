@@ -288,14 +288,20 @@ def _pick_expression(expr_field: Any, dialect_preference: str) -> str:
             val = d.get("expression", "")
             if isinstance(key, str):
                 by_dialect[key] = val if isinstance(val, str) else ""
-    if dialect_preference in by_dialect:
+    # Resolve in priority order, but skip empty expressions so a present-but-
+    # blank preferred (or ANSI_SQL) entry does not shadow a real expression
+    # further down the list. An empty string carries no SQL, so treating it as
+    # "found" would emit an empty/identity column for a genuinely calculated
+    # field.
+    if by_dialect.get(dialect_preference):
         return by_dialect[dialect_preference]
-    if "ANSI_SQL" in by_dialect:
+    if by_dialect.get("ANSI_SQL"):
         return by_dialect["ANSI_SQL"]
-    first = dialects[0]
-    if isinstance(first, dict):
-        val = first.get("expression", "")
-        return val if isinstance(val, str) else ""
+    for d in dialects:
+        if isinstance(d, dict):
+            val = d.get("expression", "")
+            if isinstance(val, str) and val:
+                return val
     return ""
 
 
