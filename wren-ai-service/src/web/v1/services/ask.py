@@ -555,6 +555,18 @@ class AskService:
             table_name = match.group(1).strip(".,;:()[]{}")
             if table_name and table_name not in table_names:
                 table_names.append(table_name)
+        for match in re.finditer(
+            r"\busing\s+([A-Za-z_][A-Za-z0-9_.$]*)",
+            query or "",
+            flags=re.IGNORECASE,
+        ):
+            table_name = match.group(1).strip(".,;:()[]{}")
+            if (
+                table_name
+                and ("." in table_name or "_" in table_name)
+                and table_name not in table_names
+            ):
+                table_names.append(table_name)
         return table_names
 
     def _build_direct_orders_sales_sql(self, query: str) -> str | None:
@@ -1725,6 +1737,11 @@ class AskService:
         if not normalized:
             return None
 
+        if schema_grounded_sql := self._build_schema_grounded_sales_sql(
+            query, table_ddls
+        ):
+            return schema_grounded_sql
+
         if throughput_sql := self._build_manufacturing_throughput_sql(
             query, table_ddls, table_names=table_names
         ):
@@ -2318,6 +2335,128 @@ class AskService:
         ]
         return documents, table_names, table_ddls
 
+    def _normalize_schema_token(self, value: str) -> str:
+        return re.sub(r"[^a-z0-9]", "", (value or "").lower())
+
+    def _query_schema_terms(self, query: str) -> set[str]:
+        normalized_query = (query or "").lower()
+        stop_words = {
+            "about",
+            "against",
+            "from",
+            "give",
+            "group",
+            "grouped",
+            "list",
+            "month",
+            "monthly",
+            "over",
+            "rows",
+            "show",
+            "table",
+            "tables",
+            "the",
+            "this",
+            "using",
+            "what",
+            "which",
+            "with",
+            "year",
+        }
+        terms = {
+            self._normalize_schema_token(token)
+            for token in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", normalized_query)
+            if len(token) > 2 and token not in stop_words
+        }
+        return {term for term in terms if term}
+
+    def _prune_sql_generation_context(
+        self,
+        query: str,
+        documents: list[dict],
+        table_names: list[str],
+        table_ddls: list[str],
+        *,
+        max_tables: int = 8,
+    ) -> tuple[list[dict], list[str], list[str]]:
+        if len(table_ddls) <= max_tables:
+            return documents, table_names, table_ddls
+
+        parsed_tables = self._parse_schema_tables(table_ddls)
+        if not parsed_tables:
+            return documents, table_names, table_ddls[:max_tables]
+
+        query_key = self._normalize_schema_token(query)
+        query_terms = self._query_schema_terms(query)
+        explicit_tables = {
+            self._normalize_schema_token(table_name)
+            for table_name in self._extract_explicit_table_names_from_query(query)
+        }
+
+        scored: list[tuple[int, int]] = []
+        for index, table in enumerate(parsed_tables):
+            table_name = str(table.get("name") or "")
+            normalized_table = self._normalize_schema_token(table_name)
+            normalized_short_table = self._normalize_schema_token(
+                re.split(r"[.$]", table_name)[-1]
+            )
+            column_terms = {
+                self._normalize_schema_token(str(column.get("name") or ""))
+                for column in table.get("columns", [])
+                if column.get("name")
+            }
+
+            score = 0
+            if normalized_table in explicit_tables or normalized_short_table in explicit_tables:
+                score += 1000
+            if normalized_table and normalized_table in query_key:
+                score += 500
+            if normalized_short_table and normalized_short_table in query_key:
+                score += 450
+            for term in query_terms:
+                if not term:
+                    continue
+                if term == normalized_table or term == normalized_short_table:
+                    score += 80
+                elif term in normalized_table or term in normalized_short_table:
+                    score += 40
+                for column_term in column_terms:
+                    if term == column_term:
+                        score += 60
+                    elif term in column_term or column_term in term:
+                        score += 25
+
+            if score > 0:
+                scored.append((score, index))
+
+        if not scored:
+            return documents, table_names, table_ddls[:max_tables]
+
+        selected_indexes = [
+            index
+            for _, index in sorted(scored, key=lambda item: item[0], reverse=True)[
+                :max_tables
+            ]
+        ]
+        selected_indexes = sorted(selected_indexes)
+        pruned_documents = [
+            documents[index] for index in selected_indexes if index < len(documents)
+        ]
+        pruned_table_names = [
+            table_names[index] for index in selected_indexes if index < len(table_names)
+        ]
+        pruned_table_ddls = [
+            table_ddls[index] for index in selected_indexes if index < len(table_ddls)
+        ]
+
+        logger.info(
+            "Pruned SQL generation context from %s to %s tables for query: %s",
+            len(table_ddls),
+            len(pruned_table_ddls),
+            query,
+        )
+        return pruned_documents, pruned_table_names, pruned_table_ddls
+
     def _is_valid_select_sql(self, sql: Optional[str]) -> bool:
         if not isinstance(sql, str):
             return False
@@ -2495,7 +2634,10 @@ class AskService:
         sql_samples = []
         instructions = []
         api_results = []
+        documents = []
         table_names = []
+        table_ddls = []
+        _retrieval_result = {}
         error_message = None
         invalid_sql = None
         allow_sql_generation_reasoning = (
@@ -2599,6 +2741,9 @@ class AskService:
                     documents, table_names, table_ddls = (
                         self._extract_retrieval_metadata(retrieval_result)
                     )
+                    _retrieval_result = retrieval_result.get(
+                        "construct_retrieval_results", {}
+                    )
                     logger.info(
                         "Retrieved explicit tables for query_id %s: %s",
                         query_id,
@@ -2633,27 +2778,61 @@ class AskService:
                         results["metadata"]["type"] = "TEXT_TO_SQL"
                         return results
 
-                    error_message = (
-                        "The requested table was not found in the deployed schema: "
-                        + ", ".join(explicit_table_names)
+                    if documents and (
+                        deterministic_sql := self._build_schema_grounded_sales_sql(
+                            user_query, table_ddls
+                        )
+                    ):
+                        api_results = [
+                            AskResult(
+                                **{
+                                    "sql": deterministic_sql,
+                                    "type": "llm",
+                                }
+                            )
+                        ]
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="finished",
+                            type="TEXT_TO_SQL",
+                            response=api_results,
+                            rephrased_question=user_query,
+                            intent_reasoning="Explicit table request matched deployed schema and generated SQL locally.",
+                            retrieved_tables=table_names,
+                            trace_id=trace_id,
+                            is_followup=True if histories else False,
+                        )
+                        results["ask_result"] = api_results
+                        results["metadata"]["type"] = "TEXT_TO_SQL"
+                        return results
+
+                    if not documents:
+                        error_message = (
+                            "The requested table was not found in the deployed schema: "
+                            + ", ".join(explicit_table_names)
+                        )
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="failed",
+                            type="TEXT_TO_SQL",
+                            error=AskError(
+                                code="NO_RELEVANT_DATA",
+                                message=error_message,
+                            ),
+                            rephrased_question=user_query,
+                            intent_reasoning="Explicit table request did not match any deployed schema table.",
+                            retrieved_tables=table_names,
+                            trace_id=trace_id,
+                            is_followup=True if histories else False,
+                        )
+                        results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
+                        results["metadata"]["error_message"] = error_message
+                        results["metadata"]["type"] = "TEXT_TO_SQL"
+                        return results
+
+                    rephrased_question = user_query
+                    intent_reasoning = (
+                        "Explicit table request matched deployed schema; generating SQL against retrieved schema."
                     )
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="failed",
-                        type="TEXT_TO_SQL",
-                        error=AskError(
-                            code="NO_RELEVANT_DATA",
-                            message=error_message,
-                        ),
-                        rephrased_question=user_query,
-                        intent_reasoning="Explicit table preview request did not match any deployed schema table.",
-                        retrieved_tables=table_names,
-                        trace_id=trace_id,
-                        is_followup=True if histories else False,
-                    )
-                    results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
-                    results["metadata"]["error_message"] = error_message
-                    results["metadata"]["type"] = "TEXT_TO_SQL"
-                    return results
+                    sql_user_query = self._rewrite_query_for_text_to_sql(user_query)
 
                 if self._is_direct_heuristic_sql_query(user_query):
                     self._ask_results[query_id] = AskResultResponse(
@@ -2981,7 +3160,11 @@ class AskService:
                                 trace_id=trace_id,
                                 is_followup=True if histories else False,
                             )
-            if not self._is_stopped(query_id, self._ask_results) and not api_results:
+            if (
+                not self._is_stopped(query_id, self._ask_results)
+                and not api_results
+                and not documents
+            ):
                 self._ask_results[query_id] = AskResultResponse(
                     status="searching",
                     type="TEXT_TO_SQL",
@@ -3213,6 +3396,14 @@ class AskService:
                     results["metadata"]["type"] = "TEXT_TO_SQL"
                     return results
 
+            if documents and not api_results:
+                documents, table_names, table_ddls = self._prune_sql_generation_context(
+                    sql_user_query,
+                    documents,
+                    table_names,
+                    table_ddls,
+                )
+
             if (
                 not self._is_stopped(query_id, self._ask_results)
                 and not api_results
@@ -3325,45 +3516,59 @@ class AskService:
                 has_metric = _retrieval_result.get("has_metric", False)
                 has_json_field = _retrieval_result.get("has_json_field", False)
 
-                if histories:
-                    text_to_sql_generation_results = await self._run_with_timeout(
-                        "Follow-up SQL generation",
-                        self._pipelines["followup_sql_generation"].run(
-                            query=sql_user_query,
-                            contexts=table_ddls,
-                            sql_generation_reasoning=sql_generation_reasoning,
-                            histories=histories,
-                            project_id=ask_request.project_id,
-                            sql_samples=sql_samples,
-                            instructions=instructions,
-                            has_calculated_field=has_calculated_field,
-                            has_metric=has_metric,
-                            has_json_field=has_json_field,
-                            sql_functions=sql_functions,
-                            use_dry_plan=use_dry_plan,
-                            allow_dry_plan_fallback=allow_dry_plan_fallback,
-                            sql_knowledge=sql_knowledge,
-                        ),
+                try:
+                    if histories:
+                        text_to_sql_generation_results = await self._run_with_timeout(
+                            "Follow-up SQL generation",
+                            self._pipelines["followup_sql_generation"].run(
+                                query=sql_user_query,
+                                contexts=table_ddls,
+                                sql_generation_reasoning=sql_generation_reasoning,
+                                histories=histories,
+                                project_id=ask_request.project_id,
+                                sql_samples=sql_samples,
+                                instructions=instructions,
+                                has_calculated_field=has_calculated_field,
+                                has_metric=has_metric,
+                                has_json_field=has_json_field,
+                                sql_functions=sql_functions,
+                                use_dry_plan=use_dry_plan,
+                                allow_dry_plan_fallback=allow_dry_plan_fallback,
+                                sql_knowledge=sql_knowledge,
+                            ),
+                        )
+                    else:
+                        text_to_sql_generation_results = await self._run_with_timeout(
+                            "SQL generation",
+                            self._pipelines["sql_generation"].run(
+                                query=sql_user_query,
+                                contexts=table_ddls,
+                                sql_generation_reasoning=sql_generation_reasoning,
+                                project_id=ask_request.project_id,
+                                sql_samples=sql_samples,
+                                instructions=instructions,
+                                has_calculated_field=has_calculated_field,
+                                has_metric=has_metric,
+                                has_json_field=has_json_field,
+                                sql_functions=sql_functions,
+                                use_dry_plan=use_dry_plan,
+                                allow_dry_plan_fallback=allow_dry_plan_fallback,
+                                sql_knowledge=sql_knowledge,
+                            ),
+                        )
+                except TimeoutError as generation_timeout:
+                    logger.warning(
+                        "SQL generation timed out for query_id %s; trying schema-grounded fallback: %s",
+                        query_id,
+                        generation_timeout,
                     )
-                else:
-                    text_to_sql_generation_results = await self._run_with_timeout(
-                        "SQL generation",
-                        self._pipelines["sql_generation"].run(
-                            query=sql_user_query,
-                            contexts=table_ddls,
-                            sql_generation_reasoning=sql_generation_reasoning,
-                            project_id=ask_request.project_id,
-                            sql_samples=sql_samples,
-                            instructions=instructions,
-                            has_calculated_field=has_calculated_field,
-                            has_metric=has_metric,
-                            has_json_field=has_json_field,
-                            sql_functions=sql_functions,
-                            use_dry_plan=use_dry_plan,
-                            allow_dry_plan_fallback=allow_dry_plan_fallback,
-                            sql_knowledge=sql_knowledge,
-                        ),
-                    )
+                    text_to_sql_generation_results = {
+                        "post_process": {
+                            "valid_generation_result": None,
+                            "invalid_generation_result": None,
+                        }
+                    }
+                    error_message = str(generation_timeout)
 
                 if sql_valid_result := text_to_sql_generation_results["post_process"][
                     "valid_generation_result"

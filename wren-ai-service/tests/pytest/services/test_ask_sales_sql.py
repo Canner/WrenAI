@@ -135,6 +135,58 @@ def test_extract_explicit_table_names_from_query():
     ) == ["tblNewOrders"]
 
 
+def test_extract_explicit_table_names_from_using_clause():
+    service = AskService.__new__(AskService)
+
+    assert service._extract_explicit_table_names_from_query(
+        "Show new orders by CustName using dbo.XStageNewOrders OrdDate and CustName"
+    ) == ["dbo.XStageNewOrders"]
+    assert service._extract_explicit_table_names_from_query(
+        "Show new orders using OrdDate and CustName"
+    ) == []
+
+
+def test_prune_sql_generation_context_prefers_referenced_table_and_columns():
+    service = AskService.__new__(AskService)
+    table_ddls = [
+        """
+        CREATE TABLE dbo_Customers (
+          CustomerId VARCHAR,
+          CustomerName VARCHAR
+        );
+        """,
+        """
+        CREATE TABLE dbo_Products (
+          ProductId VARCHAR,
+          ProductName VARCHAR
+        );
+        """,
+        """
+        CREATE TABLE dbo_XStageNewOrders (
+          OrdNo VARCHAR,
+          OrdDate TIMESTAMP,
+          CustName VARCHAR
+        );
+        """,
+    ]
+    documents = [
+        {"table_name": "dbo_Customers", "table_ddl": table_ddls[0]},
+        {"table_name": "dbo_Products", "table_ddl": table_ddls[1]},
+        {"table_name": "dbo_XStageNewOrders", "table_ddl": table_ddls[2]},
+    ]
+
+    _, table_names, pruned_ddls = service._prune_sql_generation_context(
+        "Show new orders by CustName using dbo.XStageNewOrders OrdDate and CustName",
+        documents,
+        [document["table_name"] for document in documents],
+        table_ddls,
+        max_tables=1,
+    )
+
+    assert table_names == ["dbo_XStageNewOrders"]
+    assert pruned_ddls == [table_ddls[2]]
+
+
 def test_build_schema_grounded_sales_sql_for_top_markets():
     service = AskService.__new__(AskService)
     sql = service._build_schema_grounded_sales_sql(
