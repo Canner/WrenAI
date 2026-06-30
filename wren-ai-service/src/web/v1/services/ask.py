@@ -224,6 +224,22 @@ class AskService:
         }
         return any(term in normalized for term in analysis_terms)
 
+    def _needs_conversation_context(self, query: str) -> bool:
+        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized:
+            return False
+
+        return any(
+            re.search(pattern, normalized)
+            for pattern in (
+                r"\b(previous|last|above|earlier)\s+(query|question|answer|result|sql|chart)\b",
+                r"\b(same|that|those|them|it)\s+(table|query|question|result|chart|sql|period|filter)\b",
+                r"\b(use|using|based on|compare with|compared with)\s+(that|previous|last|above|earlier)\b",
+                r"\bwhat about\b",
+                r"\bhow about\b",
+            )
+        )
+
     def _rewrite_query_for_text_to_sql(self, query: str) -> str:
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized:
@@ -3530,6 +3546,19 @@ class AskService:
                     table_ddls,
                 )
 
+            sql_generation_histories = histories
+            if self._is_data_analysis_query(
+                sql_user_query
+            ) and not self._needs_conversation_context(sql_user_query):
+                sql_generation_histories = []
+                allow_sql_generation_reasoning = False
+                allow_sql_knowledge_retrieval = False
+                max_sql_correction_retries = min(max_sql_correction_retries, 1)
+                logger.info(
+                    "Using fast standalone SQL generation path for query_id %s",
+                    query_id,
+                )
+
             if (
                 not self._is_stopped(query_id, self._ask_results)
                 and not api_results
@@ -3545,7 +3574,7 @@ class AskService:
                     is_followup=True if histories else False,
                 )
 
-                if histories:
+                if sql_generation_histories:
                     try:
                         sql_generation_reasoning = (
                             await self._run_with_timeout(
@@ -3555,7 +3584,7 @@ class AskService:
                                 ].run(
                                     query=sql_user_query,
                                     contexts=table_ddls,
-                                    histories=histories,
+                                    histories=sql_generation_histories,
                                     sql_samples=sql_samples,
                                     instructions=instructions,
                                     configuration=ask_request.configurations,
@@ -3616,25 +3645,34 @@ class AskService:
                     is_followup=True if histories else False,
                 )
 
-                sql_functions, sql_knowledge = await self._run_with_timeout(
-                    "SQL helper retrieval",
-                    asyncio.gather(
-                        (
-                            self._pipelines["sql_functions_retrieval"].run(
-                                project_id=ask_request.project_id,
-                            )
-                            if allow_sql_functions_retrieval
-                            else _return_value([])
+                try:
+                    sql_functions, sql_knowledge = await self._run_with_timeout(
+                        "SQL helper retrieval",
+                        asyncio.gather(
+                            (
+                                self._pipelines["sql_functions_retrieval"].run(
+                                    project_id=ask_request.project_id,
+                                )
+                                if allow_sql_functions_retrieval
+                                else _return_value([])
+                            ),
+                            (
+                                self._pipelines["sql_knowledge_retrieval"].run(
+                                    project_id=ask_request.project_id,
+                                )
+                                if allow_sql_knowledge_retrieval
+                                else _return_value(None)
+                            ),
                         ),
-                        (
-                            self._pipelines["sql_knowledge_retrieval"].run(
-                                project_id=ask_request.project_id,
-                            )
-                            if allow_sql_knowledge_retrieval
-                            else _return_value(None)
-                        ),
-                    ),
-                )
+                        timeout_seconds=min(self._pipeline_timeout_seconds, 10),
+                    )
+                except TimeoutError as helper_timeout:
+                    logger.warning(
+                        "SQL helper retrieval timed out for query_id %s; continuing with schema only: %s",
+                        query_id,
+                        helper_timeout,
+                    )
+                    sql_functions, sql_knowledge = [], None
 
                 has_calculated_field = _retrieval_result.get(
                     "has_calculated_field", False
@@ -3643,14 +3681,14 @@ class AskService:
                 has_json_field = _retrieval_result.get("has_json_field", False)
 
                 try:
-                    if histories:
+                    if sql_generation_histories:
                         text_to_sql_generation_results = await self._run_with_timeout(
                             "Follow-up SQL generation",
                             self._pipelines["followup_sql_generation"].run(
                                 query=sql_user_query,
                                 contexts=table_ddls,
                                 sql_generation_reasoning=sql_generation_reasoning,
-                                histories=histories,
+                                histories=sql_generation_histories,
                                 project_id=ask_request.project_id,
                                 sql_samples=sql_samples,
                                 instructions=instructions,

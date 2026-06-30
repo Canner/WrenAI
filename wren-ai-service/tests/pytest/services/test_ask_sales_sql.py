@@ -146,6 +146,17 @@ def test_extract_explicit_table_names_from_using_clause():
     ) == []
 
 
+def test_needs_conversation_context_only_for_true_followups():
+    service = AskService.__new__(AskService)
+
+    assert not service._needs_conversation_context(
+        "Show refund status distribution by Refund_Status"
+    )
+    assert service._needs_conversation_context(
+        "What about the same period from the previous result?"
+    )
+
+
 def test_prune_sql_generation_context_prefers_referenced_table_and_columns():
     service = AskService.__new__(AskService)
     table_ddls = [
