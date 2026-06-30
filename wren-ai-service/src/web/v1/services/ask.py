@@ -734,6 +734,7 @@ class AskService:
         required_dimensions: list[tuple[str, ...]],
         measure_candidates: tuple[str, ...],
         wants_date: bool = False,
+        allow_count_metric: bool = False,
     ) -> tuple[dict[str, Any], list[str], str | None, str | None] | None:
         scored: list[
             tuple[int, dict[str, Any], list[str], str | None, str | None]
@@ -749,6 +750,8 @@ class AskService:
             measure = self._find_schema_column(
                 table, measure_candidates, numeric=True
             )
+            if not measure and not allow_count_metric:
+                continue
             date_column = self._find_schema_column(
                 table,
                 (
@@ -768,6 +771,8 @@ class AskService:
             score = 10 * len([dimension for dimension in dimensions if dimension])
             if measure:
                 score += 8
+            elif allow_count_metric:
+                score += 2
             if date_column:
                 score += 4
             table_name = str(table.get("name") or "").lower()
@@ -902,7 +907,11 @@ class AskService:
             dimension_candidates.append(
                 ("ProdName", "Product", "ProductName", "Item", "ProdCode")
             )
-        if "customer" in normalized_query:
+        if (
+            "customer" in normalized_query
+            or "custname" in compact_query
+            or "custno" in compact_query
+        ):
             dimension_candidates.append(("Customer", "CustName", "CustNo"))
 
         if not dimension_candidates:
@@ -951,8 +960,21 @@ class AskService:
             and ("new order" in normalized_query or "orders" in normalized_query)
             and any(term in normalized_query for term in ("including", "include"))
         )
-        wants_date = wants_trend or "this year" in normalized_query or bool(
-            re.search(r"\b20\d{2}\b", normalized_query)
+        mentions_date_column = any(
+            column_name in compact_query
+            for column_name in (
+                "orddate",
+                "invdate",
+                "orderdate",
+                "invoicedate",
+                "createdat",
+            )
+        )
+        wants_date = (
+            wants_trend
+            or mentions_date_column
+            or "this year" in normalized_query
+            or bool(re.search(r"\b20\d{2}\b", normalized_query))
         )
 
         selected = self._select_best_analytics_table(
@@ -960,6 +982,7 @@ class AskService:
             dimension_candidates,
             measure_candidates,
             wants_date=wants_date,
+            allow_count_metric=wants_order_count_metric,
         )
         if not selected:
             return None
