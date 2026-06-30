@@ -756,6 +756,17 @@ class AskService:
             )
         return ""
 
+    def _append_not_null_filters(
+        self, where_clause: str, column_refs: list[str]
+    ) -> str:
+        conditions = [f"{column_ref} IS NOT NULL" for column_ref in column_refs]
+        if not conditions:
+            return where_clause
+
+        if where_clause.strip():
+            return f"{where_clause.rstrip()} AND {' AND '.join(conditions)} "
+        return f" WHERE {' AND '.join(conditions)} "
+
     def _select_best_analytics_table(
         self,
         tables: list[dict[str, Any]],
@@ -1051,9 +1062,97 @@ class AskService:
             )
             return (
                 f"SELECT TOP {limit} {', '.join(select_parts)} "
-                f"FROM {table_ref}{date_filter} "
+                f"FROM {table_ref}"
+                f"{self._append_not_null_filters(date_filter, dimension_refs)} "
                 f"ORDER BY {metric_ref} DESC"
             )
+
+        wants_top_per_group = (
+            len(dimensions) >= 2
+            and any(term in normalized_query for term in ("highest", "top", "most"))
+            and any(term in normalized_query for term in ("each", "per "))
+        )
+        if wants_top_per_group:
+            partition_dimension = None
+            rank_dimension = None
+            if "market" in normalized_query:
+                partition_dimension = self._find_schema_column(
+                    table, ("Market", "MarketType", "Region")
+                )
+            if "region" in normalized_query and not partition_dimension:
+                partition_dimension = self._find_schema_column(
+                    table, ("Region", "Market", "Area", "Territory")
+                )
+            if "customer" in normalized_query:
+                rank_dimension = self._find_schema_column(
+                    table, ("Customer", "CustName", "CustNo")
+                )
+            if not partition_dimension:
+                partition_dimension = dimensions[0]
+            if not rank_dimension:
+                rank_dimension = next(
+                    (
+                        dimension
+                        for dimension in dimensions
+                        if dimension != partition_dimension
+                    ),
+                    None,
+                )
+
+            if partition_dimension and rank_dimension:
+                partition_ref = (
+                    f"{table_ref}.{self._quote_sql_identifier(partition_dimension)}"
+                )
+                rank_ref = f"{table_ref}.{self._quote_sql_identifier(rank_dimension)}"
+                if wants_order_count_metric:
+                    order_column = self._find_schema_column(
+                        table,
+                        ("OrdNo", "OrderNo", "OrderId", "NewOrderId", "InvoiceNo"),
+                    )
+                    metric_expr = (
+                        f"COUNT(DISTINCT {table_ref}.{self._quote_sql_identifier(order_column)})"
+                        if order_column
+                        else "COUNT(*)"
+                    )
+                    metric_alias = "OrderCount"
+                else:
+                    metric_expr = (
+                        f"SUM({table_ref}.{self._quote_sql_identifier(measure)})"
+                        if measure
+                        else "COUNT(*)"
+                    )
+                    metric_alias = f"Total{measure}" if measure else "RecordCount"
+                where_clause = self._append_not_null_filters(
+                    (
+                        self._build_date_filter(table_name, date_column, query)
+                        if date_column
+                        else ""
+                    ),
+                    [partition_ref, rank_ref],
+                )
+                return (
+                    "WITH grouped_results AS ("
+                    f"SELECT {partition_ref} AS {self._quote_sql_identifier(partition_dimension)}, "
+                    f"{rank_ref} AS {self._quote_sql_identifier(rank_dimension)}, "
+                    f"{metric_expr} AS {self._quote_sql_identifier(metric_alias)} "
+                    f"FROM {table_ref}"
+                    f"{where_clause} "
+                    f"GROUP BY {partition_ref}, {rank_ref}"
+                    "), ranked_results AS ("
+                    f"SELECT {self._quote_sql_identifier(partition_dimension)}, "
+                    f"{self._quote_sql_identifier(rank_dimension)}, "
+                    f"{self._quote_sql_identifier(metric_alias)}, "
+                    f"ROW_NUMBER() OVER (PARTITION BY {self._quote_sql_identifier(partition_dimension)} "
+                    f"ORDER BY {self._quote_sql_identifier(metric_alias)} DESC) AS \"rank\" "
+                    "FROM grouped_results"
+                    ") "
+                    f"SELECT {self._quote_sql_identifier(partition_dimension)}, "
+                    f"{self._quote_sql_identifier(rank_dimension)}, "
+                    f"{self._quote_sql_identifier(metric_alias)} "
+                    "FROM ranked_results "
+                    "WHERE \"rank\" = 1 "
+                    f"ORDER BY {self._quote_sql_identifier(metric_alias)} DESC"
+                )
 
         if wants_trend and date_column:
             date_ref = f"{table_ref}.{self._quote_sql_identifier(date_column)}"
@@ -1091,7 +1190,7 @@ class AskService:
             ]
             return (
                 f"SELECT {', '.join(select_parts)} FROM {table_ref}"
-                f"{self._build_date_filter(table_name, date_column, query)} "
+                f"{self._append_not_null_filters(self._build_date_filter(table_name, date_column, query), dimension_refs)} "
                 f"GROUP BY {', '.join(group_parts)} "
                 f"ORDER BY DATEPART(YEAR, {date_ref}), "
                 f"DATEPART(MONTH, {date_ref})"
@@ -1120,7 +1219,8 @@ class AskService:
         )
         return (
             f"SELECT {top_clause}{', '.join(select_parts)} "
-            f"FROM {table_ref}{date_filter} "
+            f"FROM {table_ref}"
+            f"{self._append_not_null_filters(date_filter, dimension_refs)} "
             f"GROUP BY {', '.join(dimension_refs)} "
             f"ORDER BY {metric_expr} DESC"
         )

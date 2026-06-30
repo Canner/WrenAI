@@ -228,6 +228,7 @@ def test_build_schema_grounded_sales_sql_for_top_markets():
         'FROM "dbo_tblSales" '
         'WHERE "dbo_tblSales"."OrdDate" >= \'2026-01-01 00:00:00\' '
         'AND "dbo_tblSales"."OrdDate" < \'2027-01-01 00:00:00\' '
+        'AND "dbo_tblSales"."Market" IS NOT NULL '
         'GROUP BY "dbo_tblSales"."Market" '
         'ORDER BY SUM("dbo_tblSales"."SalesValue") DESC'
     )
@@ -256,6 +257,7 @@ def test_build_schema_grounded_sales_sql_for_division_revenue_trend():
         '"dbo_tblSales"."Division" AS "Division", '
         'SUM("dbo_tblSales"."SalesValue") AS "TotalSalesValue" '
         'FROM "dbo_tblSales" '
+        'WHERE "dbo_tblSales"."Division" IS NOT NULL '
         'GROUP BY DATEPART(YEAR, "dbo_tblSales"."OrdDate"), '
         'DATEPART(MONTH, "dbo_tblSales"."OrdDate"), "dbo_tblSales"."Division" '
         'ORDER BY DATEPART(YEAR, "dbo_tblSales"."OrdDate"), '
@@ -286,6 +288,9 @@ def test_build_schema_grounded_sales_sql_for_orders_by_dimensions():
         '"dbo_tblSales"."ProdType" AS "ProdType", '
         'SUM("dbo_tblSales"."SalesValue") AS "TotalSalesValue" '
         'FROM "dbo_tblSales" '
+        'WHERE "dbo_tblSales"."Market" IS NOT NULL '
+        'AND "dbo_tblSales"."Division" IS NOT NULL '
+        'AND "dbo_tblSales"."ProdType" IS NOT NULL '
         'GROUP BY "dbo_tblSales"."Market", "dbo_tblSales"."Division", '
         '"dbo_tblSales"."ProdType" '
         'ORDER BY SUM("dbo_tblSales"."SalesValue") DESC'
@@ -318,6 +323,10 @@ def test_build_schema_grounded_sales_sql_for_top_new_order_detail_rows():
         '"dbo_tblSales"."Customer" AS "Customer", '
         '"dbo_tblSales"."SalesValue" AS "SalesValue" '
         'FROM "dbo_tblSales" '
+        'WHERE "dbo_tblSales"."BU" IS NOT NULL '
+        'AND "dbo_tblSales"."Market" IS NOT NULL '
+        'AND "dbo_tblSales"."ProdName" IS NOT NULL '
+        'AND "dbo_tblSales"."Customer" IS NOT NULL '
         'ORDER BY "dbo_tblSales"."SalesValue" DESC'
     )
 
@@ -343,6 +352,8 @@ def test_build_schema_grounded_sales_sql_ignores_missing_metadata_entries():
         '"dbo_tblSales"."Customer" AS "Customer", '
         '"dbo_tblSales"."SalesValue" AS "SalesValue" '
         'FROM "dbo_tblSales" '
+        'WHERE "dbo_tblSales"."Market" IS NOT NULL '
+        'AND "dbo_tblSales"."Customer" IS NOT NULL '
         'ORDER BY "dbo_tblSales"."SalesValue" DESC'
     )
 
@@ -428,6 +439,7 @@ def test_build_schema_grounded_sales_sql_counts_new_orders_by_customer_over_time
         '"dbo_XStageNewOrders"."CustName" AS "CustName", '
         'COUNT(DISTINCT "dbo_XStageNewOrders"."OrdNo") AS "OrderCount" '
         'FROM "dbo_XStageNewOrders" '
+        'WHERE "dbo_XStageNewOrders"."CustName" IS NOT NULL '
         'GROUP BY DATEPART(YEAR, "dbo_XStageNewOrders"."OrdDate"), '
         'DATEPART(MONTH, "dbo_XStageNewOrders"."OrdDate"), '
         '"dbo_XStageNewOrders"."CustName" '
@@ -457,8 +469,45 @@ def test_build_schema_grounded_sales_sql_for_highest_invoice_value():
         '"dbo_tblSales"."Customer" AS "Customer", '
         'SUM("dbo_tblSales"."SalesValue") AS "TotalSalesValue" '
         'FROM "dbo_tblSales" '
+        'WHERE "dbo_tblSales"."ProdName" IS NOT NULL '
+        'AND "dbo_tblSales"."Customer" IS NOT NULL '
         'GROUP BY "dbo_tblSales"."ProdName", "dbo_tblSales"."Customer" '
         'ORDER BY SUM("dbo_tblSales"."SalesValue") DESC'
+    )
+
+
+def test_build_schema_grounded_sales_sql_for_highest_customers_each_market():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "Which Customers have the highest New Orders in each Market?",
+        [
+            """
+            CREATE TABLE dbo_tblSales (
+              Market VARCHAR,
+              Customer VARCHAR,
+              OrdNo VARCHAR,
+              SalesValue DOUBLE
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'WITH grouped_results AS (SELECT "dbo_tblSales"."Market" AS "Market", '
+        '"dbo_tblSales"."Customer" AS "Customer", '
+        'COUNT(DISTINCT "dbo_tblSales"."OrdNo") AS "OrderCount" '
+        'FROM "dbo_tblSales" '
+        'WHERE "dbo_tblSales"."Market" IS NOT NULL '
+        'AND "dbo_tblSales"."Customer" IS NOT NULL '
+        'GROUP BY "dbo_tblSales"."Market", "dbo_tblSales"."Customer"), '
+        'ranked_results AS (SELECT "Market", "Customer", "OrderCount", '
+        'ROW_NUMBER() OVER (PARTITION BY "Market" '
+        'ORDER BY "OrderCount" DESC) AS "rank" '
+        'FROM grouped_results) '
+        'SELECT "Market", "Customer", "OrderCount" '
+        'FROM ranked_results '
+        'WHERE "rank" = 1 '
+        'ORDER BY "OrderCount" DESC'
     )
 
 
