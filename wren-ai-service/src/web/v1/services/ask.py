@@ -175,6 +175,8 @@ class AskService:
             "compare",
             "count",
             "cost",
+            "claim",
+            "claims",
             "customer",
             "customers",
             "dashboard",
@@ -193,10 +195,16 @@ class AskService:
             "pcb",
             "performance",
             "profit",
+            "product",
+            "products",
+            "product type",
+            "product types",
             "quarter",
             "quantity",
             "rank",
             "ranking",
+            "region",
+            "regions",
             "repair",
             "resolved",
             "revenue",
@@ -878,7 +886,9 @@ class AskService:
         if "business unit" in normalized_query or "bu" in normalized_query:
             dimension_candidates.append(("BusinessUnit", "Business Unit", "BU"))
         if "market" in normalized_query:
-            dimension_candidates.append(("Market", "MarketType"))
+            dimension_candidates.append(("Market", "MarketType", "Region"))
+        if "region" in normalized_query:
+            dimension_candidates.append(("Region", "Market", "Area", "Territory"))
         if "division" in normalized_query:
             dimension_candidates.append(("Division",))
         if (
@@ -2676,7 +2686,23 @@ class AskService:
                     )
 
                 historical_question_result = []
-                if not api_results:
+                should_skip_pre_sql_retrieval = self._is_data_analysis_query(
+                    user_query
+                )
+                if should_skip_pre_sql_retrieval:
+                    rephrased_question = user_query
+                    intent_reasoning = (
+                        "Detected a deployed-data analytics question; skipping "
+                        "intent classification and using SQL generation."
+                    )
+                    sql_user_query = self._rewrite_query_for_text_to_sql(user_query)
+                    logger.info(
+                        "Skipping pre-SQL retrieval for analytics query_id %s: %s",
+                        query_id,
+                        user_query,
+                    )
+
+                if not api_results and not should_skip_pre_sql_retrieval:
                     historical_question = await self._run_with_timeout(
                         "Historical question retrieval",
                         self._pipelines["historical_question"].run(
@@ -2712,7 +2738,7 @@ class AskService:
                 if valid_historical_results:
                     api_results = valid_historical_results
                     sql_generation_reasoning = ""
-                elif not api_results:
+                elif not api_results and not should_skip_pre_sql_retrieval:
                     original_user_query = user_query
                     # Run both pipeline operations concurrently
                     sql_samples_task, instructions_task = await self._run_with_timeout(
