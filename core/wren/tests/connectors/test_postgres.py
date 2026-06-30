@@ -250,3 +250,59 @@ class TestPostgresConnectorTypes:
         assert [field.name for field in result.schema] == ["id", "id"]
         assert result.column(0).to_pylist() == [42]
         assert result.column(1).to_pylist() == [42]
+
+
+# ---------------------------------------------------------------------------
+# Trailing-semicolon stripping (mocked — no live database).
+#
+# These live in the postgres-marked module so they actually run in the
+# ``postgres tests`` CI job (which installs psycopg). They use a mocked
+# connection and assert on the SQL the connector executes, so no container
+# is required.
+# ---------------------------------------------------------------------------
+
+from contextlib import contextmanager
+from unittest.mock import MagicMock
+
+from wren.connector.postgres import _strip_trailing_semicolon
+
+
+def _make_mock_connector() -> tuple[PostgresConnector, MagicMock]:
+    """Build a PostgresConnector bypassing __init__ (no real connection)."""
+    connector = PostgresConnector.__new__(PostgresConnector)
+    connector._closed = False
+    cursor = MagicMock()
+    cursor.description = None  # _build_pg_arrow_table returns an empty table
+
+    @contextmanager
+    def _cursor_cm():
+        yield cursor
+
+    conn = MagicMock()
+    conn.cursor.side_effect = _cursor_cm
+    connector.connection = conn
+    return connector, cursor
+
+
+def test_query_strips_trailing_semicolon_before_subquery_wrap() -> None:
+    connector, cursor = _make_mock_connector()
+    connector.query("SELECT 1;", limit=5)
+    (sent,), _ = cursor.execute.call_args
+    assert sent == "SELECT * FROM (SELECT 1) AS _sub LIMIT 5"
+    assert ";)" not in sent
+
+
+def test_dry_run_strips_trailing_semicolon() -> None:
+    connector, cursor = _make_mock_connector()
+    connector.dry_run("SELECT 1;  ")
+    (sent,), _ = cursor.execute.call_args
+    assert sent == "SELECT * FROM (SELECT 1) AS _sub LIMIT 0"
+
+
+def test_helper_preserves_semicolon_inside_string_literal() -> None:
+    sql = "SELECT 'a;b' AS x"
+    assert _strip_trailing_semicolon(sql) == sql
+
+
+def test_helper_no_trailing_semicolon_unchanged() -> None:
+    assert _strip_trailing_semicolon("SELECT 1") == "SELECT 1"
