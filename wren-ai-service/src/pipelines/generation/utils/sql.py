@@ -1395,16 +1395,6 @@ def _rewrite_known_schema_hallucinations(sql: str, now: datetime) -> str:
     normalized = _unwrap_simple_mssql_where_parentheses(normalized)
     normalized = _rewrite_mssql_limit_clause(normalized)
     normalized = _rewrite_mssql_to_date_buckets(normalized)
-    normalized = _rewrite_mssql_invented_date_identifiers(normalized)
-    normalized = _rewrite_mssql_invented_repair_relationship_identifiers(normalized)
-    normalized = _rewrite_mssql_repair_log_turnaround_trend_shape(normalized)
-    normalized = _rewrite_mssql_ticket_cycle_turnaround_shape(normalized)
-    normalized = _rewrite_mssql_repair_log_throughput_shape(normalized)
-    normalized = _rewrite_mssql_invented_pcb_throughput_identifiers(normalized)
-    normalized = _rewrite_mssql_invented_failure_category(normalized)
-    normalized = _rewrite_mssql_invented_report_fields(normalized)
-    normalized = _rewrite_mssql_invented_ticket_metrics(normalized)
-    normalized = _rewrite_mssql_invented_knowledge_article_fields(normalized)
     normalized = _rewrite_mssql_bare_time_bucket_identifiers(normalized)
     normalized = _rewrite_temporal_bucket_functions(normalized)
     normalized = _rewrite_mssql_datepart_alias_references(normalized)
@@ -1480,19 +1470,6 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
         normalized = _rewrite_mssql_timestamp_subtraction(normalized)
         normalized = _rewrite_mssql_to_date_buckets(normalized)
         normalized = _rewrite_mssql_timestamp_casts(normalized)
-        normalized = _rewrite_mssql_sales_schema_aliases(normalized)
-        normalized = _rewrite_mssql_invented_date_identifiers(normalized)
-        normalized = _rewrite_mssql_invented_repair_relationship_identifiers(
-            normalized
-        )
-        normalized = _rewrite_mssql_repair_log_turnaround_trend_shape(normalized)
-        normalized = _rewrite_mssql_ticket_cycle_turnaround_shape(normalized)
-        normalized = _rewrite_mssql_repair_log_throughput_shape(normalized)
-        normalized = _rewrite_mssql_invented_pcb_throughput_identifiers(normalized)
-        normalized = _rewrite_mssql_invented_failure_category(normalized)
-        normalized = _rewrite_mssql_invented_report_fields(normalized)
-        normalized = _rewrite_mssql_invented_ticket_metrics(normalized)
-        normalized = _rewrite_mssql_invented_knowledge_article_fields(normalized)
         normalized = _rewrite_mssql_bare_time_bucket_identifiers(normalized)
         normalized = _rewrite_mssql_bucket_functions(normalized)
         normalized = _rewrite_temporal_bucket_functions(normalized)
@@ -1805,9 +1782,6 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - Never invent foreign key columns or relationship fields such as "FailurePatternID", "FailurePatternId", "TicketID", or "<Table>ID" unless that exact column appears in the DATABASE SCHEMA. Join only on explicit schema columns or explicit relationships.
 - Never invent time bucket columns such as "MONTH", "YEAR", "DAY", "month", "year", or "date" unless that exact column appears in the DATABASE SCHEMA. For monthly, yearly, or daily trends, apply a supported date/time bucket function from SQL FUNCTIONS to a real timestamp column from the selected table.
 - Every generated SQL query must be grounded only in the connected datasource metadata, deployed semantic model definitions, relationships, and DATABASE SCHEMA shown in the prompt. Do not use table names, column names, join paths, JSON keys, or business dimensions that are not explicitly present in that context.
-- For synced repair-log schemas, if "dbo_repair_logs" contains "created_at" and the user asks for monthly repair volume or repair trends, count repair rows and bucket "dbo_repair_logs"."created_at". Do not select, group by, or order by "dbo_repair_logs"."MONTH" or bare "MONTH" unless the schema explicitly contains that column.
-- For repair counts grouped by failure category, prefer the richest explicit category field exposed by the connected datasource. If the schema includes "dbo_DebugEntries", "dbo_DebugFixLogs", and "dbo_DebugFixes", group by "dbo_DebugFixes"."Description" after joining "dbo_DebugEntries"."DebugEntryId" = "dbo_DebugFixLogs"."DebugEntryId" and "dbo_DebugFixLogs"."FixId" = "dbo_DebugFixes"."Id". Otherwise use "dbo_repair_logs"."failure_code" only when that column appears in the schema. Do not invent "failure_category" unless it appears in the DATABASE SCHEMA.
-- For repair SLA compliance dashboard/chart requests, do not invent "DAY", "MONTH", "turnaround_time", "sla_due_at", or due-date fields. If the schema only exposes "dbo_repair_logs"."status" and no explicit SLA/duration/deadline column, return a status distribution using "dbo_repair_logs"."status" and COUNT(*) so the UI can render a grounded chart.
 - For top/bottom N questions, return exactly the business columns needed to answer the question. For example, "top 10 common failures" should return the failure field and the failure count.
 - For top/bottom N questions, prefer ORDER BY on the metric plus a row limit instead of adding ranking helper columns.
 - Do not include helper ranking columns such as "rank", "row_number", or "dense_rank" in the final SELECT unless the user explicitly asks to see ranks.
@@ -1823,28 +1797,8 @@ _MSSQL_TEXT_TO_SQL_RULES = """
 - If a table has a generic JSON/text column such as "data", do not assume keys inside it are queryable. Only use fields that are exposed as first-class columns in the DATABASE SCHEMA.
 - If a requested metric such as debug hours, risk score, repair cost, or turnaround time is only present inside a JSON/text column and is not exposed as a first-class column or calculated field, do not generate SQL that extracts it from JSON.
 - Never invent JSON-derived columns such as "repair_date", "repair_status", or "failure_code" unless they are explicitly listed as columns in the DATABASE SCHEMA.
-- For repair trend or repair volume questions, prefer explicit timestamp columns such as "created_at", "updated_at", "opened_at", or "closed_at" only when those exact columns appear in the selected table schema.
-- For repair SLA compliance charts on "dbo_repair_logs", use "dbo_repair_logs"."status" as the compliance/status dimension when no explicit SLA, due-date, duration, or turnaround column appears in the DATABASE SCHEMA. Never use invented "DAY", "MONTH", or "turnaround_time" fields for SLA compliance.
-- For repair counts grouped by failure category, use explicit exposed fields and schema-backed joins only. Prefer "dbo_DebugFixes"."Description" joined through "dbo_DebugFixLogs" when "dbo_DebugEntries"."DebugEntryId", "dbo_DebugFixLogs"."DebugEntryId", "dbo_DebugFixLogs"."FixId", and "dbo_DebugFixes"."Id" are present. Otherwise use "dbo_repair_logs"."failure_code" when present. Do not invent "dbo_repair_logs"."FailurePatternID"; only join to "dbo_failure_patterns" when an explicit join key or relationship exists in the DATABASE SCHEMA.
-- For PCB/debug-entry failure charts, do not join "dbo_DebugEntries"."DebugEntryId" to "dbo_failure_patterns"."id"; those fields have incompatible types. If both "dbo_DebugEntries"."FailureSys" and "dbo_failure_patterns"."id" exist, join "dbo_DebugEntries"."FailureSys" = "dbo_failure_patterns"."id".
-- For PCB synced database questions:
-    - Use "dbo_DebugEntries" for debug/PCB event records when the schema contains it.
-    - Use columns such as "Material", "WorkOrder", "SerialNumber", "FailedAt", "DateIn", "DateOut", "Hours", "Priority", "Actions", "Notes", and "FailureSys" only when they appear in the schema.
-    - Use "dbo_failure_patterns" for failure names, categories, severity, trend, occurrence counts, daily pattern summaries, and cost impact when those columns appear in the schema.
-    - For throughput trends across manufacturing/business units, use "dbo_DebugEntries"."BusinessUnit" as the unit dimension and a real debug-entry timestamp such as "dbo_DebugEntries"."DateIn" or "dbo_DebugEntries"."FailedAt" for the trend bucket. Do not use "dbo_repair_logs"."ManufacturingUnit", "dbo_repair_logs"."MONTH", or invented manufacturing/date fields.
-    - For top/common PCB failure questions, first prefer grouping by "dbo_DebugFixes"."Description" and counting rows through the explicit "dbo_DebugEntries" -> "dbo_DebugFixLogs" -> "dbo_DebugFixes" join when those tables and join columns are in the schema. Otherwise prefer grouping by "dbo_failure_patterns"."name" or "dbo_failure_patterns"."category" and counting "dbo_DebugEntries"."DebugEntryId" after joining "dbo_DebugEntries"."FailureSys" = "dbo_failure_patterns"."id".
-    - If a useful aggregate already exists in "dbo_failure_patterns" such as "occurrences", it can be used directly for top failure pattern questions without joining event rows.
-    - For requests such as "show top 10 most common PCB failures", "bar chart of failures by category", or "count of repairs grouped by failure category", generate SQL first. Do not answer with general charting guidance. Return the categorical failure field plus a count metric that can drive a bar chart.
-    - For failure-category charts, prefer one of these patterns depending on schema availability:
-        1. `GROUP BY "dbo_DebugFixes"."Description"` and `COUNT(*)` using the explicit "dbo_DebugEntries" -> "dbo_DebugFixLogs" -> "dbo_DebugFixes" join
-        2. `GROUP BY "dbo_failure_patterns"."category"` and `COUNT("dbo_DebugEntries"."DebugEntryId")`
-        3. `GROUP BY "dbo_failure_patterns"."name"` and `COUNT("dbo_DebugEntries"."DebugEntryId")`
-        4. `GROUP BY "dbo_repair_logs"."failure_code"` and `COUNT(*)`
-    - For chart-oriented questions, ensure the final SELECT contains only the chart-ready dimension and metric columns. Avoid prose-like outputs or helper columns.
-- For knowledge article tables:
-    - Use "created_at" for year/month trend buckets. Do not select, group by, or order by invented "YEAR" or "MONTH" columns.
-    - In "dbo_knowledge_articles", use "helpful" and "views" for effectiveness-style questions, and use "author" for creator/author groupings. Do not invent "effectiveness_score" or "created_by".
-    - In "dbo_kb_articles", use "created_by_user_id" for creator groupings. Do not invent "created_by" or "author" unless those exact columns appear in the schema.
+- For any trend, volume, SLA, duration, growth, or time-series question, use only explicit timestamp/date/duration columns shown in the DATABASE SCHEMA or semantic model. If no suitable field exists, do not invent one.
+- For categorical charts, choose explicit category/status/type/name fields from the selected schema and return chart-ready dimension and metric columns.
 - DO NOT use DATEADD, DATEDIFF, DATETIME2, or DATETIMEOFFSET unless the SQL FUNCTIONS section explicitly proves they are supported by the target runtime.
 - Do not subtract timestamp/date columns directly. If a duration or turnaround column exists in the schema, select that column directly. If only start/end timestamps exist and the SQL FUNCTIONS section lists DATEDIFF, use DATEDIFF('second', <start_timestamp>, <end_timestamp>) for duration in seconds.
 - Resolve relative time phrases such as "last 12 months", "last month", or "this year" into absolute ISO timestamp boundaries using the current time context. Prefer closed-open literal ranges over runtime date arithmetic.

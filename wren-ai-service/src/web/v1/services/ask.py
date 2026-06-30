@@ -1932,42 +1932,7 @@ class AskService:
         return None
 
     def _is_direct_heuristic_sql_query(self, query: str) -> bool:
-        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
-        if not normalized:
-            return False
-
-        asks_manufacturing_throughput = (
-            "throughput" in normalized
-            and any(term in normalized for term in ("manufacturing", "unit", "units"))
-        )
-        asks_failure_counts = (
-            "failure" in normalized
-            and any(
-                term in normalized
-                for term in ("count", "counts", "common", "most common", "top")
-            )
-            and any(
-                term in normalized
-                for term in ("pcb", "repair", "bar chart", "chart", "category")
-            )
-        )
-        asks_sla_compliance = "sla" in normalized and any(
-            term in normalized
-            for term in ("compliance", "dashboard", "chart", "repair", "repairs")
-        )
-        asks_monthly_repairs = (
-            "repair" in normalized
-            and any(
-                term in normalized
-                for term in ("monthly", "last 12 months", "trend", "volume")
-            )
-        )
-        return (
-            asks_manufacturing_throughput
-            or asks_failure_counts
-            or asks_sla_compliance
-            or asks_monthly_repairs
-        )
+        return False
 
     def _build_heuristic_text_to_sql_fallback(
         self,
@@ -1975,168 +1940,7 @@ class AskService:
         table_ddls: list[str],
         table_names: Optional[list[str]] = None,
     ) -> str | None:
-        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
-        if not normalized:
-            return None
-
-        if schema_grounded_sql := self._build_schema_grounded_sales_sql(
-            query, table_ddls
-        ):
-            return schema_grounded_sql
-
-        if throughput_sql := self._build_manufacturing_throughput_sql(
-            query, table_ddls, table_names=table_names
-        ):
-            return throughput_sql
-
-        if repair_failure_count_sql := self._build_repair_failure_count_sql(
-            query, table_ddls, table_names=table_names
-        ):
-            return repair_failure_count_sql
-
-        if repair_sla_sql := self._build_repair_sla_compliance_sql(
-            query, table_ddls, table_names=table_names
-        ):
-            return repair_sla_sql
-
-        if monthly_repair_volume_sql := self._build_monthly_repair_volume_sql(
-            query, table_ddls, table_names=table_names
-        ):
-            return monthly_repair_volume_sql
-
-        wants_chart = any(
-            term in normalized for term in ("chart", "bar chart", "line chart", "graph")
-        )
-        wants_failure_counts = any(
-            term in normalized
-            for term in (
-                "failure",
-                "failure category",
-                "failure code",
-                "common pcb failures",
-                "common failures",
-                "most common",
-                "top 10",
-                "top ten",
-            )
-        )
-        wants_monthly_repairs = (
-            "repair" in normalized
-            and any(
-                term in normalized
-                for term in ("monthly", "last 12 months", "trend", "volume")
-            )
-        )
-
-        if wants_failure_counts and wants_chart:
-            top_n = self._extract_requested_top_n(query)
-            has_pattern_failure_sys = self._schema_contains(
-                table_ddls, r"\bFailuresys\b", table_names=table_names
-            )
-            has_pattern_occurrences = self._schema_contains(
-                table_ddls, r"\boccurrences\b", table_names=table_names
-            )
-            has_debug_entries = self._schema_contains(
-                table_ddls, r"\bdbo_DebugEntries\b", table_names=table_names
-            )
-            has_failure_patterns = self._schema_contains(
-                table_ddls, r"\bdbo_failure_patterns\b", table_names=table_names
-            )
-            has_failure_sys = self._schema_contains(
-                table_ddls, r"\bFailureSys\b", table_names=table_names
-            )
-            has_debug_entry_id = self._schema_contains(
-                table_ddls, r"\bDebugEntryId\b", table_names=table_names
-            )
-            has_pattern_id = self._schema_contains(
-                table_ddls, r"\bid\b", table_names=table_names
-            )
-            has_pattern_category = self._schema_contains(
-                table_ddls, r"\bcategory\b", table_names=table_names
-            )
-            has_pattern_name = self._schema_contains(
-                table_ddls, r"\bname\b", table_names=table_names
-            )
-
-            if has_failure_patterns and has_pattern_failure_sys and has_pattern_occurrences:
-                return (
-                    f'SELECT "dbo_failure_patterns"."Failuresys" AS "failure_category", '
-                    f'"dbo_failure_patterns"."occurrences" AS "repair_count" '
-                    f'FROM "dbo_failure_patterns" '
-                    f'WHERE "dbo_failure_patterns"."Failuresys" IS NOT NULL '
-                    f'AND "dbo_failure_patterns"."occurrences" IS NOT NULL '
-                    f'ORDER BY "dbo_failure_patterns"."occurrences" DESC '
-                    f'LIMIT {top_n}'
-                )
-
-            if has_failure_patterns and has_pattern_failure_sys:
-                return (
-                    f'SELECT "dbo_failure_patterns"."Failuresys" AS "failure_category", '
-                    f'COUNT(*) AS "repair_count" '
-                    f'FROM "dbo_failure_patterns" '
-                    f'WHERE "dbo_failure_patterns"."Failuresys" IS NOT NULL '
-                    f'GROUP BY "dbo_failure_patterns"."Failuresys" '
-                    f'ORDER BY "repair_count" DESC '
-                    f'LIMIT {top_n}'
-                )
-
-            if (
-                has_debug_entries
-                and has_failure_patterns
-                and has_failure_sys
-                and has_debug_entry_id
-                and has_pattern_id
-            ):
-                dimension_column = (
-                    "category"
-                    if ("category" in normalized and has_pattern_category)
-                    else ("name" if has_pattern_name else "category")
-                )
-                if dimension_column == "category" and not has_pattern_category:
-                    dimension_column = "name"
-
-                return (
-                    f'SELECT "dbo_failure_patterns"."{dimension_column}" AS "failure_category", '
-                    f'COUNT("dbo_DebugEntries"."DebugEntryId") AS "repair_count" '
-                    f'FROM "dbo_DebugEntries" '
-                    f'JOIN "dbo_failure_patterns" '
-                    f'ON "dbo_DebugEntries"."FailureSys" = "dbo_failure_patterns"."id" '
-                    f'WHERE "dbo_failure_patterns"."{dimension_column}" IS NOT NULL '
-                    f'GROUP BY "dbo_failure_patterns"."{dimension_column}" '
-                    f'ORDER BY "repair_count" DESC '
-                    f'LIMIT {top_n}'
-                )
-
-            has_repair_logs = self._schema_contains(
-                table_ddls, r"\bdbo_repair_logs\b", table_names=table_names
-            )
-            has_failure_code = self._schema_contains(
-                table_ddls, r"\bfailure_code\b", table_names=table_names
-            )
-            if has_repair_logs and has_failure_code:
-                return (
-                    f'SELECT "dbo_repair_logs"."failure_code" AS "failure_category", '
-                    f'COUNT(*) AS "repair_count" '
-                    f'FROM "dbo_repair_logs" '
-                    f'WHERE "dbo_repair_logs"."failure_code" IS NOT NULL '
-                    f'GROUP BY "dbo_repair_logs"."failure_code" '
-                    f'ORDER BY "repair_count" DESC '
-                    f'LIMIT {top_n}'
-                )
-
-        if wants_failure_counts and wants_chart:
-            top_n = self._extract_requested_top_n(query)
-            return (
-                f'SELECT "dbo_failure_patterns"."Failuresys" AS "failure_category", '
-                f'COUNT(*) AS "repair_count" '
-                f'FROM "dbo_failure_patterns" '
-                f'WHERE "dbo_failure_patterns"."Failuresys" IS NOT NULL '
-                f'GROUP BY "dbo_failure_patterns"."Failuresys" '
-                f'ORDER BY "repair_count" DESC '
-                f'LIMIT {top_n}'
-            )
-
-        return None
+        return self._build_schema_grounded_analytics_sql(query, table_ddls)
 
     def _is_schema_grounded_query(
         self, query: str, db_schemas: Optional[list[str]] = None
@@ -2993,7 +2797,7 @@ class AskService:
                         return results
 
                     if documents and (
-                        deterministic_sql := self._build_schema_grounded_sales_sql(
+                        deterministic_sql := self._build_schema_grounded_analytics_sql(
                             user_query, table_ddls
                         )
                     ):
@@ -3010,7 +2814,7 @@ class AskService:
                             type="TEXT_TO_SQL",
                             response=api_results,
                             rephrased_question=user_query,
-                            intent_reasoning="Explicit table request matched deployed schema and generated SQL locally.",
+                            intent_reasoning="Explicit table request matched deployed schema and generated SQL from active metadata.",
                             retrieved_tables=table_names,
                             trace_id=trace_id,
                             is_followup=True if histories else False,
@@ -3047,83 +2851,6 @@ class AskService:
                         "Explicit table request matched deployed schema; generating SQL against retrieved schema."
                     )
                     sql_user_query = self._rewrite_query_for_text_to_sql(user_query)
-
-                if self._is_direct_heuristic_sql_query(user_query):
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="searching",
-                        type="TEXT_TO_SQL",
-                        trace_id=trace_id,
-                        is_followup=True if histories else False,
-                    )
-                    retrieval_result = await self._run_with_timeout(
-                        "Schema retrieval",
-                        self._pipelines["db_schema_retrieval"].run(
-                            query=user_query,
-                            histories=histories,
-                            project_id=ask_request.project_id,
-                            enable_column_pruning=False,
-                        ),
-                    )
-                    documents, table_names, table_ddls = (
-                        self._extract_retrieval_metadata(retrieval_result)
-                    )
-                    logger.info(
-                        "Retrieved tables for direct heuristic query_id %s: %s",
-                        query_id,
-                        table_names,
-                    )
-
-                    if heuristic_sql := self._build_heuristic_text_to_sql_fallback(
-                        user_query, table_ddls, table_names=table_names
-                    ):
-                        logger.info(
-                            "Using direct heuristic text-to-sql fallback for query_id %s: %s",
-                            query_id,
-                            user_query,
-                        )
-                        if ask_result := self._build_validated_ask_result_from_sql(
-                            heuristic_sql,
-                            table_ddls,
-                        ):
-                            api_results = [ask_result]
-                            if not self._is_stopped(query_id, self._ask_results):
-                                self._ask_results[query_id] = AskResultResponse(
-                                    status="finished",
-                                    type="TEXT_TO_SQL",
-                                    response=api_results,
-                                    rephrased_question=user_query,
-                                    retrieved_tables=table_names,
-                                    trace_id=trace_id,
-                                    is_followup=True if histories else False,
-                                )
-                            results["ask_result"] = api_results
-                            results["metadata"]["type"] = "TEXT_TO_SQL"
-                            return results
-                        invalid_sql = heuristic_sql
-                        error_message = "Heuristic SQL fallback was not valid for the active datasource schema."
-
-                if explicit_group_count_sql := self._build_explicit_group_count_sql(
-                    user_query
-                ):
-                    table_column_reference = (
-                        self._extract_explicit_table_column_reference(user_query)
-                    )
-                    table_names = (
-                        [table_column_reference[0]] if table_column_reference else []
-                    )
-                    api_results = [
-                        AskResult(
-                            **{
-                                "sql": explicit_group_count_sql,
-                                "type": "llm",
-                            }
-                        )
-                    ]
-                    rephrased_question = user_query
-                    logger.info(
-                        "Using explicit table-column grouped count SQL for query_id %s",
-                        query_id,
-                    )
 
                 historical_question_result = []
                 should_skip_pre_sql_retrieval = self._is_data_analysis_query(
@@ -3483,36 +3210,18 @@ class AskService:
                     ]
 
                 if not api_results and (
-                    audit_log_activity_sql := self._build_audit_log_activity_sql(
-                        user_query, table_ddls, table_names=table_names
-                    )
-                ):
-                    logger.info(
-                        "Using schema-grounded audit log activity SQL for query_id %s",
-                        query_id,
-                    )
-                    api_results = [
-                        AskResult(
-                            **{
-                                "sql": audit_log_activity_sql,
-                                "type": "llm",
-                            }
-                        )
-                    ]
-
-                if not api_results and (
-                    deterministic_sales_sql := self._build_schema_grounded_sales_sql(
+                    deterministic_sql := self._build_schema_grounded_analytics_sql(
                         user_query, table_ddls
                     )
                 ):
                     logger.info(
-                        "Using schema-grounded CWSales SQL for query_id %s",
+                        "Using generic schema-grounded SQL for query_id %s",
                         query_id,
                     )
                     api_results = [
                         AskResult(
                             **{
-                                "sql": deterministic_sales_sql,
+                                "sql": deterministic_sql,
                                 "type": "llm",
                             }
                         )
