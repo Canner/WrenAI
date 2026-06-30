@@ -23,12 +23,76 @@ from wren.model.error import ErrorCode, ErrorPhase, WrenError
 # ``exp.Unnest`` (trino/postgres/duckdb), Snowflake ``FLATTEN`` -> ``exp.Explode``,
 # so no per-dialect name matching is needed.
 #
-# Note: ``UNNEST(read_csv(...))`` is therefore also allowed, but that is an
-# instance of the broader pre-existing gap (data-reading TVFs in non-source
-# positions — already reachable today via projection/WHERE subqueries, since
-# strict mode only governs the top-level source position) and is tracked
-# separately. It is not a regression introduced here.
+# Note: ``UNNEST(read_csv(...))`` used to be allowed because the data-reader
+# guard only governed the top-level source position. As of the all-positions
+# data-reader check below (issue #2409 section C), the inner ``read_csv`` is now
+# blocked regardless of being wrapped by UNNEST — the reader scan walks every
+# AST position, so it sees the nested reader before the row-expansion allow-list
+# is ever consulted.
 _ROW_EXPANSION_FUNCS: tuple[type[exp.Func], ...] = (exp.Unnest, exp.Explode)
+
+# ── Category C: data/file readers (issue #2409) ─────────────────────────────
+#
+# Data-reading table-valued functions read bytes from *outside* the MDL
+# manifest: local files (``read_csv('/etc/passwd')`` → path traversal), object
+# storage / URLs (``read_parquet('s3://...')`` → SSRF / exfiltration), or other
+# databases (``dblink`` / ``postgres_scan`` → lateral movement). Allowing any of
+# them defeats strict-mode governance (RLAC/CLAC), so they are ALWAYS blocked
+# under strict mode, in EVERY AST position — not just the FROM/JOIN source slot
+# (which is all PR #2405 covered). Reader detection is fail-closed: this list is
+# the source of truth for *known* reader names, matched by both the raw
+# function name (for ``exp.Anonymous`` parses like ``glob`` / ``dblink``) and by
+# the canonical sqlglot class key (e.g. ``read_csv`` → ``exp.ReadCSV`` →
+# ``"readcsv"``), via the same dialect-probe used for the denylist.
+_DATA_READER_NAMES: frozenset[str] = frozenset(
+    {
+        # duckdb file readers
+        "read_csv",
+        "read_csv_auto",
+        "read_parquet",
+        "read_json",
+        "read_json_auto",
+        "read_ndjson",
+        "read_ndjson_auto",
+        "read_json_objects",
+        "read_text",
+        "read_blob",
+        "read_xlsx",
+        "parquet_scan",
+        "glob",
+        # duckdb extension scanners (lakehouse / external db)
+        "iceberg_scan",
+        "delta_scan",
+        "postgres_scan",
+        "postgres_query",
+        "mysql_scan",
+        "mysql_query",
+        "sqlite_scan",
+        "sqlite_query",
+        # postgres file / remote readers
+        "pg_read_file",
+        "pg_read_binary_file",
+        "pg_ls_dir",
+        "lo_import",
+        "lo_get",
+        "dblink",
+        "dblink_exec",
+        # generic external fetch
+        "url",
+    }
+)
+
+# ── Category B: synthetic generators (issue #2409) ──────────────────────────
+#
+# Generators (``generate_series`` / ``sequence`` / ``range``) read nothing
+# outside the manifest, so they are not an exfiltration risk — but an unbounded
+# range is a denial-of-service vector (``generate_series(1, 1e12)`` materialises
+# a trillion rows). They are therefore blocked by default in source position and
+# only allowed when the operator explicitly opts a name in via
+# ``allowed_source_functions``. Matching goes through the shared canonicalizer
+# so an opt-in of ``generate_series`` matches whether sqlglot lands it on
+# ``exp.GenerateSeries`` / ``exp.ExplodingGenerateSeries`` or ``exp.Anonymous``.
+_GENERATOR_NAMES: frozenset[str] = frozenset({"generate_series", "sequence", "range"})
 
 # Dialects we probe when canonicalising the user's denylist. sqlglot can map
 # the same function name (e.g. ``version()``) onto different concrete AST
@@ -94,7 +158,12 @@ def validate_sql_policy(
         Wren configuration with strict_mode and denied_functions settings.
     """
     if config.strict_mode:
-        _check_tables(ast, model_names)
+        # Data-reading TVFs (read_csv / dblink / postgres_scan / ...) are
+        # blocked in EVERY position first (issue #2409 section C) so a reader
+        # smuggled into a projection or subquery can't slip past the
+        # source-only table scan below.
+        _check_data_readers(ast)
+        _check_tables(ast, model_names, config.allowed_source_functions)
     if config.denied_functions:
         _check_functions(ast, config.denied_functions)
 
@@ -123,12 +192,22 @@ def _visible_cte_names(node: exp.Expression) -> set[str]:
 def _check_tables(
     ast: exp.Expression,
     model_names: set[str],
+    allowed_source_functions: frozenset[str] = frozenset(),
 ) -> None:
     for table in ast.find_all(exp.Table):
         name = table.name
         if not name:
             # Table nodes with no name are table-valued functions
-            # (e.g. read_csv(), generate_series()). Block them in strict mode.
+            # (e.g. read_csv(), generate_series()). A TVF written WITH an alias
+            # (``generate_series(1,10) AS t(x)``) parses as an exp.Table whose
+            # ``this`` is the inner func, so the category checks must look at
+            # the wrapped func here too. Data readers are already blocked
+            # globally by _check_data_readers; a generator may be opted in.
+            inner = table.this
+            if isinstance(inner, exp.Func) and _is_allowed_generator(
+                inner, allowed_source_functions
+            ):
+                continue
             sql_text = table.sql()
             if sql_text:
                 raise WrenError(
@@ -171,10 +250,17 @@ def _check_tables(
             if isinstance(source, exp.Alias):
                 source = source.this
         if isinstance(source, _ROW_EXPANSION_FUNCS):
-            # Row-expansion over an in-scope expression (e.g. a governed model
-            # column) reads nothing outside the manifest — allow it.
+            # Category A — row-expansion over an in-scope expression (e.g. a
+            # governed model column) reads nothing outside the manifest: allow.
             continue
         if isinstance(source, exp.Func):
+            # Category C readers are already blocked everywhere by
+            # _check_data_readers; reaching here means the source func is a
+            # generator (category B) or some other non-model source func.
+            # Category B — synthetic generators are blocked by default (DoS via
+            # unbounded ranges) but may be opted in by the operator per name.
+            if _is_allowed_generator(source, allowed_source_functions):
+                continue
             raise WrenError(
                 ErrorCode.MODEL_NOT_FOUND,
                 f"Table-valued function '{source.sql()}' is not allowed. "
@@ -184,32 +270,111 @@ def _check_tables(
 
 
 @lru_cache(maxsize=128)
-def _canonical_denied(denied: frozenset[str]) -> frozenset[str]:
-    """Expand the user's denylist to also cover sqlglot's canonical keys.
+def _canonical_names(names: frozenset[str]) -> frozenset[str]:
+    """Expand a set of function names to also cover sqlglot's canonical keys.
 
     sqlglot >=29 maps several common functions onto concrete subclasses —
     e.g. ``version()`` becomes ``exp.CurrentVersion`` in
     postgres/mysql/duckdb/trino/clickhouse (with ``type(node).key ==
     "currentversion"``), while in tsql/oracle/bigquery/snowflake it stays
-    as ``exp.Anonymous(name="version")``. A user denylist entry of
-    ``"version"`` would only match the anonymous case without this
-    expansion. Probing each known dialect collects every class key the
-    name might land on at parse time and adds them all to the result.
+    as ``exp.Anonymous(name="version")``. A plain name entry of ``"version"``
+    would only match the anonymous case without this expansion. Probing each
+    known dialect collects every class key the name might land on at parse
+    time and adds them all to the result.
+
+    Used for the denylist, the data-reader blocklist, and the generator
+    opt-in allowlist so all three match a function whether sqlglot keeps it
+    anonymous or reclassifies it to a concrete subclass.
     """
-    expanded: set[str] = {d.lower() for d in denied}
+    expanded: set[str] = {d.lower() for d in names}
     for name in list(expanded):
         for dialect in _CANONICALISE_DIALECTS:
-            try:
-                ast = parse_one(f"SELECT {name}()", dialect=dialect)
-            except SqlglotError:
-                # A malformed denylist entry can fail tokenizing or parsing on
-                # some dialects; skip it for this dialect rather than crashing
-                # validation (SqlglotError covers ParseError and TokenError).
-                continue
-            first_func = next(ast.find_all(exp.Func), None)
-            if first_func is not None and not isinstance(first_func, exp.Anonymous):
-                expanded.add(type(first_func).key.lower())
+            # Probe both arity-0 and arity-1 forms: some functions only parse to
+            # their concrete subclass when given an argument (e.g. duckdb
+            # ``read_csv('x')`` -> exp.ReadCSV, while ``read_csv()`` fails to
+            # parse), so an args-less probe alone would miss the class key.
+            for probe in (
+                f"SELECT {name}()",
+                f"SELECT {name}('x')",
+                f"SELECT {name}(1, 2)",
+            ):
+                try:
+                    ast = parse_one(probe, dialect=dialect)
+                except SqlglotError:
+                    # A malformed entry can fail tokenizing or parsing on some
+                    # dialects; skip it rather than crashing validation
+                    # (SqlglotError covers ParseError and TokenError).
+                    continue
+                first_func = next(ast.find_all(exp.Func), None)
+                if first_func is not None and not isinstance(first_func, exp.Anonymous):
+                    expanded.add(type(first_func).key.lower())
     return frozenset(expanded)
+
+
+# Backwards-compatible alias: the denylist canonicalizer is the generic one.
+_canonical_denied = _canonical_names
+
+
+def _func_match_keys(func: exp.Func) -> tuple[str, str]:
+    """Return the (raw-name, class-key) pair used to match *func* against a set.
+
+    Anonymous funcs carry the user-written name (e.g. ``glob``, ``dblink``);
+    concrete subclasses carry a stable class key (e.g. ``read_csv`` ->
+    ``"readcsv"``). Checking both against a canonicalized name set means a
+    single source-of-truth name list matches regardless of how sqlglot parsed
+    the call on a given dialect.
+    """
+    return (func.name or "").lower(), type(func).key.lower()
+
+
+def _is_data_reader(func: exp.Func) -> bool:
+    """True if *func* is a known data/file/remote reader (issue #2409 cat. C)."""
+    raw, key = _func_match_keys(func)
+    canonical = _canonical_names(_DATA_READER_NAMES)
+    return raw in canonical or key in canonical
+
+
+def _is_allowed_generator(
+    func: exp.Func, allowed_source_functions: frozenset[str]
+) -> bool:
+    """True if *func* is a generator the operator explicitly opted in.
+
+    Generators are only relevant in the source position; the opt-in is matched
+    through the shared canonicalizer so ``generate_series`` matches whether it
+    parsed to ``exp.GenerateSeries`` / ``exp.ExplodingGenerateSeries`` or
+    ``exp.Anonymous``. Only names that are *both* known generators and present
+    in the operator allowlist are permitted — never readers.
+    """
+    if not allowed_source_functions:
+        return False
+    raw, key = _func_match_keys(func)
+    generators = _canonical_names(_GENERATOR_NAMES)
+    if raw not in generators and key not in generators:
+        return False
+    allowed = _canonical_names(allowed_source_functions)
+    return raw in allowed or key in allowed
+
+
+def _check_data_readers(ast: exp.Expression) -> None:
+    """Block data-reading TVFs in EVERY AST position under strict mode.
+
+    PR #2405 only governed readers in the top-level FROM/JOIN source slot, so a
+    reader smuggled into a projection (``SELECT read_csv('/etc/passwd')``), a
+    WHERE/IN subquery, or a nested function argument
+    (``UNNEST(read_csv(...))``) bypassed MDL governance entirely — a real
+    path-traversal / SSRF / exfiltration hole. This walks the whole tree and
+    fails closed on the first known reader, wherever it appears.
+    """
+    for func in ast.find_all(exp.Func):
+        if _is_data_reader(func):
+            raise WrenError(
+                ErrorCode.MODEL_NOT_FOUND,
+                f"Data-reading function '{func.sql()}' is not allowed. "
+                "In strict mode, reading data outside the MDL manifest "
+                "(files, URLs, or external databases) is forbidden in all "
+                "query positions.",
+                phase=ErrorPhase.SQL_POLICY_CHECK,
+            )
 
 
 def _check_functions(
