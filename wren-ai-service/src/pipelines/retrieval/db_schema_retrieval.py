@@ -255,7 +255,16 @@ def _dedupe_documents(documents: list[Document]) -> list[Document]:
 
 
 @observe(capture_input=False, capture_output=False)
-async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> dict:
+async def embedding(
+    query: str,
+    embedder: Any,
+    histories: list[AskHistory],
+    tables: Optional[list[str]] = None,
+) -> dict:
+    if tables:
+        logger.info("Skipping embedding retrieval for explicit tables: %s", tables)
+        return {}
+
     if query:
         if histories:
             previous_query_summaries = [history.question for history in histories]
@@ -306,13 +315,20 @@ async def table_retrieval(
 
 @observe(capture_input=False)
 async def dbschema_retrieval(
-    query: str, table_retrieval: dict, project_id: str, dbschema_retriever: Any
+    query: str,
+    table_retrieval: dict,
+    project_id: str,
+    dbschema_retriever: Any,
+    tables: Optional[list[str]] = None,
 ) -> list[Document]:
-    tables = table_retrieval.get("documents", [])
     table_names = []
-    for table in tables:
-        content = ast.literal_eval(table.content)
-        table_names.append(content["name"])
+    if tables:
+        table_names.extend(tables)
+    else:
+        retrieved_tables = table_retrieval.get("documents", [])
+        for table in retrieved_tables:
+            content = ast.literal_eval(table.content)
+            table_names.append(content["name"])
 
     table_name_conditions = [
         {"field": "name", "operator": "==", "value": table_name}

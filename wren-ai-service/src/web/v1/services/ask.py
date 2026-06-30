@@ -2536,6 +2536,7 @@ class AskService:
                         timeout_seconds=min(
                             self._schema_retrieval_timeout_seconds,
                             self._pipeline_timeout_seconds,
+                            20,
                         ),
                     )
                     documents, table_names, table_ddls = (
@@ -2574,6 +2575,28 @@ class AskService:
                         results["ask_result"] = api_results
                         results["metadata"]["type"] = "TEXT_TO_SQL"
                         return results
+
+                    error_message = (
+                        "The requested table was not found in the deployed schema: "
+                        + ", ".join(explicit_table_names)
+                    )
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="failed",
+                        type="TEXT_TO_SQL",
+                        error=AskError(
+                            code="NO_RELEVANT_DATA",
+                            message=error_message,
+                        ),
+                        rephrased_question=user_query,
+                        intent_reasoning="Explicit table preview request did not match any deployed schema table.",
+                        retrieved_tables=table_names,
+                        trace_id=trace_id,
+                        is_followup=True if histories else False,
+                    )
+                    results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
+                    results["metadata"]["error_message"] = error_message
+                    results["metadata"]["type"] = "TEXT_TO_SQL"
+                    return results
 
                 if self._is_direct_heuristic_sql_query(user_query):
                     self._ask_results[query_id] = AskResultResponse(
