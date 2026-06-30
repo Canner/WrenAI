@@ -492,6 +492,9 @@ pub async fn transform_sql_with_ctx(
         register_remote_function(ctx, remote_function)?;
         Ok::<_, DataFusionError>(())
     })?;
+    // Note: unknown functions referenced in the manifest's expressions are
+    // auto-registered as inferred bypass UDFs inside `apply_wren_on_ctx`, which is
+    // the choke point shared by every planning path (transform, load, dry-run).
     let ctx = apply_wren_on_ctx(
         ctx,
         Arc::clone(&analyzed_mdl),
@@ -627,6 +630,129 @@ fn register_remote_function(
             ),
         )),
     };
+    Ok(())
+}
+
+/// Scan all free-form SQL expressions in the manifest — calculated column
+/// expressions, row-level access control conditions, cube
+/// measure/dimension/time-dimension expressions, and relationship conditions —
+/// for function calls that are not registered in the context, and register each
+/// unknown function as a bypass UDF whose return type is inferred from the
+/// argument types at planning time.
+///
+/// This lets MDL authors reference data-source-native functions that wren-core
+/// does not know about (and pass them through to the unparser) without declaring
+/// every one in the remote-functions list. Functions already registered — built
+/// ins, dialect functions, and explicitly declared remote functions — are left
+/// untouched, so explicit declarations always win.
+///
+/// Aggregate functions cannot be reliably distinguished from scalar functions by
+/// syntax alone, so unknown functions are registered as scalar UDFs unless they
+/// carry an `OVER (...)` clause (registered as window UDFs). Unknown aggregates
+/// still need an explicit remote-function declaration.
+///
+/// Registers into the given [`SessionState`] (rather than a shared
+/// [`SessionContext`]) so the caller can seed a derived state without leaking
+/// inferred functions back into a context that may be reused across manifests.
+pub(crate) fn register_inferred_bypass_for_manifest(
+    state: &mut SessionState,
+    manifest: &Manifest,
+) -> Result<()> {
+    use datafusion::execution::FunctionRegistry;
+    use datafusion::sql::parser::DFParserBuilder;
+    use datafusion::sql::sqlparser::ast::{self, visit_expressions};
+    use datafusion::sql::sqlparser::dialect::GenericDialect;
+    use std::collections::HashSet;
+    use std::ops::ControlFlow;
+
+    // Collect every free-form expression string in the manifest.
+    let mut expressions: Vec<&str> = vec![];
+    for model in &manifest.models {
+        for column in &model.columns {
+            if let Some(expr) = column.expression.as_deref() {
+                if !expr.is_empty() {
+                    expressions.push(expr);
+                }
+            }
+        }
+        for rule in &model.row_level_access_controls {
+            expressions.push(rule.condition.as_str());
+        }
+    }
+    for cube in &manifest.cubes {
+        for measure in &cube.measures {
+            expressions.push(measure.expression.as_str());
+        }
+        for dimension in &cube.dimensions {
+            expressions.push(dimension.expression.as_str());
+        }
+        for time_dimension in &cube.time_dimensions {
+            expressions.push(time_dimension.expression.as_str());
+        }
+    }
+    for relationship in &manifest.relationships {
+        expressions.push(relationship.condition.as_str());
+    }
+
+    // Names already registered as scalar, aggregate, or window functions
+    // (built-ins, dialect functions, explicit remote functions). Registry keys are
+    // lowercase, matching DataFusion's name resolution. Snapshot them up front so
+    // the read does not borrow `state` while we later register into it.
+    let mut preexisting: HashSet<String> = HashSet::new();
+    preexisting.extend(state.scalar_functions().keys().cloned());
+    preexisting.extend(state.aggregate_functions().keys().cloned());
+    preexisting.extend(state.window_functions().keys().cloned());
+
+    // Scalar and window auto-registrations are tracked separately so discovering
+    // `foo(...)` as a scalar does not mask a later `foo(...) OVER (...)` window
+    // occurrence (and vice versa). Original casing is kept for SQL generation.
+    let dialect = GenericDialect {};
+    let mut scalar_to_add: Vec<String> = vec![];
+    let mut window_to_add: Vec<String> = vec![];
+    let mut seen_scalar: HashSet<String> = HashSet::new();
+    let mut seen_window: HashSet<String> = HashSet::new();
+    for expr_sql in expressions {
+        // Skip expressions that don't parse; the analyzer reports those with a
+        // clearer error than we could here.
+        let Ok(mut parser) = DFParserBuilder::new(expr_sql)
+            .with_dialect(&dialect)
+            .build()
+        else {
+            continue;
+        };
+        let Ok(expr) = parser.parse_expr() else {
+            continue;
+        };
+        let _ = visit_expressions(&expr, |node| {
+            if let ast::Expr::Function(func) = node {
+                if let Some(ident) = func.name.0.last().and_then(|p| p.as_ident()) {
+                    let original = ident.value.as_str();
+                    let normalized = original.to_lowercase();
+                    if !preexisting.contains(&normalized) {
+                        if func.over.is_some() {
+                            if seen_window.insert(normalized.clone()) {
+                                window_to_add.push(original.to_string());
+                            }
+                        } else if seen_scalar.insert(normalized.clone()) {
+                            scalar_to_add.push(original.to_string());
+                        }
+                    }
+                }
+            }
+            ControlFlow::<()>::Continue(())
+        });
+    }
+
+    for name in scalar_to_add {
+        state.register_udf(Arc::new(ScalarUDF::new_from_impl(
+            ByPassScalarUDF::new_inferred(&name),
+        )))?;
+    }
+    for name in window_to_add {
+        state.register_udwf(Arc::new(WindowUDF::new_from_impl(
+            ByPassWindowFunction::new_inferred(&name),
+        )))?;
+    }
     Ok(())
 }
 
@@ -919,6 +1045,88 @@ mod test {
         // ).await?;
         // assert_eq!(actual, "");
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_inferred_bypass_unknown_function_in_expression() -> Result<()> {
+        // A column expression references `custom_mask`, a function wren-core does
+        // not know about and that is NOT declared as a remote function. It should
+        // be auto-registered as an inferred bypass UDF and passed through to the
+        // unparsed SQL with its original casing preserved.
+        let manifest = ManifestBuilder::new()
+            .catalog("CTest")
+            .schema("STest")
+            .model(
+                ModelBuilder::new("Customer")
+                    .table_reference("datafusion.public.customer")
+                    .column(ColumnBuilder::new("Custkey", "int").build())
+                    .column(ColumnBuilder::new("Name", "string").build())
+                    .column(
+                        ColumnBuilder::new("Masked", "string")
+                            .expression(r#"custom_mask("Name")"#)
+                            .build(),
+                    )
+                    .build(),
+            )
+            .build();
+        let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+            manifest,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        )?);
+        let ctx = create_wren_ctx(None, analyzed_mdl.wren_mdl().data_source().as_ref());
+        let actual = transform_sql_with_ctx(
+            &ctx,
+            Arc::clone(&analyzed_mdl),
+            &[],
+            Arc::new(HashMap::new()),
+            r#"select "Masked" from "CTest"."STest"."Customer""#,
+        )
+        .await?;
+        assert!(
+            actual.contains("custom_mask"),
+            "expected unknown function to be passed through, got: {actual}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_inferred_bypass_registers_scalar_and_window_independently() -> Result<()> {
+        // The same name appears as a plain call and as a window call. Both the
+        // scalar and the window bypass UDF must be registered — neither should
+        // mask the other.
+        let manifest = ManifestBuilder::new()
+            .catalog("CTest")
+            .schema("STest")
+            .model(
+                ModelBuilder::new("Customer")
+                    .table_reference("datafusion.public.customer")
+                    .column(ColumnBuilder::new("Custkey", "int").build())
+                    .column(ColumnBuilder::new("Name", "string").build())
+                    .column(
+                        ColumnBuilder::new("Scalar", "string")
+                            .expression(r#"foo("Name")"#)
+                            .build(),
+                    )
+                    .column(
+                        ColumnBuilder::new("Windowed", "string")
+                            .expression(r#"foo("Custkey") OVER (PARTITION BY "Name")"#)
+                            .build(),
+                    )
+                    .build(),
+            )
+            .build();
+        let mut state = create_wren_ctx(None, None).state();
+        super::register_inferred_bypass_for_manifest(&mut state, &manifest)?;
+        assert!(
+            state.scalar_functions().contains_key("foo"),
+            "scalar bypass should be registered"
+        );
+        assert!(
+            state.window_functions().contains_key("foo"),
+            "window bypass should be registered"
+        );
         Ok(())
     }
 

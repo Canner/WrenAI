@@ -955,6 +955,39 @@ mod test {
     }
 
     #[test]
+    pub fn test_build_filter_expression_with_bypass_function() -> Result<()> {
+        use crate::mdl::function::ByPassScalarUDF;
+        use datafusion::logical_expr::ScalarUDF;
+
+        // A function unknown to wren-core, registered as an inferred bypass UDF
+        // (as the manifest scan does), can be used inside an RLAC condition.
+        let ctx = SessionContext::new();
+        ctx.register_udf(ScalarUDF::new_from_impl(ByPassScalarUDF::new_inferred(
+            "mask",
+        )));
+        let state = ctx.state_ref();
+        let model = ModelBuilder::new("m1")
+            .column(ColumnBuilder::new("id", "int").build())
+            .column(ColumnBuilder::new("name", "varchar").build())
+            .build();
+
+        let headers = Arc::new(build_headers(&[(
+            "session_name".to_string(),
+            Some("'test'".to_string()),
+        )]));
+
+        let rule = RowLevelAccessControl {
+            condition: "mask(name) = @session_name".to_string(),
+            required_properties: vec![SessionProperty::new_required("session_name")],
+            name: "test".to_string(),
+        };
+
+        let expr = build_filter_expression(&state, Arc::clone(&model), &headers, &rule)?;
+        assert_snapshot!(expr_to_sql(&expr)?, @"mask(m1.\"name\") = 'test'");
+        Ok(())
+    }
+
+    #[test]
     pub fn test_match_case_insensitive() -> Result<()> {
         let ctx = SessionContext::new();
         let state = ctx.state_ref();
