@@ -39,7 +39,7 @@ jobs:
       - uses: actions/checkout@v4
       # Ubuntu's system Python is PEP 668 externally-managed; use a hosted
       # toolcache Python so `uv pip install --system` is allowed to write.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - uses: astral-sh/setup-uv@v4
@@ -59,7 +59,7 @@ jobs:
         python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       - uses: astral-sh/setup-uv@v4
@@ -76,7 +76,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       - uses: astral-sh/setup-uv@v4
