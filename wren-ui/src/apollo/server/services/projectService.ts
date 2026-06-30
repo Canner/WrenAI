@@ -27,6 +27,7 @@ import { IMDLService } from './mdlService';
 import { ProjectRecommendQuestionBackgroundTracker } from '../backgrounds';
 import { ITelemetry } from '../telemetry/telemetry';
 import { getConfig } from '../config';
+import { buildFastRecommendationQuestions } from '@server/utils/recommendationQuestions';
 
 const config = getConfig();
 
@@ -173,6 +174,20 @@ export class ProjectService implements IProjectService {
     project: Project,
   ): Promise<void> {
     const { manifest } = await this.mdlService.makeModelMDL(project);
+    const fastQuestions = buildFastRecommendationQuestions(
+      manifest,
+      this.getProjectRecommendationQuestionsConfig(project).maxQuestions,
+    );
+    if (fastQuestions.length) {
+      await this.projectRepository.updateOne(project.id, {
+        queryId: `fast-project-${project.id}-${Date.now()}`,
+        questionsStatus: RecommendationQuestionStatus.FINISHED,
+        questions: fastQuestions,
+        questionsError: null,
+      });
+      return;
+    }
+
     const recommendQuestionResult =
       await this.wrenAIAdaptor.generateRecommendationQuestions({
         manifest,

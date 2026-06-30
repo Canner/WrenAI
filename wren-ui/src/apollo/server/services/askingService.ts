@@ -42,6 +42,7 @@ import {
   TrackedAdjustmentResult,
 } from '../backgrounds';
 import { getConfig } from '@server/config';
+import { buildFastRecommendationQuestions } from '@server/utils/recommendationQuestions';
 import { TextBasedAnswerBackgroundTracker } from '../backgrounds/textBasedAnswerBackgroundTracker';
 import { IAskingTaskTracker, TrackedAskingResult } from './askingTaskTracker';
 
@@ -598,6 +599,21 @@ export class AskingService implements IAskingService {
       .sort((a, b) => b.id - a.id)
       .slice(0, 5);
     const questions = slicedThreadResponses.map(({ question }) => question);
+    const fastQuestions = buildFastRecommendationQuestions(
+      manifest,
+      this.getThreadRecommendationQuestionsConfig(project).maxQuestions,
+      questions,
+    );
+    if (fastQuestions.length) {
+      await this.threadRepository.updateOne(threadId, {
+        queryId: `fast-thread-${threadId}-${Date.now()}`,
+        questionsStatus: RecommendationQuestionStatus.FINISHED,
+        questions: fastQuestions,
+        questionsError: null,
+      });
+      return;
+    }
+
     const recommendQuestionData: RecommendationQuestionsInput = {
       manifest,
       projectId: project.id.toString(),
