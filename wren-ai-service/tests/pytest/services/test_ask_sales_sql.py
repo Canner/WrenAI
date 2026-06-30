@@ -95,7 +95,7 @@ def test_build_schema_grounded_sales_sql_requires_sales_schema():
 def test_build_explicit_table_preview_sql_for_named_table():
     service = AskService.__new__(AskService)
     result = service._build_explicit_table_preview_sql(
-        "Show the first 10 rows from tblNewOrders",
+        "Show the first 5 rows from tblNewOrders",
         [
             """
             CREATE TABLE tblNewOrders (
@@ -107,7 +107,24 @@ def test_build_explicit_table_preview_sql_for_named_table():
         ],
     )
 
-    assert result == ('SELECT TOP 10 * FROM "tblNewOrders"', "tblNewOrders")
+    assert result == ('SELECT TOP 5 * FROM "tblNewOrders"', "tblNewOrders")
+
+
+def test_build_explicit_table_preview_sql_for_show_data_prompt():
+    service = AskService.__new__(AskService)
+    result = service._build_explicit_table_preview_sql(
+        "Show data from CustomerMaster",
+        [
+            """
+            CREATE TABLE CustomerMaster (
+              CustomerId VARCHAR,
+              CustomerName VARCHAR
+            );
+            """
+        ],
+    )
+
+    assert result == ('SELECT TOP 10 * FROM "CustomerMaster"', "CustomerMaster")
 
 
 def test_extract_explicit_table_names_from_query():

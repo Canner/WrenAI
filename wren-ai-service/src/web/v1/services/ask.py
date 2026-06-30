@@ -1240,6 +1240,12 @@ class AskService:
     def _extract_requested_top_n(self, query: str, default_value: int = 10) -> int:
         if match := re.search(r"\btop\s+(\d+)\b", query or "", flags=re.IGNORECASE):
             return max(1, min(int(match.group(1)), 100))
+        if match := re.search(
+            r"\b(?:first|limit)\s+(\d+)\b", query or "", flags=re.IGNORECASE
+        ):
+            return max(1, min(int(match.group(1)), 100))
+        if match := re.search(r"\b(\d+)\s+rows?\b", query or "", flags=re.IGNORECASE):
+            return max(1, min(int(match.group(1)), 100))
         return default_value
 
     def _build_manufacturing_throughput_sql(
@@ -2505,6 +2511,69 @@ class AskService:
                         query_id,
                     )
                     return results
+
+                explicit_table_names = self._extract_explicit_table_names_from_query(
+                    user_query
+                )
+                if explicit_table_names:
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="searching",
+                        type="TEXT_TO_SQL",
+                        rephrased_question=user_query,
+                        intent_reasoning="Explicit table name detected; retrieving that deployed schema directly.",
+                        trace_id=trace_id,
+                        is_followup=True if histories else False,
+                    )
+                    retrieval_result = await self._run_with_timeout(
+                        "Explicit table schema retrieval",
+                        self._pipelines["db_schema_retrieval"].run(
+                            query=user_query,
+                            tables=explicit_table_names,
+                            project_id=ask_request.project_id,
+                            histories=histories,
+                            enable_column_pruning=False,
+                        ),
+                        timeout_seconds=min(
+                            self._schema_retrieval_timeout_seconds,
+                            self._pipeline_timeout_seconds,
+                        ),
+                    )
+                    documents, table_names, table_ddls = (
+                        self._extract_retrieval_metadata(retrieval_result)
+                    )
+                    logger.info(
+                        "Retrieved explicit tables for query_id %s: %s",
+                        query_id,
+                        table_names,
+                    )
+
+                    if explicit_table_preview := self._build_explicit_table_preview_sql(
+                        user_query, table_ddls
+                    ):
+                        explicit_sql, explicit_table_name = explicit_table_preview
+                        if explicit_table_name not in table_names:
+                            table_names.append(explicit_table_name)
+                        api_results = [
+                            AskResult(
+                                **{
+                                    "sql": explicit_sql,
+                                    "type": "llm",
+                                }
+                            )
+                        ]
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="finished",
+                            type="TEXT_TO_SQL",
+                            response=api_results,
+                            rephrased_question=user_query,
+                            intent_reasoning="Explicit table preview request matched deployed schema.",
+                            retrieved_tables=table_names,
+                            trace_id=trace_id,
+                            is_followup=True if histories else False,
+                        )
+                        results["ask_result"] = api_results
+                        results["metadata"]["type"] = "TEXT_TO_SQL"
+                        return results
 
                 if self._is_direct_heuristic_sql_query(user_query):
                     self._ask_results[query_id] = AskResultResponse(
