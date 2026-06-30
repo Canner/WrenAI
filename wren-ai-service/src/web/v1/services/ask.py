@@ -759,13 +759,11 @@ class AskService:
     def _append_not_null_filters(
         self, where_clause: str, column_refs: list[str]
     ) -> str:
-        conditions = [f"{column_ref} IS NOT NULL" for column_ref in column_refs]
-        if not conditions:
-            return where_clause
-
-        if where_clause.strip():
-            return f"{where_clause.rstrip()} AND {' AND '.join(conditions)} "
-        return f" WHERE {' AND '.join(conditions)} "
+        # Grouping dimensions can be sparsely populated in deployed customer
+        # models. Adding implicit IS NOT NULL filters can turn valid aggregate
+        # questions into empty result sets, so keep only caller-provided filters
+        # such as date ranges.
+        return where_clause
 
     def _select_best_analytics_table(
         self,
