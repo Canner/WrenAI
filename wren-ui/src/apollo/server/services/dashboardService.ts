@@ -143,7 +143,10 @@ export class DashboardService implements IDashboardService {
     const dashboard = await this.dashboardRepository.findOneBy({
       projectId: project.id,
     });
-    return { ...dashboard };
+    if (dashboard) {
+      return dashboard;
+    }
+    return await this.initDashboard();
   }
 
   public async getDashboardItem(
@@ -169,6 +172,12 @@ export class DashboardService implements IDashboardService {
   public async createDashboardItem(
     input: CreateDashboardItemInput,
   ): Promise<DashboardItem> {
+    if (!input.dashboardId) {
+      throw new Error('Dashboard id is required.');
+    }
+    if (!input.sql) {
+      throw new Error('Dashboard item SQL is required.');
+    }
     const layout = await this.calculateNewLayout(input.dashboardId);
     return await this.dashboardItemRepository.createOne({
       dashboardId: input.dashboardId,

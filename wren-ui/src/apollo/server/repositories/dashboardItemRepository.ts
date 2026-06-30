@@ -18,6 +18,7 @@ export enum DashboardItemType {
   BAR = 'BAR',
   GROUPED_BAR = 'GROUPED_BAR',
   LINE = 'LINE',
+  MULTI_LINE = 'MULTI_LINE',
   PIE = 'PIE',
   STACKED_BAR = 'STACKED_BAR',
   // other types
@@ -96,15 +97,16 @@ export class DashboardItemRepository
     const transformData = mapValues(camelCaseData, (value, key) => {
       if (this.jsonbColumns.includes(key)) {
         if (typeof value === 'string') {
-          return value ? JSON.parse(value) : value;
+          return this.parseJsonColumn(value, key);
         } else {
-          return value;
+          return isPlainObject(value) ? value : this.defaultJsonColumnValue(key);
         }
       }
       return value;
     });
     return {
       ...transformData,
+      type: this.normalizeItemType(transformData.type),
       displayName: transformData.displayName || transformData.title,
     } as DashboardItem;
   };
@@ -144,6 +146,9 @@ export class DashboardItemRepository
         this.hasColumn('updated_at', executer),
       ]);
     const normalizedData: Partial<DashboardItem> = { ...data };
+    if (normalizedData.type) {
+      normalizedData.type = this.normalizeItemType(normalizedData.type);
+    }
     const displayName =
       typeof data.displayName === 'string' ? data.displayName.trim() : '';
     const chartTitle =
@@ -174,6 +179,36 @@ export class DashboardItemRepository
     }
 
     return normalizedData;
+  }
+
+  private parseJsonColumn(value: string, key: string) {
+    if (!value) {
+      return this.defaultJsonColumnValue(key);
+    }
+    try {
+      const parsed = JSON.parse(value);
+      return isPlainObject(parsed) ? parsed : this.defaultJsonColumnValue(key);
+    } catch {
+      return this.defaultJsonColumnValue(key);
+    }
+  }
+
+  private defaultJsonColumnValue(key: string) {
+    if (key === 'layout') {
+      return { x: 0, y: 0, w: 3, h: 2 };
+    }
+    if (key === 'detail') {
+      return { sql: '', chartSchema: null };
+    }
+    return {};
+  }
+
+  private normalizeItemType(type: unknown): DashboardItemType {
+    const normalized = String(type || '').toUpperCase();
+    return (
+      DashboardItemType[normalized as keyof typeof DashboardItemType] ||
+      DashboardItemType.BAR
+    );
   }
 
   private async hasColumn(column: string, executer: Knex | Knex.Transaction) {
