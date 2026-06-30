@@ -484,6 +484,71 @@ class AskService:
     def _quote_sql_identifier(self, identifier: str) -> str:
         return f'"{identifier.replace(chr(34), chr(34) + chr(34))}"'
 
+    def _build_explicit_table_preview_sql(
+        self, query: str, table_ddls: list[str]
+    ) -> tuple[str, str] | None:
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip())
+        if not normalized_query:
+            return None
+
+        if not re.search(
+            r"\b(?:first|top|sample|preview|show|list)\b",
+            normalized_query,
+            flags=re.IGNORECASE,
+        ):
+            return None
+        if not re.search(
+            r"\b(?:rows?|records?|data)\b", normalized_query, flags=re.IGNORECASE
+        ):
+            return None
+
+        tables = self._parse_schema_tables(table_ddls)
+        if not tables:
+            return None
+
+        normalized_query_key = re.sub(r"[^a-z0-9]", "", normalized_query.lower())
+        scored_tables: list[tuple[int, str]] = []
+        for table in tables:
+            table_name = table.get("name")
+            if not table_name:
+                continue
+            table_name = str(table_name)
+            normalized_table = re.sub(r"[^a-z0-9]", "", table_name.lower())
+            if not normalized_table:
+                continue
+            if normalized_table in normalized_query_key:
+                scored_tables.append((100 + len(normalized_table), table_name))
+                continue
+
+            table_without_schema = re.split(r"[.$]", table_name)[-1]
+            normalized_short_name = re.sub(
+                r"[^a-z0-9]", "", table_without_schema.lower()
+            )
+            if normalized_short_name and normalized_short_name in normalized_query_key:
+                scored_tables.append((80 + len(normalized_short_name), table_name))
+
+        if not scored_tables:
+            return None
+
+        _, table_name = sorted(scored_tables, reverse=True)[0]
+        limit = self._extract_requested_top_n(query, default_value=10)
+        return (
+            f"SELECT TOP {limit} * FROM {self._quote_sql_identifier(table_name)}",
+            table_name,
+        )
+
+    def _extract_explicit_table_names_from_query(self, query: str) -> list[str]:
+        table_names: list[str] = []
+        for match in re.finditer(
+            r"\b(?:from|table|model)\s+([A-Za-z_][A-Za-z0-9_.$]*)",
+            query or "",
+            flags=re.IGNORECASE,
+        ):
+            table_name = match.group(1).strip(".,;:()[]{}")
+            if table_name and table_name not in table_names:
+                table_names.append(table_name)
+        return table_names
+
     def _build_direct_orders_sales_sql(self, query: str) -> str | None:
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized:
@@ -2780,12 +2845,61 @@ class AskService:
                 documents, table_names, table_ddls = (
                     self._extract_retrieval_metadata(retrieval_result)
                 )
+                if not documents:
+                    explicit_table_names = self._extract_explicit_table_names_from_query(
+                        user_query
+                    )
+                    if explicit_table_names:
+                        logger.info(
+                            "Retrying schema retrieval for explicit tables query_id %s: %s",
+                            query_id,
+                            explicit_table_names,
+                        )
+                        retrieval_result = await self._run_with_timeout(
+                            "Explicit table schema retrieval",
+                            self._pipelines["db_schema_retrieval"].run(
+                                query=user_query,
+                                tables=explicit_table_names,
+                                project_id=ask_request.project_id,
+                                histories=histories,
+                                enable_column_pruning=enable_column_pruning,
+                            ),
+                            timeout_seconds=self._schema_retrieval_timeout_seconds,
+                        )
+                        _retrieval_result = retrieval_result.get(
+                            "construct_retrieval_results", {}
+                        )
+                        documents, table_names, table_ddls = (
+                            self._extract_retrieval_metadata(retrieval_result)
+                        )
                 logger.info(
                     "Retrieved tables for query_id %s: %s", query_id, table_names
                 )
 
-                if audit_log_activity_sql := self._build_audit_log_activity_sql(
-                    user_query, table_ddls, table_names=table_names
+                if explicit_table_preview := self._build_explicit_table_preview_sql(
+                    user_query, table_ddls
+                ):
+                    explicit_sql, explicit_table_name = explicit_table_preview
+                    logger.info(
+                        "Using explicit table preview SQL for query_id %s and table %s",
+                        query_id,
+                        explicit_table_name,
+                    )
+                    if explicit_table_name not in table_names:
+                        table_names.append(explicit_table_name)
+                    api_results = [
+                        AskResult(
+                            **{
+                                "sql": explicit_sql,
+                                "type": "llm",
+                            }
+                        )
+                    ]
+
+                if not api_results and (
+                    audit_log_activity_sql := self._build_audit_log_activity_sql(
+                        user_query, table_ddls, table_names=table_names
+                    )
                 ):
                     logger.info(
                         "Using schema-grounded audit log activity SQL for query_id %s",

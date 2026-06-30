@@ -92,6 +92,32 @@ def test_build_schema_grounded_sales_sql_requires_sales_schema():
     )
 
 
+def test_build_explicit_table_preview_sql_for_named_table():
+    service = AskService.__new__(AskService)
+    result = service._build_explicit_table_preview_sql(
+        "Show the first 10 rows from tblNewOrders",
+        [
+            """
+            CREATE TABLE tblNewOrders (
+              OrdNo VARCHAR,
+              Customer VARCHAR,
+              InvDate TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert result == ('SELECT TOP 10 * FROM "tblNewOrders"', "tblNewOrders")
+
+
+def test_extract_explicit_table_names_from_query():
+    service = AskService.__new__(AskService)
+
+    assert service._extract_explicit_table_names_from_query(
+        "Show the first 10 rows from tblNewOrders"
+    ) == ["tblNewOrders"]
+
+
 def test_build_schema_grounded_sales_sql_for_top_markets():
     service = AskService.__new__(AskService)
     sql = service._build_schema_grounded_sales_sql(
