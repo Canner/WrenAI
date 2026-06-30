@@ -77,6 +77,15 @@ const getDynamicProperties = (chartType: ChartType) => {
   return propertiesMap[chartType] || BasicProperties;
 };
 
+const chartTypeToDashboardItemType = (
+  chartType: ChartType,
+): DashboardItemType | null => {
+  const normalized = String(
+    chartType || '',
+  ).toUpperCase() as keyof typeof DashboardItemType;
+  return DashboardItemType[normalized] || null;
+};
+
 export default function ChartAnswer(props: AnswerResultProps) {
   const { onGenerateChartAnswer, onAdjustChartAnswer } = usePromptThreadStore();
   const { threadResponse } = props;
@@ -181,6 +190,12 @@ export default function ChartAnswer(props: AnswerResultProps) {
   };
 
   const onPin = () => {
+    const dashboardItemType = chartTypeToDashboardItemType(chartType as ChartType);
+    if (!dashboardItemType) {
+      message.error('Chart type is not supported for dashboard pinning.');
+      return;
+    }
+
     Modal.confirm({
       title: 'Are you sure you want to pin this chart to the dashboard?',
       okText: 'Save',
@@ -188,8 +203,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
         await createDashboardItem({
           variables: {
             data: {
-              // DashboardItemType is compatible with ChartType
-              itemType: chartType as unknown as DashboardItemType,
+              itemType: dashboardItemType,
               responseId: threadResponse.id,
             },
           },

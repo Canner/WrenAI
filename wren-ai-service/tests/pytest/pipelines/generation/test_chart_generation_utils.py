@@ -35,6 +35,26 @@ def test_fallback_chart_requires_a_real_quantitative_measure():
     assert result == {"chart_schema": {}, "reasoning": "", "chart_type": ""}
 
 
+def test_fallback_chart_uses_grouped_bar_for_two_business_dimensions():
+    result = build_fallback_chart_result(
+        "Which Customers have the highest New Orders in each Market?",
+        {
+            "columns": [
+                {"name": "Market"},
+                {"name": "Customer"},
+                {"name": "OrderCount"},
+            ],
+            "data": [["North", "Acme", 10], ["South", "Globex", 8]],
+        },
+    )
+
+    assert result["chart_type"] == "grouped_bar"
+    assert result["chart_schema"]["encoding"]["x"]["field"] == "Customer"
+    assert result["chart_schema"]["encoding"]["y"]["field"] == "OrderCount"
+    assert result["chart_schema"]["encoding"]["color"]["field"] == "Market"
+    assert result["chart_schema"]["encoding"]["xOffset"]["field"] == "Market"
+
+
 def test_chart_schema_rejects_vega_aggregate_count_without_sql_metric():
     assert not _is_schema_compatible_with_sample_data(
         {
@@ -49,28 +69,10 @@ def test_chart_schema_rejects_vega_aggregate_count_without_sql_metric():
 
 
 @pytest.mark.asyncio
-async def test_chart_service_does_not_short_circuit_to_generic_fallback():
+async def test_chart_service_returns_deterministic_chart_without_llm_wait():
     class FakeChartGenerationPipeline:
         async def run(self, **kwargs):
-            assert kwargs["data"]["columns"] == [
-                {"name": "Market"},
-                {"name": "Revenue"},
-            ]
-            return {
-                "post_process": {
-                    "results": {
-                        "chart_schema": {
-                            "mark": {"type": "bar"},
-                            "encoding": {
-                                "x": {"field": "Market", "type": "nominal"},
-                                "y": {"field": "Revenue", "type": "quantitative"},
-                            },
-                        },
-                        "reasoning": "Generated from the executed SQL result.",
-                        "chart_type": "bar",
-                    }
-                }
-            }
+            raise AssertionError("chart LLM pipeline should not be called")
 
     service = ChartService({"chart_generation": FakeChartGenerationPipeline()})
     request = ChartRequest(
@@ -86,5 +88,6 @@ async def test_chart_service_does_not_short_circuit_to_generic_fallback():
     result = await service.chart(request)
 
     assert result["chart_result"]["reasoning"] == (
-        "Generated from the executed SQL result."
+        "Generated from the SQL result columns and requested chart type."
     )
+    assert result["chart_result"]["chart_type"] == "bar"

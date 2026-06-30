@@ -6,6 +6,7 @@ from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
+from src.pipelines.generation.utils.chart import build_fallback_chart_result
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest
 
@@ -138,6 +139,20 @@ class ChartService:
                 status="generating",
                 trace_id=trace_id,
             )
+
+            deterministic_chart_result = build_fallback_chart_result(
+                chart_request.query,
+                sql_data,
+                chart_request.remove_data_from_chart_schema,
+            )
+            if deterministic_chart_result.get("chart_schema"):
+                self._chart_results[query_id] = ChartResultResponse(
+                    status="finished",
+                    response=ChartResult(**deterministic_chart_result),
+                    trace_id=trace_id,
+                )
+                results["chart_result"] = deterministic_chart_result
+                return results
 
             chart_generation_result = await self._pipelines["chart_generation"].run(
                 query=chart_request.query,

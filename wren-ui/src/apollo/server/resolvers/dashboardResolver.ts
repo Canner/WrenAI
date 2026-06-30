@@ -77,14 +77,15 @@ export class DashboardResolver {
     args: { data: { itemType: DashboardItemType; responseId: number } },
     ctx: IContext,
   ): Promise<DashboardItem> {
-    const { responseId, itemType } = args.data;
+    const { responseId } = args.data;
+    const itemType = this.normalizeDashboardItemType(args.data.itemType);
     const dashboard = await ctx.dashboardService.getCurrentDashboard();
     const response = await ctx.askingService.getResponse(responseId);
 
     if (!response) {
       throw new Error(`Thread response not found. responseId: ${responseId}`);
     }
-    if (!Object.keys(ChartType).includes(itemType)) {
+    if (!itemType) {
       throw new Error(`Chart type not supported. responseId: ${responseId}`);
     }
     if (!response.chartDetail?.chartSchema) {
@@ -93,24 +94,59 @@ export class DashboardResolver {
       );
     }
 
-    // query with cache enabled
-    const project = await ctx.projectService.getCurrentProject();
-    const deployment = await ctx.deployService.getLastDeployment(project.id);
-    const mdl = deployment.manifest;
-    await ctx.queryService.preview(response.sql, {
-      project,
-      manifest: mdl,
-      limit: DEFAULT_PREVIEW_LIMIT,
-      cacheEnabled: true,
-      refresh: true,
-    });
-
-    return await ctx.dashboardService.createDashboardItem({
+    const dashboardItem = await ctx.dashboardService.createDashboardItem({
       dashboardId: dashboard.id,
       type: itemType,
       sql: response.sql,
       chartSchema: response.chartDetail?.chartSchema,
     });
+
+    // Warm dashboard cache after persisting the item. Cache warm-up failures should
+    // not prevent a valid chart from being pinned.
+    const project = await ctx.projectService.getCurrentProject();
+    const deployment = await ctx.deployService.getLastDeployment(project.id);
+    const mdl = deployment.manifest;
+    try {
+      await ctx.queryService.preview(response.sql, {
+        project,
+        manifest: mdl,
+        limit: DEFAULT_PREVIEW_LIMIT,
+        cacheEnabled: true,
+        refresh: true,
+      });
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      logger.warn(
+        `Dashboard item ${dashboardItem.id} was pinned but cache warm-up failed: ${errorMessage}`,
+      );
+    }
+
+    return dashboardItem;
+  }
+
+  private normalizeDashboardItemType(
+    itemType: DashboardItemType | ChartType | string,
+  ): DashboardItemType | null {
+    const rawValue = String(itemType || '');
+    const normalizedKey = rawValue.toUpperCase() as keyof typeof DashboardItemType;
+    const normalizedValue = DashboardItemType[normalizedKey];
+    if (normalizedValue) {
+      return normalizedValue;
+    }
+
+    const chartTypeValue = Object.values(ChartType).find(
+      (value) => value === rawValue,
+    );
+    if (!chartTypeValue) {
+      return null;
+    }
+
+    return (
+      DashboardItemType[
+        chartTypeValue.toUpperCase() as keyof typeof DashboardItemType
+      ] || null
+    );
   }
 
   public async updateDashboardItem(

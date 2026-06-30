@@ -169,6 +169,17 @@ def _select_dimension_columns(
     ordered += relevant_temporal + [
         column for column in temporal if column not in relevant_temporal
     ]
+    if len(ordered) > 1:
+        normalized_query = str(query or "").lower()
+        for column in list(ordered):
+            tokens = _identifier_tokens(column)
+            if any(
+                re.search(rf"\b(?:each|per)\s+{re.escape(token)}s?\b", normalized_query)
+                for token in tokens
+            ):
+                ordered.remove(column)
+                ordered.insert(1, column)
+                break
     return ordered
 
 
