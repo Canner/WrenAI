@@ -963,7 +963,7 @@ export class AskingService implements IAskingService {
         project,
         manifest: deployment.manifest,
         modelingOnly: false,
-        limit: 500,
+        limit: 100,
       })) as PreviewDataResponse;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
