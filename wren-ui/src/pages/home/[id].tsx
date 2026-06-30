@@ -107,7 +107,13 @@ export default function HomeThread() {
     onError: (error) => console.error(error),
     onCompleted(next) {
       const nextResponse = next.createThreadResponse;
+      if (!nextResponse) {
+        return;
+      }
       updateThreadQuery((prev) => {
+        if (!prev?.thread?.responses) {
+          return prev;
+        }
         return {
           ...prev,
           thread: {
@@ -133,15 +139,23 @@ export default function HomeThread() {
       nextFetchPolicy: 'network-only',
       onCompleted(next) {
         const nextResponse = next.threadResponse;
-        updateThreadQuery((prev) => ({
-          ...prev,
-          thread: {
-            ...prev.thread,
-            responses: prev.thread.responses.map((response) =>
-              response.id === nextResponse.id ? nextResponse : response,
-            ),
-          },
-        }));
+        if (!nextResponse) {
+          return;
+        }
+        updateThreadQuery((prev) => {
+          if (!prev?.thread?.responses) {
+            return prev;
+          }
+          return {
+            ...prev,
+            thread: {
+              ...prev.thread,
+              responses: prev.thread.responses.map((response) =>
+                response.id === nextResponse.id ? nextResponse : response,
+              ),
+            },
+          };
+        });
       },
     });
 
