@@ -9,12 +9,12 @@ python-binding = ["dep:pyo3"]
 default = []
 
 [dependencies]
-pyo3 = { version = "0.26.0", features = ["extension-module"], optional = true }
+pyo3 = { version = "0.29.0", features = ["extension-module"], optional = true }
 serde = { version = "1.0.201", features = ["derive", "rc"] }
 wren-manifest-macro = { path = "manifest-macro" }
 serde_json = { version = "1.0.117" }
 serde_with = { version = "3.11.0" }
-sqlparser = { version = "0.58.0", features = ["visitor"] }
+sqlparser = { version = "0.62.0", features = ["visitor"] }
 
 
 [lib]
