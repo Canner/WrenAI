@@ -301,16 +301,12 @@ async def table_retrieval(
             filters=base_filters,
         )
         return result
-    else:
-        base_filters["conditions"].append(
-            {"field": "name", "operator": "in", "value": tables}
-        )
 
-        result = await table_retriever.run(
-            query_embedding=[],
-            filters=base_filters,
-        )
-        return result
+    if tables:
+        logger.info("Skipping table-description retrieval for explicit tables: %s", tables)
+        return {"documents": []}
+
+    return {"documents": []}
 
 
 @observe(capture_input=False)

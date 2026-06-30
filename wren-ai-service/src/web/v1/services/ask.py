@@ -2918,19 +2918,40 @@ class AskService:
                     is_followup=True if histories else False,
                 )
 
-                retrieval_result = await self._run_with_timeout(
-                    "Schema retrieval",
-                    self._pipelines["db_schema_retrieval"].run(
-                        query=sql_user_query,
-                        histories=histories,
-                        project_id=ask_request.project_id,
-                        enable_column_pruning=(
-                            enable_column_pruning
-                            and not self._is_data_analysis_query(user_query)
+                try:
+                    retrieval_result = await self._run_with_timeout(
+                        "Schema retrieval",
+                        self._pipelines["db_schema_retrieval"].run(
+                            query=sql_user_query,
+                            histories=histories,
+                            project_id=ask_request.project_id,
+                            enable_column_pruning=(
+                                enable_column_pruning
+                                and not self._is_data_analysis_query(user_query)
+                            ),
                         ),
-                    ),
-                    timeout_seconds=self._schema_retrieval_timeout_seconds,
-                )
+                        timeout_seconds=self._schema_retrieval_timeout_seconds,
+                    )
+                except TimeoutError as error:
+                    logger.warning(
+                        "Schema retrieval timed out; falling back to deployed schemas. query_id=%s project_id=%s error=%s",
+                        query_id,
+                        ask_request.project_id,
+                        error,
+                    )
+                    retrieval_result = await self._run_with_timeout(
+                        "Deployed schema fallback retrieval",
+                        self._pipelines["db_schema_retrieval"].run(
+                            query="",
+                            histories=[],
+                            project_id=ask_request.project_id,
+                            enable_column_pruning=False,
+                        ),
+                        timeout_seconds=min(
+                            self._schema_retrieval_timeout_seconds,
+                            30,
+                        ),
+                    )
                 _retrieval_result = retrieval_result.get(
                     "construct_retrieval_results", {}
                 )
@@ -2956,7 +2977,10 @@ class AskService:
                                 histories=histories,
                                 enable_column_pruning=enable_column_pruning,
                             ),
-                            timeout_seconds=self._schema_retrieval_timeout_seconds,
+                            timeout_seconds=min(
+                                self._schema_retrieval_timeout_seconds,
+                                20,
+                            ),
                         )
                         _retrieval_result = retrieval_result.get(
                             "construct_retrieval_results", {}
