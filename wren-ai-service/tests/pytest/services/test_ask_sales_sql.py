@@ -344,6 +344,35 @@ def test_build_schema_grounded_sales_sql_for_monthly_order_count_by_invdate():
     )
 
 
+def test_build_schema_grounded_sales_sql_counts_new_orders_by_customer_over_time():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "Show new orders by CustName over the last 12 months using dbo.XStageNewOrders OrdDate and CustName.",
+        [
+            """
+            CREATE TABLE dbo_XStageNewOrders (
+              OrdNo VARCHAR,
+              OrdDate TIMESTAMP,
+              CustName VARCHAR
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT DATEPART(YEAR, "dbo_XStageNewOrders"."OrdDate") AS "year", '
+        'DATEPART(MONTH, "dbo_XStageNewOrders"."OrdDate") AS "month", '
+        '"dbo_XStageNewOrders"."CustName" AS "CustName", '
+        'COUNT(DISTINCT "dbo_XStageNewOrders"."OrdNo") AS "OrderCount" '
+        'FROM "dbo_XStageNewOrders" '
+        'GROUP BY DATEPART(YEAR, "dbo_XStageNewOrders"."OrdDate"), '
+        'DATEPART(MONTH, "dbo_XStageNewOrders"."OrdDate"), '
+        '"dbo_XStageNewOrders"."CustName" '
+        'ORDER BY DATEPART(YEAR, "dbo_XStageNewOrders"."OrdDate"), '
+        'DATEPART(MONTH, "dbo_XStageNewOrders"."OrdDate")'
+    )
+
+
 def test_build_schema_grounded_sales_sql_for_highest_invoice_value():
     service = AskService.__new__(AskService)
     sql = service._build_schema_grounded_sales_sql(

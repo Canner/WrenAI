@@ -932,7 +932,19 @@ class AskService:
                 "Value",
                 "Amount",
             )
-        wants_trend = "trend" in normalized_query or "line chart" in normalized_query
+        wants_trend = (
+            "trend" in normalized_query
+            or "line chart" in normalized_query
+            or "over time" in normalized_query
+            or "last 12 months" in normalized_query
+        )
+        wants_order_count_metric = (
+            any(term in normalized_query for term in ("order", "orders", "new order", "new orders"))
+            and not any(
+                term in normalized_query
+                for term in ("value", "amount", "revenue", "sales", "cost", "margin")
+            )
+        )
         wants_top = bool(re.search(r"\btop\s+\d+\b", normalized_query))
         wants_detail_rows = (
             wants_top
@@ -989,12 +1001,24 @@ class AskService:
 
         if wants_trend and date_column:
             date_ref = f"{table_ref}.{self._quote_sql_identifier(date_column)}"
-            metric_expr = (
-                f"SUM({table_ref}.{self._quote_sql_identifier(measure)})"
-                if measure
-                else "COUNT(*)"
-            )
-            metric_alias = f"Total{measure}" if measure else "OrderCount"
+            if wants_order_count_metric:
+                order_column = self._find_schema_column(
+                    table,
+                    ("OrdNo", "OrderNo", "OrderId", "NewOrderId", "InvoiceNo"),
+                )
+                metric_expr = (
+                    f"COUNT(DISTINCT {table_ref}.{self._quote_sql_identifier(order_column)})"
+                    if order_column
+                    else "COUNT(*)"
+                )
+                metric_alias = "OrderCount"
+            else:
+                metric_expr = (
+                    f"SUM({table_ref}.{self._quote_sql_identifier(measure)})"
+                    if measure
+                    else "COUNT(*)"
+                )
+                metric_alias = f"Total{measure}" if measure else "RecordCount"
             select_parts = [
                 f"DATEPART(YEAR, {date_ref}) AS \"year\"",
                 f"DATEPART(MONTH, {date_ref}) AS \"month\"",
