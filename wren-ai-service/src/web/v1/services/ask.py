@@ -839,6 +839,11 @@ class AskService:
         if contribution_sql := self._build_contribution_sql(query, tables):
             return contribution_sql
 
+        if categorical_count_sql := self._build_generic_categorical_count_sql(
+            query, tables
+        ):
+            return categorical_count_sql
+
         wants_monthly_count = (
             "monthly" in normalized_query
             and any(term in normalized_query for term in ("count", "volume"))
@@ -1163,6 +1168,127 @@ class AskService:
             f"FROM {table_ref} "
             f"GROUP BY {dimension_ref} "
             f"ORDER BY {metric_expr} DESC"
+        )
+
+    def _build_generic_categorical_count_sql(
+        self, query: str, tables: list[dict[str, Any]]
+    ) -> str | None:
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized_query:
+            return None
+
+        if re.search(
+            r"\b(?:first|top|sample|preview|show|list)\b.*\b(?:rows?|records?|data)\b",
+            normalized_query,
+        ):
+            return None
+
+        wants_categorical_summary = any(
+            term in normalized_query
+            for term in (
+                "bar chart",
+                "by ",
+                "chart",
+                "count",
+                "distribution",
+                "donut chart",
+                "frequency",
+                "group by",
+                "grouped by",
+                "pie chart",
+                "status",
+                "type",
+                "category",
+            )
+        )
+        if not wants_categorical_summary:
+            return None
+
+        query_key = self._normalize_schema_token(query)
+        query_terms = self._query_schema_terms(query)
+        scored: list[tuple[int, dict[str, Any], str]] = []
+        low_value_column_patterns = (
+            "id",
+            "no",
+            "number",
+            "date",
+            "time",
+            "description",
+            "comment",
+            "note",
+            "remark",
+        )
+
+        for table in tables:
+            table_name = str(table.get("name") or "")
+            normalized_table = self._normalize_schema_token(table_name)
+            normalized_short_table = self._normalize_schema_token(
+                re.split(r"[.$]", table_name)[-1]
+            )
+            for column in table.get("columns", []):
+                column_name = str(column.get("name") or "")
+                column_type = str(column.get("type") or "")
+                if not column_name or not self._is_text_schema_type(column_type):
+                    continue
+                normalized_column = self._normalize_schema_token(column_name)
+                if not normalized_column:
+                    continue
+
+                score = 0
+                if normalized_table and normalized_table in query_key:
+                    score += 120
+                if normalized_short_table and normalized_short_table in query_key:
+                    score += 100
+                if normalized_column and normalized_column in query_key:
+                    score += 180
+                for term in query_terms:
+                    if term == normalized_column:
+                        score += 100
+                    elif term in normalized_column or normalized_column in term:
+                        score += 45
+                    if term == normalized_table or term == normalized_short_table:
+                        score += 40
+                    elif term in normalized_table or term in normalized_short_table:
+                        score += 20
+                if "status" in normalized_query and "status" in normalized_column:
+                    score += 90
+                if "category" in normalized_query and "category" in normalized_column:
+                    score += 80
+                if "type" in normalized_query and "type" in normalized_column:
+                    score += 70
+                if any(pattern == normalized_column for pattern in low_value_column_patterns):
+                    score -= 100
+                elif any(
+                    normalized_column.endswith(pattern)
+                    for pattern in low_value_column_patterns
+                ):
+                    score -= 35
+
+                if score > 0:
+                    scored.append((score, table, column_name))
+
+        if not scored:
+            return None
+
+        _, table, dimension = sorted(
+            scored, key=lambda item: item[0], reverse=True
+        )[0]
+        table_name = table.get("name")
+        if not table_name:
+            return None
+
+        table_name = str(table_name)
+        table_ref = self._quote_sql_identifier(table_name)
+        dimension_ref = f"{table_ref}.{self._quote_sql_identifier(dimension)}"
+        top_n = self._extract_requested_top_n(query, default_value=0)
+        top_clause = f"TOP {top_n} " if top_n else ""
+        return (
+            f"SELECT {top_clause}{dimension_ref} AS {self._quote_sql_identifier(dimension)}, "
+            f'COUNT(*) AS "RecordCount" '
+            f"FROM {table_ref} "
+            f"WHERE {dimension_ref} IS NOT NULL "
+            f"GROUP BY {dimension_ref} "
+            f"ORDER BY COUNT(*) DESC"
         )
 
     def _build_order_invoice_conversion_sql(

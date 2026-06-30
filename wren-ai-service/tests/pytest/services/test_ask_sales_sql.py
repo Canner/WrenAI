@@ -474,6 +474,31 @@ def test_build_schema_grounded_sales_sql_for_product_type_contribution():
     )
 
 
+def test_build_schema_grounded_sql_counts_categorical_status_values():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "Show refund status distribution.",
+        [
+            """
+            CREATE TABLE dbo_ytblRefund (
+              Refund_Id VARCHAR,
+              Refund_Status VARCHAR,
+              CustomerName VARCHAR
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_ytblRefund"."Refund_Status" AS "Refund_Status", '
+        'COUNT(*) AS "RecordCount" '
+        'FROM "dbo_ytblRefund" '
+        'WHERE "dbo_ytblRefund"."Refund_Status" IS NOT NULL '
+        'GROUP BY "dbo_ytblRefund"."Refund_Status" '
+        'ORDER BY COUNT(*) DESC'
+    )
+
+
 def test_build_schema_grounded_sales_sql_for_yoy_waterfall_dimensions():
     service = AskService.__new__(AskService)
     sql = service._build_schema_grounded_sales_sql(
