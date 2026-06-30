@@ -560,6 +560,112 @@ def check(
 
 
 @memory_app.command()
+def watch(
+    mdl: MdlOpt = None,
+    path: PathOpt = None,
+    interval: Annotated[
+        float,
+        typer.Option(
+            "--interval",
+            "-i",
+            help="Seconds between polls (min 1).",
+        ),
+    ] = 5.0,
+    reindex_on_start: Annotated[
+        bool,
+        typer.Option(
+            "--reindex-on-start/--no-reindex-on-start",
+            help="Reindex once on startup before watching.",
+        ),
+    ] = False,
+    max_polls: Annotated[
+        Optional[int],
+        typer.Option(
+            "--max-polls",
+            help="Stop after N polls (mainly for scripting/testing). "
+            "Default: run until Ctrl+C.",
+        ),
+    ] = None,
+) -> None:
+    """Watch project sources and auto-reindex memory on change.
+
+    Polls ``target/mdl.json`` and ``knowledge/sql/*.md`` on an interval; when
+    their content fingerprint changes, runs the equivalent of
+    ``wren memory index`` so semantic recall never serves a stale schema while
+    you are actively modelling. A reindex that fails leaves the change pending
+    and is retried on the next poll — an update is never silently dropped.
+
+    Requires the ``memory`` extra (the index it maintains is LanceDB-backed).
+    With the grep backend there is no derived index to keep fresh.
+    """
+    from wren.context import discover_project_path  # noqa: PLC0415
+    from wren.memory.index_backend import resolve_backend  # noqa: PLC0415
+    from wren.memory.watch import watch_loop  # noqa: PLC0415
+
+    if resolve_backend() == "grep":
+        typer.echo(
+            "grep backend: knowledge/sql/ IS the index — nothing to watch. "
+            "Install `wrenai[memory]` for a derived index to keep fresh.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    try:
+        project_path = discover_project_path()
+    except SystemExit as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1)
+
+    def _reindex() -> None:
+        manifest = _load_manifest(mdl)
+        mem_store = _get_store(path)
+        result = mem_store.index_schema(manifest, seed_queries=True)
+        from wren.memory.markdown import load_query_pairs  # noqa: PLC0415
+
+        md_pairs = load_query_pairs(project_path)
+        loaded = 0
+        if md_pairs:
+            res = mem_store.load_queries(md_pairs, upsert=True)
+            loaded = res["loaded"] + res["updated"]
+        typer.echo(
+            f"Reindexed {result['schema_items']} schema item(s)"
+            + (f", {loaded} pair(s)" if loaded else "")
+            + "."
+        )
+
+    def _on_event(event: str) -> None:
+        if event == "change-detected":
+            typer.echo("Change detected — reindexing...", err=True)
+        elif event == "reindex-error":
+            typer.echo(
+                "Reindex failed; change kept pending, will retry next poll.",
+                err=True,
+            )
+        elif event == "stopped":
+            typer.echo("Stopped watching.", err=True)
+
+    typer.echo(
+        f"Watching {project_path} every {max(interval, 1.0):g}s "
+        "(target/mdl.json + knowledge/sql/). Ctrl+C to stop.",
+        err=True,
+    )
+    state = watch_loop(
+        project_path,
+        _reindex,
+        interval=interval,
+        max_polls=max_polls,
+        reindex_on_start=reindex_on_start,
+        on_event=_on_event,
+    )
+    if max_polls is not None:
+        typer.echo(
+            f"Polled {state.polls} time(s), {state.reindexes} reindex(es), "
+            f"{state.errors} error(s).",
+            err=True,
+        )
+
+
+@memory_app.command()
 def export(
     path: PathOpt = None,
     include_seed: Annotated[
