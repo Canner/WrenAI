@@ -261,9 +261,15 @@ def _build_clickhouse_client_kwargs(connection_info: Any) -> dict:
         # urlparse leaves percent-encoded characters in userinfo, so decode
         # them before clickhouse-connect sees the credentials. Matches the
         # mssql / postgres URL handling elsewhere in this package.
+        secure = parsed.scheme == "clickhouse+https"
+        # Pick the port-less default from the scheme: ClickHouse listens for
+        # HTTPS on 8443 and plaintext HTTP on 8123. Defaulting an https URL to
+        # 8123 silently dialed the plaintext port with ``secure=True``, so the
+        # TLS handshake hit a non-TLS listener and the connection failed.
+        default_port = 8443 if secure else 8123
         out: dict = {
             "host": parsed.hostname,
-            "port": int(parsed.port) if parsed.port else 8123,
+            "port": int(parsed.port) if parsed.port else default_port,
             "username": (
                 unquote_plus(parsed.username) if parsed.username else "default"
             ),
@@ -272,7 +278,7 @@ def _build_clickhouse_client_kwargs(connection_info: Any) -> dict:
         }
         if parsed.path and parsed.path != "/":
             out["database"] = parsed.path.lstrip("/")
-        if parsed.scheme == "clickhouse+https":
+        if secure:
             out["secure"] = True
         # ``settings`` already popped above, so ``out["settings"]`` survives.
         out.update(kwargs)

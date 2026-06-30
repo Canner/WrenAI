@@ -289,3 +289,45 @@ class TestClickHouseClientKwargs:
         info = _FakeChInfo(kwargs={"statement_timeout": 10})
         out = _build_clickhouse_client_kwargs(info)
         assert out["settings"] == {"max_execution_time": 10}
+
+
+class _FakeChUrl:
+    """Stand-in exposing a ``connection_url`` for the URL kwargs path."""
+
+    def __init__(self, url: str) -> None:
+        from pydantic import SecretStr
+
+        self.connection_url = SecretStr(url)
+        self.kwargs = None
+
+
+@pytest.mark.clickhouse
+class TestClickHouseUrlKwargs:
+    """Pure-Python tests for the ``connection_url`` branch of the kwargs builder."""
+
+    def test_https_url_without_port_uses_secure_default_port(self) -> None:
+        """A port-less clickhouse+https URL must dial 8443 (TLS), not 8123.
+
+        ClickHouse serves HTTPS on 8443 and plaintext HTTP on 8123. Defaulting
+        an https URL to 8123 while also setting ``secure=True`` made the TLS
+        client connect to the plaintext listener — the handshake fails.
+        """
+        out = _build_clickhouse_client_kwargs(
+            _FakeChUrl("clickhouse+https://user:pw@host/db")
+        )
+        assert out["secure"] is True
+        assert out["port"] == 8443
+
+    def test_http_url_without_port_uses_plaintext_default_port(self) -> None:
+        out = _build_clickhouse_client_kwargs(
+            _FakeChUrl("clickhouse+http://user:pw@host/db")
+        )
+        assert "secure" not in out
+        assert out["port"] == 8123
+
+    def test_explicit_port_is_respected_for_https(self) -> None:
+        out = _build_clickhouse_client_kwargs(
+            _FakeChUrl("clickhouse+https://user:pw@host:9440/db")
+        )
+        assert out["secure"] is True
+        assert out["port"] == 9440
