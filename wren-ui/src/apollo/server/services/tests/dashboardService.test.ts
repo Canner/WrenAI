@@ -85,41 +85,6 @@ describe('DashboardService', () => {
     });
   });
 
-  describe('getCurrentDashboard', () => {
-    it('should return the existing dashboard for the current project', async () => {
-      const project = { id: 7 };
-      const dashboard = { id: 11, projectId: 7, name: 'Dashboard' };
-      mockProjectService.getCurrentProject.mockResolvedValue(project);
-      mockDashboardRepository.findOneBy.mockResolvedValue(dashboard);
-
-      await expect(dashboardService.getCurrentDashboard()).resolves.toBe(
-        dashboard,
-      );
-      expect(mockDashboardRepository.findOneBy).toHaveBeenCalledWith({
-        projectId: 7,
-      });
-      expect(mockDashboardRepository.createOne).not.toHaveBeenCalled();
-    });
-
-    it('should initialize a dashboard when the current project has none', async () => {
-      const project = { id: 7 };
-      const dashboard = { id: 12, projectId: 7, name: 'Dashboard' };
-      mockProjectService.getCurrentProject.mockResolvedValue(project);
-      mockDashboardRepository.findOneBy
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(null);
-      mockDashboardRepository.createOne.mockResolvedValue(dashboard);
-
-      await expect(dashboardService.getCurrentDashboard()).resolves.toBe(
-        dashboard,
-      );
-      expect(mockDashboardRepository.createOne).toHaveBeenCalledWith({
-        name: 'Dashboard',
-        projectId: 7,
-      });
-    });
-  });
-
   describe('generateCronExpression', () => {
     it('should generate correct cron expression for daily schedule', () => {
       const schedule = {

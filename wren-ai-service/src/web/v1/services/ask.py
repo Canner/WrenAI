@@ -2923,6 +2923,34 @@ class AskService:
                     results["metadata"]["type"] = "GENERAL"
                     return results
 
+                if direct_orders_sales_sql := self._build_direct_orders_sales_sql(
+                    user_query
+                ):
+                    api_results = [
+                        AskResult(
+                            **{
+                                "sql": direct_orders_sales_sql,
+                                "type": "llm",
+                            }
+                        )
+                    ]
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="finished",
+                        type="TEXT_TO_SQL",
+                        response=api_results,
+                        rephrased_question=user_query,
+                        retrieved_tables=["dbo_tblSales"],
+                        trace_id=trace_id,
+                        is_followup=True if histories else False,
+                    )
+                    results["ask_result"] = api_results
+                    results["metadata"]["type"] = "TEXT_TO_SQL"
+                    logger.info(
+                        "Using direct Orders/Sales SQL for query_id %s",
+                        query_id,
+                    )
+                    return results
+
                 explicit_table_names = self._extract_explicit_table_names_from_query(
                     user_query
                 )
