@@ -133,8 +133,12 @@ def _model_seeds(
 
 
 def _relationship_seed(rel: dict, model_layers: dict[str, str]) -> dict | None:
-    models = rel.get("models", [])
-    condition = rel.get("condition", "").strip()
+    # Use `or` fallbacks so an explicit JSON null ("models": null /
+    # "condition": null in the manifest) does not slip a None past `.get()`'s
+    # default and crash `len(None)` / `None.strip()`. Mirrors the defensive
+    # `rel.get("condition") or ""` in `_relationship_key_columns`.
+    models = rel.get("models") or []
+    condition = (rel.get("condition") or "").strip()
 
     if len(models) < 2 or not condition:
         return None
