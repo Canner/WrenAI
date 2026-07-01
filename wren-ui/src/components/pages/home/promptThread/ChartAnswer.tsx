@@ -11,7 +11,11 @@ import LineProperties from '@/components/chart/properties/LineProperties';
 import StackedBarProperties from '@/components/chart/properties/StackedBarProperties';
 import GroupedBarProperties from '@/components/chart/properties/GroupedBarProperties';
 import { Props as AnswerResultProps } from '@/components/pages/home/promptThread/AnswerResult';
-import { ChartTaskStatus, ChartType } from '@/apollo/client/graphql/__types__';
+import {
+  ChartTaskStatus,
+  ChartType,
+  DashboardItemType,
+} from '@/apollo/client/graphql/__types__';
 import { usePreviewDataMutation } from '@/apollo/client/graphql/home.generated';
 import { isEmpty, isEqual } from 'lodash';
 import {
@@ -19,7 +23,6 @@ import {
   getChartSpecOptionValues,
 } from '@/components/chart/handler';
 import { useCreateDashboardItemMutation } from '@/apollo/client/graphql/dashboard.generated';
-import { DashboardItemType } from '@/apollo/server/repositories';
 import usePromptThreadStore from './store';
 
 const Chart = dynamic(() => import('@/components/chart'), {
@@ -78,11 +81,11 @@ const getDynamicProperties = (chartType: ChartType) => {
 };
 
 const chartTypeToDashboardItemType = (
-  chartType: ChartType,
+  chartType: ChartType | string,
 ): DashboardItemType | null => {
-  const normalized = String(
-    chartType || '',
-  ).toUpperCase() as keyof typeof DashboardItemType;
+  const normalized = String(chartType || '')
+    .replace(/-/g, '_')
+    .toUpperCase() as keyof typeof DashboardItemType;
   return DashboardItemType[normalized] || null;
 };
 
@@ -190,7 +193,9 @@ export default function ChartAnswer(props: AnswerResultProps) {
   };
 
   const onPin = () => {
-    const dashboardItemType = chartTypeToDashboardItemType(chartType as ChartType);
+    const dashboardItemType = chartTypeToDashboardItemType(
+      chartType || chartDetail?.chartType,
+    );
     if (!dashboardItemType) {
       message.error('Chart type is not supported for dashboard pinning.');
       return;
