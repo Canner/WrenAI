@@ -164,9 +164,7 @@ class ChartService:
             )
             chart_result = chart_generation_result["post_process"]["results"]
 
-            if not chart_result.get("chart_schema", {}) and not chart_result.get(
-                "reasoning", ""
-            ):
+            if not chart_result.get("chart_schema", {}):
                 self._chart_results[query_id] = ChartResultResponse(
                     status="failed",
                     error=ChartError(

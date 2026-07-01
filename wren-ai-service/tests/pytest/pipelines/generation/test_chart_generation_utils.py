@@ -79,6 +79,62 @@ def test_explicit_bar_chart_is_not_refined_to_grouped_bar():
     assert "xOffset" not in result["chart_schema"]["encoding"]
 
 
+def test_explicit_line_chart_is_respected():
+    result = build_fallback_chart_result(
+        "Generate a line chart of monthly revenue.",
+        {
+            "columns": [{"name": "Month"}, {"name": "Revenue"}],
+            "data": [["2026-01", 100], ["2026-02", 150]],
+        },
+    )
+
+    assert result["chart_type"] == "line"
+    assert result["chart_schema"]["mark"]["type"] == "line"
+
+
+def test_explicit_area_chart_is_respected():
+    result = build_fallback_chart_result(
+        "Generate an area chart of monthly revenue.",
+        {
+            "columns": [{"name": "Month"}, {"name": "Revenue"}],
+            "data": [["2026-01", 100], ["2026-02", 150]],
+        },
+    )
+
+    assert result["chart_type"] == "area"
+    assert result["chart_schema"]["mark"]["type"] == "area"
+
+
+def test_explicit_pie_chart_is_respected():
+    result = build_fallback_chart_result(
+        "Show a pie chart of ticket status.",
+        {
+            "columns": [{"name": "Status"}, {"name": "RecordCount"}],
+            "data": [["open", 10], ["closed", 20]],
+        },
+    )
+
+    assert result["chart_type"] == "pie"
+    assert result["chart_schema"]["mark"]["type"] == "arc"
+
+
+def test_explicit_grouped_bar_chart_is_respected():
+    result = build_fallback_chart_result(
+        "Create a grouped bar chart of sales by Market and Division.",
+        {
+            "columns": [
+                {"name": "Market"},
+                {"name": "Division"},
+                {"name": "Sales"},
+            ],
+            "data": [["North", "A", 10], ["North", "B", 8]],
+        },
+    )
+
+    assert result["chart_type"] == "grouped_bar"
+    assert result["chart_schema"]["encoding"]["xOffset"]["field"] == "Division"
+
+
 def test_explicit_stacked_bar_chart_is_respected():
     result = build_fallback_chart_result(
         "Create a stacked bar chart of sales by Market and Division.",
@@ -94,6 +150,24 @@ def test_explicit_stacked_bar_chart_is_respected():
 
     assert result["chart_type"] == "stacked_bar"
     assert result["chart_schema"]["encoding"]["y"]["stack"] == "zero"
+
+
+def test_explicit_multi_line_chart_is_respected():
+    result = build_fallback_chart_result(
+        "Create a multi-line chart of revenue and cost by month.",
+        {
+            "columns": [
+                {"name": "Month"},
+                {"name": "Revenue"},
+                {"name": "Cost"},
+            ],
+            "data": [["2026-01", 100, 60], ["2026-02", 150, 70]],
+        },
+    )
+
+    assert result["chart_type"] == "multi_line"
+    assert result["chart_schema"]["mark"]["type"] == "line"
+    assert result["chart_schema"]["transform"][0]["fold"] == ["Revenue", "Cost"]
 
 
 def test_scatter_request_uses_closest_supported_chart_with_reasoning():
@@ -145,3 +219,34 @@ async def test_chart_service_returns_deterministic_chart_without_llm_wait():
         "Generated from the SQL result columns and requested chart type."
     )
     assert result["chart_result"]["chart_type"] == "bar"
+
+
+@pytest.mark.asyncio
+async def test_chart_service_rejects_text_only_chart_generation_result():
+    class FakeChartGenerationPipeline:
+        async def run(self, **kwargs):
+            return {
+                "post_process": {
+                    "results": {
+                        "chart_schema": {},
+                        "reasoning": "The data is not suitable for this chart.",
+                        "chart_type": "",
+                    }
+                }
+            }
+
+    service = ChartService({"chart_generation": FakeChartGenerationPipeline()})
+    request = ChartRequest(
+        query_id="chart-task",
+        query="Generate a line chart.",
+        sql="SELECT NULL AS empty_value",
+        data={
+            "columns": [{"name": "empty_value"}],
+            "data": [[None]],
+        },
+    )
+
+    result = await service.chart(request)
+
+    assert result["metadata"]["error_type"] == "NO_CHART"
+    assert result["chart_result"] == {}
