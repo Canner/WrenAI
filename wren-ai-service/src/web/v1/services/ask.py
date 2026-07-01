@@ -3144,6 +3144,16 @@ class AskService:
                     )
 
                 if not api_results and not should_skip_pre_sql_retrieval:
+                    if not self._is_stopped(query_id, self._ask_results):
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="searching",
+                            type="TEXT_TO_SQL",
+                            rephrased_question=rephrased_question,
+                            intent_reasoning=intent_reasoning,
+                            trace_id=trace_id,
+                            is_followup=True if histories else False,
+                        )
+
                     try:
                         historical_question = await self._run_with_timeout(
                             "Historical question retrieval",
