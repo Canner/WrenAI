@@ -2897,6 +2897,7 @@ class AskService:
         use_dry_plan = ask_request.use_dry_plan
         allow_dry_plan_fallback = ask_request.allow_dry_plan_fallback
         sql_knowledge = None
+        understanding_timeout_seconds = min(self._pipeline_timeout_seconds, 20)
 
         try:
             sql_user_query = user_query
@@ -3143,18 +3144,27 @@ class AskService:
                     )
 
                 if not api_results and not should_skip_pre_sql_retrieval:
-                    historical_question = await self._run_with_timeout(
-                        "Historical question retrieval",
-                        self._pipelines["historical_question"].run(
-                            query=user_query,
-                            project_id=ask_request.project_id,
-                        ),
-                    )
+                    try:
+                        historical_question = await self._run_with_timeout(
+                            "Historical question retrieval",
+                            self._pipelines["historical_question"].run(
+                                query=user_query,
+                                project_id=ask_request.project_id,
+                            ),
+                            timeout_seconds=min(understanding_timeout_seconds, 10),
+                        )
 
-                    # we only return top 1 result
-                    historical_question_result = historical_question.get(
-                        "formatted_output", {}
-                    ).get("documents", [])[:1]
+                        # we only return top 1 result
+                        historical_question_result = historical_question.get(
+                            "formatted_output", {}
+                        ).get("documents", [])[:1]
+                    except TimeoutError as exc:
+                        logger.warning(
+                            "Historical question retrieval timed out; continuing without history match. query_id=%s project_id=%s error=%s",
+                            query_id,
+                            ask_request.project_id,
+                            exc,
+                        )
 
                 valid_historical_results = []
                 for result in historical_question_result:
@@ -3181,28 +3191,39 @@ class AskService:
                 elif not api_results and not should_skip_pre_sql_retrieval:
                     original_user_query = user_query
                     # Run both pipeline operations concurrently
-                    sql_samples_task, instructions_task = await self._run_with_timeout(
-                        "SQL pair and instruction retrieval",
-                        asyncio.gather(
-                            self._pipelines["sql_pairs_retrieval"].run(
-                                query=user_query,
-                                project_id=ask_request.project_id,
+                    try:
+                        sql_samples_task, instructions_task = await self._run_with_timeout(
+                            "SQL pair and instruction retrieval",
+                            asyncio.gather(
+                                self._pipelines["sql_pairs_retrieval"].run(
+                                    query=user_query,
+                                    project_id=ask_request.project_id,
+                                ),
+                                self._pipelines["instructions_retrieval"].run(
+                                    query=user_query,
+                                    project_id=ask_request.project_id,
+                                    scope="sql",
+                                ),
                             ),
-                            self._pipelines["instructions_retrieval"].run(
-                                query=user_query,
-                                project_id=ask_request.project_id,
-                                scope="sql",
-                            ),
-                        ),
-                    )
+                            timeout_seconds=understanding_timeout_seconds,
+                        )
 
-                    # Extract results from completed tasks
-                    sql_samples = sql_samples_task["formatted_output"].get(
-                        "documents", []
-                    )
-                    instructions = instructions_task["formatted_output"].get(
-                        "documents", []
-                    )
+                        # Extract results from completed tasks
+                        sql_samples = sql_samples_task["formatted_output"].get(
+                            "documents", []
+                        )
+                        instructions = instructions_task["formatted_output"].get(
+                            "documents", []
+                        )
+                    except TimeoutError as exc:
+                        logger.warning(
+                            "SQL pair and instruction retrieval timed out; continuing without optional examples. query_id=%s project_id=%s error=%s",
+                            query_id,
+                            ask_request.project_id,
+                            exc,
+                        )
+                        sql_samples = []
+                        instructions = []
 
                     if self._allow_intent_classification:
                         try:
@@ -3217,6 +3238,7 @@ class AskService:
                                         project_id=ask_request.project_id,
                                         configuration=ask_request.configurations,
                                     ),
+                                    timeout_seconds=understanding_timeout_seconds,
                                 )
                             ).get("post_process", {})
                         except TimeoutError as exc:
