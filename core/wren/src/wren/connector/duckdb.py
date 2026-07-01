@@ -1,4 +1,5 @@
 import os
+import re
 
 import opendal
 import pyarrow as pa
@@ -11,6 +12,20 @@ from wren.model import (
     S3FileConnectionInfo,
 )
 from wren.model.error import ErrorCode, WrenError
+
+_TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
+
+
+def _strip_trailing_semicolon(sql: str) -> str:
+    """Strip the terminating run of ``;`` characters and surrounding whitespace.
+
+    Matches the canner/clickhouse/trino helpers of the same name. Wrapping
+    user SQL as ``SELECT * FROM ({sql}) AS _q LIMIT N`` breaks when ``sql``
+    ends in a semicolon — ``SELECT 1;`` is invalid inside a subquery. Only the
+    terminating run is removed so semicolons inside string literals
+    (e.g. ``SELECT ';' AS x``) are preserved.
+    """
+    return _TRAILING_SEMICOLONS_RE.sub("", sql)
 
 
 def _escape_sql(value: str) -> str:
@@ -79,30 +94,27 @@ class DuckDBConnector(ConnectorABC):
         so only that many rows are fetched.
         """
         if limit is not None:
-            # Strip any trailing semicolon so the wrapped subquery stays valid
-            # SQL (e.g. ``SELECT 1;`` must not become ``SELECT * FROM (SELECT
-            # 1;) AS _q LIMIT ...``).
-            sql = sql.rstrip().rstrip(";")
-            sql = f"SELECT * FROM ({sql}) AS _q LIMIT {int(limit)}"
+            # Strip the terminating run of ``;`` / whitespace before wrapping so
+            # the subquery stays valid SQL (e.g. ``SELECT 1;`` must not become
+            # ``SELECT * FROM (SELECT 1;) AS _q LIMIT ...``). Semicolons inside
+            # string literals are preserved.
+            stripped = _strip_trailing_semicolon(sql)
+            sql = f"SELECT * FROM ({stripped}) AS _q LIMIT {int(limit)}"
         return self.connection.execute(sql).fetch_arrow_table()
 
     def dry_run(self, sql: str) -> None:
-        """Validate ``sql`` without returning rows via ``EXPLAIN``.
+        """Validate ``sql`` without returning rows or side effects.
 
-        Only a single statement is permitted: ``duckdb.execute`` runs
-        semicolon-separated batches, so an ``EXPLAIN`` prefix would still
-        execute any trailing statements and violate the no-side-effects
-        contract. Multi-statement input is rejected before execution.
+        ``duckdb.execute`` runs semicolon-separated batches, so an ``EXPLAIN``
+        prefix on raw input would still execute any trailing statements. Rather
+        than reject multi-statement input outright (which false-positives on
+        semicolons inside string literals), we neutralize it the same way the
+        other connectors do: wrap in a ``LIMIT 0`` subquery. Any trailing
+        statement then becomes a natural syntax error inside the subquery, and
+        no rows are materialized.
         """
-        # Ignore a single trailing terminator, then reject anything that still
-        # contains a statement separator.
-        stripped = sql.rstrip().rstrip(";")
-        if ";" in stripped:
-            raise WrenError(
-                ErrorCode.INVALID_SQL,
-                "dry_run only accepts a single SQL statement.",
-            )
-        self.connection.execute(f"EXPLAIN {stripped}")
+        stripped = _strip_trailing_semicolon(sql)
+        self.connection.execute(f"SELECT * FROM ({stripped}) AS _q LIMIT 0")
 
     def _attach_database(self, connection_info) -> None:
         """Attach every discovered DuckDB file as a read-only database.

@@ -3,11 +3,8 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 import wren.connector.duckdb as duckdb_mod
 from wren.connector.duckdb import DuckDBConnector
-from wren.model.error import WrenError
 
 
 def _entry(path):
@@ -102,23 +99,39 @@ def test_query_strips_trailing_semicolon_before_limit_wrap():
     assert result == "tbl"
 
 
-def test_dry_run_rejects_multi_statement_sql():
-    # ``duckdb.execute`` runs semicolon-separated batches, so dry_run must not
-    # let a trailing statement slip past EXPLAIN and cause side effects.
+def test_dry_run_wraps_in_limit_zero_subquery():
+    # dry_run neutralizes multi-statement input by wrapping in a LIMIT 0
+    # subquery (matching the other connectors) rather than pre-rejecting it,
+    # so no rows materialize and any trailing statement becomes a natural
+    # syntax error inside the subquery.
     connector = DuckDBConnector.__new__(DuckDBConnector)
     connector.connection = MagicMock()
 
-    with pytest.raises(WrenError):
-        connector.dry_run("SELECT 1; DROP TABLE t;")
+    connector.dry_run("SELECT 1; DROP TABLE t;")
 
-    connector.connection.execute.assert_not_called()
+    executed = connector.connection.execute.call_args.args[0]
+    # The trailing terminator is stripped; the interior ``;`` stays inside the
+    # subquery where DuckDB rejects it as a syntax error (no side effects).
+    assert executed == "SELECT * FROM (SELECT 1; DROP TABLE t) AS _q LIMIT 0"
 
 
-def test_dry_run_allows_single_trailing_semicolon():
+def test_dry_run_strips_trailing_semicolon():
     connector = DuckDBConnector.__new__(DuckDBConnector)
     connector.connection = MagicMock()
 
     connector.dry_run("SELECT 1;")
 
     executed = connector.connection.execute.call_args.args[0]
-    assert executed == "EXPLAIN SELECT 1"
+    assert executed == "SELECT * FROM (SELECT 1) AS _q LIMIT 0"
+
+
+def test_dry_run_preserves_semicolon_in_string_literal():
+    # A single valid statement with a semicolon inside a string literal must
+    # not be mangled or falsely rejected.
+    connector = DuckDBConnector.__new__(DuckDBConnector)
+    connector.connection = MagicMock()
+
+    connector.dry_run("SELECT ';' AS x")
+
+    executed = connector.connection.execute.call_args.args[0]
+    assert executed == "SELECT * FROM (SELECT ';' AS x) AS _q LIMIT 0"
