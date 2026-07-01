@@ -1,6 +1,22 @@
 from src.web.v1.services.ask import AskService
 
 
+def test_basic_datasource_questions_are_detected_as_data_analysis():
+    service = AskService(pipelines={})
+
+    assert service._is_data_analysis_query("Show copilot feedback by rating")
+    assert service._is_data_analysis_query("List first 10 rows from CustomerMaster")
+    assert service._is_data_analysis_query("What is the distribution of status?")
+    assert service._is_data_analysis_query("Summarize records by category")
+
+
+def test_wren_help_questions_do_not_force_text_to_sql():
+    service = AskService(pipelines={})
+
+    assert not service._is_data_analysis_query("How do I use Wren AI?")
+    assert not service._is_data_analysis_query("Show me how to configure Wren SQL")
+
+
 def test_manufacturing_throughput_trend_uses_debug_entry_business_unit():
     service = AskService(pipelines={})
     table_ddls = [

@@ -164,6 +164,24 @@ class AskService:
         if not normalized:
             return False
 
+        app_help_patterns = (
+            r"\bhow\s+(do|can)\s+i\s+(use|setup|configure|connect|deploy)\b",
+            r"\bwhat\s+is\s+wren\b",
+            r"\bwren\s+(ai|sql|docs|documentation|guide|api)\b",
+            r"\bhelp\s+(me\s+)?(use|setup|configure|connect)\b",
+        )
+        if any(re.search(pattern, normalized) for pattern in app_help_patterns):
+            return False
+
+        datasource_question_patterns = (
+            r"\b(show|list|display|give|tell|find|get|fetch)\b.+\b(by|from|for|where|with|top|bottom|first|last|count|sum|total|average|avg|rating|status|category|type|month|year|date)\b",
+            r"\b(how many|what are|what is|which|who)\b.+\b(count|sum|total|average|avg|top|bottom|highest|lowest|distribution|trend|pattern|correlation|rating|status|category|type|month|year|date)\b",
+            r"\b(group|grouped|breakdown|distribution|trend|correlation|pattern|rank|ranking|summarize|summary)\b",
+            r"\b(first|last|top|bottom)\s+\d+\b",
+        )
+        if any(re.search(pattern, normalized) for pattern in datasource_question_patterns):
+            return True
+
         analysis_terms = {
             "amount",
             "average",
@@ -183,6 +201,7 @@ class AskService:
             "debug",
             "failure",
             "fastest growing",
+            "feedback",
             "growth",
             "group",
             "grouped",
@@ -203,6 +222,8 @@ class AskService:
             "quantity",
             "rank",
             "ranking",
+            "rating",
+            "ratings",
             "region",
             "regions",
             "repair",
@@ -213,7 +234,11 @@ class AskService:
             "sales person",
             "sales rep",
             "salesperson",
+            "score",
+            "scores",
             "sla",
+            "status",
+            "summary",
             "top",
             "trend",
             "turnaround",
