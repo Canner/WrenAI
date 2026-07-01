@@ -468,6 +468,74 @@ def test_monthly_repair_volume_uses_direct_heuristic_route():
     )
 
 
+def test_operational_fallback_does_not_use_status_for_unit_question_without_unit_column():
+    service = AskService(pipelines={})
+    tables = service._parse_schema_tables(
+        [
+            """
+            CREATE TABLE dbo_repair_logs (
+              id VARCHAR,
+              status VARCHAR,
+              created_at TIMESTAMP
+            );
+            """
+        ]
+    )
+
+    assert (
+        service._build_schema_grounded_operational_sql(
+            "Which business units are underperforming?",
+            tables,
+        )
+        is None
+    )
+
+
+def test_operational_fallback_requires_date_for_trend_question():
+    service = AskService(pipelines={})
+    tables = service._parse_schema_tables(
+        [
+            """
+            CREATE TABLE dbo_repair_logs (
+              id VARCHAR,
+              status VARCHAR
+            );
+            """
+        ]
+    )
+
+    assert (
+        service._build_schema_grounded_operational_sql(
+            "Generate a line chart showing monthly repair volume for the last 12 months.",
+            tables,
+        )
+        is None
+    )
+
+
+def test_operational_fallback_allows_status_when_status_is_requested():
+    service = AskService(pipelines={})
+    tables = service._parse_schema_tables(
+        [
+            """
+            CREATE TABLE dbo_ticket_cycles (
+              id VARCHAR,
+              status VARCHAR
+            );
+            """
+        ]
+    )
+
+    sql = service._build_schema_grounded_operational_sql(
+        "Show a pie chart of open, closed, and in-progress repair tickets.",
+        tables,
+    )
+
+    assert sql
+    assert '"dbo_ticket_cycles"."status" AS "status"' in sql
+    assert 'COUNT(*) AS "RecordCount"' in sql
+
+
 def test_repair_failure_count_requires_schema_backed_failure_dimension():
     service = AskService(pipelines={})
     table_ddls = [
@@ -499,6 +567,32 @@ def test_ask_result_validation_requires_select_sql():
     assert service._build_ask_result_from_sql("") is None
     assert service._build_ask_result_from_sql("DELETE FROM dbo_repair_logs") is None
     assert service._build_ask_result_from_sql(None) is None
+
+
+def test_low_signal_sql_is_rejected_for_analytical_questions():
+    service = AskService(pipelines={})
+
+    assert service._is_low_signal_sql_for_question(
+        "Generate a line chart showing monthly repair volume for the last 12 months.",
+        'SELECT "dbo_ticket_cycles"."status" AS "status" FROM "dbo_ticket_cycles"',
+    )
+    assert service._is_low_signal_sql_for_question(
+        "Show Top 20 Sales Accounts by revenue.",
+        'SELECT "dbo_refunds"."Refund_Status" AS "Refund_Status" FROM "dbo_refunds"',
+    )
+
+
+def test_aggregate_sql_is_allowed_for_analytical_questions():
+    service = AskService(pipelines={})
+
+    assert not service._is_low_signal_sql_for_question(
+        "Show a pie chart of open, closed, and in-progress repair tickets.",
+        (
+            'SELECT "dbo_ticket_cycles"."status" AS "status", '
+            'COUNT(*) AS "RecordCount" '
+            'FROM "dbo_ticket_cycles" GROUP BY "dbo_ticket_cycles"."status"'
+        ),
+    )
 
 
 def test_retrieval_metadata_ignores_malformed_documents():

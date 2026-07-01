@@ -2218,6 +2218,19 @@ class AskService:
         if not any(term in normalized_query for term in operational_terms):
             return None
 
+        asks_status_dimension = any(
+            term in normalized_query
+            for term in (
+                "status",
+                "open",
+                "closed",
+                "completed",
+                "in-progress",
+                "in progress",
+                "active",
+            )
+        )
+
         scored_tables: list[tuple[int, dict[str, Any]]] = []
         for table in tables:
             table_name = str(table.get("name") or "")
@@ -2270,16 +2283,25 @@ class AskService:
         )
 
         dimension_candidates: list[tuple[str, ...]] = []
-        if "manufacturing" in normalized_query or "unit" in normalized_query:
+        asks_unit_dimension = (
+            "manufacturing" in normalized_query
+            or "business unit" in normalized_query
+            or "business units" in normalized_query
+            or re.search(r"\bunit(?:s)?\b", normalized_query) is not None
+        )
+        if asks_unit_dimension:
             dimension_candidates.append(
                 (
                     "manufacturing_unit",
                     "manufacturing unit",
+                    "business_unit",
+                    "business unit",
+                    "BusinessUnit",
+                    "BU",
                     "unit",
                     "assignee_user_id",
                     "created_by_user_id",
                     "org_id",
-                    "status",
                 )
             )
         if "component" in normalized_query:
@@ -2294,11 +2316,7 @@ class AskService:
             dimension_candidates.append(("source", "author", "category", "status"))
         if "priority" in normalized_query:
             dimension_candidates.append(("priority", "status"))
-        if (
-            "status" in normalized_query
-            or "open" in normalized_query
-            or "closed" in normalized_query
-        ):
+        if asks_status_dimension:
             dimension_candidates.append(("status", "priority"))
         if "assignee" in normalized_query:
             dimension_candidates.append(("assignee_user_id", "created_by_user_id"))
@@ -2309,11 +2327,13 @@ class AskService:
             if dimension and dimension not in dimensions:
                 dimensions.append(dimension)
 
+        if asks_unit_dimension and not dimensions:
+            return None
+
         if not dimensions:
             fallback_dimension = self._find_first_schema_column(
                 table,
                 (
-                    "status",
                     "priority",
                     "category",
                     "subcategory",
@@ -2327,6 +2347,11 @@ class AskService:
             if fallback_dimension:
                 dimensions.append(fallback_dimension)
 
+        if not dimensions and asks_status_dimension:
+            fallback_dimension = self._find_schema_column(table, ("status",))
+            if fallback_dimension:
+                dimensions.append(fallback_dimension)
+
         wants_trend = any(
             term in normalized_query
             for term in ("trend", "monthly", "month", "line chart", "over time")
@@ -2334,6 +2359,9 @@ class AskService:
         wants_top = bool(re.search(r"\btop\s+\d+\b", normalized_query))
         limit_match = re.search(r"\btop\s+(\d+)\b", normalized_query)
         limit = int(limit_match.group(1)) if limit_match else 10
+
+        if wants_trend and not date_column:
+            return None
 
         if wants_trend and date_column:
             date_ref = f"{table_ref}.{self._quote_sql_identifier(date_column)}"
@@ -3052,6 +3080,98 @@ class AskService:
             return False
 
         return bool(re.match(r"^(?:WITH|SELECT)\b", normalized, flags=re.IGNORECASE))
+
+    def _extract_top_level_select_expressions(self, sql: str) -> list[str]:
+        normalized = re.sub(r"\s+", " ", (sql or "").strip())
+        select_match = re.search(r"\bSELECT\b", normalized, flags=re.IGNORECASE)
+        if not select_match:
+            return []
+
+        start = select_match.end()
+        from_match_start: int | None = None
+        depth = 0
+        index = start
+        while index < len(normalized):
+            char = normalized[index]
+            if char == "(":
+                depth += 1
+            elif char == ")" and depth > 0:
+                depth -= 1
+            elif (
+                depth == 0
+                and normalized[index : index + 6].upper() == " FROM "
+            ):
+                from_match_start = index
+                break
+            index += 1
+
+        if from_match_start is None:
+            return []
+
+        select_clause = normalized[start:from_match_start].strip()
+        select_clause = re.sub(
+            r"^TOP\s+\d+\s+",
+            "",
+            select_clause,
+            flags=re.IGNORECASE,
+        )
+        expressions: list[str] = []
+        depth = 0
+        expression_start = 0
+        for index, char in enumerate(select_clause):
+            if char == "(":
+                depth += 1
+            elif char == ")" and depth > 0:
+                depth -= 1
+            elif char == "," and depth == 0:
+                expression = select_clause[expression_start:index].strip()
+                if expression:
+                    expressions.append(expression)
+                expression_start = index + 1
+
+        last_expression = select_clause[expression_start:].strip()
+        if last_expression:
+            expressions.append(last_expression)
+        return expressions
+
+    def _is_low_signal_sql_for_question(self, query: str, sql: str) -> bool:
+        if not self._is_data_analysis_query(query):
+            return False
+
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not any(
+            term in normalized_query
+            for term in (
+                "chart",
+                "trend",
+                "monthly",
+                "rate",
+                "revenue",
+                "sales",
+                "volume",
+                "count",
+                "top",
+                "highest",
+                "underperforming",
+                "distribution",
+                "group",
+                "grouped",
+                " by ",
+            )
+        ):
+            return False
+
+        normalized_sql = re.sub(r"\s+", " ", (sql or "").strip())
+        if re.search(
+            r"\b(?:COUNT|SUM|AVG|MIN|MAX|DATEPART|DATETRUNC|DATE_TRUNC|"
+            r"ROW_NUMBER|RANK|DENSE_RANK)\s*\(",
+            normalized_sql,
+            flags=re.IGNORECASE,
+        ):
+            return False
+
+        expressions = self._extract_top_level_select_expressions(normalized_sql)
+        return len(expressions) <= 1
 
     def _build_ask_result_from_sql(self, sql: Optional[str]) -> Optional[AskResult]:
         if not self._is_valid_select_sql(sql):
@@ -4246,12 +4366,19 @@ class AskService:
                 if sql_valid_result := text_to_sql_generation_results["post_process"][
                     "valid_generation_result"
                 ]:
-                    if ask_result := self._build_ask_result_from_sql(
-                        sql_valid_result.get("sql")
+                    generated_sql = sql_valid_result.get("sql")
+                    if generated_sql and self._is_low_signal_sql_for_question(
+                        sql_user_query, generated_sql
                     ):
+                        invalid_sql = generated_sql
+                        error_message = (
+                            "SQL generation produced a low-signal result shape for "
+                            "the requested analysis."
+                        )
+                    elif ask_result := self._build_ask_result_from_sql(generated_sql):
                         api_results = [ask_result]
                     else:
-                        invalid_sql = sql_valid_result.get("sql")
+                        invalid_sql = generated_sql
                         error_message = (
                             "SQL generation did not produce a valid SELECT statement."
                         )
@@ -4329,12 +4456,22 @@ class AskService:
                         if valid_generation_result := sql_correction_results[
                             "post_process"
                         ]["valid_generation_result"]:
+                            generated_sql = valid_generation_result.get("sql")
+                            if generated_sql and self._is_low_signal_sql_for_question(
+                                sql_user_query, generated_sql
+                            ):
+                                invalid_sql = generated_sql
+                                error_message = (
+                                    "SQL correction produced a low-signal result "
+                                    "shape for the requested analysis."
+                                )
+                                break
                             if ask_result := self._build_ask_result_from_sql(
-                                valid_generation_result.get("sql")
+                                generated_sql
                             ):
                                 api_results = [ask_result]
                                 break
-                            invalid_sql = valid_generation_result.get("sql")
+                            invalid_sql = generated_sql
                             error_message = (
                                 "SQL correction did not produce a valid SELECT statement."
                             )
