@@ -23,7 +23,7 @@ def test_chart_preprocessor_uses_deterministic_sql_result_order():
     ]
 
 
-def test_fallback_chart_requires_a_real_quantitative_measure():
+def test_fallback_chart_counts_categorical_only_results():
     result = build_fallback_chart_result(
         "Create a chart comparing completed repairs across engineers.",
         {
@@ -32,7 +32,13 @@ def test_fallback_chart_requires_a_real_quantitative_measure():
         },
     )
 
-    assert result == {"chart_schema": {}, "reasoning": "", "chart_type": ""}
+    assert result["chart_type"] == "bar"
+    assert result["chart_schema"]["encoding"]["x"]["field"] == "Status"
+    assert result["chart_schema"]["encoding"]["y"] == {
+        "aggregate": "count",
+        "type": "quantitative",
+        "title": "Count",
+    }
 
 
 def test_fallback_chart_uses_grouped_bar_for_two_business_dimensions():
