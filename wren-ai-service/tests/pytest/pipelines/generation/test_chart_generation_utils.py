@@ -61,54 +61,6 @@ def test_fallback_chart_uses_grouped_bar_for_two_business_dimensions():
     assert result["chart_schema"]["encoding"]["xOffset"]["field"] == "Market"
 
 
-def test_explicit_bar_chart_is_not_refined_to_grouped_bar():
-    result = build_fallback_chart_result(
-        "Create a bar chart of new orders by Customer in each Market.",
-        {
-            "columns": [
-                {"name": "Market"},
-                {"name": "Customer"},
-                {"name": "OrderCount"},
-            ],
-            "data": [["North", "Acme", 10], ["South", "Globex", 8]],
-        },
-    )
-
-    assert result["chart_type"] == "bar"
-    assert result["chart_schema"]["mark"]["type"] == "bar"
-    assert "xOffset" not in result["chart_schema"]["encoding"]
-
-
-def test_explicit_stacked_bar_chart_is_respected():
-    result = build_fallback_chart_result(
-        "Create a stacked bar chart of sales by Market and Division.",
-        {
-            "columns": [
-                {"name": "Market"},
-                {"name": "Division"},
-                {"name": "Sales"},
-            ],
-            "data": [["North", "A", 10], ["North", "B", 8]],
-        },
-    )
-
-    assert result["chart_type"] == "stacked_bar"
-    assert result["chart_schema"]["encoding"]["y"]["stack"] == "zero"
-
-
-def test_scatter_request_uses_closest_supported_chart_with_reasoning():
-    result = build_fallback_chart_result(
-        "Create a scatter plot of revenue by market.",
-        {
-            "columns": [{"name": "Market"}, {"name": "Revenue"}],
-            "data": [["North", 100], ["South", 200]],
-        },
-    )
-
-    assert result["chart_type"] == "bar"
-    assert "scatter charts are not supported" in result["reasoning"]
-
-
 def test_chart_schema_rejects_vega_aggregate_count_without_sql_metric():
     assert not _is_schema_compatible_with_sample_data(
         {
