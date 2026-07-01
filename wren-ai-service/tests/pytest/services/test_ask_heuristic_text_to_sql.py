@@ -1,6 +1,92 @@
 from src.web.v1.services.ask import AskService
 
 
+def test_metadata_table_question_is_not_sql_or_chart_intent():
+    service = AskService(pipelines={})
+
+    assert service._get_metadata_question_kind(
+        "What tables are there in this datasource?"
+    ) == "tables"
+    assert service._get_metadata_question_kind(
+        "List the available models in the semantic layer"
+    ) == "tables"
+    assert service._get_metadata_question_kind(
+        "Create a bar chart of orders by table category"
+    ) is None
+
+
+def test_metadata_column_question_is_not_sql_or_chart_intent():
+    service = AskService(pipelines={})
+
+    assert service._get_metadata_question_kind(
+        "What columns are available in dbo_orders?"
+    ) == "columns"
+    assert service._get_metadata_question_kind(
+        "Show fields in the CustomerMaster table"
+    ) == "columns"
+    assert service._get_metadata_question_kind(
+        "Show schema for CustomerMaster"
+    ) == "columns"
+    assert service._get_metadata_question_kind(
+        "Show a line chart of monthly order count by customer field"
+    ) is None
+
+
+def test_metadata_table_answer_lists_deployed_tables():
+    service = AskService(pipelines={})
+    answer = service._build_metadata_response(
+        "What tables are there in this datasource?",
+        [
+            """
+            CREATE TABLE dbo_orders (
+              OrderId INT,
+              CustomerName VARCHAR
+            );
+            """,
+            """
+            CREATE TABLE dbo_customers (
+              CustomerId INT,
+              Region VARCHAR
+            );
+            """,
+        ],
+        [],
+    )
+
+    assert "active datasource has 2 deployed tables" in answer
+    assert "- dbo_orders" in answer
+    assert "- dbo_customers" in answer
+
+
+def test_metadata_column_answer_lists_matching_table_columns():
+    service = AskService(pipelines={})
+    answer = service._build_metadata_response(
+        "What columns are available in dbo_orders?",
+        [
+            """
+            CREATE TABLE dbo_orders (
+              OrderId INT,
+              CustomerName VARCHAR,
+              OrderDate TIMESTAMP
+            );
+            """,
+            """
+            CREATE TABLE dbo_customers (
+              CustomerId INT,
+              Region VARCHAR
+            );
+            """,
+        ],
+        [],
+    )
+
+    assert "dbo_orders" in answer
+    assert "OrderId (INT)" in answer
+    assert "CustomerName (VARCHAR)" in answer
+    assert "OrderDate (TIMESTAMP)" in answer
+    assert "dbo_customers" not in answer
+
+
 def test_manufacturing_throughput_trend_uses_debug_entry_business_unit():
     service = AskService(pipelines={})
     table_ddls = [

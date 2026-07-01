@@ -2577,6 +2577,167 @@ class AskService:
         ]
         return documents, table_names, table_ddls
 
+    def _is_visualization_request(self, query: str) -> bool:
+        normalized = (query or "").lower()
+        return bool(
+            re.search(
+                r"\b(?:chart|graph|plot|visuali[sz]e|dashboard|bar|line|pie|donut|"
+                r"scatter|histogram|heatmap|trend|trends|distribution)\b",
+                normalized,
+            )
+        )
+
+    def _get_metadata_question_kind(self, query: str) -> str | None:
+        normalized = re.sub(r"\s+", " ", (query or "").lower()).strip()
+        if not normalized:
+            return None
+
+        if self._is_visualization_request(normalized):
+            return None
+
+        explicit_column_patterns = (
+            r"\b(?:what|which|list|show|display|give|describe)\b.*\b(?:columns?|fields?)\b",
+            r"\b(?:columns?|fields?)\b.*\b(?:available|present|there|exist|schema|metadata)\b",
+        )
+        if any(re.search(pattern, normalized) for pattern in explicit_column_patterns):
+            return "columns"
+
+        table_patterns = (
+            r"\b(?:what|which|list|show|display|give)\b.*\b(?:tables?|models?)\b",
+            r"\b(?:tables?|models?)\b.*\b(?:available|present|there|exist|in this datasource|in the datasource)\b",
+            r"\b(?:datasource|database|semantic layer|semantic model)\b.*\b(?:tables?|models?)\b",
+        )
+        if any(re.search(pattern, normalized) for pattern in table_patterns):
+            return "tables"
+
+        schema_patterns = (
+            r"\b(?:what|show|display|describe|list)\b.*\b(?:schema|metadata)\b",
+            r"\b(?:schema|metadata)\b.*\b(?:of|for|in)\b",
+        )
+        if any(re.search(pattern, normalized) for pattern in schema_patterns):
+            return "columns"
+
+        return None
+
+    def _find_metadata_table_matches(
+        self, query: str, tables: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        query_key = self._normalize_schema_token(query)
+        if not query_key:
+            return []
+
+        matches: list[tuple[int, dict[str, Any]]] = []
+        for table in tables:
+            table_name = str(table.get("name") or "")
+            if not table_name:
+                continue
+            short_name = re.split(r"[.$]", table_name)[-1]
+            normalized_name = self._normalize_schema_token(table_name)
+            normalized_short_name = self._normalize_schema_token(short_name)
+
+            score = 0
+            if normalized_name and normalized_name in query_key:
+                score = 100 + len(normalized_name)
+            elif normalized_short_name and normalized_short_name in query_key:
+                score = 80 + len(normalized_short_name)
+
+            if score:
+                matches.append((score, table))
+
+        return [
+            table
+            for _, table in sorted(matches, key=lambda item: item[0], reverse=True)
+        ]
+
+    def _format_metadata_table_list(
+        self, tables: list[dict[str, Any]], *, max_tables: int = 120
+    ) -> str:
+        if not tables:
+            return "I couldn't find any deployed tables in the active datasource metadata."
+
+        sorted_tables = sorted(
+            {str(table.get("name")) for table in tables if table.get("name")},
+            key=str.lower,
+        )
+        shown_tables = sorted_tables[:max_tables]
+        lines = [
+            f"The active datasource has {len(sorted_tables)} deployed table"
+            f"{'' if len(sorted_tables) == 1 else 's'}:"
+        ]
+        lines.extend(f"- {table_name}" for table_name in shown_tables)
+        if len(sorted_tables) > max_tables:
+            lines.append(
+                f"- ...and {len(sorted_tables) - max_tables} more tables."
+            )
+        return "\n".join(lines)
+
+    def _format_metadata_columns(
+        self,
+        query: str,
+        tables: list[dict[str, Any]],
+        *,
+        max_tables: int = 25,
+        max_columns_per_table: int = 60,
+    ) -> str:
+        if not tables:
+            return "I couldn't find any deployed columns in the active datasource metadata."
+
+        matched_tables = self._find_metadata_table_matches(query, tables)
+        selected_tables = matched_tables or sorted(
+            tables, key=lambda table: str(table.get("name") or "").lower()
+        )
+        selected_tables = selected_tables[:max_tables]
+
+        heading = (
+            "Columns available in the matched deployed table"
+            if matched_tables and len(selected_tables) == 1
+            else "Columns available in the active datasource metadata"
+        )
+        lines = [f"{heading}:"]
+        for table in selected_tables:
+            table_name = str(table.get("name") or "unknown_table")
+            columns = [
+                column
+                for column in table.get("columns", [])
+                if isinstance(column, dict) and column.get("name")
+            ]
+            if not columns:
+                lines.append(f"- {table_name}: no columns found")
+                continue
+
+            column_parts = []
+            for column in columns[:max_columns_per_table]:
+                column_name = str(column.get("name"))
+                column_type = str(column.get("type") or "").upper()
+                column_parts.append(
+                    f"{column_name} ({column_type})" if column_type else column_name
+                )
+            if len(columns) > max_columns_per_table:
+                column_parts.append(
+                    f"...and {len(columns) - max_columns_per_table} more"
+                )
+            lines.append(f"- {table_name}: {', '.join(column_parts)}")
+
+        if len(tables) > max_tables and not matched_tables:
+            lines.append(f"- ...and {len(tables) - max_tables} more tables.")
+
+        return "\n".join(lines)
+
+    def _build_metadata_response(
+        self, query: str, table_ddls: list[str], table_names: list[str]
+    ) -> str:
+        kind = self._get_metadata_question_kind(query)
+        parsed_tables = self._parse_schema_tables(table_ddls)
+
+        if not parsed_tables and table_names:
+            parsed_tables = [
+                {"name": table_name, "columns": []} for table_name in table_names
+            ]
+
+        if kind == "columns":
+            return self._format_metadata_columns(query, parsed_tables)
+        return self._format_metadata_table_list(parsed_tables)
+
     def _normalize_schema_token(self, value: str) -> str:
         return re.sub(r"[^a-z0-9]", "", (value or "").lower())
 
@@ -2924,6 +3085,61 @@ class AskService:
                         general_type="USER_GUIDE",
                     )
                     results["metadata"]["type"] = "GENERAL"
+                    return results
+
+                metadata_question_kind = self._get_metadata_question_kind(user_query)
+                if metadata_question_kind:
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="searching",
+                        type="GENERAL",
+                        rephrased_question=user_query,
+                        intent_reasoning=(
+                            "Basic datasource metadata question detected; "
+                            "retrieving deployed schema metadata directly."
+                        ),
+                        trace_id=trace_id,
+                        is_followup=True if histories else False,
+                        general_type="DATA_ASSISTANCE",
+                    )
+                    retrieval_result = await self._run_with_timeout(
+                        "Metadata schema retrieval",
+                        self._pipelines["db_schema_retrieval"].run(
+                            query="",
+                            project_id=ask_request.project_id,
+                            histories=[],
+                            enable_column_pruning=False,
+                        ),
+                        timeout_seconds=min(
+                            self._schema_retrieval_timeout_seconds,
+                            self._pipeline_timeout_seconds,
+                            20,
+                        ),
+                    )
+                    documents, table_names, table_ddls = (
+                        self._extract_retrieval_metadata(retrieval_result)
+                    )
+                    metadata_answer = self._build_metadata_response(
+                        user_query, table_ddls, table_names
+                    )
+                    self._general_streaming_results[query_id] = metadata_answer
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="finished",
+                        type="GENERAL",
+                        rephrased_question=user_query,
+                        intent_reasoning=(
+                            "Answered from active datasource deployed metadata "
+                            "without SQL generation."
+                        ),
+                        retrieved_tables=table_names,
+                        trace_id=trace_id,
+                        is_followup=True if histories else False,
+                        general_type="DATA_ASSISTANCE",
+                    )
+                    results["metadata"]["type"] = "GENERAL"
+                    results["metadata"]["metadata_question_kind"] = (
+                        metadata_question_kind
+                    )
+                    results["metadata"]["retrieved_table_count"] = len(documents)
                     return results
 
                 explicit_table_names = self._extract_explicit_table_names_from_query(
