@@ -439,6 +439,10 @@ export class AskingService implements IAskingService {
   private askingTaskRepository: IAskingTaskRepository;
   private adjustmentBackgroundTracker: AdjustmentBackgroundTaskTracker;
   private instantRecommendationJobs = new Map<string, Promise<Task>>();
+  private instantRecommendationResults = new Map<
+    string,
+    RecommendationQuestionsResult
+  >();
   private threadRecommendationJobs = new Map<number, Promise<void>>();
   private initialized = false;
 
@@ -1203,6 +1207,26 @@ export class AskingService implements IAskingService {
       currentProject.id,
     );
 
+    const fastQuestions = buildFastRecommendationQuestions(
+      manifest,
+      this.getThreadRecommendationQuestionsConfig(currentProject).maxQuestions,
+      input.previousQuestions || [],
+    );
+    if (fastQuestions.length) {
+      const queryId = `fast-instant-${currentProject.id}-${Date.now()}`;
+      this.instantRecommendationResults.set(queryId, {
+        status: RecommendationQuestionStatus.FINISHED,
+        type: null,
+        response: { questions: fastQuestions },
+        error: null,
+      });
+      setTimeout(
+        () => this.instantRecommendationResults.delete(queryId),
+        5 * 60 * 1000,
+      );
+      return { id: queryId };
+    }
+
     const response = await this.wrenAIAdaptor.generateRecommendationQuestions({
       manifest,
       projectId: currentProject.id.toString(),
@@ -1215,6 +1239,11 @@ export class AskingService implements IAskingService {
   public async getInstantRecommendedQuestions(
     queryId: string,
   ): Promise<RecommendationQuestionsResult> {
+    const localResult = this.instantRecommendationResults.get(queryId);
+    if (localResult) {
+      return localResult;
+    }
+
     const response =
       await this.wrenAIAdaptor.getRecommendationQuestionsResult(queryId);
     return response;

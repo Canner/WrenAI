@@ -59,8 +59,8 @@ export interface IAskingTaskTracker {
 }
 
 export class AskingTaskTracker implements IAskingTaskTracker {
-  private readonly minPollDelay = 10000;
-  private readonly maxPollDelay = 60000;
+  private readonly minPollDelay = 1000;
+  private readonly maxPollDelay = 10000;
   private wrenAIAdaptor: IWrenAIAdaptor;
   private askingTaskRepository: IAskingTaskRepository;
   private trackedTasks: Map<string, TrackedTask> = new Map();
@@ -598,6 +598,6 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       return this.minPollDelay;
     }
 
-    return 3000;
+    return 1500;
   }
 }

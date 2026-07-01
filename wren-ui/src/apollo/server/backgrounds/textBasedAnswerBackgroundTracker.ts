@@ -128,7 +128,7 @@ export class TextBasedAnswerBackgroundTracker {
     this.projectService = projectService;
     this.deployService = deployService;
     this.queryService = queryService;
-    this.intervalTime = 2000;
+    this.intervalTime = 1000;
     this.start();
   }
 

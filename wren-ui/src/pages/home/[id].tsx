@@ -70,8 +70,8 @@ const getThreadResponseIsFinished = (threadResponse: ThreadResponse) => {
   return isAnswerFinished !== false && isChartFinished !== false;
 };
 
-const THREAD_RESPONSE_POLL_INTERVAL_MS = 2000;
-const THREAD_RECOMMENDATION_POLL_INTERVAL_MS = 2000;
+const THREAD_RESPONSE_POLL_INTERVAL_MS = 1000;
+const THREAD_RECOMMENDATION_POLL_INTERVAL_MS = 1000;
 const THREAD_RESPONSE_POLL_MAX_INTERVAL_MS = 10000;
 const THREAD_RECOMMENDATION_POLL_MAX_INTERVAL_MS = 10000;
 

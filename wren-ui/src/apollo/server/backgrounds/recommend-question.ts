@@ -20,7 +20,7 @@ const isFinalized = (status: RecommendationQuestionStatus) => {
   ].includes(status);
 };
 
-const MIN_POLL_DELAY = 2000;
+const MIN_POLL_DELAY = 1000;
 const MAX_POLL_DELAY = 10000;
 
 export class ProjectRecommendQuestionBackgroundTracker {

@@ -22,7 +22,7 @@ const isFinalized = (status: ChartStatus) => {
   );
 };
 
-const MIN_POLL_DELAY = 2000;
+const MIN_POLL_DELAY = 1000;
 const MAX_POLL_DELAY = 10000;
 
 export class ChartBackgroundTracker {
@@ -48,7 +48,7 @@ export class ChartBackgroundTracker {
     this.telemetry = telemetry;
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.threadResponseRepository = threadResponseRepository;
-    this.intervalTime = 2000;
+    this.intervalTime = 1000;
     this.start();
   }
 
@@ -243,7 +243,7 @@ export class ChartAdjustmentBackgroundTracker {
     this.telemetry = telemetry;
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.threadResponseRepository = threadResponseRepository;
-    this.intervalTime = 2000;
+    this.intervalTime = 1000;
     this.start();
   }
 
