@@ -169,10 +169,10 @@ export class ThreadResponseRepository
     data: Partial<{
       status: AskResultStatus;
       sql: string;
-      viewId: number;
-      answerDetail: ThreadResponseAnswerDetail;
-      breakdownDetail: ThreadResponseBreakdownDetail;
-      chartDetail: ThreadResponseChartDetail;
+      viewId: number | null;
+      answerDetail: ThreadResponseAnswerDetail | null;
+      breakdownDetail: ThreadResponseBreakdownDetail | null;
+      chartDetail: ThreadResponseChartDetail | null;
       adjustment: ThreadResponseAdjustment;
     }>,
     queryOptions?: IQueryOptions,
@@ -180,15 +180,26 @@ export class ThreadResponseRepository
     const transformedData = {
       status: data.status ? data.status : undefined,
       sql: data.sql ? data.sql : undefined,
-      viewId: data.viewId ? data.viewId : undefined,
-      answerDetail: data.answerDetail
-        ? JSON.stringify(data.answerDetail)
+      viewId: Object.prototype.hasOwnProperty.call(data, 'viewId')
+        ? data.viewId
         : undefined,
-      breakdownDetail: data.breakdownDetail
-        ? JSON.stringify(data.breakdownDetail)
+      answerDetail: Object.prototype.hasOwnProperty.call(data, 'answerDetail')
+        ? data.answerDetail
+          ? JSON.stringify(data.answerDetail)
+          : null
         : undefined,
-      chartDetail: data.chartDetail
-        ? JSON.stringify(data.chartDetail)
+      breakdownDetail: Object.prototype.hasOwnProperty.call(
+        data,
+        'breakdownDetail',
+      )
+        ? data.breakdownDetail
+          ? JSON.stringify(data.breakdownDetail)
+          : null
+        : undefined,
+      chartDetail: Object.prototype.hasOwnProperty.call(data, 'chartDetail')
+        ? data.chartDetail
+          ? JSON.stringify(data.chartDetail)
+          : null
         : undefined,
       adjustment: data.adjustment ? JSON.stringify(data.adjustment) : undefined,
       updatedAt: new Date(),

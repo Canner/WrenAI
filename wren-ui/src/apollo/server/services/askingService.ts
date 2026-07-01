@@ -122,6 +122,13 @@ const isChartGenerationInProgress = (status?: ChartStatus | string | null) =>
     status || '',
   );
 
+const isContextualFollowUpQuestion = (question?: string) => {
+  if (!question) return false;
+  return /\b(previous|last|above|earlier|same|that|those|them|it|this)\b/i.test(
+    question,
+  );
+};
+
 // adjustment input
 export interface AdjustmentReasoningInput {
   tables: string[];
@@ -709,7 +716,7 @@ export class AskingService implements IAskingService {
     // if it's a follow-up question, then the input will have a threadId
     // then use the threadId to get the sql and get the steps of last thread response
     // construct it into AskHistory and pass to ask
-    const histories = threadId
+    const histories = threadId && isContextualFollowUpQuestion(input.question)
       ? await this.getAskingHistory(threadId, threadResponseId)
       : null;
     const response = await this.askingTaskTracker.createAskingTask({
@@ -886,6 +893,10 @@ export class AskingService implements IAskingService {
 
     return await this.threadResponseRepository.updateOne(responseId, {
       sql: data.sql,
+      viewId: null,
+      answerDetail: null,
+      breakdownDetail: null,
+      chartDetail: null,
     });
   }
 

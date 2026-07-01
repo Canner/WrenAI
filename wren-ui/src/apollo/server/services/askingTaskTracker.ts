@@ -448,10 +448,17 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       await this.threadResponseRepository.updateOne(task.threadResponseId, {
         sql: view.statement,
         viewId: response.viewId,
+        answerDetail: null,
+        breakdownDetail: null,
+        chartDetail: null,
       });
     } else {
       await this.threadResponseRepository.updateOne(task.threadResponseId, {
         sql: response?.sql,
+        viewId: null,
+        answerDetail: null,
+        breakdownDetail: null,
+        chartDetail: null,
       });
     }
   }
