@@ -26,10 +26,27 @@ def test_metadata_column_question_is_not_sql_or_chart_intent():
     ) == "columns"
     assert service._get_metadata_question_kind(
         "Show schema for CustomerMaster"
-    ) == "columns"
+    ) == "schema"
     assert service._get_metadata_question_kind(
         "Show a line chart of monthly order count by customer field"
     ) is None
+    assert service._get_metadata_question_kind(
+        "What is the row count for dbo_orders?"
+    ) is None
+
+
+def test_metadata_relationship_and_count_questions_have_specific_intents():
+    service = AskService(pipelines={})
+
+    assert service._get_metadata_question_kind(
+        "What relationships exist between tables?"
+    ) == "relationships"
+    assert service._get_metadata_question_kind(
+        "How many tables are in this datasource?"
+    ) == "table_count"
+    assert service._get_metadata_question_kind(
+        "How many columns are in dbo_orders?"
+    ) == "column_count"
 
 
 def test_metadata_table_answer_lists_deployed_tables():
@@ -85,6 +102,89 @@ def test_metadata_column_answer_lists_matching_table_columns():
     assert "CustomerName (VARCHAR)" in answer
     assert "OrderDate (TIMESTAMP)" in answer
     assert "dbo_customers" not in answer
+
+
+def test_metadata_schema_answer_includes_columns_and_relationships():
+    service = AskService(pipelines={})
+    answer = service._build_metadata_response(
+        "Show schema for dbo_orders",
+        [
+            """
+            CREATE TABLE dbo_orders (
+              OrderId INT,
+              CustomerId INT,
+              CONSTRAINT fk_customer FOREIGN KEY (CustomerId)
+                REFERENCES dbo_customers(CustomerId)
+            );
+            """,
+            """
+            CREATE TABLE dbo_customers (
+              CustomerId INT,
+              Region VARCHAR
+            );
+            """,
+        ],
+        [],
+    )
+
+    assert "Schema details from the active datasource metadata" in answer
+    assert "- dbo_orders" in answer
+    assert "OrderId (INT)" in answer
+    assert "Relationships:" in answer
+    assert "dbo_orders(CustomerId) -> dbo_customers(CustomerId)" in answer
+
+
+def test_metadata_relationship_answer_lists_foreign_keys():
+    service = AskService(pipelines={})
+    answer = service._build_metadata_response(
+        "What relationships exist between tables?",
+        [
+            """
+            CREATE TABLE dbo_orders (
+              OrderId INT,
+              CustomerId INT,
+              FOREIGN KEY (CustomerId) REFERENCES dbo_customers(CustomerId)
+            );
+            """,
+        ],
+        [],
+    )
+
+    assert "active datasource metadata has 1 relationship" in answer
+    assert "dbo_orders(CustomerId) -> dbo_customers(CustomerId)" in answer
+
+
+def test_metadata_count_answers_are_intent_specific():
+    service = AskService(pipelines={})
+    table_ddls = [
+        """
+        CREATE TABLE dbo_orders (
+          OrderId INT,
+          CustomerId INT
+        );
+        """,
+        """
+        CREATE TABLE dbo_customers (
+          CustomerId INT,
+          Region VARCHAR,
+          Segment VARCHAR
+        );
+        """,
+    ]
+
+    table_count = service._build_metadata_response(
+        "How many tables are in this datasource?",
+        table_ddls,
+        [],
+    )
+    column_count = service._build_metadata_response(
+        "How many columns are in dbo_customers?",
+        table_ddls,
+        [],
+    )
+
+    assert table_count == "The active datasource has 2 deployed tables."
+    assert column_count == "dbo_customers has 3 deployed columns."
 
 
 def test_manufacturing_throughput_trend_uses_debug_entry_business_unit():

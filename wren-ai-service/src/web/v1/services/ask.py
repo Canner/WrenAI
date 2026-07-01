@@ -2595,6 +2595,37 @@ class AskService:
         if self._is_visualization_request(normalized):
             return None
 
+        if re.search(r"\b(?:row|rows|record|records)\s+count\b", normalized):
+            return None
+
+        relationship_patterns = (
+            r"\b(?:relationships?|relations?|joins?|foreign keys?|primary keys?)\b",
+            r"\b(?:how|what|which|show|list|describe)\b.*\b(?:tables?|models?)\b.*\b(?:connected|related|joined)\b",
+        )
+        if any(re.search(pattern, normalized) for pattern in relationship_patterns):
+            return "relationships"
+
+        table_count_patterns = (
+            r"\b(?:how many|count|number of)\b.*\b(?:tables?|models?)\b",
+            r"\b(?:tables?|models?)\b.*\b(?:count|number)\b",
+        )
+        if any(re.search(pattern, normalized) for pattern in table_count_patterns):
+            return "table_count"
+
+        column_count_patterns = (
+            r"\b(?:how many|count|number of)\b.*\b(?:columns?|fields?)\b",
+            r"\b(?:columns?|fields?)\b.*\b(?:count|number)\b",
+        )
+        if any(re.search(pattern, normalized) for pattern in column_count_patterns):
+            return "column_count"
+
+        schema_patterns = (
+            r"\b(?:what|show|display|describe|list)\b.*\b(?:schema|metadata)\b",
+            r"\b(?:schema|metadata)\b.*\b(?:of|for|in)\b",
+        )
+        if any(re.search(pattern, normalized) for pattern in schema_patterns):
+            return "schema"
+
         explicit_column_patterns = (
             r"\b(?:what|which|list|show|display|give|describe)\b.*\b(?:columns?|fields?)\b",
             r"\b(?:columns?|fields?)\b.*\b(?:available|present|there|exist|schema|metadata)\b",
@@ -2609,13 +2640,6 @@ class AskService:
         )
         if any(re.search(pattern, normalized) for pattern in table_patterns):
             return "tables"
-
-        schema_patterns = (
-            r"\b(?:what|show|display|describe|list)\b.*\b(?:schema|metadata)\b",
-            r"\b(?:schema|metadata)\b.*\b(?:of|for|in)\b",
-        )
-        if any(re.search(pattern, normalized) for pattern in schema_patterns):
-            return "columns"
 
         return None
 
@@ -2723,6 +2747,150 @@ class AskService:
 
         return "\n".join(lines)
 
+    def _extract_metadata_relationships(self, table_ddls: list[str]) -> list[str]:
+        relationships: list[str] = []
+        for ddl in table_ddls or []:
+            if not isinstance(ddl, str):
+                continue
+            table_match = re.search(
+                r'\bCREATE\s+TABLE\s+(?:"(?P<quoted>[^"]+)"|'
+                r"\[(?P<bracketed>[^\]]+)\]|`(?P<backticked>[^`]+)`|"
+                r"(?P<bare>[A-Za-z_][A-Za-z0-9_.$]*))\s*\(",
+                ddl,
+                flags=re.IGNORECASE,
+            )
+            if not table_match:
+                continue
+            source_table = next(
+                (value for value in table_match.groupdict().values() if value),
+                "unknown_table",
+            )
+
+            for relationship_match in re.finditer(
+                r"FOREIGN\s+KEY\s*\((?P<source_columns>[^)]+)\)\s+REFERENCES\s+"
+                r'(?:"(?P<quoted>[^"]+)"|\[(?P<bracketed>[^\]]+)\]|'
+                r"`(?P<backticked>[^`]+)`|(?P<bare>[A-Za-z_][A-Za-z0-9_.$]*))"
+                r"\s*\((?P<target_columns>[^)]+)\)",
+                ddl,
+                flags=re.IGNORECASE,
+            ):
+                target_table = next(
+                    (
+                        value
+                        for key, value in relationship_match.groupdict().items()
+                        if key
+                        in {
+                            "quoted",
+                            "bracketed",
+                            "backticked",
+                            "bare",
+                        }
+                        and value
+                    ),
+                    "unknown_table",
+                )
+                source_columns = relationship_match.group("source_columns")
+                target_columns = relationship_match.group("target_columns")
+                relationships.append(
+                    f"{source_table}({source_columns}) -> "
+                    f"{target_table}({target_columns})"
+                )
+
+        return sorted(set(relationships), key=str.lower)
+
+    def _format_metadata_relationships(self, table_ddls: list[str]) -> str:
+        relationships = self._extract_metadata_relationships(table_ddls)
+        if not relationships:
+            return (
+                "I couldn't find explicit relationships or foreign keys in the "
+                "active datasource metadata."
+            )
+
+        lines = [
+            f"The active datasource metadata has {len(relationships)} "
+            f"relationship{'' if len(relationships) == 1 else 's'}:"
+        ]
+        lines.extend(f"- {relationship}" for relationship in relationships[:120])
+        if len(relationships) > 120:
+            lines.append(f"- ...and {len(relationships) - 120} more relationships.")
+        return "\n".join(lines)
+
+    def _format_metadata_schema(
+        self, query: str, tables: list[dict[str, Any]], table_ddls: list[str]
+    ) -> str:
+        matched_tables = self._find_metadata_table_matches(query, tables)
+        selected_tables = matched_tables or sorted(
+            tables, key=lambda table: str(table.get("name") or "").lower()
+        )
+        selected_tables = selected_tables[:20]
+        if not selected_tables:
+            return "I couldn't find schema details in the active datasource metadata."
+
+        lines = ["Schema details from the active datasource metadata:"]
+        for table in selected_tables:
+            table_name = str(table.get("name") or "unknown_table")
+            columns = [
+                column
+                for column in table.get("columns", [])
+                if isinstance(column, dict) and column.get("name")
+            ]
+            lines.append(f"- {table_name}")
+            if columns:
+                column_parts = []
+                for column in columns[:60]:
+                    column_name = str(column.get("name"))
+                    column_type = str(column.get("type") or "").upper()
+                    column_parts.append(
+                        f"{column_name} ({column_type})"
+                        if column_type
+                        else column_name
+                    )
+                if len(columns) > 60:
+                    column_parts.append(f"...and {len(columns) - 60} more")
+                lines.append(f"  Columns: {', '.join(column_parts)}")
+            else:
+                lines.append("  Columns: no columns found")
+
+        relationships = self._extract_metadata_relationships(table_ddls)
+        if relationships:
+            lines.append("Relationships:")
+            lines.extend(f"- {relationship}" for relationship in relationships[:40])
+            if len(relationships) > 40:
+                lines.append(f"- ...and {len(relationships) - 40} more relationships.")
+
+        return "\n".join(lines)
+
+    def _format_metadata_table_count(self, tables: list[dict[str, Any]]) -> str:
+        table_names = {str(table.get("name")) for table in tables if table.get("name")}
+        return (
+            f"The active datasource has {len(table_names)} deployed table"
+            f"{'' if len(table_names) == 1 else 's'}."
+        )
+
+    def _format_metadata_column_count(
+        self, query: str, tables: list[dict[str, Any]]
+    ) -> str:
+        matched_tables = self._find_metadata_table_matches(query, tables)
+        selected_tables = matched_tables or tables
+        total_columns = sum(
+            len(
+                [
+                    column
+                    for column in table.get("columns", [])
+                    if isinstance(column, dict) and column.get("name")
+                ]
+            )
+            for table in selected_tables
+        )
+        if matched_tables and len(selected_tables) == 1:
+            table_name = str(selected_tables[0].get("name") or "the matched table")
+            return f"{table_name} has {total_columns} deployed columns."
+        return (
+            f"The active datasource metadata has {total_columns} deployed columns "
+            f"across {len(selected_tables)} table"
+            f"{'' if len(selected_tables) == 1 else 's'}."
+        )
+
     def _build_metadata_response(
         self, query: str, table_ddls: list[str], table_names: list[str]
     ) -> str:
@@ -2734,6 +2902,14 @@ class AskService:
                 {"name": table_name, "columns": []} for table_name in table_names
             ]
 
+        if kind == "schema":
+            return self._format_metadata_schema(query, parsed_tables, table_ddls)
+        if kind == "relationships":
+            return self._format_metadata_relationships(table_ddls)
+        if kind == "table_count":
+            return self._format_metadata_table_count(parsed_tables)
+        if kind == "column_count":
+            return self._format_metadata_column_count(query, parsed_tables)
         if kind == "columns":
             return self._format_metadata_columns(query, parsed_tables)
         return self._format_metadata_table_list(parsed_tables)
