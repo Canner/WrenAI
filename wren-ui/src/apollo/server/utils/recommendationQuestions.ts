@@ -59,12 +59,13 @@ export const buildFastRecommendationQuestions = (
   maxQuestions = 5,
   previousQuestions: string[] = [],
 ): RecommendationQuestion[] => {
+  const candidateLimit = Math.max(maxQuestions * 3, maxQuestions);
   const seen = new Set(
     previousQuestions.map((question) => question.trim().toLowerCase()),
   );
   const questions: RecommendationQuestion[] = [];
   const addQuestion = (question: RecommendationQuestion) => {
-    if (questions.length >= maxQuestions) {
+    if (questions.length >= candidateLimit) {
       return;
     }
     const key = question.question.trim().toLowerCase();
@@ -82,6 +83,12 @@ export const buildFastRecommendationQuestions = (
     const metrics = columns.filter(isMetricColumn);
     const dates = columns.filter(isDateColumn);
     const label = displayName(model);
+
+    addQuestion({
+      category: label,
+      question: `How many records are in ${label}?`,
+      sql: `SELECT COUNT(*) AS "RecordCount" FROM ${modelRef}`,
+    });
 
     if (dimensions[0]) {
       const column = dimensions[0];

@@ -58,6 +58,11 @@ const buildFastAnswer = (
 
   if (columns.length === 1) {
     const values = sampleRows.map((row) => formatValue(row[0])).join(', ');
+    const columnName = columnNames[0];
+    const isCountColumn = /count|recordcount|rowcount/i.test(columnName);
+    if (isCountColumn && Number(sampleRows[0]?.[0]) === 0) {
+      return `${questionPrefix}the active datasource returned 0 matching records.`;
+    }
     return `${questionPrefix}the query returned ${rowCount} row${
       rowCount === 1 ? '' : 's'
     }. Values: ${values}.`;

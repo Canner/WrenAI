@@ -237,6 +237,7 @@ export const initComponents = () => {
     projectRepository,
     metadataService,
     mdlService,
+    queryService,
     wrenAIAdaptor,
     telemetry,
     projectRecommendQuestionBackgroundTracker,

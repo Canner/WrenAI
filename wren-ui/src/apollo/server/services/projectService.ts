@@ -28,6 +28,7 @@ import { ProjectRecommendQuestionBackgroundTracker } from '../backgrounds';
 import { ITelemetry } from '../telemetry/telemetry';
 import { getConfig } from '../config';
 import { buildFastRecommendationQuestions } from '../utils/recommendationQuestions';
+import { IQueryService, PreviewDataResponse } from './queryService';
 
 const config = getConfig();
 
@@ -94,6 +95,7 @@ export class ProjectService implements IProjectService {
   private projectRepository: IProjectRepository;
   private metadataService: IDataSourceMetadataService;
   private mdlService: IMDLService;
+  private queryService: IQueryService;
   private wrenAIAdaptor: IWrenAIAdaptor;
   private projectRecommendQuestionBackgroundTracker: ProjectRecommendQuestionBackgroundTracker;
   private projectRecommendationJobs = new Map<number, Promise<void>>();
@@ -101,6 +103,7 @@ export class ProjectService implements IProjectService {
     projectRepository,
     metadataService,
     mdlService,
+    queryService,
     wrenAIAdaptor,
     telemetry,
     projectRecommendQuestionBackgroundTracker,
@@ -108,6 +111,7 @@ export class ProjectService implements IProjectService {
     projectRepository: IProjectRepository;
     metadataService: IDataSourceMetadataService;
     mdlService: IMDLService;
+    queryService: IQueryService;
     wrenAIAdaptor: IWrenAIAdaptor;
     telemetry: ITelemetry;
     projectRecommendQuestionBackgroundTracker?: ProjectRecommendQuestionBackgroundTracker;
@@ -115,6 +119,7 @@ export class ProjectService implements IProjectService {
     this.projectRepository = projectRepository;
     this.metadataService = metadataService;
     this.mdlService = mdlService;
+    this.queryService = queryService;
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.projectRecommendQuestionBackgroundTracker =
       projectRecommendQuestionBackgroundTracker ??
@@ -174,7 +179,12 @@ export class ProjectService implements IProjectService {
     project: Project,
   ): Promise<void> {
     const { manifest } = await this.mdlService.makeModelMDL(project);
-    const fastQuestions = buildFastRecommendationQuestions(
+    const fastQuestions = await this.filterExecutableRecommendationQuestions(
+      buildFastRecommendationQuestions(
+        manifest,
+        this.getProjectRecommendationQuestionsConfig(project).maxQuestions,
+      ),
+      project,
       manifest,
       this.getProjectRecommendationQuestionsConfig(project).maxQuestions,
     );
@@ -329,6 +339,37 @@ export class ProjectService implements IProjectService {
       },
       {},
     );
+  }
+
+  private async filterExecutableRecommendationQuestions(
+    questions: RecommendationQuestion[],
+    project: Project,
+    manifest: any,
+    maxQuestions: number,
+  ): Promise<RecommendationQuestion[]> {
+    const validQuestions: RecommendationQuestion[] = [];
+    for (const question of questions) {
+      try {
+        const result = (await this.queryService.preview(question.sql, {
+          project,
+          manifest,
+          modelingOnly: false,
+          limit: 1,
+          cacheEnabled: false,
+        })) as PreviewDataResponse;
+        if (result?.data?.length) {
+          validQuestions.push(question);
+          if (validQuestions.length >= maxQuestions) {
+            break;
+          }
+        }
+      } catch (error) {
+        logger.warn(
+          `Skipping project recommended question because SQL preview failed: ${question.question}. ${error}`,
+        );
+      }
+    }
+    return validQuestions;
   }
 
   private getProjectRecommendationQuestionsConfig(project: Project) {
