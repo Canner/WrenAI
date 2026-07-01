@@ -240,6 +240,13 @@ class AskService:
             )
         )
 
+    def _should_reuse_historical_question_sql(
+        self,
+        query: str,
+        histories: list[AskHistory] | None,
+    ) -> bool:
+        return bool(histories) and self._needs_conversation_context(query)
+
     def _rewrite_query_for_text_to_sql(self, query: str) -> str:
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized:
@@ -3535,7 +3542,13 @@ class AskService:
                         user_query,
                     )
 
-                if not api_results and not should_skip_pre_sql_retrieval:
+                if (
+                    not api_results
+                    and not should_skip_pre_sql_retrieval
+                    and self._should_reuse_historical_question_sql(
+                        user_query, histories
+                    )
+                ):
                     if not self._is_stopped(query_id, self._ask_results):
                         self._ask_results[query_id] = AskResultResponse(
                             status="searching",

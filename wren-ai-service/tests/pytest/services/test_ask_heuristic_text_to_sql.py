@@ -1,4 +1,26 @@
-from src.web.v1.services.ask import AskService
+from src.web.v1.services.ask import AskHistory, AskService
+
+
+def test_independent_question_does_not_reuse_historical_sql():
+    service = AskService(pipelines={})
+
+    assert not service._should_reuse_historical_question_sql(
+        "Show monthly order count by market.",
+        [],
+    )
+    assert not service._should_reuse_historical_question_sql(
+        "Show monthly order count by market.",
+        [AskHistory(question="previous", sql="SELECT 1")],
+    )
+
+
+def test_contextual_followup_can_reuse_historical_sql():
+    service = AskService(pipelines={})
+
+    assert service._should_reuse_historical_question_sql(
+        "Use the same table and show it by month.",
+        [AskHistory(question="previous", sql="SELECT 1")],
+    )
 
 
 def test_metadata_table_question_is_not_sql_or_chart_intent():
