@@ -185,6 +185,7 @@ export class TextBasedAnswerBackgroundTracker {
                   manifest: mdl,
                   modelingOnly: false,
                   limit: ANSWER_PREVIEW_LIMIT,
+                  cacheEnabled: false,
                 })) as PreviewDataResponse;
               } catch (error) {
                 logger.error(`Error when query sql data: ${error}`);

@@ -1000,6 +1000,7 @@ export class AskingService implements IAskingService {
         manifest: deployment.manifest,
         modelingOnly: false,
         limit: 100,
+        cacheEnabled: false,
       })) as PreviewDataResponse;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1067,6 +1068,7 @@ export class AskingService implements IAskingService {
         manifest: deployment.manifest,
         modelingOnly: false,
         limit: 500,
+        cacheEnabled: false,
       })) as PreviewDataResponse;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1134,6 +1136,7 @@ export class AskingService implements IAskingService {
         project,
         manifest: mdl,
         limit,
+        cacheEnabled: false,
       })) as PreviewDataResponse;
       this.telemetry.sendEvent(eventName, { sql: response.sql });
       return data;
@@ -1176,6 +1179,7 @@ export class AskingService implements IAskingService {
         project,
         manifest: mdl,
         limit,
+        cacheEnabled: false,
       })) as PreviewDataResponse;
       this.telemetry.sendEvent(eventName, { sql });
       return data;
