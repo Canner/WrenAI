@@ -61,6 +61,59 @@ def test_fallback_chart_uses_grouped_bar_for_two_business_dimensions():
     assert result["chart_schema"]["encoding"]["xOffset"]["field"] == "Market"
 
 
+def test_fallback_chart_selects_question_relevant_x_and_numeric_y():
+    result = build_fallback_chart_result(
+        "Show Top 20 Sales Accounts by revenue.",
+        {
+            "columns": [
+                {"name": "SalesAccount"},
+                {"name": "Refund_Status"},
+                {"name": "Revenue"},
+            ],
+            "data": [["Acme", "TRANSMITTED", 100], ["Globex", "TRANSMITTED", 200]],
+        },
+    )
+
+    assert result["chart_schema"]["encoding"]["x"]["field"] == "SalesAccount"
+    assert result["chart_schema"]["encoding"]["y"]["field"] == "Revenue"
+    assert result["chart_schema"]["encoding"]["y"]["type"] == "quantitative"
+
+
+def test_fallback_chart_never_uses_same_numeric_field_for_x_and_y():
+    result = build_fallback_chart_result(
+        "Show revenue by discount.",
+        {
+            "columns": [{"name": "Discount"}, {"name": "Revenue"}],
+            "data": [[5, 100], [10, 200]],
+        },
+    )
+
+    assert result["chart_schema"]["encoding"]["x"]["field"] == "Discount"
+    assert result["chart_schema"]["encoding"]["y"]["field"] == "Revenue"
+    assert (
+        result["chart_schema"]["encoding"]["x"]["field"]
+        != result["chart_schema"]["encoding"]["y"]["field"]
+    )
+
+
+def test_line_chart_uses_count_y_when_no_numeric_metric_exists():
+    result = build_fallback_chart_result(
+        "Generate a line chart showing monthly repair volume.",
+        {
+            "columns": [{"name": "Month"}, {"name": "Status"}],
+            "data": [["2026-01", "completed"], ["2026-02", "in-progress"]],
+        },
+    )
+
+    assert result["chart_type"] == "line"
+    assert result["chart_schema"]["encoding"]["x"]["field"] == "Month"
+    assert result["chart_schema"]["encoding"]["y"] == {
+        "aggregate": "count",
+        "type": "quantitative",
+        "title": "Repair Count",
+    }
+
+
 def test_chart_schema_rejects_vega_aggregate_count_without_sql_metric():
     assert not _is_schema_compatible_with_sample_data(
         {

@@ -85,11 +85,40 @@ def _query_relevant_columns(query: str | None, columns: list[str]) -> list[str]:
     return [column for _, _, column in sorted(scored_columns)]
 
 
+def _query_grouping_columns(query: str | None, columns: list[str]) -> set[str]:
+    normalized_query = str(query or "").lower()
+    grouping_terms = set()
+    for match in re.finditer(
+        r"\b(?:by|per|each|grouped by|group by)\s+([a-zA-Z0-9_ ]+)",
+        normalized_query,
+    ):
+        phrase = match.group(1)
+        phrase = re.split(
+            r"\b(?:and|with|over|for|where|order|sort|top|last|using)\b",
+            phrase,
+            maxsplit=1,
+        )[0]
+        grouping_terms.update(_identifier_tokens(phrase))
+
+    grouped_columns = set()
+    for column in columns:
+        tokens = _identifier_tokens(column)
+        if tokens and tokens.intersection(grouping_terms):
+            grouped_columns.add(column)
+
+    return grouped_columns
+
+
 def _select_measure_column(query: str | None, quantitative: list[str]) -> str | None:
     if not quantitative:
         return None
 
-    relevant = _query_relevant_columns(query, quantitative)
+    grouping_columns = _query_grouping_columns(query, quantitative)
+    measure_candidates = [
+        column for column in quantitative if column not in grouping_columns
+    ] or quantitative
+
+    relevant = _query_relevant_columns(query, measure_candidates)
     if relevant:
         return relevant[0]
 
@@ -109,12 +138,41 @@ def _select_measure_column(query: str | None, quantitative: list[str]) -> str | 
         "failure",
         "repair",
     )
-    for column in quantitative:
+    for column in measure_candidates:
         normalized = str(column).lower()
         if any(keyword in normalized for keyword in metric_keywords):
             return column
 
-    return quantitative[0]
+    return measure_candidates[0]
+
+
+def _select_axis_columns(
+    query: str | None,
+    chart_type: str,
+    quantitative: list[str],
+    temporal: list[str],
+    nominal: list[str],
+    columns: list[str],
+) -> tuple[str | None, str | None, list[str]]:
+    dimensions = _select_dimension_columns(
+        query, chart_type, nominal, temporal, columns
+    )
+    measure = _select_measure_column(query, quantitative)
+
+    if dimensions:
+        return dimensions[0], measure, dimensions
+
+    # Numeric-only SQL results are still chartable, but x/y must never point to
+    # the same column. Use the first non-measure numeric column as the category
+    # axis and the selected measure as y.
+    if measure and len(quantitative) > 1:
+        x_field = next(
+            (column for column in quantitative if column != measure),
+            quantitative[0],
+        )
+        return x_field, measure, [x_field]
+
+    return (columns[0] if columns else None), measure, dimensions
 
 
 def _count_axis_title(query: str | None) -> str:
@@ -347,10 +405,10 @@ def _fallback_chart_type(
         return "pie" if nominal else ""
 
     if chart_type in {"line", "area", "multi_line"}:
-        return chart_type if quantitative and (temporal or nominal) else ""
+        return chart_type if temporal or nominal or quantitative else ""
 
     if chart_type in {"grouped_bar", "stacked_bar"}:
-        return chart_type if quantitative and len(nominal) > 1 else ""
+        return chart_type if len(nominal) > 1 else ""
 
     return "bar" if nominal or temporal or quantitative else ""
 
@@ -374,10 +432,9 @@ def _build_fallback_chart_schema(
     if not chart_type:
         return {}
 
-    dimensions = _select_dimension_columns(
-        query, chart_type, nominal, temporal, columns
+    x_field, measure, dimensions = _select_axis_columns(
+        query, chart_type, quantitative, temporal, nominal, columns
     )
-    measure = _select_measure_column(query, quantitative)
 
     title = _humanize_title(query or "Chart")
 
@@ -394,7 +451,7 @@ def _build_fallback_chart_schema(
     }
 
     if chart_type == "pie":
-        color_field = dimensions[0] if dimensions else columns[0]
+        color_field = x_field or columns[0]
         theta_axis = axis(measure, "quantitative") if measure else count_axis
         return {
             "title": title,
@@ -407,8 +464,9 @@ def _build_fallback_chart_schema(
 
     if chart_type in {"line", "area", "multi_line"}:
         if not measure:
-            return {}
-        y_encoding = axis(measure, "quantitative")
+            y_encoding = count_axis
+        else:
+            y_encoding = axis(measure, "quantitative")
         if {"year", "month"}.issubset({str(c).lower() for c in columns}):
             month_field = next(c for c in columns if str(c).lower() == "month")
             encoding = {
@@ -424,7 +482,7 @@ def _build_fallback_chart_schema(
                 "encoding": encoding,
             }
 
-        x_field = dimensions[0] if dimensions else columns[0]
+        x_field = x_field or columns[0]
         x_type = "temporal" if x_field in temporal else "ordinal"
         encoding = {
             "x": axis(x_field, x_type),
@@ -442,7 +500,7 @@ def _build_fallback_chart_schema(
             "encoding": encoding,
         }
 
-    x_field = dimensions[0] if dimensions else columns[0]
+    x_field = x_field or columns[0]
     x_type = (
         "nominal"
         if x_field in nominal
