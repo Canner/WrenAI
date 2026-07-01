@@ -58,6 +58,7 @@ export class BaseRepository<T> implements IBasicRepository<T> {
   protected knex: Knex;
   protected tableName: string;
   private hasIdColumnCache: boolean | null = null;
+  private hasIdentityIdPromise?: Promise<boolean>;
 
   constructor({ knexPg, tableName }: { knexPg: Knex; tableName: string }) {
     this.knex = knexPg;
@@ -277,6 +278,29 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     return (row?.maxId || 0) + 1;
   }
 
+  private async hasIdentityId(executer: Knex | Knex.Transaction) {
+    if (!this.isMssql(executer)) {
+      return true;
+    }
+
+    if (!this.hasIdentityIdPromise) {
+      this.hasIdentityIdPromise = executer('INFORMATION_SCHEMA.COLUMNS')
+        .select('COLUMN_NAME')
+        .where({
+          TABLE_SCHEMA: 'dbo',
+          TABLE_NAME: this.tableName,
+          COLUMN_NAME: 'id',
+        })
+        .whereRaw(
+          "COLUMNPROPERTY(OBJECT_ID(TABLE_SCHEMA + '.' + TABLE_NAME), COLUMN_NAME, 'IsIdentity') = 1",
+        )
+        .first()
+        .then(Boolean);
+    }
+
+    return this.hasIdentityIdPromise;
+  }
+
   private async prepareInsertData(
     data: Partial<T>,
     executer: Knex | Knex.Transaction,
@@ -286,7 +310,11 @@ export class BaseRepository<T> implements IBasicRepository<T> {
       return dbData;
     }
 
-    if (!(await this.hasIdColumn(executer)) || dbData.id !== undefined) {
+    if (
+      !(await this.hasIdColumn(executer)) ||
+      dbData.id !== undefined ||
+      (await this.hasIdentityId(executer))
+    ) {
       return dbData;
     }
 
@@ -301,7 +329,11 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     executer: Knex | Knex.Transaction,
   ) {
     const dbData = data.map((item) => this.transformToDBData(item));
-    if (!this.isMssql(executer) || !(await this.hasIdColumn(executer))) {
+    if (
+      !this.isMssql(executer) ||
+      !(await this.hasIdColumn(executer)) ||
+      (await this.hasIdentityId(executer))
+    ) {
       return dbData;
     }
 

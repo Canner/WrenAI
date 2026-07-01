@@ -58,6 +58,7 @@ export class DashboardItemRepository
 {
   private readonly jsonbColumns = ['layout', 'detail'];
   private hasIdColumnCache: boolean | null = null;
+  private hasIdentityIdPromise?: Promise<boolean>;
   private hasTitleColumnCache: boolean | null = null;
   private hasDisplayNameColumnCache: boolean | null = null;
   private columnCache = new Map<string, boolean>();
@@ -162,7 +163,8 @@ export class DashboardItemRepository
       includeGeneratedId &&
       hasIdColumn &&
       normalizedData.id === undefined &&
-      this.isMssqlLike(executer)
+      this.isMssqlLike(executer) &&
+      !(await this.hasIdentityId(executer))
     ) {
       normalizedData.id = await this.getNextId(executer);
     }
@@ -217,6 +219,29 @@ export class DashboardItemRepository
     return [clientName, dialect, driverName].some((value) =>
       value.includes('mssql'),
     );
+  }
+
+  private async hasIdentityId(executer: Knex | Knex.Transaction) {
+    if (!this.isMssqlLike(executer)) {
+      return true;
+    }
+
+    if (!this.hasIdentityIdPromise) {
+      this.hasIdentityIdPromise = executer('INFORMATION_SCHEMA.COLUMNS')
+        .select('COLUMN_NAME')
+        .where({
+          TABLE_SCHEMA: 'dbo',
+          TABLE_NAME: this.tableName,
+          COLUMN_NAME: 'id',
+        })
+        .whereRaw(
+          "COLUMNPROPERTY(OBJECT_ID(TABLE_SCHEMA + '.' + TABLE_NAME), COLUMN_NAME, 'IsIdentity') = 1",
+        )
+        .first()
+        .then(Boolean);
+    }
+
+    return this.hasIdentityIdPromise;
   }
 
   private async getNextId(executer: Knex | Knex.Transaction) {
