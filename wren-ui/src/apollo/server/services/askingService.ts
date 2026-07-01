@@ -42,7 +42,7 @@ import {
   TrackedAdjustmentResult,
 } from '../backgrounds';
 import { getConfig } from '@server/config';
-import { buildFastRecommendationQuestions } from '@server/utils/recommendationQuestions';
+import { buildFastRecommendationQuestions } from '../utils/recommendationQuestions';
 import { TextBasedAnswerBackgroundTracker } from '../backgrounds/textBasedAnswerBackgroundTracker';
 import { IAskingTaskTracker, TrackedAskingResult } from './askingTaskTracker';
 

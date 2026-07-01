@@ -27,7 +27,7 @@ import { IMDLService } from './mdlService';
 import { ProjectRecommendQuestionBackgroundTracker } from '../backgrounds';
 import { ITelemetry } from '../telemetry/telemetry';
 import { getConfig } from '../config';
-import { buildFastRecommendationQuestions } from '@server/utils/recommendationQuestions';
+import { buildFastRecommendationQuestions } from '../utils/recommendationQuestions';
 
 const config = getConfig();
 
