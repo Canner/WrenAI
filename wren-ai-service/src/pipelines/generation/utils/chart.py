@@ -404,10 +404,10 @@ def _fallback_chart_type(
         return "pie" if nominal else ""
 
     if chart_type in {"line", "area", "multi_line"}:
-        return chart_type if temporal or nominal or quantitative else ""
+        return chart_type if quantitative and (temporal or nominal) else ""
 
     if chart_type in {"grouped_bar", "stacked_bar"}:
-        return chart_type if len(nominal) > 1 else ""
+        return chart_type if quantitative and len(nominal) > 1 else ""
 
     return "bar" if nominal or temporal or quantitative else ""
 
@@ -463,37 +463,9 @@ def _build_fallback_chart_schema(
         }
 
     if chart_type in {"line", "area", "multi_line"}:
-        y_encoding = axis(measure, "quantitative") if measure else count_axis
-        if chart_type == "multi_line" and len(quantitative) > 1:
-            x_field = (
-                dimensions[0]
-                if dimensions
-                else (temporal[0] if temporal else nominal[0] if nominal else columns[0])
-            )
-            x_type = "temporal" if x_field in temporal else "ordinal"
-            return {
-                "title": title,
-                "mark": {"type": "line"},
-                "transform": [
-                    {
-                        "fold": quantitative,
-                        "as": ["Metric", "Value"],
-                    }
-                ],
-                "encoding": {
-                    "x": axis(x_field, x_type),
-                    "y": {
-                        "field": "Value",
-                        "type": "quantitative",
-                        "title": "Value",
-                    },
-                    "color": {
-                        "field": "Metric",
-                        "type": "nominal",
-                        "title": "Metric",
-                    },
-                },
-            }
+        if not measure:
+            return {}
+        y_encoding = axis(measure, "quantitative")
         if {"year", "month"}.issubset({str(c).lower() for c in columns}):
             month_field = next(c for c in columns if str(c).lower() == "month")
             encoding = {
@@ -545,9 +517,7 @@ def _build_fallback_chart_schema(
     if comparison_field:
         encoding["color"] = axis(comparison_field, "nominal")
         nominal_dimension_count = len([c for c in dimensions if c in nominal])
-        if chart_type == "grouped_bar" or (
-            not chart_type and nominal_dimension_count > 1
-        ):
+        if chart_type == "grouped_bar" or nominal_dimension_count > 1:
             encoding["xOffset"] = axis(comparison_field, "nominal")
     elif x_field in nominal:
         encoding["color"] = axis(x_field, "nominal")
