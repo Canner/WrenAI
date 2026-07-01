@@ -31,13 +31,68 @@ def _detect_requested_chart_type(query: str | None) -> str:
         ("bar", ["waterfall", "waterfall chart"]),
         ("pie", ["pie chart", "donut chart", "doughnut chart"]),
         ("area", ["area chart", "area graph"]),
+        ("scatter", ["scatter chart", "scatter plot", "scatter graph"]),
     ]
     for chart_type, patterns in checks:
         if any(pattern in normalized for pattern in patterns):
             return chart_type
-    if re.search(r"\b(chart|graph|plot|visuali[sz](?:e|ation)?)\b", normalized):
+    return ""
+
+
+def _closest_supported_chart_type(
+    requested_chart_type: str,
+    quantitative: list[str],
+    temporal: list[str],
+    nominal: list[str],
+) -> str:
+    if requested_chart_type != "scatter":
+        return requested_chart_type
+
+    if len(quantitative) >= 2:
+        return "bar"
+    if temporal and quantitative:
+        return "line"
+    if nominal and quantitative:
         return "bar"
     return ""
+
+
+def _chart_reasoning(
+    requested_chart_type: str,
+    chart_type: str,
+    chart_schema: dict,
+    existing_reasoning: str = "",
+) -> str:
+    if not chart_schema:
+        return existing_reasoning
+    if requested_chart_type == "scatter" and chart_type:
+        return (
+            "The user requested a scatter chart, but scatter charts are not "
+            "supported by the current chart type contract. Generated the closest "
+            f"supported visualization ({chart_type.replace('_', ' ')} chart) "
+            "from the SQL result columns."
+        )
+    if requested_chart_type and requested_chart_type != chart_type:
+        return (
+            f"The requested {requested_chart_type.replace('_', ' ')} chart was "
+            "not suitable for the returned SQL result shape. Generated the "
+            f"closest meaningful {chart_type.replace('_', ' ')} chart from the "
+            "SQL result columns."
+        )
+    if existing_reasoning:
+        return existing_reasoning
+    return "Generated from the SQL result columns and requested chart type."
+
+
+def _chart_type_matches_request(
+    requested_chart_type: str,
+    actual_chart_type: str,
+) -> bool:
+    if not requested_chart_type:
+        return True
+    if requested_chart_type == "scatter":
+        return actual_chart_type in {"line", "bar"}
+    return requested_chart_type == actual_chart_type
 
 
 def _safe_column_names(columns: list[Any]) -> list[str]:
@@ -341,7 +396,9 @@ def _fallback_chart_type(
     temporal: list[str],
     nominal: list[str],
 ) -> str:
-    chart_type = requested_chart_type or "bar"
+    chart_type = _closest_supported_chart_type(
+        requested_chart_type or "bar", quantitative, temporal, nominal
+    )
 
     if chart_type == "pie":
         return "pie" if nominal else ""
@@ -483,8 +540,10 @@ def build_fallback_chart_result(
 ) -> dict:
     processed = ChartDataPreprocessor().run(data)
     sample_data = processed.get("sample_data", [])
-    chart_type = _detect_requested_chart_type(query) or "bar"
-    chart_type = _refine_chart_type_for_columns(query, chart_type, sample_data)
+    requested_chart_type = _detect_requested_chart_type(query)
+    chart_type = requested_chart_type or "bar"
+    if not requested_chart_type:
+        chart_type = _refine_chart_type_for_columns(query, chart_type, sample_data)
     chart_schema = _build_fallback_chart_schema(query, chart_type, sample_data)
     if not chart_schema:
         return {
@@ -501,7 +560,11 @@ def build_fallback_chart_result(
 
     return {
         "chart_schema": chart_schema,
-        "reasoning": "Generated from the SQL result columns and requested chart type.",
+        "reasoning": _chart_reasoning(
+            requested_chart_type,
+            chart_type,
+            chart_schema,
+        ),
         "chart_type": chart_type,
     }
 
@@ -908,9 +971,15 @@ class ChartGenerationPostProcessor:
                 chart_schema = _normalize_chart_schema_fields(
                     chart_schema, list(sample_data[0].keys()) if sample_data else []
                 )
+                actual_chart_type = _chart_type_from_schema(
+                    chart_schema, generation_result.get("chart_type", "")
+                )
 
                 if (
                     not _is_schema_compatible_with_sample_data(chart_schema, sample_data)
+                    or not _chart_type_matches_request(
+                        requested_chart_type, actual_chart_type
+                    )
                     or _needs_deterministic_bar_fallback(
                         chart_schema, chart_type or "", sample_data
                     )
@@ -919,6 +988,8 @@ class ChartGenerationPostProcessor:
                         query, chart_type or "bar", sample_data
                     )
                     chart_type = _chart_type_from_schema(chart_schema, chart_type)
+                else:
+                    chart_type = actual_chart_type
 
                 if not chart_schema:
                     return {
@@ -942,7 +1013,12 @@ class ChartGenerationPostProcessor:
                 return {
                     "results": {
                         "chart_schema": chart_schema,
-                        "reasoning": reasoning,
+                        "reasoning": _chart_reasoning(
+                            requested_chart_type,
+                            chart_type,
+                            chart_schema,
+                            reasoning,
+                        ),
                         "chart_type": chart_type,
                     }
                 }
@@ -957,7 +1033,12 @@ class ChartGenerationPostProcessor:
             return {
                 "results": {
                     "chart_schema": fallback_schema,
-                    "reasoning": reasoning,
+                    "reasoning": _chart_reasoning(
+                        requested_chart_type,
+                        fallback_chart_type,
+                        fallback_schema,
+                        reasoning,
+                    ),
                     "chart_type": fallback_chart_type,
                 }
             }
