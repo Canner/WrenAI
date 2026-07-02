@@ -23,10 +23,11 @@ interface TreeTitleProps {
   title: string;
   onDelete?: (id: string) => void;
   onRename?: (id: string, newName: string) => void;
+  renderDeleteModal?: (props: { onConfirm: () => void }) => React.ReactNode;
 }
 
 export default function TreeTitle(props: TreeTitleProps) {
-  const { id, onDelete, onRename } = props;
+  const { id, onDelete, onRename, renderDeleteModal } = props;
   const [title, setTitle] = useState(props.title);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -44,6 +45,11 @@ export default function TreeTitle(props: TreeTitleProps) {
   const onDeleteData = (id: string) => {
     onDelete && onDelete(id);
   };
+
+  const deleteModal =
+    renderDeleteModal?.({
+      onConfirm: () => onDeleteData(id),
+    }) || <DeleteThreadModal onConfirm={() => onDeleteData(id)} />;
 
   return isEditing ? (
     <TreeTitleInput
@@ -76,9 +82,7 @@ export default function TreeTitle(props: TreeTitleProps) {
                   },
                 },
                 {
-                  label: (
-                    <DeleteThreadModal onConfirm={() => onDeleteData(id)} />
-                  ),
+                  label: deleteModal,
                   key: MENU_ITEM_KEYS.DELETE,
                   onClick: ({ domEvent }) => {
                     domEvent.stopPropagation();

@@ -22,8 +22,12 @@ logger.level = 'debug';
 
 export class DashboardResolver {
   constructor() {
+    this.getDashboards = this.getDashboards.bind(this);
     this.getDashboard = this.getDashboard.bind(this);
     this.getDashboardItems = this.getDashboardItems.bind(this);
+    this.createDashboard = this.createDashboard.bind(this);
+    this.updateDashboard = this.updateDashboard.bind(this);
+    this.deleteDashboard = this.deleteDashboard.bind(this);
     this.createDashboardItem = this.createDashboardItem.bind(this);
     this.updateDashboardItem = this.updateDashboardItem.bind(this);
     this.deleteDashboardItem = this.deleteDashboardItem.bind(this);
@@ -33,9 +37,17 @@ export class DashboardResolver {
     this.setDashboardSchedule = this.setDashboardSchedule.bind(this);
   }
 
-  public async getDashboard(
+  public async getDashboards(
     _root: any,
     _args: any,
+    ctx: IContext,
+  ): Promise<Dashboard[]> {
+    return await ctx.dashboardService.getDashboards();
+  }
+
+  public async getDashboard(
+    _root: any,
+    args: { where?: { id: number } },
     ctx: IContext,
   ): Promise<
     Omit<Dashboard, 'nextScheduledAt'> & {
@@ -44,7 +56,7 @@ export class DashboardResolver {
       nextScheduledAt: string | null;
     }
   > {
-    const dashboard = await ctx.dashboardService.getCurrentDashboard();
+    const dashboard = await ctx.dashboardService.getDashboard(args.where?.id);
     if (!dashboard) {
       throw new Error('Dashboard not found.');
     }
@@ -65,21 +77,51 @@ export class DashboardResolver {
     _args: any,
     ctx: IContext,
   ): Promise<DashboardItem[]> {
-    const dashboard = await ctx.dashboardService.getCurrentDashboard();
+    const dashboard = await ctx.dashboardService.getDashboard();
     if (!dashboard) {
       throw new Error('Dashboard not found.');
     }
     return await ctx.dashboardService.getDashboardItems(dashboard.id);
   }
 
+  public async createDashboard(
+    _root: any,
+    args: { data?: { name?: string } },
+    ctx: IContext,
+  ): Promise<Dashboard> {
+    return await ctx.dashboardService.createDashboard(args.data || {});
+  }
+
+  public async updateDashboard(
+    _root: any,
+    args: { where: { id: number }; data: { name: string } },
+    ctx: IContext,
+  ): Promise<Dashboard> {
+    return await ctx.dashboardService.updateDashboard(args.where.id, args.data);
+  }
+
+  public async deleteDashboard(
+    _root: any,
+    args: { where: { id: number } },
+    ctx: IContext,
+  ): Promise<Dashboard | null> {
+    return await ctx.dashboardService.deleteDashboard(args.where.id);
+  }
+
   public async createDashboardItem(
     _root: any,
-    args: { data: { itemType: DashboardItemType; responseId: number } },
+    args: {
+      data: {
+        itemType: DashboardItemType;
+        responseId: number;
+        dashboardId?: number;
+      };
+    },
     ctx: IContext,
   ): Promise<DashboardItem> {
     const { responseId } = args.data;
     const itemType = this.normalizeDashboardItemType(args.data.itemType);
-    const dashboard = await ctx.dashboardService.getCurrentDashboard();
+    const dashboard = await ctx.dashboardService.getDashboard(args.data.dashboardId);
     const response = await ctx.askingService.getResponse(responseId);
 
     if (!response) {
@@ -196,7 +238,9 @@ export class DashboardResolver {
     const { itemId, limit, refresh } = args.data;
     try {
       const item = await ctx.dashboardService.getDashboardItem(itemId);
-      const { cacheEnabled } = await ctx.dashboardService.getCurrentDashboard();
+      const { cacheEnabled } = await ctx.dashboardService.getDashboard(
+        item.dashboardId,
+      );
       const project = await ctx.projectService.getCurrentProject();
       const deployment = await ctx.deployService.getLastDeployment(project.id);
       const mdl = deployment.manifest;
@@ -230,17 +274,17 @@ export class DashboardResolver {
 
   public async setDashboardSchedule(
     _root: any,
-    args: { data: SetDashboardCacheData },
+    args: { where: { id: number }; data: SetDashboardCacheData },
     ctx: IContext,
   ): Promise<Dashboard> {
     try {
-      const dashboard = await ctx.dashboardService.getCurrentDashboard();
+      const dashboard = await ctx.dashboardService.getDashboard(args.where.id);
       if (!dashboard) {
         throw new Error('Dashboard not found.');
       }
 
       return await ctx.dashboardService.setDashboardSchedule(
-        dashboard.id,
+        args.where.id,
         args.data,
       );
     } catch (error) {

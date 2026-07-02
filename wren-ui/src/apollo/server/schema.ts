@@ -975,10 +975,23 @@ export const typeDefs = gql`
   input CreateDashboardItemInput {
     itemType: DashboardItemType!
     responseId: Int!
+    dashboardId: Int
   }
 
   input UpdateDashboardItemInput {
     displayName: String!
+  }
+
+  input DashboardWhereInput {
+    id: Int!
+  }
+
+  input CreateDashboardInput {
+    name: String
+  }
+
+  input UpdateDashboardInput {
+    name: String!
   }
 
   input ItemLayoutInput {
@@ -1277,9 +1290,10 @@ export const typeDefs = gql`
     getProjectRecommendationQuestions: RecommendedQuestionsTask!
     instantRecommendedQuestions(taskId: String): RecommendedQuestionsTask!
 
-    # Dashboard
-    dashboardItems: [DashboardItem!]!
-    dashboard: DetailedDashboard!
+      # Dashboard
+      dashboards: [Dashboard!]!
+      dashboardItems: [DashboardItem!]!
+      dashboard(where: DashboardWhereInput): DetailedDashboard!
 
     # SQL Pairs
     sqlPairs: [SqlPair]!
@@ -1412,18 +1426,27 @@ export const typeDefs = gql`
       data: InstantRecommendedQuestionsInput!
     ): Task!
 
-    # Dashboard
-    updateDashboardItemLayouts(
-      data: UpdateDashboardItemLayoutsInput!
-    ): [DashboardItem!]!
-    createDashboardItem(data: CreateDashboardItemInput!): DashboardItem!
+      # Dashboard
+      createDashboard(data: CreateDashboardInput): Dashboard!
+      updateDashboard(
+        where: DashboardWhereInput!
+        data: UpdateDashboardInput!
+      ): Dashboard!
+      deleteDashboard(where: DashboardWhereInput!): Dashboard
+      updateDashboardItemLayouts(
+        data: UpdateDashboardItemLayoutsInput!
+      ): [DashboardItem!]!
+      createDashboardItem(data: CreateDashboardItemInput!): DashboardItem!
     updateDashboardItem(
       where: DashboardItemWhereInput!
       data: UpdateDashboardItemInput!
     ): DashboardItem!
-    deleteDashboardItem(where: DashboardItemWhereInput!): Boolean!
-    previewItemSQL(data: PreviewItemSQLInput!): PreviewItemResponse!
-    setDashboardSchedule(data: SetDashboardScheduleInput!): Dashboard!
+      deleteDashboardItem(where: DashboardItemWhereInput!): Boolean!
+      previewItemSQL(data: PreviewItemSQLInput!): PreviewItemResponse!
+      setDashboardSchedule(
+        where: DashboardWhereInput!
+        data: SetDashboardScheduleInput!
+      ): Dashboard!
 
     # SQL Pairs
     createSqlPair(data: CreateSqlPairInput!): SqlPair!

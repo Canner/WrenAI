@@ -77,8 +77,11 @@ export const PREVIEW_ITEM_SQL = gql`
 `;
 
 export const SET_DASHBOARD_SCHEDULE = gql`
-  mutation SetDashboardSchedule($data: SetDashboardScheduleInput!) {
-    setDashboardSchedule(data: $data) {
+  mutation SetDashboardSchedule(
+    $where: DashboardWhereInput!
+    $data: SetDashboardScheduleInput!
+  ) {
+    setDashboardSchedule(where: $where, data: $data) {
       id
       projectId
       name
@@ -91,9 +94,19 @@ export const SET_DASHBOARD_SCHEDULE = gql`
   }
 `;
 
+export const DASHBOARDS = gql`
+  query Dashboards {
+    dashboards {
+      id
+      projectId
+      name
+    }
+  }
+`;
+
 export const DASHBOARD = gql`
-  query Dashboard {
-    dashboard {
+  query Dashboard($where: DashboardWhereInput) {
+    dashboard(where: $where) {
       id
       name
       description
@@ -113,4 +126,47 @@ export const DASHBOARD = gql`
     }
   }
   ${COMMON_DASHBOARD_ITEM}
+`;
+
+export const CREATE_DASHBOARD = gql`
+  mutation CreateDashboard($data: CreateDashboardInput) {
+    createDashboard(data: $data) {
+      id
+      projectId
+      name
+      cacheEnabled
+      scheduleFrequency
+      scheduleTimezone
+      scheduleCron
+      nextScheduledAt
+    }
+  }
+`;
+
+export const UPDATE_DASHBOARD = gql`
+  mutation UpdateDashboard(
+    $where: DashboardWhereInput!
+    $data: UpdateDashboardInput!
+  ) {
+    updateDashboard(where: $where, data: $data) {
+      id
+      projectId
+      name
+      cacheEnabled
+      scheduleFrequency
+      scheduleTimezone
+      scheduleCron
+      nextScheduledAt
+    }
+  }
+`;
+
+export const DELETE_DASHBOARD = gql`
+  mutation DeleteDashboard($where: DashboardWhereInput!) {
+    deleteDashboard(where: $where) {
+      id
+      projectId
+      name
+    }
+  }
 `;
