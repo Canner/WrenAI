@@ -76,9 +76,20 @@ See https://docs.getwren.ai/oss/engine/get_started/installation for full setup.
 
 
 def _snake_to_camel(name: str) -> str:
-    """Convert snake_case to camelCase."""
-    parts = name.split("_")
-    return parts[0] + "".join(w.capitalize() for w in parts[1:])
+    """Convert snake_case to camelCase, preserving any leading underscores.
+
+    Keys like ``_instructions`` are sentinel carriers consumed downstream
+    under that exact name. The naive ``"_instructions".split("_")`` yields
+    ``["", "instructions"]`` → ``"Instructions"`` — the leading underscore is
+    lost and the first real word is capitalized, mangling the key. Strip and
+    re-attach the leading underscore run so it round-trips.
+    """
+    stripped = name.lstrip("_")
+    prefix = name[: len(name) - len(stripped)]
+    parts = stripped.split("_")
+    if not stripped:
+        return name
+    return prefix + parts[0] + "".join(w.capitalize() for w in parts[1:])
 
 
 def _convert_keys(obj: Any) -> Any:

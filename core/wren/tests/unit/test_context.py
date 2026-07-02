@@ -43,6 +43,24 @@ def test_snake_to_camel():
     assert _snake_to_camel("name") == "name"
 
 
+def test_snake_to_camel_preserves_leading_underscore():
+    # Sentinel keys like `_instructions` must keep their leading underscore
+    # and not capitalize the first real word (the naive split mangled this
+    # into "Instructions").
+    assert _snake_to_camel("_instructions") == "_instructions"
+    assert _snake_to_camel("_dbt_tests") == "_dbtTests"
+    assert _snake_to_camel("__double") == "__double"
+
+
+def test_convert_keys_does_not_mangle_nested_instructions():
+    # A nested `_instructions` carrier must survive the camelCase pass intact;
+    # the top-level pop workarounds elsewhere don't protect nested ones.
+    obj = {"models": [{"name": "m", "_instructions": "do x"}]}
+    result = _convert_keys(obj)
+    assert result["models"][0]["_instructions"] == "do x"
+    assert "Instructions" not in result["models"][0]
+
+
 def test_convert_keys_nested():
     obj = {
         "table_reference": {"catalog": "c", "schema_name": "s"},
