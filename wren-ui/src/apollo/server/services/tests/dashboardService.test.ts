@@ -175,35 +175,6 @@ describe('DashboardService', () => {
         ]),
       ).rejects.toThrow('Invalid layouts boundaries.');
     });
-
-    it('should reject fetching items for a dashboard outside the current context', async () => {
-      const project = { id: 42 };
-      const dashboard = { id: '1001', projectId: 42, name: 'Dashboard' };
-      mockProjectService.getCurrentProject.mockResolvedValue(project);
-      mockDashboardRepository.findOneBy.mockResolvedValue(dashboard);
-
-      await expect(
-        dashboardService.getDashboardItems('9999'),
-      ).rejects.toThrow('Dashboard not found.');
-      expect(mockDashboardItemRepository.findAllBy).not.toHaveBeenCalled();
-    });
-
-    it('should reject creating items for a dashboard outside the current context', async () => {
-      const project = { id: 42 };
-      const dashboard = { id: '1001', projectId: 42, name: 'Dashboard' };
-      mockProjectService.getCurrentProject.mockResolvedValue(project);
-      mockDashboardRepository.findOneBy.mockResolvedValue(dashboard);
-
-      await expect(
-        dashboardService.createDashboardItem({
-          dashboardId: '9999',
-          type: 'BAR' as any,
-          sql: 'select 1',
-          chartSchema: { title: 'Test' },
-        }),
-      ).rejects.toThrow('Dashboard not found.');
-      expect(mockDashboardItemRepository.createOne).not.toHaveBeenCalled();
-    });
   });
 
   describe('generateCronExpression', () => {

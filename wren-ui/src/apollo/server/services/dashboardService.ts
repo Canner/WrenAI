@@ -63,37 +63,6 @@ export class DashboardService implements IDashboardService {
   private dashboardItemRepository: IDashboardItemRepository;
   private dashboardRepository: IDashboardRepository;
 
-  private async getCurrentDashboardContext(): Promise<{
-    project: Awaited<ReturnType<IProjectService['getCurrentProject']>>;
-    dashboard: Dashboard;
-  }> {
-    const project = await this.projectService.getCurrentProject();
-    logger.debug(
-      `Loading current dashboard for project ${String(project.id)} (${project.type || 'unknown'})`,
-    );
-    const existingDashboard = await this.dashboardRepository.findOneBy({
-      projectId: project.id,
-    });
-    if (existingDashboard) {
-      logger.debug(
-        `Resolved dashboard ${String(existingDashboard.id)} for project ${String(project.id)}`,
-      );
-      return { project, dashboard: existingDashboard };
-    }
-
-    logger.debug(
-      `Dashboard not found for project ${project.id}; initializing a default dashboard.`,
-    );
-    const dashboard = await this.dashboardRepository.createOne({
-      name: 'Dashboard',
-      projectId: project.id,
-    });
-    logger.debug(
-      `Initialized dashboard ${String(dashboard.id)} for project ${String(project.id)}`,
-    );
-    return { project, dashboard };
-  }
-
   constructor({
     projectService,
     dashboardItemRepository,
@@ -117,12 +86,15 @@ export class DashboardService implements IDashboardService {
       // Validate input
       this.validateScheduleInput(data);
 
-      const { dashboard } = await this.getCurrentDashboardContext();
-      if (String(dashboard.id) !== String(dashboardId)) {
+      // Check if dashboard exists
+      const dashboard = await this.dashboardRepository.findOneBy({
+        id: dashboardId,
+      });
+      if (!dashboard) {
         throw new Error(`Dashboard with id ${dashboardId} not found`);
       }
       if (!cacheEnabled) {
-        return await this.dashboardRepository.updateOne(dashboard.id, {
+        return await this.dashboardRepository.updateOne(dashboardId, {
           cacheEnabled: false,
           scheduleFrequency: null,
           scheduleTimezone: null,
@@ -141,7 +113,7 @@ export class DashboardService implements IDashboardService {
       }
 
       // Update dashboard with new schedule
-      return await this.dashboardRepository.updateOne(dashboard.id, {
+      return await this.dashboardRepository.updateOne(dashboardId, {
         cacheEnabled,
         scheduleFrequency: schedule.frequency,
         scheduleTimezone: schedule.timezone,
@@ -155,13 +127,40 @@ export class DashboardService implements IDashboardService {
   }
 
   public async initDashboard(): Promise<Dashboard> {
-    const { dashboard } = await this.getCurrentDashboardContext();
-    return dashboard;
+    const project = await this.projectService.getCurrentProject();
+    logger.debug(
+      `Initializing dashboard for project ${String(project.id)} (${project.type || 'unknown'})`,
+    );
+    const existingDashboard = await this.dashboardRepository.findOneBy({
+      projectId: project.id,
+    });
+    if (existingDashboard) return existingDashboard;
+    // only support one dashboard for oss
+    return await this.dashboardRepository.createOne({
+      name: 'Dashboard',
+      projectId: project.id,
+    });
   }
 
   public async getCurrentDashboard(): Promise<Dashboard> {
-    const { dashboard } = await this.getCurrentDashboardContext();
-    return dashboard;
+    const project = await this.projectService.getCurrentProject();
+    logger.debug(
+      `Loading current dashboard for project ${String(project.id)} (${project.type || 'unknown'})`,
+    );
+    const dashboard = await this.dashboardRepository.findOneBy({
+      projectId: project.id,
+    });
+    if (dashboard) {
+      logger.debug(
+        `Resolved dashboard ${String(dashboard.id)} for project ${String(project.id)}`,
+      );
+      return dashboard;
+    }
+
+    logger.debug(
+      `Dashboard not found for project ${project.id}; initializing a default dashboard.`,
+    );
+    return await this.initDashboard();
   }
 
   public async getDashboardItem(
@@ -180,15 +179,11 @@ export class DashboardService implements IDashboardService {
   public async getDashboardItems(
     dashboardId: string | number,
   ): Promise<DashboardItem[]> {
-    const { dashboard } = await this.getCurrentDashboardContext();
-    if (String(dashboard.id) !== String(dashboardId)) {
-      throw new Error('Dashboard not found.');
-    }
     const items = await this.dashboardItemRepository.findAllBy({
-      dashboardId: dashboard.id,
+      dashboardId,
     });
     logger.debug(
-      `Loaded ${items.length} dashboard item(s) for dashboard ${String(dashboard.id)}`,
+      `Loaded ${items.length} dashboard item(s) for dashboard ${String(dashboardId)}`,
     );
     return items;
   }
@@ -196,16 +191,12 @@ export class DashboardService implements IDashboardService {
   public async createDashboardItem(
     input: CreateDashboardItemInput,
   ): Promise<DashboardItem> {
-    const { dashboard } = await this.getCurrentDashboardContext();
-    if (String(dashboard.id) !== String(input.dashboardId)) {
-      throw new Error('Dashboard not found.');
-    }
-    const layout = await this.calculateNewLayout(dashboard.id);
+    const layout = await this.calculateNewLayout(input.dashboardId);
     logger.debug(
-      `Creating dashboard item for dashboard ${String(dashboard.id)} with type ${input.type}`,
+      `Creating dashboard item for dashboard ${String(input.dashboardId)} with type ${input.type}`,
     );
     const dashboardItem = await this.dashboardItemRepository.createOne({
-      dashboardId: dashboard.id,
+      dashboardId: input.dashboardId,
       type: input.type,
       detail: {
         sql: input.sql,
@@ -215,7 +206,7 @@ export class DashboardService implements IDashboardService {
       layout,
     });
     logger.debug(
-      `Created dashboard item ${String(dashboardItem.id)} for dashboard ${String(dashboard.id)}`,
+      `Created dashboard item ${String(dashboardItem.id)} for dashboard ${String(input.dashboardId)}`,
     );
     return dashboardItem;
   }
@@ -515,74 +506,58 @@ export class DashboardService implements IDashboardService {
   }
 
   public parseCronExpression(dashboard: Dashboard): DashboardSchedule {
-    try {
-      if (!dashboard.scheduleCron) {
+    if (!dashboard.scheduleCron) {
+      return {
+        frequency: dashboard.scheduleFrequency,
+        hour: 0,
+        minute: 0,
+        day: null,
+        timezone: dashboard.scheduleTimezone || '',
+        cron: '',
+      } as DashboardSchedule;
+    }
+    switch (dashboard.scheduleFrequency) {
+      case ScheduleFrequencyEnum.CUSTOM:
         return {
-          frequency: dashboard.scheduleFrequency,
+          frequency: ScheduleFrequencyEnum.CUSTOM,
           hour: 0,
           minute: 0,
           day: null,
           timezone: dashboard.scheduleTimezone || '',
-          cron: '',
+          cron: dashboard.scheduleCron,
+        };
+      case ScheduleFrequencyEnum.DAILY:
+      case ScheduleFrequencyEnum.WEEKLY: {
+        const parts = dashboard.scheduleCron.split(' ');
+        if (parts.length !== 5) {
+          throw new Error('Invalid cron expression format');
+        }
+        const [minute, hour, , , dayOfWeek] = parts;
+        return this.toTimezone({
+          frequency: dashboard.scheduleFrequency,
+          hour: parseInt(hour, 10),
+          minute: parseInt(minute, 10),
+          day:
+            dashboard.scheduleFrequency === ScheduleFrequencyEnum.WEEKLY
+              ? (dayOfWeek as CacheScheduleDayEnum)
+              : null,
+          timezone: dashboard.scheduleTimezone || '',
+          cron: null,
         } as DashboardSchedule);
       }
-      switch (dashboard.scheduleFrequency) {
-        case ScheduleFrequencyEnum.CUSTOM:
-          return {
-            frequency: ScheduleFrequencyEnum.CUSTOM,
-            hour: 0,
-            minute: 0,
-            day: null,
-            timezone: dashboard.scheduleTimezone || '',
-            cron: dashboard.scheduleCron,
-          };
-        case ScheduleFrequencyEnum.DAILY:
-        case ScheduleFrequencyEnum.WEEKLY: {
-          const parts = dashboard.scheduleCron.split(' ');
-          if (parts.length !== 5) {
-            throw new Error('Invalid cron expression format');
-          }
-          const [minute, hour, , , dayOfWeek] = parts;
-          return this.toTimezone({
-            frequency: dashboard.scheduleFrequency,
-            hour: parseInt(hour, 10),
-            minute: parseInt(minute, 10),
-            day:
-              dashboard.scheduleFrequency === ScheduleFrequencyEnum.WEEKLY
-                ? (dayOfWeek as CacheScheduleDayEnum)
-                : null,
-            timezone: dashboard.scheduleTimezone || '',
-            cron: null,
-          } as DashboardSchedule);
-        }
-        case ScheduleFrequencyEnum.NEVER: {
-          return {
-            frequency: ScheduleFrequencyEnum.NEVER,
-            hour: null,
-            minute: null,
-            day: null,
-            timezone: dashboard.scheduleTimezone || '',
-            cron: null,
-          } as DashboardSchedule;
-        }
-        default: {
-          throw new Error('Invalid schedule frequency');
-        }
+      case ScheduleFrequencyEnum.NEVER: {
+        return {
+          frequency: ScheduleFrequencyEnum.NEVER,
+          hour: null,
+          minute: null,
+          day: null,
+          timezone: dashboard.scheduleTimezone || '',
+          cron: null,
+        } as DashboardSchedule;
       }
-    } catch (error) {
-      logger.warn(
-        `Failed to parse dashboard schedule for dashboard ${String(dashboard.id)}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-      return {
-        frequency: ScheduleFrequencyEnum.NEVER,
-        hour: null,
-        minute: null,
-        day: null,
-        timezone: dashboard.scheduleTimezone || '',
-        cron: null,
-      } as DashboardSchedule;
+      default: {
+        throw new Error('Invalid schedule frequency');
+      }
     }
   }
 }
