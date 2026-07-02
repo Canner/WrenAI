@@ -8,7 +8,7 @@ edition = "2021"
 homepage = "https://getwren.ai"
 license = "Apache-2.0"
 readme = "README.md"
-repository = "https://github.com/Canner/wren-engine"
+repository = "https://github.com/Canner/WrenAI"
 rust-version = "1.78"
 version = "0.1.0"
 

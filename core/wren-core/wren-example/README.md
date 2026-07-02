@@ -6,8 +6,8 @@ The crate includes several examples of how to use Wren Engine APIs and help you 
 To run the examples, use the `cargo run` command, such as:
 
 ```bash
-git clone https://github.com/Canner/wren-engine.git
-cd wren-engine/wren-core
+git clone https://github.com/Canner/WrenAI.git
+cd WrenAI/core/wren-core
 
 # Run the `datafusion_apply` example:
 # ... use the equivalent for other examples
