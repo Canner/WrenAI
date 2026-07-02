@@ -410,3 +410,24 @@ class TestClickHouseUrlKwargs:
         )
         assert "secure" not in out
         assert out["port"] == 8123
+
+    def test_blank_secure_query_param_is_a_falsy_override(self) -> None:
+        """``?secure=`` must reach the override handling, not be dropped.
+
+        ``parse_qsl`` discards blank values by default, which silently turned
+        ``?secure=`` into "unspecified". Blank is falsy, like everywhere else
+        in ``_parse_secure_flag``.
+        """
+        out = _build_clickhouse_client_kwargs(
+            _FakeChUrl("clickhouse+https://user:pw@host/db?secure=")
+        )
+        assert "secure" not in out
+        assert out["port"] == 8123
+
+    def test_blank_statement_timeout_query_param_is_ignored(self) -> None:
+        """``?statement_timeout=`` is treated as absent, not ``int("")``."""
+        out = _build_clickhouse_client_kwargs(
+            _FakeChUrl("clickhouse://user:pw@host/db?statement_timeout=")
+        )
+        assert out["settings"] == {}
+        assert "statement_timeout" not in out

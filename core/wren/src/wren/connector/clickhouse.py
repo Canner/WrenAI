@@ -259,7 +259,10 @@ def _build_clickhouse_client_kwargs(connection_info: Any) -> dict:
                 "ClickHouse connection URL must use clickhouse:// scheme",
             )
 
-        kwargs: dict = dict(parse_qsl(parsed.query))
+        # ``keep_blank_values`` so a blank parameter (``?secure=``) still
+        # reaches the override handling below instead of being dropped —
+        # blank means "falsy", matching ``_parse_secure_flag``.
+        kwargs: dict = dict(parse_qsl(parsed.query, keep_blank_values=True))
         info_kwargs = getattr(connection_info, "kwargs", None)
         if info_kwargs:
             kwargs.update(info_kwargs)
@@ -268,7 +271,8 @@ def _build_clickhouse_client_kwargs(connection_info: Any) -> dict:
             dict(kwargs.pop("settings", {})) if "settings" in kwargs else {}
         )
         statement_timeout = kwargs.pop("statement_timeout", None)
-        if statement_timeout is not None:
+        # Blank (``?statement_timeout=``) is treated the same as absent.
+        if statement_timeout not in (None, ""):
             settings["max_execution_time"] = int(statement_timeout)
 
         # urlparse leaves percent-encoded characters in userinfo, so decode
