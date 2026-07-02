@@ -11,23 +11,23 @@ Translate natural SQL queries through an [MDL (Modeling Definition Language)](ht
 ## Installation
 
 ```bash
-pip install wrenai              # Core (DuckDB included)
-pip install wrenai[postgres]    # PostgreSQL
-pip install wrenai[mysql]       # MySQL
-pip install wrenai[bigquery]    # BigQuery
-pip install wrenai[snowflake]   # Snowflake
-pip install wrenai[clickhouse]  # ClickHouse
-pip install wrenai[trino]       # Trino
-pip install wrenai[mssql]       # SQL Server
-pip install wrenai[databricks]  # Databricks
-pip install wrenai[redshift]    # Redshift
-pip install wrenai[spark]       # Spark
-pip install wrenai[athena]      # Athena
-pip install wrenai[oracle]      # Oracle
-pip install 'wrenai[memory]'    # Schema & query memory (LanceDB)
-pip install 'wrenai[ui]'        # Browser-based profile form (starlette + uvicorn)
-pip install 'wrenai[main]'      # memory + interactive prompts + ui
-pip install 'wrenai[all]'       # All connectors + main
+pip install wrenai                 # Core (DuckDB included)
+pip install 'wrenai[postgres]'     # PostgreSQL
+pip install 'wrenai[mysql]'        # MySQL
+pip install 'wrenai[bigquery]'     # BigQuery
+pip install 'wrenai[snowflake]'    # Snowflake
+pip install 'wrenai[clickhouse]'   # ClickHouse
+pip install 'wrenai[trino]'        # Trino
+pip install 'wrenai[mssql]'        # SQL Server
+pip install 'wrenai[databricks]'   # Databricks
+pip install 'wrenai[redshift]'     # Redshift
+pip install 'wrenai[spark]'        # Spark
+pip install 'wrenai[athena]'       # Athena
+pip install 'wrenai[oracle]'       # Oracle
+pip install 'wrenai[memory]'       # Schema & query memory (LanceDB)
+pip install 'wrenai[ui]'           # Browser-based profile form (starlette + uvicorn)
+pip install 'wrenai[main]'         # memory + interactive prompts + ui
+pip install 'wrenai[all]'          # All connectors + main
 ```
 
 Requires Python 3.11+.

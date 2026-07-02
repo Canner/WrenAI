@@ -339,7 +339,7 @@ def _parse_trino_url(url: str, extra_kwargs: dict | None) -> dict:
 
 _TRINO_IMPORT_HINT = (
     "The 'trino' package is required for the Trino connector. "
-    "Install it with: pip install wren-engine[trino]"
+    "Install it with: pip install 'wrenai[trino]'"
 )
 
 

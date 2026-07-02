@@ -8,7 +8,7 @@ metadata:
 
 # Wren Engine CLI — Agent Workflow Guide
 
-> This guide is served by the `wren` CLI (`wren skills get usage`), so it always matches your installed wren-engine version. Pull the deeper reference docs with `wren skills get usage --full`.
+> This guide is served by the `wren` CLI (`wren skills get usage`), so it always matches your installed wrenai version. Pull the deeper reference docs with `wren skills get usage --full`.
 
 ## Preflight — Verify environment and installation
 

@@ -663,7 +663,7 @@ def _interactive_forget(mem_store, source: str | None, limit: int) -> None:
     except ImportError:
         typer.echo(
             "Interactive mode requires InquirerPy.\n"
-            "Install with: pip install wrenai[interactive]\n"
+            "Install with: pip install 'wrenai[interactive]'\n"
             "Or use: wren memory forget --id <ID> [--id <ID> ...]",
             err=True,
         )
