@@ -35,6 +35,7 @@ export interface DashboardItemLayout {
 export interface DashboardItemDetail {
   sql: string;
   chartSchema?: Record<string, any>;
+  previewDataSnapshot?: Record<string, any>[];
 }
 
 export interface DashboardItem {

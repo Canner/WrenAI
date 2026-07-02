@@ -16,9 +16,12 @@ import {
   DashboardSchedule,
   PreviewItemResponse,
 } from '@server/models/dashboard';
+import { Manifest } from '@server/mdl/type';
 
 const logger = getLogger('DashboardResolver');
 logger.level = 'debug';
+const DASHBOARD_SNAPSHOT_TIMEOUT_MS = 5000;
+const DASHBOARD_PREVIEW_TIMEOUT_MS = 15000;
 
 export class DashboardResolver {
   constructor() {
@@ -93,34 +96,25 @@ export class DashboardResolver {
         `Chart schema not found in thread response. responseId: ${responseId}`,
       );
     }
+    if (!response.sql) {
+      throw new Error(`Chart SQL not found in thread response. responseId: ${responseId}`);
+    }
+
+    const previewDataSnapshot = await this.capturePreviewSnapshot(
+      ctx,
+      response.sql,
+    );
 
     const dashboardItem = await ctx.dashboardService.createDashboardItem({
       dashboardId: dashboard.id,
       type: itemType,
       sql: response.sql,
       chartSchema: response.chartDetail?.chartSchema,
+      previewDataSnapshot,
     });
 
-    // Warm dashboard cache after persisting the item. Cache warm-up failures should
-    // not prevent a valid chart from being pinned.
-    const project = await ctx.projectService.getCurrentProject();
-    const deployment = await ctx.deployService.getLastDeployment(project.id);
-    const mdl = deployment.manifest;
-    try {
-      await ctx.queryService.preview(response.sql, {
-        project,
-        manifest: mdl,
-        limit: DEFAULT_PREVIEW_LIMIT,
-        cacheEnabled: true,
-        refresh: true,
-      });
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      logger.warn(
-        `Dashboard item ${dashboardItem.id} was pinned but cache warm-up failed: ${errorMessage}`,
-      );
-    }
+    // Warm dashboard cache asynchronously so datasource latency does not block pinning.
+    void this.warmDashboardCache(ctx, response.sql, dashboardItem.id);
 
     return dashboardItem;
   }
@@ -198,30 +192,40 @@ export class DashboardResolver {
       const item = await ctx.dashboardService.getDashboardItem(itemId);
       const { cacheEnabled } = await ctx.dashboardService.getCurrentDashboard();
       const project = await ctx.projectService.getCurrentProject();
-      const deployment = await ctx.deployService.getLastDeployment(project.id);
-      const mdl = deployment.manifest;
-      const data = (await ctx.queryService.preview(item.detail.sql, {
-        project,
-        manifest: mdl,
-        limit: limit || DEFAULT_PREVIEW_LIMIT,
-        cacheEnabled,
-        refresh: refresh || false,
-      })) as PreviewDataResponse;
+      const manifest = await this.getPreviewManifest(ctx, project.id);
 
-      // handle data to [{ column1: value1, column2: value2, ... }]
-      const values = data.data.map((val) => {
-        return data.columns.reduce((acc, col, index) => {
-          acc[col.name] = val[index];
-          return acc;
-        }, {});
-      });
-      return {
-        cacheHit: data.cacheHit || false,
-        cacheCreatedAt: data.cacheCreatedAt || null,
-        cacheOverrodeAt: data.cacheOverrodeAt || null,
-        override: data.override || false,
-        data: values,
-      } as PreviewItemResponse;
+      try {
+        const data = (await this.withTimeout(
+          ctx.queryService.preview(item.detail.sql, {
+            project,
+            manifest,
+            limit: limit || DEFAULT_PREVIEW_LIMIT,
+            cacheEnabled,
+            refresh: refresh || false,
+          }),
+          DASHBOARD_PREVIEW_TIMEOUT_MS,
+          `Dashboard preview timed out for item ${itemId}`,
+        )) as PreviewDataResponse;
+
+        return this.formatPreviewItemResponse(data);
+      } catch (error) {
+        const snapshot = item.detail.previewDataSnapshot;
+        if (snapshot?.length) {
+          logger.warn(
+            `Using stored dashboard preview snapshot for item ${itemId}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+          return {
+            cacheHit: false,
+            cacheCreatedAt: null,
+            cacheOverrodeAt: null,
+            override: false,
+            data: snapshot,
+          } as PreviewItemResponse;
+        }
+        throw error;
+      }
     } catch (error) {
       logger.error(`Error previewing SQL item ${itemId}: ${error}`);
       throw error;
@@ -246,6 +250,117 @@ export class DashboardResolver {
     } catch (error) {
       logger.error(`Failed to set dashboard schedule: ${error.message}`);
       throw error;
+    }
+  }
+
+  private async capturePreviewSnapshot(
+    ctx: IContext,
+    sql: string,
+  ): Promise<Record<string, any>[] | undefined> {
+    try {
+      const project = await ctx.projectService.getCurrentProject();
+      const manifest = await this.getPreviewManifest(ctx, project.id);
+      const data = (await this.withTimeout(
+        ctx.queryService.preview(sql, {
+          project,
+          manifest,
+          limit: DEFAULT_PREVIEW_LIMIT,
+          cacheEnabled: false,
+          refresh: false,
+        }),
+        DASHBOARD_SNAPSHOT_TIMEOUT_MS,
+        'Dashboard snapshot preview timed out',
+      )) as PreviewDataResponse;
+
+      return this.formatPreviewItemResponse(data).data;
+    } catch (error) {
+      logger.warn(
+        `Failed to capture dashboard preview snapshot: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return undefined;
+    }
+  }
+
+  private async warmDashboardCache(
+    ctx: IContext,
+    sql: string,
+    dashboardItemId: number,
+  ): Promise<void> {
+    try {
+      const project = await ctx.projectService.getCurrentProject();
+      const manifest = await this.getPreviewManifest(ctx, project.id);
+      await this.withTimeout(
+        ctx.queryService.preview(sql, {
+          project,
+          manifest,
+          limit: DEFAULT_PREVIEW_LIMIT,
+          cacheEnabled: true,
+          refresh: true,
+        }),
+        DASHBOARD_PREVIEW_TIMEOUT_MS,
+        `Dashboard cache warm-up timed out for item ${dashboardItemId}`,
+      );
+    } catch (error) {
+      logger.warn(
+        `Dashboard item ${dashboardItemId} was pinned but cache warm-up failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
+  private async getPreviewManifest(
+    ctx: IContext,
+    projectId: number,
+  ): Promise<Manifest> {
+    const deployment = await ctx.deployService.getLastDeployment(projectId);
+    if (deployment?.manifest) {
+      return deployment.manifest as Manifest;
+    }
+
+    const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
+    return manifest;
+  }
+
+  private formatPreviewItemResponse(data: PreviewDataResponse): PreviewItemResponse {
+    const values = data.data.map((val) => {
+      return data.columns.reduce((acc, col, index) => {
+        acc[col.name] = val[index];
+        return acc;
+      }, {});
+    });
+
+    return {
+      cacheHit: data.cacheHit || false,
+      cacheCreatedAt: data.cacheCreatedAt || null,
+      cacheOverrodeAt: data.cacheOverrodeAt || null,
+      override: data.override || false,
+      data: values,
+    } as PreviewItemResponse;
+  }
+
+  private async withTimeout<T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    timeoutMessage: string,
+  ): Promise<T> {
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise<T>((_resolve, reject) => {
+          timeoutHandle = setTimeout(
+            () => reject(new Error(timeoutMessage)),
+            timeoutMs,
+          );
+        }),
+      ]);
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
     }
   }
 }

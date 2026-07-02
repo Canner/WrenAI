@@ -106,7 +106,12 @@ export default function ChartAnswer(props: AnswerResultProps) {
   });
 
   const [createDashboardItem] = useCreateDashboardItemMutation({
-    onError: (error) => console.error(error),
+    onError: (error) => {
+      console.error(error);
+      message.error(
+        error.message || 'Failed to pin chart to dashboard. Please try again.',
+      );
+    },
     onCompleted: () => {
       message.success('Successfully pinned chart to dashboard.');
     },
