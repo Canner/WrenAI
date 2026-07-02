@@ -217,7 +217,7 @@ Cross-project joins must happen in Python, not in SQL — each project has its o
 
 | `wren-pydantic` | `wrenai` | `pydantic-ai` |
 |---|---|---|
-| 0.1.x | >= 0.5.0 | >= 1.0, < 2.0 |
+| 0.1.x | >= 0.7.0 | >= 1.0, < 2.0 |
 
 ---
 

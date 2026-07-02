@@ -42,16 +42,16 @@ wren context build                                # produces target/mdl.json
 wren memory index                                 # optional but recommended
 ```
 
-If you haven't installed the CLI yet, install `wren-engine` first:
+If you haven't installed the CLI yet, install `wrenai` first:
 
 ```bash
-pip install "wren-engine[memory,postgres]"
+pip install "wrenai[memory,postgres]"
 ```
 
 ## Installation
 
 `wren-pydantic` exposes datasource and memory extras that pass through to the
-matching `wren-engine` extras, so you only have to install once:
+matching `wrenai` extras, so you only have to install once:
 
 ```bash
 # Match the datasource your wren_project.yml uses (DuckDB needs no extra):
@@ -70,7 +70,7 @@ pip install "wren-pydantic[bigquery,memory]"
 pip install "wren-pydantic[all,memory]"
 ```
 
-If `wren-engine` is already installed (e.g. you use the CLI), the bare
+If `wrenai` is already installed (e.g. you use the CLI), the bare
 `pip install wren-pydantic` is enough — your existing extras carry over.
 
 ## What you get
@@ -140,9 +140,9 @@ already captures its own state.
 
 ## Compatibility matrix
 
-| `wren-pydantic` | `wren-engine` | `pydantic-ai` |
+| `wren-pydantic` | `wrenai` | `pydantic-ai` |
 |---|---|---|
-| 0.1.x | >= 0.5.0 | >= 1.0, < 2.0 |
+| 0.1.x | >= 0.7.0 | >= 1.0, < 2.0 |
 
 ## Known limitations (v0.1)
 
