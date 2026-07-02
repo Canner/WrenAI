@@ -81,7 +81,7 @@ export default function Dashboard() {
     },
   });
 
-  const onRemoveDashboardItemFromQueryCache = (id: number) => {
+  const onRemoveDashboardItemFromQueryCache = (id: string) => {
     updateDashboardQuery((prev) => {
       return {
         ...prev,
@@ -99,7 +99,7 @@ export default function Dashboard() {
     }
   };
 
-  const onDelete = async (id: number) => {
+  const onDelete = async (id: string) => {
     await deleteDashboardItem({ variables: { where: { id } } });
   };
 

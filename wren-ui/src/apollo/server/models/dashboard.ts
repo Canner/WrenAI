@@ -40,8 +40,8 @@ export interface SetDashboardCacheData {
 }
 
 export interface DetailedDashboard {
-  id: number;
-  projectId: number;
+  id: string | number;
+  projectId: string | number;
   name: string;
   cacheEnabled: boolean;
   scheduleFrequency: ScheduleFrequencyEnum | null;

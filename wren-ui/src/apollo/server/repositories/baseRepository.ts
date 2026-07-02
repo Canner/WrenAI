@@ -290,11 +290,23 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     return hasIdColumn;
   }
 
+  private serializeIdValue(value: number | string | bigint) {
+    const bigintValue = BigInt(value);
+    return bigintValue <= BigInt(Number.MAX_SAFE_INTEGER)
+      ? Number(bigintValue)
+      : bigintValue.toString();
+  }
+
+  private toNextIdValue(maxId: number | string | bigint | null | undefined) {
+    const nextId = BigInt(maxId ?? 0) + 1n;
+    return this.serializeIdValue(nextId);
+  }
+
   private async getNextId(executer: Knex | Knex.Transaction) {
     const [row] = await executer(this.tableName).max<{
-      maxId: number | string | null;
+      maxId: number | string | bigint | null;
     }>('id as maxId');
-    return Number(row?.maxId || 0) + 1;
+    return this.toNextIdValue(row?.maxId);
   }
 
   private async hasIdentityId(executer: Knex | Knex.Transaction) {
@@ -369,11 +381,11 @@ export class BaseRepository<T> implements IBasicRepository<T> {
       return dbData;
     }
 
-    let nextId = await this.getNextId(executer);
+    let nextId = BigInt((await this.getNextId(executer)) ?? 0);
     for (const index of missingIdIndexes) {
       dbData[index] = {
         ...dbData[index],
-        id: nextId++,
+        id: this.serializeIdValue(nextId++),
       };
     }
 

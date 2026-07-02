@@ -129,7 +129,7 @@ const getLayoutToGrid = (item: DashboardItem) => {
 
 const getLayoutToUpdateItem = (layout: Layout) => {
   return {
-    itemId: Number(layout.i),
+    itemId: layout.i,
     x: layout.x,
     y: layout.y,
     w: layout.w,
@@ -141,7 +141,7 @@ interface Props {
   items: DashboardItem[];
   isSupportCached: boolean;
   onUpdateChange: (layouts: ItemLayoutInput[]) => void;
-  onDelete: (id: number) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
 }
 
 const DashboardGrid = forwardRef(
@@ -240,7 +240,7 @@ const DashboardGrid = forwardRef(
 
 export default DashboardGrid;
 
-const PinnedItemTitle = (props: { id: number; title: string }) => {
+const PinnedItemTitle = (props: { id: string; title: string }) => {
   const { title } = props;
   const [form] = Form.useForm();
 
@@ -248,7 +248,7 @@ const PinnedItemTitle = (props: { id: number; title: string }) => {
     onError: (error) => console.error(error),
   });
 
-  const handleSave = (dashboardItemId: number, values: { title: string }) => {
+  const handleSave = (dashboardItemId: string, values: { title: string }) => {
     if (values.title === title) return;
     updateDashboardItem({
       variables: {
@@ -280,7 +280,7 @@ const PinnedItem = forwardRef(
     props: {
       item: DashboardItem;
       isSupportCached: boolean;
-      onDelete: (id: number) => Promise<void>;
+      onDelete: (id: string) => Promise<void>;
     },
     ref: React.RefObject<{ onRefresh: () => void }>,
   ) => {

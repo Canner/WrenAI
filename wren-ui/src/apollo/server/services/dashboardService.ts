@@ -22,7 +22,7 @@ const logger = getLogger('DashboardService');
 logger.level = 'debug';
 
 export interface CreateDashboardItemInput {
-  dashboardId: number;
+  dashboardId: string | number;
   type: DashboardItemType;
   sql: string;
   chartSchema: DashboardItemDetail['chartSchema'];
@@ -34,25 +34,25 @@ export interface UpdateDashboardItemInput {
 }
 
 export type UpdateDashboardItemLayouts = (DashboardItemLayout & {
-  itemId: number;
+  itemId: string | number;
 })[];
 
 export interface IDashboardService {
   initDashboard(): Promise<Dashboard>;
   getCurrentDashboard(): Promise<Dashboard>;
-  getDashboardItem(dashboardItemId: number): Promise<DashboardItem>;
-  getDashboardItems(dashboardId: number): Promise<DashboardItem[]>;
+  getDashboardItem(dashboardItemId: string | number): Promise<DashboardItem>;
+  getDashboardItems(dashboardId: string | number): Promise<DashboardItem[]>;
   createDashboardItem(input: CreateDashboardItemInput): Promise<DashboardItem>;
   updateDashboardItem(
-    dashboardItemId: number,
+    dashboardItemId: string | number,
     input: UpdateDashboardItemInput,
   ): Promise<DashboardItem>;
-  deleteDashboardItem(dashboardItemId: number): Promise<boolean>;
+  deleteDashboardItem(dashboardItemId: string | number): Promise<boolean>;
   updateDashboardItemLayouts(
     layouts: UpdateDashboardItemLayouts,
   ): Promise<DashboardItem[]>;
   setDashboardSchedule(
-    dashboardId: number,
+    dashboardId: string | number,
     data: SetDashboardCacheData,
   ): Promise<Dashboard>;
   parseCronExpression(dashboard: Dashboard): DashboardSchedule;
@@ -78,7 +78,7 @@ export class DashboardService implements IDashboardService {
   }
 
   public async setDashboardSchedule(
-    dashboardId: number,
+    dashboardId: string | number,
     data: SetDashboardCacheData,
   ): Promise<Dashboard> {
     try {
@@ -148,7 +148,7 @@ export class DashboardService implements IDashboardService {
   }
 
   public async getDashboardItem(
-    dashboardItemId: number,
+    dashboardItemId: string | number,
   ): Promise<DashboardItem> {
     const item = await this.dashboardItemRepository.findOneBy({
       id: dashboardItemId,
@@ -160,7 +160,7 @@ export class DashboardService implements IDashboardService {
   }
 
   public async getDashboardItems(
-    dashboardId: number,
+    dashboardId: string | number,
   ): Promise<DashboardItem[]> {
     return await this.dashboardItemRepository.findAllBy({
       dashboardId,
@@ -184,7 +184,7 @@ export class DashboardService implements IDashboardService {
   }
 
   public async updateDashboardItem(
-    dashboardItemId: number,
+    dashboardItemId: string | number,
     input: UpdateDashboardItemInput,
   ): Promise<DashboardItem> {
     return await this.dashboardItemRepository.updateOne(dashboardItemId, {
@@ -226,13 +226,15 @@ export class DashboardService implements IDashboardService {
     return updatedItems;
   }
 
-  public async deleteDashboardItem(dashboardItemId: number): Promise<boolean> {
+  public async deleteDashboardItem(
+    dashboardItemId: string | number,
+  ): Promise<boolean> {
     await this.dashboardItemRepository.deleteOne(dashboardItemId);
     return true;
   }
 
   private async calculateNewLayout(
-    dashboardId: number,
+    dashboardId: string | number,
   ): Promise<DashboardItemLayout> {
     const dashboardItems = await this.dashboardItemRepository.findAllBy({
       dashboardId,

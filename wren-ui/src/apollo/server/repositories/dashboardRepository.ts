@@ -8,8 +8,8 @@ import {
 import { ScheduleFrequencyEnum } from '@server/models/dashboard';
 
 export interface Dashboard {
-  id: number;
-  projectId: number;
+  id: string | number;
+  projectId: string | number;
   name: string;
   cacheEnabled: boolean;
   scheduleFrequency: ScheduleFrequencyEnum | null;
@@ -148,12 +148,14 @@ export class DashboardRepository
     }
 
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    const [row] = await executer(this.tableName).max<{ maxId?: number }>({
+    const [row] = await executer(this.tableName).max<{
+      maxId?: number | string | bigint | null;
+    }>({
       maxId: 'id',
     });
     return {
       ...data,
-      id: Number(row?.maxId || 0) + 1,
+      id: this.toNextIdValue(row?.maxId),
     };
   };
 
@@ -171,19 +173,33 @@ export class DashboardRepository
     }
 
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    const [row] = await executer(this.tableName).max<{ maxId?: number }>({
+    const [row] = await executer(this.tableName).max<{
+      maxId?: number | string | bigint | null;
+    }>({
       maxId: 'id',
     });
-    let nextId = Number(row?.maxId || 0) + 1;
+    let nextId = BigInt(row?.maxId ?? 0) + 1n;
     return data.map((item) => {
       if (item.id !== undefined && item.id !== null) {
         return item;
       }
       return {
         ...item,
-        id: nextId++,
+        id: this.serializeIdValue(nextId++),
       };
     });
+  };
+
+  private toNextIdValue = (maxId: number | string | bigint | null | undefined) => {
+    const nextId = BigInt(maxId ?? 0) + 1n;
+    return this.serializeIdValue(nextId);
+  };
+
+  private serializeIdValue = (value: number | string | bigint) => {
+    const bigintValue = BigInt(value);
+    return bigintValue <= BigInt(Number.MAX_SAFE_INTEGER)
+      ? Number(bigintValue)
+      : bigintValue.toString();
   };
 
   private shouldRetryManualId = (

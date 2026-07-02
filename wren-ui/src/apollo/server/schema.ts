@@ -3,6 +3,7 @@ import { gql } from 'apollo-server-micro';
 export const typeDefs = gql`
   scalar JSON
   scalar DialectSQL
+  scalar BigIntString
 
   enum ApiType {
     GENERATE_SQL
@@ -969,7 +970,7 @@ export const typeDefs = gql`
   }
 
   input DashboardItemWhereInput {
-    id: Int!
+    id: BigIntString!
   }
 
   input CreateDashboardItemInput {
@@ -982,7 +983,7 @@ export const typeDefs = gql`
   }
 
   input ItemLayoutInput {
-    itemId: Int!
+    itemId: BigIntString!
     x: Int!
     y: Int!
     w: Int!
@@ -994,11 +995,11 @@ export const typeDefs = gql`
   }
 
   input DeleteDashboardItemInput {
-    itemId: Int!
+    itemId: BigIntString!
   }
 
   input PreviewItemSQLInput {
-    itemId: Int!
+    itemId: BigIntString!
     limit: Int
     refresh: Boolean = false
   }
@@ -1064,8 +1065,8 @@ export const typeDefs = gql`
   }
 
   type DashboardItem {
-    id: Int!
-    dashboardId: Int!
+    id: BigIntString!
+    dashboardId: BigIntString!
     type: DashboardItemType!
     layout: DashboardItemLayout!
     detail: DashboardItemDetail!
@@ -1073,8 +1074,8 @@ export const typeDefs = gql`
   }
 
   type Dashboard {
-    id: Int!
-    projectId: Int!
+    id: BigIntString!
+    projectId: BigIntString!
     name: String!
     cacheEnabled: Boolean!
     scheduleFrequency: ScheduleFrequencyEnum
@@ -1084,7 +1085,7 @@ export const typeDefs = gql`
   }
 
   type DetailedDashboard {
-    id: Int!
+    id: BigIntString!
     name: String!
     description: String
     cacheEnabled: Boolean!

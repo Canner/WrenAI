@@ -10,7 +10,7 @@ import { InstructionResolver } from './resolvers/instructionResolver';
 import { ApiHistoryResolver } from './resolvers/apiHistoryResolver';
 import { RbacResolver } from './resolvers/rbacResolver';
 import { convertColumnType } from '@server/utils';
-import { DialectSQLScalar } from './scalars';
+import { BigIntStringScalar, DialectSQLScalar } from './scalars';
 
 const projectResolver = new ProjectResolver();
 const modelResolver = new ModelResolver();
@@ -25,6 +25,7 @@ const rbacResolver = new RbacResolver();
 const resolvers = {
   JSON: GraphQLJSON,
   DialectSQL: DialectSQLScalar,
+  BigIntString: BigIntStringScalar,
   Query: {
     listDataSourceTables: projectResolver.listDataSourceTables,
     autoGenerateRelation: projectResolver.autoGenerateRelation,

@@ -145,7 +145,7 @@ export class DashboardResolver {
 
   public async updateDashboardItem(
     _root: any,
-    args: { where: { id: number }; data: { displayName: string } },
+    args: { where: { id: string | number }; data: { displayName: string } },
     ctx: IContext,
   ): Promise<DashboardItem> {
     const { id } = args.where;
@@ -159,7 +159,7 @@ export class DashboardResolver {
 
   public async deleteDashboardItem(
     _root: any,
-    args: { where: { id: number } },
+    args: { where: { id: string | number } },
     ctx: IContext,
   ): Promise<boolean> {
     const { id } = args.where;
@@ -184,7 +184,9 @@ export class DashboardResolver {
 
   public async previewItemSQL(
     _root: any,
-    args: { data: { itemId: number; limit?: number; refresh?: boolean } },
+    args: {
+      data: { itemId: string | number; limit?: number; refresh?: boolean };
+    },
     ctx: IContext,
   ): Promise<PreviewItemResponse> {
     const { itemId, limit, refresh } = args.data;
@@ -286,7 +288,7 @@ export class DashboardResolver {
   private async warmDashboardCache(
     ctx: IContext,
     sql: string,
-    dashboardItemId: number,
+    dashboardItemId: string | number,
   ): Promise<void> {
     try {
       const project = await ctx.projectService.getCurrentProject();

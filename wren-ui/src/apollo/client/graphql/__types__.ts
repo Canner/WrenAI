@@ -11,6 +11,7 @@ export type Scalars = {
   Boolean: boolean;
   Int: number;
   Float: number;
+  BigIntString: string;
   DialectSQL: any;
   JSON: any;
 };
@@ -288,10 +289,10 @@ export type CustomFieldInput = {
 export type Dashboard = {
   __typename?: 'Dashboard';
   cacheEnabled: Scalars['Boolean'];
-  id: Scalars['Int'];
+  id: Scalars['BigIntString'];
   name: Scalars['String'];
   nextScheduledAt?: Maybe<Scalars['String']>;
-  projectId: Scalars['Int'];
+  projectId: Scalars['BigIntString'];
   scheduleCron?: Maybe<Scalars['String']>;
   scheduleFrequency?: Maybe<ScheduleFrequencyEnum>;
   scheduleTimezone?: Maybe<Scalars['String']>;
@@ -299,10 +300,10 @@ export type Dashboard = {
 
 export type DashboardItem = {
   __typename?: 'DashboardItem';
-  dashboardId: Scalars['Int'];
+  dashboardId: Scalars['BigIntString'];
   detail: DashboardItemDetail;
   displayName?: Maybe<Scalars['String']>;
-  id: Scalars['Int'];
+  id: Scalars['BigIntString'];
   layout: DashboardItemLayout;
   type: DashboardItemType;
 };
@@ -334,7 +335,7 @@ export enum DashboardItemType {
 }
 
 export type DashboardItemWhereInput = {
-  id: Scalars['Int'];
+  id: Scalars['BigIntString'];
 };
 
 export type DashboardSchedule = {
@@ -381,7 +382,7 @@ export enum DatabricksConnectionType {
 }
 
 export type DeleteDashboardItemInput = {
-  itemId: Scalars['Int'];
+  itemId: Scalars['BigIntString'];
 };
 
 export type DetailStep = {
@@ -436,7 +437,7 @@ export type DetailedDashboard = {
   __typename?: 'DetailedDashboard';
   cacheEnabled: Scalars['Boolean'];
   description?: Maybe<Scalars['String']>;
-  id: Scalars['Int'];
+  id: Scalars['BigIntString'];
   items: Array<DashboardItem>;
   name: Scalars['String'];
   nextScheduledAt?: Maybe<Scalars['String']>;
@@ -664,7 +665,7 @@ export type InstructionWhereInput = {
 
 export type ItemLayoutInput = {
   h: Scalars['Int'];
-  itemId: Scalars['Int'];
+  itemId: Scalars['BigIntString'];
   w: Scalars['Int'];
   x: Scalars['Int'];
   y: Scalars['Int'];
@@ -1137,7 +1138,7 @@ export type PreviewItemResponse = {
 };
 
 export type PreviewItemSqlInput = {
-  itemId: Scalars['Int'];
+  itemId: Scalars['BigIntString'];
   limit?: InputMaybe<Scalars['Int']>;
   refresh?: InputMaybe<Scalars['Boolean']>;
 };

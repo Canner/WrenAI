@@ -39,8 +39,8 @@ export interface DashboardItemDetail {
 }
 
 export interface DashboardItem {
-  id: number;
-  dashboardId: number;
+  id: string | number;
+  dashboardId: string | number;
   type: DashboardItemType;
   layout: DashboardItemLayout;
   detail: DashboardItemDetail;
@@ -224,8 +224,11 @@ export class DashboardItemRepository
 
   private async getNextId(executer: Knex | Knex.Transaction) {
     const [row] = await executer(this.tableName).max<{
-      maxId: number | string | null;
+      maxId: number | string | bigint | null;
     }>('id as maxId');
-    return Number(row?.maxId || 0) + 1;
+    const nextId = BigInt(row?.maxId ?? 0) + 1n;
+    return nextId <= BigInt(Number.MAX_SAFE_INTEGER)
+      ? Number(nextId)
+      : nextId.toString();
   }
 }

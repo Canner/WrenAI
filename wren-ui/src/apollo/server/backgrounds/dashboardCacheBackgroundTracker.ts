@@ -24,7 +24,7 @@ export class DashboardCacheBackgroundTracker {
   private projectService: IProjectService;
   private deployService: IDeployService;
   private queryService: IQueryService;
-  private runningJobs = new Set<number>();
+  private runningJobs = new Set<string | number>();
   private intervalId?: NodeJS.Timeout;
 
   constructor({
