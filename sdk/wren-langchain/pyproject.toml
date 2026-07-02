@@ -29,7 +29,7 @@ classifiers = [
 ]
 dependencies = [
   # Core: provides WrenEngine, MemoryStore, profile resolution, MDL handling.
-  "wren-engine>=0.5.0",
+  "wrenai>=0.7.0",
   # langchain >=1.0 ships the recommended `langchain.agents.create_agent`
   # entrypoint. Older `langgraph.prebuilt.create_react_agent` still works
   # but emits deprecation warnings and is scheduled for removal in
@@ -43,39 +43,39 @@ dependencies = [
 [project.optional-dependencies]
 # ── Datasource pass-through extras ────────────────────────────────────────
 # Pick the one matching your project's `data_source` (in wren_project.yml).
-# These chain through to the matching `wren-engine[<datasource>]` extra so
+# These chain through to the matching `wrenai[<datasource>]` extra so
 # you don't have to install the connector dependency twice.
 #
 #   pip install "wren-langchain[mysql]"
 #   pip install "wren-langchain[mysql,memory]"
 #
-# DuckDB is built into wren-engine — no extra needed.
-postgres   = ["wren-engine[postgres]>=0.5.0"]
-mysql      = ["wren-engine[mysql]>=0.5.0"]
-bigquery   = ["wren-engine[bigquery]>=0.5.0"]
-snowflake  = ["wren-engine[snowflake]>=0.5.0"]
-clickhouse = ["wren-engine[clickhouse]>=0.5.0"]
-trino      = ["wren-engine[trino]>=0.5.0"]
-mssql      = ["wren-engine[mssql]>=0.5.0"]
-databricks = ["wren-engine[databricks]>=0.5.0"]
-redshift   = ["wren-engine[redshift]>=0.5.0"]
-spark      = ["wren-engine[spark]>=0.5.0"]
-athena     = ["wren-engine[athena]>=0.5.0"]
-oracle     = ["wren-engine[oracle]>=0.5.0"]
+# DuckDB is built into wrenai — no extra needed.
+postgres   = ["wrenai[postgres]>=0.7.0"]
+mysql      = ["wrenai[mysql]>=0.7.0"]
+bigquery   = ["wrenai[bigquery]>=0.7.0"]
+snowflake  = ["wrenai[snowflake]>=0.7.0"]
+clickhouse = ["wrenai[clickhouse]>=0.7.0"]
+trino      = ["wrenai[trino]>=0.7.0"]
+mssql      = ["wrenai[mssql]>=0.7.0"]
+databricks = ["wrenai[databricks]>=0.7.0"]
+redshift   = ["wrenai[redshift]>=0.7.0"]
+spark      = ["wrenai[spark]>=0.7.0"]
+athena     = ["wrenai[athena]>=0.7.0"]
+oracle     = ["wrenai[oracle]>=0.7.0"]
 
 # ── Memory extra ──────────────────────────────────────────────────────────
 # Required to use the three memory tools (wren_fetch_context,
 # wren_recall_queries, wren_store_query). Pulls in LanceDB and the
-# sentence-transformer model deps via wren-engine.
+# sentence-transformer model deps via wrenai.
 #
 # Without this, the toolkit auto-detects no memory and exposes only the
 # three runtime tools.
-memory = ["wren-engine[memory]>=0.5.0"]
+memory = ["wrenai[memory]>=0.7.0"]
 
 # ── Convenience aggregate ─────────────────────────────────────────────────
 # Installs every datasource + memory at once. Useful for CI / examples,
 # heavyweight for production where you usually want only one datasource.
-all = ["wren-engine[all]>=0.5.0"]
+all = ["wrenai[all]>=0.7.0"]
 
 # ── Dev / test deps ───────────────────────────────────────────────────────
 dev = [
@@ -83,7 +83,7 @@ dev = [
   "pytest-mock>=3",
   "ruff>=0.4",
   # Tests run real DuckDB + LanceDB integrations, so memory deps are required.
-  "wren-engine[memory]>=0.5.0",
+  "wrenai[memory]>=0.7.0",
 ]
 
 [project.urls]
