@@ -294,11 +294,11 @@ class TestClickHouseClientKwargs:
 class _FakeChUrl:
     """Stand-in exposing a ``connection_url`` for the URL kwargs path."""
 
-    def __init__(self, url: str) -> None:
+    def __init__(self, url: str, kwargs: dict | None = None) -> None:
         from pydantic import SecretStr
 
         self.connection_url = SecretStr(url)
-        self.kwargs = None
+        self.kwargs = kwargs
 
 
 @pytest.mark.clickhouse
@@ -331,3 +331,82 @@ class TestClickHouseUrlKwargs:
         )
         assert out["secure"] is True
         assert out["port"] == 9440
+
+    # --- secure enabled after the scheme is inspected (#2416) ---------------
+
+    def test_secure_query_param_uses_secure_default_port(self) -> None:
+        """``?secure=true`` on a plain scheme must dial 8443, not 8123.
+
+        The scheme alone said plaintext, so the old code picked 8123 — then
+        ``secure=True`` arrived via the query string and the TLS handshake
+        hit the plaintext listener.
+        """
+        out = _build_clickhouse_client_kwargs(
+            _FakeChUrl("clickhouse://user:pw@host/db?secure=true")
+        )
+        assert out["secure"] is True
+        assert out["port"] == 8443
+
+    def test_secure_kwargs_override_uses_secure_default_port(self) -> None:
+        out = _build_clickhouse_client_kwargs(
+            _FakeChUrl("clickhouse://user:pw@host/db", kwargs={"secure": True})
+        )
+        assert out["secure"] is True
+        assert out["port"] == 8443
+
+    def test_secure_false_query_param_uses_plaintext_default_port(self) -> None:
+        """``?secure=false`` must not be truthy just because it is a string."""
+        out = _build_clickhouse_client_kwargs(
+            _FakeChUrl("clickhouse+https://user:pw@host/db?secure=false")
+        )
+        assert "secure" not in out
+        assert out["port"] == 8123
+
+    def test_secure_false_kwargs_override_uses_plaintext_default_port(self) -> None:
+        out = _build_clickhouse_client_kwargs(
+            _FakeChUrl("clickhouse+https://user:pw@host/db", kwargs={"secure": False})
+        )
+        assert "secure" not in out
+        assert out["port"] == 8123
+
+    def test_explicit_port_wins_over_secure_query_param(self) -> None:
+        out = _build_clickhouse_client_kwargs(
+            _FakeChUrl("clickhouse://user:pw@host:9000/db?secure=true")
+        )
+        assert out["secure"] is True
+        assert out["port"] == 9000
+
+    def test_explicit_port_wins_over_secure_false_override(self) -> None:
+        out = _build_clickhouse_client_kwargs(
+            _FakeChUrl(
+                "clickhouse+https://user:pw@host:9440/db", kwargs={"secure": "false"}
+            )
+        )
+        assert "secure" not in out
+        assert out["port"] == 9440
+
+    def test_secure_kwargs_win_over_query_param(self) -> None:
+        """kwargs are merged after query params, so they take precedence."""
+        out = _build_clickhouse_client_kwargs(
+            _FakeChUrl(
+                "clickhouse://user:pw@host/db?secure=true", kwargs={"secure": False}
+            )
+        )
+        assert "secure" not in out
+        assert out["port"] == 8123
+
+    @pytest.mark.parametrize("raw", ["1", "true", "TRUE", "yes", "on"])
+    def test_truthy_secure_strings(self, raw: str) -> None:
+        out = _build_clickhouse_client_kwargs(
+            _FakeChUrl(f"clickhouse://user:pw@host/db?secure={raw}")
+        )
+        assert out["secure"] is True
+        assert out["port"] == 8443
+
+    @pytest.mark.parametrize("raw", ["0", "false", "FALSE", "no", "off", ""])
+    def test_falsy_secure_strings(self, raw: str) -> None:
+        out = _build_clickhouse_client_kwargs(
+            _FakeChUrl("clickhouse+https://user:pw@host/db", kwargs={"secure": raw})
+        )
+        assert "secure" not in out
+        assert out["port"] == 8123
