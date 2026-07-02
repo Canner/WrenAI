@@ -272,10 +272,10 @@ export class BaseRepository<T> implements IBasicRepository<T> {
   }
 
   private async getNextId(executer: Knex | Knex.Transaction) {
-    const [row] = await executer(this.tableName).max<{ maxId: number | null }>(
-      'id as maxId',
-    );
-    return (row?.maxId || 0) + 1;
+    const [row] = await executer(this.tableName).max<{
+      maxId: number | string | null;
+    }>('id as maxId');
+    return Number(row?.maxId || 0) + 1;
   }
 
   private async hasIdentityId(executer: Knex | Knex.Transaction) {
