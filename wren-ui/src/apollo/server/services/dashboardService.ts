@@ -144,7 +144,14 @@ export class DashboardService implements IDashboardService {
     const dashboard = await this.dashboardRepository.findOneBy({
       projectId: project.id,
     });
-    return { ...dashboard };
+    if (dashboard) {
+      return dashboard;
+    }
+
+    logger.debug(
+      `Dashboard not found for project ${project.id}; initializing a default dashboard.`,
+    );
+    return await this.initDashboard();
   }
 
   public async getDashboardItem(
