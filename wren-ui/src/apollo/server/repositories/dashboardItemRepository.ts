@@ -72,10 +72,19 @@ export class DashboardItemRepository
     data: Partial<DashboardItem>,
     queryOptions?: IQueryOptions,
   ): Promise<DashboardItem> {
-    return await super.createOne(
-      await this.normalizeWriteData(data, queryOptions, true),
-      queryOptions,
-    );
+    const normalized = await this.normalizeWriteData(data, queryOptions, true);
+    try {
+      return await super.createOne(normalized, queryOptions);
+    } catch (error) {
+      if (!this.shouldRetryManualId(error, normalized)) {
+        throw error;
+      }
+
+      return await super.createOne(
+        await this.normalizeWriteData(data, queryOptions, true, true),
+        queryOptions,
+      );
+    }
   }
 
   public override async updateOne(
@@ -129,6 +138,7 @@ export class DashboardItemRepository
     data: Partial<DashboardItem>,
     queryOptions?: IQueryOptions,
     includeGeneratedId = false,
+    forceManualId = false,
   ): Promise<Partial<DashboardItem>> {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
     const [
@@ -165,7 +175,7 @@ export class DashboardItemRepository
       hasIdColumn &&
       normalizedData.id === undefined &&
       this.isMssqlLike(executer) &&
-      !(await this.hasIdentityId(executer))
+      (forceManualId || !(await this.hasIdentityId(executer)))
     ) {
       normalizedData.id = await this.getNextId(executer);
     }
@@ -250,5 +260,30 @@ export class DashboardItemRepository
       maxId: number | string | null;
     }>('id as maxId');
     return Number(row?.maxId || 0) + 1;
+  }
+
+  private shouldRetryManualId(
+    error: unknown,
+    data: Partial<DashboardItem>,
+  ): boolean {
+    if (!this.isMssqlLike(this.knex)) {
+      return false;
+    }
+
+    if (data.id !== undefined && data.id !== null) {
+      return false;
+    }
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === 'string'
+          ? error
+          : '';
+
+    return (
+      message.includes("Cannot insert the value NULL into column 'id'") ||
+      message.includes("Cannot insert explicit value for identity column")
+    );
   }
 }
