@@ -1,5 +1,6 @@
 """Native oracledb connector — bypasses ibis oracle backend."""
 
+import re
 from decimal import Decimal as PyDecimal
 from urllib.parse import urlparse
 
@@ -8,6 +9,22 @@ import pyarrow as pa
 
 from wren.connector.base import ConnectorABC
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
+
+_TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
+
+
+def _strip_trailing_semicolon(sql: str) -> str:
+    """Strip any trailing ``;`` characters and surrounding whitespace.
+
+    Both ``query`` (with a limit) and ``dry_run`` wrap user SQL as
+    ``SELECT * FROM ({sql}) t WHERE ROWNUM <= N``. Oracle rejects a trailing
+    semicolon inside a subquery (``ORA-00911: invalid character``), so a query
+    that ends in ``;`` fails even though it runs fine standalone. Only the
+    terminating run of semicolons/whitespace is stripped, so semicolons inside
+    string literals (e.g. ``SELECT 'a;b'``) are preserved. Mirrors the
+    postgres/canner/trino/clickhouse connectors.
+    """
+    return _TRAILING_SEMICOLONS_RE.sub("", sql)
 
 
 def _ora_number_type(precision, scale) -> pa.DataType:
@@ -131,7 +148,10 @@ class OracleConnector(ConnectorABC):
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         if limit is not None:
-            sql = f"SELECT * FROM ({sql}) t WHERE ROWNUM <= {limit}"
+            sql = (
+                f"SELECT * FROM ({_strip_trailing_semicolon(sql)}) t "
+                f"WHERE ROWNUM <= {limit}"
+            )
         try:
             with self.connection.cursor() as cursor:
                 cursor.execute(sql)
@@ -148,7 +168,10 @@ class OracleConnector(ConnectorABC):
         if hasattr(self.connection, "cursor"):
             try:
                 with self.connection.cursor() as cursor:
-                    cursor.execute(f"SELECT * FROM ({sql}) t WHERE ROWNUM <= 0")
+                    cursor.execute(
+                        f"SELECT * FROM ({_strip_trailing_semicolon(sql)}) t "
+                        f"WHERE ROWNUM <= 0"
+                    )
             except oracledb.DatabaseError as e:
                 raise WrenError(
                     ErrorCode.INVALID_SQL,
