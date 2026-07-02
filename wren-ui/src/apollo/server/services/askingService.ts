@@ -1119,6 +1119,7 @@ export class AskingService implements IAskingService {
     if (!response) {
       return null;
     }
+    await this.ensureThreadInCurrentProject(response.threadId);
     return response;
   }
 

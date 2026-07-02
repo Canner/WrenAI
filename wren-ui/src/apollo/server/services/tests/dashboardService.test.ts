@@ -120,6 +120,63 @@ describe('DashboardService', () => {
     });
   });
 
+  describe('dashboard scoping', () => {
+    it('should only return dashboard items from the current dashboard', async () => {
+      const project = { id: 42 };
+      const dashboard = { id: '1001', projectId: 42, name: 'Dashboard' };
+      const dashboardItem = {
+        id: '2001',
+        dashboardId: '1001',
+        layout: { x: 0, y: 0, w: 3, h: 2 },
+      };
+      mockProjectService.getCurrentProject.mockResolvedValue(project);
+      mockDashboardRepository.findOneBy.mockResolvedValue(dashboard);
+      mockDashboardItemRepository.findOneBy.mockResolvedValue(dashboardItem);
+
+      await expect(dashboardService.getDashboardItem('2001')).resolves.toEqual(
+        dashboardItem,
+      );
+    });
+
+    it('should reject dashboard items from another dashboard context', async () => {
+      const project = { id: 42 };
+      const dashboard = { id: '1001', projectId: 42, name: 'Dashboard' };
+      const dashboardItem = {
+        id: '2001',
+        dashboardId: '9999',
+        layout: { x: 0, y: 0, w: 3, h: 2 },
+      };
+      mockProjectService.getCurrentProject.mockResolvedValue(project);
+      mockDashboardRepository.findOneBy.mockResolvedValue(dashboard);
+      mockDashboardItemRepository.findOneBy.mockResolvedValue(dashboardItem);
+
+      await expect(dashboardService.getDashboardItem('2001')).rejects.toThrow(
+        'Dashboard item not found.',
+      );
+    });
+
+    it('should reject layout updates for items outside the current dashboard', async () => {
+      const project = { id: 42 };
+      const dashboard = { id: '1001', projectId: 42, name: 'Dashboard' };
+      const dashboardItems = [
+        {
+          id: '2001',
+          dashboardId: '1001',
+          layout: { x: 0, y: 0, w: 3, h: 2 },
+        },
+      ];
+      mockProjectService.getCurrentProject.mockResolvedValue(project);
+      mockDashboardRepository.findOneBy.mockResolvedValue(dashboard);
+      mockDashboardItemRepository.findAllBy.mockResolvedValue(dashboardItems);
+
+      await expect(
+        dashboardService.updateDashboardItemLayouts([
+          { itemId: '9999', x: 0, y: 0, w: 3, h: 2 },
+        ]),
+      ).rejects.toThrow('Invalid layouts boundaries.');
+    });
+  });
+
   describe('generateCronExpression', () => {
     it('should generate correct cron expression for daily schedule', () => {
       const schedule = {

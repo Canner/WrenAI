@@ -157,10 +157,11 @@ export class DashboardService implements IDashboardService {
   public async getDashboardItem(
     dashboardItemId: string | number,
   ): Promise<DashboardItem> {
+    const dashboard = await this.getCurrentDashboard();
     const item = await this.dashboardItemRepository.findOneBy({
       id: dashboardItemId,
     });
-    if (!item) {
+    if (!item || String(item.dashboardId) !== String(dashboard.id)) {
       throw new Error('Dashboard item not found.');
     }
     return item;
@@ -202,10 +203,18 @@ export class DashboardService implements IDashboardService {
   public async updateDashboardItemLayouts(
     layouts: UpdateDashboardItemLayouts,
   ): Promise<DashboardItem[]> {
+    const dashboard = await this.getCurrentDashboard();
+    const dashboardItems = await this.dashboardItemRepository.findAllBy({
+      dashboardId: dashboard.id,
+    });
+    const dashboardItemIds = new Set(
+      dashboardItems.map((item) => String(item.id)),
+    );
     const updatedItems: DashboardItem[] = [];
     const isValidLayouts = layouts.every(
       (layout) =>
         layout.itemId &&
+        dashboardItemIds.has(String(layout.itemId)) &&
         layout.x >= 0 &&
         layout.y >= 0 &&
         layout.w > 0 &&

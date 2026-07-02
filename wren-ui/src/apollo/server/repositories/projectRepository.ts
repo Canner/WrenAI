@@ -280,12 +280,14 @@ export class ProjectRepository
 
     const projects = await this.findAll({
       order: 'id',
-      limit: 1,
     });
     if (!projects.length) {
       throw new Error('No project found');
     }
-    return projects[0];
+    if (projects.length === 1) {
+      return await this.setCurrentProject(projects[0].id);
+    }
+    throw new Error('No current project selected');
   }
 
   public async listProjects() {

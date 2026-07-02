@@ -326,7 +326,33 @@ export class ProjectService implements IProjectService {
   }
 
   public async deleteProject(projectId: number): Promise<void> {
+    const [projectToDelete, currentProject, remainingProjects] =
+      await Promise.all([
+        this.projectRepository.findOneBy({ id: projectId }),
+        this.projectRepository.findCurrentProject(),
+        this.projectRepository.listProjects(),
+      ]);
+
     await this.projectRepository.deleteOne(projectId);
+
+    if (currentProject?.id !== projectId) {
+      return;
+    }
+
+    const nextProject = remainingProjects
+      .filter((project) => project.id !== projectId)
+      .sort((a, b) => b.id - a.id)[0];
+
+    if (nextProject) {
+      await this.projectRepository.setCurrentProject(nextProject.id);
+      return;
+    }
+
+    if (projectToDelete) {
+      logger.debug(
+        `Deleted the last current project ${projectToDelete.id}; no active project remains.`,
+      );
+    }
   }
 
   public getGeneralConnectionInfo(project) {
