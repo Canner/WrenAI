@@ -2,8 +2,7 @@ import clsx from 'clsx';
 import dynamic from 'next/dynamic';
 import styled from 'styled-components';
 import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery } from '@apollo/client';
-import { Alert, Form, Button, Skeleton, Modal, Select, message } from 'antd';
+import { Alert, Form, Button, Skeleton, Modal, message } from 'antd';
 import { attachLoading } from '@/utils/helper';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import BasicProperties from '@/components/chart/properties/BasicProperties';
@@ -23,7 +22,7 @@ import {
   getChartSpecFieldTitleMap,
   getChartSpecOptionValues,
 } from '@/components/chart/handler';
-import { CREATE_DASHBOARD_ITEM, DASHBOARDS } from '@/apollo/client/graphql/dashboard';
+import { useCreateDashboardItemMutation } from '@/apollo/client/graphql/dashboard.generated';
 import usePromptThreadStore from './store';
 
 const Chart = dynamic(() => import('@/components/chart'), {
@@ -96,35 +95,22 @@ export default function ChartAnswer(props: AnswerResultProps) {
   const [regenerating, setRegenerating] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [newValues, setNewValues] = useState(null);
-  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
-  const [selectedDashboardId, setSelectedDashboardId] = useState<number | null>(
-    null,
-  );
 
   const [form] = Form.useForm();
   const chartType = Form.useWatch('chartType', form);
   const { chartDetail } = threadResponse;
   const { error, status, adjustment } = chartDetail || {};
-  const { data: dashboardsResult } = useQuery(DASHBOARDS);
-  const dashboards = dashboardsResult?.dashboards || [];
 
   const [previewData, previewDataResult] = usePreviewDataMutation({
     onError: (error) => console.error(error),
   });
 
-  const [createDashboardItem] = useMutation(CREATE_DASHBOARD_ITEM, {
+  const [createDashboardItem] = useCreateDashboardItemMutation({
     onError: (error) => console.error(error),
     onCompleted: () => {
       message.success('Successfully pinned chart to dashboard.');
-      setIsPinModalOpen(false);
     },
   });
-
-  useEffect(() => {
-    if (!selectedDashboardId && dashboards.length > 0) {
-      setSelectedDashboardId(dashboards[0].id);
-    }
-  }, [dashboards, selectedDashboardId]);
 
   // Fetch preview data after the chart task has a terminal schema/result.
   useEffect(() => {
@@ -215,31 +201,18 @@ export default function ChartAnswer(props: AnswerResultProps) {
       return;
     }
 
-    if (dashboards.length === 0) {
-      message.error('No dashboards are available.');
-      return;
-    }
-
-    setSelectedDashboardId((prev) => prev || dashboards[0].id);
-    setIsPinModalOpen(true);
-  };
-
-  const onConfirmPin = async () => {
-    const dashboardItemType = chartTypeToDashboardItemType(
-      chartType || chartDetail?.chartType,
-    );
-    if (!dashboardItemType || !selectedDashboardId) {
-      return;
-    }
-
-    await createDashboardItem({
-      variables: {
-        data: {
-          itemType: dashboardItemType,
-          responseId: threadResponse.id,
-          dashboardId: selectedDashboardId,
-        },
-      },
+    Modal.confirm({
+      title: 'Are you sure you want to pin this chart to the dashboard?',
+      okText: 'Save',
+      onOk: async () =>
+        await createDashboardItem({
+          variables: {
+            data: {
+              itemType: dashboardItemType,
+              responseId: threadResponse.id,
+            },
+          },
+        }),
     });
   };
 
@@ -290,78 +263,53 @@ export default function ChartAnswer(props: AnswerResultProps) {
       <div className="text-md gray-10 p-6">
         {chartDetail?.description}
         {chartSpec ? (
-          <>
-            <ChartWrapper
-              className={clsx(
-                'border border-gray-4 rounded mt-4 pb-3 overflow-hidden',
-                { isEditMode: isEditMode },
-              )}
-            >
-              <Toolbar className={clsx({ isEditMode: isEditMode })}>
-                <Form
-                  size="small"
-                  style={{ width: '100%' }}
-                  form={form}
-                  initialValues={chartOptionValues}
-                  onFieldsChange={onFormChange}
-                >
-                  <div className="d-flex justify-content-between align-center">
-                    <div className="flex-grow-1">
-                      <DynamicProperties
-                        columns={dataColumns}
-                        titleMap={chartSpecFieldTitleMap}
-                      />
-                    </div>
-                    {isAdjusted && (
-                      <div className="d-flex flex-column">
-                        <Button
-                          className="ml-4 mb-2"
-                          onClick={onResetAdjustment}
-                        >
-                          Reset
-                        </Button>
-                        <Button
-                          className="ml-4"
-                          type="primary"
-                          onClick={onAdjustChart}
-                        >
-                          Adjust
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </Form>
-              </Toolbar>
-              <Chart
-                width={700}
-                spec={chartSpec}
-                values={dataValues}
-                onEdit={onEdit}
-                onReload={onReload}
-                onPin={onPin}
-              />
-            </ChartWrapper>
-            <Modal
-              title="Pin chart to dashboard"
-              visible={isPinModalOpen}
-              okText="Pin"
-              onOk={onConfirmPin}
-              onCancel={() => setIsPinModalOpen(false)}
-            >
-              <div className="gray-8 mb-2">
-                Choose which dashboard should receive this chart.
-              </div>
-              <Select
+          <ChartWrapper
+            className={clsx(
+              'border border-gray-4 rounded mt-4 pb-3 overflow-hidden',
+              { isEditMode: isEditMode },
+            )}
+          >
+            <Toolbar className={clsx({ isEditMode: isEditMode })}>
+              <Form
+                size="small"
                 style={{ width: '100%' }}
-                value={selectedDashboardId}
-                onChange={(value) => setSelectedDashboardId(value)}
-                options={dashboards.map((dashboard) => ({
-                  value: dashboard.id,
-                  label: dashboard.name,
-                }))}
-              />
-            </Modal>
-          </>
+                form={form}
+                initialValues={chartOptionValues}
+                onFieldsChange={onFormChange}
+              >
+                <div className="d-flex justify-content-between align-center">
+                  <div className="flex-grow-1">
+                    <DynamicProperties
+                      columns={dataColumns}
+                      titleMap={chartSpecFieldTitleMap}
+                    />
+                  </div>
+                  {isAdjusted && (
+                    <div className="d-flex flex-column">
+                      <Button className="ml-4 mb-2" onClick={onResetAdjustment}>
+                        Reset
+                      </Button>
+                      <Button
+                        className="ml-4"
+                        type="primary"
+                        onClick={onAdjustChart}
+                      >
+                        Adjust
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </Form>
+            </Toolbar>
+            <Chart
+              width={700}
+              spec={chartSpec}
+              values={dataValues}
+              onEdit={onEdit}
+              onReload={onReload}
+              onPin={onPin}
+            />
+          </ChartWrapper>
         ) : (
           chartRegenerateBtn
         )}

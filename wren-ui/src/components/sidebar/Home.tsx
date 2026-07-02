@@ -1,68 +1,58 @@
+import clsx from 'clsx';
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useParams } from 'next/navigation';
+import styled from 'styled-components';
 import { Path } from '@/utils/enum';
-import { useSidebarTreeState } from './SidebarTree';
-import DashboardTree, { DashboardData } from './home/DashboardTree';
+import FundViewOutlined from '@ant-design/icons/FundViewOutlined';
+import SidebarTree, {
+  StyledTreeNodeLink,
+  useSidebarTreeState,
+} from './SidebarTree';
 import ThreadTree, { ThreadData } from './home/ThreadTree';
 
 export interface Props {
   data: {
-    dashboards: DashboardData[];
     threads: ThreadData[];
   };
-  onSelectThread: (selectKeys: string[]) => void;
-  onSelectDashboard: (selectKeys: string[]) => void;
-  onDeleteThread: (id: string) => Promise<void>;
-  onRenameThread: (id: string, newName: string) => Promise<void>;
-  onCreateDashboard: () => Promise<void>;
-  onDeleteDashboard: (id: string) => Promise<void>;
-  onRenameDashboard: (id: string, newName: string) => Promise<void>;
+  onSelect: (selectKeys) => void;
+  onDelete: (id: string) => Promise<void>;
+  onRename: (id: string, newName: string) => Promise<void>;
 }
 
+export const StyledSidebarTree = styled(SidebarTree)`
+  .adm-treeNode {
+    &.adm-treeNode__thread {
+      padding: 0px 16px 0px 4px !important;
+
+      .ant-tree-title {
+        flex-grow: 1;
+        display: inline-flex;
+        align-items: center;
+        span:first-child,
+        .adm-treeTitle__title {
+          flex-grow: 1;
+        }
+      }
+    }
+  }
+`;
+
 export default function Home(props: Props) {
-  const {
-    data,
-    onSelectThread,
-    onSelectDashboard,
-    onRenameThread,
-    onDeleteThread: deleteThread,
-    onCreateDashboard,
-    onDeleteDashboard,
-    onRenameDashboard,
-  } = props;
+  const { data, onSelect, onRename, onDelete } = props;
   const router = useRouter();
   const params = useParams<{ id: string }>();
-  const { threads, dashboards } = data;
+  const { threads } = data;
 
-  const {
-    treeSelectedKeys: threadSelectedKeys,
-    setTreeSelectedKeys: setThreadSelectedKeys,
-  } = useSidebarTreeState();
-  const {
-    treeSelectedKeys: dashboardSelectedKeys,
-    setTreeSelectedKeys: setDashboardSelectedKeys,
-  } = useSidebarTreeState();
+  const { treeSelectedKeys, setTreeSelectedKeys } = useSidebarTreeState();
 
   useEffect(() => {
-    params?.id && setThreadSelectedKeys([params.id] as string[]);
+    params?.id && setTreeSelectedKeys([params.id] as string[]);
   }, [params?.id]);
 
-  useEffect(() => {
-    const selectedDashboardId = router.query.dashboardId;
-    if (router.pathname !== Path.HomeDashboard) {
-      setDashboardSelectedKeys([]);
-      return;
-    }
-
-    if (typeof selectedDashboardId === 'string') {
-      setDashboardSelectedKeys([selectedDashboardId]);
-    }
-  }, [router.pathname, router.query.dashboardId]);
-
-  const handleDeleteThread = async (threadId: string) => {
+  const onDeleteThread = async (threadId: string) => {
     try {
-      await deleteThread(threadId);
+      await onDelete(threadId);
       if (params?.id == threadId) {
         router.push(Path.Home);
       }
@@ -75,33 +65,27 @@ export default function Home(props: Props) {
     // prevent deselected
     if (selectedKeys.length === 0) return;
 
-    setThreadSelectedKeys(selectedKeys);
-    onSelectThread(selectedKeys as string[]);
-  };
-
-  const onDashboardSelect = (selectedKeys: React.Key[], _info: any) => {
-    if (selectedKeys.length === 0) return;
-
-    setDashboardSelectedKeys(selectedKeys);
-    onSelectDashboard(selectedKeys as string[]);
+    setTreeSelectedKeys(selectedKeys);
+    onSelect(selectedKeys);
   };
 
   return (
     <>
-      <DashboardTree
-        dashboards={dashboards}
-        selectedKeys={dashboardSelectedKeys}
-        onSelect={onDashboardSelect}
-        onRename={onRenameDashboard}
-        onDeleteDashboard={onDeleteDashboard}
-        onCreateDashboard={onCreateDashboard}
-      />
+      <StyledTreeNodeLink
+        className={clsx({
+          'adm-treeNode--selected': router.pathname === Path.HomeDashboard,
+        })}
+        href={Path.HomeDashboard}
+      >
+        <FundViewOutlined className="mr-2" />
+        <span className="text-medium">Dashboard</span>
+      </StyledTreeNodeLink>
       <ThreadTree
         threads={threads}
-        selectedKeys={threadSelectedKeys}
+        selectedKeys={treeSelectedKeys}
         onSelect={onTreeSelect}
-        onRename={onRenameThread}
-        onDeleteThread={handleDeleteThread}
+        onRename={onRename}
+        onDeleteThread={onDeleteThread}
       />
     </>
   );

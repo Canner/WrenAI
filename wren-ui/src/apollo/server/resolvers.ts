@@ -67,7 +67,6 @@ const resolvers = {
       projectResolver.getProjectRecommendationQuestions,
 
     // Dashboard
-    dashboards: dashboardResolver.getDashboards,
     dashboardItems: dashboardResolver.getDashboardItems,
     dashboard: dashboardResolver.getDashboard,
 
@@ -168,9 +167,6 @@ const resolvers = {
       askingResolver.generateProjectRecommendationQuestions,
 
     // Dashboard
-    createDashboard: dashboardResolver.createDashboard,
-    updateDashboard: dashboardResolver.updateDashboard,
-    deleteDashboard: dashboardResolver.deleteDashboard,
     updateDashboardItemLayouts: dashboardResolver.updateDashboardItemLayouts,
     createDashboardItem: dashboardResolver.createDashboardItem,
     updateDashboardItem: dashboardResolver.updateDashboardItem,

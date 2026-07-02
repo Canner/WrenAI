@@ -32,30 +32,15 @@ export interface UpdateDashboardItemInput {
   displayName: string;
 }
 
-export interface CreateDashboardInput {
-  name?: string;
-}
-
-export interface UpdateDashboardInput {
-  name: string;
-}
-
 export type UpdateDashboardItemLayouts = (DashboardItemLayout & {
   itemId: number;
 })[];
 
 export interface IDashboardService {
   initDashboard(): Promise<Dashboard>;
-  getDashboard(dashboardId?: number): Promise<Dashboard>;
-  getDashboards(): Promise<Dashboard[]>;
+  getCurrentDashboard(): Promise<Dashboard>;
   getDashboardItem(dashboardItemId: number): Promise<DashboardItem>;
   getDashboardItems(dashboardId: number): Promise<DashboardItem[]>;
-  createDashboard(input: CreateDashboardInput): Promise<Dashboard>;
-  updateDashboard(
-    dashboardId: number,
-    input: UpdateDashboardInput,
-  ): Promise<Dashboard>;
-  deleteDashboard(dashboardId: number): Promise<Dashboard | null>;
   createDashboardItem(input: CreateDashboardItemInput): Promise<DashboardItem>;
   updateDashboardItem(
     dashboardItemId: number,
@@ -146,76 +131,19 @@ export class DashboardService implements IDashboardService {
       projectId: project.id,
     });
     if (existingDashboard) return existingDashboard;
+    // only support one dashboard for oss
     return await this.dashboardRepository.createOne({
       name: 'Dashboard',
       projectId: project.id,
     });
   }
 
-  public async getDashboards(): Promise<Dashboard[]> {
-    const project = await this.projectService.getCurrentProject();
-    const dashboards = await this.dashboardRepository.findAllBy({
-      projectId: project.id,
-    });
-    if (dashboards.length > 0) {
-      return dashboards.sort((left, right) => left.id - right.id);
-    }
-
-    return [await this.initDashboard()];
-  }
-
-  public async getDashboard(dashboardId?: number): Promise<Dashboard> {
-    if (!dashboardId) {
-      const [dashboard] = await this.getDashboards();
-      return { ...dashboard };
-    }
-
+  public async getCurrentDashboard(): Promise<Dashboard> {
     const project = await this.projectService.getCurrentProject();
     const dashboard = await this.dashboardRepository.findOneBy({
-      id: dashboardId,
       projectId: project.id,
     });
-    if (!dashboard) {
-      throw new Error(`Dashboard with id ${dashboardId} not found.`);
-    }
     return { ...dashboard };
-  }
-
-  public async createDashboard(input: CreateDashboardInput): Promise<Dashboard> {
-    const project = await this.projectService.getCurrentProject();
-    const dashboards = await this.getDashboards();
-    const defaultName = this.getNextDashboardName(dashboards);
-    const name = this.normalizeDashboardName(input.name || defaultName);
-
-    return await this.dashboardRepository.createOne({
-      name,
-      projectId: project.id,
-    });
-  }
-
-  public async updateDashboard(
-    dashboardId: number,
-    input: UpdateDashboardInput,
-  ): Promise<Dashboard> {
-    await this.getDashboard(dashboardId);
-    return await this.dashboardRepository.updateOne(dashboardId, {
-      name: this.normalizeDashboardName(input.name),
-    });
-  }
-
-  public async deleteDashboard(dashboardId: number): Promise<Dashboard | null> {
-    const dashboards = await this.getDashboards();
-    if (dashboards.length <= 1) {
-      throw new Error('At least one dashboard is required.');
-    }
-
-    const dashboard = dashboards.find((item) => item.id === dashboardId);
-    if (!dashboard) {
-      throw new Error(`Dashboard with id ${dashboardId} not found.`);
-    }
-
-    await this.dashboardRepository.deleteOne(dashboardId);
-    return dashboards.find((item) => item.id !== dashboardId) || null;
   }
 
   public async getDashboardItem(
@@ -323,27 +251,6 @@ export class DashboardService implements IDashboardService {
     const x = isNextRow ? 0 : halfLayoutX;
     const y = isNextRow ? maxY + 2 : maxY;
     return { x, y, w: 3, h: 2 };
-  }
-
-  private normalizeDashboardName(name: string): string {
-    const normalized = name?.trim();
-    if (!normalized) {
-      throw new Error('Dashboard name is required.');
-    }
-    return normalized;
-  }
-
-  private getNextDashboardName(dashboards: Dashboard[]): string {
-    if (dashboards.length === 0) {
-      return 'Dashboard';
-    }
-
-    let index = dashboards.length + 1;
-    const existingNames = new Set(dashboards.map((dashboard) => dashboard.name));
-    while (existingNames.has(`Dashboard ${index}`)) {
-      index += 1;
-    }
-    return `Dashboard ${index}`;
   }
 
   protected toUTC(schedule: DashboardSchedule): DashboardSchedule {

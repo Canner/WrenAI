@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { useMutation, useQuery } from '@apollo/client';
+import { useMemo, useRef } from 'react';
 import { message } from 'antd';
 import { Path } from '@/utils/enum';
 import { useRouter } from 'next/router';
@@ -14,12 +13,11 @@ import CacheSettingsDrawer, {
   Schedule,
 } from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
 import {
-  DASHBOARD,
-  DASHBOARDS,
-  DELETE_DASHBOARD_ITEM,
-  SET_DASHBOARD_SCHEDULE,
-  UPDATE_DASHBOARD_ITEM_LAYOUTS,
-} from '@/apollo/client/graphql/dashboard';
+  useDashboardQuery,
+  useDeleteDashboardItemMutation,
+  useUpdateDashboardItemLayoutsMutation,
+  useSetDashboardScheduleMutation,
+} from '@/apollo/client/graphql/dashboard.generated';
 import { useGetSettingsQuery } from '@/apollo/client/graphql/settings.generated';
 import {
   DataSource,
@@ -36,10 +34,6 @@ const isSupportCachedSettings = (dataSource: DataSource) => {
 
 export default function Dashboard() {
   const router = useRouter();
-  const selectedDashboardId =
-    typeof router.query.dashboardId === 'string'
-      ? Number(router.query.dashboardId)
-      : undefined;
   const dashboardGridRef = useRef<{ onRefreshAll: () => void }>(null);
   const homeSidebar = useHomeSidebar();
   const cacheSettingsDrawer = useDrawerAction();
@@ -50,10 +44,11 @@ export default function Dashboard() {
     [settings?.dataSource],
   );
 
-  const { data, loading, client } = useQuery(DASHBOARD, {
-    variables: selectedDashboardId
-      ? { where: { id: selectedDashboardId } }
-      : undefined,
+  const {
+    data,
+    loading,
+    updateQuery: updateDashboardQuery,
+  } = useDashboardQuery({
     fetchPolicy: 'cache-and-network',
     onError: () => {
       message.error('Failed to fetch dashboard items.');
@@ -65,31 +60,20 @@ export default function Dashboard() {
     [data?.dashboard?.items],
   );
 
-  const [setDashboardSchedule] = useMutation(SET_DASHBOARD_SCHEDULE, {
-    refetchQueries: [
-      {
-        query: DASHBOARD,
-        variables: selectedDashboardId
-          ? { where: { id: selectedDashboardId } }
-          : undefined,
-      },
-      { query: DASHBOARDS },
-    ],
+  const [setDashboardSchedule] = useSetDashboardScheduleMutation({
+    refetchQueries: ['Dashboard'],
     onCompleted: () => {
       message.success('Successfully updated dashboard schedule.');
     },
     onError: (error) => console.error(error),
   });
 
-  const [updateDashboardItemLayouts] = useMutation(
-    UPDATE_DASHBOARD_ITEM_LAYOUTS,
-    {
-      onError: () => {
-        message.error('Failed to update dashboard item layouts.');
-      },
+  const [updateDashboardItemLayouts] = useUpdateDashboardItemLayoutsMutation({
+    onError: () => {
+      message.error('Failed to update dashboard item layouts.');
     },
-  );
-  const [deleteDashboardItem] = useMutation(DELETE_DASHBOARD_ITEM, {
+  });
+  const [deleteDashboardItem] = useDeleteDashboardItemMutation({
     onError: (error) => console.error(error),
     onCompleted: (_, query) => {
       message.success('Successfully deleted dashboard item.');
@@ -98,25 +82,15 @@ export default function Dashboard() {
   });
 
   const onRemoveDashboardItemFromQueryCache = (id: number) => {
-    client.cache.updateQuery(
-      {
-        query: DASHBOARD,
-        variables: selectedDashboardId
-          ? { where: { id: selectedDashboardId } }
-          : undefined,
-      },
-      (prev: any) => {
-        if (!prev?.dashboard) return prev;
-        return {
-          ...prev,
-          dashboard: {
-            ...prev.dashboard,
-            items:
-              prev?.dashboard?.items?.filter((item) => item.id !== id) || [],
-          },
-        };
-      },
-    );
+    updateDashboardQuery((prev) => {
+      return {
+        ...prev,
+        dashboard: {
+          ...prev.dashboard,
+          items: prev?.dashboard?.items?.filter((item) => item.id !== id) || [],
+        },
+      };
+    });
   };
 
   const onUpdateChange = async (layouts: ItemLayoutInput[]) => {
@@ -128,23 +102,6 @@ export default function Dashboard() {
   const onDelete = async (id: number) => {
     await deleteDashboardItem({ variables: { where: { id } } });
   };
-
-  const dashboardId = data?.dashboard?.id;
-
-  useEffect(() => {
-    if (!dashboardId || selectedDashboardId || router.pathname !== Path.HomeDashboard) {
-      return;
-    }
-
-    router.replace(
-      {
-        pathname: Path.HomeDashboard,
-        query: { dashboardId },
-      },
-      undefined,
-      { shallow: true },
-    );
-  }, [dashboardId, router.pathname, selectedDashboardId]);
 
   return (
     <SiderLayout loading={false} color="gray-3" sidebar={homeSidebar}>
@@ -178,13 +135,7 @@ export default function Dashboard() {
               {...cacheSettingsDrawer.state}
               onClose={cacheSettingsDrawer.closeDrawer}
               onSubmit={async (values) => {
-                if (!dashboardId) return;
-                await setDashboardSchedule({
-                  variables: {
-                    where: { id: dashboardId },
-                    data: values,
-                  },
-                });
+                await setDashboardSchedule({ variables: { data: values } });
               }}
             />
           )}
