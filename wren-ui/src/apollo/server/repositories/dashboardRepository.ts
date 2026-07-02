@@ -142,7 +142,7 @@ export class DashboardRepository
     if (
       (data.id !== undefined && data.id !== null) ||
       !this.isMssql() ||
-      (!forceManualId && (await this.hasIdentityId()))
+      !forceManualId
     ) {
       return data;
     }
@@ -165,7 +165,7 @@ export class DashboardRepository
     if (
       data.every((item) => item.id !== undefined && item.id !== null) ||
       !this.isMssql() ||
-      (!forceManualId && (await this.hasIdentityId()))
+      !forceManualId
     ) {
       return data;
     }

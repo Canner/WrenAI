@@ -80,7 +80,7 @@ export class BaseRepository<T> implements IBasicRepository<T> {
   public async findOneBy(filter: Partial<T>, queryOptions?: IQueryOptions) {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
     const query = executer(this.tableName).where(
-      this.transformToDBData(filter),
+      this.normalizeMssqlBindings(this.transformToDBData(filter)),
     );
     if (queryOptions?.limit) {
       query.limit(queryOptions.limit);
@@ -96,7 +96,7 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     // format filter keys to snake_case
 
     const query = executer(this.tableName).where(
-      this.transformToDBData(filter),
+      this.normalizeMssqlBindings(this.transformToDBData(filter)),
     );
     if (queryOptions?.order) {
       query.orderBy(queryOptions.order);
@@ -120,34 +120,47 @@ export class BaseRepository<T> implements IBasicRepository<T> {
 
   public async createOne(data: Partial<T>, queryOptions?: IQueryOptions) {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    const insertValue = await this.prepareInsertData(data, executer);
-    const [result] = await executer(this.tableName)
-      .insert(insertValue)
-      .returning('*');
-    return this.transformFromDBData(result);
+    try {
+      const insertValue = await this.prepareInsertData(data, executer);
+      const [result] = await executer(this.tableName)
+        .insert(this.normalizeMssqlBindings(insertValue))
+        .returning('*');
+      return this.transformFromDBData(result);
+    } catch (error) {
+      if (!this.shouldRetryManualId(error, data, executer)) {
+        throw error;
+      }
+
+      const insertValue = await this.prepareInsertData(data, executer, true);
+      const [result] = await executer(this.tableName)
+        .insert(this.normalizeMssqlBindings(insertValue))
+        .returning('*');
+      return this.transformFromDBData(result);
+    }
   }
 
   public async createMany(data: Partial<T>[], queryOptions?: IQueryOptions) {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    const preparedData = await this.prepareInsertManyData(data, executer);
+    let preparedData: any[];
+    try {
+      preparedData = await this.prepareInsertManyData(data, executer);
+    } catch (error) {
+      throw error;
+    }
     if (preparedData.length === 0) {
       return [];
     }
 
-    const batchSize = this.getCreateManyBatchSize(preparedData);
-    const batchCount = Math.ceil(preparedData.length / batchSize);
-    const result = [];
-    for (let i = 0; i < batchCount; i++) {
-      const start = i * batchSize;
-      const end = Math.min((i + 1) * batchSize, preparedData.length);
-      const batchValues = preparedData.slice(start, end);
-      const chunk = await executer(this.tableName)
-        .insert(batchValues)
-        .returning('*');
-      result.push(...chunk);
-    }
+    try {
+      return await this.insertMany(executer, preparedData);
+    } catch (error) {
+      if (!this.shouldRetryManualId(error, data, executer)) {
+        throw error;
+      }
 
-    return result.map((data) => this.transformFromDBData(data));
+      preparedData = await this.prepareInsertManyData(data, executer, true);
+      return await this.insertMany(executer, preparedData);
+    }
   }
 
   public async updateOne(
@@ -156,16 +169,21 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     queryOptions?: IQueryOptions,
   ) {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
+    const normalizedId = this.normalizeMssqlBindings({ id }).id;
     const [result] = await executer(this.tableName)
-      .where({ id })
-      .update(this.transformToDBData(data))
+      .where({ id: normalizedId })
+      .update(this.normalizeMssqlBindings(this.transformToDBData(data)))
       .returning('*');
     return this.transformFromDBData(result);
   }
 
   public async deleteOne(id: string, queryOptions?: IQueryOptions) {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    const builder = executer.from(this.tableName).where({ id }).delete();
+    const normalizedId = this.normalizeMssqlBindings({ id }).id;
+    const builder = executer
+      .from(this.tableName)
+      .where({ id: normalizedId })
+      .delete();
     return await builder;
   }
 
@@ -174,8 +192,9 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     queryOptions?: IQueryOptions,
   ) {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
+    const normalizedIds = this.normalizeMssqlBindings(ids);
     let deleted = 0;
-    for (const batch of this.toWhereInBatches(ids)) {
+    for (const batch of this.toWhereInBatches(normalizedIds)) {
       deleted += await executer
         .from(this.tableName)
         .whereIn('id', batch)
@@ -190,7 +209,7 @@ export class BaseRepository<T> implements IBasicRepository<T> {
   ) => {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
     const builder = executer(this.tableName)
-      .where(this.transformToDBData(where))
+      .where(this.normalizeMssqlBindings(this.transformToDBData(where)))
       .delete();
     return await builder;
   };
@@ -304,6 +323,7 @@ export class BaseRepository<T> implements IBasicRepository<T> {
   private async prepareInsertData(
     data: Partial<T>,
     executer: Knex | Knex.Transaction,
+    forceManualId = false,
   ) {
     const dbData = this.transformToDBData(data);
     if (!this.isMssql(executer)) {
@@ -313,7 +333,7 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     if (
       !(await this.hasIdColumn(executer)) ||
       dbData.id !== undefined ||
-      (await this.hasIdentityId(executer))
+      !forceManualId
     ) {
       return dbData;
     }
@@ -327,12 +347,13 @@ export class BaseRepository<T> implements IBasicRepository<T> {
   private async prepareInsertManyData(
     data: Partial<T>[],
     executer: Knex | Knex.Transaction,
+    forceManualId = false,
   ) {
     const dbData = data.map((item) => this.transformToDBData(item));
     if (
       !this.isMssql(executer) ||
       !(await this.hasIdColumn(executer)) ||
-      (await this.hasIdentityId(executer))
+      !forceManualId
     ) {
       return dbData;
     }
@@ -357,5 +378,97 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     }
 
     return dbData;
+  }
+
+  private async insertMany(
+    executer: Knex | Knex.Transaction,
+    preparedData: any[],
+  ) {
+    const batchSize = this.getCreateManyBatchSize(preparedData);
+    const batchCount = Math.ceil(preparedData.length / batchSize);
+    const result = [];
+    for (let i = 0; i < batchCount; i++) {
+      const start = i * batchSize;
+      const end = Math.min((i + 1) * batchSize, preparedData.length);
+      const batchValues = preparedData.slice(start, end);
+      const chunk = await executer(this.tableName)
+        .insert(this.normalizeMssqlBindings(batchValues))
+        .returning('*');
+      result.push(...chunk);
+    }
+
+    return result.map((data) => this.transformFromDBData(data));
+  }
+
+  private normalizeMssqlBindings(value: any): any {
+    if (!this.isMssql(this.knex)) {
+      return value;
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((item) => this.normalizeMssqlBindings(item));
+    }
+
+    if (typeof value === 'bigint') {
+      return value.toString();
+    }
+
+    if (!isPlainObject(value)) {
+      if (
+        typeof value === 'number' &&
+        Number.isInteger(value) &&
+        !Number.isSafeInteger(value)
+      ) {
+        return String(value);
+      }
+      return value;
+    }
+
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entryValue]) => {
+        if (
+          typeof entryValue === 'number' &&
+          Number.isInteger(entryValue) &&
+          (!Number.isSafeInteger(entryValue) ||
+            key === 'id' ||
+            key.endsWith('_id'))
+        ) {
+          return [key, String(entryValue)];
+        }
+
+        if (typeof entryValue === 'bigint') {
+          return [key, entryValue.toString()];
+        }
+
+        return [key, this.normalizeMssqlBindings(entryValue)];
+      }),
+    );
+  }
+
+  private shouldRetryManualId(
+    error: unknown,
+    data: Partial<T> | Partial<T>[],
+    executer: Knex | Knex.Transaction,
+  ) {
+    if (!this.isMssql(executer)) {
+      return false;
+    }
+
+    const hasMissingId = Array.isArray(data)
+      ? data.some((item: any) => item?.id === undefined || item?.id === null)
+      : (data as any)?.id === undefined || (data as any)?.id === null;
+
+    if (!hasMissingId) {
+      return false;
+    }
+
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === 'string'
+          ? error
+          : '';
+
+    return message.includes("Cannot insert the value NULL into column 'id'");
   }
 }
