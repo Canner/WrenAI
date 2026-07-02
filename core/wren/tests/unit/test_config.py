@@ -102,3 +102,32 @@ def test_load_config_denied_functions_mixed_types_rejected(tmp_path):
     (tmp_path / "config.json").write_text(json.dumps(data))
     with pytest.raises(WrenError):
         load_config(tmp_path)
+
+
+def test_load_config_allowed_source_functions(tmp_path):
+    data = {
+        "strict_mode": True,
+        "allowed_source_functions": ["Generate_Series", "RANGE"],
+    }
+    (tmp_path / "config.json").write_text(json.dumps(data))
+    config = load_config(tmp_path)
+    assert config.allowed_source_functions == frozenset(["generate_series", "range"])
+
+
+def test_load_config_allowed_source_functions_default_empty(tmp_path):
+    config = load_config(tmp_path)
+    assert config.allowed_source_functions == frozenset()
+
+
+def test_load_config_allowed_source_functions_not_array(tmp_path):
+    data = {"allowed_source_functions": "generate_series"}
+    (tmp_path / "config.json").write_text(json.dumps(data))
+    with pytest.raises(WrenError):
+        load_config(tmp_path)
+
+
+def test_load_config_allowed_source_functions_mixed_types_rejected(tmp_path):
+    data = {"allowed_source_functions": ["generate_series", 3]}
+    (tmp_path / "config.json").write_text(json.dumps(data))
+    with pytest.raises(WrenError):
+        load_config(tmp_path)
