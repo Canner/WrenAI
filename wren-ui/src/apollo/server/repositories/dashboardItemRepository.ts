@@ -175,7 +175,7 @@ export class DashboardItemRepository
       hasIdColumn &&
       normalizedData.id === undefined &&
       this.isMssqlLike(executer) &&
-      (forceManualId || !(await this.hasIdentityId(executer)))
+      forceManualId
     ) {
       normalizedData.id = await this.getNextId(executer);
     }
