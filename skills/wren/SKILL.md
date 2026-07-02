@@ -9,7 +9,7 @@ allowed-tools: Bash(wren:*)
 
 This is a discovery stub. The actual workflow guides and prompt helpers
 live inside the `wren` CLI itself, so they always match the installed
-wren-engine version (no skill cache, no version drift).
+wrenai version (no skill cache, no version drift).
 
 Install: `pip install wrenai`.
 

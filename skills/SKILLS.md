@@ -1,7 +1,7 @@
 # Wren Engine — Agent Skills
 
 The actual workflow guides, reference docs, and prompt helpers live **inside
-the `wren` CLI itself**, so they always match the installed wren-engine
+the `wren` CLI itself**, so they always match the installed wrenai
 version (no skill cache, no version drift).
 
 This directory ships a single discovery stub ([`wren/SKILL.md`](wren/SKILL.md))

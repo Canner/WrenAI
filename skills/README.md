@@ -4,7 +4,7 @@ The actual skill content (workflow guides, reference docs, prompt helpers)
 **lives inside the `wren` CLI**. This directory ships a single discovery stub
 that an AI client installs once; the stub then tells the agent to fetch
 everything else from the CLI at runtime (so content always matches the
-installed wren-engine version).
+installed wrenai version).
 
 See [`SKILLS.md`](SKILLS.md) for the full design and command surface.
 

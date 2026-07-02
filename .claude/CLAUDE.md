@@ -16,7 +16,7 @@ core/
 ├── wren-core-base/   Shared Rust crate — manifest types (Model, Column, Metric, Relationship, View) + ManifestBuilder
 ├── wren-core-py/     PyO3 bindings exposing wren-core to Python (PyPI: wren-core)
 ├── wren-core-wasm/   WebAssembly build of wren-core for in-browser semantic SQL (npm: wren-core-wasm)
-├── wren/             Python SDK and CLI — `wren` command, profile/context/memory management (PyPI: wren-engine)
+├── wren/             Python SDK and CLI — `wren` command, profile/context/memory management (PyPI: wrenai)
 └── wren-mdl/         MDL JSON schema definition
 
 docs/core/            Module documentation
