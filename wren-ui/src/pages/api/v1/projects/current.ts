@@ -46,18 +46,26 @@ export default async function handler(
     }
 
     const projectService = getProjectService();
+    let currentProject = null;
+    try {
+      currentProject = await projectService.getCurrentProject();
+    } catch {
+      currentProject = null;
+    }
     const projects = await projectService.listProjects();
-    const currentProject =
-      projects.find((project) => coerceBoolean(project.isCurrent)) || null;
+    const serializedCurrentProject =
+      currentProject && projects.some((project) => project.id === currentProject.id)
+        ? currentProject
+        : projects.find((project) => coerceBoolean(project.isCurrent)) || null;
 
     await respondWithSimple({
       res,
       statusCode: 200,
       responsePayload: {
-        currentProject: serializeProject(currentProject),
+        currentProject: serializeProject(serializedCurrentProject),
         projects: projects.map(serializeProject),
       },
-      projectId: currentProject?.id ?? 0,
+      projectId: serializedCurrentProject?.id ?? 0,
       apiType: ApiType.GET_CURRENT_PROJECT,
       startTime,
       requestPayload: {},
