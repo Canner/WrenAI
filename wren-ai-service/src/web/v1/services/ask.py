@@ -2584,6 +2584,63 @@ class AskService:
         ]
         return documents, table_names, table_ddls
 
+    async def _complete_sql_generation_context(
+        self,
+        *,
+        query: str,
+        project_id: Optional[str],
+        documents: list[dict],
+        table_names: list[str],
+        table_ddls: list[str],
+    ) -> tuple[list[dict], list[str], list[str], dict]:
+        if not table_names or "db_schema_retrieval" not in self._pipelines:
+            return documents, table_names, table_ddls, {}
+
+        selected_table_names = list(dict.fromkeys(table_names))
+        try:
+            retrieval_result = await self._run_with_timeout(
+                "Complete selected schema retrieval",
+                self._pipelines["db_schema_retrieval"].run(
+                    query=query,
+                    tables=selected_table_names,
+                    project_id=project_id,
+                    histories=[],
+                    enable_column_pruning=False,
+                ),
+                timeout_seconds=min(self._schema_retrieval_timeout_seconds, 30),
+            )
+        except Exception as error:
+            logger.warning(
+                "Complete selected schema retrieval failed; using existing retrieval context. project_id=%s tables=%s error=%s",
+                project_id,
+                selected_table_names,
+                error,
+            )
+            return documents, table_names, table_ddls, {}
+
+        complete_documents, complete_table_names, complete_table_ddls = (
+            self._extract_retrieval_metadata(retrieval_result)
+        )
+        if not complete_documents:
+            logger.warning(
+                "Complete selected schema retrieval returned no documents; using existing retrieval context. project_id=%s tables=%s",
+                project_id,
+                selected_table_names,
+            )
+            return documents, table_names, table_ddls, {}
+
+        logger.info(
+            "Completed SQL generation context with full schemas for project_id %s tables=%s",
+            project_id,
+            complete_table_names,
+        )
+        return (
+            complete_documents,
+            complete_table_names,
+            complete_table_ddls,
+            retrieval_result.get("construct_retrieval_results", {}),
+        )
+
     def _is_visualization_request(self, query: str) -> bool:
         normalized = (query or "").lower()
         return bool(
@@ -4054,6 +4111,20 @@ class AskService:
                     table_names,
                     table_ddls,
                 )
+                (
+                    documents,
+                    table_names,
+                    table_ddls,
+                    completed_retrieval_result,
+                ) = await self._complete_sql_generation_context(
+                    query=sql_user_query,
+                    project_id=ask_request.project_id,
+                    documents=documents,
+                    table_names=table_names,
+                    table_ddls=table_ddls,
+                )
+                if completed_retrieval_result:
+                    _retrieval_result = completed_retrieval_result
 
             sql_generation_histories = histories
             if self._is_data_analysis_query(

@@ -1,4 +1,31 @@
+import asyncio
+
 from src.web.v1.services.ask import AskHistory, AskService
+
+
+class _FakeSchemaRetrievalPipeline:
+    def __init__(self):
+        self.calls = []
+
+    async def run(self, **kwargs):
+        self.calls.append(kwargs)
+        return {
+            "construct_retrieval_results": {
+                "retrieval_results": [
+                    {
+                        "table_name": "dbo_orders",
+                        "table_ddl": (
+                            "CREATE TABLE dbo_orders ("
+                            "OrderId INT, CustomerId INT, OrderDate TIMESTAMP"
+                            ")"
+                        ),
+                    }
+                ],
+                "has_calculated_field": False,
+                "has_metric": False,
+                "has_json_field": False,
+            }
+        }
 
 
 def test_independent_question_does_not_reuse_historical_sql():
@@ -519,3 +546,51 @@ def test_retrieval_metadata_ignores_malformed_documents():
     assert len(documents) == 1
     assert table_names == ["dbo_repair_logs"]
     assert table_ddls == ["CREATE TABLE dbo_repair_logs (id varchar)"]
+
+
+def test_complete_sql_generation_context_refetches_full_selected_schema():
+    pipeline = _FakeSchemaRetrievalPipeline()
+    service = AskService(
+        pipelines={"db_schema_retrieval": pipeline},
+        schema_retrieval_timeout_seconds=180,
+    )
+
+    documents, table_names, table_ddls, retrieval_result = asyncio.run(
+        service._complete_sql_generation_context(
+            query="Show monthly orders by customer.",
+            project_id="project-1",
+            documents=[
+                {
+                    "table_name": "dbo_orders",
+                    "table_ddl": "CREATE TABLE dbo_orders (OrderId INT)",
+                }
+            ],
+            table_names=["dbo_orders"],
+            table_ddls=["CREATE TABLE dbo_orders (OrderId INT)"],
+        )
+    )
+
+    assert table_names == ["dbo_orders"]
+    assert table_ddls == [
+        "CREATE TABLE dbo_orders (OrderId INT, CustomerId INT, OrderDate TIMESTAMP)"
+    ]
+    assert documents == [
+        {
+            "table_name": "dbo_orders",
+            "table_ddl": (
+                "CREATE TABLE dbo_orders ("
+                "OrderId INT, CustomerId INT, OrderDate TIMESTAMP"
+                ")"
+            ),
+        }
+    ]
+    assert retrieval_result["retrieval_results"] == documents
+    assert pipeline.calls == [
+        {
+            "query": "Show monthly orders by customer.",
+            "tables": ["dbo_orders"],
+            "project_id": "project-1",
+            "histories": [],
+            "enable_column_pruning": False,
+        }
+    ]
