@@ -59,7 +59,7 @@ export type ProjectRecommendationQuestionsResult = {
 export interface IProjectService {
   createProject: (projectData: ProjectData) => Promise<Project>;
   updateProject: (
-    projectId: number,
+    projectId: string | number,
     projectData: Partial<Project>,
   ) => Promise<Project>;
   getGeneralConnectionInfo: (project: Project) => Record<string, any>;
@@ -78,8 +78,8 @@ export interface IProjectService {
 
   getCurrentProject: () => Promise<Project>;
   listProjects: () => Promise<Project[]>;
-  selectProject: (projectId: number) => Promise<Project>;
-  getProjectById: (projectId: number) => Promise<Project>;
+  selectProject: (projectId: string | number) => Promise<Project>;
+  getProjectById: (projectId: string | number) => Promise<Project>;
   writeCredentialFile: (
     credentials: JSON,
     persistCredentialDir: string,
@@ -98,7 +98,7 @@ export class ProjectService implements IProjectService {
   private queryService: IQueryService;
   private wrenAIAdaptor: IWrenAIAdaptor;
   private projectRecommendQuestionBackgroundTracker: ProjectRecommendQuestionBackgroundTracker;
-  private projectRecommendationJobs = new Map<number, Promise<void>>();
+  private projectRecommendationJobs = new Map<string, Promise<void>>();
   constructor({
     projectRepository,
     metadataService,
@@ -134,7 +134,7 @@ export class ProjectService implements IProjectService {
     this.projectRecommendQuestionBackgroundTracker.stop();
   }
   public async updateProject(
-    projectId: number,
+    projectId: string | number,
     projectData: Partial<Project>,
   ): Promise<Project> {
     return await this.projectRepository.updateOne(projectId, projectData);
@@ -158,7 +158,8 @@ export class ProjectService implements IProjectService {
       throw new Error(`Project not found`);
     }
 
-    const existingJob = this.projectRecommendationJobs.get(project.id);
+    const projectJobKey = String(project.id);
+    const existingJob = this.projectRecommendationJobs.get(projectJobKey);
     if (existingJob) {
       logger.debug(
         `project "${project.id}" recommended questions are already being requested, reusing in-flight job`,
@@ -167,11 +168,11 @@ export class ProjectService implements IProjectService {
     }
 
     const job = this.doGenerateProjectRecommendationQuestions(project);
-    this.projectRecommendationJobs.set(project.id, job);
+    this.projectRecommendationJobs.set(projectJobKey, job);
     try {
       return await job;
     } finally {
-      this.projectRecommendationJobs.delete(project.id);
+      this.projectRecommendationJobs.delete(projectJobKey);
     }
   }
 
@@ -251,11 +252,12 @@ export class ProjectService implements IProjectService {
     return await this.projectRepository.listProjects();
   }
 
-  public async selectProject(projectId: number) {
+  public async selectProject(projectId: string | number) {
+    logger.debug(`Selecting active project ${String(projectId)}`);
     return await this.projectRepository.setCurrentProject(projectId);
   }
 
-  public async getProjectById(projectId: number) {
+  public async getProjectById(projectId: string | number) {
     return await this.projectRepository.findOneBy({ id: projectId });
   }
 
@@ -340,8 +342,8 @@ export class ProjectService implements IProjectService {
     }
 
     const nextProject = remainingProjects
-      .filter((project) => project.id !== projectId)
-      .sort((a, b) => b.id - a.id)[0];
+      .filter((project) => String(project.id) !== String(projectId))
+      .sort((a, b) => this.compareProjectIdsDescending(a.id, b.id))[0];
 
     if (nextProject) {
       await this.projectRepository.setCurrentProject(nextProject.id);
@@ -407,5 +409,17 @@ export class ProjectService implements IProjectService {
         language: WrenAILanguage[project.language] || WrenAILanguage.EN,
       },
     };
+  }
+
+  private compareProjectIdsDescending(
+    left: string | number,
+    right: string | number,
+  ) {
+    const leftId = BigInt(left);
+    const rightId = BigInt(right);
+    if (leftId === rightId) {
+      return 0;
+    }
+    return leftId > rightId ? -1 : 1;
   }
 }

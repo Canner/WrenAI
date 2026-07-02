@@ -23,7 +23,7 @@ const getProjectService = () => {
 const serializeProject = (project) =>
   project
     ? {
-        id: project.id,
+        id: String(project.id),
         displayName: project.displayName,
         projectType: project.projectType || 'CLASSIC',
         isCurrent: coerceBoolean(project.isCurrent),
@@ -49,14 +49,37 @@ export default async function handler(
     let currentProject = null;
     try {
       currentProject = await projectService.getCurrentProject();
-    } catch {
+      logger.debug(
+        `Resolved current project ${String(currentProject?.id)} (${currentProject?.type || 'unknown'})`,
+      );
+    } catch (error) {
+      logger.warn(
+        `Failed to resolve current project through project service: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
       currentProject = null;
     }
     const projects = await projectService.listProjects();
+    logger.debug(
+      `Loaded ${projects.length} project(s) for current project API: ${projects
+        .map((project) => `${String(project.id)}:${project.type || 'unknown'}:${coerceBoolean(project.isCurrent)}`)
+        .join(', ') || 'none'}`,
+    );
     const serializedCurrentProject =
-      currentProject && projects.some((project) => project.id === currentProject.id)
+      currentProject &&
+      projects.some(
+        (project) => String(project.id) === String(currentProject.id),
+      )
         ? currentProject
         : projects.find((project) => coerceBoolean(project.isCurrent)) || null;
+    logger.debug(
+      `Current project API returning ${
+        serializedCurrentProject
+          ? `${String(serializedCurrentProject.id)} (${serializedCurrentProject.type || 'unknown'})`
+          : 'no current project'
+      }`,
+    );
 
     await respondWithSimple({
       res,
@@ -65,7 +88,9 @@ export default async function handler(
         currentProject: serializeProject(serializedCurrentProject),
         projects: projects.map(serializeProject),
       },
-      projectId: serializedCurrentProject?.id ?? 0,
+      projectId: Number.isSafeInteger(Number(serializedCurrentProject?.id))
+        ? Number(serializedCurrentProject?.id)
+        : 0,
       apiType: ApiType.GET_CURRENT_PROJECT,
       startTime,
       requestPayload: {},

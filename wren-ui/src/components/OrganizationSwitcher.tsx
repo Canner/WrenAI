@@ -37,7 +37,7 @@ interface OrganizationResponse {
 }
 
 interface ProjectRecord {
-  id: number;
+  id: string;
   displayName: string;
   projectType: WorkspaceProjectType;
   isCurrent: boolean;
@@ -291,7 +291,7 @@ export default function OrganizationSwitcher() {
     }
   };
 
-  const selectProject = async (projectId: number) => {
+  const selectProject = async (projectId: string) => {
     try {
       const response = await fetch(`/api/v1/projects/${projectId}/select`, {
         method: 'POST',

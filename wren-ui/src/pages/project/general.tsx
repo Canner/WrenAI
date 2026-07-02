@@ -15,7 +15,7 @@ import {
 import { getLanguageText } from '@/utils/language';
 
 interface CurrentProjectRecord {
-  id: number;
+  id: string;
   displayName: string;
   projectType: WorkspaceProjectType;
   isCurrent: boolean;

@@ -51,6 +51,10 @@ export class DashboardResolver {
     if (!dashboard) {
       throw new Error('Dashboard not found.');
     }
+    const project = await ctx.projectService.getCurrentProject();
+    logger.debug(
+      `Resolving dashboard ${String(dashboard.id)} for project ${String(project.id)} (${project.type || 'unknown'})`,
+    );
     const schedule = ctx.dashboardService.parseCronExpression(dashboard);
     const items = await ctx.dashboardService.getDashboardItems(dashboard.id);
     return {
@@ -72,6 +76,10 @@ export class DashboardResolver {
     if (!dashboard) {
       throw new Error('Dashboard not found.');
     }
+    const project = await ctx.projectService.getCurrentProject();
+    logger.debug(
+      `Resolving dashboard items for dashboard ${String(dashboard.id)} in project ${String(project.id)} (${project.type || 'unknown'})`,
+    );
     return await ctx.dashboardService.getDashboardItems(dashboard.id);
   }
 
@@ -84,6 +92,11 @@ export class DashboardResolver {
     const itemType = this.normalizeDashboardItemType(args.data.itemType);
     const dashboard = await ctx.dashboardService.getCurrentDashboard();
     const response = await ctx.askingService.getResponse(responseId);
+    const project = await ctx.projectService.getCurrentProject();
+
+    logger.debug(
+      `Pinning response ${responseId} into dashboard ${String(dashboard.id)} for project ${String(project.id)} (${project.type || 'unknown'})`,
+    );
 
     if (!response) {
       throw new Error(`Thread response not found. responseId: ${responseId}`);
@@ -194,6 +207,9 @@ export class DashboardResolver {
       const item = await ctx.dashboardService.getDashboardItem(itemId);
       const { cacheEnabled } = await ctx.dashboardService.getCurrentDashboard();
       const project = await ctx.projectService.getCurrentProject();
+      logger.debug(
+        `Previewing dashboard item ${String(itemId)} for project ${String(project.id)} (${project.type || 'unknown'})`,
+      );
       const manifest = await this.getPreviewManifest(ctx, project.id);
 
       try {
@@ -315,13 +331,15 @@ export class DashboardResolver {
 
   private async getPreviewManifest(
     ctx: IContext,
-    projectId: number,
+    projectId: string | number,
   ): Promise<Manifest> {
     const deployment = await ctx.deployService.getLastDeployment(projectId);
     if (deployment?.manifest) {
+      logger.debug(`Using deployed manifest for project ${projectId}`);
       return deployment.manifest as Manifest;
     }
 
+    logger.debug(`Using current model manifest fallback for project ${projectId}`);
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     return manifest;
   }

@@ -21,11 +21,10 @@ const getProjectService = () => {
 
 const parseProjectId = (value: string | string[] | undefined) => {
   const rawValue = Array.isArray(value) ? value[0] : value;
-  const parsed = Number(rawValue);
-  if (!rawValue || !Number.isInteger(parsed) || parsed <= 0) {
+  if (!rawValue || !/^\d+$/.test(rawValue)) {
     throw new ApiError('Invalid project id', 400);
   }
-  return parsed;
+  return rawValue;
 };
 
 export default async function handler(
@@ -41,7 +40,11 @@ export default async function handler(
 
     const projectId = parseProjectId(req.query.id);
     const projectService = getProjectService();
+    logger.debug(`API select project request for ${projectId}`);
     const project = await projectService.selectProject(projectId);
+    logger.debug(
+      `API selected project ${String(project.id)} (${project.type || 'unknown'})`,
+    );
 
     await respondWithSimple({
       res,
@@ -53,7 +56,7 @@ export default async function handler(
           projectType: project.projectType || 'CLASSIC',
         },
       },
-      projectId,
+      projectId: Number.isSafeInteger(Number(projectId)) ? Number(projectId) : 0,
       apiType: ApiType.SELECT_PROJECT,
       startTime,
       requestPayload: {},

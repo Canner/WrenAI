@@ -17,6 +17,10 @@ import {
   IbisRedshiftConnectionType,
   IbisDatabricksConnectionType,
 } from '@server/adaptors/ibisAdaptor';
+import { getLogger } from '@server/utils';
+
+const logger = getLogger('ProjectRepository');
+logger.level = 'debug';
 
 export interface BIG_QUERY_CONNECTION_INFO {
   projectId: string;
@@ -199,7 +203,7 @@ export interface IProjectRepository extends IBasicRepository<Project> {
   getCurrentProject: () => Promise<Project>;
   listProjects: () => Promise<Project[]>;
   findCurrentProject: () => Promise<Project | null>;
-  setCurrentProject: (projectId: number) => Promise<Project>;
+  setCurrentProject: (projectId: string | number) => Promise<Project>;
 }
 
 export class ProjectRepository
@@ -275,16 +279,29 @@ export class ProjectRepository
   public async getCurrentProject() {
     const currentProject = await this.findCurrentProject();
     if (currentProject) {
+      logger.debug(
+        `Resolved current project ${String(currentProject.id)} (${currentProject.type || 'unknown'})`,
+      );
       return currentProject;
     }
 
     const projects = await this.findAll({
       order: 'id',
     });
+    logger.warn(
+      `Current project marker missing. Available projects: ${projects
+        .map((project) => String(project.id))
+        .join(', ') || 'none'}`,
+    );
     if (!projects.length) {
       throw new Error('No project found');
     }
     if (projects.length === 1) {
+      logger.warn(
+        `Repairing missing current project marker by selecting the only project ${String(
+          projects[0].id,
+        )}`,
+      );
       return await this.setCurrentProject(projects[0].id);
     }
     throw new Error('No current project selected');
@@ -302,11 +319,14 @@ export class ProjectRepository
     } as Partial<Project>);
   }
 
-  public async setCurrentProject(projectId: number) {
+  public async setCurrentProject(projectId: string | number) {
     const tx = await this.transaction();
     try {
+      logger.debug(`Selecting current project ${String(projectId)}`);
       await tx(this.tableName).update({ is_current: false });
-      await tx(this.tableName).where({ id: projectId }).update({ is_current: true });
+      await tx(this.tableName)
+        .where({ id: this.normalizeProjectId(projectId) })
+        .update({ is_current: true });
       const project = await this.findOneBy({ id: projectId } as Partial<Project>, {
         tx,
       });
@@ -314,6 +334,9 @@ export class ProjectRepository
         throw new Error(`Project ${projectId} not found`);
       }
       await this.commit(tx);
+      logger.debug(
+        `Selected current project ${String(project.id)} (${project.type || 'unknown'})`,
+      );
       return project;
     } catch (error) {
       await this.rollback(tx);
@@ -425,12 +448,14 @@ export class ProjectRepository
     }
 
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    const [row] = await executer(this.tableName).max<{ maxId?: number }>({
+    const [row] = await executer(this.tableName).max<{
+      maxId?: number | string | bigint | null;
+    }>({
       maxId: 'id',
     });
     return {
       ...data,
-      id: Number(row?.maxId || 0) + 1,
+      id: this.toNextIdValue(row?.maxId),
     };
   };
 
@@ -448,20 +473,38 @@ export class ProjectRepository
     }
 
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
-    const [row] = await executer(this.tableName).max<{ maxId?: number }>({
+    const [row] = await executer(this.tableName).max<{
+      maxId?: number | string | bigint | null;
+    }>({
       maxId: 'id',
     });
-    let nextId = Number(row?.maxId || 0) + 1;
+    let nextId = BigInt(row?.maxId ?? 0) + 1n;
     return data.map((item) => {
       if (item.id !== undefined && item.id !== null) {
         return item;
       }
       return {
         ...item,
-        id: nextId++,
+        id: this.serializeIdValue(nextId++),
       };
     });
   };
+
+  private serializeIdValue(value: number | string | bigint) {
+    const bigintValue = BigInt(value);
+    return bigintValue <= BigInt(Number.MAX_SAFE_INTEGER)
+      ? Number(bigintValue)
+      : bigintValue.toString();
+  }
+
+  private toNextIdValue(maxId: number | string | bigint | null | undefined) {
+    const nextId = BigInt(maxId ?? 0) + 1n;
+    return this.serializeIdValue(nextId);
+  }
+
+  private normalizeProjectId(projectId: string | number) {
+    return typeof projectId === 'string' ? projectId : projectId;
+  }
 
   private shouldRetryManualId = (
     error: unknown,

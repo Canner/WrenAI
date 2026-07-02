@@ -128,6 +128,9 @@ export class DashboardService implements IDashboardService {
 
   public async initDashboard(): Promise<Dashboard> {
     const project = await this.projectService.getCurrentProject();
+    logger.debug(
+      `Initializing dashboard for project ${String(project.id)} (${project.type || 'unknown'})`,
+    );
     const existingDashboard = await this.dashboardRepository.findOneBy({
       projectId: project.id,
     });
@@ -141,10 +144,16 @@ export class DashboardService implements IDashboardService {
 
   public async getCurrentDashboard(): Promise<Dashboard> {
     const project = await this.projectService.getCurrentProject();
+    logger.debug(
+      `Loading current dashboard for project ${String(project.id)} (${project.type || 'unknown'})`,
+    );
     const dashboard = await this.dashboardRepository.findOneBy({
       projectId: project.id,
     });
     if (dashboard) {
+      logger.debug(
+        `Resolved dashboard ${String(dashboard.id)} for project ${String(project.id)}`,
+      );
       return dashboard;
     }
 
@@ -170,16 +179,23 @@ export class DashboardService implements IDashboardService {
   public async getDashboardItems(
     dashboardId: string | number,
   ): Promise<DashboardItem[]> {
-    return await this.dashboardItemRepository.findAllBy({
+    const items = await this.dashboardItemRepository.findAllBy({
       dashboardId,
     });
+    logger.debug(
+      `Loaded ${items.length} dashboard item(s) for dashboard ${String(dashboardId)}`,
+    );
+    return items;
   }
 
   public async createDashboardItem(
     input: CreateDashboardItemInput,
   ): Promise<DashboardItem> {
     const layout = await this.calculateNewLayout(input.dashboardId);
-    return await this.dashboardItemRepository.createOne({
+    logger.debug(
+      `Creating dashboard item for dashboard ${String(input.dashboardId)} with type ${input.type}`,
+    );
+    const dashboardItem = await this.dashboardItemRepository.createOne({
       dashboardId: input.dashboardId,
       type: input.type,
       detail: {
@@ -189,6 +205,10 @@ export class DashboardService implements IDashboardService {
       },
       layout,
     });
+    logger.debug(
+      `Created dashboard item ${String(dashboardItem.id)} for dashboard ${String(input.dashboardId)}`,
+    );
+    return dashboardItem;
   }
 
   public async updateDashboardItem(
