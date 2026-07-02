@@ -231,6 +231,19 @@ def _build_clickhouse_column(values: list, arrow_type: pa.DataType) -> pa.Array:
 # Client kwargs assembly
 # --------------------------------------------------------------------------
 
+_FALSY_SECURE_VALUES = frozenset({"", "0", "false", "no", "off"})
+
+
+def _parse_secure_flag(value: Any) -> bool:
+    """Interpret a ``secure`` override from kwargs or a URL query string.
+
+    Query parameters always arrive as strings, so ``?secure=false`` must not
+    be treated as truthy the way ``bool("false")`` would.
+    """
+    if isinstance(value, str):
+        return value.strip().lower() not in _FALSY_SECURE_VALUES
+    return bool(value)
+
 
 def _build_clickhouse_client_kwargs(connection_info: Any) -> dict:
     """Translate ``ClickHouseConnectionInfo`` / ``ConnectionUrl`` into
@@ -246,7 +259,10 @@ def _build_clickhouse_client_kwargs(connection_info: Any) -> dict:
                 "ClickHouse connection URL must use clickhouse:// scheme",
             )
 
-        kwargs: dict = dict(parse_qsl(parsed.query))
+        # ``keep_blank_values`` so a blank parameter (``?secure=``) still
+        # reaches the override handling below instead of being dropped —
+        # blank means "falsy", matching ``_parse_secure_flag``.
+        kwargs: dict = dict(parse_qsl(parsed.query, keep_blank_values=True))
         info_kwargs = getattr(connection_info, "kwargs", None)
         if info_kwargs:
             kwargs.update(info_kwargs)
@@ -255,17 +271,27 @@ def _build_clickhouse_client_kwargs(connection_info: Any) -> dict:
             dict(kwargs.pop("settings", {})) if "settings" in kwargs else {}
         )
         statement_timeout = kwargs.pop("statement_timeout", None)
-        if statement_timeout is not None:
+        # Blank (``?statement_timeout=``) is treated the same as absent.
+        if statement_timeout not in (None, ""):
             settings["max_execution_time"] = int(statement_timeout)
 
         # urlparse leaves percent-encoded characters in userinfo, so decode
         # them before clickhouse-connect sees the credentials. Matches the
         # mssql / postgres URL handling elsewhere in this package.
         secure = parsed.scheme == "clickhouse+https"
-        # Pick the port-less default from the scheme: ClickHouse listens for
-        # HTTPS on 8443 and plaintext HTTP on 8123. Defaulting an https URL to
-        # 8123 silently dialed the plaintext port with ``secure=True``, so the
-        # TLS handshake hit a non-TLS listener and the connection failed.
+        # TLS can also be toggled *after* the scheme is inspected — via a
+        # ``?secure=...`` query parameter or a ``kwargs`` override. Reconcile
+        # the effective value here (kwargs win over query params, which win
+        # over the scheme, matching the merge above) so the port-less default
+        # tracks the real TLS setting instead of just the scheme.
+        secure_override = kwargs.pop("secure", None)
+        if secure_override is not None:
+            secure = _parse_secure_flag(secure_override)
+        # Pick the port-less default from the effective TLS setting: ClickHouse
+        # listens for HTTPS on 8443 and plaintext HTTP on 8123. Defaulting a
+        # secure connection to 8123 silently dialed the plaintext port with
+        # ``secure=True``, so the TLS handshake hit a non-TLS listener and the
+        # connection failed. An explicit URL port always wins.
         default_port = 8443 if secure else 8123
         out: dict = {
             "host": parsed.hostname,
