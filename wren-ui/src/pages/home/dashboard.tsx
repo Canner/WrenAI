@@ -24,6 +24,7 @@ import {
   DataSourceName,
   ItemLayoutInput,
 } from '@/apollo/client/graphql/__types__';
+import { parseGraphQLError } from '@/utils/errorHandler';
 
 const isSupportCachedSettings = (dataSource: DataSource) => {
   // DuckDB not supported, sample dataset as well
@@ -49,9 +50,14 @@ export default function Dashboard() {
     loading,
     updateQuery: updateDashboardQuery,
   } = useDashboardQuery({
-    fetchPolicy: 'cache-and-network',
-    onError: () => {
-      message.error('Failed to fetch dashboard items.');
+    fetchPolicy: 'network-only',
+    nextFetchPolicy: 'network-only',
+    onError: (error) => {
+      console.error('Dashboard query failed', error);
+      const parsedError = parseGraphQLError(error);
+      message.error(
+        parsedError?.message || 'Failed to fetch dashboard items.',
+      );
       router.push(Path.Home);
     },
   });
