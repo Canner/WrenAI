@@ -3,11 +3,15 @@ import { IContext } from '@server/types';
 import { getLogger } from 'log4js';
 import { SchemaChange } from '@server/repositories/schemaChangeRepository';
 import { Model, ModelColumn, RelationInfo } from '../repositories';
+import type {
+  CompactColumn,
+  CompactTable,
+} from '@server/services/metadataService';
 import {
   handleNestedColumns,
+  replaceInvalidReferenceName,
   transformUniqueInvalidColumnName,
 } from '@server/utils/model';
-import { CompactColumn } from '@server/services/metadataService';
 
 const logger = getLogger('DataSourceSchemaDetector');
 logger.level = 'debug';
@@ -58,6 +62,7 @@ interface AffectedResources {
 
 export interface IDataSourceSchemaDetector {
   detectSchemaChange(): Promise<boolean>;
+  syncLatestSchemaMetadata(): Promise<boolean>;
   resolveSchemaChange(type: string): Promise<void>;
   getAffectedResources(
     changes: DataSourceSchema[],
@@ -110,10 +115,180 @@ export default class DataSourceSchemaDetector
       }
     }
 
+    const hasMissingModelSync = await this.syncLatestSchemaMetadata();
     const hasSchemaMetadataSync =
       await this.syncExistingModelsWithLatestSchema(latestSchema);
 
-    return !!diffSchema || hasSchemaMetadataSync;
+    return !!diffSchema || hasMissingModelSync || hasSchemaMetadataSync;
+  }
+
+  public async syncLatestSchemaMetadata() {
+    logger.info('Start to sync latest datasource schema metadata.');
+    const project = await this.ctx.projectRepository.findOneBy({
+      id: this.projectId,
+    });
+    const latestTables =
+      await this.ctx.projectService.getProjectDataSourceTables(project);
+    const models = await this.ctx.modelRepository.findAllBy({
+      projectId: this.projectId,
+    });
+    const createdModels = await this.createMissingModels(latestTables, models);
+    await this.createColumnsForModels(latestTables, createdModels);
+    logger.info('Finished syncing latest datasource schema metadata.');
+    return createdModels.length > 0;
+  }
+
+  private async createMissingModels(
+    latestTables: CompactTable[],
+    models: Model[],
+  ): Promise<Model[]> {
+    const existingSourceTableNames = new Set(
+      models.map((model) => model.sourceTableName),
+    );
+    const usedReferenceNames = new Set(
+      models.map((model) => model.referenceName.toLowerCase()),
+    );
+    const missingTables = latestTables.filter(
+      (table) => !existingSourceTableNames.has(table.name),
+    );
+
+    if (!missingTables.length) {
+      return [];
+    }
+
+    const modelValues = missingTables.map((table) => {
+      const referenceName = this.getUniqueModelReferenceName(
+        replaceInvalidReferenceName(table.name),
+        usedReferenceNames,
+      );
+      return {
+        projectId: this.projectId,
+        displayName: table.name,
+        referenceName,
+        sourceTableName: table.name,
+        cached: false,
+        refreshTime: null,
+        properties: table.properties ? JSON.stringify(table.properties) : null,
+      } as Partial<Model>;
+    });
+
+    logger.info(
+      `Creating ${modelValues.length} missing model(s): ${missingTables
+        .map((table) => table.name)
+        .join(', ')}`,
+    );
+    return await this.ctx.modelRepository.createMany(modelValues);
+  }
+
+  private async createColumnsForModels(
+    latestTables: CompactTable[],
+    models: Model[],
+  ): Promise<ModelColumn[]> {
+    if (!models.length) {
+      return [];
+    }
+
+    const columnValues = models.flatMap((model) => {
+      const table = latestTables.find(
+        (table) => table.name === model.sourceTableName,
+      );
+      if (!table) {
+        return [];
+      }
+      const usedReferenceNames = new Set<string>();
+      return this.buildColumnValues(model, table.columns, table.primaryKey, {
+        usedReferenceNames,
+      });
+    });
+
+    if (!columnValues.length) {
+      return [];
+    }
+
+    const columns = await this.ctx.modelColumnRepository.createMany(
+      columnValues,
+    );
+    await this.createNestedColumns(latestTables, models, columns);
+    return columns;
+  }
+
+  private buildColumnValues(
+    model: Model,
+    columns: CompactColumn[],
+    primaryKey: string | undefined,
+    { usedReferenceNames }: { usedReferenceNames: Set<string> },
+  ): Partial<ModelColumn>[] {
+    return columns.map(
+      (column) =>
+        ({
+          modelId: model.id,
+          isCalculated: false,
+          displayName: column.name,
+          referenceName: transformUniqueInvalidColumnName(
+            column.name,
+            usedReferenceNames,
+          ),
+          sourceColumnName: column.name,
+          type: column.type || 'string',
+          notNull: !!column.notNull,
+          isPk: primaryKey === column.name,
+          properties: column.properties
+            ? JSON.stringify(column.properties)
+            : null,
+        }) as Partial<ModelColumn>,
+    );
+  }
+
+  private async createNestedColumns(
+    latestTables: CompactTable[],
+    models: Model[],
+    columns: ModelColumn[],
+  ) {
+    const nestedColumnValues = models.flatMap((model) => {
+      const table = latestTables.find(
+        (table) => table.name === model.sourceTableName,
+      );
+      if (!table) {
+        return [];
+      }
+      const modelColumns = columns.filter(
+        (column) => column.modelId === model.id,
+      );
+      return table.columns.flatMap((compactColumn) => {
+        const column = modelColumns.find(
+          (column) => column.sourceColumnName === compactColumn.name,
+        );
+        if (!column) {
+          return [];
+        }
+        return handleNestedColumns(compactColumn, {
+          modelId: column.modelId,
+          columnId: column.id,
+          sourceColumnName: column.sourceColumnName,
+        });
+      });
+    });
+
+    if (nestedColumnValues.length) {
+      await this.ctx.modelNestedColumnRepository.createMany(nestedColumnValues);
+    }
+  }
+
+  private getUniqueModelReferenceName(
+    referenceName: string,
+    usedReferenceNames: Set<string>,
+  ) {
+    const baseName = referenceName || 'model';
+    let uniqueName = baseName;
+    let suffix = 2;
+
+    while (usedReferenceNames.has(uniqueName.toLowerCase())) {
+      uniqueName = `${baseName}_${suffix}`;
+      suffix += 1;
+    }
+
+    usedReferenceNames.add(uniqueName.toLowerCase());
+    return uniqueName;
   }
 
   public async resolveSchemaChange(type: string) {
