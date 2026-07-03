@@ -49,6 +49,7 @@ export default function ModelTree(props: Props) {
   const [triggerDataSourceDetection, { loading: isDetecting }] =
     useTriggerDataSourceDetectionMutation({
       onError: (error) => console.error(error),
+      refetchQueries: [{ query: DIAGRAM }, { query: LIST_MODELS }],
       onCompleted: async (data) => {
         if (data.triggerDataSourceDetection) {
           message.warning('Schema change detected.');
