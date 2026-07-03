@@ -59,6 +59,7 @@ export class DeployLogRepository
         this.transformToDBData({ projectId, status: DeployStatusEnum.SUCCESS }),
       )
       .orderBy('created_at', 'desc')
+      .orderBy('id', 'desc')
       .first();
     return (res && this.transformFromDBData(res)) || null;
   }
@@ -69,6 +70,7 @@ export class DeployLogRepository
       .from(this.tableName)
       .where(this.transformToDBData({ projectId }))
       .orderBy('created_at', 'desc')
+      .orderBy('id', 'desc')
       .first();
     return (res && this.transformFromDBData(res)) || null;
   }
@@ -84,6 +86,7 @@ export class DeployLogRepository
         }),
       )
       .orderBy('created_at', 'desc')
+      .orderBy('id', 'desc')
       .first();
     return (res && this.transformFromDBData(res)) || null;
   }
