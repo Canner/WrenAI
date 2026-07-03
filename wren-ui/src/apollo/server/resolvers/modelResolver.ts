@@ -232,10 +232,13 @@ export class ModelResolver {
       });
     }
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
+    const syncStatus = await this.checkModelSync(_root, {}, ctx);
+    const shouldForceDeploy =
+      args.force || syncStatus.status === SyncStatusEnum.UNSYNCRONIZED;
     const deployRes = await ctx.deployService.deploy(
       manifest,
       project.id,
-      args.force,
+      shouldForceDeploy,
     );
 
     // Recommendation generation depends on a successful deployment because
