@@ -140,6 +140,7 @@ wren memory index                              # index MDL schema
 wren memory fetch -q "customer order price"    # fetch relevant schema context
 wren memory store --nl "top customers" --sql "SELECT ..."  # store NL→SQL pair
 wren memory recall -q "best customers"         # retrieve similar past queries
+wren memory watch                              # auto-reindex on schema/query changes
 ```
 
 **7. (Optional) Build a shareable GenBI app** — turn the context layer into a
