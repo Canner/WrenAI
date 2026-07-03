@@ -550,6 +550,9 @@ def test_retrieval_metadata_ignores_malformed_documents():
 
 def test_explicit_table_filter_matches_dot_and_underscore_variants():
     service = AskService(pipelines={})
+    assert service._extract_explicit_table_names_from_query(
+        "Which name values have the highest occurrences in dbo.failure_patterns?"
+    ) == ["dbo.failure_patterns"]
     documents = [
         {
             "table_name": "dbo_failure_patterns",
@@ -575,6 +578,52 @@ def test_explicit_table_filter_matches_dot_and_underscore_variants():
     assert filtered_table_ddls == [
         "CREATE TABLE dbo_failure_patterns (name varchar)"
     ]
+
+
+def test_explicit_metadata_object_extraction_avoids_plain_language_prepositions():
+    service = AskService(pipelines={})
+
+    assert service._extract_explicit_table_names_from_query(
+        "Show total sales in each market"
+    ) == []
+    assert service._extract_explicit_table_names_from_query(
+        "Show the first 10 rows from CustomerMaster"
+    ) == ["CustomerMaster"]
+    assert service._extract_explicit_table_names_from_query(
+        "Create a chart on dbo.ticket_cycles by status"
+    ) == ["dbo.ticket_cycles"]
+
+
+def test_explicit_table_filter_includes_relationship_dependencies():
+    service = AskService(pipelines={})
+    documents = [
+        {
+            "table_name": "dbo_orders",
+            "table_ddl": (
+                "CREATE TABLE dbo_orders ("
+                "OrderId INT, CustomerId INT, "
+                "FOREIGN KEY (CustomerId) REFERENCES dbo_customers(CustomerId)"
+                ")"
+            ),
+        },
+        {
+            "table_name": "dbo_customers",
+            "table_ddl": "CREATE TABLE dbo_customers (CustomerId INT, Region varchar)",
+        },
+        {
+            "table_name": "dbo_inventory",
+            "table_ddl": "CREATE TABLE dbo_inventory (Sku varchar)",
+        },
+    ]
+
+    _, filtered_table_names, _ = service._filter_context_to_explicit_tables(
+        "Show orders from dbo.orders by customer region",
+        documents,
+        [document["table_name"] for document in documents],
+        [document["table_ddl"] for document in documents],
+    )
+
+    assert filtered_table_names == ["dbo_orders", "dbo_customers"]
 
 
 def test_prune_sql_generation_context_prioritizes_explicit_table_variant():

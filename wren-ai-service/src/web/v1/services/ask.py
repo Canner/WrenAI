@@ -569,28 +569,28 @@ class AskService:
         )
 
     def _extract_explicit_table_names_from_query(self, query: str) -> list[str]:
-        table_names: list[str] = []
+        object_names: list[str] = []
         for match in re.finditer(
-            r"\b(?:from|table|model)\s+([A-Za-z_][A-Za-z0-9_.$]*)",
+            r"\b(?:from|table|model|view|metric)\s+([A-Za-z_][A-Za-z0-9_.$]*)",
             query or "",
             flags=re.IGNORECASE,
         ):
-            table_name = match.group(1).strip(".,;:()[]{}")
-            if table_name and table_name not in table_names:
-                table_names.append(table_name)
+            object_name = match.group(1).strip(".,;:()[]{}")
+            if object_name and object_name not in object_names:
+                object_names.append(object_name)
         for match in re.finditer(
-            r"\busing\s+([A-Za-z_][A-Za-z0-9_.$]*)",
+            r"\b(?:using|in|on|for|against)\s+([A-Za-z_][A-Za-z0-9_.$]*)",
             query or "",
             flags=re.IGNORECASE,
         ):
-            table_name = match.group(1).strip(".,;:()[]{}")
+            object_name = match.group(1).strip(".,;:()[]{}")
             if (
-                table_name
-                and ("." in table_name or "_" in table_name)
-                and table_name not in table_names
+                object_name
+                and ("." in object_name or "_" in object_name)
+                and object_name not in object_names
             ):
-                table_names.append(table_name)
-        return table_names
+                object_names.append(object_name)
+        return object_names
 
     def _explicit_table_name_tokens(self, query: str) -> set[str]:
         tokens: set[str] = set()
@@ -612,6 +612,40 @@ class AskService:
             )
         return {token for token in tokens if token}
 
+    def _metadata_object_name_tokens(self, object_name: str) -> set[str]:
+        object_name = str(object_name or "").strip()
+        if not object_name:
+            return set()
+
+        variants = {
+            object_name,
+            object_name.replace("_", "."),
+            object_name.replace(".", "_"),
+            re.split(r"[.$]", object_name)[-1],
+        }
+        return {
+            token
+            for variant in variants
+            if (token := self._normalize_schema_token(variant))
+        }
+
+    def _referenced_relationship_table_tokens(
+        self, table_ddls: list[str], selected_indexes: list[int]
+    ) -> set[str]:
+        selected_ddls = [
+            table_ddls[index] for index in selected_indexes if index < len(table_ddls)
+        ]
+        relationship_tokens: set[str] = set()
+        for relationship in self._extract_metadata_relationships(selected_ddls):
+            for table_name in re.findall(
+                r"([A-Za-z_][A-Za-z0-9_.$]*)\s*\(",
+                relationship,
+            ):
+                relationship_tokens.update(
+                    self._metadata_object_name_tokens(table_name)
+                )
+        return relationship_tokens
+
     def _filter_context_to_explicit_tables(
         self,
         query: str,
@@ -626,20 +660,28 @@ class AskService:
         selected_indexes: list[int] = []
         for index, table_name in enumerate(table_names):
             table_name = str(table_name or "")
-            table_tokens = {
-                self._normalize_schema_token(table_name),
-                self._normalize_schema_token(table_name.replace("_", ".")),
-                self._normalize_schema_token(table_name.replace(".", "_")),
-                self._normalize_schema_token(re.split(r"[.$]", table_name)[-1]),
-            }
+            table_tokens = self._metadata_object_name_tokens(table_name)
             if explicit_tokens.intersection(table_tokens):
                 selected_indexes.append(index)
 
         if not selected_indexes:
             return documents, table_names, table_ddls
 
+        relationship_tokens = self._referenced_relationship_table_tokens(
+            table_ddls, selected_indexes
+        )
+        if relationship_tokens:
+            selected_index_set = set(selected_indexes)
+            for index, table_name in enumerate(table_names):
+                if index in selected_index_set:
+                    continue
+                if relationship_tokens.intersection(
+                    self._metadata_object_name_tokens(str(table_name or ""))
+                ):
+                    selected_indexes.append(index)
+
         logger.info(
-            "Restricting SQL generation context to explicit tables for query: %s",
+            "Restricting SQL generation context to explicit metadata objects for query: %s",
             query,
         )
         return (
