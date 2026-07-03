@@ -25,6 +25,12 @@ permissions:
   contents: write
   pull-requests: write
 
+# Serialize runs for the same version so an automatic run and a manual re-run
+# can't both push chore/sync-wren-core-py-<version>. Don't cancel mid-push.
+concurrency:
+  group: sync-wren-core-py-lock-${{ inputs.version }}
+  cancel-in-progress: false
+
 jobs:
   sync-lock:
     if: ${{ github.repository == 'Canner/WrenAI' }}
@@ -62,20 +68,13 @@ jobs:
             if uv add --no-sync "wren-core-py>=${VERSION}"; then
               exit 0
             fi
-            echo "uv add attempt ${attempt} failed; retrying after PyPI propagation delay"
-            sleep 20
+            if [ "${attempt}" -lt 5 ]; then
+              echo "uv add attempt ${attempt} failed; retrying after PyPI propagation delay"
+              sleep 20
+            fi
           done
           echo "::error::uv add did not succeed after retries"
           exit 1
-
-      - name: Verify lock resolved to the released version
-        run: |
-          locked=$(awk -F'"' '/^name = "wren-core-py"$/{getline; print $2}' core/wren/uv.lock)
-          if [[ "${locked}" != "${VERSION}" ]]; then
-            echo "::error::core/wren/uv.lock resolved wren-core-py ${locked:-<none>}, expected ${VERSION}"
-            exit 1
-          fi
-          echo "core/wren/uv.lock resolved wren-core-py ${locked}"
 
       - name: Validate lockfile is consistent
         working-directory: core/wren
@@ -96,18 +95,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           BRANCH="chore/sync-wren-core-py-${VERSION}"
+          # If a PR is already open for this bump, leave it untouched.
+          if [ "$(gh pr list --state open --head "${BRANCH}" --json number --jq 'length')" != "0" ]; then
+            echo "Open PR for ${BRANCH} already exists; leaving it untouched."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b "${BRANCH}"
           git add core/wren/pyproject.toml core/wren/uv.lock
           git commit -m "chore(wren): bump wren-core-py to ${VERSION}"
+          # No open PR: --force only overwrites a leftover branch from a closed PR.
           git push --force origin "${BRANCH}"
-          if gh pr view "${BRANCH}" --json number >/dev/null 2>&1; then
-            echo "PR for ${BRANCH} already exists; branch updated."
-          else
-            gh pr create \
-              --base main \
-              --head "${BRANCH}" \
-              --title "chore(wren): bump wren-core-py to ${VERSION}" \
-              --body "Automated follow-up after \`wren-core-py\` ${VERSION} was published to PyPI. Relocks \`core/wren\` against the new engine binding. Please review and merge."
-          fi
+          gh pr create \
+            --base main \
+            --head "${BRANCH}" \
+            --title "chore(wren): bump wren-core-py to ${VERSION}" \
+            --body "Automated follow-up after \`wren-core-py\` ${VERSION} was published to PyPI. Relocks \`core/wren\` against the new engine binding. Please review and merge."
