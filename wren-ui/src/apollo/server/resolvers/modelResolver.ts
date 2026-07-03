@@ -18,7 +18,7 @@ import { DeployResponse } from '../services/deployService';
 import { safeFormatSQL } from '@server/utils/sqlFormat';
 import { isEmpty, isNil } from 'lodash';
 import { replaceAllowableSyntax, validateDisplayName } from '../utils/regex';
-import { Model, ModelColumn } from '../repositories';
+import { Model, ModelColumn, Project } from '../repositories';
 import {
   findColumnsToUpdate,
   getPreviewColumnsStr,
@@ -28,6 +28,9 @@ import {
 } from '../utils/model';
 import { CompactTable, PreviewDataResponse } from '@server/services';
 import { TelemetryEvent } from '../telemetry/telemetry';
+import DataSourceSchemaDetector, {
+  SchemaChangeType,
+} from '@server/managers/dataSourceSchemaDetector';
 
 const logger = getLogger('ModelResolver');
 logger.level = 'debug';
@@ -75,6 +78,10 @@ export class ModelResolver {
     this.createRelation = this.createRelation.bind(this);
     this.updateRelation = this.updateRelation.bind(this);
     this.deleteRelation = this.deleteRelation.bind(this);
+    this.refreshProjectDataSourceVersion =
+      this.refreshProjectDataSourceVersion.bind(this);
+    this.resolveModifiedSchemaChanges =
+      this.resolveModifiedSchemaChanges.bind(this);
   }
 
   public async createRelation(
@@ -223,14 +230,9 @@ export class ModelResolver {
     args: { force: boolean },
     ctx: IContext,
   ): Promise<DeployResponse> {
-    const project = await ctx.projectService.getCurrentProject();
-    if (!project.version && project.type !== DataSourceName.DUCKDB) {
-      const version =
-        await ctx.projectService.getProjectDataSourceVersion(project);
-      await ctx.projectService.updateProject(project.id, {
-        version,
-      });
-    }
+    let project = await ctx.projectService.getCurrentProject();
+    await this.resolveModifiedSchemaChanges(ctx, project.id);
+    project = await this.refreshProjectDataSourceVersion(ctx, project);
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     const syncStatus = await this.checkModelSync(_root, {}, ctx);
     const shouldForceDeploy =
@@ -249,6 +251,46 @@ export class ModelResolver {
       );
     }
     return deployRes;
+  }
+
+  private async refreshProjectDataSourceVersion(
+    ctx: IContext,
+    project: Project,
+  ) {
+    if (project.type === DataSourceName.DUCKDB) {
+      return project;
+    }
+
+    try {
+      const version = await ctx.projectService.getProjectDataSourceVersion(
+        project,
+      );
+      if (version && version !== project.version) {
+        return await ctx.projectService.updateProject(project.id, {
+          version,
+        });
+      }
+    } catch (err: any) {
+      logger.warn(
+        `Failed to refresh project datasource version before deploy: ${err.message}`,
+      );
+    }
+    return project;
+  }
+
+  private async resolveModifiedSchemaChanges(ctx: IContext, projectId: number) {
+    const lastSchemaChange =
+      await ctx.schemaChangeRepository.findLastSchemaChange(projectId);
+    const hasUnresolvedModifiedColumns =
+      lastSchemaChange?.resolve?.[SchemaChangeType.MODIFIED_COLUMNS] === false &&
+      !!lastSchemaChange?.change?.[SchemaChangeType.MODIFIED_COLUMNS]?.length;
+
+    if (!hasUnresolvedModifiedColumns) {
+      return;
+    }
+
+    const schemaDetector = new DataSourceSchemaDetector({ ctx, projectId });
+    await schemaDetector.resolveSchemaChange(SchemaChangeType.MODIFIED_COLUMNS);
   }
 
   public async getMDL(_root: any, args: { hash: string }, ctx: IContext) {

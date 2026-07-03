@@ -638,7 +638,36 @@ export class ProjectResolver {
   }
 
   private async deploy(ctx: IContext) {
-    const project = await ctx.projectService.getCurrentProject();
+    let project = await ctx.projectService.getCurrentProject();
+    const lastSchemaChange =
+      await ctx.schemaChangeRepository.findLastSchemaChange(project.id);
+    const hasUnresolvedModifiedColumns =
+      lastSchemaChange?.resolve?.[SchemaChangeType.MODIFIED_COLUMNS] === false &&
+      !!lastSchemaChange?.change?.[SchemaChangeType.MODIFIED_COLUMNS]?.length;
+    if (hasUnresolvedModifiedColumns) {
+      const schemaDetector = new DataSourceSchemaDetector({
+        ctx,
+        projectId: project.id,
+      });
+      await schemaDetector.resolveSchemaChange(
+        SchemaChangeType.MODIFIED_COLUMNS,
+      );
+    }
+    if (project.type !== DataSourceName.DUCKDB) {
+      try {
+        const version =
+          await ctx.projectService.getProjectDataSourceVersion(project);
+        if (version && version !== project.version) {
+          project = await ctx.projectService.updateProject(project.id, {
+            version,
+          });
+        }
+      } catch (err: any) {
+        logger.warn(
+          `Failed to refresh project datasource version before deploy: ${err.message}`,
+        );
+      }
+    }
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     const deployRes = await ctx.deployService.deploy(manifest, project.id);
 
