@@ -25,10 +25,10 @@ permissions:
   contents: write
   pull-requests: write
 
-# Serialize runs for the same version so an automatic run and a manual re-run
-# can't both push chore/sync-wren-core-py-<version>. Don't cancel mid-push.
+# Serialize sync runs so two can't push the same branch at once. Constant key
+# (not per-version) because a blank-dispatch version is only known at run time.
 concurrency:
-  group: sync-wren-core-py-lock-${{ inputs.version }}
+  group: sync-wren-core-py-lock
   cancel-in-progress: false
 
 jobs:
