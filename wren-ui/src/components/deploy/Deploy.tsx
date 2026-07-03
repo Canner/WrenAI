@@ -66,7 +66,9 @@ export default function Deploy() {
   const syncStatus = data?.modelSync.status;
 
   const onDeploy = () => {
-    deployMutation();
+    deployMutation({
+      variables: { force: syncStatus === SyncStatus.UNSYNCRONIZED },
+    });
     startPolling(1000);
   };
 

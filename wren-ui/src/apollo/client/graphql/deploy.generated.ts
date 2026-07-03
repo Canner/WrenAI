@@ -3,7 +3,9 @@ import * as Types from './__types__';
 import { gql } from '@apollo/client';
 import * as Apollo from '@apollo/client';
 const defaultOptions = {} as const;
-export type DeployMutationVariables = Types.Exact<{ [key: string]: never; }>;
+export type DeployMutationVariables = Types.Exact<{
+  force?: Types.InputMaybe<Types.Scalars['Boolean']>;
+}>;
 
 
 export type DeployMutation = { __typename?: 'Mutation', deploy: any };
@@ -15,8 +17,8 @@ export type DeployStatusQuery = { __typename?: 'Query', modelSync: { __typename?
 
 
 export const DeployDocument = gql`
-    mutation Deploy {
-  deploy
+    mutation Deploy($force: Boolean) {
+  deploy(force: $force)
 }
     `;
 export type DeployMutationFn = Apollo.MutationFunction<DeployMutation, DeployMutationVariables>;
