@@ -577,6 +577,29 @@ def test_explicit_table_filter_matches_dot_and_underscore_variants():
     ]
 
 
+def test_prune_sql_generation_context_prioritizes_explicit_table_variant():
+    service = AskService(pipelines={})
+    table_ddls = [
+        "CREATE TABLE dbo_DebugEntries_Staging (Priority varchar)",
+        "CREATE TABLE dbo_failure_patterns (name varchar, occurrences int)",
+    ]
+    documents = [
+        {"table_name": "dbo_DebugEntries_Staging", "table_ddl": table_ddls[0]},
+        {"table_name": "dbo_failure_patterns", "table_ddl": table_ddls[1]},
+    ]
+
+    _, table_names, pruned_ddls = service._prune_sql_generation_context(
+        "Which name values have the highest occurrences in dbo.failure_patterns?",
+        documents,
+        [document["table_name"] for document in documents],
+        table_ddls,
+        max_tables=1,
+    )
+
+    assert table_names == ["dbo_failure_patterns"]
+    assert pruned_ddls == [table_ddls[1]]
+
+
 def test_complete_sql_generation_context_refetches_full_selected_schema():
     pipeline = _FakeSchemaRetrievalPipeline()
     service = AskService(

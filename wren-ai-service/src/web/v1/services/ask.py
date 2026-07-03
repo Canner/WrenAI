@@ -3091,10 +3091,7 @@ class AskService:
 
         query_key = self._normalize_schema_token(query)
         query_terms = self._query_schema_terms(query)
-        explicit_tables = {
-            self._normalize_schema_token(table_name)
-            for table_name in self._extract_explicit_table_names_from_query(query)
-        }
+        explicit_tables = self._explicit_table_name_tokens(query)
 
         scored: list[tuple[int, int]] = []
         for index, table in enumerate(parsed_tables):
@@ -3110,7 +3107,13 @@ class AskService:
             }
 
             score = 0
-            if normalized_table in explicit_tables or normalized_short_table in explicit_tables:
+            explicit_table_tokens = {
+                normalized_table,
+                normalized_short_table,
+                self._normalize_schema_token(table_name.replace("_", ".")),
+                self._normalize_schema_token(table_name.replace(".", "_")),
+            }
+            if explicit_tables.intersection(explicit_table_tokens):
                 score += 1000
             if normalized_table and normalized_table in query_key:
                 score += 500
@@ -4165,12 +4168,6 @@ class AskService:
                     return results
 
             if documents and not api_results:
-                documents, table_names, table_ddls = self._prune_sql_generation_context(
-                    sql_user_query,
-                    documents,
-                    table_names,
-                    table_ddls,
-                )
                 documents, table_names, table_ddls = (
                     self._filter_context_to_explicit_tables(
                         sql_user_query,
@@ -4178,6 +4175,12 @@ class AskService:
                         table_names,
                         table_ddls,
                     )
+                )
+                documents, table_names, table_ddls = self._prune_sql_generation_context(
+                    sql_user_query,
+                    documents,
+                    table_names,
+                    table_ddls,
                 )
                 (
                     documents,
