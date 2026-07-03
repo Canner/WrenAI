@@ -111,6 +111,31 @@ wren memory index                          # uses ~/.wren/mdl.json
 wren memory index --mdl /path/to/mdl.json  # explicit MDL file
 ```
 
+### `wren memory watch`
+
+Watch project sources and auto-reindex on change so semantic recall never serves a stale
+schema while you are actively modelling. Polls `target/mdl.json` and `knowledge/sql/*.md`
+on an interval; when their content fingerprint changes it runs the equivalent of
+`wren memory index`. A failed reindex leaves the change pending and is retried on the next
+poll — an update is never silently dropped. Runs until `Ctrl+C`.
+
+Requires the `memory` extra. With the grep backend there is no derived index to keep
+fresh, so this command exits with a message.
+
+| Flag | Description |
+|------|-------------|
+| `--interval`, `-i` | Seconds between polls (min 1). Default: `5`. |
+| `--reindex-on-start` / `--no-reindex-on-start` | Reindex once on startup before watching. Default: off. |
+| `--max-polls` | Stop after N polls (mainly for scripting/testing). Default: run until Ctrl+C. |
+| `--mdl` | Explicit MDL file (must live under the watched project root). |
+| `--path` | Project root to watch. Defaults to the discovered project. |
+
+```bash
+wren memory watch                    # poll every 5s, reindex on change
+wren memory watch -i 2                # poll every 2s
+wren memory watch --reindex-on-start  # ensure the index is fresh before the first interval
+```
+
 ### `wren memory describe`
 
 Print the full schema as structured plain text. No embedding or LanceDB required — this is a pure transformation of the MDL manifest into a human/LLM-readable format.
