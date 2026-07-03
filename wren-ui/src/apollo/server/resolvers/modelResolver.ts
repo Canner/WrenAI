@@ -210,14 +210,16 @@ export class ModelResolver {
   public async checkModelSync(_root: any, _args: any, ctx: IContext) {
     try {
       const { id } = await ctx.projectService.getCurrentProject();
-      const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-      const lastDeploy = await ctx.deployService.getLastDeployment(id);
       const inProgressDeployment =
         await ctx.deployService.getInProgressDeployment(id);
       if (inProgressDeployment) {
         return { status: SyncStatusEnum.IN_PROGRESS };
       }
-      return ctx.deployService.isSameDeployment(manifest, id, lastDeploy)
+
+      const project = await this.prepareProjectForDeploy(ctx);
+      const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
+      const lastDeploy = await ctx.deployService.getLastDeployment(project.id);
+      return ctx.deployService.isSameDeployment(manifest, project.id, lastDeploy)
         ? { status: SyncStatusEnum.SYNCRONIZED }
         : { status: SyncStatusEnum.UNSYNCRONIZED };
     } catch (err: any) {
@@ -233,9 +235,10 @@ export class ModelResolver {
   ): Promise<DeployResponse> {
     const project = await this.prepareProjectForDeploy(ctx);
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-    const syncStatus = await this.checkModelSync(_root, {}, ctx);
+    const lastDeploy = await ctx.deployService.getLastDeployment(project.id);
     const shouldForceDeploy =
-      args.force || syncStatus.status === SyncStatusEnum.UNSYNCRONIZED;
+      args.force ||
+      !ctx.deployService.isSameDeployment(manifest, project.id, lastDeploy);
     const deployRes = await ctx.deployService.deploy(
       manifest,
       project.id,

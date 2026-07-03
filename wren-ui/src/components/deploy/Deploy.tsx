@@ -4,7 +4,10 @@ import CheckCircleOutlined from '@ant-design/icons/CheckCircleOutlined';
 import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
 import WarningOutlined from '@ant-design/icons/WarningOutlined';
 import { SyncStatus } from '@/apollo/client/graphql/__types__';
-import { useDeployMutation } from '@/apollo/client/graphql/deploy.generated';
+import {
+  DeployStatusDocument,
+  useDeployMutation,
+} from '@/apollo/client/graphql/deploy.generated';
 import { useDeployStatusContext } from '@/components/deploy/Context';
 
 const { Text } = Typography;
@@ -51,6 +54,8 @@ export default function Deploy() {
           );
         }
       },
+      refetchQueries: [{ query: DeployStatusDocument }],
+      awaitRefetchQueries: true,
     });
 
   useEffect(() => {
