@@ -186,7 +186,7 @@ export class DeployService implements IDeployService {
   }
 
   public createMDLHash(manifest: Manifest, projectId: number) {
-    const manifestStr = JSON.stringify(manifest);
+    const manifestStr = this.canonicalStringify(manifest);
     const content = `${projectId} ${manifestStr}`;
     const hash = createHash('sha1').update(content).digest('hex');
     return hash;

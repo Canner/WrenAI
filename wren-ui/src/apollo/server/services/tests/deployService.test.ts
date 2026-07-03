@@ -73,6 +73,37 @@ describe('DeployService', () => {
     expect(mockWrenAIAdaptor.deploy).not.toHaveBeenCalled();
   });
 
+  it('should create the same deployment hash for equivalent manifests', () => {
+    const manifest = {
+      models: [
+        {
+          name: 'orders',
+          columns: [{ name: 'id' }, { name: 'amount' }],
+        },
+        {
+          name: 'customers',
+          columns: [{ name: 'id' }, { name: 'name' }],
+        },
+      ],
+    };
+    const reorderedManifest = {
+      models: [
+        {
+          columns: [{ name: 'name' }, { name: 'id' }],
+          name: 'customers',
+        },
+        {
+          columns: [{ name: 'amount' }, { name: 'id' }],
+          name: 'orders',
+        },
+      ],
+    };
+
+    expect(deployService.createMDLHash(manifest, 1)).toEqual(
+      deployService.createMDLHash(reorderedManifest, 1),
+    );
+  });
+
   it('should treat equivalent deployed manifests as the same deployment', () => {
     const manifest = {
       models: [
