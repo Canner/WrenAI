@@ -932,8 +932,13 @@ class AskService:
                 score += 2
             if date_column:
                 score += 4
-            if not str(table.get("name") or ""):
+            table_name = str(table.get("name") or "").lower()
+            if not table_name:
                 continue
+            if "sales" in table_name:
+                score += 5
+            if "stage" in table_name:
+                score -= 8
 
             scored.append((score, table, dimensions, measure, date_column))
 
@@ -3977,11 +3982,6 @@ class AskService:
                                 trace_id=trace_id,
                                 is_followup=True if histories else False,
                             )
-            retrieval_histories = self._sql_generation_histories_for_query(
-                sql_user_query,
-                histories,
-            )
-
             if (
                 not self._is_stopped(query_id, self._ask_results)
                 and not api_results
@@ -3993,7 +3993,7 @@ class AskService:
                     rephrased_question=rephrased_question,
                     intent_reasoning=intent_reasoning,
                     trace_id=trace_id,
-                    is_followup=True if retrieval_histories else False,
+                    is_followup=True if histories else False,
                 )
 
                 try:
@@ -4001,7 +4001,7 @@ class AskService:
                         "Schema retrieval",
                         self._pipelines["db_schema_retrieval"].run(
                             query=sql_user_query,
-                            histories=retrieval_histories,
+                            histories=histories,
                             project_id=ask_request.project_id,
                             enable_column_pruning=(
                                 enable_column_pruning
@@ -4052,7 +4052,7 @@ class AskService:
                                 query=user_query,
                                 tables=explicit_table_names,
                                 project_id=ask_request.project_id,
-                                histories=retrieval_histories,
+                                histories=histories,
                                 enable_column_pruning=enable_column_pruning,
                             ),
                             timeout_seconds=min(

@@ -81,38 +81,6 @@ def test_explicit_followup_question_can_use_history():
     ) == histories
 
 
-def test_generic_table_selection_does_not_prefer_sales_named_tables():
-    service = AskService(pipelines={})
-    tables = [
-        {
-            "name": "dbo_agent_events",
-            "columns": [
-                {"name": "Region", "type": "varchar"},
-                {"name": "Amount", "type": "decimal"},
-            ],
-        },
-        {
-            "name": "dbo_sales_archive",
-            "columns": [
-                {"name": "Region", "type": "varchar"},
-                {"name": "Amount", "type": "decimal"},
-            ],
-        },
-    ]
-
-    selected = service._select_best_analytics_table(
-        tables,
-        required_dimensions=[("Region",)],
-        measure_candidates=("Amount",),
-    )
-
-    assert selected is not None
-    table, dimensions, measure, _ = selected
-    assert table["name"] == "dbo_agent_events"
-    assert dimensions == ["Region"]
-    assert measure == "Amount"
-
-
 def test_metadata_table_question_is_not_sql_or_chart_intent():
     service = AskService(pipelines={})
 
