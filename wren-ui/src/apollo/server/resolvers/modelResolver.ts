@@ -241,10 +241,12 @@ export class ModelResolver {
       shouldForceDeploy,
     );
 
-    // Recommendation generation depends on a successful deployment because
-    // question validation calls previewSql against the deployed manifest.
     if (deployRes.status === 'SUCCESS' && project.sampleDataset === null) {
-      await ctx.projectService.generateProjectRecommendationQuestions();
+      ctx.projectService.generateProjectRecommendationQuestions().catch((err) =>
+        logger.warn(
+          `Failed to generate project recommendation questions after deploy: ${err.message}`,
+        ),
+      );
     }
     return deployRes;
   }
