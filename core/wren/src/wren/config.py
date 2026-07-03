@@ -21,10 +21,17 @@ class WrenConfig:
     denied_functions:
         Set of function names (lowercase) that are forbidden in SQL queries.
         Matching is case-insensitive.
+    allowed_source_functions:
+        Set of synthetic-generator function names (lowercase) the operator
+        explicitly opts in as query sources under strict mode (e.g.
+        ``generate_series``). Empty by default — generators are blocked unless
+        listed here. Data/file readers (``read_csv``, ``dblink``, ...) can
+        NEVER be allowed via this list; they are always blocked in strict mode.
     """
 
     strict_mode: bool = False
     denied_functions: frozenset[str] = field(default_factory=frozenset)
+    allowed_source_functions: frozenset[str] = field(default_factory=frozenset)
 
 
 def load_config(wren_home: Path) -> WrenConfig:
@@ -71,4 +78,21 @@ def load_config(wren_home: Path) -> WrenConfig:
         )
     denied_functions = frozenset(f.lower() for f in denied_raw)
 
-    return WrenConfig(strict_mode=strict_mode_raw, denied_functions=denied_functions)
+    allowed_src_raw = raw.get("allowed_source_functions", [])
+    if not isinstance(allowed_src_raw, list):
+        raise WrenError(
+            ErrorCode.GENERIC_USER_ERROR,
+            f"{config_path}: 'allowed_source_functions' must be a JSON array.",
+        )
+    if any(not isinstance(f, str) for f in allowed_src_raw):
+        raise WrenError(
+            ErrorCode.GENERIC_USER_ERROR,
+            f"{config_path}: 'allowed_source_functions' must contain only strings.",
+        )
+    allowed_source_functions = frozenset(f.lower() for f in allowed_src_raw)
+
+    return WrenConfig(
+        strict_mode=strict_mode_raw,
+        denied_functions=denied_functions,
+        allowed_source_functions=allowed_source_functions,
+    )
