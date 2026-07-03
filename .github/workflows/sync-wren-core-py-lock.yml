@@ -1,0 +1,100 @@
+name: Sync core/wren lock after wren-core-py release
+
+# After wren-core-py publishes to PyPI, core/wren still pins the old engine in
+# its pyproject floor and uv.lock (release-please extra-files only touch a
+# component's own dir). Relock core/wren against the release and open a PR.
+# Called after publish-wren-core-py succeeds, so a failed publish is never bumped.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Released wren-core-py version (e.g. 0.7.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync-lock:
+    if: ${{ github.repository == 'Canner/WrenAI' }}
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - name: Validate version
+        run: |
+          # Guard a malformed version out of the dep edit, branch name, and PR.
+          if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+)?$ ]]; then
+            echo "::error::Unsupported version format: ${VERSION}. Expected X.Y.Z or X.Y.ZrcN."
+            exit 1
+          fi
+
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          # publish takes minutes; main may have moved. Base the PR on main tip.
+          ref: main
+
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Bump floor and relock core/wren against published wren-core-py
+        working-directory: core/wren
+        run: |
+          # uv add rewrites the pyproject floor in place and relocks in one step;
+          # --no-sync skips the heavy env. Retry for PyPI index lag after publish.
+          for attempt in 1 2 3 4 5; do
+            if uv add --no-sync "wren-core-py>=${VERSION}"; then
+              exit 0
+            fi
+            echo "uv add attempt ${attempt} failed; retrying after PyPI propagation delay"
+            sleep 20
+          done
+          echo "::error::uv add did not succeed after retries"
+          exit 1
+
+      - name: Verify lock resolved to the released version
+        run: |
+          locked=$(awk -F'"' '/^name = "wren-core-py"$/{getline; print $2}' core/wren/uv.lock)
+          if [[ "${locked}" != "${VERSION}" ]]; then
+            echo "::error::core/wren/uv.lock resolved wren-core-py ${locked:-<none>}, expected ${VERSION}"
+            exit 1
+          fi
+          echo "core/wren/uv.lock resolved wren-core-py ${locked}"
+
+      - name: Validate lockfile is consistent
+        working-directory: core/wren
+        run: uv lock --check
+
+      - name: Detect changes
+        id: diff
+        run: |
+          if git diff --quiet -- core/wren/pyproject.toml core/wren/uv.lock; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open sync PR
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="chore/sync-wren-core-py-${VERSION}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "${BRANCH}"
+          git add core/wren/pyproject.toml core/wren/uv.lock
+          git commit -m "chore(wren): bump wren-core-py to ${VERSION}"
+          git push --force origin "${BRANCH}"
+          if gh pr view "${BRANCH}" --json number >/dev/null 2>&1; then
+            echo "PR for ${BRANCH} already exists; branch updated."
+          else
+            gh pr create \
+              --base main \
+              --head "${BRANCH}" \
+              --title "chore(wren): bump wren-core-py to ${VERSION}" \
+              --body "Automated follow-up after \`wren-core-py\` ${VERSION} was published to PyPI. Relocks \`core/wren\` against the new engine binding. Please review and merge."
+          fi

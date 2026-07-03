@@ -46,6 +46,19 @@ jobs:
       contents: read
       id-token: write
 
+  # After wren-core-py is published, relock the downstream core/wren SDK against
+  # the new engine binding and open a PR. Runs only if publish-wren-core-py
+  # succeeded, so we never bump to a version that failed to publish.
+  sync-wren-core-py-lock:
+    needs: [release-please, publish-wren-core-py]
+    if: needs.release-please.outputs['wren-core-py--release_created'] == 'true'
+    uses: ./.github/workflows/sync-wren-core-py-lock.yml
+    with:
+      version: ${{ needs.release-please.outputs['wren-core-py--version'] }}
+    permissions:
+      contents: write
+      pull-requests: write
+
   publish-wren:
     needs: release-please
     if: needs.release-please.outputs['wren--release_created'] == 'true'
