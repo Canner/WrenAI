@@ -638,45 +638,14 @@ export class ProjectResolver {
   }
 
   private async deploy(ctx: IContext) {
-    let project = await ctx.projectService.getCurrentProject();
-    const lastSchemaChange =
-      await ctx.schemaChangeRepository.findLastSchemaChange(project.id);
-    const hasUnresolvedModifiedColumns =
-      lastSchemaChange?.resolve?.[SchemaChangeType.MODIFIED_COLUMNS] === false &&
-      !!lastSchemaChange?.change?.[SchemaChangeType.MODIFIED_COLUMNS]?.length;
-    if (hasUnresolvedModifiedColumns) {
-      const schemaDetector = new DataSourceSchemaDetector({
-        ctx,
-        projectId: project.id,
-      });
-      await schemaDetector.resolveSchemaChange(
-        SchemaChangeType.MODIFIED_COLUMNS,
-      );
-    }
-    if (project.type !== DataSourceName.DUCKDB) {
-      try {
-        const version =
-          await ctx.projectService.getProjectDataSourceVersion(project);
-        if (version && version !== project.version) {
-          project = await ctx.projectService.updateProject(project.id, {
-            version,
-          });
-        }
-      } catch (err: any) {
-        logger.warn(
-          `Failed to refresh project datasource version before deploy: ${err.message}`,
-        );
-      }
-    }
+    const project = await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     const deployRes = await ctx.deployService.deploy(manifest, project.id);
 
+    // Recommendation generation depends on a successful deployment because
+    // question validation calls previewSql against the deployed manifest.
     if (deployRes.status === 'SUCCESS' && project.sampleDataset === null) {
-      ctx.projectService.generateProjectRecommendationQuestions().catch((err) =>
-        logger.warn(
-          `Failed to generate project recommendation questions after deploy: ${err.message}`,
-        ),
-      );
+      await ctx.projectService.generateProjectRecommendationQuestions();
     }
     return deployRes;
   }

@@ -30,6 +30,7 @@ class _FakeSchemaRetrievalPipeline:
 
 def test_independent_question_does_not_reuse_historical_sql():
     service = AskService(pipelines={})
+    histories = [AskHistory(question="previous", sql="SELECT 1")]
 
     assert not service._should_reuse_historical_question_sql(
         "Show monthly order count by market.",
@@ -37,17 +38,47 @@ def test_independent_question_does_not_reuse_historical_sql():
     )
     assert not service._should_reuse_historical_question_sql(
         "Show monthly order count by market.",
-        [AskHistory(question="previous", sql="SELECT 1")],
+        histories,
     )
+    assert service._sql_generation_histories_for_query(
+        "Show monthly order count by market.",
+        histories,
+    ) == []
 
 
 def test_contextual_followup_can_reuse_historical_sql():
     service = AskService(pipelines={})
+    histories = [AskHistory(question="previous", sql="SELECT 1")]
 
     assert service._should_reuse_historical_question_sql(
         "Use the same table and show it by month.",
-        [AskHistory(question="previous", sql="SELECT 1")],
+        histories,
     )
+    assert service._sql_generation_histories_for_query(
+        "Use the same table and show it by month.",
+        histories,
+    ) == histories
+
+
+def test_independent_question_with_thread_history_uses_standalone_sql_generation():
+    service = AskService(pipelines={})
+
+    assert service._sql_generation_histories_for_query(
+        "Which name values have the highest occurrences in dbo.failure_patterns?",
+        [AskHistory(question="Show repair ticket status", sql="SELECT status FROM x")],
+    ) == []
+
+
+def test_explicit_followup_question_can_use_history():
+    service = AskService(pipelines={})
+    histories = [
+        AskHistory(question="Show orders by market", sql="SELECT Market FROM x")
+    ]
+
+    assert service._sql_generation_histories_for_query(
+        "Use that same table and show it by month.",
+        histories,
+    ) == histories
 
 
 def test_metadata_table_question_is_not_sql_or_chart_intent():

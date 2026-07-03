@@ -113,7 +113,6 @@ export default class DataSourceSchemaDetector
     const supportedTypes = [
       SchemaChangeType.DELETED_TABLES,
       SchemaChangeType.DELETED_COLUMNS,
-      SchemaChangeType.MODIFIED_COLUMNS,
     ];
     if (!supportedTypes.includes(schemaChangeType)) {
       throw new Error('Resolved scheme change type is not supported.');
@@ -152,11 +151,10 @@ export default class DataSourceSchemaDetector
     });
 
     /**
-     * Handle resolve scheme change for DELETED_TABLES / DELETED_COLUMNS / MODIFIED_COLUMNS
+     * Handle resolve scheme change for DELETED_TABLES / DELETED_COLUMNS
      *  1. Remove all affected calculated fields
      *  2. Remove all affected columns if DELETED_COLUMNS
-     *  3. Update all affected column types if MODIFIED_COLUMNS
-     *  4. Remove all affected tables if DELETED_TABLES
+     *  3. Remove all affected tables if DELETED_TABLES
      *
      *  Considering that we have set up foreign keys, some data will be automatically deleted in cascade,
      *  so there is no need to perform additional deletions. (E.g., relationships, model's column)
@@ -186,27 +184,6 @@ export default class DataSourceSchemaDetector
           await this.ctx.modelColumnRepository.deleteAllBySourceColumnNames(
             resource.modelId,
             affectedColumnNames,
-          );
-        }
-        if (schemaChangeType === SchemaChangeType.MODIFIED_COLUMNS) {
-          await Promise.all(
-            resource.columns.map(async (column) => {
-              const modelColumn = modelColumns.find(
-                (modelColumn) =>
-                  modelColumn.modelId === resource.modelId &&
-                  modelColumn.sourceColumnName === column.sourceColumnName &&
-                  !modelColumn.isCalculated,
-              );
-              if (!modelColumn || modelColumn.type === column.type) {
-                return;
-              }
-              logger.debug(
-                `Updating column "${column.sourceColumnName}" type from "${modelColumn.type}" to "${column.type}" in model "${resource.referenceName}".`,
-              );
-              await this.ctx.modelColumnRepository.updateOne(modelColumn.id, {
-                type: column.type,
-              });
-            }),
           );
         }
         return;
