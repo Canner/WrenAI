@@ -169,7 +169,18 @@ def watch_loop(
 
     try:
         while max_polls is None or state.polls < max_polls:
-            poll_once(project_path, state, reindex, on_event=on_event)
+            try:
+                poll_once(project_path, state, reindex, on_event=on_event)
+            except Exception:
+                # A transient reindex/poll failure must not kill the watcher.
+                # poll_once keeps the old fingerprint on reindex failure, so
+                # the same change is retried on the next interval.
+                if on_event is not None:
+                    on_event("error")
+                if max_polls is not None and state.polls >= max_polls:
+                    break
+                sleep(interval)
+                continue
             if max_polls is not None and state.polls >= max_polls:
                 break
             sleep(interval)

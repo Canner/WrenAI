@@ -67,6 +67,18 @@ def test_fingerprint_empty_project_is_deterministic(tmp_path):
     assert compute_fingerprint(tmp_path) == compute_fingerprint(tmp_path)
 
 
+def test_fingerprint_changes_on_delete(tmp_path):
+    # Deleting a watched knowledge/sql file must change the digest so the
+    # watcher reindexes on disappearance, not just add/edit.
+    _touch_mdl(tmp_path)
+    write_query_markdown(tmp_path, "Customer count", "SELECT COUNT(*) FROM customers")
+    before = compute_fingerprint(tmp_path)
+    for path in (tmp_path / "knowledge" / "sql").glob("*.md"):
+        path.unlink()
+    after = compute_fingerprint(tmp_path)
+    assert before != after
+
+
 # ── poll_once ───────────────────────────────────────────────────────────────
 
 
@@ -154,6 +166,38 @@ def test_watch_loop_demonstrates_autoreindex(tmp_path):
     assert "reindexed" in events
     # After reindexing, later polls see no further change.
     assert state.last_change_poll < state.polls
+
+
+def test_watch_loop_survives_transient_reindex_failure(tmp_path):
+    """A raising reindex must not terminate the loop; the change is retried."""
+    _touch_mdl(tmp_path, '{"v": 1}')
+    events: list[str] = []
+    attempts: list[int] = []
+
+    def flaky_reindex():
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise RuntimeError("transient indexing failure")
+
+    # reindex_on_start=True gives an empty baseline, so poll 1 always detects a
+    # change and calls reindex — which raises the first time. The loop must keep
+    # going and retry on the next poll (change stays pending) instead of dying.
+    state = watch_loop(
+        tmp_path,
+        flaky_reindex,
+        interval=5.0,
+        max_polls=3,
+        reindex_on_start=True,
+        on_event=events.append,
+        sleep=lambda _s: None,
+    )
+
+    # Loop did not die on the first failure; it retried and eventually succeeded.
+    assert state.polls == 3
+    assert len(attempts) >= 2
+    assert state.reindexes == 1
+    assert state.errors == 1
+    assert "error" in events
 
 
 def test_watch_loop_reindex_on_start(tmp_path):

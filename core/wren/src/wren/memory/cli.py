@@ -616,6 +616,26 @@ def watch(
         typer.echo(str(e), err=True)
         raise typer.Exit(1)
 
+    # The watcher polls <project_path>/target/mdl.json + <project_path>/knowledge/sql,
+    # but the reindex reads --mdl and load_query_pairs(project_path). If an explicit
+    # --mdl points outside the watched project root we'd watch one tree and index a
+    # mixed one — fail fast instead of silently building a cross-project index.
+    if mdl:
+        mdl_path = Path(mdl).expanduser().resolve()
+        root = project_path.resolve()
+        if root != mdl_path and root not in mdl_path.parents:
+            typer.echo(
+                f"Error: --mdl ({mdl_path}) is outside the watched project "
+                f"root ({root}).\n"
+                "  `watch` monitors target/mdl.json + knowledge/sql/ under the "
+                "project root and reindexes from that same tree, so an --mdl "
+                "from another project would watch and index mismatched files.\n"
+                "  Run from the project that owns this MDL, or point --mdl at a "
+                "file under this root.",
+                err=True,
+            )
+            raise typer.Exit(1)
+
     def _reindex() -> None:
         manifest = _load_manifest(mdl)
         mem_store = _get_store(path)
