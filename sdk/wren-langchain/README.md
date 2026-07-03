@@ -37,16 +37,16 @@ wren memory index   # optional but recommended
 wren profile add ...
 ```
 
-If you haven't installed the CLI yet, install `wren-engine` first:
+If you haven't installed the CLI yet, install `wrenai` first:
 
 ```bash
-pip install "wren-engine[memory,postgres]"
+pip install "wrenai[memory,postgres]"
 ```
 
 ## Installation
 
 `wren-langchain` exposes datasource and memory extras that pass through to
-the matching `wren-engine` extras, so you only have to install once:
+the matching `wrenai` extras, so you only have to install once:
 
 ```bash
 # Match the datasource your wren_project.yml uses (DuckDB needs no extra):
@@ -65,8 +65,8 @@ pip install "wren-langchain[bigquery,memory]"
 pip install "wren-langchain[all,memory]"
 ```
 
-If you prefer to install `wren-engine` separately (e.g. you already use the
-CLI), the bare package is enough and your existing `wren-engine` extras carry
+If you prefer to install `wrenai` separately (e.g. you already use the
+CLI), the bare package is enough and your existing `wrenai` extras carry
 over:
 
 ```bash
@@ -225,9 +225,9 @@ elsewhere on the same machine.
 
 ## Compatibility matrix
 
-| `wren-langchain` | `wren-engine` | `langchain` | `langgraph` |
+| `wren-langchain` | `wrenai` | `langchain` | `langgraph` |
 |---|---|---|---|
-| 0.1.0 | >= 0.5.0 | >= 1.0 | >= 1.0 |
+| 0.1.0 | >= 0.7.0 | >= 1.0 | >= 1.0 |
 
 ## Known limitations (v0.1)
 

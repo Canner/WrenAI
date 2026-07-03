@@ -52,7 +52,7 @@ def _walk(cmd, prefix: str = "") -> dict[str, set[str]]:
 
 COMMANDS: dict[str, set[str]] = _walk(typer.main.get_command(app))
 
-# ``wren memory`` is conditionally registered (needs `wren-engine[memory]`
+# ``wren memory`` is conditionally registered (needs `wrenai[memory]`
 # extras). It's a real public surface; bundled content correctly references
 # it. Allow-list its subcommands so this guard doesn't flag false positives
 # when the test env lacks memory extras.

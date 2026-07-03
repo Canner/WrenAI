@@ -196,7 +196,7 @@ Cross-project joins must happen in Python, not in SQL — each project has its o
 
 | `wren-langchain` | `wrenai` | `langchain` | `langgraph` |
 |---|---|---|---|
-| 0.2.x | >= 0.5.0 | >= 1.0 | >= 1.0 |
+| 0.2.x | >= 0.7.0 | >= 1.0 | >= 1.0 |
 
 ---
 

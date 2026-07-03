@@ -58,7 +58,7 @@ def get_connector(data_source: DataSource, connection_info):
         raise WrenError(
             ErrorCode.NOT_IMPLEMENTED,
             f"Connector '{data_source.value}' requires additional dependencies: {e}. "
-            f"Install with: pip install wren[{extra}]",
+            f"Install with: pip install 'wrenai[{extra}]'",
         ) from e
 
     if data_source in _NEEDS_DATA_SOURCE:

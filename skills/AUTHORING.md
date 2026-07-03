@@ -43,7 +43,7 @@ metadata:
 ---
 ```
 
-**Drop the `version:` field.** Content version = the installed wren-engine
+**Drop the `version:` field.** Content version = the installed wrenai
 version, since the SKILL.md ships inside the wheel.
 
 ---

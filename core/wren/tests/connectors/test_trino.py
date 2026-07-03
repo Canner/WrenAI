@@ -191,7 +191,7 @@ def test_parse_trino_url_rejects_bad_scheme() -> None:
 
 def test_trino_connector_import_error_has_install_hint(monkeypatch) -> None:
     """If ``import trino`` fails, the connector should raise a WrenError with
-    a clear ``pip install wren-engine[trino]`` hint rather than a raw
+    a clear ``pip install 'wrenai[trino]'`` hint rather than a raw
     ImportError.
     """
     import builtins  # noqa: PLC0415
@@ -214,7 +214,7 @@ def test_trino_connector_import_error_has_install_hint(monkeypatch) -> None:
         trino_module._import_trino()
     assert exc.value.error_code == ErrorCode.INVALID_CONNECTION_INFO
     msg = str(exc.value)
-    assert "wren-engine[trino]" in msg
+    assert "pip install 'wrenai[trino]'" in msg
 
 
 def test_native_connector_does_not_import_ibis() -> None:

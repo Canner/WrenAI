@@ -9,7 +9,7 @@ metadata:
 # Wren GenBI App — Agent Workflow Guide
 
 > This guide is served by the `wren` CLI (`wren skills get genbi`), so it
-> always matches your installed wren-engine version.
+> always matches your installed wrenai version.
 
 Turn a Wren context layer into a shareable GenBI app — from a natural-language
 request to a public URL in one conversation.
