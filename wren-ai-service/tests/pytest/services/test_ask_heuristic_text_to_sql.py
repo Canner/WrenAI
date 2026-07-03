@@ -30,7 +30,6 @@ class _FakeSchemaRetrievalPipeline:
 
 def test_independent_question_does_not_reuse_historical_sql():
     service = AskService(pipelines={})
-    histories = [AskHistory(question="previous", sql="SELECT 1")]
 
     assert not service._should_reuse_historical_question_sql(
         "Show monthly order count by market.",
@@ -38,47 +37,17 @@ def test_independent_question_does_not_reuse_historical_sql():
     )
     assert not service._should_reuse_historical_question_sql(
         "Show monthly order count by market.",
-        histories,
+        [AskHistory(question="previous", sql="SELECT 1")],
     )
-    assert service._sql_generation_histories_for_query(
-        "Show monthly order count by market.",
-        histories,
-    ) == []
 
 
 def test_contextual_followup_can_reuse_historical_sql():
     service = AskService(pipelines={})
-    histories = [AskHistory(question="previous", sql="SELECT 1")]
 
     assert service._should_reuse_historical_question_sql(
         "Use the same table and show it by month.",
-        histories,
+        [AskHistory(question="previous", sql="SELECT 1")],
     )
-    assert service._sql_generation_histories_for_query(
-        "Use the same table and show it by month.",
-        histories,
-    ) == histories
-
-
-def test_independent_question_with_thread_history_uses_standalone_sql_generation():
-    service = AskService(pipelines={})
-
-    assert service._sql_generation_histories_for_query(
-        "Which name values have the highest occurrences in dbo.failure_patterns?",
-        [AskHistory(question="Show repair ticket status", sql="SELECT status FROM x")],
-    ) == []
-
-
-def test_explicit_followup_question_can_use_history():
-    service = AskService(pipelines={})
-    histories = [
-        AskHistory(question="Show orders by market", sql="SELECT Market FROM x")
-    ]
-
-    assert service._sql_generation_histories_for_query(
-        "Use that same table and show it by month.",
-        histories,
-    ) == histories
 
 
 def test_metadata_table_question_is_not_sql_or_chart_intent():
@@ -577,107 +546,6 @@ def test_retrieval_metadata_ignores_malformed_documents():
     assert len(documents) == 1
     assert table_names == ["dbo_repair_logs"]
     assert table_ddls == ["CREATE TABLE dbo_repair_logs (id varchar)"]
-
-
-def test_explicit_table_filter_matches_dot_and_underscore_variants():
-    service = AskService(pipelines={})
-    assert service._extract_explicit_table_names_from_query(
-        "Which name values have the highest occurrences in dbo.failure_patterns?"
-    ) == ["dbo.failure_patterns"]
-    documents = [
-        {
-            "table_name": "dbo_failure_patterns",
-            "table_ddl": "CREATE TABLE dbo_failure_patterns (name varchar)",
-        },
-        {
-            "table_name": "dbo_DebugEntries_Staging",
-            "table_ddl": "CREATE TABLE dbo_DebugEntries_Staging (Priority varchar)",
-        },
-    ]
-
-    filtered_documents, filtered_table_names, filtered_table_ddls = (
-        service._filter_context_to_explicit_tables(
-            "Which name values have the highest occurrences in dbo.failure_patterns?",
-            documents,
-            [document["table_name"] for document in documents],
-            [document["table_ddl"] for document in documents],
-        )
-    )
-
-    assert filtered_documents == [documents[0]]
-    assert filtered_table_names == ["dbo_failure_patterns"]
-    assert filtered_table_ddls == [
-        "CREATE TABLE dbo_failure_patterns (name varchar)"
-    ]
-
-
-def test_explicit_metadata_object_extraction_avoids_plain_language_prepositions():
-    service = AskService(pipelines={})
-
-    assert service._extract_explicit_table_names_from_query(
-        "Show total sales in each market"
-    ) == []
-    assert service._extract_explicit_table_names_from_query(
-        "Show the first 10 rows from CustomerMaster"
-    ) == ["CustomerMaster"]
-    assert service._extract_explicit_table_names_from_query(
-        "Create a chart on dbo.ticket_cycles by status"
-    ) == ["dbo.ticket_cycles"]
-
-
-def test_explicit_table_filter_includes_relationship_dependencies():
-    service = AskService(pipelines={})
-    documents = [
-        {
-            "table_name": "dbo_orders",
-            "table_ddl": (
-                "CREATE TABLE dbo_orders ("
-                "OrderId INT, CustomerId INT, "
-                "FOREIGN KEY (CustomerId) REFERENCES dbo_customers(CustomerId)"
-                ")"
-            ),
-        },
-        {
-            "table_name": "dbo_customers",
-            "table_ddl": "CREATE TABLE dbo_customers (CustomerId INT, Region varchar)",
-        },
-        {
-            "table_name": "dbo_inventory",
-            "table_ddl": "CREATE TABLE dbo_inventory (Sku varchar)",
-        },
-    ]
-
-    _, filtered_table_names, _ = service._filter_context_to_explicit_tables(
-        "Show orders from dbo.orders by customer region",
-        documents,
-        [document["table_name"] for document in documents],
-        [document["table_ddl"] for document in documents],
-    )
-
-    assert filtered_table_names == ["dbo_orders", "dbo_customers"]
-
-
-def test_prune_sql_generation_context_prioritizes_explicit_table_variant():
-    service = AskService(pipelines={})
-    table_ddls = [
-        "CREATE TABLE dbo_DebugEntries_Staging (Priority varchar)",
-        "CREATE TABLE dbo_failure_patterns (name varchar, occurrences int)",
-    ]
-    documents = [
-        {"table_name": "dbo_DebugEntries_Staging", "table_ddl": table_ddls[0]},
-        {"table_name": "dbo_failure_patterns", "table_ddl": table_ddls[1]},
-    ]
-
-    _, table_names, pruned_ddls = service._prune_sql_generation_context(
-        "Which name values have the highest occurrences in dbo.failure_patterns?",
-        documents,
-        [document["table_name"] for document in documents],
-        table_ddls,
-        max_tables=1,
-    )
-
-    assert table_names == ["dbo_failure_patterns"]
-    assert pruned_ddls == [table_ddls[1]]
 
 
 def test_complete_sql_generation_context_refetches_full_selected_schema():

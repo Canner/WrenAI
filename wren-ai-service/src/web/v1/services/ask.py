@@ -247,15 +247,6 @@ class AskService:
     ) -> bool:
         return bool(histories) and self._needs_conversation_context(query)
 
-    def _sql_generation_histories_for_query(
-        self,
-        query: str,
-        histories: list[AskHistory] | None,
-    ) -> list[AskHistory]:
-        if not histories or not self._needs_conversation_context(query):
-            return []
-        return histories
-
     def _rewrite_query_for_text_to_sql(self, query: str) -> str:
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized:
@@ -578,130 +569,28 @@ class AskService:
         )
 
     def _extract_explicit_table_names_from_query(self, query: str) -> list[str]:
-        object_names: list[str] = []
+        table_names: list[str] = []
         for match in re.finditer(
-            r"\b(?:from|table|model|view|metric)\s+([A-Za-z_][A-Za-z0-9_.$]*)",
+            r"\b(?:from|table|model)\s+([A-Za-z_][A-Za-z0-9_.$]*)",
             query or "",
             flags=re.IGNORECASE,
         ):
-            object_name = match.group(1).strip(".,;:()[]{}")
-            if object_name and object_name not in object_names:
-                object_names.append(object_name)
+            table_name = match.group(1).strip(".,;:()[]{}")
+            if table_name and table_name not in table_names:
+                table_names.append(table_name)
         for match in re.finditer(
-            r"\b(?:using|in|on|for|against)\s+([A-Za-z_][A-Za-z0-9_.$]*)",
+            r"\busing\s+([A-Za-z_][A-Za-z0-9_.$]*)",
             query or "",
             flags=re.IGNORECASE,
         ):
-            object_name = match.group(1).strip(".,;:()[]{}")
+            table_name = match.group(1).strip(".,;:()[]{}")
             if (
-                object_name
-                and ("." in object_name or "_" in object_name)
-                and object_name not in object_names
+                table_name
+                and ("." in table_name or "_" in table_name)
+                and table_name not in table_names
             ):
-                object_names.append(object_name)
-        return object_names
-
-    def _explicit_table_name_tokens(self, query: str) -> set[str]:
-        tokens: set[str] = set()
-        for table_name in self._extract_explicit_table_names_from_query(query):
-            table_name = str(table_name or "").strip()
-            if not table_name:
-                continue
-
-            variants = {
-                table_name,
-                table_name.replace(".", "_"),
-                table_name.replace("_", "."),
-                re.split(r"[.$]", table_name)[-1],
-            }
-            tokens.update(
-                self._normalize_schema_token(variant)
-                for variant in variants
-                if variant
-            )
-        return {token for token in tokens if token}
-
-    def _metadata_object_name_tokens(self, object_name: str) -> set[str]:
-        object_name = str(object_name or "").strip()
-        if not object_name:
-            return set()
-
-        variants = {
-            object_name,
-            object_name.replace("_", "."),
-            object_name.replace(".", "_"),
-            re.split(r"[.$]", object_name)[-1],
-        }
-        return {
-            token
-            for variant in variants
-            if (token := self._normalize_schema_token(variant))
-        }
-
-    def _referenced_relationship_table_tokens(
-        self, table_ddls: list[str], selected_indexes: list[int]
-    ) -> set[str]:
-        selected_ddls = [
-            table_ddls[index] for index in selected_indexes if index < len(table_ddls)
-        ]
-        relationship_tokens: set[str] = set()
-        for relationship in self._extract_metadata_relationships(selected_ddls):
-            for table_name in re.findall(
-                r"([A-Za-z_][A-Za-z0-9_.$]*)\s*\(",
-                relationship,
-            ):
-                relationship_tokens.update(
-                    self._metadata_object_name_tokens(table_name)
-                )
-        return relationship_tokens
-
-    def _filter_context_to_explicit_tables(
-        self,
-        query: str,
-        documents: list[dict],
-        table_names: list[str],
-        table_ddls: list[str],
-    ) -> tuple[list[dict], list[str], list[str]]:
-        explicit_tokens = self._explicit_table_name_tokens(query)
-        if not explicit_tokens:
-            return documents, table_names, table_ddls
-
-        selected_indexes: list[int] = []
-        for index, table_name in enumerate(table_names):
-            table_name = str(table_name or "")
-            table_tokens = self._metadata_object_name_tokens(table_name)
-            if explicit_tokens.intersection(table_tokens):
-                selected_indexes.append(index)
-
-        if not selected_indexes:
-            return documents, table_names, table_ddls
-
-        relationship_tokens = self._referenced_relationship_table_tokens(
-            table_ddls, selected_indexes
-        )
-        if relationship_tokens:
-            selected_index_set = set(selected_indexes)
-            for index, table_name in enumerate(table_names):
-                if index in selected_index_set:
-                    continue
-                if relationship_tokens.intersection(
-                    self._metadata_object_name_tokens(str(table_name or ""))
-                ):
-                    selected_indexes.append(index)
-
-        logger.info(
-            "Restricting SQL generation context to explicit metadata objects for query: %s",
-            query,
-        )
-        return (
-            [documents[index] for index in selected_indexes if index < len(documents)],
-            [
-                table_names[index]
-                for index in selected_indexes
-                if index < len(table_names)
-            ],
-            [table_ddls[index] for index in selected_indexes if index < len(table_ddls)],
-        )
+                table_names.append(table_name)
+        return table_names
 
     def _build_direct_orders_sales_sql(self, query: str) -> str | None:
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
@@ -3142,7 +3031,10 @@ class AskService:
 
         query_key = self._normalize_schema_token(query)
         query_terms = self._query_schema_terms(query)
-        explicit_tables = self._explicit_table_name_tokens(query)
+        explicit_tables = {
+            self._normalize_schema_token(table_name)
+            for table_name in self._extract_explicit_table_names_from_query(query)
+        }
 
         scored: list[tuple[int, int]] = []
         for index, table in enumerate(parsed_tables):
@@ -3158,13 +3050,7 @@ class AskService:
             }
 
             score = 0
-            explicit_table_tokens = {
-                normalized_table,
-                normalized_short_table,
-                self._normalize_schema_token(table_name.replace("_", ".")),
-                self._normalize_schema_token(table_name.replace(".", "_")),
-            }
-            if explicit_tables.intersection(explicit_table_tokens):
+            if normalized_table in explicit_tables or normalized_short_table in explicit_tables:
                 score += 1000
             if normalized_table and normalized_table in query_key:
                 score += 500
@@ -4219,14 +4105,6 @@ class AskService:
                     return results
 
             if documents and not api_results:
-                documents, table_names, table_ddls = (
-                    self._filter_context_to_explicit_tables(
-                        sql_user_query,
-                        documents,
-                        table_names,
-                        table_ddls,
-                    )
-                )
                 documents, table_names, table_ddls = self._prune_sql_generation_context(
                     sql_user_query,
                     documents,
@@ -4248,10 +4126,7 @@ class AskService:
                 if completed_retrieval_result:
                     _retrieval_result = completed_retrieval_result
 
-            sql_generation_histories = self._sql_generation_histories_for_query(
-                sql_user_query,
-                histories,
-            )
+            sql_generation_histories = histories
             if self._is_data_analysis_query(
                 sql_user_query
             ) and not self._needs_conversation_context(sql_user_query):
@@ -4276,7 +4151,7 @@ class AskService:
                     intent_reasoning=intent_reasoning,
                     retrieved_tables=table_names,
                     trace_id=trace_id,
-                    is_followup=True if sql_generation_histories else False,
+                    is_followup=True if histories else False,
                 )
 
                 if sql_generation_histories:
@@ -4335,7 +4210,7 @@ class AskService:
                     retrieved_tables=table_names,
                     sql_generation_reasoning=sql_generation_reasoning,
                     trace_id=trace_id,
-                    is_followup=True if sql_generation_histories else False,
+                    is_followup=True if histories else False,
                 )
 
             if not self._is_stopped(query_id, self._ask_results) and not api_results:
@@ -4347,7 +4222,7 @@ class AskService:
                     retrieved_tables=table_names,
                     sql_generation_reasoning=sql_generation_reasoning,
                     trace_id=trace_id,
-                    is_followup=True if sql_generation_histories else False,
+                    is_followup=True if histories else False,
                 )
 
                 try:
@@ -4479,7 +4354,7 @@ class AskService:
                             retrieved_tables=table_names,
                             sql_generation_reasoning=sql_generation_reasoning,
                             trace_id=trace_id,
-                            is_followup=True if sql_generation_histories else False,
+                            is_followup=True if histories else False,
                         )
 
                         if allow_sql_diagnosis:
@@ -4554,7 +4429,7 @@ class AskService:
                         retrieved_tables=table_names,
                         sql_generation_reasoning=sql_generation_reasoning,
                         trace_id=trace_id,
-                        is_followup=True if sql_generation_histories else False,
+                        is_followup=True if histories else False,
                     )
                 results["ask_result"] = api_results
                 results["metadata"]["type"] = "TEXT_TO_SQL"
@@ -4586,7 +4461,7 @@ class AskService:
                                 retrieved_tables=table_names,
                                 sql_generation_reasoning=sql_generation_reasoning,
                                 trace_id=trace_id,
-                                is_followup=True if sql_generation_histories else False,
+                                is_followup=True if histories else False,
                             )
                         results["ask_result"] = api_results
                         results["metadata"]["type"] = "TEXT_TO_SQL"
