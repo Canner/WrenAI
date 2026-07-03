@@ -58,6 +58,15 @@ dimensions, time dimensions, and hierarchies in markdown.
 wren memory index
 ```
 
+**Automate it while modelling:** instead of re-running `index` by hand every time
+sources change, run `wren memory watch` — it polls `target/mdl.json` and
+`knowledge/sql/*.md` and reindexes automatically on change, so `fetch` never serves a
+stale schema.
+
+```bash
+wren memory watch   # poll + auto-reindex until Ctrl+C
+```
+
 ---
 
 ## Storing queries: `wren memory store`
