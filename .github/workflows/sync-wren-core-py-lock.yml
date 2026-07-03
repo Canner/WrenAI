@@ -41,6 +41,9 @@ jobs:
         with:
           # publish takes minutes; main may have moved. Base the PR on main tip.
           ref: main
+          # Keep the write token out of .git/config so dependency code uv may
+          # build during resolution can't read it (supply-chain); push re-auths.
+          persist-credentials: false
 
       - name: Resolve and validate version
         env:
@@ -96,7 +99,7 @@ jobs:
         run: |
           BRANCH="chore/sync-wren-core-py-${VERSION}"
           # If a PR is already open for this bump, leave it untouched.
-          if [ "$(gh pr list --state open --head "${BRANCH}" --json number --jq 'length')" != "0" ]; then
+          if [ "$(gh pr list --repo "${GITHUB_REPOSITORY}" --state open --head "${BRANCH}" --json number --jq 'length')" != "0" ]; then
             echo "Open PR for ${BRANCH} already exists; leaving it untouched."
             exit 0
           fi
@@ -106,8 +109,12 @@ jobs:
           git add core/wren/pyproject.toml core/wren/uv.lock
           git commit -m "chore(wren): bump wren-core-py to ${VERSION}"
           # No open PR: --force only overwrites a leftover branch from a closed PR.
-          git push --force origin "${BRANCH}"
+          # Auth the push explicitly since credentials aren't persisted (masked in logs).
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@${GITHUB_SERVER_URL#https://}/${GITHUB_REPOSITORY}.git" \
+            "${BRANCH}"
           gh pr create \
+            --repo "${GITHUB_REPOSITORY}" \
             --base main \
             --head "${BRANCH}" \
             --title "chore(wren): bump wren-core-py to ${VERSION}" \
