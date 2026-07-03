@@ -40,6 +40,7 @@ export class SchemaChangeRepository
       .from(this.tableName)
       .where(this.transformToDBData({ projectId }))
       .orderBy('created_at', 'desc')
+      .orderBy('id', 'desc')
       .first();
     return (res && this.transformFromDBData(res)) || null;
   }
