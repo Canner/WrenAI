@@ -12,6 +12,14 @@ on:
         description: "Released wren-core-py version (e.g. 0.7.1)"
         required: true
         type: string
+  # Manual fallback: re-run the sync if the automatic run after publish failed
+  # or was skipped. Leave version blank to use the release tracked in the repo.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "wren-core-py version to sync to; blank = .release-please-manifest.json"
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -21,22 +29,27 @@ jobs:
   sync-lock:
     if: ${{ github.repository == 'Canner/WrenAI' }}
     runs-on: ubuntu-latest
-    env:
-      VERSION: ${{ inputs.version }}
     steps:
-      - name: Validate version
-        run: |
-          # Guard a malformed version out of the dep edit, branch name, and PR.
-          if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+)?$ ]]; then
-            echo "::error::Unsupported version format: ${VERSION}. Expected X.Y.Z or X.Y.ZrcN."
-            exit 1
-          fi
-
       - name: Checkout main
         uses: actions/checkout@v4
         with:
           # publish takes minutes; main may have moved. Base the PR on main tip.
           ref: main
+
+      - name: Resolve and validate version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          # workflow_call always passes the released version; manual runs may
+          # omit it and fall back to the release tracked in the repo.
+          version="${INPUT_VERSION:-$(jq -r '."core/wren-core-py"' .release-please-manifest.json)}"
+          # Guard a malformed version out of the dep edit, branch name, and PR.
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+)?$ ]]; then
+            echo "::error::Unsupported version: ${version}. Expected X.Y.Z or X.Y.ZrcN."
+            exit 1
+          fi
+          echo "Syncing core/wren to wren-core-py ${version}"
+          echo "VERSION=${version}" >> "$GITHUB_ENV"
 
       - uses: astral-sh/setup-uv@v4
 
