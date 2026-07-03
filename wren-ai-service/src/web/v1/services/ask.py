@@ -247,6 +247,15 @@ class AskService:
     ) -> bool:
         return bool(histories) and self._needs_conversation_context(query)
 
+    def _sql_generation_histories_for_query(
+        self,
+        query: str,
+        histories: list[AskHistory] | None,
+    ) -> list[AskHistory]:
+        if not histories or not self._needs_conversation_context(query):
+            return []
+        return histories
+
     def _rewrite_query_for_text_to_sql(self, query: str) -> str:
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized:
@@ -4239,7 +4248,10 @@ class AskService:
                 if completed_retrieval_result:
                     _retrieval_result = completed_retrieval_result
 
-            sql_generation_histories = histories
+            sql_generation_histories = self._sql_generation_histories_for_query(
+                sql_user_query,
+                histories,
+            )
             if self._is_data_analysis_query(
                 sql_user_query
             ) and not self._needs_conversation_context(sql_user_query):
@@ -4264,7 +4276,7 @@ class AskService:
                     intent_reasoning=intent_reasoning,
                     retrieved_tables=table_names,
                     trace_id=trace_id,
-                    is_followup=True if histories else False,
+                    is_followup=True if sql_generation_histories else False,
                 )
 
                 if sql_generation_histories:
@@ -4323,7 +4335,7 @@ class AskService:
                     retrieved_tables=table_names,
                     sql_generation_reasoning=sql_generation_reasoning,
                     trace_id=trace_id,
-                    is_followup=True if histories else False,
+                    is_followup=True if sql_generation_histories else False,
                 )
 
             if not self._is_stopped(query_id, self._ask_results) and not api_results:
@@ -4335,7 +4347,7 @@ class AskService:
                     retrieved_tables=table_names,
                     sql_generation_reasoning=sql_generation_reasoning,
                     trace_id=trace_id,
-                    is_followup=True if histories else False,
+                    is_followup=True if sql_generation_histories else False,
                 )
 
                 try:
@@ -4467,7 +4479,7 @@ class AskService:
                             retrieved_tables=table_names,
                             sql_generation_reasoning=sql_generation_reasoning,
                             trace_id=trace_id,
-                            is_followup=True if histories else False,
+                            is_followup=True if sql_generation_histories else False,
                         )
 
                         if allow_sql_diagnosis:
@@ -4542,7 +4554,7 @@ class AskService:
                         retrieved_tables=table_names,
                         sql_generation_reasoning=sql_generation_reasoning,
                         trace_id=trace_id,
-                        is_followup=True if histories else False,
+                        is_followup=True if sql_generation_histories else False,
                     )
                 results["ask_result"] = api_results
                 results["metadata"]["type"] = "TEXT_TO_SQL"
@@ -4574,7 +4586,7 @@ class AskService:
                                 retrieved_tables=table_names,
                                 sql_generation_reasoning=sql_generation_reasoning,
                                 trace_id=trace_id,
-                                is_followup=True if histories else False,
+                                is_followup=True if sql_generation_histories else False,
                             )
                         results["ask_result"] = api_results
                         results["metadata"]["type"] = "TEXT_TO_SQL"
