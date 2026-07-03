@@ -39,11 +39,21 @@ _ROW_EXPANSION_FUNCS: tuple[type[exp.Func], ...] = (exp.Unnest, exp.Explode)
 # databases (``dblink`` / ``postgres_scan`` → lateral movement). Allowing any of
 # them defeats strict-mode governance (RLAC/CLAC), so they are ALWAYS blocked
 # under strict mode, in EVERY AST position — not just the FROM/JOIN source slot
-# (which is all PR #2405 covered). Reader detection is fail-closed: this list is
-# the source of truth for *known* reader names, matched by both the raw
-# function name (for ``exp.Anonymous`` parses like ``glob`` / ``dblink``) and by
-# the canonical sqlglot class key (e.g. ``read_csv`` → ``exp.ReadCSV`` →
-# ``"readcsv"``), via the same dialect-probe used for the denylist.
+# (which is all PR #2405 covered).
+#
+# IMPORTANT — for non-source positions this is a *blocklist*, not a fail-closed
+# allowlist. The source position (FROM/JOIN) is genuinely fail-closed:
+# ``_check_tables`` rejects ANY unknown TVF there. But you cannot allowlist
+# every scalar function that may appear in a projection or WHERE clause, so for
+# non-source positions this named list is the security boundary: a reader that
+# is not enumerated here will pass in a projection / subquery / nested-arg
+# position. The list must therefore be MAINTAINED PER-CONNECTOR as new
+# file/remote readers land upstream, and operators who need to guard a reader
+# not covered here should add it to ``denied_functions`` as a defense-in-depth
+# backstop. Matching is by both the raw function name (for ``exp.Anonymous``
+# parses like ``glob`` / ``dblink``) and by the canonical sqlglot class key
+# (e.g. ``read_csv`` → ``exp.ReadCSV`` → ``"readcsv"``), via the same
+# dialect-probe used for the denylist.
 _DATA_READER_NAMES: frozenset[str] = frozenset(
     {
         # duckdb file readers
@@ -73,10 +83,29 @@ _DATA_READER_NAMES: frozenset[str] = frozenset(
         "pg_read_file",
         "pg_read_binary_file",
         "pg_ls_dir",
+        "pg_ls_logdir",
+        "pg_ls_waldir",
+        "pg_ls_tmpdir",
+        "pg_ls_archive_statusdir",
+        "pg_stat_file",
         "lo_import",
         "lo_get",
         "dblink",
         "dblink_exec",
+        # mysql file reader (same arbitrary-file-read primitive as read_csv,
+        # just via a first-class connector)
+        "load_file",
+        # duckdb spatial / sniffing / metadata scanners over arbitrary paths
+        "sniff_csv",
+        "st_read",
+        "st_readosm",
+        "st_read_meta",
+        "parquet_metadata",
+        "parquet_file_metadata",
+        "parquet_kv_metadata",
+        "parquet_schema",
+        "iceberg_metadata",
+        "iceberg_snapshots",
         # generic external fetch
         "url",
     }
@@ -367,9 +396,21 @@ def _check_data_readers(ast: exp.Expression) -> None:
     """
     for func in ast.find_all(exp.Func):
         if _is_data_reader(func):
+            # Report only the function name, never ``func.sql()`` — the full
+            # expression would echo the argument (file paths, URLs, DSNs /
+            # connection strings) back into the error message and logs, which
+            # is a needless info-leak of exactly the sensitive target this
+            # guard exists to block.
+            # For exp.Anonymous the user-written name is authoritative; for
+            # concrete subclasses ``func.name`` can return the *argument*
+            # (e.g. exp.ReadCSV.name -> the file path), so use the stable class
+            # key there to avoid leaking the target.
+            reader_name = (
+                func.name if isinstance(func, exp.Anonymous) else type(func).key
+            )
             raise WrenError(
                 ErrorCode.MODEL_NOT_FOUND,
-                f"Data-reading function '{func.sql()}' is not allowed. "
+                f"Data-reading function '{reader_name}' is not allowed. "
                 "In strict mode, reading data outside the MDL manifest "
                 "(files, URLs, or external databases) is forbidden in all "
                 "query positions.",

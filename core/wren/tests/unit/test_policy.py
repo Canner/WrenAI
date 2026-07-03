@@ -398,6 +398,51 @@ def test_reader_case_insensitive_blocked():
     assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
 
 
+def test_mysql_load_file_reader_in_projection_blocked():
+    # ``load_file`` is the same arbitrary-file-read primitive as read_csv, via
+    # a first-class connector (MySQL). It must be blocked in a projection just
+    # like the duckdb reader family (goldmedal review on PR #2419).
+    ast = parse_one("SELECT load_file('/etc/passwd')", dialect="mysql")
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, WrenConfig(strict_mode=True))
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+
+
+def test_postgres_filesystem_enumeration_readers_blocked():
+    # Postgres filesystem enumeration / stat readers in a projection.
+    for sql in (
+        "SELECT pg_stat_file('/etc/passwd')",
+        "SELECT pg_ls_waldir()",
+        "SELECT pg_ls_logdir()",
+        "SELECT pg_ls_tmpdir()",
+    ):
+        ast = parse_one(sql, dialect="postgres")
+        with pytest.raises(WrenError) as exc_info:
+            validate_sql_policy(ast, _MODELS, WrenConfig(strict_mode=True))
+        assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND, sql
+
+
+def test_duckdb_spatial_and_sniff_readers_blocked():
+    # duckdb sniff / spatial readers over arbitrary paths, in a projection.
+    for sql in (
+        "SELECT sniff_csv('/etc/passwd') FROM orders",
+        "SELECT st_read('/x.shp') FROM orders",
+    ):
+        ast = parse_one(sql, dialect="duckdb")
+        with pytest.raises(WrenError) as exc_info:
+            validate_sql_policy(ast, _MODELS, WrenConfig(strict_mode=True))
+        assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND, sql
+
+
+def test_reader_error_message_does_not_leak_argument():
+    # The error must report only the function name, never the full expression
+    # (which would echo the path / URL / DSN back into messages and logs).
+    ast = parse_one("SELECT read_csv('/etc/passwd')", dialect="duckdb")
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, WrenConfig(strict_mode=True))
+    assert "/etc/passwd" not in str(exc_info.value)
+
+
 def test_reader_not_blocked_when_strict_off():
     # The reader guard is a strict-mode control; without strict mode (and no
     # denylist) the query is allowed, preserving non-governed behaviour.
@@ -422,9 +467,13 @@ def test_reader_can_never_be_opted_in_as_source_func():
 
 
 def test_legit_query_with_column_named_like_reader_passes():
-    # A model column / identifier is not a function call — must not be blocked.
-    ast = parse_one('SELECT o_orderkey FROM "orders"', dialect="duckdb")
+    # An identifier that collides with a reader name (quoted column / alias) is
+    # not a function call — _check_data_readers must only reject exp.Func nodes,
+    # never plain identifiers.
+    ast = parse_one('SELECT "read_csv" FROM "orders"', dialect="duckdb")
     validate_sql_policy(ast, _MODELS, WrenConfig(strict_mode=True))
+    ast2 = parse_one('SELECT o_orderkey AS "read_csv" FROM "orders"', dialect="duckdb")
+    validate_sql_policy(ast2, _MODELS, WrenConfig(strict_mode=True))
 
 
 def test_legit_aggregate_and_scalar_funcs_pass():
