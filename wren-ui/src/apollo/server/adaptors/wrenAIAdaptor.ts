@@ -776,11 +776,15 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
 
   private async waitDeployFinished(deployId: string): Promise<boolean> {
     let deploySuccess = false;
-    // timeout after 30 seconds
-    for (let waitTime = 1; waitTime <= 7; waitTime++) {
+    const maxAttempts = 90;
+    const pollingIntervalMs = 2000;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         const status = await this.getDeployStatus(deployId);
-        logger.debug(`Wren AI: Deploy status: ${status}`);
+        logger.debug(
+          `Wren AI: Deploy status: ${status}, attempt: ${attempt}/${maxAttempts}`,
+        );
         if (status === WrenAISystemStatus.FINISHED) {
           deploySuccess = true;
           break;
@@ -795,7 +799,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       } catch (err: any) {
         throw err;
       }
-      await new Promise((resolve) => setTimeout(resolve, waitTime * 1000));
+      await new Promise((resolve) => setTimeout(resolve, pollingIntervalMs));
     }
     return deploySuccess;
   }
