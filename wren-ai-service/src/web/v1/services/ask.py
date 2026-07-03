@@ -592,6 +592,66 @@ class AskService:
                 table_names.append(table_name)
         return table_names
 
+    def _explicit_table_name_tokens(self, query: str) -> set[str]:
+        tokens: set[str] = set()
+        for table_name in self._extract_explicit_table_names_from_query(query):
+            table_name = str(table_name or "").strip()
+            if not table_name:
+                continue
+
+            variants = {
+                table_name,
+                table_name.replace(".", "_"),
+                table_name.replace("_", "."),
+                re.split(r"[.$]", table_name)[-1],
+            }
+            tokens.update(
+                self._normalize_schema_token(variant)
+                for variant in variants
+                if variant
+            )
+        return {token for token in tokens if token}
+
+    def _filter_context_to_explicit_tables(
+        self,
+        query: str,
+        documents: list[dict],
+        table_names: list[str],
+        table_ddls: list[str],
+    ) -> tuple[list[dict], list[str], list[str]]:
+        explicit_tokens = self._explicit_table_name_tokens(query)
+        if not explicit_tokens:
+            return documents, table_names, table_ddls
+
+        selected_indexes: list[int] = []
+        for index, table_name in enumerate(table_names):
+            table_name = str(table_name or "")
+            table_tokens = {
+                self._normalize_schema_token(table_name),
+                self._normalize_schema_token(table_name.replace("_", ".")),
+                self._normalize_schema_token(table_name.replace(".", "_")),
+                self._normalize_schema_token(re.split(r"[.$]", table_name)[-1]),
+            }
+            if explicit_tokens.intersection(table_tokens):
+                selected_indexes.append(index)
+
+        if not selected_indexes:
+            return documents, table_names, table_ddls
+
+        logger.info(
+            "Restricting SQL generation context to explicit tables for query: %s",
+            query,
+        )
+        return (
+            [documents[index] for index in selected_indexes if index < len(documents)],
+            [
+                table_names[index]
+                for index in selected_indexes
+                if index < len(table_names)
+            ],
+            [table_ddls[index] for index in selected_indexes if index < len(table_ddls)],
+        )
+
     def _build_direct_orders_sales_sql(self, query: str) -> str | None:
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized:
@@ -4110,6 +4170,14 @@ class AskService:
                     documents,
                     table_names,
                     table_ddls,
+                )
+                documents, table_names, table_ddls = (
+                    self._filter_context_to_explicit_tables(
+                        sql_user_query,
+                        documents,
+                        table_names,
+                        table_ddls,
+                    )
                 )
                 (
                     documents,

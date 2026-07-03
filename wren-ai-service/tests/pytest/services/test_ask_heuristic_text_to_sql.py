@@ -548,6 +548,35 @@ def test_retrieval_metadata_ignores_malformed_documents():
     assert table_ddls == ["CREATE TABLE dbo_repair_logs (id varchar)"]
 
 
+def test_explicit_table_filter_matches_dot_and_underscore_variants():
+    service = AskService(pipelines={})
+    documents = [
+        {
+            "table_name": "dbo_failure_patterns",
+            "table_ddl": "CREATE TABLE dbo_failure_patterns (name varchar)",
+        },
+        {
+            "table_name": "dbo_DebugEntries_Staging",
+            "table_ddl": "CREATE TABLE dbo_DebugEntries_Staging (Priority varchar)",
+        },
+    ]
+
+    filtered_documents, filtered_table_names, filtered_table_ddls = (
+        service._filter_context_to_explicit_tables(
+            "Which name values have the highest occurrences in dbo.failure_patterns?",
+            documents,
+            [document["table_name"] for document in documents],
+            [document["table_ddl"] for document in documents],
+        )
+    )
+
+    assert filtered_documents == [documents[0]]
+    assert filtered_table_names == ["dbo_failure_patterns"]
+    assert filtered_table_ddls == [
+        "CREATE TABLE dbo_failure_patterns (name varchar)"
+    ]
+
+
 def test_complete_sql_generation_context_refetches_full_selected_schema():
     pipeline = _FakeSchemaRetrievalPipeline()
     service = AskService(
