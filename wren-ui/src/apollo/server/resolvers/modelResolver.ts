@@ -28,6 +28,7 @@ import {
 } from '../utils/model';
 import { CompactTable, PreviewDataResponse } from '@server/services';
 import { TelemetryEvent } from '../telemetry/telemetry';
+import DataSourceSchemaDetector from '@server/managers/dataSourceSchemaDetector';
 
 const logger = getLogger('ModelResolver');
 logger.level = 'debug';
@@ -209,6 +210,9 @@ export class ModelResolver {
       if (inProgressDeployment) {
         return { status: SyncStatusEnum.IN_PROGRESS };
       }
+      if (await this.hasUnresolvedSchemaChange(ctx, id)) {
+        return { status: SyncStatusEnum.UNSYNCRONIZED };
+      }
       return ctx.deployService.isSameDeployment(manifest, id, lastDeploy)
         ? { status: SyncStatusEnum.SYNCRONIZED }
         : { status: SyncStatusEnum.UNSYNCRONIZED };
@@ -241,9 +245,22 @@ export class ModelResolver {
     // Recommendation generation depends on a successful deployment because
     // question validation calls previewSql against the deployed manifest.
     if (deployRes.status === 'SUCCESS' && project.sampleDataset === null) {
+      const schemaDetector = new DataSourceSchemaDetector({
+        ctx,
+        projectId: project.id,
+      });
+      await schemaDetector.detectSchemaChange();
       await ctx.projectService.generateProjectRecommendationQuestions();
     }
     return deployRes;
+  }
+
+  private async hasUnresolvedSchemaChange(ctx: IContext, projectId: number) {
+    const lastSchemaChange =
+      await ctx.schemaChangeRepository.findLastSchemaChange(projectId);
+    return Object.values(lastSchemaChange?.resolve || {}).some(
+      (resolved) => resolved === false,
+    );
   }
 
   public async getMDL(_root: any, args: { hash: string }, ctx: IContext) {
