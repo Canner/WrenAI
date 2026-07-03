@@ -236,14 +236,10 @@ export class ModelResolver {
       });
     }
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-    const hasUnresolvedSchemaChange = await this.hasUnresolvedSchemaChange(
-      ctx,
-      project.id,
-    );
     const deployRes = await ctx.deployService.deploy(
       manifest,
       project.id,
-      args.force || hasUnresolvedSchemaChange,
+      args.force,
     );
 
     // Recommendation generation depends on a successful deployment because
