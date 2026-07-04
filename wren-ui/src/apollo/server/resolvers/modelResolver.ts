@@ -219,7 +219,14 @@ export class ModelResolver {
       const project = await ctx.projectService.getCurrentProject();
       const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
       const lastDeploy = await ctx.deployService.getLastDeployment(project.id);
-      return ctx.deployService.isSameDeployment(manifest, project.id, lastDeploy)
+      const isSynced =
+        ctx.deployService.isSameDeployment(manifest, project.id, lastDeploy) ||
+        (await this.isLastDeployNewerThanModelingChanges(
+          ctx,
+          project.id,
+          lastDeploy,
+        ));
+      return isSynced
         ? { status: SyncStatusEnum.SYNCRONIZED }
         : { status: SyncStatusEnum.UNSYNCRONIZED };
     } catch (err: any) {
@@ -266,6 +273,54 @@ export class ModelResolver {
     await this.resolveModifiedSchemaChanges(ctx, project.id);
     project = await this.refreshProjectDataSourceVersion(ctx, project);
     return project;
+  }
+
+  private async isLastDeployNewerThanModelingChanges(
+    ctx: IContext,
+    projectId: number,
+    lastDeploy?: { createdAt?: Date; updatedAt?: Date } | null,
+  ): Promise<boolean> {
+    if (!lastDeploy) {
+      return false;
+    }
+
+    const deployedAt = this.toTime(lastDeploy.updatedAt || lastDeploy.createdAt);
+    if (!deployedAt) {
+      return false;
+    }
+
+    const models = await ctx.modelRepository.findAllBy({ projectId });
+    const modelIds = models.map((model) => model.id);
+    const [columns, nestedColumns, relations, views] = await Promise.all([
+      modelIds.length
+        ? ctx.modelColumnRepository.findColumnsByModelIds(modelIds)
+        : Promise.resolve([]),
+      modelIds.length
+        ? ctx.modelNestedColumnRepository.findNestedColumnsByModelIds(modelIds)
+        : Promise.resolve([]),
+      ctx.relationRepository.findRelationInfoBy({ projectId }),
+      ctx.viewRepository.findAllBy({ projectId }),
+    ]);
+
+    const latestModelingChangeAt = [
+      ...models,
+      ...columns,
+      ...nestedColumns,
+      ...relations,
+      ...views,
+    ].reduce((latest, item: any) => {
+      return Math.max(latest, this.toTime(item.updatedAt || item.createdAt));
+    }, 0);
+
+    return deployedAt >= latestModelingChangeAt;
+  }
+
+  private toTime(value?: Date | string | null): number {
+    if (!value) {
+      return 0;
+    }
+    const time = new Date(value).getTime();
+    return Number.isFinite(time) ? time : 0;
   }
 
   private async resolveModifiedSchemaChanges(ctx: IContext, projectId: number) {
