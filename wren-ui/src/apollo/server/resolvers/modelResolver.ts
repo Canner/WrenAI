@@ -216,7 +216,7 @@ export class ModelResolver {
         return { status: SyncStatusEnum.IN_PROGRESS };
       }
 
-      const project = await this.prepareProjectForDeploy(ctx);
+      const project = await ctx.projectService.getCurrentProject();
       const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
       const lastDeploy = await ctx.deployService.getLastDeployment(project.id);
       return ctx.deployService.isSameDeployment(manifest, project.id, lastDeploy)
