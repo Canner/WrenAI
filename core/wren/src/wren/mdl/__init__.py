@@ -1,17 +1,23 @@
 """MDL processing utilities backed by wren-core-py."""
 
-from functools import cache
+from functools import lru_cache
 
 import wren_core
 
 
-@cache
+@lru_cache(maxsize=32)
 def get_session_context(
     manifest_str: str | None,
     function_path: str | None,
     properties: frozenset | None = None,
     data_source: str | None = None,
 ) -> wren_core.SessionContext:
+    """Build (or reuse) a SessionContext for the given manifest tuple.
+
+    Bounded LRU: the cache key includes the per-query extracted manifest
+    (engine.py ``extract_by``), so an unbounded cache would grow one
+    SessionContext per distinct table subset for the life of the process.
+    """
     return wren_core.SessionContext(
         manifest_str, function_path, properties, data_source
     )
