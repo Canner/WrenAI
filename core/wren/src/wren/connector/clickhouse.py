@@ -273,9 +273,7 @@ def _build_clickhouse_client_kwargs(connection_info: Any) -> dict:
         out: dict = {
             "host": parsed.hostname,
             "port": int(parsed.port) if parsed.port else default_port,
-            "username": (
-                unquote(parsed.username) if parsed.username else "default"
-            ),
+            "username": (unquote(parsed.username) if parsed.username else "default"),
             "password": unquote(parsed.password) if parsed.password else "",
             "settings": settings,
         }
