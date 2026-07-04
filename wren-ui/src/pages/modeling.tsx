@@ -83,6 +83,7 @@ export default function Modeling() {
       awaitRefetchQueries: true,
       ...options,
       onCompleted: () => {
+        window.dispatchEvent(new Event('wren:modeling-changed'));
         // refetch to get latest deploy status
         deployStatusQueryResult.refetch();
 

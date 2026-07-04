@@ -1,13 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Space, Typography, message } from 'antd';
 import CheckCircleOutlined from '@ant-design/icons/CheckCircleOutlined';
 import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
 import WarningOutlined from '@ant-design/icons/WarningOutlined';
 import { SyncStatus } from '@/apollo/client/graphql/__types__';
-import {
-  DeployStatusDocument,
-  useDeployMutation,
-} from '@/apollo/client/graphql/deploy.generated';
+import { useDeployMutation } from '@/apollo/client/graphql/deploy.generated';
 import { useDeployStatusContext } from '@/components/deploy/Context';
 
 const { Text } = Typography;
@@ -42,21 +39,32 @@ const getDeployStatus = (deploying: boolean, status: SyncStatus) => {
 export default function Deploy() {
   const deployContext = useDeployStatusContext();
   const { data, loading, startPolling, stopPolling } = deployContext;
+  const [deployedSuccessfully, setDeployedSuccessfully] = useState(false);
 
   const [deployMutation, { data: deployResult, loading: deploying }] =
     useDeployMutation({
       onError: (error) => console.error(error),
       onCompleted: (data) => {
         if (data.deploy?.status === 'FAILED') {
+          setDeployedSuccessfully(false);
           console.error('Failed to deploy - ', data.deploy?.error);
           message.error(
             'Failed to deploy. Please check the log for more details.',
           );
+        } else if (data.deploy?.status === 'SUCCESS') {
+          setDeployedSuccessfully(true);
+          stopPolling();
         }
       },
-      refetchQueries: [{ query: DeployStatusDocument }],
-      awaitRefetchQueries: true,
     });
+
+  useEffect(() => {
+    const resetDeploySuccess = () => setDeployedSuccessfully(false);
+    window.addEventListener('wren:modeling-changed', resetDeploySuccess);
+    return () => {
+      window.removeEventListener('wren:modeling-changed', resetDeploySuccess);
+    };
+  }, []);
 
   useEffect(() => {
     // Stop polling deploy status if deploy failed
@@ -68,11 +76,15 @@ export default function Deploy() {
     }
   }, [deployResult, data]);
 
-  const syncStatus = data?.modelSync.status;
+  const serverSyncStatus = data?.modelSync.status;
+  const syncStatus = deployedSuccessfully
+    ? SyncStatus.SYNCRONIZED
+    : serverSyncStatus;
 
   const onDeploy = () => {
+    setDeployedSuccessfully(false);
     deployMutation({
-      variables: { force: syncStatus === SyncStatus.UNSYNCRONIZED },
+      variables: { force: serverSyncStatus === SyncStatus.UNSYNCRONIZED },
     });
     startPolling(1000);
   };
