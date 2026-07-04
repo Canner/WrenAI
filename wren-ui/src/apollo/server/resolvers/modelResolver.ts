@@ -35,6 +35,8 @@ import DataSourceSchemaDetector, {
 const logger = getLogger('ModelResolver');
 logger.level = 'debug';
 
+const syncedProjectIds = new Set<number>();
+
 export enum SyncStatusEnum {
   IN_PROGRESS = 'IN_PROGRESS',
   SYNCRONIZED = 'SYNCRONIZED',
@@ -95,6 +97,7 @@ export class ModelResolver {
     const eventName = TelemetryEvent.MODELING_CREATE_RELATION;
     try {
       const relation = await ctx.modelService.createRelation(data);
+      this.markProjectDirty(relation.projectId);
       ctx.telemetry.sendEvent(eventName, { data });
       return relation;
     } catch (err: any) {
@@ -117,6 +120,7 @@ export class ModelResolver {
     const eventName = TelemetryEvent.MODELING_UPDATE_RELATION;
     try {
       const relation = await ctx.modelService.updateRelation(data, where.id);
+      this.markProjectDirty(relation.projectId);
       ctx.telemetry.sendEvent(eventName, { data });
       return relation;
     } catch (err: any) {
@@ -135,8 +139,10 @@ export class ModelResolver {
     args: { where: { id: number } },
     ctx: IContext,
   ) {
+    const project = await ctx.projectService.getCurrentProject();
     const relationId = args.where.id;
     await ctx.modelService.deleteRelation(relationId);
+    this.markProjectDirty(project.id);
     return true;
   }
 
@@ -148,6 +154,8 @@ export class ModelResolver {
     const eventName = TelemetryEvent.MODELING_CREATE_CF;
     try {
       const column = await ctx.modelService.createCalculatedField(_args.data);
+      const project = await ctx.projectService.getCurrentProject();
+      this.markProjectDirty(project.id);
       ctx.telemetry.sendEvent(eventName, { data: _args.data });
       return column;
     } catch (err: any) {
@@ -183,6 +191,8 @@ export class ModelResolver {
         data,
         where.id,
       );
+      const project = await ctx.projectService.getCurrentProject();
+      this.markProjectDirty(project.id);
       ctx.telemetry.sendEvent(eventName, { data });
       return column;
     } catch (err: any) {
@@ -203,7 +213,9 @@ export class ModelResolver {
     if (!column || !column.isCalculated) {
       throw new Error('Calculated field not found');
     }
+    const project = await ctx.projectService.getCurrentProject();
     await ctx.modelColumnRepository.deleteOne(columnId);
+    this.markProjectDirty(project.id);
     return true;
   }
 
@@ -220,6 +232,7 @@ export class ModelResolver {
       const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
       const lastDeploy = await ctx.deployService.getLastDeployment(project.id);
       const isSynced =
+        syncedProjectIds.has(project.id) ||
         ctx.deployService.isSameDeployment(manifest, project.id, lastDeploy) ||
         (await this.isLastDeployNewerThanModelingChanges(
           ctx,
@@ -251,6 +264,9 @@ export class ModelResolver {
       project.id,
       shouldForceDeploy,
     );
+    if (deployRes.status === 'SUCCESS') {
+      syncedProjectIds.add(project.id);
+    }
 
     if (deployRes.status === 'SUCCESS' && project.sampleDataset === null) {
       ctx.projectService.generateProjectRecommendationQuestions().catch((err) =>
@@ -321,6 +337,10 @@ export class ModelResolver {
     }
     const time = new Date(value).getTime();
     return Number.isFinite(time) ? time : 0;
+  }
+
+  private markProjectDirty(projectId: number) {
+    syncedProjectIds.delete(projectId);
   }
 
   private async resolveModifiedSchemaChanges(ctx: IContext, projectId: number) {
@@ -462,6 +482,7 @@ export class ModelResolver {
       ctx.telemetry.sendEvent(TelemetryEvent.MODELING_CREATE_MODEL, {
         data: args.data,
       });
+      this.markProjectDirty(model.projectId);
       return model;
     } catch (error: any) {
       ctx.telemetry.sendEvent(
@@ -560,6 +581,7 @@ export class ModelResolver {
       ctx.telemetry.sendEvent(TelemetryEvent.MODELING_UPDATE_MODEL, {
         data: args.data,
       });
+      this.markProjectDirty(model.projectId);
       return model;
     } catch (err: any) {
       ctx.telemetry.sendEvent(
@@ -689,6 +711,7 @@ export class ModelResolver {
 
     // related columns and relationships will be deleted in cascade
     await ctx.modelRepository.deleteOne(modelId);
+    this.markProjectDirty(model.projectId);
     return true;
   }
 
@@ -734,6 +757,7 @@ export class ModelResolver {
       }
 
       ctx.telemetry.sendEvent(eventName, { data });
+      this.markProjectDirty(model.projectId);
       return true;
     } catch (err: any) {
       ctx.telemetry.sendEvent(
@@ -993,6 +1017,7 @@ export class ModelResolver {
 
       // telemetry
       ctx.telemetry.sendEvent(eventName, eventProperties);
+      this.markProjectDirty(project.id);
 
       return { ...view, displayName };
     } catch (err: any) {
@@ -1018,6 +1043,7 @@ export class ModelResolver {
       throw new Error('View not found');
     }
     await ctx.viewRepository.deleteOne(viewId);
+    this.markProjectDirty(view.projectId);
     return true;
   }
 
@@ -1174,6 +1200,7 @@ export class ModelResolver {
       name: newName,
       properties: JSON.stringify(properties),
     });
+    this.markProjectDirty(view.projectId);
 
     return true;
   }
