@@ -77,8 +77,14 @@ interface CurrentUserProfile {
 export default function HeaderBar() {
   const router = useRouter();
   const { pathname } = router;
+  const currentPath = router.asPath.split(/[?#]/)[0];
   const showNav = !pathname.startsWith(Path.Onboarding);
   const isModeling = pathname.startsWith(Path.Modeling);
+  const navigateTo = (path: Path) => {
+    if (currentPath !== path) {
+      router.push(path);
+    }
+  };
   const [currentUser, setCurrentUser] = useState<CurrentUserProfile | null>(
     null,
   );
@@ -130,7 +136,7 @@ export default function HeaderBar() {
                 shape="round"
                 size="small"
                 $isHighlight={pathname.startsWith(Path.Home)}
-                onClick={() => router.push(Path.Home)}
+                onClick={() => navigateTo(Path.Home)}
               >
                 Home
               </StyledButton>
@@ -138,7 +144,7 @@ export default function HeaderBar() {
                 shape="round"
                 size="small"
                 $isHighlight={pathname.startsWith(Path.Modeling)}
-                onClick={() => router.push(Path.Modeling)}
+                onClick={() => navigateTo(Path.Modeling)}
               >
                 Modeling
               </StyledButton>
@@ -146,7 +152,7 @@ export default function HeaderBar() {
                 shape="round"
                 size="small"
                 $isHighlight={pathname.startsWith(Path.Knowledge)}
-                onClick={() => router.push(Path.KnowledgeQuestionSQLPairs)}
+                onClick={() => navigateTo(Path.KnowledgeQuestionSQLPairs)}
               >
                 Knowledge
               </StyledButton>
@@ -154,7 +160,7 @@ export default function HeaderBar() {
                 shape="round"
                 size="small"
                 $isHighlight={pathname.startsWith(Path.APIManagement)}
-                onClick={() => router.push(Path.APIManagementHistory)}
+                onClick={() => navigateTo(Path.APIManagementHistory)}
               >
                 API
               </StyledButton>

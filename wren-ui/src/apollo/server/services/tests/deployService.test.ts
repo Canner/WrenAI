@@ -59,6 +59,24 @@ describe('DeployService', () => {
     expect(response.error).toEqual('AI error');
   });
 
+  it('should mark deployment failed if ai-service deployment throws', async () => {
+    const manifest = { key: 'value' };
+    const projectId = 1;
+
+    mockDeployLogRepository.findLastProjectDeployLog.mockResolvedValue(null);
+    mockDeployLogRepository.createOne.mockResolvedValue({ id: 123 });
+    mockWrenAIAdaptor.deploy.mockRejectedValue(new Error('AI unavailable'));
+
+    const response = await deployService.deploy(manifest, projectId);
+
+    expect(response.status).toEqual(DeployStatusEnum.FAILED);
+    expect(response.error).toEqual('AI unavailable');
+    expect(mockDeployLogRepository.updateOne).toHaveBeenCalledWith(123, {
+      status: DeployStatusEnum.FAILED,
+      error: 'AI unavailable',
+    });
+  });
+
   it('should skip deployment if an existing deployment with the same hash exists', async () => {
     const manifest = { key: 'value' };
     const projectId = 1;
