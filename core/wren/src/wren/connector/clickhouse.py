@@ -13,7 +13,7 @@ import json
 import re
 from decimal import Decimal as PyDecimal
 from typing import Any
-from urllib.parse import parse_qsl, unquote_plus, urlparse
+from urllib.parse import parse_qsl, unquote, urlparse
 
 import pyarrow as pa
 import sqlglot
@@ -258,9 +258,12 @@ def _build_clickhouse_client_kwargs(connection_info: Any) -> dict:
         if statement_timeout is not None:
             settings["max_execution_time"] = int(statement_timeout)
 
-        # urlparse leaves percent-encoded characters in userinfo, so decode
-        # them before clickhouse-connect sees the credentials. Matches the
-        # mssql / postgres URL handling elsewhere in this package.
+        # urlparse leaves percent-encoded characters in userinfo/path, so
+        # decode them before clickhouse-connect sees the credentials. Use
+        # ``unquote`` (not ``unquote_plus``): in a URL, ``+`` is only a space
+        # inside a query string, NOT in userinfo or the path — so a literal
+        # ``+`` in a password (e.g. ``pw+1``) must be preserved. This matches
+        # the mssql / mysql / oracle / trino URL handling in this package.
         secure = parsed.scheme == "clickhouse+https"
         # Pick the port-less default from the scheme: ClickHouse listens for
         # HTTPS on 8443 and plaintext HTTP on 8123. Defaulting an https URL to
@@ -271,13 +274,13 @@ def _build_clickhouse_client_kwargs(connection_info: Any) -> dict:
             "host": parsed.hostname,
             "port": int(parsed.port) if parsed.port else default_port,
             "username": (
-                unquote_plus(parsed.username) if parsed.username else "default"
+                unquote(parsed.username) if parsed.username else "default"
             ),
-            "password": unquote_plus(parsed.password) if parsed.password else "",
+            "password": unquote(parsed.password) if parsed.password else "",
             "settings": settings,
         }
         if parsed.path and parsed.path != "/":
-            out["database"] = parsed.path.lstrip("/")
+            out["database"] = unquote(parsed.path.lstrip("/"))
         if secure:
             out["secure"] = True
         # ``settings`` already popped above, so ``out["settings"]`` survives.

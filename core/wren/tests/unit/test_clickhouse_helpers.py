@@ -42,7 +42,7 @@ class _FakeConnInfoFromUrl:
 
 
 def test_clickhouse_url_decodes_username_and_password() -> None:
-    """user / password from the URL must be unquote_plus'd.
+    """user / password / database from the URL must be percent-decoded.
 
     urlparse leaves ``%40`` (``@``) and ``%20`` (space) literal in the
     userinfo, which would otherwise reach ClickHouse verbatim and fail auth.
@@ -58,6 +58,35 @@ def test_clickhouse_url_decodes_username_and_password() -> None:
     assert out["host"] == "clickhouse-host"
     assert out["port"] == 9000
     assert out["database"] == "analytics"
+
+
+def test_clickhouse_url_preserves_literal_plus_in_credentials() -> None:
+    """A literal ``+`` in userinfo is a plus, not a space.
+
+    Regression: the parser used ``unquote_plus``, which turned a literal
+    ``+`` in a password into a space and corrupted the credential. In a URL,
+    ``+`` only means space inside a query string — never in userinfo/path.
+    """
+    info = _FakeConnInfoFromUrl(
+        "clickhouse://svc+etl:pw+1@clickhouse-host:9000/an+db"
+    )
+
+    out = _build_clickhouse_client_kwargs(info)
+
+    assert out["username"] == "svc+etl"
+    assert out["password"] == "pw+1"
+    assert out["database"] == "an+db"
+
+
+def test_clickhouse_url_decodes_percent_encoded_database() -> None:
+    """A percent-encoded database name in the path must be decoded too."""
+    info = _FakeConnInfoFromUrl(
+        "clickhouse://clickhouse-host:9000/my%20analytics"
+    )
+
+    out = _build_clickhouse_client_kwargs(info)
+
+    assert out["database"] == "my analytics"
 
 
 def test_clickhouse_url_defaults_username_when_omitted() -> None:
