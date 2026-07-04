@@ -47,6 +47,29 @@ use wren_core::{
 };
 use wren_core_base::mdl::DataSource;
 
+/// Process-wide Tokio runtime, recreated lazily after a fork.
+///
+/// A child inherits this handle but not the runtime's worker threads, so a PID
+/// mismatch installs a new runtime. The inherited handle is leaked because
+/// dropping it may wait on nonexistent workers. The mutex is released before
+/// `block_on`; fork safety requires it to be unlocked when `fork()` occurs.
+/// Runtime creation failures are returned as Python errors.
+static RUNTIME: Mutex<Option<(u32, Arc<Runtime>)>> = Mutex::new(None);
+
+fn shared_runtime() -> PyResult<Arc<Runtime>> {
+    let mut guard = RUNTIME.lock().unwrap_or_else(PoisonError::into_inner);
+    match guard.as_ref() {
+        Some((pid, rt)) if *pid == std::process::id() => Ok(Arc::clone(rt)),
+        _ => {
+            let rt = Arc::new(Runtime::new().map_err(CoreError::from)?);
+            if let Some(stale) = guard.replace((std::process::id(), Arc::clone(&rt))) {
+                std::mem::forget(stale);
+            }
+            Ok(rt)
+        }
+    }
+}
+
 /// The Python wrapper for the Wren Core session context.
 #[pyclass(name = "SessionContext")]
 pub struct PySessionContext {
@@ -57,7 +80,6 @@ pub struct PySessionContext {
     exec_ctx: wren_core::SessionContext,
     mdl: Arc<AnalyzedWrenMDL>,
     properties: Arc<HashMap<String, Option<String>>>,
-    runtime: Arc<Runtime>,
     /// Serializes engine calls on this context. `transform_sql` re-applies
     /// the MDL catalog onto the context's shared catalog list on every call
     /// (`apply_wren_on_ctx` -> `register_table_with_mdl`), while `query`,
@@ -85,7 +107,6 @@ impl Default for PySessionContext {
             exec_ctx: ctx,
             mdl: Arc::new(AnalyzedWrenMDL::default()),
             properties: Arc::new(HashMap::new()),
-            runtime: Arc::new(Runtime::new().unwrap()),
             call_lock: Arc::new(Mutex::new(())),
         }
     }
@@ -106,7 +127,7 @@ impl PySessionContext {
         properties: Option<Py<PyAny>>,
         data_source: Option<&str>,
     ) -> PyResult<Self> {
-        let runtime = Runtime::new().map_err(CoreError::from)?;
+        let runtime = shared_runtime()?;
 
         let Some(mdl_base64) = mdl_base64 else {
             let data_source = data_source
@@ -118,7 +139,6 @@ impl PySessionContext {
                 py,
                 data_source.as_ref(),
                 remote_functions_path,
-                &runtime,
                 &ctx,
             )?;
             return Ok(Self {
@@ -127,7 +147,6 @@ impl PySessionContext {
                 exec_ctx: ctx,
                 mdl: Arc::new(AnalyzedWrenMDL::default()),
                 properties: Arc::new(HashMap::new()),
-                runtime: Arc::new(runtime),
                 call_lock: Arc::new(Mutex::new(())),
             });
         };
@@ -152,7 +171,6 @@ impl PySessionContext {
             py,
             data_source.as_ref(),
             remote_functions_path,
-            &runtime,
             &ctx,
         )?;
 
@@ -225,7 +243,6 @@ impl PySessionContext {
                         ctx: unparser_ctx,
                         exec_ctx,
                         mdl: analyzed_mdl,
-                        runtime: Arc::new(runtime),
                         properties: properties_ref,
                         call_lock: Arc::new(Mutex::new(())),
                     })
@@ -248,9 +265,10 @@ impl PySessionContext {
         // Own the SQL so no Python-borrowed data crosses into the detached
         // section, then release the GIL for the duration of the blocking call.
         let sql = sql.to_owned();
+        let rt = shared_runtime()?;
         py.detach(|| {
             let _guard = self.lock_calls();
-            self.runtime.block_on(mdl::transform_sql_with_ctx(
+            rt.block_on(mdl::transform_sql_with_ctx(
                 &self.ctx,
                 Arc::clone(&self.mdl),
                 // the ctx has been initialized when PySessionContext is created
@@ -268,11 +286,11 @@ impl PySessionContext {
         &self,
         py: Python<'_>,
     ) -> PyResult<Vec<PyRemoteFunction>> {
+        let rt = shared_runtime()?;
         let registered_functions: Vec<PyRemoteFunction> = py
             .detach(|| {
                 let _guard = self.lock_calls();
-                self.runtime
-                    .block_on(Self::get_registered_functions(&self.exec_ctx))
+                rt.block_on(Self::get_registered_functions(&self.exec_ctx))
             })
             .map_err(CoreError::from)?
             .into_iter()
@@ -287,10 +305,11 @@ impl PySessionContext {
         function_name: &str,
     ) -> PyResult<Vec<PyRemoteFunction>> {
         let function_name = function_name.to_owned();
+        let rt = shared_runtime()?;
         let functions = py
             .detach(|| {
                 let _guard = self.lock_calls();
-                self.runtime.block_on(Self::get_registered_function(
+                rt.block_on(Self::get_registered_function(
                     &function_name,
                     &self.exec_ctx,
                 ))
@@ -370,10 +389,10 @@ impl PySessionContext {
     #[pyo3(signature = (sql))]
     pub fn query(&self, py: Python<'_>, sql: &str) -> PyResult<Vec<u8>> {
         let sql = sql.to_owned();
+        let rt = shared_runtime()?;
         py.detach(|| {
             let _guard = self.lock_calls();
-            let (batches, schema) = self
-                .runtime
+            let (batches, schema) = rt
                 .block_on(async {
                     let df = self.exec_ctx.sql(&sql).await?;
                     let schema = df.schema().inner().clone();
@@ -409,9 +428,10 @@ impl PySessionContext {
         path: &str,
     ) -> PyResult<()> {
         let (name, path) = (name.to_owned(), path.to_owned());
+        let rt = shared_runtime()?;
         py.detach(|| {
             let _guard = self.lock_calls();
-            self.runtime.block_on(self.base_ctx.register_parquet(
+            rt.block_on(self.base_ctx.register_parquet(
                 &name,
                 &path,
                 ParquetReadOptions::default(),
@@ -426,9 +446,10 @@ impl PySessionContext {
     #[pyo3(signature = (name, path))]
     pub fn register_csv(&self, py: Python<'_>, name: &str, path: &str) -> PyResult<()> {
         let (name, path) = (name.to_owned(), path.to_owned());
+        let rt = shared_runtime()?;
         py.detach(|| {
             let _guard = self.lock_calls();
-            self.runtime.block_on(self.base_ctx.register_csv(
+            rt.block_on(self.base_ctx.register_csv(
                 &name,
                 &path,
                 CsvReadOptions::default(),
@@ -464,10 +485,11 @@ impl PySessionContext {
     #[pyo3(signature = (sql))]
     pub fn dry_run(&self, py: Python<'_>, sql: &str) -> PyResult<String> {
         let sql = sql.to_owned();
+        let rt = shared_runtime()?;
         let result = py
             .detach(|| {
                 let _guard = self.lock_calls();
-                self.runtime.block_on(async {
+                rt.block_on(async {
                     let df = self.exec_ctx.sql(&format!("EXPLAIN {sql}")).await?;
                     df.collect().await
                 })
@@ -486,9 +508,10 @@ impl PySessionContext {
 
         // Extract physical table providers from base_ctx so the MDL can
         // resolve table references to real data during LocalRuntime execution.
+        let rt = shared_runtime()?;
         let register_tables = py.detach(|| {
             let _guard = self.lock_calls();
-            self.runtime.block_on(async {
+            rt.block_on(async {
                 let mut tables = HashMap::new();
                 for catalog_name in self.base_ctx.catalog_names() {
                     if let Some(catalog) = self.base_ctx.catalog(&catalog_name) {
@@ -519,8 +542,7 @@ impl PySessionContext {
 
         let (unparser_ctx, exec_ctx) = py.detach(|| {
             let _guard = self.lock_calls();
-            let unparser_ctx = self
-                .runtime
+            let unparser_ctx = rt
                 .block_on(apply_wren_on_ctx(
                     &self.base_ctx,
                     Arc::clone(&analyzed_mdl),
@@ -529,8 +551,7 @@ impl PySessionContext {
                 ))
                 .map_err(CoreError::from)?;
 
-            let exec_ctx = self
-                .runtime
+            let exec_ctx = rt
                 .block_on(apply_wren_on_ctx(
                     &self.base_ctx,
                     Arc::clone(&analyzed_mdl),
@@ -649,7 +670,6 @@ impl PySessionContext {
         py: Python<'_>,
         data_source: Option<&DataSource>,
         remote_functions_path: Option<&str>,
-        runtime: &Runtime,
         ctx: &wren_core::SessionContext,
     ) -> PyResult<()> {
         match data_source {
@@ -663,8 +683,9 @@ impl PySessionContext {
                     .map(|f| f.into())
                     .collect::<Vec<_>>();
 
+                let rt = shared_runtime()?;
                 let registered_functions = py
-                    .detach(|| runtime.block_on(Self::get_registered_functions(ctx)))
+                    .detach(|| rt.block_on(Self::get_registered_functions(ctx)))
                     .map(|functions| {
                         functions
                             .into_iter()
