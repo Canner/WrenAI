@@ -36,6 +36,7 @@ const logger = getLogger('ModelResolver');
 logger.level = 'debug';
 
 const syncedProjectIds = new Set<number>();
+const dirtyProjectIds = new Set<number>();
 
 export enum SyncStatusEnum {
   IN_PROGRESS = 'IN_PROGRESS',
@@ -231,8 +232,13 @@ export class ModelResolver {
       const project = await ctx.projectService.getCurrentProject();
       const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
       const lastDeploy = await ctx.deployService.getLastDeployment(project.id);
+      if (dirtyProjectIds.has(project.id)) {
+        return { status: SyncStatusEnum.UNSYNCRONIZED };
+      }
+
       const isSynced =
         syncedProjectIds.has(project.id) ||
+        !!lastDeploy ||
         ctx.deployService.isSameDeployment(manifest, project.id, lastDeploy) ||
         (await this.isLastDeployNewerThanModelingChanges(
           ctx,
@@ -265,6 +271,7 @@ export class ModelResolver {
       shouldForceDeploy,
     );
     if (deployRes.status === 'SUCCESS') {
+      dirtyProjectIds.delete(project.id);
       syncedProjectIds.add(project.id);
     }
 
@@ -340,6 +347,7 @@ export class ModelResolver {
   }
 
   private markProjectDirty(projectId: number) {
+    dirtyProjectIds.add(projectId);
     syncedProjectIds.delete(projectId);
   }
 
