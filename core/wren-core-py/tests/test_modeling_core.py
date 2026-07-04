@@ -1,8 +1,13 @@
 import base64
 import json
+import os
+import signal
 import threading
+import time
+import warnings
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext as does_not_raise
+from contextlib import suppress
 
 import pytest
 from wren_core import (
@@ -630,3 +635,43 @@ def test_concurrent_calls_from_threads():
     with ThreadPoolExecutor(max_workers=4) as ex:
         results = list(ex.map(mixed_worker, range(4)))
     assert all(r == expected for batch in results for r in batch)
+
+
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="fork is POSIX-only")
+def test_fork_child_gets_working_runtime():
+    """A forked child rebuilds the runtime for pre- and post-fork contexts."""
+    sql = "SELECT o_orderkey FROM my_catalog.my_schema.orders"
+    ctx = SessionContext(manifest_str, None)
+    expected = ctx.transform_sql(sql)  # shared runtime exists before the fork
+
+    with warnings.catch_warnings():
+        # Tokio workers trigger CPython's multi-threaded fork warning.
+        warnings.simplefilter("ignore", DeprecationWarning)
+        pid = os.fork()
+    if pid == 0:
+        # Child: report through the exit status only; never return to pytest.
+        try:
+            status = 0
+            if ctx.transform_sql(sql) != expected:  # pre-fork session
+                status = 1
+            fresh = SessionContext(manifest_str, None)  # post-fork session
+            if fresh.transform_sql(sql) != expected:
+                status = 1
+        except BaseException:
+            status = 2
+        os._exit(status)
+
+    # Bound deadlock regressions without making a performance assertion.
+    deadline = time.monotonic() + 30
+    while True:
+        child_pid, wait_status = os.waitpid(pid, os.WNOHANG)
+        if child_pid == pid:
+            break
+        if time.monotonic() >= deadline:
+            with suppress(ProcessLookupError):
+                os.kill(pid, signal.SIGKILL)
+            os.waitpid(pid, 0)
+            pytest.fail("forked child timed out")
+        time.sleep(0.01)
+
+    assert os.WIFEXITED(wait_status) and os.WEXITSTATUS(wait_status) == 0
