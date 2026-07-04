@@ -51,6 +51,23 @@ def test_parse_type(type_str: str, dialect: str, expected: str) -> None:
     assert parse_type(type_str, dialect) == expected
 
 
+@pytest.mark.parametrize(
+    "type_str",
+    [
+        # Unterminated quote — sqlglot's tokenizer raises TokenError, which is
+        # a SqlglotError but NOT a ParseError. Must fall back, not propagate.
+        '"unterminated',
+        # Stray control character trips the tokenizer the same way.
+        "VARC\x00HAR",
+    ],
+)
+def test_parse_type_falls_back_on_tokenizer_error(type_str: str) -> None:
+    # Regression: docstring promises "Falls back to original string if parsing
+    # fails", but only ParseError/ValueError were caught, so a TokenError
+    # from the tokenizer escaped and crashed callers.
+    assert parse_type(type_str, "postgres") == type_str
+
+
 # ── parse_types batch tests ────────────────────────────────────────────────
 
 
@@ -117,6 +134,12 @@ def test_translate_type(
     type_str: str, source: str, target: str, expected: str
 ) -> None:
     assert translate_type(type_str, source, target) == expected
+
+
+def test_translate_type_falls_back_on_tokenizer_error() -> None:
+    # Same TokenError regression as parse_type — must fall back to the raw
+    # string instead of raising.
+    assert translate_type('"unterminated', "postgres", "bigquery") == '"unterminated'
 
 
 def test_translate_types_adds_type_field() -> None:
