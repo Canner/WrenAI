@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   release-please:
+    if: ${{ github.repository == 'Canner/WrenAI' }}
     runs-on: ubuntu-latest
     outputs:
       wren-core-py--release_created: ${{ steps.release.outputs['core/wren-core-py--release_created'] }}

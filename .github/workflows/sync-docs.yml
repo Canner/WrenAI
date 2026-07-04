@@ -16,6 +16,7 @@ permissions:
 
 jobs:
   sync-docs:
+    if: ${{ github.repository == 'Canner/WrenAI' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout WrenAI
