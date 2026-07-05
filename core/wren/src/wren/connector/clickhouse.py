@@ -261,8 +261,15 @@ def _build_clickhouse_client_kwargs(connection_info: Any) -> dict:
 
         # ``keep_blank_values`` so a blank parameter (``?secure=``) still
         # reaches the override handling below instead of being dropped —
-        # blank means "falsy", matching ``_parse_secure_flag``.
-        kwargs: dict = dict(parse_qsl(parsed.query, keep_blank_values=True))
+        # blank means "falsy", matching ``_parse_secure_flag``. Blank is only
+        # meaningful for the params handled below, though: any other blank
+        # param keeps the old dropped behaviour rather than leaking
+        # ``key=""`` into the client kwargs via ``out.update(kwargs)``.
+        kwargs: dict = {
+            key: value
+            for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+            if value != "" or key in ("secure", "statement_timeout")
+        }
         info_kwargs = getattr(connection_info, "kwargs", None)
         if info_kwargs:
             kwargs.update(info_kwargs)

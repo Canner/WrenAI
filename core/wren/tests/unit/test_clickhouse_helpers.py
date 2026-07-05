@@ -374,3 +374,22 @@ class TestClickHouseUrlKwargs:
         )
         assert out["settings"] == {}
         assert "statement_timeout" not in out
+
+    def test_blank_unhandled_query_param_is_dropped(self) -> None:
+        """``?connect_timeout=`` must not reach the client kwargs as ``""``.
+
+        ``keep_blank_values`` exists so ``?secure=`` / ``?statement_timeout=``
+        can act as explicit "unset" overrides; every other blank param keeps
+        the old dropped behaviour instead of leaking ``key=""`` into
+        ``clickhouse_connect.get_client``.
+        """
+        out = _build_clickhouse_client_kwargs(
+            _FakeConnInfoFromUrl("clickhouse://user:pw@host/db?connect_timeout=")
+        )
+        assert "connect_timeout" not in out
+
+    def test_non_blank_query_param_passes_through(self) -> None:
+        out = _build_clickhouse_client_kwargs(
+            _FakeConnInfoFromUrl("clickhouse://user:pw@host/db?connect_timeout=10")
+        )
+        assert out["connect_timeout"] == "10"
