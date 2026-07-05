@@ -9,7 +9,10 @@ has already verified the ``mcp`` extra is installed (see ``serve_cli.py``).
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
+from datetime import date, datetime, time
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -31,24 +34,51 @@ class ServeContext:
     no_connect: bool
 
 
-def _table_to_result(table, limit_requested: int | None) -> dict:
+def _normalize_value(value: Any) -> Any:
+    """Recursively coerce a value into a JSON-native type."""
+    if isinstance(value, (datetime, date, time)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, (bytes, bytearray)):
+        return value.decode(errors="replace")
+    if isinstance(value, float):
+        if math.isnan(value) or math.isinf(value):
+            return None
+        return value
+    if hasattr(value, "item"):
+        return _normalize_value(value.item())
+    if isinstance(value, dict):
+        return {k: _normalize_value(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_normalize_value(v) for v in value]
+    return value
+
+
+def _table_to_result(table, *, truncated: bool) -> dict:
     """Serialize a pyarrow.Table into the MCP result shape."""
-    try:
-        rows = table.to_pandas().to_dict(orient="records")
-    except Exception:
-        pydict = table.to_pydict()
-        columns = list(pydict.keys())
-        row_count = len(next(iter(pydict.values()), []))
-        rows = [{col: pydict[col][i] for col in columns} for i in range(row_count)]
     columns = [f.name for f in table.schema]
-    row_count = len(rows)
-    truncated = limit_requested is not None and row_count >= limit_requested
+    rows = [
+        {col: _normalize_value(val) for col, val in row.items()}
+        for row in table.to_pylist()
+    ]
     return {
         "columns": columns,
         "rows": rows,
-        "row_count": row_count,
+        "row_count": len(rows),
         "truncated": truncated,
     }
+
+
+def _query_with_limit_probe(ctx: ServeContext, sql: str, limit: int | None) -> dict:
+    """Run ``sql`` capped at ``MAX_ROW_LIMIT``, probing one extra row to detect truncation."""
+    effective_limit = DEFAULT_ROW_LIMIT if limit is None else limit
+    effective_limit = min(effective_limit, MAX_ROW_LIMIT)
+    table = ctx.engine.query(sql, effective_limit + 1)
+    truncated = table.num_rows > effective_limit
+    if truncated:
+        table = table.slice(0, effective_limit)
+    return _table_to_result(table, truncated=truncated)
 
 
 def _register_query_tools(mcp: FastMCP, ctx: ServeContext) -> None:
@@ -57,17 +87,14 @@ def _register_query_tools(mcp: FastMCP, ctx: ServeContext) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(title="Run SQL", readOnlyHint=True),
         )
-        def run_sql(sql: str, limit: int | None = None, format: str = "json") -> dict:
+        def run_sql(sql: str, limit: int | None = None) -> dict:
             """Execute a SQL query through the Wren semantic layer and return rows.
 
             SQL is written against MDL model names, not raw database tables.
             Applies a default cap of 1000 rows when ``limit`` is not given, and
             a hard maximum of 10000 rows regardless of the requested limit.
             """
-            effective_limit = DEFAULT_ROW_LIMIT if limit is None else limit
-            effective_limit = min(effective_limit, MAX_ROW_LIMIT)
-            table = ctx.engine.query(sql, effective_limit)
-            return _table_to_result(table, effective_limit)
+            return _query_with_limit_probe(ctx, sql, limit)
 
         @mcp.tool(
             annotations=ToolAnnotations(title="Dry Run SQL", readOnlyHint=True),
@@ -124,10 +151,7 @@ def _register_query_tools(mcp: FastMCP, ctx: ServeContext) -> None:
             if sql_only:
                 return {"sql": sql}
 
-            effective_limit = DEFAULT_ROW_LIMIT if limit is None else limit
-            effective_limit = min(effective_limit, MAX_ROW_LIMIT)
-            table = ctx.engine.query(sql, effective_limit)
-            return _table_to_result(table, effective_limit)
+            return _query_with_limit_probe(ctx, sql, limit)
 
     @mcp.tool(
         annotations=ToolAnnotations(title="Dry Plan SQL", readOnlyHint=True),
@@ -345,13 +369,8 @@ def _register_write_tools(mcp: FastMCP, ctx: ServeContext) -> None:
             MemoryStore(path=str(_default_memory_path())).store_query(
                 nl_query, sql_query, datasource=datasource, tags=tags
             )
-        except ModuleNotFoundError as e:
-            if (e.name or "").split(".")[0] not in {
-                "lancedb",
-                "sentence_transformers",
-                "pyarrow",
-            }:
-                raise
+        except Exception as e:
+            logger.warning(f"LanceDB indexing failed for stored query (non-fatal): {e}")
 
         return {"path": str(md_path)}
 
