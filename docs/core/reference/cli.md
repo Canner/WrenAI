@@ -428,17 +428,29 @@ default; there is no bearer-token auth in this version — treat it as local-onl
 |---|---|
 | Query | `run_sql`, `dry_run`, `dry_plan`, `query_cube` |
 | Schema | `get_mdl`, `list_models`, `describe_model`, `get_data_source`, `list_cubes`, `describe_cube`, `list_functions` |
-| Knowledge | `get_instructions`, `recall_queries` |
+| Knowledge | `get_instructions`, `recall_queries`, `get_context`, `describe_schema`, `list_stored_queries`, `list_knowledge` |
 | Write (`--allow-write`) | `store_query` |
 
 `run_sql`, `dry_run`, and `query_cube` are disabled under `--no-connect`.
 `store_query` is only registered when `--allow-write` is passed.
 
+The knowledge tools degrade gracefully without the `memory` extra:
+`get_context` (semantic schema retrieval, the schema-axis twin of
+`recall_queries`) falls back to the full plain-text schema description;
+`describe_schema` (the human-readable counterpart to `get_mdl`) needs no
+optional dependency at all; `list_stored_queries` enumerates every NL→SQL
+pair (not just a semantic top-k) from `knowledge/sql/*.md`; `list_knowledge`
+lists every file readable via the `wren://knowledge/{path}` resource below.
+
 ### Resources & prompt
 
 - `wren://mdl` — compiled MDL JSON
 - `wren://instructions` — business rules from `knowledge/rules/*.md`
-- `wren://project` — project name / catalog / schema / data source / schema_version
+- `wren://project` — project name / catalog / schema / data source / schema_version / knowledge_schema_version
+- `wren://agents` — the project's `AGENTS.md`, if present
+- `wren://knowledge/{path}` — read any file under `knowledge/` (e.g.
+  `wren://knowledge/knowledge.yml`, `wren://knowledge/rules/general.md`);
+  rejects any path that escapes the project's `knowledge/` directory
 - `wren_workflow` prompt — packages the schema → instructions → recall →
   dry-run → run_sql → query_cube → store SOP for a connecting agent
 
