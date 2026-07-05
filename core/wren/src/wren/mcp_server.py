@@ -373,7 +373,9 @@ def _register_knowledge_tools(mcp: FastMCP, ctx: ServeContext) -> None:
                 item_type=item_type,
                 model_name=model_name,
             )
-        except Exception:
+        except ImportError:
+            # Only the missing `memory` extra falls back to full-text; real
+            # index/embedding errors from an installed store surface as-is.
             return {
                 "strategy": "full",
                 "schema": schema_indexer.describe_schema(manifest),
@@ -453,10 +455,12 @@ def _register_knowledge_tools(mcp: FastMCP, ctx: ServeContext) -> None:
         knowledge_dir = ctx.project / "knowledge"
         files: list[str] = []
         if knowledge_dir.is_dir():
+            # Only list what the wren://knowledge/{name} and
+            # wren://knowledge/{subdir}/{name} templates can serve: top-level
+            # files and one directory level down. Deeper files aren't readable.
+            candidates = [*knowledge_dir.glob("*"), *knowledge_dir.glob("*/*")]
             files = sorted(
-                str(p.relative_to(knowledge_dir))
-                for p in knowledge_dir.rglob("*")
-                if p.is_file()
+                str(p.relative_to(knowledge_dir)) for p in candidates if p.is_file()
             )
         return {
             "files": files,
@@ -540,7 +544,12 @@ def _register_resources(mcp: FastMCP, ctx: ServeContext) -> None:
     def agents_resource() -> str:
         """The project's AGENTS.md, if present."""
         agents_path = ctx.project / "AGENTS.md"
-        return agents_path.read_text(encoding="utf-8") if agents_path.exists() else ""
+        if not agents_path.exists():
+            return ""
+        try:
+            return agents_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError as e:
+            raise ValueError("AGENTS.md is not valid UTF-8 text.") from e
 
     def _read_knowledge_file(rel_path: str) -> str:
         """Read ``<project>/knowledge/<rel_path>``, rejecting escapes.
@@ -551,7 +560,12 @@ def _register_resources(mcp: FastMCP, ctx: ServeContext) -> None:
         target = (ctx.project / "knowledge" / rel_path).resolve()
         if not target.is_relative_to(knowledge_dir) or not target.is_file():
             raise ValueError(f"Invalid knowledge path: '{rel_path}'.")
-        return target.read_text(encoding="utf-8")
+        try:
+            return target.read_text(encoding="utf-8")
+        except UnicodeDecodeError as e:
+            raise ValueError(
+                f"Knowledge file is not valid UTF-8 text: '{rel_path}'."
+            ) from e
 
     # The installed MCP SDK matches each `{param}` against a single path
     # segment (`[^/]+`), so one `{path}` placeholder cannot span a slash
