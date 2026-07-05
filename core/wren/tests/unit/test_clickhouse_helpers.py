@@ -228,3 +228,149 @@ def test_clickhouse_arrow_table_nullable_columns_preserve_none_values() -> None:
     assert table.column("id").to_pylist() == [1, None, 3]
     assert table.column("name").to_pylist() == ["Alice", "Bob", None]
     assert table.column("score").to_pylist() == [9.5, None, 7.0]
+
+
+# ---------------------------------------------------------------------------
+# 5. Default port tracks the effective ``secure`` value (connection_url branch)
+#
+# Regression for Canner/WrenAI#2412 / #2416: the port-less default must follow
+# the *effective* TLS setting (kwargs > query param > scheme), not the scheme
+# alone, and string overrides like ``?secure=false`` must not be truthy.
+# ---------------------------------------------------------------------------
+
+
+class TestClickHouseUrlKwargs:
+    """Pure-Python tests for the ``connection_url`` branch of the kwargs builder."""
+
+    def test_https_url_without_port_uses_secure_default_port(self) -> None:
+        """A port-less clickhouse+https URL must dial 8443 (TLS), not 8123.
+
+        ClickHouse serves HTTPS on 8443 and plaintext HTTP on 8123. Defaulting
+        an https URL to 8123 while also setting ``secure=True`` made the TLS
+        client connect to the plaintext listener — the handshake fails.
+        """
+        out = _build_clickhouse_client_kwargs(
+            _FakeConnInfoFromUrl("clickhouse+https://user:pw@host/db")
+        )
+        assert out["secure"] is True
+        assert out["port"] == 8443
+
+    def test_http_url_without_port_uses_plaintext_default_port(self) -> None:
+        out = _build_clickhouse_client_kwargs(
+            _FakeConnInfoFromUrl("clickhouse+http://user:pw@host/db")
+        )
+        assert "secure" not in out
+        assert out["port"] == 8123
+
+    def test_explicit_port_is_respected_for_https(self) -> None:
+        out = _build_clickhouse_client_kwargs(
+            _FakeConnInfoFromUrl("clickhouse+https://user:pw@host:9440/db")
+        )
+        assert out["secure"] is True
+        assert out["port"] == 9440
+
+    # --- secure enabled after the scheme is inspected (#2416) ---------------
+
+    def test_secure_query_param_uses_secure_default_port(self) -> None:
+        """``?secure=true`` on a plain scheme must dial 8443, not 8123.
+
+        The scheme alone said plaintext, so the old code picked 8123 — then
+        ``secure=True`` arrived via the query string and the TLS handshake
+        hit the plaintext listener.
+        """
+        out = _build_clickhouse_client_kwargs(
+            _FakeConnInfoFromUrl("clickhouse://user:pw@host/db?secure=true")
+        )
+        assert out["secure"] is True
+        assert out["port"] == 8443
+
+    def test_secure_kwargs_override_uses_secure_default_port(self) -> None:
+        out = _build_clickhouse_client_kwargs(
+            _FakeConnInfoFromUrl(
+                "clickhouse://user:pw@host/db", kwargs={"secure": True}
+            )
+        )
+        assert out["secure"] is True
+        assert out["port"] == 8443
+
+    def test_secure_false_query_param_uses_plaintext_default_port(self) -> None:
+        """``?secure=false`` must not be truthy just because it is a string."""
+        out = _build_clickhouse_client_kwargs(
+            _FakeConnInfoFromUrl("clickhouse+https://user:pw@host/db?secure=false")
+        )
+        assert "secure" not in out
+        assert out["port"] == 8123
+
+    def test_secure_false_kwargs_override_uses_plaintext_default_port(self) -> None:
+        out = _build_clickhouse_client_kwargs(
+            _FakeConnInfoFromUrl(
+                "clickhouse+https://user:pw@host/db", kwargs={"secure": False}
+            )
+        )
+        assert "secure" not in out
+        assert out["port"] == 8123
+
+    def test_explicit_port_wins_over_secure_query_param(self) -> None:
+        out = _build_clickhouse_client_kwargs(
+            _FakeConnInfoFromUrl("clickhouse://user:pw@host:9000/db?secure=true")
+        )
+        assert out["secure"] is True
+        assert out["port"] == 9000
+
+    def test_explicit_port_wins_over_secure_false_override(self) -> None:
+        out = _build_clickhouse_client_kwargs(
+            _FakeConnInfoFromUrl(
+                "clickhouse+https://user:pw@host:9440/db", kwargs={"secure": "false"}
+            )
+        )
+        assert "secure" not in out
+        assert out["port"] == 9440
+
+    def test_secure_kwargs_win_over_query_param(self) -> None:
+        """kwargs are merged after query params, so they take precedence."""
+        out = _build_clickhouse_client_kwargs(
+            _FakeConnInfoFromUrl(
+                "clickhouse://user:pw@host/db?secure=true", kwargs={"secure": False}
+            )
+        )
+        assert "secure" not in out
+        assert out["port"] == 8123
+
+    @pytest.mark.parametrize("raw", ["1", "true", "TRUE", "yes", "on"])
+    def test_truthy_secure_strings(self, raw: str) -> None:
+        out = _build_clickhouse_client_kwargs(
+            _FakeConnInfoFromUrl(f"clickhouse://user:pw@host/db?secure={raw}")
+        )
+        assert out["secure"] is True
+        assert out["port"] == 8443
+
+    @pytest.mark.parametrize("raw", ["0", "false", "FALSE", "no", "off", ""])
+    def test_falsy_secure_strings(self, raw: str) -> None:
+        out = _build_clickhouse_client_kwargs(
+            _FakeConnInfoFromUrl(
+                "clickhouse+https://user:pw@host/db", kwargs={"secure": raw}
+            )
+        )
+        assert "secure" not in out
+        assert out["port"] == 8123
+
+    def test_blank_secure_query_param_is_a_falsy_override(self) -> None:
+        """``?secure=`` must reach the override handling, not be dropped.
+
+        ``parse_qsl`` discards blank values by default, which silently turned
+        ``?secure=`` into "unspecified". Blank is falsy, like everywhere else
+        in ``_parse_secure_flag``.
+        """
+        out = _build_clickhouse_client_kwargs(
+            _FakeConnInfoFromUrl("clickhouse+https://user:pw@host/db?secure=")
+        )
+        assert "secure" not in out
+        assert out["port"] == 8123
+
+    def test_blank_statement_timeout_query_param_is_ignored(self) -> None:
+        """``?statement_timeout=`` is treated as absent, not ``int("")``."""
+        out = _build_clickhouse_client_kwargs(
+            _FakeConnInfoFromUrl("clickhouse://user:pw@host/db?statement_timeout=")
+        )
+        assert out["settings"] == {}
+        assert "statement_timeout" not in out
