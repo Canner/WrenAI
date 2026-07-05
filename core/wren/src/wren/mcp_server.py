@@ -339,6 +339,130 @@ def _register_knowledge_tools(mcp: FastMCP, ctx: ServeContext) -> None:
         idx = get_index(ctx.project, mem_path)
         return {"matches": idx.search(question, limit=limit)}
 
+    @mcp.tool(
+        annotations=ToolAnnotations(title="Get Context", readOnlyHint=True),
+    )
+    def get_context(
+        question: str,
+        limit: int = 5,
+        item_type: str | None = None,
+        model_name: str | None = None,
+    ) -> dict:
+        """Semantic retrieval of the schema fragments relevant to a question.
+
+        The schema-axis twin of ``recall_queries``: instead of NL->SQL
+        exemplars, this returns models/columns/cubes ranked by relevance.
+        Uses embedding search when the ``memory`` extra is installed and the
+        schema has been indexed (``wren memory index``); otherwise falls back
+        to the full plain-text schema description (same content as
+        ``describe_schema``).
+        """
+        from wren.context import build_json  # noqa: PLC0415
+        from wren.memory import schema_indexer  # noqa: PLC0415
+
+        manifest = build_json(ctx.project)
+        try:
+            from wren.memory.cli import _default_memory_path  # noqa: PLC0415
+            from wren.memory.store import MemoryStore  # noqa: PLC0415
+
+            store = MemoryStore(path=str(_default_memory_path()))
+            return store.get_context(
+                manifest,
+                question,
+                limit=limit,
+                item_type=item_type,
+                model_name=model_name,
+            )
+        except Exception:
+            return {
+                "strategy": "full",
+                "schema": schema_indexer.describe_schema(manifest),
+                "note": (
+                    "Install wrenai[memory] and run `wren memory index` for "
+                    "embedding-based schema search on large schemas."
+                ),
+            }
+
+    @mcp.tool(
+        annotations=ToolAnnotations(title="Describe Schema", readOnlyHint=True),
+    )
+    def describe_schema() -> dict:
+        """Return the full MDL schema as a structured plain-text description.
+
+        The human-readable counterpart to ``get_mdl`` (JSON) — suitable for
+        pasting directly into an LLM prompt. No optional dependencies
+        required.
+        """
+        from wren.context import build_json  # noqa: PLC0415
+        from wren.memory import schema_indexer  # noqa: PLC0415
+
+        return {"schema": schema_indexer.describe_schema(build_json(ctx.project))}
+
+    @mcp.tool(
+        annotations=ToolAnnotations(title="List Stored Queries", readOnlyHint=True),
+    )
+    def list_stored_queries(
+        source: str | None = None, limit: int | None = None
+    ) -> dict:
+        """Enumerate stored NL->SQL pairs from knowledge/sql/.
+
+        Unlike ``recall_queries`` (semantic top-k for a question), this lists
+        every stored pair, optionally filtered by ``source`` tag (e.g.
+        "user", "seed"). Returns ``{"queries": [...]}``.
+        """
+        try:
+            from wren.memory.cli import _default_memory_path  # noqa: PLC0415
+            from wren.memory.store import MemoryStore  # noqa: PLC0415
+
+            store = MemoryStore(path=str(_default_memory_path()))
+            rows, _total = store.list_queries(
+                source=source,
+                limit=limit if limit is not None else MAX_ROW_LIMIT,
+            )
+            return {"queries": [_normalize_value(row) for row in rows]}
+        except Exception:
+            from wren.memory.markdown import load_query_pairs  # noqa: PLC0415
+
+            pairs = load_query_pairs(ctx.project)
+            if source:
+                pairs = [p for p in pairs if p.get("source", "user") == source]
+            if limit is not None:
+                pairs = pairs[:limit]
+            queries = [
+                {
+                    "nl_query": p["nl"],
+                    "sql_query": p["sql"],
+                    "datasource": p.get("datasource", ""),
+                    "tags": p.get("tags", ""),
+                    "source": p.get("source", "user"),
+                    "path": p.get("path"),
+                }
+                for p in pairs
+            ]
+            return {"queries": queries}
+
+    @mcp.tool(
+        annotations=ToolAnnotations(title="List Knowledge", readOnlyHint=True),
+    )
+    def list_knowledge() -> dict:
+        """List knowledge files readable via the wren://knowledge/{path} resource.
+
+        Walks knowledge/ recursively (knowledge.yml, rules/*.md, sql/*.md) and
+        reports whether AGENTS.md exists at the project root.
+        """
+        knowledge_dir = ctx.project / "knowledge"
+        files: list[str] = []
+        if knowledge_dir.is_dir():
+            files = sorted(
+                str(p.relative_to(knowledge_dir))
+                for p in knowledge_dir.rglob("*")
+                if p.is_file()
+            )
+        return {
+            "files": files,
+            "agents": (ctx.project / "AGENTS.md").exists(),
+        }
+
 
 def _register_write_tools(mcp: FastMCP, ctx: ServeContext) -> None:
     @mcp.tool(
@@ -395,6 +519,7 @@ def _register_resources(mcp: FastMCP, ctx: ServeContext) -> None:
     def project_resource() -> str:
         """Summary of wren_project.yml (name, catalog, schema, data source)."""
         from wren.context import (  # noqa: PLC0415
+            get_knowledge_schema_version,
             get_schema_version,
             load_project_config,
         )
@@ -407,8 +532,47 @@ def _register_resources(mcp: FastMCP, ctx: ServeContext) -> None:
                 "schema": config.get("schema"),
                 "data_source": config.get("data_source"),
                 "schema_version": get_schema_version(ctx.project),
+                "knowledge_schema_version": get_knowledge_schema_version(ctx.project),
             }
         )
+
+    @mcp.resource("wren://agents", mime_type="text/markdown")
+    def agents_resource() -> str:
+        """The project's AGENTS.md, if present."""
+        agents_path = ctx.project / "AGENTS.md"
+        return agents_path.read_text(encoding="utf-8") if agents_path.exists() else ""
+
+    def _read_knowledge_file(rel_path: str) -> str:
+        """Read ``<project>/knowledge/<rel_path>``, rejecting escapes.
+
+        Shared by both knowledge resource templates below.
+        """
+        knowledge_dir = (ctx.project / "knowledge").resolve()
+        target = (ctx.project / "knowledge" / rel_path).resolve()
+        if not target.is_relative_to(knowledge_dir) or not target.is_file():
+            raise ValueError(f"Invalid knowledge path: '{rel_path}'.")
+        return target.read_text(encoding="utf-8")
+
+    # The installed MCP SDK matches each `{param}` against a single path
+    # segment (`[^/]+`), so one `{path}` placeholder cannot span a slash
+    # (e.g. "rules/general.md"). knowledge/ is only ever one level deep in
+    # practice (knowledge.yml at the root; rules/*.md, sql/*.md, ... one
+    # directory down), so two templates cover the real layout.
+    @mcp.resource("wren://knowledge/{name}")
+    def knowledge_root_resource(name: str) -> str:
+        """Read a top-level file directly under knowledge/ (e.g. knowledge.yml).
+
+        Rejects any name that escapes the project's knowledge/ directory.
+        """
+        return _read_knowledge_file(name)
+
+    @mcp.resource("wren://knowledge/{subdir}/{name}")
+    def knowledge_nested_resource(subdir: str, name: str) -> str:
+        """Read a file under a knowledge/ subdirectory (rules/*.md, sql/*.md, ...).
+
+        Rejects any path that escapes the project's knowledge/ directory.
+        """
+        return _read_knowledge_file(f"{subdir}/{name}")
 
 
 def _register_prompts(mcp: FastMCP) -> None:
@@ -420,11 +584,14 @@ def _register_prompts(mcp: FastMCP) -> None:
             f"{intro}"
             "Follow this workflow to answer a data question:\n"
             "1. Read the `wren://mdl` resource and use `list_models` / "
-            "`describe_model` to understand the schema.\n"
+            "`describe_model` to understand the schema; for schema, read "
+            "`wren://mdl` or use `get_context` / `describe_schema`; browse "
+            "project knowledge via `list_knowledge` + the "
+            "`wren://knowledge/{path}` resource.\n"
             "2. Call `get_instructions` for business rules that affect how to "
             "interpret the data.\n"
             "3. Call `recall_queries` for proven NL->SQL exemplars similar to "
-            "the question.\n"
+            "the question, or `list_stored_queries` to browse all of them.\n"
             "4. Write SQL in the project's dialect, validate it with `dry_run`, "
             "then execute it with `run_sql`.\n"
             "5. For named metrics, prefer `query_cube` over hand-written "

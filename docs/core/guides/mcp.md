@@ -68,11 +68,19 @@ version — keep it local.
 - **Query tools** — `run_sql`, `dry_run`, `dry_plan`, `query_cube`
 - **Schema tools** — `get_mdl`, `list_models`, `describe_model`,
   `get_data_source`, `list_cubes`, `describe_cube`, `list_functions`
-- **Knowledge tools** — `get_instructions`, `recall_queries`, and
+- **Knowledge tools** — `get_instructions`, `recall_queries`, `get_context`,
+  `describe_schema`, `list_stored_queries`, `list_knowledge`, and
   (behind `--allow-write`) `store_query`
-- **Resources** — `wren://mdl`, `wren://instructions`, `wren://project`
+- **Resources** — `wren://mdl`, `wren://instructions`, `wren://project`,
+  `wren://agents`, `wren://knowledge/{path}`
 - **Prompt** — `wren_workflow`, a ready-made SOP for schema → instructions →
   recall → dry-run → run → store
+
+`get_context` and `list_stored_queries` prefer the `memory` extra (embedding
+search, full query history) but fall back to dependency-free reads over
+`knowledge/` when it isn't installed — the same degradation `recall_queries`
+already does. `describe_schema` needs no extra at all: it's the plain-text
+counterpart to `get_mdl`, sized for pasting into an LLM prompt.
 
 See the [CLI reference](../reference/cli.md#wren-serve--mcp-server) for every
 flag and tool signature.
@@ -84,6 +92,10 @@ server-side — only SQL text, query results, and metadata cross the MCP
 boundary. The server never auto-builds the MDL; if project source files are
 newer than `target/mdl.json` it logs a staleness warning but keeps serving the
 existing manifest, so re-run `wren context build` after model changes.
+
+The `wren://knowledge/{path}` resource resolves the requested path and
+verifies it stays inside the project's `knowledge/` directory before reading
+it — a path that would escape (e.g. `../wren_project.yml`) is rejected.
 
 ## See also
 
