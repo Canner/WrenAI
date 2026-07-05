@@ -32,6 +32,7 @@ Uses `uv` (not Poetry). `pyproject.toml` uses `hatchling` as build backend.
 - `wren docs connection-info` — Generate connection field docs
 - `wren utils parse-type` — SQL type normalization
 - `wren memory index|fetch|store|recall` — Semantic memory (when `wren[memory]` installed)
+- `wren serve mcp` — Serve query/schema/knowledge tools as an MCP server (in-process engine, when `wren[mcp]` installed)
 
 ## Key Design Points
 

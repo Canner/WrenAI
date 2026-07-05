@@ -162,6 +162,21 @@ never CLI flags; Cloudflare needs `wrangler` installed. See the
 [GenBI guide](../../docs/core/guides/genbi.md) and the
 [CLI reference](../../docs/core/reference/cli.md#wren-genbi--build--deploy-genbi-apps).
 
+**8. (Optional) Serve an MCP server** — expose the project's query, schema, and
+knowledge tools to Claude Desktop/Code, Cursor, or any MCP client. Runs
+in-process against the compiled MDL — no ibis-server, no separate service:
+
+```bash
+wren serve mcp                                # stdio (default) — client spawns this as a child process
+wren serve mcp --transport http --port 8080   # local Streamable HTTP for other clients
+```
+
+Requires `wren context build` to have already run and the `mcp` extra:
+`pip install 'wrenai[mcp]'`. See the
+[MCP guide](../../docs/core/guides/mcp.md) and the
+[CLI reference](../../docs/core/reference/cli.md#wren-serve--mcp-server) for
+the full tool/resource list and client wiring.
+
 ---
 
 ## Connection profiles

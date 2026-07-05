@@ -622,6 +622,10 @@ from wren.profile_cli import profile_app  # noqa: PLC0415, E402
 app.add_typer(genbi_app)
 app.add_typer(profile_app)
 
+from wren.serve_cli import serve_app  # noqa: PLC0415, E402
+
+app.add_typer(serve_app)
+
 
 if __name__ == "__main__":
     app()
