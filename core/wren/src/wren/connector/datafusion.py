@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import re
 from pathlib import Path
 
 import pyarrow as pa
@@ -10,6 +11,22 @@ from loguru import logger
 from wren.connector.base import ConnectorABC
 from wren.model import DataFusionConnectionInfo
 from wren.model.error import ErrorCode, WrenError
+
+_TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
+
+
+def _strip_trailing_semicolon(sql: str) -> str:
+    """Strip the terminating run of ``;`` characters and surrounding whitespace.
+
+    Wrapping user SQL as ``SELECT * FROM ({sql}) AS _q LIMIT N`` breaks when
+    ``sql`` ends in a semicolon — DataFusion rejects ``SELECT 1;`` inside a
+    subquery (``sql parser error: Expected: an expression, found: ;``). Only
+    the *terminating* run of semicolons/whitespace is stripped, so semicolons
+    inside string literals (e.g. ``SELECT 'a;b' FROM t``) are preserved.
+    Mirrors the postgres/redshift/duckdb connectors, which already strip
+    before subquery-wrapping.
+    """
+    return _TRAILING_SEMICOLONS_RE.sub("", sql)
 
 
 class DataFusionConnector(ConnectorABC):
@@ -30,7 +47,10 @@ class DataFusionConnector(ConnectorABC):
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         if limit is not None:
-            sql = f"SELECT * FROM ({sql}) AS _q LIMIT {int(limit)}"
+            sql = (
+                f"SELECT * FROM ({_strip_trailing_semicolon(sql)}) "
+                f"AS _q LIMIT {int(limit)}"
+            )
         ipc_bytes = self.ctx.query(sql)
         reader = ipc.open_stream(io.BytesIO(bytes(ipc_bytes)))
         return reader.read_all()
