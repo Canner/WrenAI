@@ -702,6 +702,43 @@ def test_build_schema_grounded_sql_for_ticket_throughput_trend():
     )
 
 
+def test_build_schema_grounded_sql_for_ticket_workflow_total_time_uses_first_class_columns():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "What is the estimated total time for each workflow?",
+        [
+            """
+            CREATE TABLE dbo_tickets (
+              id VARCHAR,
+              org_id VARCHAR,
+              title VARCHAR,
+              description VARCHAR,
+              status VARCHAR,
+              priority VARCHAR,
+              assignee_user_id VARCHAR,
+              data VARCHAR,
+              created_at TIMESTAMP,
+              updated_at TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_tickets"."status" AS "workflow", '
+        'SUM(DATEDIFF(\'second\', "dbo_tickets"."created_at", '
+        '"dbo_tickets"."updated_at")) AS "total_time_seconds" '
+        'FROM "dbo_tickets" '
+        'WHERE "dbo_tickets"."created_at" IS NOT NULL '
+        'AND "dbo_tickets"."updated_at" IS NOT NULL '
+        'AND "dbo_tickets"."status" IS NOT NULL '
+        'GROUP BY "dbo_tickets"."status" '
+        'ORDER BY "total_time_seconds" DESC'
+    )
+    assert "data" not in sql
+    assert "JSON" not in sql
+
+
 def test_build_audit_log_activity_sql_uses_existing_condition_columns():
     service = AskService.__new__(AskService)
     sql = service._build_audit_log_activity_sql(

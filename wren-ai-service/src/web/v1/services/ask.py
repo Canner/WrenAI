@@ -2212,6 +2212,11 @@ class AskService:
             "open",
             "closed",
             "aging",
+            "workflow",
+            "time",
+            "duration",
+            "elapsed",
+            "estimated",
             "volume",
             "count",
         )
@@ -2302,6 +2307,8 @@ class AskService:
             dimension_candidates.append(("status", "priority"))
         if "assignee" in normalized_query:
             dimension_candidates.append(("assignee_user_id", "created_by_user_id"))
+        if "workflow" in normalized_query:
+            dimension_candidates.append(("status", "priority", "assignee_user_id"))
 
         dimensions: list[str] = []
         for candidates in dimension_candidates:
@@ -2331,9 +2338,73 @@ class AskService:
             term in normalized_query
             for term in ("trend", "monthly", "month", "line chart", "over time")
         )
+        wants_elapsed_time = any(
+            term in normalized_query
+            for term in (
+                "time",
+                "duration",
+                "elapsed",
+                "turnaround",
+                "estimated",
+            )
+        )
         wants_top = bool(re.search(r"\btop\s+\d+\b", normalized_query))
         limit_match = re.search(r"\btop\s+(\d+)\b", normalized_query)
         limit = int(limit_match.group(1)) if limit_match else 10
+
+        if wants_elapsed_time:
+            start_column = self._find_schema_column(
+                table,
+                ("created_at", "created", "DateIn"),
+                temporal=True,
+            )
+            end_column = self._find_schema_column(
+                table,
+                ("updated_at", "updated", "DateOut", "closed_at", "resolved_at"),
+                temporal=True,
+            )
+            if start_column and end_column:
+                start_ref = f"{table_ref}.{self._quote_sql_identifier(start_column)}"
+                end_ref = f"{table_ref}.{self._quote_sql_identifier(end_column)}"
+                duration_expr = f"DATEDIFF('second', {start_ref}, {end_ref})"
+                if not dimensions:
+                    fallback_dimension = self._find_first_schema_column(
+                        table,
+                        (
+                            "status",
+                            "priority",
+                            "assignee_user_id",
+                            "created_by_user_id",
+                            "org_id",
+                        ),
+                    )
+                    if fallback_dimension:
+                        dimensions.append(fallback_dimension)
+                if dimensions:
+                    dimension = dimensions[0]
+                    dimension_ref = (
+                        f"{table_ref}.{self._quote_sql_identifier(dimension)}"
+                    )
+                    dimension_alias = (
+                        "workflow" if "workflow" in normalized_query else dimension
+                    )
+                    return (
+                        f"SELECT {dimension_ref} AS "
+                        f"{self._quote_sql_identifier(dimension_alias)}, "
+                        f'SUM({duration_expr}) AS "total_time_seconds" '
+                        f"FROM {table_ref} "
+                        f"WHERE {start_ref} IS NOT NULL "
+                        f"AND {end_ref} IS NOT NULL "
+                        f"AND {dimension_ref} IS NOT NULL "
+                        f"GROUP BY {dimension_ref} "
+                        f'ORDER BY "total_time_seconds" DESC'
+                    )
+                return (
+                    f'SELECT SUM({duration_expr}) AS "total_time_seconds" '
+                    f"FROM {table_ref} "
+                    f"WHERE {start_ref} IS NOT NULL "
+                    f"AND {end_ref} IS NOT NULL"
+                )
 
         if wants_trend and date_column:
             date_ref = f"{table_ref}.{self._quote_sql_identifier(date_column)}"
