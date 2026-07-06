@@ -1,6 +1,6 @@
 //! SQL generation from `CubeQuery` to plain `SELECT … GROUP BY` SQL.
 //!
-//! This is a Rust port of `wren-engine-saas` `ibis-server/app/mdl/cube.py`.
+//! This is a Rust port of the reference Python `cube.py` implementation.
 //! Output strings should match the Python implementation 1:1 so existing
 //! integration tests can be re-used.
 
