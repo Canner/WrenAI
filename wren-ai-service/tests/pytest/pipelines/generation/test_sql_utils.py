@@ -10,6 +10,7 @@ from src.pipelines.generation.utils.sql import (
     normalize_data_source,
     normalize_generation_result_sql,
     normalize_sql_column_references_to_schema,
+    normalize_sql_table_references_to_schema,
     get_sql_generation_system_prompt,
     get_text_to_sql_rules,
 )
@@ -78,6 +79,23 @@ def test_column_validation_allows_valid_unqualified_projection_for_single_table(
         'SELECT status AS repair_status FROM "dbo_repair_logs"',
         {"dbo_repair_logs": ["id", "created_at", "status"]},
     ) == []
+
+
+def test_normalize_sql_table_references_to_schema_maps_unique_prefix_table():
+    sql = (
+        'SELECT "public"."dbo_failure"."created_at" '
+        'FROM "public"."dbo_failure"'
+    )
+
+    normalized = normalize_sql_table_references_to_schema(
+        sql,
+        ["dbo_failure_patterns"],
+    )
+
+    assert normalized == (
+        'SELECT "dbo_failure_patterns"."created_at" '
+        'FROM "dbo_failure_patterns"'
+    )
 
 
 def test_construct_valid_table_columns_adds_qualified_suffix_tables():

@@ -840,6 +840,33 @@ def test_build_validated_ask_result_from_sql_normalizes_customer_to_account():
     assert result.sql == 'SELECT "dbo_tblFactSales"."account" FROM "dbo_tblFactSales"'
 
 
+def test_build_validated_ask_result_from_sql_normalizes_active_table_reference():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT "public"."dbo_failure"."created_at" '
+            'FROM "public"."dbo_failure"'
+        ),
+        [
+            """
+            CREATE TABLE dbo_failure_patterns (
+              id VARCHAR,
+              created_at TIMESTAMP,
+              updated_at TIMESTAMP
+            );
+            """
+        ],
+        "Show monthly record count by created_at in dbo.failure_patterns",
+    )
+
+    assert result is not None
+    assert result.sql == (
+        'SELECT "dbo_failure_patterns"."created_at" '
+        'FROM "dbo_failure_patterns"'
+    )
+
+
 def test_build_schema_grounded_operational_sql_prefers_failure_column_for_error_rate():
     service = AskService.__new__(AskService)
 

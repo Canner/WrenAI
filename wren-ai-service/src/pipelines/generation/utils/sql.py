@@ -1574,6 +1574,10 @@ class SQLGenPostProcessor:
             cleaned_generation_result = normalize_generation_result_sql(
                 cleaned_generation_result, data_source=data_source
             )
+            cleaned_generation_result = normalize_sql_table_references_to_schema(
+                cleaned_generation_result,
+                valid_table_names or [],
+            )
             cleaned_generation_result = normalize_sql_column_references_to_schema(
                 cleaned_generation_result,
                 valid_table_columns or {},
@@ -2661,6 +2665,12 @@ def _table_reference_suffixes(table_reference: str) -> list[str]:
     return [".".join(parts[index:]) for index in range(len(parts))]
 
 
+def _quote_table_reference(table_reference: str) -> str:
+    return ".".join(
+        _quote_sql_identifier(part) for part in _split_table_reference(table_reference)
+    )
+
+
 def extract_sql_table_references(sql: str) -> list[str]:
     references = []
     for match in _SQL_TABLE_REFERENCE_PATTERN.finditer(sql):
@@ -2707,6 +2717,111 @@ def find_invalid_table_references(sql: str, valid_table_names: list[str]) -> lis
         invalid_references.append(table_reference)
 
     return sorted(set(invalid_references))
+
+
+def _find_schema_table_alias(
+    requested_table: str, valid_table_names: list[str]
+) -> str | None:
+    requested_suffixes = _table_reference_suffixes(requested_table)
+    requested_candidates = [
+        suffix for suffix in requested_suffixes if suffix and len(suffix) > 2
+    ]
+    if not requested_candidates:
+        return None
+
+    valid_candidates = [
+        str(table_name)
+        for table_name in valid_table_names or []
+        if table_name is not None and str(table_name).strip()
+    ]
+    valid_by_lower = {table.lower(): table for table in valid_candidates}
+    for candidate in requested_candidates:
+        exact = valid_by_lower.get(candidate.lower())
+        if exact:
+            return exact
+
+    scored: list[tuple[int, int, str]] = []
+    for valid_table in valid_candidates:
+        valid_suffixes = _table_reference_suffixes(valid_table)
+        valid_keys = [valid_table, *valid_suffixes]
+        for requested_key in requested_candidates:
+            requested_compact = _compact_sql_identifier(requested_key)
+            if not requested_compact:
+                continue
+            for valid_key in valid_keys:
+                valid_compact = _compact_sql_identifier(valid_key)
+                if not valid_compact:
+                    continue
+                score = 0
+                if requested_compact == valid_compact:
+                    score = 1000 + len(valid_compact)
+                elif valid_compact.endswith(requested_compact):
+                    score = 800 + len(requested_compact)
+                elif requested_compact.endswith(valid_compact):
+                    score = 700 + len(valid_compact)
+                elif (
+                    len(requested_compact) >= 6
+                    and valid_compact.startswith(requested_compact)
+                ):
+                    score = 600 + len(requested_compact)
+                elif (
+                    len(valid_compact) >= 6
+                    and requested_compact.startswith(valid_compact)
+                ):
+                    score = 500 + len(valid_compact)
+                if score:
+                    scored.append((score, len(valid_compact), valid_table))
+
+    if not scored:
+        return None
+
+    scored.sort(reverse=True)
+    best_score = scored[0][0]
+    best_tables = {table for score, _, table in scored if score == best_score}
+    if len(best_tables) != 1:
+        return None
+    return scored[0][2]
+
+
+def normalize_sql_table_references_to_schema(
+    sql: str, valid_table_names: list[str]
+) -> str:
+    if not sql or not valid_table_names:
+        return sql
+
+    replacements: dict[str, str] = {}
+    for table_reference in extract_sql_table_references(sql):
+        canonical_table = _find_schema_table_alias(table_reference, valid_table_names)
+        if not canonical_table or canonical_table == table_reference:
+            continue
+        replacements[table_reference] = canonical_table
+
+    if not replacements:
+        return sql
+
+    normalized_sql = sql
+    for requested_table, canonical_table in sorted(
+        replacements.items(), key=lambda item: len(item[0]), reverse=True
+    ):
+        requested_parts = _split_table_reference(requested_table)
+        if not requested_parts:
+            continue
+        quoted_requested = r"\s*\.\s*".join(
+            re.escape(_quote_sql_identifier(part)) for part in requested_parts
+        )
+        bare_requested = r"\s*\.\s*".join(
+            re.escape(part) for part in requested_parts
+        )
+        table_pattern = re.compile(
+            rf"(?<![A-Za-z0-9_$])(?:{quoted_requested}|{bare_requested})"
+            rf"(?![A-Za-z0-9_$])",
+            flags=re.IGNORECASE,
+        )
+        normalized_sql = table_pattern.sub(
+            _quote_table_reference(canonical_table), normalized_sql
+        )
+
+    return normalized_sql
 
 
 def _extract_table_aliases(
