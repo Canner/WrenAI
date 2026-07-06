@@ -947,3 +947,103 @@ def test_should_not_use_histories_for_independent_same_thread_question():
 def test_should_use_histories_for_contextual_followup_question():
     assert AskService._should_use_histories_for_query("What about by month?")
     assert AskService._should_use_histories_for_query("Show the same for last year")
+
+
+def test_build_schema_grounded_table_question_sql_for_record_count():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_table_question_sql(
+        "How many records are in dbo.failure_patterns?",
+        [
+            """
+            CREATE TABLE dbo_failure_patterns (
+              id INTEGER,
+              name VARCHAR,
+              created_at TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == 'SELECT COUNT(*) AS "RecordCount" FROM "dbo_failure_patterns"'
+
+
+def test_build_schema_grounded_table_question_sql_for_name_distribution():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_table_question_sql(
+        "What is the distribution of name in dbo.failure_patterns?",
+        [
+            """
+            CREATE TABLE dbo_failure_patterns (
+              id INTEGER,
+              name VARCHAR,
+              created_at TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT TOP 10 "dbo_failure_patterns"."name" AS "name", '
+        'COUNT(*) AS "RecordCount" '
+        'FROM "dbo_failure_patterns" '
+        'WHERE "dbo_failure_patterns"."name" IS NOT NULL '
+        'GROUP BY "dbo_failure_patterns"."name" '
+        'ORDER BY COUNT(*) DESC'
+    )
+
+
+def test_build_schema_grounded_table_question_sql_for_highest_occurrences():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_table_question_sql(
+        "Which name values have the highest occurrences in dbo.failure_patterns?",
+        [
+            """
+            CREATE TABLE dbo_failure_patterns (
+              id INTEGER,
+              name VARCHAR,
+              occurrences INTEGER,
+              created_at TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT TOP 10 "dbo_failure_patterns"."name" AS "name", '
+        '"dbo_failure_patterns"."occurrences" AS "occurrences" '
+        'FROM "dbo_failure_patterns" '
+        'WHERE "dbo_failure_patterns"."name" IS NOT NULL '
+        'ORDER BY "dbo_failure_patterns"."occurrences" DESC'
+    )
+
+
+def test_build_schema_grounded_table_question_sql_for_monthly_created_at_count():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_table_question_sql(
+        "Show monthly record count by created_at in dbo.failure_patterns",
+        [
+            """
+            CREATE TABLE dbo_failure_patterns (
+              id INTEGER,
+              name VARCHAR,
+              created_at TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT DATEPART(YEAR, "dbo_failure_patterns"."created_at") AS "year", '
+        'DATEPART(MONTH, "dbo_failure_patterns"."created_at") AS "month", '
+        'COUNT(*) AS "RecordCount" '
+        'FROM "dbo_failure_patterns" '
+        'WHERE "dbo_failure_patterns"."created_at" IS NOT NULL '
+        'GROUP BY DATEPART(YEAR, "dbo_failure_patterns"."created_at"), '
+        'DATEPART(MONTH, "dbo_failure_patterns"."created_at") '
+        'ORDER BY DATEPART(YEAR, "dbo_failure_patterns"."created_at") ASC, '
+        'DATEPART(MONTH, "dbo_failure_patterns"."created_at") ASC'
+    )

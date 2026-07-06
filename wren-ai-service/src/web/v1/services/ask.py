@@ -811,6 +811,203 @@ class AskService:
     def _quote_sql_identifier(self, identifier: str) -> str:
         return f'"{identifier.replace(chr(34), chr(34) + chr(34))}"'
 
+    def _normalize_schema_identifier_key(self, value: str) -> str:
+        return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
+
+    def _table_matches_query(self, table_name: str, query: str) -> bool:
+        normalized_query = self._normalize_schema_identifier_key(query)
+        normalized_table = self._normalize_schema_identifier_key(table_name)
+        short_table = re.split(r"[.$_]", str(table_name or ""))[-1]
+        normalized_short_table = self._normalize_schema_identifier_key(short_table)
+        return bool(
+            normalized_table
+            and normalized_table in normalized_query
+            or normalized_short_table
+            and normalized_short_table in normalized_query
+        )
+
+    def _find_best_schema_table_for_query(
+        self, query: str, tables: list[dict[str, Any]]
+    ) -> dict[str, Any] | None:
+        if not tables:
+            return None
+
+        scored_tables: list[tuple[int, dict[str, Any]]] = []
+        query_tokens = self._intent_tokens(query)
+        for table in tables:
+            table_name = str(table.get("name") or "")
+            if not table_name:
+                continue
+
+            score = 0
+            if self._table_matches_query(table_name, query):
+                score += 100
+
+            table_tokens = self._schema_name_tokens(table_name)
+            score += 8 * len(table_tokens & query_tokens)
+
+            column_token_matches = 0
+            for column in table.get("columns", []):
+                column_token_matches += len(
+                    self._schema_name_tokens(str(column.get("name") or ""))
+                    & query_tokens
+                )
+            score += column_token_matches
+
+            if score > 0:
+                scored_tables.append((score, table))
+
+        if scored_tables:
+            return sorted(scored_tables, key=lambda item: item[0], reverse=True)[0][1]
+        if len(tables) == 1:
+            return tables[0]
+        return None
+
+    def _query_mentions_column(self, query: str, column_name: str) -> bool:
+        normalized_query = self._normalize_schema_identifier_key(query)
+        normalized_column = self._normalize_schema_identifier_key(column_name)
+        return bool(normalized_column and normalized_column in normalized_query)
+
+    def _find_dimension_column_for_query(
+        self, query: str, table: dict[str, Any]
+    ) -> str | None:
+        for column in table.get("columns", []):
+            column_name = str(column.get("name") or "")
+            if column_name and self._query_mentions_column(query, column_name):
+                return column_name
+
+        text_columns = [
+            str(column.get("name"))
+            for column in table.get("columns", [])
+            if column.get("name")
+            and self._is_text_schema_type(str(column.get("type") or ""))
+        ]
+        for candidate in ("name", "category", "type", "status", "code"):
+            column = self._find_schema_column(table, (candidate,))
+            if column in text_columns:
+                return column
+        return text_columns[0] if text_columns else None
+
+    def _find_temporal_column_for_query(
+        self, query: str, table: dict[str, Any]
+    ) -> str | None:
+        for column in table.get("columns", []):
+            column_name = str(column.get("name") or "")
+            column_type = str(column.get("type") or "")
+            if (
+                column_name
+                and self._is_temporal_schema_type(column_type)
+                and self._query_mentions_column(query, column_name)
+            ):
+                return column_name
+
+        return self._find_first_schema_column(
+            table,
+            (
+                "created_at",
+                "createdat",
+                "created",
+                "date",
+                "time",
+                "timestamp",
+                "updated_at",
+            ),
+        )
+
+    def _build_schema_grounded_table_question_sql(
+        self, query: str, table_ddls: list[str]
+    ) -> str | None:
+        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized:
+            return None
+
+        tables = self._parse_schema_tables(table_ddls)
+        table = self._find_best_schema_table_for_query(query, tables)
+        if not table:
+            return None
+
+        table_name = str(table.get("name") or "")
+        table_ref = self._quote_sql_identifier(table_name)
+        limit = self._extract_requested_top_n(query, default_value=10)
+
+        wants_monthly_count = any(
+            term in normalized
+            for term in ("monthly", "by month", "per month", "month-wise")
+        ) and any(term in normalized for term in ("count", "records", "rows"))
+        if wants_monthly_count:
+            date_column = self._find_temporal_column_for_query(query, table)
+            if not date_column:
+                return None
+            date_ref = f"{table_ref}.{self._quote_sql_identifier(date_column)}"
+            return (
+                f"SELECT DATEPART(YEAR, {date_ref}) AS \"year\", "
+                f"DATEPART(MONTH, {date_ref}) AS \"month\", "
+                f'COUNT(*) AS "RecordCount" '
+                f"FROM {table_ref} "
+                f"WHERE {date_ref} IS NOT NULL "
+                f"GROUP BY DATEPART(YEAR, {date_ref}), DATEPART(MONTH, {date_ref}) "
+                f"ORDER BY DATEPART(YEAR, {date_ref}) ASC, "
+                f"DATEPART(MONTH, {date_ref}) ASC"
+            )
+
+        wants_total_count = (
+            re.search(r"\bhow many\b", normalized)
+            or "record count" in normalized
+            or "count of records" in normalized
+            or "number of records" in normalized
+        ) and not re.search(r"\b(?:by|per|each|distribution|highest|top)\b", normalized)
+        if wants_total_count:
+            return f'SELECT COUNT(*) AS "RecordCount" FROM {table_ref}'
+
+        wants_distribution = any(
+            term in normalized
+            for term in (
+                "distribution",
+                "highest occurrence",
+                "highest occurrences",
+                "most occurrence",
+                "most occurrences",
+                "occurrences",
+                "top",
+                "common",
+            )
+        )
+        if wants_distribution:
+            dimension_column = self._find_dimension_column_for_query(query, table)
+            if not dimension_column:
+                return None
+            dimension_ref = f"{table_ref}.{self._quote_sql_identifier(dimension_column)}"
+
+            occurrence_column = self._find_schema_column(
+                table,
+                ("occurrences", "occurrence", "count", "total_count", "record_count"),
+                numeric=True,
+            )
+            if occurrence_column and self._query_mentions_column(
+                query, occurrence_column
+            ):
+                metric_ref = f"{table_ref}.{self._quote_sql_identifier(occurrence_column)}"
+                return (
+                    f"SELECT TOP {limit} {dimension_ref} AS "
+                    f"{self._quote_sql_identifier(dimension_column)}, "
+                    f"{metric_ref} AS {self._quote_sql_identifier(occurrence_column)} "
+                    f"FROM {table_ref} "
+                    f"WHERE {dimension_ref} IS NOT NULL "
+                    f"ORDER BY {metric_ref} DESC"
+                )
+
+            return (
+                f"SELECT TOP {limit} {dimension_ref} AS "
+                f"{self._quote_sql_identifier(dimension_column)}, "
+                f'COUNT(*) AS "RecordCount" '
+                f"FROM {table_ref} "
+                f"WHERE {dimension_ref} IS NOT NULL "
+                f"GROUP BY {dimension_ref} "
+                f"ORDER BY COUNT(*) DESC"
+            )
+
+        return None
+
     def _build_explicit_table_preview_sql(
         self, query: str, table_ddls: list[str]
     ) -> tuple[str, str] | None:
@@ -3835,6 +4032,31 @@ class AskService:
                         table_names,
                     )
 
+                    if table_question_sql := self._build_schema_grounded_table_question_sql(
+                        user_query, table_ddls
+                    ):
+                        ask_result = self._build_validated_ask_result_from_sql(
+                            table_question_sql,
+                            table_ddls,
+                            user_query,
+                        )
+                        if ask_result:
+                            api_results = [ask_result]
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="TEXT_TO_SQL",
+                                response=api_results,
+                                rephrased_question=user_query,
+                                intent_reasoning="Explicit table question matched deployed schema.",
+                                retrieved_tables=table_names,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                            )
+                            results["ask_result"] = api_results
+                            results["metadata"]["type"] = "TEXT_TO_SQL"
+                            return results
+                        invalid_sql = table_question_sql
+
                     if explicit_table_preview := self._build_explicit_table_preview_sql(
                         user_query, table_ddls
                     ):
@@ -4383,8 +4605,30 @@ class AskService:
                     "Retrieved tables for query_id %s: %s", query_id, table_names
                 )
 
-                if explicit_table_preview := self._build_explicit_table_preview_sql(
-                    user_query, table_ddls
+                if not api_results and (
+                    table_question_sql := self._build_schema_grounded_table_question_sql(
+                        user_query, table_ddls
+                    )
+                ):
+                    logger.info(
+                        "Using schema-grounded table question SQL for query_id %s",
+                        query_id,
+                    )
+                    ask_result = self._build_validated_ask_result_from_sql(
+                        table_question_sql,
+                        table_ddls,
+                        user_query,
+                    )
+                    if ask_result:
+                        api_results = [ask_result]
+                    else:
+                        invalid_sql = table_question_sql
+                        error_message = "Schema-grounded table SQL was not valid for the active datasource schema."
+
+                if not api_results and (
+                    explicit_table_preview := self._build_explicit_table_preview_sql(
+                        user_query, table_ddls
+                    )
                 ):
                     explicit_sql, explicit_table_name = explicit_table_preview
                     logger.info(
