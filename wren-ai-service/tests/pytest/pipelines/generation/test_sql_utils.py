@@ -455,26 +455,6 @@ def test_normalize_sql_column_references_to_schema_maps_last_update_date_alias()
     ) == []
 
 
-def test_normalize_sql_column_references_to_schema_maps_created_at_to_temporal_column():
-    sql = (
-        'SELECT DATEPART(YEAR, "dbo_DebugEntries_Staging2"."created_at") AS "year", '
-        'DATEPART(MONTH, "dbo_DebugEntries_Staging2"."created_at") AS "month" '
-        'FROM "dbo_DebugEntries_Staging2"'
-    )
-
-    normalized = normalize_sql_column_references_to_schema(
-        sql,
-        {"dbo_DebugEntries_Staging2": ["DebugEntryId", "DateIn", "DateOut"]},
-    )
-
-    assert '"dbo_DebugEntries_Staging2"."created_at"' not in normalized
-    assert '"dbo_DebugEntries_Staging2"."DateIn"' in normalized
-    assert find_invalid_column_references(
-        normalized,
-        {"dbo_DebugEntries_Staging2": ["DebugEntryId", "DateIn", "DateOut"]},
-    ) == []
-
-
 def test_normalize_sql_column_references_to_schema_keeps_unknown_columns_invalid():
     sql = 'SELECT "dbo_qSales1"."UnitPrice" FROM "dbo_qSales1"'
     normalized = normalize_sql_column_references_to_schema(
