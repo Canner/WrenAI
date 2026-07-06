@@ -50,7 +50,7 @@ Above Wren AI sit the **agents** that ask questions. Below it sits the **data in
 
 ### You have no semantic layer
 
-Start with Wren AI's context layer. The `generate-mdl` guide scaffolds an MDL project from your warehouse schema in a few minutes — your first set of trusted semantic definitions, with the rest of the context layer (instructions, memory, governance) growing around them. Enrich it over time with the grill / auto-pilot workflow.
+Start with Wren AI's context layer. The `generate-mdl` guide scaffolds an MDL project from your warehouse schema in a few minutes — your first set of trusted semantic definitions, with the rest of the context layer (`knowledge/rules/`, memory, governance) growing around them. Enrich it over time with the grill / auto-pilot workflow.
 
 ### You have a transformation pipeline (dbt, Coalesce, in-house)
 

@@ -27,7 +27,7 @@ Five layers sit between the agent's question and the database:
 |---|---|---|
 | **Skills** | Encode the workflow the agent must follow | The agent cannot skip "check memory" or "validate before execute" |
 | **MDL** | Declare every table, column, and relationship the agent is allowed to use | The agent can only name modeled objects, so undeclared columns and legacy tables are invisible |
-| **Memory** | Index MDL + `knowledge/` + past NL-SQL pairs; retrieve only what matters per question | The agent reads the relevant slice, not a generic schema dump |
+| **Memory** | Index MDL + `knowledge/rules/` + `knowledge/sql/`; retrieve only what matters per question | The agent reads the relevant slice, not a generic schema dump |
 | **Plan + validate** | Expand modeled SQL into the exact SQL that will run, before any DB call | Bad references fail at plan time with a clear error, not silently in production |
 | **Connectors** | Execute the planned SQL against the source | Type, dialect, and permission checks happen here |
 
