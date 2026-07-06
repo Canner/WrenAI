@@ -285,6 +285,32 @@ class TestGenerateSeedQueries:
         pairs = generate_seed_queries(manifest)
         assert not any("with" in p["nl"] for p in pairs)
 
+    def test_relationship_null_condition_skipped(self):
+        # An explicit JSON null for "condition" must be treated like a missing
+        # condition, not crash `None.strip()`.
+        manifest = {
+            "models": [
+                _model("a", "aid", [_col("aid", "varchar")]),
+                _model("b", "bid", [_col("bid", "varchar")]),
+            ],
+            "relationships": [
+                {"name": "a_b", "models": ["a", "b"], "condition": None}
+            ],
+        }
+        pairs = generate_seed_queries(manifest)
+        assert not any("with" in p["nl"] for p in pairs)
+
+    def test_relationship_null_models_skipped(self):
+        # An explicit JSON null for "models" must not crash `len(None)`.
+        manifest = {
+            "models": [_model("a", "aid", [_col("aid", "varchar")])],
+            "relationships": [
+                {"name": "a_b", "models": None, "condition": "a.id = b.id"}
+            ],
+        }
+        pairs = generate_seed_queries(manifest)
+        assert not any("with" in p["nl"] for p in pairs)
+
     def test_relationship_fewer_than_two_models_skipped(self):
         manifest = {
             "models": [_model("a", "aid", [_col("aid", "varchar")])],
