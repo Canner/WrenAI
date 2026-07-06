@@ -4,7 +4,7 @@ Memory is the behavioral layer of Wren AI's context system.
 
 MDL tells an agent what your data means. Instructions tell it how your team wants that data used. Memory tells it what has worked before: which schema items were relevant, which SQL answered a similar question, and which examples your team has already confirmed.
 
-Without memory, every question starts from zero. With memory, each accepted answer can make the next answer, and the next dashboard, easier to ground. It is one half of how Wren manages your business knowledge (see [How Wren manages your business knowledge](/oss/concepts/knowledge_management)).
+Without memory, every question starts from zero. With memory, each accepted answer can make the next answer, and the next dashboard, easier to ground. It is the retrieval half of the [learning loop](/oss/concepts/agent_learning): the loop writes knowledge down; memory finds it again when a similar question arrives.
 
 ## Why memory matters
 
@@ -81,15 +81,7 @@ Think of memory as the retrieval and learning layer on top of the contract.
 
 ## What improves over time
 
-A traditional text-to-SQL prompt has a fixed ceiling: the model sees the schema and tries its best.
-
-Wren AI memory lets the system compound:
-
-- common questions retrieve better examples
-- recurring metrics reuse accepted SQL patterns
-- schema retrieval becomes more targeted on large projects
-- corrections can become future grounding instead of disappearing after the chat
-- teams can seed memory by committing known-good `knowledge/sql/*.md` pairs
+A traditional text-to-SQL prompt has a fixed ceiling: the model sees the schema and tries its best. Memory removes that ceiling — each accepted answer becomes a retrievable example, schema retrieval grows more targeted as the project grows, and corrections persist instead of dying with the chat session. The full compounding loop, and where each artifact fits in it, is covered in [How does the agent learn from your context?](/oss/concepts/agent_learning).
 
 The goal is not to memorize every answer. The goal is to make the agent better at finding the right context before it reasons.
 

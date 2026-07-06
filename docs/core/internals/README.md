@@ -1,7 +1,7 @@
 # Internal engineering docs
 
 Technical specs, contracts, and design notes for **contributors** — not published to the
-docs site (intentionally absent from `docs.getwren.ai/sidebars.ts`). User-facing
+docs site (intentionally excluded from the published site's navigation). User-facing
 documentation lives in the sibling `concepts/`, `guides/`, `reference/`, and `sdk/`
 directories.
 
