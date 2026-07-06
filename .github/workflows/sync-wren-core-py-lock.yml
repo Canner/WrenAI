@@ -1,0 +1,121 @@
+name: Sync core/wren lock after wren-core-py release
+
+# After wren-core-py publishes to PyPI, core/wren still pins the old engine in
+# its pyproject floor and uv.lock (release-please extra-files only touch a
+# component's own dir). Relock core/wren against the release and open a PR.
+# Called after publish-wren-core-py succeeds, so a failed publish is never bumped.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Released wren-core-py version (e.g. 0.7.1)"
+        required: true
+        type: string
+  # Manual fallback: re-run the sync if the automatic run after publish failed
+  # or was skipped. Leave version blank to use the release tracked in the repo.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "wren-core-py version to sync to; blank = .release-please-manifest.json"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# Serialize sync runs so two can't push the same branch at once. Constant key
+# (not per-version) because a blank-dispatch version is only known at run time.
+concurrency:
+  group: sync-wren-core-py-lock
+  cancel-in-progress: false
+
+jobs:
+  sync-lock:
+    if: ${{ github.repository == 'Canner/WrenAI' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          # publish takes minutes; main may have moved. Base the PR on main tip.
+          ref: main
+          # Keep the write token out of .git/config so dependency code uv may
+          # build during resolution can't read it (supply-chain); push re-auths.
+          persist-credentials: false
+
+      - name: Resolve and validate version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          # workflow_call always passes the released version; manual runs may
+          # omit it and fall back to the release tracked in the repo.
+          version="${INPUT_VERSION:-$(jq -r '."core/wren-core-py"' .release-please-manifest.json)}"
+          # Guard a malformed version out of the dep edit, branch name, and PR.
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+)?$ ]]; then
+            echo "::error::Unsupported version: ${version}. Expected X.Y.Z or X.Y.ZrcN."
+            exit 1
+          fi
+          echo "Syncing core/wren to wren-core-py ${version}"
+          echo "VERSION=${version}" >> "$GITHUB_ENV"
+
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Bump floor and relock core/wren against published wren-core-py
+        working-directory: core/wren
+        run: |
+          # uv add rewrites the pyproject floor in place and relocks in one step;
+          # --no-sync skips the heavy env. Retry for PyPI index lag after publish.
+          for attempt in 1 2 3 4 5; do
+            if uv add --no-sync "wren-core-py>=${VERSION}"; then
+              exit 0
+            fi
+            if [ "${attempt}" -lt 5 ]; then
+              echo "uv add attempt ${attempt} failed; retrying after PyPI propagation delay"
+              sleep 20
+            fi
+          done
+          echo "::error::uv add did not succeed after retries"
+          exit 1
+
+      - name: Validate lockfile is consistent
+        working-directory: core/wren
+        run: uv lock --check
+
+      - name: Detect changes
+        id: diff
+        run: |
+          if git diff --quiet -- core/wren/pyproject.toml core/wren/uv.lock; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open sync PR
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="chore/sync-wren-core-py-${VERSION}"
+          # If a PR is already open for this bump, leave it untouched.
+          if [ "$(gh pr list --repo "${GITHUB_REPOSITORY}" --state open --head "${BRANCH}" --json number --jq 'length')" != "0" ]; then
+            echo "Open PR for ${BRANCH} already exists; leaving it untouched."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "${BRANCH}"
+          git add core/wren/pyproject.toml core/wren/uv.lock
+          git commit -m "chore(wren): bump wren-core-py to ${VERSION}"
+          # No open PR: --force only overwrites a leftover branch from a closed PR.
+          # Auth the push explicitly since credentials aren't persisted (masked in logs).
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@${GITHUB_SERVER_URL#https://}/${GITHUB_REPOSITORY}.git" \
+            "${BRANCH}"
+          gh pr create \
+            --repo "${GITHUB_REPOSITORY}" \
+            --base main \
+            --head "${BRANCH}" \
+            --title "chore(wren): bump wren-core-py to ${VERSION}" \
+            --body "Automated follow-up after \`wren-core-py\` ${VERSION} was published to PyPI. Relocks \`core/wren\` against the new engine binding. Please review and merge."
