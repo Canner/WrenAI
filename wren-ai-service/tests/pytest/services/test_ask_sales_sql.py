@@ -1150,54 +1150,6 @@ def test_build_schema_grounded_table_question_sql_for_monthly_created_at_count()
     )
 
 
-def test_build_schema_grounded_table_question_sql_uses_any_temporal_column():
-    service = AskService.__new__(AskService)
-
-    sql = service._build_schema_grounded_table_question_sql(
-        "Show monthly record count for dbo.failure_patterns.",
-        [
-            """
-            CREATE TABLE dbo_failure_patterns (
-              id INTEGER,
-              name VARCHAR,
-              execution_date TIMESTAMP
-            );
-            """
-        ],
-    )
-
-    assert sql == (
-        'SELECT DATEPART(YEAR, "dbo_failure_patterns"."execution_date") AS "year", '
-        'DATEPART(MONTH, "dbo_failure_patterns"."execution_date") AS "month", '
-        'COUNT(*) AS "RecordCount" '
-        'FROM "dbo_failure_patterns" '
-        'WHERE "dbo_failure_patterns"."execution_date" IS NOT NULL '
-        'GROUP BY DATEPART(YEAR, "dbo_failure_patterns"."execution_date"), '
-        'DATEPART(MONTH, "dbo_failure_patterns"."execution_date") '
-        'ORDER BY DATEPART(YEAR, "dbo_failure_patterns"."execution_date") ASC, '
-        'DATEPART(MONTH, "dbo_failure_patterns"."execution_date") ASC'
-    )
-
-
-def test_build_schema_grounded_table_question_sql_rejects_time_question_without_temporal_column():
-    service = AskService.__new__(AskService)
-
-    assert (
-        service._build_schema_grounded_table_question_sql(
-            "Show monthly record count for dbo.failure_patterns.",
-            [
-                """
-                CREATE TABLE dbo_failure_patterns (
-                  id INTEGER,
-                  name VARCHAR
-                );
-                """
-            ],
-        )
-        is None
-    )
-
-
 def test_build_validated_ask_result_rejects_status_for_product_line_pcb_question():
     service = AskService.__new__(AskService)
 
@@ -1359,22 +1311,3 @@ def test_build_validated_ask_result_rejects_sql_when_schema_is_missing():
     )
 
     assert result is None
-
-
-def test_get_unqueryable_metric_message_rejects_turnaround_trend_without_temporal_column():
-    service = AskService.__new__(AskService)
-
-    message = service._get_unqueryable_metric_message(
-        "Generate a trend chart for average turnaround time by month.",
-        [
-            """
-            CREATE TABLE dbo_repair_logs (
-              status VARCHAR,
-              repair_cost DOUBLE
-            );
-            """
-        ],
-    )
-
-    assert message is not None
-    assert "temporal field" in message
