@@ -718,9 +718,17 @@ const getManifestTableReferenceAliases = (manifest?: Manifest) => {
     }
 
     aliases.set(model.name.toLowerCase(), model.name);
+    const dboModelMatch = model.name.match(/^dbo_(.+)$/i);
+    if (dboModelMatch?.[1]) {
+      aliases.set(`dbo.${dboModelMatch[1]}`.toLowerCase(), model.name);
+    }
     const basePatternMatch = model.name.match(/^(.+)_patterns$/i);
     if (basePatternMatch?.[1]) {
       aliases.set(basePatternMatch[1].toLowerCase(), model.name);
+      const dboBasePatternMatch = basePatternMatch[1].match(/^dbo_(.+)$/i);
+      if (dboBasePatternMatch?.[1]) {
+        aliases.set(`dbo.${dboBasePatternMatch[1]}`.toLowerCase(), model.name);
+      }
     }
     if (model.tableReference?.table) {
       addModelReferenceAlias(
