@@ -5,6 +5,7 @@ from __future__ import annotations
 import atexit
 import json
 import os
+import shlex
 import shutil
 import sys
 from pathlib import Path
@@ -79,7 +80,9 @@ def _print_connection_help(
 
     echo(line)
     if transport == "http":
-        url = f"http://{host}:{port}/mcp"
+        # A wildcard bind host isn't a connectable client target — show loopback.
+        display_host = "127.0.0.1" if host in ("0.0.0.0", "::", "") else host
+        url = f"http://{display_host}:{port}/mcp"
         echo(" wren MCP server — Streamable HTTP")
         echo(f"   URL: {url}")
         echo("")
@@ -94,13 +97,14 @@ def _print_connection_help(
         echo(" Press Ctrl+C to stop.")
     else:
         args = _serve_args(project, profile, allow_write, no_connect)
-        argline = " ".join(args)
-        env_flag = f" -e WREN_HOME={wren_home}" if wren_home else ""
+        # Shell-quote every token so paths with spaces stay copy-pasteable.
+        cmd = " ".join(shlex.quote(t) for t in [wren_cmd, *args])
+        env_flag = f" -e {shlex.quote('WREN_HOME=' + wren_home)}" if wren_home else ""
         echo(" wren MCP server — stdio (your MCP client spawns this process)")
         echo("")
         echo(" Register with a client:")
-        echo(f"   Claude Code   claude mcp add wren{env_flag} -- {wren_cmd} {argline}")
-        echo(f"   Codex         codex mcp add wren{env_flag} -- {wren_cmd} {argline}")
+        echo(f"   Claude Code   claude mcp add wren{env_flag} -- {cmd}")
+        echo(f"   Codex         codex mcp add wren{env_flag} -- {cmd}")
         echo("")
         echo(" Or add to an IDE MCP config (Claude Desktop / Cursor / VS Code):")
         server: dict = {"command": wren_cmd, "args": args}
