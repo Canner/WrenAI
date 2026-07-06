@@ -2336,6 +2336,59 @@ class AskService:
         if not (wants_throughput and wants_unit_breakdown):
             return None
 
+        tables = self._parse_schema_tables(table_ddls)
+        table = self._find_best_schema_table_for_query(query, tables)
+        if table:
+            unit_column = self._find_schema_column(
+                table,
+                (
+                    "BusinessUnit",
+                    "business_unit",
+                    "manufacturing_unit",
+                    "manufacturingunit",
+                    "unit",
+                    "unit_name",
+                    "BU",
+                    "division",
+                ),
+            )
+            if unit_column:
+                table_name = str(table.get("name") or "")
+                table_ref = self._quote_sql_identifier(table_name)
+                unit_ref = f"{table_ref}.{self._quote_sql_identifier(unit_column)}"
+                timestamp_column = self._find_temporal_column_for_query(query, table)
+
+                if timestamp_column and any(
+                    term in normalized for term in ("trend", "monthly", "over time")
+                ):
+                    timestamp_ref = (
+                        f"{table_ref}.{self._quote_sql_identifier(timestamp_column)}"
+                    )
+                    return (
+                        f"SELECT {unit_ref} AS "
+                        f"{self._quote_sql_identifier(unit_column)}, "
+                        f"DATEPART(YEAR, {timestamp_ref}) AS \"year\", "
+                        f"DATEPART(MONTH, {timestamp_ref}) AS \"month\", "
+                        f'COUNT(*) AS "throughput" '
+                        f"FROM {table_ref} "
+                        f"WHERE {unit_ref} IS NOT NULL "
+                        f"AND {timestamp_ref} IS NOT NULL "
+                        f"GROUP BY {unit_ref}, DATEPART(YEAR, {timestamp_ref}), "
+                        f"DATEPART(MONTH, {timestamp_ref}) "
+                        f"ORDER BY {unit_ref} ASC, DATEPART(YEAR, {timestamp_ref}) ASC, "
+                        f"DATEPART(MONTH, {timestamp_ref}) ASC"
+                    )
+
+                return (
+                    f"SELECT {unit_ref} AS "
+                    f"{self._quote_sql_identifier(unit_column)}, "
+                    f'COUNT(*) AS "throughput" '
+                    f"FROM {table_ref} "
+                    f"WHERE {unit_ref} IS NOT NULL "
+                    f"GROUP BY {unit_ref} "
+                    f"ORDER BY COUNT(*) DESC"
+                )
+
         has_debug_entries = self._schema_contains(
             table_ddls, r"\bdbo_DebugEntries\b", table_names=table_names
         )
@@ -3229,6 +3282,41 @@ class AskService:
 
         if not normalized_query:
             return None
+
+        if "throughput" in normalized_query and any(
+            term in normalized_query for term in ("manufacturing", "unit", "units")
+        ):
+            unit_field_patterns = (
+                r"\bbusiness[_ ]?unit\b",
+                r"\bmanufacturing[_ ]?unit\b",
+                r"\bunit[_ ]?name\b",
+                r"\bunit\b",
+                r"\bbu\b",
+                r"\bdivision\b",
+            )
+            has_unit_field = any(
+                re.search(pattern, column_name)
+                for pattern in unit_field_patterns
+                for column_name in schema_column_names
+            )
+            has_temporal_field = any(
+                self._is_temporal_schema_type(str(column.get("type") or ""))
+                for table in self._parse_schema_tables(table_ddls)
+                for column in table.get("columns", [])
+            )
+            if not has_unit_field:
+                return (
+                    "The active datasource does not expose a manufacturing unit, "
+                    "business unit, unit, BU, or division column. I cannot build "
+                    "throughput trends across manufacturing units without a "
+                    "queryable unit field."
+                )
+            if "trend" in normalized_query and not has_temporal_field:
+                return (
+                    "The active datasource does not expose a queryable date or "
+                    "timestamp column. I cannot build a throughput trend without "
+                    "a first-class temporal field."
+                )
 
         repair_cost_terms = (
             "repair cost",

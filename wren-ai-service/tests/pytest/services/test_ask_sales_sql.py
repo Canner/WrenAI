@@ -702,6 +702,59 @@ def test_build_schema_grounded_sql_for_ticket_throughput_trend():
     )
 
 
+def test_build_manufacturing_throughput_sql_uses_active_unit_and_date_columns():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_manufacturing_throughput_sql(
+        "Show throughput trends across different manufacturing units.",
+        [
+            """
+            CREATE TABLE dbo_production_events (
+              id INTEGER,
+              manufacturing_unit VARCHAR,
+              created_at TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_production_events"."manufacturing_unit" AS "manufacturing_unit", '
+        'DATEPART(YEAR, "dbo_production_events"."created_at") AS "year", '
+        'DATEPART(MONTH, "dbo_production_events"."created_at") AS "month", '
+        'COUNT(*) AS "throughput" '
+        'FROM "dbo_production_events" '
+        'WHERE "dbo_production_events"."manufacturing_unit" IS NOT NULL '
+        'AND "dbo_production_events"."created_at" IS NOT NULL '
+        'GROUP BY "dbo_production_events"."manufacturing_unit", '
+        'DATEPART(YEAR, "dbo_production_events"."created_at"), '
+        'DATEPART(MONTH, "dbo_production_events"."created_at") '
+        'ORDER BY "dbo_production_events"."manufacturing_unit" ASC, '
+        'DATEPART(YEAR, "dbo_production_events"."created_at") ASC, '
+        'DATEPART(MONTH, "dbo_production_events"."created_at") ASC'
+    )
+
+
+def test_get_unqueryable_metric_message_for_throughput_without_unit_column():
+    service = AskService.__new__(AskService)
+
+    message = service._get_unqueryable_metric_message(
+        "Show throughput trends across different manufacturing units.",
+        [
+            """
+            CREATE TABLE dbo_failure_patterns (
+              name VARCHAR,
+              occurrences INTEGER,
+              created_at TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert message is not None
+    assert "unit" in message
+
+
 def test_build_schema_grounded_sql_for_ticket_workflow_total_time_uses_first_class_columns():
     service = AskService.__new__(AskService)
     sql = service._build_schema_grounded_sales_sql(
