@@ -12,6 +12,7 @@ import {
   MAX_WAIT_TIME,
   isAskResultFinished,
   validateAskResult,
+  transformHistoryInput,
 } from '@/apollo/server/utils/apiUtils';
 import { DataSourceName } from '@server/types';
 
@@ -19,6 +20,7 @@ const logger = getLogger('API_GENERATE_SQL');
 logger.level = 'debug';
 
 const {
+  apiHistoryRepository,
   projectService,
   deployService,
   wrenAIAdaptor,
@@ -70,10 +72,14 @@ export default async function handler(
       );
     }
 
+    // ask AI service to generate SQL
+    const histories = threadId
+      ? await apiHistoryRepository.findAllBy({ threadId })
+      : undefined;
     const task = await wrenAIAdaptor.ask({
       query: question,
       deployId: lastDeploy.hash,
-      histories: undefined,
+      histories: transformHistoryInput(histories) as any,
       configurations: {
         language:
           language || WrenAILanguage[project.language] || WrenAILanguage.EN,
