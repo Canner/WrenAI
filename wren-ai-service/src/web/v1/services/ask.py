@@ -612,6 +612,55 @@ class AskService:
                 return table
         return None
 
+    def _required_sql_concept_groups(self, query: str | None) -> list[set[str]]:
+        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized:
+            return []
+
+        concept_groups: list[set[str]] = []
+        if "product line" in normalized or "productline" in normalized:
+            concept_groups.append({"product", "prod", "line", "productline"})
+        if "pcb" in normalized:
+            concept_groups.append({"pcb", "board"})
+        if "critical" in normalized:
+            concept_groups.append({"critical", "severity", "priority"})
+        if "cost" in normalized:
+            concept_groups.append({"cost", "amount", "expense", "impact"})
+        if "quarterly" in normalized or "quarter" in normalized:
+            concept_groups.append({"quarter", "quarterly"})
+        if "recurring" in normalized or "recurrence" in normalized:
+            concept_groups.append({"recurring", "recurrence", "occurrence", "occurrences", "count"})
+        if "issue" in normalized or "issues" in normalized:
+            concept_groups.append({"issue", "issues", "failure", "failures", "problem", "defect"})
+
+        return concept_groups
+
+    def _sql_covers_required_question_concepts(
+        self,
+        sql: str,
+        query: str | None,
+        referenced_column_tokens: set[str],
+        referenced_table_tokens: set[str],
+    ) -> bool:
+        sql_text = (sql or "").lower()
+        available_tokens = referenced_column_tokens | referenced_table_tokens
+        for concept_group in self._required_sql_concept_groups(query):
+            if concept_group & available_tokens:
+                continue
+            if any(token in sql_text for token in concept_group):
+                continue
+            logger.warning(
+                "Ignoring SQL because it does not cover required question concept. "
+                "query=%s required=%s referenced_column_tokens=%s referenced_table_tokens=%s sql=%s",
+                query,
+                sorted(concept_group),
+                sorted(referenced_column_tokens),
+                sorted(referenced_table_tokens),
+                sql,
+            )
+            return False
+        return True
+
     def _sql_matches_question_intent(
         self,
         sql: str,
@@ -626,11 +675,10 @@ class AskService:
                 normalized_query,
             )
         )
-        if not expects_dimension:
-            return True
 
         question_tokens = self._intent_tokens(query or "")
-        if not question_tokens:
+        required_concept_groups = self._required_sql_concept_groups(query)
+        if not question_tokens and not required_concept_groups:
             return True
 
         valid_tables = {
@@ -653,6 +701,9 @@ class AskService:
         if not referenced_tables:
             return True
 
+        referenced_table_tokens = set().union(
+            *[self._schema_name_tokens(table) for table in referenced_tables]
+        )
         qualified_column_pattern = re.compile(
             r'(?:"(?P<table_quoted>[^"]+)"|\[(?P<table_bracketed>[^\]]+)\]|'
             r"(?P<table_bare>[A-Za-z_][A-Za-z0-9_.$]*))\s*\.\s*"
@@ -677,6 +728,24 @@ class AskService:
             referenced_columns_by_table.setdefault(table_reference, set()).add(
                 column_reference
             )
+
+        all_referenced_column_tokens = set().union(
+            *[
+                self._schema_name_tokens(column_name)
+                for columns in referenced_columns_by_table.values()
+                for column_name in columns
+            ]
+        ) if referenced_columns_by_table else set()
+        if not self._sql_covers_required_question_concepts(
+            sql,
+            query,
+            all_referenced_column_tokens,
+            referenced_table_tokens,
+        ):
+            return False
+
+        if not expects_dimension:
+            return True
 
         for table_reference in referenced_tables:
             table = self._table_for_sql_reference(table_reference, valid_tables)

@@ -1047,3 +1047,99 @@ def test_build_schema_grounded_table_question_sql_for_monthly_created_at_count()
         'ORDER BY DATEPART(YEAR, "dbo_failure_patterns"."created_at") ASC, '
         'DATEPART(MONTH, "dbo_failure_patterns"."created_at") ASC'
     )
+
+
+def test_build_validated_ask_result_rejects_status_for_product_line_pcb_question():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT "dbo_repair_logs"."status" AS "status" '
+            'FROM "dbo_repair_logs"'
+        ),
+        [
+            """
+            CREATE TABLE dbo_repair_logs (
+              status VARCHAR,
+              product_line VARCHAR,
+              pcb_issue VARCHAR,
+              created_at TIMESTAMP
+            );
+            """
+        ],
+        "Create a visualization of recurring PCB issues by product line.",
+    )
+
+    assert result is None
+
+
+def test_build_validated_ask_result_rejects_status_for_repair_cost_question():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT "dbo_repair_logs"."status" AS "status" '
+            'FROM "dbo_repair_logs"'
+        ),
+        [
+            """
+            CREATE TABLE dbo_repair_logs (
+              status VARCHAR,
+              repair_cost DOUBLE,
+              created_at TIMESTAMP
+            );
+            """
+        ],
+        "Generate a quarterly repair cost analysis chart.",
+    )
+
+    assert result is None
+
+
+def test_build_validated_ask_result_rejects_status_for_critical_repairs_question():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT "dbo_repair_logs"."status" AS "status" '
+            'FROM "dbo_repair_logs"'
+        ),
+        [
+            """
+            CREATE TABLE dbo_repair_logs (
+              status VARCHAR,
+              severity VARCHAR,
+              repair_id INTEGER
+            );
+            """
+        ],
+        "Create a stacked bar chart comparing critical vs non-critical repairs.",
+    )
+
+    assert result is None
+
+
+def test_build_validated_ask_result_accepts_product_line_pcb_question_sql():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT "dbo_repair_logs"."product_line" AS "product_line", '
+            '"dbo_repair_logs"."pcb_issue" AS "pcb_issue", '
+            'COUNT(*) AS "RecordCount" '
+            'FROM "dbo_repair_logs" '
+            'GROUP BY "dbo_repair_logs"."product_line", '
+            '"dbo_repair_logs"."pcb_issue"'
+        ),
+        [
+            """
+            CREATE TABLE dbo_repair_logs (
+              product_line VARCHAR,
+              pcb_issue VARCHAR
+            );
+            """
+        ],
+        "Create a visualization of recurring PCB issues by product line.",
+    )
+
+    assert result is not None
