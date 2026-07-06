@@ -505,6 +505,203 @@ class AskService:
 
         return tables
 
+    _INTENT_STOPWORDS = {
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "based",
+        "be",
+        "by",
+        "can",
+        "chart",
+        "correct",
+        "data",
+        "different",
+        "do",
+        "does",
+        "each",
+        "for",
+        "from",
+        "give",
+        "how",
+        "in",
+        "is",
+        "it",
+        "list",
+        "many",
+        "me",
+        "of",
+        "on",
+        "or",
+        "per",
+        "question",
+        "rate",
+        "records",
+        "reduce",
+        "show",
+        "system",
+        "taken",
+        "the",
+        "there",
+        "to",
+        "total",
+        "type",
+        "types",
+        "what",
+        "which",
+        "with",
+    }
+
+    def _intent_tokens(self, text: str) -> set[str]:
+        tokens: set[str] = set()
+        for raw_token in re.findall(r"[A-Za-z][A-Za-z0-9_]*", text or ""):
+            split_token = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", raw_token)
+            for token in re.findall(r"[A-Za-z0-9]+", split_token.lower()):
+                if len(token) <= 2 or token in self._INTENT_STOPWORDS:
+                    continue
+                tokens.add(token)
+                if token.endswith("ies") and len(token) > 4:
+                    tokens.add(token[:-3] + "y")
+                elif token.endswith("s") and len(token) > 3:
+                    tokens.add(token[:-1])
+        return tokens
+
+    def _schema_name_tokens(self, name: str) -> set[str]:
+        spaced = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", str(name or ""))
+        return {
+            token
+            for token in re.findall(r"[A-Za-z0-9]+", spaced.lower())
+            if len(token) > 1
+        }
+
+    def _table_for_sql_reference(
+        self, table_reference: str, valid_tables: dict[str, dict[str, Any]]
+    ) -> dict[str, Any] | None:
+        table_key = str(table_reference or "").lower()
+        if table_key in valid_tables:
+            return valid_tables[table_key]
+        suffix_key = table_key.split(".")[-1]
+        for valid_table_name, table in valid_tables.items():
+            if valid_table_name.split(".")[-1] == suffix_key:
+                return table
+        return None
+
+    def _sql_matches_question_intent(
+        self,
+        sql: str,
+        query: str | None,
+        schema_tables: list[dict[str, Any]],
+    ) -> bool:
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        expects_dimension = bool(
+            re.search(
+                r"\b(?:by|per|each|which|different|type|types|category|"
+                r"categories|status|source)\b",
+                normalized_query,
+            )
+        )
+        if not expects_dimension:
+            return True
+
+        question_tokens = self._intent_tokens(query or "")
+        if not question_tokens:
+            return True
+
+        valid_tables = {
+            str(table.get("name") or "").lower(): table
+            for table in schema_tables
+            if table.get("name")
+        }
+        if not valid_tables:
+            return True
+
+        table_reference_pattern = re.compile(
+            r'\b(?:FROM|JOIN)\s+(?:"(?P<quoted>[^"]+)"|'
+            r"\[(?P<bracketed>[^\]]+)\]|(?P<bare>[A-Za-z_][A-Za-z0-9_.$]*))",
+            flags=re.IGNORECASE,
+        )
+        referenced_tables = [
+            next(value for value in match.groupdict().values() if value)
+            for match in table_reference_pattern.finditer(sql)
+        ]
+        if not referenced_tables:
+            return True
+
+        qualified_column_pattern = re.compile(
+            r'(?:"(?P<table_quoted>[^"]+)"|\[(?P<table_bracketed>[^\]]+)\]|'
+            r"(?P<table_bare>[A-Za-z_][A-Za-z0-9_.$]*))\s*\.\s*"
+            r'(?:"(?P<column_quoted>[^"]+)"|\[(?P<column_bracketed>[^\]]+)\]|'
+            r"(?P<column_bare>[A-Za-z_][A-Za-z0-9_$]*))",
+            flags=re.IGNORECASE,
+        )
+        referenced_columns_by_table: dict[str, set[str]] = {}
+        for match in qualified_column_pattern.finditer(sql):
+            table_reference = (
+                match.group("table_quoted")
+                or match.group("table_bracketed")
+                or match.group("table_bare")
+                or ""
+            ).lower()
+            column_reference = (
+                match.group("column_quoted")
+                or match.group("column_bracketed")
+                or match.group("column_bare")
+                or ""
+            )
+            referenced_columns_by_table.setdefault(table_reference, set()).add(
+                column_reference
+            )
+
+        for table_reference in referenced_tables:
+            table = self._table_for_sql_reference(table_reference, valid_tables)
+            if not table:
+                continue
+
+            columns = [
+                column for column in table.get("columns", []) if column.get("name")
+            ]
+            intent_matching_columns = [
+                str(column.get("name"))
+                for column in columns
+                if self._schema_name_tokens(str(column.get("name"))) & question_tokens
+            ]
+            if not intent_matching_columns:
+                continue
+
+            table_key = str(table_reference or "").lower()
+            referenced_columns = referenced_columns_by_table.get(
+                table_key
+            ) or referenced_columns_by_table.get(
+                table_key.split(".")[-1],
+                set(),
+            )
+            referenced_column_tokens = (
+                set().union(
+                    *[
+                        self._schema_name_tokens(column_name)
+                        for column_name in referenced_columns
+                    ]
+                )
+                if referenced_columns
+                else set()
+            )
+
+            if not referenced_column_tokens & question_tokens:
+                logger.warning(
+                    "Ignoring SQL because selected columns do not match question intent. "
+                    "query=%s table=%s matching_schema_columns=%s referenced_columns=%s sql=%s",
+                    query,
+                    table.get("name"),
+                    intent_matching_columns,
+                    sorted(referenced_columns),
+                    sql,
+                )
+                return False
+
+        return True
+
     def _is_numeric_schema_type(self, column_type: str) -> bool:
         return bool(
             re.search(
@@ -2316,6 +2513,16 @@ class AskService:
                 score += 5
             if "repair" in normalized_query and "repair" in normalized_table:
                 score += 5
+            if "failure" in normalized_query and "failure" in normalized_table:
+                score += 8
+            if any(term in normalized_query for term in ("error", "failure")) and any(
+                self._find_schema_column(table, candidates)
+                for candidates in (
+                    ("failure_code", "FailureSys", "failure", "failure_type"),
+                    ("category", "name", "description"),
+                )
+            ):
+                score += 6
             if self._find_schema_column(
                 table,
                 ("created_at", "updated_at", "DateIn", "DateOut", "created", "date"),
@@ -2350,6 +2557,19 @@ class AskService:
         )
 
         dimension_candidates: list[tuple[str, ...]] = []
+        if any(term in normalized_query for term in ("failure", "failures", "error")):
+            dimension_candidates.append(
+                (
+                    "failure_code",
+                    "FailureSys",
+                    "failure",
+                    "failure_type",
+                    "failure_category",
+                    "category",
+                    "name",
+                    "description",
+                )
+            )
         if "manufacturing" in normalized_query or "unit" in normalized_query:
             dimension_candidates.append(
                 (
@@ -3265,6 +3485,7 @@ class AskService:
         self,
         sql: Optional[str],
         table_ddls: list[str],
+        query: str | None = None,
     ) -> Optional[AskResult]:
         if isinstance(sql, str):
             sql = normalize_sql_column_references_to_schema(
@@ -3354,6 +3575,13 @@ class AskService:
                 invalid_columns,
                 ask_result.sql,
             )
+            return None
+
+        if not self._sql_matches_question_intent(
+            ask_result.sql,
+            query,
+            schema_tables,
+        ):
             return None
 
         return ask_result
@@ -3692,6 +3920,7 @@ class AskService:
                         if ask_result := self._build_validated_ask_result_from_sql(
                             heuristic_sql,
                             table_ddls,
+                            user_query,
                         ):
                             api_results = [ask_result]
                             if not self._is_stopped(query_id, self._ask_results):
@@ -4213,6 +4442,7 @@ class AskService:
                         ask_result = self._build_validated_ask_result_from_sql(
                             heuristic_sql,
                             table_ddls,
+                            user_query,
                         )
                         if not ask_result:
                             invalid_sql = heuristic_sql
@@ -4480,14 +4710,16 @@ class AskService:
                 if sql_valid_result := text_to_sql_generation_results["post_process"][
                     "valid_generation_result"
                 ]:
-                    if ask_result := self._build_ask_result_from_sql(
-                        sql_valid_result.get("sql")
+                    if ask_result := self._build_validated_ask_result_from_sql(
+                        sql_valid_result.get("sql"),
+                        table_ddls,
+                        sql_user_query,
                     ):
                         api_results = [ask_result]
                     else:
                         invalid_sql = sql_valid_result.get("sql")
                         error_message = (
-                            "SQL generation did not produce a valid SELECT statement."
+                            "SQL generation did not produce SQL that matches the active datasource schema and question intent."
                         )
                 elif failed_dry_run_result := text_to_sql_generation_results[
                     "post_process"
@@ -4563,14 +4795,16 @@ class AskService:
                         if valid_generation_result := sql_correction_results[
                             "post_process"
                         ]["valid_generation_result"]:
-                            if ask_result := self._build_ask_result_from_sql(
-                                valid_generation_result.get("sql")
+                            if ask_result := self._build_validated_ask_result_from_sql(
+                                valid_generation_result.get("sql"),
+                                table_ddls,
+                                sql_user_query,
                             ):
                                 api_results = [ask_result]
                                 break
                             invalid_sql = valid_generation_result.get("sql")
                             error_message = (
-                                "SQL correction did not produce a valid SELECT statement."
+                                "SQL correction did not produce SQL that matches the active datasource schema and question intent."
                             )
 
                         failed_dry_run_result = sql_correction_results["post_process"][
@@ -4608,6 +4842,7 @@ class AskService:
                     ask_result = self._build_validated_ask_result_from_sql(
                         heuristic_sql,
                         table_ddls,
+                        user_query,
                     )
                     if not ask_result:
                         invalid_sql = heuristic_sql

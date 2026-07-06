@@ -840,6 +840,53 @@ def test_build_validated_ask_result_from_sql_normalizes_customer_to_account():
     assert result.sql == 'SELECT "dbo_tblFactSales"."account" FROM "dbo_tblFactSales"'
 
 
+def test_build_schema_grounded_operational_sql_prefers_failure_column_for_error_rate():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_operational_sql(
+        "What is the error rate in the repair data collection system for different types of failures?",
+        [
+            {
+                "name": "dbo_repair_logs",
+                "columns": [
+                    {"name": "status", "type": "varchar"},
+                    {"name": "failure_code", "type": "varchar"},
+                    {"name": "created_at", "type": "timestamp"},
+                ],
+            }
+        ],
+    )
+
+    assert sql is not None
+    assert '"dbo_repair_logs"."failure_code" AS "failure_code"' in sql
+    assert '"dbo_repair_logs"."status" AS "status"' not in sql
+
+
+def test_build_validated_ask_result_rejects_status_when_failure_field_matches_question():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT "dbo_repair_logs"."status" AS "status", '
+            'COUNT(*) AS "RecordCount" '
+            'FROM "dbo_repair_logs" '
+            'GROUP BY "dbo_repair_logs"."status"'
+        ),
+        [
+            """
+            CREATE TABLE dbo_repair_logs (
+              status VARCHAR,
+              failure_code VARCHAR,
+              created_at TIMESTAMP
+            );
+            """
+        ],
+        "What is the error rate for different types of failures?",
+    )
+
+    assert result is None
+
+
 def test_reusable_historical_question_allows_exact_recommended_question():
     assert AskService._is_reusable_historical_question(
         "How many tickets are currently open?",
