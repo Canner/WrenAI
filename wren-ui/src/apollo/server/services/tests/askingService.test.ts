@@ -1,4 +1,4 @@
-import { constructCteSql } from '../askingService';
+import { AskingService, constructCteSql } from '../askingService';
 
 describe('AskingService', () => {
   describe('utility: constructCteSql', () => {
@@ -92,6 +92,29 @@ describe('AskingService', () => {
         `WITH test1 AS\n-- test1 summary\n(SELECT * FROM test)` +
           `\n-- test2 summary\nSELECT * FROM test2`,
       );
+    });
+  });
+
+  describe('project lookup for thread response', () => {
+    test('falls back to current project when parent thread is missing', async () => {
+      const currentProject = { id: 2, type: 'mssql' };
+      const service = Object.create(AskingService.prototype) as any;
+      service.threadRepository = {
+        findOneBy: jest.fn().mockResolvedValue(null),
+      };
+      service.projectService = {
+        getCurrentProject: jest.fn().mockResolvedValue(currentProject),
+        getProjectById: jest.fn(),
+      };
+
+      const project = await service.getProjectForThreadResponse({
+        id: 10,
+        threadId: 530,
+      });
+
+      expect(project).toBe(currentProject);
+      expect(service.projectService.getCurrentProject).toHaveBeenCalledTimes(1);
+      expect(service.projectService.getProjectById).not.toHaveBeenCalled();
     });
   });
 });

@@ -1355,7 +1355,10 @@ export class AskingService implements IAskingService {
       id: threadResponse.threadId,
     });
     if (!thread) {
-      throw new Error(`Thread ${threadResponse.threadId} not found`);
+      logger.warn(
+        `Thread ${threadResponse.threadId} for response ${threadResponse.id} not found; falling back to current project`,
+      );
+      return this.projectService.getCurrentProject();
     }
 
     return this.projectService.getProjectById(thread.projectId);
