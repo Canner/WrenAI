@@ -528,6 +528,72 @@ describe('QueryService', () => {
     expect(mockIbisAdaptor.dryRun).toHaveBeenCalledTimes(1);
   });
 
+  it('should rewrite physical table references to active model names before ibis dry run', async () => {
+    mockIbisAdaptor.dryRun.mockResolvedValue({
+      correlationId: '123',
+      processTime: '1s',
+    });
+
+    await queryService.preview(
+      'SELECT "wrenai.public.dbo_failure"."created_at" FROM "wrenai.public.dbo_failure"',
+      {
+        project: { type: DataSourceName.POSTGRES, connectionInfo: {} },
+        manifest: {
+          models: [
+            {
+              name: 'dbo_failure_patterns',
+              tableReference: {
+                catalog: 'wrenai',
+                schema: 'public',
+                table: 'dbo_failure',
+              },
+              columns: [{ name: 'created_at' }],
+            },
+          ],
+        },
+        dryRun: true,
+      },
+    );
+
+    expect(mockIbisAdaptor.dryRun).toHaveBeenCalledWith(
+      'SELECT "dbo_failure_patterns"."created_at" FROM "dbo_failure_patterns"',
+      expect.any(Object),
+    );
+  });
+
+  it('should rewrite multipart physical table references to active model names before ibis dry run', async () => {
+    mockIbisAdaptor.dryRun.mockResolvedValue({
+      correlationId: '123',
+      processTime: '1s',
+    });
+
+    await queryService.preview(
+      'SELECT "wrenai"."public"."dbo_failure"."created_at" FROM "wrenai"."public"."dbo_failure"',
+      {
+        project: { type: DataSourceName.POSTGRES, connectionInfo: {} },
+        manifest: {
+          models: [
+            {
+              name: 'dbo_failure_patterns',
+              tableReference: {
+                catalog: 'wrenai',
+                schema: 'public',
+                table: 'dbo_failure',
+              },
+              columns: [{ name: 'created_at' }],
+            },
+          ],
+        },
+        dryRun: true,
+      },
+    );
+
+    expect(mockIbisAdaptor.dryRun).toHaveBeenCalledWith(
+      'SELECT "dbo_failure_patterns"."created_at" FROM "dbo_failure_patterns"',
+      expect.any(Object),
+    );
+  });
+
   it('should allow source tables referenced by active manifest refSql before ibis dry run', async () => {
     mockIbisAdaptor.dryRun.mockResolvedValue({
       correlationId: '123',
