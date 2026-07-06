@@ -718,6 +718,10 @@ const getManifestTableReferenceAliases = (manifest?: Manifest) => {
     }
 
     aliases.set(model.name.toLowerCase(), model.name);
+    const basePatternMatch = model.name.match(/^(.+)_patterns$/i);
+    if (basePatternMatch?.[1]) {
+      aliases.set(basePatternMatch[1].toLowerCase(), model.name);
+    }
     if (model.tableReference?.table) {
       addModelReferenceAlias(
         aliases,

@@ -594,6 +594,34 @@ describe('QueryService', () => {
     );
   });
 
+  it('should rewrite generated base pattern table references to active pattern model names before ibis dry run', async () => {
+    mockIbisAdaptor.dryRun.mockResolvedValue({
+      correlationId: '123',
+      processTime: '1s',
+    });
+
+    await queryService.preview(
+      'SELECT "dbo_failure"."created_at" FROM "dbo_failure"',
+      {
+        project: { type: DataSourceName.POSTGRES, connectionInfo: {} },
+        manifest: {
+          models: [
+            {
+              name: 'dbo_failure_patterns',
+              columns: [{ name: 'created_at' }],
+            },
+          ],
+        },
+        dryRun: true,
+      },
+    );
+
+    expect(mockIbisAdaptor.dryRun).toHaveBeenCalledWith(
+      'SELECT "dbo_failure_patterns"."created_at" FROM "dbo_failure_patterns"',
+      expect.any(Object),
+    );
+  });
+
   it('should allow source tables referenced by active manifest refSql before ibis dry run', async () => {
     mockIbisAdaptor.dryRun.mockResolvedValue({
       correlationId: '123',
