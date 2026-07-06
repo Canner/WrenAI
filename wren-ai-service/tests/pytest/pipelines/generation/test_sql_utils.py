@@ -98,6 +98,40 @@ def test_normalize_sql_table_references_to_schema_maps_unique_prefix_table():
     )
 
 
+def test_normalize_sql_table_references_to_schema_maps_single_quoted_full_table():
+    sql = (
+        'SELECT "wrenai.public.dbo_failure"."created_at" '
+        'FROM "wrenai.public.dbo_failure"'
+    )
+
+    normalized = normalize_sql_table_references_to_schema(
+        sql,
+        ["dbo_failure_patterns"],
+    )
+
+    assert normalized == (
+        'SELECT "dbo_failure_patterns"."created_at" '
+        'FROM "dbo_failure_patterns"'
+    )
+
+
+def test_normalize_sql_table_references_to_schema_maps_multipart_quoted_table():
+    sql = (
+        'SELECT "wrenai"."public"."dbo_failure"."created_at" '
+        'FROM "wrenai"."public"."dbo_failure"'
+    )
+
+    normalized = normalize_sql_table_references_to_schema(
+        sql,
+        ["dbo_failure_patterns"],
+    )
+
+    assert normalized == (
+        'SELECT "dbo_failure_patterns"."created_at" '
+        'FROM "dbo_failure_patterns"'
+    )
+
+
 def test_construct_valid_table_columns_adds_qualified_suffix_tables():
     documents = [
         'CREATE TABLE "wrenai"."public"."dbo_repair_logs" ("warning_signals" INTEGER);',

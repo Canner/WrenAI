@@ -2653,9 +2653,32 @@ def _find_semantic_column_alias(
 
 
 def _split_table_reference(table_reference: str) -> list[str]:
+    stripped = table_reference.strip()
+    if not stripped:
+        return []
+
+    is_multipart_quoted_reference = bool(
+        re.search(r'"\s*\.\s*"|\]\s*\.\s*\[|`\s*\.\s*`', stripped)
+    )
+    if (
+        not is_multipart_quoted_reference
+        and (
+            (stripped.startswith('"') and stripped.endswith('"'))
+            or (stripped.startswith("[") and stripped.endswith("]"))
+            or (stripped.startswith("`") and stripped.endswith("`"))
+        )
+    ):
+        normalized_identifier = _normalize_sql_identifier(stripped)
+        if "." in normalized_identifier:
+            return [
+                part
+                for part in re.split(r"\s*\.\s*", normalized_identifier)
+                if part.strip()
+            ]
+
     return [
         _normalize_sql_identifier(part)
-        for part in re.split(r"\s*\.\s*", table_reference.strip())
+        for part in re.split(r"\s*\.\s*", stripped)
         if part.strip()
     ]
 
@@ -2809,11 +2832,16 @@ def normalize_sql_table_references_to_schema(
         quoted_requested = r"\s*\.\s*".join(
             re.escape(_quote_sql_identifier(part)) for part in requested_parts
         )
+        single_quoted_requested = re.escape(_quote_sql_identifier(requested_table))
+        bracketed_requested = re.escape(f"[{requested_table}]")
+        backticked_requested = re.escape(f"`{requested_table}`")
         bare_requested = r"\s*\.\s*".join(
             re.escape(part) for part in requested_parts
         )
         table_pattern = re.compile(
-            rf"(?<![A-Za-z0-9_$])(?:{quoted_requested}|{bare_requested})"
+            rf"(?<![A-Za-z0-9_$])(?:{quoted_requested}|"
+            rf"{single_quoted_requested}|{bracketed_requested}|"
+            rf"{backticked_requested}|{bare_requested})"
             rf"(?![A-Za-z0-9_$])",
             flags=re.IGNORECASE,
         )
