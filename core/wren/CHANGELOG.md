@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.12.0](https://github.com/Canner/WrenAI/compare/wren-v0.11.0...wren-v0.12.0) (2026-07-06)
+
+
+### Features
+
+* **memory:** add 'wren memory watch' to auto-reindex on source changes ([#2418](https://github.com/Canner/WrenAI/issues/2418)) ([d5911c5](https://github.com/Canner/WrenAI/commit/d5911c5fb3352a8e7652d90db645b5d487084c37))
+* **policy:** govern data-reading TVFs in all positions + structure source-func allowlist ([#2419](https://github.com/Canner/WrenAI/issues/2419)) ([5ff51e4](https://github.com/Canner/WrenAI/commit/5ff51e4a0f941761b3e12c9975b88c77e0e3d892))
+* **wren:** add cross-dialect type translation to type_mapping ([#2410](https://github.com/Canner/WrenAI/issues/2410)) ([e124ff5](https://github.com/Canner/WrenAI/commit/e124ff538f512716a4d4779d495c6f4e38e3e072))
+
+
+### Bug Fixes
+
+* **athena:** strip trailing semicolon before EXPLAIN in dry_run ([#2421](https://github.com/Canner/WrenAI/issues/2421)) ([830dfbe](https://github.com/Canner/WrenAI/commit/830dfbeb7896e7321d63c799de73b71120d2d127))
+* **athena:** treat DECIMAL(p) as scale 0, not a default non-zero scale ([#2403](https://github.com/Canner/WrenAI/issues/2403)) ([22d3125](https://github.com/Canner/WrenAI/commit/22d3125ced39c4e463ebff4d6c05bbeac1ea6209))
+* **clickhouse:** default port-less clickhouse+https URLs to 8443, not 8123 ([#2412](https://github.com/Canner/WrenAI/issues/2412)) ([06a51a8](https://github.com/Canner/WrenAI/commit/06a51a81b002434365acacdf33d138599386df8f))
+* **clickhouse:** reconcile default port when `secure` is toggled via kwargs or query params ([#2426](https://github.com/Canner/WrenAI/issues/2426)) ([f28b886](https://github.com/Canner/WrenAI/commit/f28b8867fc7f534668742a3d003a67342fecc170))
+* **context:** preserve leading underscores in _snake_to_camel key conversion ([#2414](https://github.com/Canner/WrenAI/issues/2414)) ([0cf9fa3](https://github.com/Canner/WrenAI/commit/0cf9fa3ece85141ce5dcf51f0eba1908a6d547ce))
+* **databricks:** strip trailing semicolon before subquery-wrapping in dry_run ([#2422](https://github.com/Canner/WrenAI/issues/2422)) ([35abf74](https://github.com/Canner/WrenAI/commit/35abf747873bc0e9097bd299438c6bb3b31e5d7b))
+* **datafusion:** strip trailing semicolon before subquery-wrapping in query ([#2430](https://github.com/Canner/WrenAI/issues/2430)) ([8929764](https://github.com/Canner/WrenAI/commit/8929764310b51c2b59e4e67fbadd8ae41c1e2c3f))
+* **duckdb:** case-insensitive .duckdb discovery, deterministic attach aliases, and single-statement SQL hardening ([#2411](https://github.com/Canner/WrenAI/issues/2411)) ([cfbd209](https://github.com/Canner/WrenAI/commit/cfbd209d906497d0f2c0b481ffba08c9756d991c))
+* finish wren-engine → wrenai rename cleanup ([#2425](https://github.com/Canner/WrenAI/issues/2425)) ([0733d37](https://github.com/Canner/WrenAI/commit/0733d379e15f041235bd7ff7449ecc421834a7f4))
+* **genbi:** normalise null apps/schema_version in app index ([#2406](https://github.com/Canner/WrenAI/issues/2406)) ([0c031d6](https://github.com/Canner/WrenAI/commit/0c031d60b0fdbb28925970622434721f3fd631db))
+* **memory:** guard seed-query generation against null relationship models/condition ([#2424](https://github.com/Canner/WrenAI/issues/2424)) ([f96e978](https://github.com/Canner/WrenAI/commit/f96e9785cdc71655d7fbe5b6507f2f0b09720261))
+* **oracle:** strip trailing semicolon before subquery-wrapping ([#2423](https://github.com/Canner/WrenAI/issues/2423)) ([fe92e5b](https://github.com/Canner/WrenAI/commit/fe92e5b2a2870f9b40c763507e3a90e4a584bbde))
+* **osi:** skip empty expressions when picking a dialect expression ([#2413](https://github.com/Canner/WrenAI/issues/2413)) ([bcf78d1](https://github.com/Canner/WrenAI/commit/bcf78d19aa3dba61a79d633321f929f8a77ec740))
+* **policy:** block table-valued functions reached via JOIN in strict mode ([#2405](https://github.com/Canner/WrenAI/issues/2405)) ([a2a37b3](https://github.com/Canner/WrenAI/commit/a2a37b39556f05e2aaa1a9550540cec1ed0a1aed))
+* **postgres:** strip trailing semicolon before subquery-wrapping ([#2407](https://github.com/Canner/WrenAI/issues/2407)) ([3122f4f](https://github.com/Canner/WrenAI/commit/3122f4fbeda1175de21078296f7aaa4cf38b87cb))
+* **redshift:** strip trailing semicolon before subquery-wrapping ([#2420](https://github.com/Canner/WrenAI/issues/2420)) ([a60a14a](https://github.com/Canner/WrenAI/commit/a60a14a868e47162943b9634c6121b449cfe4cf6))
+* **trino:** treat DECIMAL(p) as scale 0, not a default non-zero scale ([#2404](https://github.com/Canner/WrenAI/issues/2404)) ([1be4baa](https://github.com/Canner/WrenAI/commit/1be4baaeba6f6a54febda73a5850bb47f25c6f40))
+
 ## [0.11.0](https://github.com/Canner/WrenAI/compare/wren-v0.10.1...wren-v0.11.0) (2026-06-26)
 
 
