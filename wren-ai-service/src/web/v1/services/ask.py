@@ -1031,6 +1031,14 @@ class AskService:
                 return column
         return None
 
+    def _find_any_temporal_schema_column(self, table: dict[str, Any]) -> str | None:
+        for column in table.get("columns", []):
+            column_name = str(column.get("name") or "")
+            column_type = str(column.get("type") or "")
+            if column_name and self._is_temporal_schema_type(column_type):
+                return column_name
+        return None
+
     def _quote_sql_identifier(self, identifier: str) -> str:
         return f'"{identifier.replace(chr(34), chr(34) + chr(34))}"'
 
@@ -1134,18 +1142,7 @@ class AskService:
             ):
                 return column_name
 
-        return self._find_first_schema_column(
-            table,
-            (
-                "created_at",
-                "createdat",
-                "created",
-                "date",
-                "time",
-                "timestamp",
-                "updated_at",
-            ),
-        )
+        return self._find_any_temporal_schema_column(table)
 
     def _build_schema_grounded_table_question_sql(
         self, query: str, table_ddls: list[str]
@@ -3171,16 +3168,47 @@ class AskService:
         limit = int(limit_match.group(1)) if limit_match else 10
 
         if wants_elapsed_time:
+            temporal_columns = [
+                str(column.get("name") or "")
+                for column in table.get("columns", [])
+                if column.get("name")
+                and self._is_temporal_schema_type(str(column.get("type") or ""))
+            ]
             start_column = self._find_schema_column(
                 table,
-                ("created_at", "created", "DateIn"),
+                (
+                    "created_at",
+                    "created",
+                    "DateIn",
+                    "execution_date",
+                    "opened_at",
+                    "started_at",
+                    "start_date",
+                    "begin_date",
+                ),
                 temporal=True,
             )
             end_column = self._find_schema_column(
                 table,
-                ("updated_at", "updated", "DateOut", "closed_at", "resolved_at"),
+                (
+                    "updated_at",
+                    "updated",
+                    "DateOut",
+                    "closed_at",
+                    "resolved_at",
+                    "completed_at",
+                    "finished_at",
+                    "end_date",
+                ),
                 temporal=True,
             )
+            if not start_column and temporal_columns:
+                start_column = temporal_columns[0]
+            if not end_column:
+                for candidate in temporal_columns:
+                    if candidate.lower() != str(start_column or "").lower():
+                        end_column = candidate
+                        break
             if start_column and end_column:
                 start_ref = f"{table_ref}.{self._quote_sql_identifier(start_column)}"
                 end_ref = f"{table_ref}.{self._quote_sql_identifier(end_column)}"
@@ -3316,6 +3344,33 @@ class AskService:
                     "The active datasource does not expose a queryable date or "
                     "timestamp column. I cannot build a throughput trend without "
                     "a first-class temporal field."
+                )
+
+        if any(
+            term in normalized_query
+            for term in (
+                "monthly",
+                "trend",
+                "turnaround",
+                "time",
+                "duration",
+                "elapsed",
+                "latest",
+                "recent",
+                "newest",
+                "last records",
+            )
+        ):
+            has_temporal_field = any(
+                self._is_temporal_schema_type(str(column.get("type") or ""))
+                for table in self._parse_schema_tables(table_ddls)
+                for column in table.get("columns", [])
+            )
+            if not has_temporal_field:
+                return (
+                    "The active datasource does not expose a queryable date or "
+                    "timestamp column. I cannot build a time-based analysis "
+                    "without a first-class temporal field."
                 )
 
         repair_cost_terms = (
