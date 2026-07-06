@@ -4059,6 +4059,12 @@ class AskService:
             return None
 
         schema_tables = self._parse_schema_tables(table_ddls)
+        if not schema_tables:
+            logger.warning(
+                "Ignoring SQL because no active schema tables were available for validation. sql=%s",
+                ask_result.sql,
+            )
+            return None
         valid_tables = {
             str(table.get("name") or "").lower(): table
             for table in schema_tables
