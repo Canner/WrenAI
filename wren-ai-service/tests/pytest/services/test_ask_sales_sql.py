@@ -1143,3 +1143,57 @@ def test_build_validated_ask_result_accepts_product_line_pcb_question_sql():
     )
 
     assert result is not None
+
+
+def test_build_validated_ask_result_rejects_unqualified_invalid_columns():
+    service = AskService.__new__(AskService)
+    table_ddls = [
+        """
+        CREATE TABLE dbo_repair_logs (
+          created_at TIMESTAMP,
+          updated_at TIMESTAMP,
+          status VARCHAR,
+          name VARCHAR,
+          occurrences INTEGER
+        );
+        """
+    ]
+
+    invalid_sqls = [
+        'SELECT DATEPART(MONTH, execution_date) AS "month", COUNT(*) AS "RecordCount" FROM "dbo_repair_logs" GROUP BY DATEPART(MONTH, execution_date)',
+        'SELECT created_by AS "created_by", COUNT(*) AS "RecordCount" FROM "dbo_repair_logs" GROUP BY created_by',
+        'SELECT physical_name AS "physical_name", occurrences FROM "dbo_repair_logs" ORDER BY occurrences DESC',
+    ]
+
+    for sql in invalid_sqls:
+        assert (
+            service._build_validated_ask_result_from_sql(
+                sql,
+                table_ddls,
+                "Show top 10 failure pattern names by occurrences.",
+            )
+            is None
+        )
+
+
+def test_build_validated_ask_result_accepts_unqualified_valid_columns():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT name AS "name", occurrences AS "occurrences" '
+            'FROM "dbo_repair_logs" '
+            'ORDER BY occurrences DESC'
+        ),
+        [
+            """
+            CREATE TABLE dbo_repair_logs (
+              name VARCHAR,
+              occurrences INTEGER
+            );
+            """
+        ],
+        "Show top 10 failure pattern names by occurrences.",
+    )
+
+    assert result is not None

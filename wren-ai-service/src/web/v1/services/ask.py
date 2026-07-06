@@ -661,6 +661,151 @@ class AskService:
             return False
         return True
 
+    def _invalid_unqualified_sql_identifiers(
+        self, sql: str, schema_tables: list[dict[str, Any]]
+    ) -> list[str]:
+        valid_columns = {
+            str(column.get("name") or "").lower()
+            for table in schema_tables
+            for column in table.get("columns", [])
+            if column.get("name")
+        }
+        valid_tables = {
+            str(table.get("name") or "").lower()
+            for table in schema_tables
+            if table.get("name")
+        }
+        valid_table_suffixes = {table_name.split(".")[-1] for table_name in valid_tables}
+        allowed_words = {
+            "and",
+            "as",
+            "asc",
+            "avg",
+            "by",
+            "case",
+            "cast",
+            "count",
+            "datepart",
+            "day",
+            "desc",
+            "distinct",
+            "else",
+            "end",
+            "from",
+            "group",
+            "having",
+            "in",
+            "is",
+            "join",
+            "limit",
+            "month",
+            "not",
+            "null",
+            "on",
+            "or",
+            "order",
+            "over",
+            "partition",
+            "quarter",
+            "select",
+            "sum",
+            "then",
+            "top",
+            "when",
+            "where",
+            "with",
+            "year",
+        }
+        aliases = {
+            (match.group("quoted") or match.group("bare") or "").lower()
+            for match in re.finditer(
+                r'\bAS\s+(?:"(?P<quoted>[^"]+)"|(?P<bare>[A-Za-z_][A-Za-z0-9_]*))',
+                sql or "",
+                flags=re.IGNORECASE,
+            )
+        }
+
+        sql_without_strings = re.sub(r"'(?:''|[^'])*'", "''", sql or "")
+        identifier_pattern = re.compile(
+            r'"(?P<quoted>[^"]+)"|(?P<bare>\b[A-Za-z_][A-Za-z0-9_]*\b)'
+        )
+        invalid: list[str] = []
+        for match in identifier_pattern.finditer(sql_without_strings):
+            identifier = match.group("quoted") or match.group("bare") or ""
+            identifier_key = identifier.lower()
+            if not identifier_key:
+                continue
+
+            before = sql_without_strings[: match.start()].rstrip()
+            after = sql_without_strings[match.end() :].lstrip()
+            if before.endswith(".") or after.startswith("."):
+                continue
+
+            previous_word_match = re.search(r"([A-Za-z_][A-Za-z0-9_]*)\s*$", before)
+            previous_word = (
+                previous_word_match.group(1).lower() if previous_word_match else ""
+            )
+            if previous_word == "as":
+                continue
+
+            order_by_context = bool(
+                re.search(r"\bORDER\s+BY\b[^)]*$", before, flags=re.IGNORECASE)
+            )
+            if order_by_context and identifier_key in aliases:
+                continue
+
+            if (
+                identifier_key in valid_columns
+                or identifier_key in valid_tables
+                or identifier_key in valid_table_suffixes
+                or identifier_key in allowed_words
+            ):
+                continue
+
+            if identifier not in invalid:
+                invalid.append(identifier)
+
+        return invalid
+
+    def _unqualified_valid_sql_column_tokens(
+        self, sql: str, schema_tables: list[dict[str, Any]]
+    ) -> set[str]:
+        valid_columns = {
+            str(column.get("name") or "").lower(): str(column.get("name") or "")
+            for table in schema_tables
+            for column in table.get("columns", [])
+            if column.get("name")
+        }
+        if not valid_columns:
+            return set()
+
+        sql_without_strings = re.sub(r"'(?:''|[^'])*'", "''", sql or "")
+        identifier_pattern = re.compile(
+            r'"(?P<quoted>[^"]+)"|(?P<bare>\b[A-Za-z_][A-Za-z0-9_]*\b)'
+        )
+        tokens: set[str] = set()
+        for match in identifier_pattern.finditer(sql_without_strings):
+            identifier = match.group("quoted") or match.group("bare") or ""
+            identifier_key = identifier.lower()
+            if identifier_key not in valid_columns:
+                continue
+
+            before = sql_without_strings[: match.start()].rstrip()
+            after = sql_without_strings[match.end() :].lstrip()
+            if before.endswith(".") or after.startswith("."):
+                continue
+
+            previous_word_match = re.search(r"([A-Za-z_][A-Za-z0-9_]*)\s*$", before)
+            previous_word = (
+                previous_word_match.group(1).lower() if previous_word_match else ""
+            )
+            if previous_word == "as":
+                continue
+
+            tokens.update(self._schema_name_tokens(valid_columns[identifier_key]))
+
+        return tokens
+
     def _sql_matches_question_intent(
         self,
         sql: str,
@@ -736,6 +881,9 @@ class AskService:
                 for column_name in columns
             ]
         ) if referenced_columns_by_table else set()
+        all_referenced_column_tokens.update(
+            self._unqualified_valid_sql_column_tokens(sql, schema_tables)
+        )
         if not self._sql_covers_required_question_concepts(
             sql,
             query,
@@ -778,7 +926,7 @@ class AskService:
                     ]
                 )
                 if referenced_columns
-                else set()
+                else all_referenced_column_tokens
             )
 
             if not referenced_column_tokens & question_tokens:
@@ -3871,6 +4019,19 @@ class AskService:
             )
             return None
 
+        invalid_unqualified_identifiers = self._invalid_unqualified_sql_identifiers(
+            ask_result.sql,
+            schema_tables,
+        )
+        if invalid_unqualified_identifiers:
+            logger.warning(
+                "Ignoring SQL because it references unqualified fields outside the active schema. "
+                "invalid_identifiers=%s sql=%s",
+                invalid_unqualified_identifiers,
+                ask_result.sql,
+            )
+            return None
+
         if not self._sql_matches_question_intent(
             ask_result.sql,
             query,
@@ -4725,14 +4886,18 @@ class AskService:
                         "Using schema-grounded audit log activity SQL for query_id %s",
                         query_id,
                     )
-                    api_results = [
-                        AskResult(
-                            **{
-                                "sql": audit_log_activity_sql,
-                                "type": "llm",
-                            }
+                    ask_result = self._build_validated_ask_result_from_sql(
+                        audit_log_activity_sql,
+                        table_ddls,
+                        user_query,
+                    )
+                    if ask_result:
+                        api_results = [ask_result]
+                    else:
+                        invalid_sql = audit_log_activity_sql
+                        error_message = (
+                            "Schema-grounded audit SQL was not valid for the active datasource schema and question intent."
                         )
-                    ]
 
                 if not api_results and (
                     deterministic_sales_sql := self._build_schema_grounded_sales_sql(
@@ -4743,14 +4908,18 @@ class AskService:
                         "Using schema-grounded CWSales SQL for query_id %s",
                         query_id,
                     )
-                    api_results = [
-                        AskResult(
-                            **{
-                                "sql": deterministic_sales_sql,
-                                "type": "llm",
-                            }
+                    ask_result = self._build_validated_ask_result_from_sql(
+                        deterministic_sales_sql,
+                        table_ddls,
+                        user_query,
+                    )
+                    if ask_result:
+                        api_results = [ask_result]
+                    else:
+                        invalid_sql = deterministic_sales_sql
+                        error_message = (
+                            "Schema-grounded SQL was not valid for the active datasource schema and question intent."
                         )
-                    ]
 
                 if unqueryable_metric_message := self._get_unqueryable_metric_message(
                     user_query, table_ddls
