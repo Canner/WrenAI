@@ -306,6 +306,24 @@ def test_normalize_sql_column_references_to_schema_maps_sales_business_aliases()
     ) == []
 
 
+def test_normalize_sql_column_references_to_schema_maps_period_to_timeid():
+    sql = 'SELECT "dbo_tblFactSales"."Period" FROM "dbo_tblFactSales"'
+
+    normalized = normalize_sql_column_references_to_schema(
+        sql,
+        {
+            "dbo_tblFactSales": [
+                "account",
+                "customerpo",
+                "timeid",
+                "amount",
+            ]
+        },
+    )
+
+    assert normalized == 'SELECT "dbo_tblFactSales"."timeid" FROM "dbo_tblFactSales"'
+
+
 def test_normalize_sql_column_references_to_schema_maps_debug_business_aliases():
     sql = (
         'SELECT COUNT("FixLogId") AS "FixLogCount" '

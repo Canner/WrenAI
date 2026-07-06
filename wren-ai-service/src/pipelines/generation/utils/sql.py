@@ -2622,6 +2622,9 @@ _SEMANTIC_COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     ),
     "invoicequantity": ("Qty", "Quantity", "InvoiceQty", "InvoiceCount"),
     "otddate": ("InvDate", "OrdDate", "OrderDate", "InvoiceDate", "Date"),
+    "period": ("timeid", "TimeID", "TimeId", "YearInd", "Year", "Date"),
+    "periodid": ("timeid", "TimeID", "TimeId"),
+    "timeid": ("timeid", "TimeID", "TimeId"),
     "customerregion": ("Country", "Market", "Region", "CustomerRegion"),
     "fixlogid": ("DebugEntryId", "FixId", "RepairItem", "id"),
 }
