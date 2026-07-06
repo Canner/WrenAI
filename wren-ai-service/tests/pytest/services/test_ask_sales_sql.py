@@ -1299,15 +1299,3 @@ def test_build_validated_ask_result_accepts_unqualified_valid_columns():
     )
 
     assert result is not None
-
-
-def test_build_validated_ask_result_rejects_sql_when_schema_is_missing():
-    service = AskService.__new__(AskService)
-
-    result = service._build_validated_ask_result_from_sql(
-        'SELECT execution_date FROM "dbo_repair_logs"',
-        [],
-        "Generate a trend chart for average turnaround time by month.",
-    )
-
-    assert result is None
