@@ -1,6 +1,6 @@
 # wren-pydantic
 
-Pydantic AI integration for Wren AI. Attach a CLI-prepared Wren project to your agent as a toolkit, with the semantic layer doing schema resolution, memory recall, and SQL execution.
+Pydantic AI integration for Wren AI. Attach a CLI-prepared Wren project to your agent as a toolkit, with the context layer doing schema resolution, memory recall, and SQL execution.
 
 **Use this SDK when**: you're building a [Pydantic AI](https://ai.pydantic.dev) agent that needs to answer data questions against a Wren project. For one-shot CLI use, the `wren` command is fine on its own.
 
@@ -96,7 +96,7 @@ Wren-aware instructions string that adapts to enabled tools and includes your pr
 
 | Tool | Returns | Purpose |
 |---|---|---|
-| `wren_query` | `WrenQueryResult` | Execute SQL through Wren's semantic layer; capped at 1000 rows |
+| `wren_query` | `WrenQueryResult` | Execute SQL through Wren's context layer; capped at 1000 rows |
 | `wren_dry_plan` | `str` | Plan SQL without execution; verifies it targets MDL models correctly |
 | `wren_list_models` | `list[ModelSummary]` | List project models with column counts and descriptions |
 | `wren_fetch_context` | `FetchContextResult` | Retrieve schema and business context for a natural-language question |

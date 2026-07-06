@@ -86,7 +86,7 @@ Add a cube when:
 Do **not** add a cube when:
 
 - The metric is exploratory or one-off (a SQL query is fine)
-- The metric definition is still under debate (write it in `instructions.md` first)
+- The metric definition is still under debate (write it in `knowledge/rules/` first)
 - There is no clear grain (cubes need explicit measures + dimensions)
 
 ## When to come back here

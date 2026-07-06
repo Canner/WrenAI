@@ -8,7 +8,7 @@ Turn your warehouse schema into an agent-readable MDL project that captures your
 
 ## What you'll end up with
 
-- A Wren project directory with `wren_project.yml`, `models/`, `views/`, `relationships.yml`, and `instructions.md`
+- A Wren project directory with `wren_project.yml`, `models/`, `views/`, `relationships.yml`, and `knowledge/`
 - A compiled `target/mdl.json` ready for the engine
 - A memory index over the modeled schema, so agents can fetch relevant context per question
 - A first query that runs through MDL, not against raw tables
@@ -36,7 +36,7 @@ The first pass is rough but functional. The agent produces:
 - **One model per physical table** with explicit column declarations (no `SELECT *` ambiguity)
 - **Type normalization** through `wren utils parse-type` so the manifest types are canonical
 - **Primary keys and relationships** inferred from foreign-key metadata where the connector exposes them
-- **Empty `instructions.md`** for you to fill with business rules
+- **An empty `knowledge/` base** for you to fill with business rules (`knowledge/rules/`)
 
 Everything is YAML you can review and version. Nothing is locked behind a UI.
 
@@ -73,7 +73,7 @@ wren memory index
 
 - A new table or domain enters your warehouse
 - Schema drift breaks an existing model
-- Your team agrees on a new metric definition worth promoting from `instructions.md` into a calculated field
+- Your team agrees on a new metric definition worth promoting from `knowledge/rules/` into a calculated field
 - An AI coding agent suggests a structural change worth reviewing
 
 ## See also

@@ -257,7 +257,7 @@ in the [Migration reference](/oss/reference/migration).
 - Adding a new environment (staging / preview / customer X)
 - Onboarding a new teammate (point them at `~/.wren/profiles.yml` setup)
 - A schema_version bump shows up in a release
-- Migrating from another semantic layer manifest
+- Migrating from another tool's semantic-layer manifest
 
 ## See also
 

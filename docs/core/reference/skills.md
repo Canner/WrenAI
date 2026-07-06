@@ -128,7 +128,7 @@ User says "install wren" / "set up wren"
 | **One step per round-trip** | Avoids overwhelming the user; keeps each turn focused |
 | **Never ask for credentials in chat** | Host, port, user, password, tokens all go through `.env` only |
 | **Never invent connection field names** | Always run `wren docs connection-info <ds>` to introspect real fields |
-| **Never query the database before MDL is built** | Forces the agent to scaffold a semantic layer first |
+| **Never query the database before MDL is built** | Forces the agent to scaffold a context layer first |
 
 ### When to trigger
 
@@ -186,7 +186,7 @@ The skill includes a two-layer error diagnosis strategy:
 | **DB-level** | `wren dry-plan` succeeds but execution fails | Type mismatch, permissions, dialect issues |
 
 The agent checks `dry-plan` output first to isolate whether the error is
-in the semantic layer or the database.
+in the context layer or the database.
 
 ### Additional workflows
 

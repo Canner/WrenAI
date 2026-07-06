@@ -38,7 +38,7 @@ The agent will check your environment, install Python dependencies, create a con
 
 ## 3. Start asking questions
 
-Once onboarding finishes, just ask your agent business questions in natural language. The agent uses Wren AI's semantic layer to resolve schema, recall similar past queries, and generate accurate SQL.
+Once onboarding finishes, just ask your agent business questions in natural language. The agent uses Wren AI's context layer to resolve schema, recall similar past queries, and generate accurate SQL.
 
 ```text
 How many customers placed more than one order this month?
