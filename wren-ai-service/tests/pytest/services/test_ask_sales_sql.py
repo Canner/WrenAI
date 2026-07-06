@@ -819,6 +819,27 @@ def test_build_validated_ask_result_from_sql_normalizes_column_case_to_schema():
     assert result.sql == 'SELECT "dbo_tblFactSales"."timeid" FROM "dbo_tblFactSales"'
 
 
+def test_build_validated_ask_result_from_sql_normalizes_customer_to_account():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        'SELECT "dbo_tblFactSales"."customer" FROM "dbo_tblFactSales"',
+        [
+            """
+            CREATE TABLE dbo_tblFactSales (
+              account VARCHAR,
+              customerpo VARCHAR,
+              timeid VARCHAR,
+              amount DOUBLE
+            );
+            """
+        ],
+    )
+
+    assert result is not None
+    assert result.sql == 'SELECT "dbo_tblFactSales"."account" FROM "dbo_tblFactSales"'
+
+
 def test_reusable_historical_question_allows_exact_recommended_question():
     assert AskService._is_reusable_historical_question(
         "How many tickets are currently open?",
