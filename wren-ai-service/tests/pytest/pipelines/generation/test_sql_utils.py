@@ -930,6 +930,26 @@ def test_normalize_generation_result_sql_rewrites_qualified_month_field_for_mssq
     assert 'ORDER BY DATEPART(MONTH, "dbo_repair_logs"."created_at") ASC' in normalized
 
 
+def test_normalize_generation_result_sql_rewrites_aggregate_qualified_temporal_column_for_mssql():
+    sql = """
+    SELECT
+      DATEPART(YEAR, "SUM"."created_at") AS "year",
+      DATEPART(MONTH, "SUM"."created_at") AS "month",
+      COUNT(*) AS "ticket_count"
+    FROM "dbo_tickets"
+    GROUP BY DATEPART(YEAR, "SUM"."created_at"), DATEPART(MONTH, "SUM"."created_at")
+    ORDER BY DATEPART(YEAR, "SUM"."created_at"), DATEPART(MONTH, "SUM"."created_at")
+    """
+
+    normalized = normalize_generation_result_sql(sql, data_source="MSSQL")
+
+    assert '"SUM"."created_at"' not in normalized
+    assert 'DATEPART(YEAR, "dbo_tickets"."created_at") AS "year"' in normalized
+    assert 'DATEPART(MONTH, "dbo_tickets"."created_at") AS "month"' in normalized
+    assert 'GROUP BY DATEPART(YEAR, "dbo_tickets"."created_at")' in normalized
+    assert 'ORDER BY DATEPART(YEAR, "dbo_tickets"."created_at")' in normalized
+
+
 def test_normalize_generation_result_sql_rewrites_unquoted_qualified_month_field_for_mssql():
     sql = """
     SELECT

@@ -528,6 +528,44 @@ def _infer_mssql_timestamp_expression(sql: str) -> str | None:
     return None
 
 
+def _rewrite_mssql_aggregate_qualified_temporal_columns(sql: str) -> str:
+    table_references = extract_sql_table_references(sql)
+    if len(table_references) != 1:
+        return sql
+
+    table_name = table_references[0]
+    if not table_name:
+        return sql
+
+    table_ref = _quote_sql_identifier(table_name)
+    aggregate_qualifier_pattern = (
+        r'(?:"(?:SUM|COUNT|AVG|MIN|MAX)"|\[(?:SUM|COUNT|AVG|MIN|MAX)\]|'
+        r'\b(?:SUM|COUNT|AVG|MIN|MAX)\b)'
+    )
+    temporal_column_pattern = (
+        r'(?:"(?P<quoted>created_at|updated_at|generated_at|opened_at|closed_at|'
+        r'completed_at|resolved_at|DateIn|DateOut|FailedAt)"|'
+        r'\[(?P<bracketed>created_at|updated_at|generated_at|opened_at|closed_at|'
+        r'completed_at|resolved_at|DateIn|DateOut|FailedAt)\]|'
+        r'(?P<bare>created_at|updated_at|generated_at|opened_at|closed_at|'
+        r'completed_at|resolved_at|DateIn|DateOut|FailedAt))'
+    )
+    pattern = re.compile(
+        rf"{aggregate_qualifier_pattern}\s*\.\s*{temporal_column_pattern}",
+        re.IGNORECASE,
+    )
+
+    def replace_reference(match: re.Match[str]) -> str:
+        column = (
+            match.group("quoted")
+            or match.group("bracketed")
+            or match.group("bare")
+        )
+        return f"{table_ref}.{_quote_sql_identifier(str(column))}"
+
+    return pattern.sub(replace_reference, sql)
+
+
 def _rewrite_mssql_invented_date_identifiers(sql: str) -> str:
     timestamp_expression = _infer_mssql_timestamp_expression(sql)
     if not timestamp_expression:
@@ -1395,6 +1433,7 @@ def _rewrite_known_schema_hallucinations(sql: str, now: datetime) -> str:
     normalized = _unwrap_simple_mssql_where_parentheses(normalized)
     normalized = _rewrite_mssql_limit_clause(normalized)
     normalized = _rewrite_mssql_to_date_buckets(normalized)
+    normalized = _rewrite_mssql_aggregate_qualified_temporal_columns(normalized)
     normalized = _rewrite_mssql_invented_date_identifiers(normalized)
     normalized = _rewrite_mssql_invented_repair_relationship_identifiers(normalized)
     normalized = _rewrite_mssql_repair_log_turnaround_trend_shape(normalized)
@@ -1481,6 +1520,7 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
         normalized = _rewrite_mssql_to_date_buckets(normalized)
         normalized = _rewrite_mssql_timestamp_casts(normalized)
         normalized = _rewrite_mssql_sales_schema_aliases(normalized)
+        normalized = _rewrite_mssql_aggregate_qualified_temporal_columns(normalized)
         normalized = _rewrite_mssql_invented_date_identifiers(normalized)
         normalized = _rewrite_mssql_invented_repair_relationship_identifiers(
             normalized
