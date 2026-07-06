@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import atexit
+import json
+import os
+import shutil
+import sys
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -37,6 +41,79 @@ def _mdl_is_stale(project: Path, mdl_path: Path) -> bool:
     return False
 
 
+def _serve_args(
+    project: Path, profile: str | None, allow_write: bool, no_connect: bool
+) -> list[str]:
+    """Reconstruct the stdio `serve mcp` args for a client config."""
+    args = ["serve", "mcp", "--project", str(project)]
+    if profile:
+        args += ["--profile", profile]
+    if allow_write:
+        args.append("--allow-write")
+    if no_connect:
+        args.append("--no-connect")
+    return args
+
+
+def _print_connection_help(
+    *,
+    transport: str,
+    host: str,
+    port: int,
+    project: Path,
+    profile: str | None,
+    allow_write: bool,
+    no_connect: bool,
+) -> None:
+    """Print client-registration guidance.
+
+    Always to stderr — on stdio transport, stdout is the MCP protocol channel
+    and must not be polluted.
+    """
+    wren_cmd = shutil.which("wren") or sys.argv[0] or "wren"
+    wren_home = os.environ.get("WREN_HOME")
+    line = "─" * 68
+
+    def echo(msg: str = "") -> None:
+        typer.echo(msg, err=True)
+
+    echo(line)
+    if transport == "http":
+        url = f"http://{host}:{port}/mcp"
+        echo(" wren MCP server — Streamable HTTP")
+        echo(f"   URL: {url}")
+        echo("")
+        echo(" Register with a client:")
+        echo(f"   Claude Code   claude mcp add --transport http wren {url}")
+        echo(f"   Codex         codex mcp add wren --url {url}")
+        echo(
+            "   Inspector     npx @modelcontextprotocol/inspector   "
+            "(Streamable HTTP → the URL above)"
+        )
+        echo("")
+        echo(" Press Ctrl+C to stop.")
+    else:
+        args = _serve_args(project, profile, allow_write, no_connect)
+        argline = " ".join(args)
+        env_flag = f" -e WREN_HOME={wren_home}" if wren_home else ""
+        echo(" wren MCP server — stdio (your MCP client spawns this process)")
+        echo("")
+        echo(" Register with a client:")
+        echo(f"   Claude Code   claude mcp add wren{env_flag} -- {wren_cmd} {argline}")
+        echo(f"   Codex         codex mcp add wren{env_flag} -- {wren_cmd} {argline}")
+        echo("")
+        echo(" Or add to an IDE MCP config (Claude Desktop / Cursor / VS Code):")
+        server: dict = {"command": wren_cmd, "args": args}
+        if wren_home:
+            server["env"] = {"WREN_HOME": wren_home}
+        config = {"mcpServers": {"wren": server}}
+        for cfg_line in json.dumps(config, indent=2).splitlines():
+            echo(f"   {cfg_line}")
+        echo("")
+        echo(" Waiting for a client on stdin…")
+    echo(line)
+
+
 @serve_app.command("mcp")
 def serve_mcp(
     transport: Annotated[
@@ -66,6 +143,14 @@ def serve_mcp(
         typer.Option(
             "--no-connect",
             help="Transpile-only mode: disable run_sql, dry_run, and query_cube.",
+        ),
+    ] = False,
+    quiet: Annotated[
+        bool,
+        typer.Option(
+            "--quiet",
+            "-q",
+            help="Suppress the client-registration help banner.",
         ),
     ] = False,
 ) -> None:
@@ -156,4 +241,14 @@ def serve_mcp(
         allow_write=allow_write,
         no_connect=no_connect,
     )
+    if not quiet:
+        _print_connection_help(
+            transport=transport,
+            host=host,
+            port=port,
+            project=project_path,
+            profile=profile,
+            allow_write=allow_write,
+            no_connect=no_connect,
+        )
     run_server(ctx, transport=transport, host=host, port=port)

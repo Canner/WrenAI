@@ -37,10 +37,15 @@ Add `--allow-write` to enable `store_query` (off by default — the server is
 otherwise read-only), or `--no-connect` for a transpile-only server that never
 touches the database (`run_sql` / `dry_run` / `query_cube` are disabled).
 
+On startup the server prints ready-to-copy registration commands for exactly the
+invocation you ran — a `claude mcp add` / `codex mcp add` line for HTTP, and those
+plus a JSON `mcpServers` block for stdio. Pass `--quiet` to silence it.
+
 ## Wire it into a client
 
-Most desktop/IDE MCP clients take a JSON config that spawns the server over
-stdio:
+The startup banner already prints the commands below filled in for your project;
+this section explains them. Most desktop/IDE MCP clients take a JSON config that
+spawns the server over stdio:
 
 ```json
 {

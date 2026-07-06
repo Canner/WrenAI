@@ -402,6 +402,13 @@ Requires the `mcp` extra: `pip install 'wrenai[mcp]'`.
 | `--profile` | active profile | Connection profile name |
 | `--allow-write` | off | Enable the `store_query` write tool |
 | `--no-connect` | off | Transpile-only mode: disable `run_sql`, `dry_run`, `query_cube` |
+| `--quiet` / `-q` | off | Suppress the client-registration help banner |
+
+On startup the server prints (to stderr) ready-to-copy registration commands for
+the running invocation — a `claude mcp add` / `codex mcp add` command for
+`--transport http`, and those plus a JSON `mcpServers` config block for stdio
+(reflecting `--project`, `--profile`, `--allow-write`, and `WREN_HOME`). Pass
+`--quiet` to suppress it.
 
 Requires `target/mdl.json` to exist (`wren context build` first) — errors with
 a hint otherwise. If project source files (`models/`, `views/`, `cubes/`,
