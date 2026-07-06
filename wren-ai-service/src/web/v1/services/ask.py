@@ -204,20 +204,7 @@ class AskService:
         )
         if not normalized_query or not normalized_historical_question:
             return False
-        if normalized_query == normalized_historical_question:
-            return True
-
-        query_tokens = cls._historical_question_tokens(normalized_query)
-        historical_tokens = cls._historical_question_tokens(
-            normalized_historical_question
-        )
-        if len(query_tokens) < 2 or len(historical_tokens) < 2:
-            return False
-
-        overlap = query_tokens & historical_tokens
-        coverage = len(overlap) / max(len(query_tokens), 1)
-        similarity = len(overlap) / len(query_tokens | historical_tokens)
-        return coverage >= 0.8 and similarity >= 0.72
+        return normalized_query == normalized_historical_question
 
     def _is_greeting_query(self, query: str) -> bool:
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())

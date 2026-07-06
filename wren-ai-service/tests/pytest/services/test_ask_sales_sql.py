@@ -926,3 +926,10 @@ def test_reusable_historical_question_rejects_materially_different_agent_questio
         "What is the estimated total time for each workflow?",
         "How many tickets are currently open?",
     )
+
+
+def test_reusable_historical_question_rejects_similar_but_different_failure_question():
+    assert not AskService._is_reusable_historical_question(
+        "Which name values have the highest occurrences in dbo.failure_patterns?",
+        "What is the distribution of name in dbo.failure_patterns?",
+    )
