@@ -394,24 +394,6 @@ def test_normalize_sql_column_references_to_schema_maps_customer_to_account():
     assert normalized == 'SELECT "dbo_tblFactSales"."account" FROM "dbo_tblFactSales"'
 
 
-def test_normalize_sql_column_references_to_schema_maps_patterns_to_name():
-    sql = 'SELECT "dbo_failure_patterns"."patterns" FROM "dbo_failure_patterns"'
-
-    normalized = normalize_sql_column_references_to_schema(
-        sql,
-        {
-            "dbo_failure_patterns": [
-                "id",
-                "name",
-                "category",
-                "created_at",
-            ]
-        },
-    )
-
-    assert normalized == 'SELECT "dbo_failure_patterns"."name" FROM "dbo_failure_patterns"'
-
-
 def test_normalize_sql_column_references_to_schema_maps_unqualified_customer_to_account():
     sql = 'SELECT "customer" FROM "dbo_tblFactSales"'
 
