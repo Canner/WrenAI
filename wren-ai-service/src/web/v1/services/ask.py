@@ -100,6 +100,39 @@ class AskResultResponse(_AskResultResponse):
 
 
 class AskService:
+    _HISTORICAL_QUESTION_STOP_WORDS = {
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "be",
+        "by",
+        "can",
+        "chart",
+        "create",
+        "each",
+        "for",
+        "from",
+        "give",
+        "graph",
+        "how",
+        "in",
+        "is",
+        "me",
+        "of",
+        "on",
+        "please",
+        "show",
+        "the",
+        "to",
+        "total",
+        "what",
+        "which",
+        "with",
+    }
+
     def __init__(
         self,
         pipelines: Dict[str, BasicPipeline],
@@ -141,6 +174,44 @@ class AskService:
             return True
 
         return False
+
+    @classmethod
+    def _normalize_historical_question_text(cls, question: str | None) -> str:
+        return " ".join(re.findall(r"[a-z0-9]+", (question or "").lower()))
+
+    @classmethod
+    def _historical_question_tokens(cls, question: str | None) -> set[str]:
+        normalized = cls._normalize_historical_question_text(question)
+        return {
+            token
+            for token in normalized.split()
+            if len(token) > 1 and token not in cls._HISTORICAL_QUESTION_STOP_WORDS
+        }
+
+    @classmethod
+    def _is_reusable_historical_question(
+        cls, query: str | None, historical_question: str | None
+    ) -> bool:
+        normalized_query = cls._normalize_historical_question_text(query)
+        normalized_historical_question = cls._normalize_historical_question_text(
+            historical_question
+        )
+        if not normalized_query or not normalized_historical_question:
+            return False
+        if normalized_query == normalized_historical_question:
+            return True
+
+        query_tokens = cls._historical_question_tokens(normalized_query)
+        historical_tokens = cls._historical_question_tokens(
+            normalized_historical_question
+        )
+        if len(query_tokens) < 2 or len(historical_tokens) < 2:
+            return False
+
+        overlap = query_tokens & historical_tokens
+        coverage = len(overlap) / max(len(query_tokens), 1)
+        similarity = len(overlap) / len(query_tokens | historical_tokens)
+        return coverage >= 0.8 and similarity >= 0.72
 
     def _is_greeting_query(self, query: str) -> bool:
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
@@ -3711,6 +3782,18 @@ class AskService:
 
                 valid_historical_results = []
                 for result in historical_question_result:
+                    historical_question_text = result.get("question")
+                    if not self._is_reusable_historical_question(
+                        user_query, historical_question_text
+                    ):
+                        logger.info(
+                            "Ignoring historical SQL for materially different question. query_id=%s query=%s historical_question=%s",
+                            query_id,
+                            user_query,
+                            historical_question_text,
+                        )
+                        continue
+
                     sql_statement = result.get("statement")
                     if not self._is_valid_select_sql(sql_statement):
                         logger.warning(

@@ -797,3 +797,17 @@ def test_build_validated_ask_result_from_sql_uses_local_schema_validation():
 
     assert result is not None
     assert result.sql == 'SELECT "dbo_tblSales"."SalesPerson" FROM "dbo_tblSales"'
+
+
+def test_reusable_historical_question_allows_exact_recommended_question():
+    assert AskService._is_reusable_historical_question(
+        "How many tickets are currently open?",
+        "How many tickets are currently open?",
+    )
+
+
+def test_reusable_historical_question_rejects_materially_different_agent_question():
+    assert not AskService._is_reusable_historical_question(
+        "What is the estimated total time for each workflow?",
+        "How many tickets are currently open?",
+    )
