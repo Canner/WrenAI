@@ -243,7 +243,7 @@ Schema column types (case-insensitive): `int8`/`int16`/`int32`/`int64`,
 
 ### `engine.query(sql)`
 
-Execute a SQL query through the semantic layer. Returns parsed rows.
+Execute a SQL query through the context layer. Returns parsed rows.
 
 ```typescript
 async query(sql: string): Promise<Record<string, unknown>[]>

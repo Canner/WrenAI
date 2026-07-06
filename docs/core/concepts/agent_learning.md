@@ -10,15 +10,15 @@ sidebar_label: How does the agent learn from your context?
 
 A first-day analyst does not know which table is canonical. Neither does an agent. Both get better through the same path: a guided start, focused questions, and a record of what worked.
 
-The difference is that an agent forgets between sessions unless your tooling stores the learning somewhere reviewable. Wren AI captures that learning in four explicit places (MDL, instructions, memory, and skills) so the agent picks up where the team left off, every time.
+The difference is that an agent forgets between sessions unless your tooling stores the learning somewhere reviewable. Wren AI captures that learning in four explicit places (MDL, business rules, confirmed NL→SQL pairs, and the memory index) so the agent picks up where the team left off, every time.
 
-## The two beats: scaffold fast, enrich deep
+## Two phases: scaffold fast, enrich deep
 
-Wren AI runs the agent through two beats whenever you set up a new project.
+Wren AI runs the agent through two phases whenever you set up a new project.
 
-**Beat 1: Scaffold fast.** The `generate-mdl` guide drives the agent through schema discovery, type normalization, and an initial MDL project. The agent can already query through that modeled layer in a few minutes. The MDL is rough but functional. It covers what the database can tell you about itself.
+**Phase 1: Scaffold fast.** The `generate-mdl` guide drives the agent through schema discovery, type normalization, and an initial MDL project. The agent can already query through that modeled layer in a few minutes. The MDL is rough but functional. It covers what the database can tell you about itself.
 
-**Beat 2: Enrich deep.** Structure is only the start. The hard business meaning lives in docs, decks, Slack threads, and analyst SQL. The `enrich-context` workflow brings that meaning in through two modes:
+**Phase 2: Enrich deep.** Structure is only the start. The hard business meaning lives in docs, decks, Slack threads, and analyst SQL. The `enrich-context` workflow brings that meaning in through two modes:
 
 - **Grill mode**: the agent asks one focused question at a time ("which is the canonical `orders` table?", "what does `status = 4` mean?", "should `active customer` exclude internal users?"). You answer; the agent patches MDL or `knowledge/` (rules and NL→SQL pairs).
 - **Auto-pilot mode**: drop PDFs, glossaries, handbooks, and SQL history into `<project>/raw/`. The agent reads them, proposes context changes with evidence, and waits for review.

@@ -1,6 +1,6 @@
 # dbt Integration
 
-Import a dbt project into Wren AI to query dbt models through the Wren semantic layer.
+Import a dbt project into Wren AI to query dbt models through the Wren context layer.
 
 ## What Wren Imports
 

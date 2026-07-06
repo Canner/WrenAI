@@ -26,7 +26,7 @@ sidebar_label: Where does Wren AI sit in my stack?
 └──────────────────────────────────────────────────────┘
 ```
 
-Three things sit above Wren AI: the **agents** that ask questions. Three things sit below: the **data infrastructure** that stores the answers. Wren AI is the layer in between that turns "I can see schema" into "I know what the business means."
+Above Wren AI sit the **agents** that ask questions. Below it sits the **data infrastructure** that stores the answers. Wren AI is the layer in between that turns "I can see schema" into "I know what the business means."
 
 ## What it does NOT replace
 
@@ -50,7 +50,7 @@ Three things sit above Wren AI: the **agents** that ask questions. Three things 
 
 ### You have no semantic layer
 
-Wren AI can be your first one. The `generate-mdl` guide scaffolds an MDL project from your warehouse schema in a few minutes. Enrich it over time with the grill / auto-pilot workflow.
+Start with Wren AI's context layer. The `generate-mdl` guide scaffolds an MDL project from your warehouse schema in a few minutes — your first set of trusted semantic definitions, with the rest of the context layer (`knowledge/rules/`, memory, governance) growing around them. Enrich it over time with the grill / auto-pilot workflow.
 
 ### You have a transformation pipeline (dbt, Coalesce, in-house)
 
@@ -58,7 +58,7 @@ Keep it. Point Wren AI at the **output tables** of your pipeline. The MDL descri
 
 ### You have a semantic layer
 
-Wren AI does not compete with it for the data team. It gives the **agents** the same definitions through a structure agents can read and reason about: MDL files, structured retrieval, memory of past answers, governed execution primitives. Think of it as the agent-native projection of the semantic layer you already use.
+Wren AI does not compete with it for the data team. Its context layer gives the **agents** the same definitions through a structure agents can read and reason about: MDL files, structured retrieval, memory of past answers, governed execution primitives. Think of it as the agent-native projection of the semantic layer you already use.
 
 ### You have multiple warehouses
 

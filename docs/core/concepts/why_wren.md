@@ -40,7 +40,7 @@ A few distinctions worth being precise about:
   hand, in their UI. Wren has agents *generate* them from your context and
   deploy them to your own hosting.
 - **vs. a bare semantic layer** (dbt Semantic Layer, Cube): those define metrics
-  from the schema. Wren adds the company knowledge that isn't in the schema
+  from the schema. Wren's context layer adds the company knowledge that isn't in the schema
   (enum meanings, units, policy, proven examples) and a generative-BI output on
   top. See [How does the agent learn from your context?](/oss/concepts/agent_learning).
 

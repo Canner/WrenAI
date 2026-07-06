@@ -27,7 +27,7 @@ Five layers sit between the agent's question and the database:
 |---|---|---|
 | **Skills** | Encode the workflow the agent must follow | The agent cannot skip "check memory" or "validate before execute" |
 | **MDL** | Declare every table, column, and relationship the agent is allowed to use | The agent can only name modeled objects, so undeclared columns and legacy tables are invisible |
-| **Memory** | Index MDL + instructions + past NL-SQL pairs; retrieve only what matters per question | The agent reads the relevant slice, not a generic schema dump |
+| **Memory** | Index MDL + `knowledge/rules/` + `knowledge/sql/`; retrieve only what matters per question | The agent reads the relevant slice, not a generic schema dump |
 | **Plan + validate** | Expand modeled SQL into the exact SQL that will run, before any DB call | Bad references fail at plan time with a clear error, not silently in production |
 | **Connectors** | Execute the planned SQL against the source | Type, dialect, and permission checks happen here |
 
@@ -46,7 +46,7 @@ Two common failure modes:
 - **Dump the whole schema** into the prompt → the model gets confused by irrelevant tables.
 - **Let the model guess** which tables are relevant → it picks the wrong one.
 
-Memory does neither. It indexes MDL + `instructions.md` + confirmed NL-SQL pairs, and retrieves only the slice that matches the question. The agent reads `customers`, `orders`, and the approved revenue calculation, not 500 tables.
+Memory does neither. It indexes MDL + `knowledge/rules/` + confirmed NL-SQL pairs (`knowledge/sql/`), and retrieves only the slice that matches the question. The agent reads `customers`, `orders`, and the approved revenue calculation, not 500 tables.
 
 ### Plan + validate: errors fail visibly
 
@@ -54,7 +54,7 @@ Memory does neither. It indexes MDL + `instructions.md` + confirmed NL-SQL pairs
 
 - Catalog and schema resolution
 - Relationship joins inlined as CTEs
-- Policy filters from `instructions.md` injected
+- Policy filters from your business rules (`knowledge/rules/`) injected
 - Column-level access enforced
 
 If a column name is wrong, dry-plan returns the available columns. If a relationship is missing, it says so. The agent retries with the right info instead of running broken SQL and reporting a wrong number.

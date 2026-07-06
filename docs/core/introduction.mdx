@@ -1,6 +1,6 @@
 # Wren AI
 
-*Open-source GenBI: let your AI agents generate, deploy, and govern dashboards from any database, grounded in a context layer they can actually trust, across 22+ data sources.*
+*Open-source GenBI: your AI agents generate, deploy, and govern dashboards on the databases you already have, grounded in a context layer they can actually trust.*
 
 <iframe src="https://ghbtns.com/github-btn.html?user=Canner&repo=WrenAI&type=star&count=true&size=large" frameBorder="0" scrolling="0" height="50" title="Wren AI"></iframe>
 
@@ -10,15 +10,15 @@ Generative BI is only as good as the context it stands on. So underneath GenBI, 
 
 The goal is simple: **agents that produce trustworthy BI, not plausible guesses**, on one governed context layer that every data consumer, human or agent, can share.
 
-## GenBI in three beats
+## GenBI in three moves
 
-| Beat | What the agent does | Powered by |
+| Move | What the agent does | Powered by |
 | --- | --- | --- |
 | **Generate** | Turns a business question into governed SQL and charts | MDL planning, schema retrieval, dry-plan validation |
 | **Deploy** | Ships the answer as a shareable, browser-side dashboard | [`wren-core-wasm`](/oss/sdk/wasm) → Vercel / Cloudflare Pages |
-| **Know** | Captures the business meaning that keeps it all correct | MDL, `instructions.md`, memory (reviewable, Git-friendly) |
+| **Know** | Captures the business meaning that keeps it all correct | MDL, `knowledge/`, memory (reviewable, Git-friendly) |
 
-The rest of this page explains the layer that makes the *Generate* and *Deploy* beats trustworthy, the **Know** beat, because that is where correctness comes from.
+The rest of this page focuses on **Know**, because that is where correctness comes from: *Generate* and *Deploy* are only as trustworthy as the context underneath them.
 
 ## Why Wren AI exists
 
@@ -83,10 +83,10 @@ Behind the scenes, Wren AI:
 1. Looks up `customers` in the MDL
 2. Resolves it to the physical table declared in `table_reference`
 3. Drops columns not declared in the model (e.g. `email`, `phone`), keeping them invisible to the agent
-4. Applies any rules from `instructions.md` (default filters, canonical tables, business definitions)
+4. Applies your business rules from `knowledge/rules/` (default filters, canonical tables, business definitions)
 5. Returns rows
 
-From there, the same context drives the *Deploy* beat: ask your agent to turn an answer into a dashboard and it builds a browser-side GenBI app from the project and ships it to your own hosting. See [Build & deploy a GenBI app](/oss/guides/genbi).
+From there, the same context drives the *Deploy* move: ask your agent to turn an answer into a dashboard and it builds a browser-side GenBI app from the project and ships it to your own hosting. See [Build & deploy a GenBI app](/oss/guides/genbi).
 
 ## What is in the open core
 
@@ -110,7 +110,7 @@ The active arcs are end-to-end context enrichment, richer GenBI (more chart type
 2. [Quickstart with `jaffle_shop` sample data](/oss/get_started/quickstart)
 3. [Connect your own database](/oss/guides/connect)
 4. [Build & deploy a GenBI app](/oss/guides/genbi): the *Generate* + *Deploy* payoff
-5. [Concepts](/oss/concepts/what_is_context): the design ideas behind the *Know* beat
+5. [Concepts](/oss/concepts/what_is_context): the design ideas behind the *Know* move
 
 ## A note on the "GenBI" name
 

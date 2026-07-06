@@ -20,7 +20,6 @@ Wren AI Commercial is the same engine built for a team. It runs as a hosted clou
 
 | Capability | Open source | Commercial |
 | --- | :---: | :---: |
-| Free and fully self-hosted | ✅ | ✅ |
 | Fully managed cloud | ❌ | ✅ |
 | CLI and SDK for your own agents | ✅ | ✅ |
 | MCP server and hosted REST API | ❌ | ✅ |

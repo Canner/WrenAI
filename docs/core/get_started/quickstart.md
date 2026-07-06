@@ -1,16 +1,24 @@
+---
+sidebar_label: Quickstart (jaffle_shop)
+---
+
+import ArchStrip from '@site/src/components/ArchStrip';
+
 # Quick Start: Wren CLI with jaffle_shop
 
 Ask natural-language questions of the **jaffle_shop** dataset using **Wren AI CLI** and **Claude Code**. No cloud database, no Docker, no extra infrastructure.
 
 > **Time:** ~15 minutes
 >
-> **What you'll get:** A local semantic layer + memory system that lets an AI agent write accurate SQL by understanding your data's meaning, not just its schema.
+> **What you'll get:** A local context layer + memory system that lets an AI agent write accurate SQL by understanding your data's meaning, not just its schema.
+
+<ArchStrip variant="cli" />
 
 ## Terms used in this guide
 
 This guide drops three things on you in the first few steps. Skim before you start:
 
-- **Wren CLI (`wren`)**: the Python CLI that runs all of this. Connects to a database, holds your modeling files, executes SQL through the semantic layer, manages a local memory index. ([CLI reference →](/oss/reference/cli))
+- **Wren CLI (`wren`)**: the Python CLI that runs all of this. Connects to a database, holds your modeling files, executes SQL through the context layer, manages a local memory index. ([CLI reference →](/oss/reference/cli))
 - **MDL (Modeling Definition Language)**: YAML files under `models/`, `views/`, and `relationships.yml` that describe your tables, columns, and joins in business terms. The agent reads MDL instead of guessing from raw schema. ([MDL concept →](/oss/concepts/what_is_mdl) · [Wren project guide →](/oss/reference/mdl))
 - **jaffle_shop**: a public sample database from dbt Labs. We use it so you do not need to bring your own database to follow this quickstart. It is a fictional ecommerce business with `customers`, `orders`, `products`, and `supplies`. *(Want to skip jaffle_shop and use your own database? Finish the install in step 2 then jump to [Connect your database](/oss/guides/connect).)*
 - **Skills**: markdown workflow guides that tell an AI coding agent (Claude Code, Openclaw, Hermes, Codex, etc.) how to operate the CLI. You install one `wren` discovery stub; it fetches the guides from the CLI on demand. Two guides drive this quickstart: `generate-mdl` (one-time scaffolding) and `usage` (day-to-day querying). ([Skills concept →](/oss/reference/skills))
@@ -184,7 +192,7 @@ This creates:
 ├── views/                  # reusable SQL views
 ├── cubes/                  # pre-aggregation metrics
 ├── relationships.yml       # table join definitions
-└── instructions.md         # business rules for the AI
+└── knowledge/              # business rules + NL→SQL pairs for the AI
 ```
 
 The generated `wren_project.yml` contains default values for `catalog` and `schema`:
@@ -267,7 +275,7 @@ Behind the scenes, Claude Code uses the **usage** guide to:
 
 1. **Fetch context** (`wren memory fetch`): find relevant tables and columns for your question
 2. **Recall examples** (`wren memory recall`): find similar past queries
-3. **Write SQL** using the semantic layer (model names, not raw table names)
+3. **Write SQL** using the context layer (model names, not raw table names)
 4. **Execute** (`wren --sql "..."`): run through the Wren engine
 5. **Store** (`wren memory store`): save successful NL-SQL pairs for future recall
 
@@ -374,7 +382,9 @@ After setup, your project directory looks like this:
 │   └── revenue/
 │       └── metadata.yml        # measures + dimensions for aggregation
 ├── relationships.yml           # e.g. orders → customers (many_to_one)
-├── instructions.md             # your business rules
+├── knowledge/
+│   ├── rules/                  # your business rules
+│   └── sql/                    # confirmed NL→SQL pairs (wren memory store)
 ├── .wren/
 │   └── memory/                 # LanceDB index (auto-managed)
 └── target/
@@ -383,7 +393,7 @@ After setup, your project directory looks like this:
 
 Key files to customize:
 
-- **`instructions.md`**: Add business rules, naming conventions, or query guidelines. Use `##` headings to organize by topic. Example:
+- **`knowledge/rules/`**: Add business rules, naming conventions, or query guidelines — one markdown file per topic, organized with `##` headings. Example (`knowledge/rules/conventions.md`):
 
   ```markdown
   ## Naming Conventions

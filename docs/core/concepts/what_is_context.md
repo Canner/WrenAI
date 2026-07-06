@@ -10,7 +10,7 @@ Wren AI exists to turn that scattered meaning into an open, machine-readable con
 
 ## Why schema is not enough
 
-Your agent sees schema. It reads column names, catches types, and may even parse semantic-layer YAML. But schema does not tell the whole story:
+Your agent sees schema. It reads column names, catches types, and may even parse the metric definitions you already maintain. But schema does not tell the whole story:
 
 - `status = 4` means refunded
 - `loyalty_v3` is the table your team actually uses
@@ -41,9 +41,9 @@ Together, these layers form the context layer.
 
 ## Context vs. semantic layer
 
-A semantic layer is one important part of context. It defines business-facing models, relationships, calculations, and reusable logic so people and tools do not have to query raw tables directly.
+"Semantic layer" is the industry's name for tools like the dbt Semantic Layer, Cube, or LookML. They define business-facing models, relationships, calculations, and reusable logic so people and tools do not have to query raw tables directly. That job matters, and it is one important part of context — in Wren AI, those semantic definitions live in MDL.
 
-A context layer is broader. It includes the semantic layer, then adds the knowledge an autonomous agent needs to behave well in the real world:
+A context layer is broader. Around the semantic definitions, it adds the knowledge an autonomous agent needs to behave well in the real world:
 
 - which definitions are trusted
 - which tables should be preferred
@@ -53,7 +53,7 @@ A context layer is broader. It includes the semantic layer, then adds the knowle
 - which past examples should guide the next query
 - how to validate, retry, repair, and evaluate generated SQL
 
-Traditional semantic layers were designed mostly for dashboards and BI workflows. Wren AI is designed for a world where agents, applications, and humans all need the same trusted answer through different interfaces.
+Semantic layers were designed mostly for dashboards and BI workflows. The context layer is designed for a world where agents, applications, and humans all need the same trusted answer through different interfaces.
 
 ## How Wren AI represents context
 
@@ -65,9 +65,9 @@ Wren AI does not treat context as a single prompt or a hidden product feature. I
 
 MDL helps an agent map a question like "top customers by revenue" to the right models, joins, and calculations instead of reconstructing logic from raw warehouse structure.
 
-### Instructions: business and operational guidance
+### Knowledge rules: business and operational guidance
 
-Project instructions capture guidance that may not belong in a model definition: preferred terminology, default filters, table selection rules, caveats, and policies the agent should follow.
+Business rules under `knowledge/rules/` capture guidance that may not belong in a model definition: preferred terminology, default filters, table selection rules, caveats, and policies the agent should follow.
 
 This is where business meaning starts to become operational. The agent is not only told what exists; it is told how your team expects the data to be used.
 
@@ -77,7 +77,7 @@ Most text-to-SQL systems treat every question like the first question. Wren AI a
 
 Memory has two jobs:
 
-- **Schema context retrieval** - index MDL and instructions, then retrieve the relevant models, columns, relationships, and guidance for each question.
+- **Schema context retrieval** - index MDL and `knowledge/rules/`, then retrieve the relevant models, columns, relationships, and guidance for each question.
 - **Query recall** - store confirmed natural-language-to-SQL pairs so similar future questions can use proven examples.
 
 This turns usage into a learning loop. The context layer becomes more useful as your team asks, corrects, and confirms more questions.
@@ -117,7 +117,7 @@ Wren AI exposes these as primitives the agent can orchestrate instead of hiding 
 
 ## Where context comes from
 
-The first version of context usually comes from the database. Wren AI can scaffold MDL from tables, columns, types, and relationships so the agent has a working structural and semantic layer quickly.
+The first version of context usually comes from the database. Wren AI can scaffold MDL from tables, columns, types, and relationships so the agent has a working structural and semantic foundation quickly.
 
 The deeper context comes from everywhere else:
 
@@ -135,7 +135,7 @@ That is why Wren AI is designed around the workflow **scaffold fast, then enrich
 ## In short
 
 - **Schema** tells an agent what exists.
-- **Semantic layer** tells an agent what the data means.
+- **Semantic definitions** tell an agent what the data means.
 - **Context layer** tells an agent how the business uses the data, how to act safely, and what has worked before.
 
 Wren AI is the open context layer for AI agents: portable, inspectable, versionable, and shared across every agent and app that needs trusted business data.

@@ -73,7 +73,7 @@ This loop gives the agent two kinds of grounding:
 
 ## Memory is not a replacement for MDL
 
-Memory does not define your semantic layer. MDL does.
+Memory does not define your semantics. MDL does.
 
 Memory helps agents find and reuse context, but the durable contract still lives in project files: models, relationships, views, cubes, and `knowledge/`. If a definition is important enough to govern future behavior, put it in MDL or `knowledge/rules/`, then re-index memory.
 
