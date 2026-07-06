@@ -1020,6 +1020,54 @@ def test_build_schema_grounded_table_question_sql_for_highest_occurrences():
     )
 
 
+def test_build_schema_grounded_table_question_sql_for_plural_names_by_occurrences():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_table_question_sql(
+        "Show top 10 names by occurrences in dbo.failure_patterns.",
+        [
+            """
+            CREATE TABLE dbo_failure_patterns (
+              name VARCHAR,
+              occurrences INTEGER,
+              created_at TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT TOP 10 "dbo_failure_patterns"."name" AS "name", '
+        '"dbo_failure_patterns"."occurrences" AS "occurrences" '
+        'FROM "dbo_failure_patterns" '
+        'WHERE "dbo_failure_patterns"."name" IS NOT NULL '
+        'ORDER BY "dbo_failure_patterns"."occurrences" DESC'
+    )
+
+
+def test_build_schema_grounded_table_question_sql_for_latest_records_by_created_at():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_table_question_sql(
+        "Show the latest records from dbo.failure_patterns by created_at.",
+        [
+            """
+            CREATE TABLE dbo_failure_patterns (
+              name VARCHAR,
+              occurrences INTEGER,
+              created_at TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT TOP 10 * FROM "dbo_failure_patterns" '
+        'WHERE "dbo_failure_patterns"."created_at" IS NOT NULL '
+        'ORDER BY "dbo_failure_patterns"."created_at" DESC'
+    )
+
+
 def test_build_schema_grounded_table_question_sql_for_monthly_created_at_count():
     service = AskService.__new__(AskService)
 
@@ -1163,6 +1211,7 @@ def test_build_validated_ask_result_rejects_unqualified_invalid_columns():
         'SELECT DATEPART(MONTH, execution_date) AS "month", COUNT(*) AS "RecordCount" FROM "dbo_repair_logs" GROUP BY DATEPART(MONTH, execution_date)',
         'SELECT created_by AS "created_by", COUNT(*) AS "RecordCount" FROM "dbo_repair_logs" GROUP BY created_by',
         'SELECT physical_name AS "physical_name", occurrences FROM "dbo_repair_logs" ORDER BY occurrences DESC',
+        'SELECT name AS "created_by" FROM "dbo_repair_logs" ORDER BY created_by',
     ]
 
     for sql in invalid_sqls:

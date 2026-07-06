@@ -745,7 +745,10 @@ class AskService:
             previous_word = (
                 previous_word_match.group(1).lower() if previous_word_match else ""
             )
-            if previous_word == "as":
+            if previous_word == "as" and self._is_alias_identifier_position(
+                sql_without_strings,
+                match.start(),
+            ):
                 continue
 
             order_by_context = bool(
@@ -799,7 +802,10 @@ class AskService:
             previous_word = (
                 previous_word_match.group(1).lower() if previous_word_match else ""
             )
-            if previous_word == "as":
+            if previous_word == "as" and self._is_alias_identifier_position(
+                sql_without_strings,
+                match.start(),
+            ):
                 continue
 
             tokens.update(self._schema_name_tokens(valid_columns[identifier_key]))
@@ -1083,7 +1089,17 @@ class AskService:
     def _query_mentions_column(self, query: str, column_name: str) -> bool:
         normalized_query = self._normalize_schema_identifier_key(query)
         normalized_column = self._normalize_schema_identifier_key(column_name)
-        return bool(normalized_column and normalized_column in normalized_query)
+        if not normalized_column:
+            return False
+        if normalized_column in normalized_query:
+            return True
+        if normalized_column.endswith("y"):
+            return f"{normalized_column[:-1]}ies" in normalized_query
+        return f"{normalized_column}s" in normalized_query
+
+    def _is_alias_identifier_position(self, sql: str, start: int) -> bool:
+        before = sql[:start].rstrip()
+        return bool(re.search(r"\bAS\s*$", before, flags=re.IGNORECASE))
 
     def _find_dimension_column_for_query(
         self, query: str, table: dict[str, Any]
@@ -1146,6 +1162,22 @@ class AskService:
         table_name = str(table.get("name") or "")
         table_ref = self._quote_sql_identifier(table_name)
         limit = self._extract_requested_top_n(query, default_value=10)
+
+        wants_latest_records = any(
+            term in normalized
+            for term in ("latest", "recent", "newest", "last records", "latest records")
+        )
+        if wants_latest_records:
+            date_column = self._find_temporal_column_for_query(query, table)
+            if not date_column:
+                return None
+            date_ref = f"{table_ref}.{self._quote_sql_identifier(date_column)}"
+            return (
+                f"SELECT TOP {limit} * "
+                f"FROM {table_ref} "
+                f"WHERE {date_ref} IS NOT NULL "
+                f"ORDER BY {date_ref} DESC"
+            )
 
         wants_monthly_count = any(
             term in normalized
