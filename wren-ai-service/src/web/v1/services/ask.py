@@ -206,6 +206,41 @@ class AskService:
             return False
         return normalized_query == normalized_historical_question
 
+    @classmethod
+    def _should_use_histories_for_query(cls, query: str | None) -> bool:
+        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized:
+            return False
+
+        contextual_prefixes = (
+            "also ",
+            "and ",
+            "but ",
+            "for those ",
+            "for that ",
+            "for the same ",
+            "from that ",
+            "how about ",
+            "in that ",
+            "now ",
+            "same ",
+            "show more",
+            "show the same",
+            "then ",
+            "use that ",
+            "what about ",
+            "what if ",
+        )
+        if normalized.startswith(contextual_prefixes):
+            return True
+
+        contextual_patterns = (
+            r"\b(previous|last|above|earlier|same|those|that|these|them|it|its|there)\b",
+            r"\b(add|break down|compare|filter|group|instead|only|sort|split)\b.+\b(by|to|with)\b",
+            r"\b(by|for|with)\s+(month|quarter|year|status|type|category|customer|market|region|country|division)\b",
+        )
+        return any(re.search(pattern, normalized) for pattern in contextual_patterns)
+
     def _is_greeting_query(self, query: str) -> bool:
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
         greeting_patterns = {
@@ -3643,6 +3678,13 @@ class AskService:
         histories = ask_request.histories[: self._max_histories][
             ::-1
         ]  # reverse the order of histories
+        if histories and not self._should_use_histories_for_query(user_query):
+            logger.info(
+                "Ignoring thread histories for independent question. query_id=%s query=%s",
+                query_id,
+                user_query,
+            )
+            histories = []
         rephrased_question = None
         intent_reasoning = None
         sql_generation_reasoning = None

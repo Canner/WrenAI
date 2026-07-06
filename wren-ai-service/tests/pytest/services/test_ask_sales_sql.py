@@ -933,3 +933,17 @@ def test_reusable_historical_question_rejects_similar_but_different_failure_ques
         "Which name values have the highest occurrences in dbo.failure_patterns?",
         "What is the distribution of name in dbo.failure_patterns?",
     )
+
+
+def test_should_not_use_histories_for_independent_same_thread_question():
+    assert not AskService._should_use_histories_for_query(
+        "Which name values have the highest occurrences in dbo.failure_patterns?"
+    )
+    assert not AskService._should_use_histories_for_query(
+        "Show monthly record count by created_at in dbo.failure_patterns"
+    )
+
+
+def test_should_use_histories_for_contextual_followup_question():
+    assert AskService._should_use_histories_for_query("What about by month?")
+    assert AskService._should_use_histories_for_query("Show the same for last year")
