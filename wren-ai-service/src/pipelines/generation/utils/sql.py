@@ -2652,6 +2652,57 @@ def _find_semantic_column_alias(
     return None
 
 
+def _find_temporal_schema_column(
+    canonical_columns: dict[str, str],
+) -> str | None:
+    temporal_aliases = (
+        "created_at",
+        "updated_at",
+        "generated_at",
+        "opened_at",
+        "closed_at",
+        "completed_at",
+        "resolved_at",
+        "DateIn",
+        "DateOut",
+        "FailedAt",
+        "ModifiedAt",
+        "CreatedAt",
+        "execution_date",
+        "event_date",
+        "date",
+        "time",
+        "timestamp",
+    )
+    for alias in temporal_aliases:
+        canonical = canonical_columns.get(_compact_sql_identifier(alias))
+        if canonical:
+            return canonical
+    return next(iter(canonical_columns.values()), None)
+
+
+def _is_temporal_identifier(identifier: str) -> bool:
+    normalized = _compact_sql_identifier(identifier)
+    return normalized in {
+        "createdat",
+        "updatedat",
+        "generatedat",
+        "openedat",
+        "closedat",
+        "completedat",
+        "resolvedat",
+        "datein",
+        "dateout",
+        "failedat",
+        "modifiedat",
+        "executiondate",
+        "eventdate",
+        "date",
+        "time",
+        "timestamp",
+    }
+
+
 def _split_table_reference(table_reference: str) -> list[str]:
     stripped = table_reference.strip()
     if not stripped:
@@ -2932,6 +2983,11 @@ def normalize_sql_column_references_to_schema(
         canonical_column = canonical_columns.get(
             compact_column
         ) or _find_semantic_column_alias(normalized_column, canonical_columns)
+        if (
+            not canonical_column
+            and _is_temporal_identifier(normalized_column)
+        ):
+            canonical_column = _find_temporal_schema_column(canonical_columns)
         if not canonical_column or canonical_column == normalized_column:
             return match.group(0)
 
@@ -2968,6 +3024,8 @@ def normalize_sql_column_references_to_schema(
         canonical_column = canonical_columns.get(
             compact_identifier
         ) or _find_semantic_column_alias(identifier, canonical_columns)
+        if not canonical_column and _is_temporal_identifier(identifier):
+            canonical_column = _find_temporal_schema_column(canonical_columns)
         if not canonical_column:
             return match.group(0)
 
