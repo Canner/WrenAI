@@ -26,6 +26,7 @@ concurrency:
 
 jobs:
   create-rc:
+    if: ${{ github.repository == 'Canner/WrenAI' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
