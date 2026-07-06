@@ -25,19 +25,32 @@ Wren AI runs the agent through two beats whenever you set up a new project.
 
 Both modes write to reviewable, version-controlled artifacts. Nothing is silently absorbed into a black box.
 
-## What learning actually persists
+## Where the learning lives
 
-Four artifacts capture different layers of learning:
+Four artifacts capture different layers of learning — explicit, inspectable files, not a prompt or a locked UI:
 
-| Artifact | What it stores | Updated by |
-|---|---|---|
-| **MDL** (`models/`, `views/`, `relationships.yml`) | Structural and semantic contract: what data exists, how it relates, which calculations are reusable | `wren context build`, manual edits, agent-proposed changes |
-| **`knowledge/rules/`** | Operational guidance: preferred terminology, default filters, table selection rules, caveats | Manual edits or agent-proposed changes |
-| **`knowledge/sql/`** | Confirmed natural-language-to-SQL pairs — committable, the source of truth for recall | `wren memory store`, manual edits |
-| **Memory index** (`.wren/memory/`) | Derived retrieval index over MDL + `knowledge/` (optional LanceDB, else grep) | `wren memory index` |
+| Artifact | What it holds | Example | Updated by |
+|---|---|---|---|
+| **MDL** (`models/`, `views/`, `relationships.yml`) | Structural and semantic contract: what data exists, how it relates, which calculations are reusable | `loyalty_v3` is the canonical loyalty table; `revenue = price * qty - refunds` | `wren context build`, manual edits, agent-proposed changes |
+| **`knowledge/rules/`** | Business rules and operating policy the schema can't carry | "active customer excludes service accounts"; "always filter `is_deleted = false`" | Manual edits or agent-proposed changes |
+| **`knowledge/sql/`** | Confirmed natural-language-to-SQL pairs, one markdown file each — the source of truth for recall | "top customers by revenue" → the accepted SQL | `wren memory store`, manual edits |
+| **Memory index** (`.wren/memory/`) | Derived retrieval index over MDL + `knowledge/` (optional LanceDB, else grep) | rebuilt any time, gitignored | `wren memory index` |
+
+MDL says what the data *means*. `knowledge/rules/` says how your team wants it *used*. `knowledge/sql/` records what has *worked*. The first three are version-controlled files in your repo; the memory index is a derived artifact rebuilt from them. Together they are the context layer the rest of the docs refer to — see [What does Wren AI mean by context?](/oss/concepts/what_is_context).
 
 The agent reads from all of these when it gathers context for a new question. MDL and rules
 change rarely; the NL→SQL pairs grow with use, and the index is rebuilt from them.
+
+## Why this knowledge stays trustworthy
+
+- **Reviewable.** Every definition, rule, and example is a file you can read in a
+  pull request. No black-box embeddings deciding what your metrics mean.
+- **Versioned and Git-friendly.** Knowledge evolves with your code, with full
+  history and the ability to fork, diff, and roll back.
+- **Evidence-linked.** Enrichment records *why* a mapping is true (the doc or
+  column it came from), so it can be re-validated when the business changes.
+- **Compounding.** Every confirmed answer can feed memory, so the next question,
+  and the next dashboard, starts further ahead.
 
 ## The query workflow in practice
 
@@ -76,3 +89,4 @@ The agent is not getting smarter. The context layer it reads from is getting ric
 - [How does memory get smarter over time?](./memory_system.md): the mechanics of recall and indexing.
 - [What does MDL do for the agent?](./what_is_mdl.md): the semantic contract the agent reads.
 - [Refine answer quality](/oss/guides/refine): the recipe for running the enrich loop.
+- [Build & deploy a GenBI app](/oss/guides/genbi): turn this knowledge into a dashboard.

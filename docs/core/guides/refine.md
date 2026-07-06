@@ -4,7 +4,7 @@ sidebar_label: Refine answer quality
 
 # Refine answer quality
 
-Scaffolding gives you a baseline MDL. This recipe is how you close the loop. Bring in the business meaning that lives outside the database, store proven examples, and let the agent compound from every confirmed answer. It is the hands-on version of the [Know beat](/oss/concepts/knowledge_management): richer knowledge here means more trustworthy BI downstream.
+Scaffolding gives you a baseline MDL. This recipe is how you close the loop. Bring in the business meaning that lives outside the database, store proven examples, and let the agent compound from every confirmed answer. It is the hands-on side of the [learning loop](/oss/concepts/agent_learning): richer knowledge here means more trustworthy BI downstream.
 
 ## What you'll end up with
 

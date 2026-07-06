@@ -42,7 +42,7 @@ A few distinctions worth being precise about:
 - **vs. a bare semantic layer** (dbt Semantic Layer, Cube): those define metrics
   from the schema. Wren adds the company knowledge that isn't in the schema
   (enum meanings, units, policy, proven examples) and a generative-BI output on
-  top. See [How Wren manages your business knowledge](/oss/concepts/knowledge_management).
+  top. See [How does the agent learn from your context?](/oss/concepts/agent_learning).
 
 ## Wren is for you if…
 
