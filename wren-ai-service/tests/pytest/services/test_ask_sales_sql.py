@@ -544,6 +544,56 @@ def test_build_schema_grounded_sales_sql_for_highest_order_revenue_by_country():
     )
 
 
+def test_build_schema_grounded_sales_sql_for_highest_order_revenue_by_prefixed_country():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "Which countries have the highest order revenue?",
+        [
+            """
+            CREATE TABLE dbo_xStageLoad8 (
+              col_07_Country VARCHAR,
+              TotalOrderValue DOUBLE,
+              OrdDate TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_xStageLoad8"."col_07_Country" AS "col_07_Country", '
+        'SUM("dbo_xStageLoad8"."TotalOrderValue") AS "TotalTotalOrderValue" '
+        'FROM "dbo_xStageLoad8" '
+        'WHERE "dbo_xStageLoad8"."col_07_Country" IS NOT NULL '
+        'GROUP BY "dbo_xStageLoad8"."col_07_Country" '
+        'ORDER BY SUM("dbo_xStageLoad8"."TotalOrderValue") DESC'
+    )
+
+
+def test_build_schema_grounded_sales_sql_for_losing_order_value_by_market():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "Which markets are losing order value?",
+        [
+            """
+            CREATE TABLE dbo_tblStageNewOrders (
+              Market VARCHAR,
+              TotalOrderValue DOUBLE,
+              OrdDate TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_tblStageNewOrders"."Market" AS "Market", '
+        'SUM("dbo_tblStageNewOrders"."TotalOrderValue") AS "TotalTotalOrderValue" '
+        'FROM "dbo_tblStageNewOrders" '
+        'WHERE "dbo_tblStageNewOrders"."Market" IS NOT NULL '
+        'GROUP BY "dbo_tblStageNewOrders"."Market" '
+        'ORDER BY SUM("dbo_tblStageNewOrders"."TotalOrderValue") ASC'
+    )
+
+
 def test_build_schema_grounded_sales_sql_for_highest_customers_each_market():
     service = AskService.__new__(AskService)
     sql = service._build_schema_grounded_sales_sql(

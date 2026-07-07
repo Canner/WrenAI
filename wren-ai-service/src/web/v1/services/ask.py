@@ -1740,7 +1740,7 @@ class AskService:
         if "business unit" in normalized_query or "bu" in normalized_query:
             dimension_candidates.append(("BusinessUnit", "Business Unit", "BU"))
         if "market" in normalized_query:
-            dimension_candidates.append(("Market", "MarketType", "Region"))
+            dimension_candidates.append(("Market", "MarketType", "MarketName", "Region", "Country"))
         if "region" in normalized_query:
             dimension_candidates.append(("Region", "Market", "Area", "Territory"))
         if "country" in normalized_query or "countries" in normalized_query:
@@ -1777,8 +1777,10 @@ class AskService:
             "SalesValue",
             "FXSalesValue",
             "Revenue",
+            "TotalRevenue",
             "Amount",
             "Value",
+            "TotalOrderValue",
             "Cost",
             "Qty",
             "Quantity",
@@ -2062,6 +2064,22 @@ class AskService:
         limit_match = re.search(r"\btop\s+(\d+)\b", normalized_query)
         limit = int(limit_match.group(1)) if limit_match else 10
         top_clause = f"TOP {limit} " if wants_top else ""
+        sort_direction = (
+            "ASC"
+            if any(
+                term in normalized_query
+                for term in (
+                    "losing",
+                    "lowest",
+                    "least",
+                    "bottom",
+                    "declining",
+                    "underperforming",
+                    "smallest",
+                )
+            )
+            else "DESC"
+        )
         date_filter = (
             self._build_date_filter(table_name, date_column, query)
             if date_column
@@ -2079,7 +2097,7 @@ class AskService:
             f"FROM {table_ref}"
             f"{self._append_not_null_filters(date_filter, dimension_refs)} "
             f"GROUP BY {', '.join(dimension_refs)} "
-            f"ORDER BY {metric_expr} DESC"
+            f"ORDER BY {metric_expr} {sort_direction}"
         )
 
     def _build_contribution_sql(
