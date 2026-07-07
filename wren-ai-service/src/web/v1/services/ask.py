@@ -1516,6 +1516,36 @@ class AskService:
             return f"{where_clause.rstrip()} AND {' AND '.join(conditions)} "
         return f" WHERE {' AND '.join(conditions)} "
 
+    def _build_schema_literal_filter_conditions(
+        self,
+        query: str,
+        table: dict[str, Any],
+        table_ref: str,
+    ) -> list[str]:
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        conditions: list[str] = []
+
+        if "backlog" in normalized_query:
+            filter_column = self._find_schema_column(
+                table,
+                (
+                    "Category",
+                    "OrderCategory",
+                    "Order Category",
+                    "Status",
+                    "OrderStatus",
+                    "Order Status",
+                    "Stage",
+                    "OrderStage",
+                    "Order Stage",
+                ),
+            )
+            if filter_column:
+                filter_ref = f"{table_ref}.{self._quote_sql_identifier(filter_column)}"
+                conditions.append(f"{filter_ref} = 'Backlog'")
+
+        return conditions
+
     def _select_best_analytics_table(
         self,
         tables: list[dict[str, Any]],
@@ -1740,6 +1770,16 @@ class AskService:
             or "over time" in normalized_query
             or "last 12 months" in normalized_query
         )
+        wants_date_distribution = (
+            any(
+                term in normalized_query
+                for term in ("distribution", "breakdown", "split")
+            )
+            and any(
+                term in normalized_query
+                for term in ("date", "dates", "orddate", "order date", "order dates")
+            )
+        )
         wants_order_count_metric = (
             any(term in normalized_query for term in ("order", "orders", "new order", "new orders"))
             and not any(
@@ -1765,6 +1805,7 @@ class AskService:
         )
         wants_date = (
             wants_trend
+            or wants_date_distribution
             or mentions_date_column
             or "this year" in normalized_query
             or bool(re.search(r"\b20\d{2}\b", normalized_query))
@@ -1814,6 +1855,45 @@ class AskService:
                 f"FROM {table_ref}"
                 f"{self._append_not_null_filters(date_filter, dimension_refs)} "
                 f"ORDER BY {metric_ref} DESC"
+            )
+
+        if wants_date_distribution and date_column:
+            date_ref = f"{table_ref}.{self._quote_sql_identifier(date_column)}"
+            select_parts = [
+                f"DATEPART(YEAR, {date_ref}) AS \"year\"",
+                f"DATEPART(MONTH, {date_ref}) AS \"month\"",
+                *[
+                    f"{dimension_ref} AS {self._quote_sql_identifier(dimensions[index])}"
+                    for index, dimension_ref in enumerate(dimension_refs)
+                ],
+                'COUNT(*) AS "OrderCount"',
+            ]
+            group_parts = [
+                f"DATEPART(YEAR, {date_ref})",
+                f"DATEPART(MONTH, {date_ref})",
+                *dimension_refs,
+            ]
+            where_clause = self._append_not_null_filters(
+                self._build_date_filter(table_name, date_column, query),
+                [date_ref, *dimension_refs],
+            )
+            extra_conditions = self._build_schema_literal_filter_conditions(
+                query,
+                table,
+                table_ref,
+            )
+            if extra_conditions:
+                where_clause = (
+                    f"{where_clause.rstrip()} AND {' AND '.join(extra_conditions)} "
+                    if where_clause.strip()
+                    else f" WHERE {' AND '.join(extra_conditions)} "
+                )
+            return (
+                f"SELECT {', '.join(select_parts)} FROM {table_ref}"
+                f"{where_clause}"
+                f"GROUP BY {', '.join(group_parts)} "
+                f"ORDER BY DATEPART(YEAR, {date_ref}), "
+                f"DATEPART(MONTH, {date_ref}), COUNT(*) DESC"
             )
 
         wants_top_per_group = (

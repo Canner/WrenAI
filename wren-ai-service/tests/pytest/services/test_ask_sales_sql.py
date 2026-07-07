@@ -297,6 +297,49 @@ def test_build_schema_grounded_sales_sql_for_orders_by_dimensions():
     )
 
 
+def test_build_schema_grounded_sales_sql_for_order_date_distribution_by_dimensions():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        'In the "Backlog" category, what is the distribution of order dates '
+        "(OrdDate) for each product type (ProdType) sold in each market "
+        "segment (Market), considering the salesperson responsible "
+        "(SalesPerson)?",
+        [
+            """
+            CREATE TABLE dbo_tblSales (
+              Category VARCHAR,
+              Market VARCHAR,
+              ProdType VARCHAR,
+              SalesPerson VARCHAR,
+              SalesValue DOUBLE,
+              OrdDate TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT DATEPART(YEAR, "dbo_tblSales"."OrdDate") AS "year", '
+        'DATEPART(MONTH, "dbo_tblSales"."OrdDate") AS "month", '
+        '"dbo_tblSales"."SalesPerson" AS "SalesPerson", '
+        '"dbo_tblSales"."Market" AS "Market", '
+        '"dbo_tblSales"."ProdType" AS "ProdType", '
+        'COUNT(*) AS "OrderCount" '
+        'FROM "dbo_tblSales" '
+        'WHERE "dbo_tblSales"."OrdDate" IS NOT NULL '
+        'AND "dbo_tblSales"."SalesPerson" IS NOT NULL '
+        'AND "dbo_tblSales"."Market" IS NOT NULL '
+        'AND "dbo_tblSales"."ProdType" IS NOT NULL '
+        'AND "dbo_tblSales"."Category" = \'Backlog\' '
+        'GROUP BY DATEPART(YEAR, "dbo_tblSales"."OrdDate"), '
+        'DATEPART(MONTH, "dbo_tblSales"."OrdDate"), '
+        '"dbo_tblSales"."SalesPerson", "dbo_tblSales"."Market", '
+        '"dbo_tblSales"."ProdType" '
+        'ORDER BY DATEPART(YEAR, "dbo_tblSales"."OrdDate"), '
+        'DATEPART(MONTH, "dbo_tblSales"."OrdDate"), COUNT(*) DESC'
+    )
+
+
 def test_build_schema_grounded_sales_sql_for_top_new_order_detail_rows():
     service = AskService.__new__(AskService)
     sql = service._build_schema_grounded_sales_sql(
