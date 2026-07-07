@@ -519,6 +519,31 @@ def test_build_schema_grounded_sales_sql_for_highest_invoice_value():
     )
 
 
+def test_build_schema_grounded_sales_sql_for_highest_order_revenue_by_country():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "Which countries have the highest order revenue?",
+        [
+            """
+            CREATE TABLE dbo_tblSales (
+              Country VARCHAR,
+              OrderValue DOUBLE,
+              OrdDate TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_tblSales"."Country" AS "Country", '
+        'SUM("dbo_tblSales"."OrderValue") AS "TotalOrderValue" '
+        'FROM "dbo_tblSales" '
+        'WHERE "dbo_tblSales"."Country" IS NOT NULL '
+        'GROUP BY "dbo_tblSales"."Country" '
+        'ORDER BY SUM("dbo_tblSales"."OrderValue") DESC'
+    )
+
+
 def test_build_schema_grounded_sales_sql_for_highest_customers_each_market():
     service = AskService.__new__(AskService)
     sql = service._build_schema_grounded_sales_sql(

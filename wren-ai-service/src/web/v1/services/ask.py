@@ -1743,6 +1743,8 @@ class AskService:
             dimension_candidates.append(("Market", "MarketType", "Region"))
         if "region" in normalized_query:
             dimension_candidates.append(("Region", "Market", "Area", "Territory"))
+        if "country" in normalized_query or "countries" in normalized_query:
+            dimension_candidates.append(("Country", "CountryName", "Nation", "Market"))
         if "division" in normalized_query:
             dimension_candidates.append(("Division",))
         if (
