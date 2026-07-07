@@ -778,6 +778,72 @@ def test_build_manufacturing_throughput_sql_uses_active_unit_and_date_columns():
     )
 
 
+def test_build_monthly_repair_volume_sql_uses_repair_log_date_column():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_sales_sql(
+        "Generate a line chart showing monthly repair volume for the last 12 months.",
+        [
+            """
+            CREATE TABLE dbo_repair_logs (
+              id VARCHAR,
+              status VARCHAR,
+              created_at TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT DATEPART(YEAR, "dbo_repair_logs"."created_at") AS "year", '
+        'DATEPART(MONTH, "dbo_repair_logs"."created_at") AS "month", '
+        'COUNT(*) AS "repair_count" '
+        'FROM "dbo_repair_logs" '
+        'WHERE "dbo_repair_logs"."created_at" IS NOT NULL '
+        'GROUP BY DATEPART(YEAR, "dbo_repair_logs"."created_at"), '
+        'DATEPART(MONTH, "dbo_repair_logs"."created_at") '
+        'ORDER BY DATEPART(YEAR, "dbo_repair_logs"."created_at") ASC, '
+        'DATEPART(MONTH, "dbo_repair_logs"."created_at") ASC'
+    )
+    assert '"status"' not in sql
+
+
+def test_build_monthly_repair_volume_sql_uses_debug_entry_date_column():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_sales_sql(
+        "Generate a line chart showing monthly repair volume for the last 12 months.",
+        [
+            """
+            CREATE TABLE dbo_DebugEntries (
+              DebugEntryId VARCHAR,
+              Status VARCHAR,
+              DateIn TIMESTAMP
+            );
+            """,
+            """
+            CREATE TABLE dbo_DebugFixLogs (
+              DebugEntryId VARCHAR,
+              FixId VARCHAR
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT DATEPART(YEAR, "dbo_DebugEntries"."DateIn") AS "year", '
+        'DATEPART(MONTH, "dbo_DebugEntries"."DateIn") AS "month", '
+        'COUNT(*) AS "repair_count" '
+        'FROM "dbo_DebugEntries" '
+        'WHERE "dbo_DebugEntries"."DateIn" IS NOT NULL '
+        'GROUP BY DATEPART(YEAR, "dbo_DebugEntries"."DateIn"), '
+        'DATEPART(MONTH, "dbo_DebugEntries"."DateIn") '
+        'ORDER BY DATEPART(YEAR, "dbo_DebugEntries"."DateIn") ASC, '
+        'DATEPART(MONTH, "dbo_DebugEntries"."DateIn") ASC'
+    )
+    assert '"Status"' not in sql
+
+
 def test_get_unqueryable_metric_message_for_throughput_without_unit_column():
     service = AskService.__new__(AskService)
 

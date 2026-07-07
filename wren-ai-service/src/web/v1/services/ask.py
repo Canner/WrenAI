@@ -1645,6 +1645,11 @@ class AskService:
         if contribution_sql := self._build_contribution_sql(query, tables):
             return contribution_sql
 
+        if monthly_repair_volume_sql := self._build_monthly_repair_volume_sql(
+            query, table_ddls
+        ):
+            return monthly_repair_volume_sql
+
         if categorical_count_sql := self._build_generic_categorical_count_sql(
             query, tables
         ):
@@ -2792,26 +2797,73 @@ class AskService:
         if not wants_monthly_repairs:
             return None
 
-        has_repair_created_at = self._schema_has_table_column(
-            table_ddls,
-            "dbo_repair_logs",
-            "created_at",
-            table_names=table_names,
-        )
-        if has_repair_created_at:
-            return (
-                'SELECT DATEPART(YEAR, "dbo_repair_logs"."created_at") AS "year", '
-                'DATEPART(MONTH, "dbo_repair_logs"."created_at") AS "month", '
-                'COUNT(*) AS "repair_count" '
-                'FROM "dbo_repair_logs" '
-                'WHERE "dbo_repair_logs"."created_at" IS NOT NULL '
-                'GROUP BY DATEPART(YEAR, "dbo_repair_logs"."created_at"), '
-                'DATEPART(MONTH, "dbo_repair_logs"."created_at") '
-                'ORDER BY DATEPART(YEAR, "dbo_repair_logs"."created_at") ASC, '
-                'DATEPART(MONTH, "dbo_repair_logs"."created_at") ASC'
-            )
+        tables = self._parse_schema_tables(table_ddls)
+        scored_tables: list[tuple[int, dict[str, Any], str]] = []
+        for table in tables:
+            table_name = str(table.get("name") or "")
+            if table_names and table_name not in table_names:
+                continue
 
-        return None
+            date_column = self._find_schema_column(
+                table,
+                (
+                    "created_at",
+                    "createdAt",
+                    "created",
+                    "DateIn",
+                    "Date",
+                    "repair_date",
+                    "RepairDate",
+                    "opened_at",
+                    "started_at",
+                ),
+                temporal=True,
+            )
+            if not date_column:
+                date_column = self._find_any_temporal_schema_column(table)
+            if not date_column:
+                continue
+
+            normalized_table = self._normalize_schema_token(table_name)
+            score = 0
+            if "repair" in normalized_table:
+                score += 30
+            if "debugentries" in normalized_table or "debugentry" in normalized_table:
+                score += 25
+            if "log" in normalized_table:
+                score += 10
+            if self._find_schema_column(
+                table,
+                ("DebugEntryId", "RepairId", "repair_id", "id"),
+            ):
+                score += 5
+            scored_tables.append((score, table, date_column))
+
+        if not scored_tables:
+            return None
+
+        _score, table, date_column = sorted(
+            scored_tables,
+            key=lambda item: item[0],
+            reverse=True,
+        )[0]
+        table_name = str(table.get("name") or "")
+        if not table_name:
+            return None
+
+        table_ref = self._quote_sql_identifier(table_name)
+        date_ref = f"{table_ref}.{self._quote_sql_identifier(date_column)}"
+        return (
+            f"SELECT DATEPART(YEAR, {date_ref}) AS \"year\", "
+            f"DATEPART(MONTH, {date_ref}) AS \"month\", "
+            f'COUNT(*) AS "repair_count" '
+            f"FROM {table_ref} "
+            f"WHERE {date_ref} IS NOT NULL "
+            f"GROUP BY DATEPART(YEAR, {date_ref}), "
+            f"DATEPART(MONTH, {date_ref}) "
+            f"ORDER BY DATEPART(YEAR, {date_ref}) ASC, "
+            f"DATEPART(MONTH, {date_ref}) ASC"
+        )
 
     def _is_direct_heuristic_sql_query(self, query: str) -> bool:
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
