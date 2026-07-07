@@ -40,7 +40,10 @@ def parse_type(type_str: str, dialect: str) -> str:
         return type_str
     try:
         return sqlglot.parse_one(type_str, into=DataType, dialect=dialect).sql()
-    except (sqlglot.errors.ParseError, ValueError):
+    except (sqlglot.errors.SqlglotError, ValueError):
+        # SqlglotError covers both ParseError and TokenError (the tokenizer
+        # raises TokenError on unterminated quotes / stray control chars, and
+        # it is NOT a subclass of ParseError). Fall back to the raw string.
         return type_str
 
 
@@ -85,11 +88,12 @@ def translate_type(type_str: str, source_dialect: str, target_dialect: str) -> s
         return type_str
     try:
         parsed = sqlglot.parse_one(type_str, into=DataType, dialect=source_dialect)
-    except (sqlglot.errors.ParseError, ValueError):
+    except (sqlglot.errors.SqlglotError, ValueError):
+        # SqlglotError covers both ParseError and TokenError; see parse_type.
         return type_str
     try:
         return parsed.sql(dialect=target_dialect)
-    except (sqlglot.errors.ParseError, ValueError):
+    except (sqlglot.errors.SqlglotError, ValueError):
         return type_str
 
 
