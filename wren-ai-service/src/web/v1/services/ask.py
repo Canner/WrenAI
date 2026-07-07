@@ -3300,6 +3300,7 @@ class AskService:
             "ticket",
             "repair",
             "failure",
+            "pcb",
             "component",
             "board",
             "throughput",
@@ -3345,6 +3346,40 @@ class AskService:
                 score += 5
             if "failure" in normalized_query and "failure" in normalized_table:
                 score += 8
+            if any(
+                term in normalized_query
+                for term in ("business unit", "business units", "unit", "units")
+            ) and self._find_schema_column(
+                table,
+                (
+                    "BusinessUnit",
+                    "Business_Unit",
+                    "Business Unit",
+                    "manufacturing_unit",
+                    "ManufacturingUnit",
+                    "unit",
+                    "BU",
+                    "Division",
+                ),
+            ):
+                score += 15
+            if any(
+                term in normalized_query
+                for term in ("product line", "product family", "product", "products")
+            ) and self._find_schema_column(
+                table,
+                (
+                    "Product_Family",
+                    "ProductFamily",
+                    "Product Family",
+                    "ProductLine",
+                    "Product_Line",
+                    "Product",
+                    "ProdType",
+                    "Material",
+                ),
+            ):
+                score += 15
             if any(term in normalized_query for term in ("error", "failure")) and any(
                 self._find_schema_column(table, candidates)
                 for candidates in (
@@ -3403,13 +3438,35 @@ class AskService:
         if "manufacturing" in normalized_query or "unit" in normalized_query:
             dimension_candidates.append(
                 (
+                    "BusinessUnit",
+                    "Business_Unit",
+                    "Business Unit",
                     "manufacturing_unit",
                     "manufacturing unit",
+                    "ManufacturingUnit",
                     "unit",
+                    "BU",
+                    "Division",
                     "assignee_user_id",
                     "created_by_user_id",
                     "org_id",
                     "status",
+                )
+            )
+        if any(
+            term in normalized_query
+            for term in ("product line", "product family", "product", "products")
+        ):
+            dimension_candidates.append(
+                (
+                    "Product_Family",
+                    "ProductFamily",
+                    "Product Family",
+                    "ProductLine",
+                    "Product_Line",
+                    "Product",
+                    "ProdType",
+                    "Material",
                 )
             )
         if "component" in normalized_query:
@@ -5395,6 +5452,39 @@ class AskService:
                         error_message = (
                             "Schema-grounded audit SQL was not valid for the active datasource schema and question intent."
                         )
+
+                if not api_results and any(
+                    term in user_query.lower()
+                    for term in (
+                        "pcb",
+                        "repair",
+                        "failure",
+                        "business unit",
+                        "business units",
+                        "product line",
+                        "product family",
+                    )
+                ):
+                    operational_sql = self._build_schema_grounded_analytics_sql(
+                        user_query, table_ddls
+                    )
+                    if operational_sql:
+                        logger.info(
+                            "Using schema-grounded operational SQL for query_id %s",
+                            query_id,
+                        )
+                        ask_result = self._build_validated_ask_result_from_sql(
+                            operational_sql,
+                            table_ddls,
+                            user_query,
+                        )
+                        if ask_result:
+                            api_results = [ask_result]
+                        else:
+                            invalid_sql = operational_sql
+                            error_message = (
+                                "Schema-grounded operational SQL was not valid for the active datasource schema and question intent."
+                            )
 
                 if not api_results and (
                     deterministic_sales_sql := self._build_schema_grounded_sales_sql(
