@@ -1130,6 +1130,25 @@ def test_build_schema_grounded_table_question_sql_for_record_count():
     assert sql == 'SELECT COUNT(*) AS "RecordCount" FROM "dbo_failure_patterns"'
 
 
+def test_build_schema_grounded_table_question_sql_matches_dot_table_to_underscore_table():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_table_question_sql(
+        "How many records are in dbo.ytblTarrifsRec?",
+        [
+            """
+            CREATE TABLE dbo_ytblTarrifsRec (
+              EntrySummaryNumber2 VARCHAR,
+              LiquidationStatus VARCHAR,
+              LiquidationDate TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == 'SELECT COUNT(*) AS "RecordCount" FROM "dbo_ytblTarrifsRec"'
+
+
 def test_build_schema_grounded_table_question_sql_for_name_distribution():
     service = AskService.__new__(AskService)
 
@@ -1152,6 +1171,33 @@ def test_build_schema_grounded_table_question_sql_for_name_distribution():
         'FROM "dbo_failure_patterns" '
         'WHERE "dbo_failure_patterns"."name" IS NOT NULL '
         'GROUP BY "dbo_failure_patterns"."name" '
+        'ORDER BY COUNT(*) DESC'
+    )
+
+
+def test_build_schema_grounded_table_question_sql_for_numeric_column_distribution():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_table_question_sql(
+        "What is the distribution of EntrySummaryNumber2 in dbo.ytblTarrifsRec?",
+        [
+            """
+            CREATE TABLE dbo_ytblTarrifsRec (
+              EntrySummaryNumber2 BIGINT,
+              LiquidationStatus VARCHAR,
+              LiquidationDate TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT TOP 10 "dbo_ytblTarrifsRec"."EntrySummaryNumber2" AS '
+        '"EntrySummaryNumber2", '
+        'COUNT(*) AS "RecordCount" '
+        'FROM "dbo_ytblTarrifsRec" '
+        'WHERE "dbo_ytblTarrifsRec"."EntrySummaryNumber2" IS NOT NULL '
+        'GROUP BY "dbo_ytblTarrifsRec"."EntrySummaryNumber2" '
         'ORDER BY COUNT(*) DESC'
     )
 

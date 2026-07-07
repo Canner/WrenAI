@@ -1037,16 +1037,31 @@ class AskService:
     def _normalize_schema_identifier_key(self, value: str) -> str:
         return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
 
+    def _schema_identifier_alias_keys(self, value: str) -> set[str]:
+        raw_value = str(value or "").strip()
+        base_key = self._normalize_schema_identifier_key(raw_value)
+        separator_normalized_key = self._normalize_schema_identifier_key(
+            re.sub(r"[.$]", "_", raw_value)
+        )
+        compact_parts_key = "".join(
+            self._normalize_schema_identifier_key(part)
+            for part in re.split(r"[.$_]+", raw_value)
+            if part
+        )
+        return {
+            key
+            for key in (base_key, separator_normalized_key, compact_parts_key)
+            if key
+        }
+
     def _table_matches_query(self, table_name: str, query: str) -> bool:
-        normalized_query = self._normalize_schema_identifier_key(query)
-        normalized_table = self._normalize_schema_identifier_key(table_name)
+        query_keys = self._schema_identifier_alias_keys(query)
         short_table = re.split(r"[.$_]", str(table_name or ""))[-1]
-        normalized_short_table = self._normalize_schema_identifier_key(short_table)
-        return bool(
-            normalized_table
-            and normalized_table in normalized_query
-            or normalized_short_table
-            and normalized_short_table in normalized_query
+        table_keys = self._schema_identifier_alias_keys(table_name)
+        table_keys.update(self._schema_identifier_alias_keys(short_table))
+        return any(
+            table_key and any(table_key in query_key for query_key in query_keys)
+            for table_key in table_keys
         )
 
     def _find_best_schema_table_for_query(
@@ -1109,17 +1124,17 @@ class AskService:
             if column_name and self._query_mentions_column(query, column_name):
                 return column_name
 
-        text_columns = [
+        candidate_columns = [
             str(column.get("name"))
             for column in table.get("columns", [])
             if column.get("name")
-            and self._is_text_schema_type(str(column.get("type") or ""))
+            and not self._is_temporal_schema_type(str(column.get("type") or ""))
         ]
         for candidate in ("name", "category", "type", "status", "code"):
             column = self._find_schema_column(table, (candidate,))
-            if column in text_columns:
+            if column in candidate_columns:
                 return column
-        return text_columns[0] if text_columns else None
+        return candidate_columns[0] if candidate_columns else None
 
     def _find_temporal_column_for_query(
         self, query: str, table: dict[str, Any]
@@ -1280,6 +1295,7 @@ class AskService:
             return None
 
         normalized_query_key = re.sub(r"[^a-z0-9]", "", normalized_query.lower())
+        normalized_query_keys = self._schema_identifier_alias_keys(normalized_query)
         scored_tables: list[tuple[int, str]] = []
         for table in tables:
             table_name = table.get("name")
@@ -1289,7 +1305,12 @@ class AskService:
             normalized_table = re.sub(r"[^a-z0-9]", "", table_name.lower())
             if not normalized_table:
                 continue
-            if normalized_table in normalized_query_key:
+            table_keys = self._schema_identifier_alias_keys(table_name)
+            if normalized_table in normalized_query_key or any(
+                table_key in query_key
+                for table_key in table_keys
+                for query_key in normalized_query_keys
+            ):
                 scored_tables.append((100 + len(normalized_table), table_name))
                 continue
 
