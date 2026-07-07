@@ -19,6 +19,10 @@ from src.web.v1.services import BaseRequest, SSEEvent
 
 logger = logging.getLogger("wren-ai-service")
 
+NO_RELEVANT_ACTIVE_DATASOURCE_MESSAGE = (
+    "No relevant data found in the active datasource for this question."
+)
+
 
 async def _return_value(value):
     return value
@@ -4689,6 +4693,28 @@ class AskService:
             is_followup=is_followup,
         )
 
+    def _build_no_relevant_active_datasource_response(
+        self,
+        trace_id: Optional[str],
+        *,
+        rephrased_question: Optional[str] = None,
+        intent_reasoning: Optional[str] = None,
+        retrieved_tables: Optional[list[str]] = None,
+        sql_generation_reasoning: Optional[str] = None,
+        is_followup: bool = False,
+    ) -> AskResultResponse:
+        return self._build_failed_text_to_sql_response(
+            trace_id,
+            NO_RELEVANT_ACTIVE_DATASOURCE_MESSAGE,
+            rephrased_question=rephrased_question,
+            intent_reasoning=intent_reasoning,
+            retrieved_tables=retrieved_tables,
+            sql_generation_reasoning=sql_generation_reasoning,
+            invalid_sql=None,
+            is_followup=is_followup,
+            code="NO_RELEVANT_DATA",
+        )
+
     @observe(name="Ask Question")
     @trace_metadata
     async def ask(
@@ -5547,6 +5573,32 @@ class AskService:
                             "Schema-grounded audit SQL was not valid for the active datasource schema and question intent."
                         )
 
+                if (
+                    not api_results
+                    and self._is_data_analysis_query(user_query)
+                    and (
+                        schema_grounded_sql := self._build_schema_grounded_analytics_sql(
+                            user_query, table_ddls
+                        )
+                    )
+                ):
+                    logger.info(
+                        "Using generic schema-grounded analytics SQL for query_id %s",
+                        query_id,
+                    )
+                    ask_result = self._build_validated_ask_result_from_sql(
+                        schema_grounded_sql,
+                        table_ddls,
+                        user_query,
+                    )
+                    if ask_result:
+                        api_results = [ask_result]
+                    else:
+                        invalid_sql = schema_grounded_sql
+                        error_message = (
+                            "Schema-grounded SQL was not valid for the active datasource schema and question intent."
+                        )
+
                 if not api_results and any(
                     term in user_query.lower()
                     for term in (
@@ -5647,18 +5699,18 @@ class AskService:
                             error_message = "Heuristic SQL fallback was not valid for the active datasource schema."
                             if not self._is_stopped(query_id, self._ask_results):
                                 self._ask_results[query_id] = (
-                                    self._build_failed_text_to_sql_response(
+                                    self._build_no_relevant_active_datasource_response(
                                         trace_id,
-                                        error_message,
                                         rephrased_question=rephrased_question,
                                         intent_reasoning=intent_reasoning,
                                         retrieved_tables=table_names,
-                                        invalid_sql=invalid_sql,
                                         is_followup=True if histories else False,
                                     )
                                 )
-                            results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
-                            results["metadata"]["error_message"] = error_message
+                            results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
+                            results["metadata"]["error_message"] = (
+                                NO_RELEVANT_ACTIVE_DATASOURCE_MESSAGE
+                            )
                             results["metadata"]["type"] = "TEXT_TO_SQL"
                             return results
                         api_results = [ask_result]
@@ -5679,19 +5731,19 @@ class AskService:
 
                     logger.exception(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
                     if not self._is_stopped(query_id, self._ask_results):
-                        self._ask_results[query_id] = AskResultResponse(
-                            status="failed",
-                            type="TEXT_TO_SQL",
-                            error=AskError(
-                                code="NO_RELEVANT_DATA",
-                                message="No relevant data",
-                            ),
-                            rephrased_question=rephrased_question,
-                            intent_reasoning=intent_reasoning,
-                            trace_id=trace_id,
-                            is_followup=True if histories else False,
+                        self._ask_results[query_id] = (
+                            self._build_no_relevant_active_datasource_response(
+                                trace_id,
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                retrieved_tables=table_names,
+                                is_followup=True if histories else False,
+                            )
                         )
                     results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
+                    results["metadata"]["error_message"] = (
+                        NO_RELEVANT_ACTIVE_DATASOURCE_MESSAGE
+                    )
                     results["metadata"]["type"] = "TEXT_TO_SQL"
                     return results
 
@@ -6065,23 +6117,28 @@ class AskService:
 
                 logger.exception(f"ask pipeline - NO_RELEVANT_SQL: {user_query}")
                 if not self._is_stopped(query_id, self._ask_results):
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="failed",
-                        type="TEXT_TO_SQL",
-                        error=AskError(
-                            code="NO_RELEVANT_SQL",
-                            message=error_message or "No relevant SQL",
-                        ),
-                        rephrased_question=rephrased_question,
-                        intent_reasoning=intent_reasoning,
-                        retrieved_tables=table_names,
-                        sql_generation_reasoning=sql_generation_reasoning,
-                        invalid_sql=invalid_sql,
-                        trace_id=trace_id,
-                        is_followup=True if histories else False,
+                    self._ask_results[query_id] = (
+                        self._build_no_relevant_active_datasource_response(
+                            trace_id,
+                            rephrased_question=rephrased_question,
+                            intent_reasoning=intent_reasoning,
+                            retrieved_tables=table_names,
+                            sql_generation_reasoning=sql_generation_reasoning,
+                            is_followup=True if histories else False,
+                        )
                     )
-                results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
-                results["metadata"]["error_message"] = error_message
+                if error_message or invalid_sql:
+                    logger.info(
+                        "Suppressed technical SQL failure for query_id %s. "
+                        "error=%s invalid_sql=%s",
+                        query_id,
+                        error_message,
+                        invalid_sql,
+                    )
+                results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
+                results["metadata"]["error_message"] = (
+                    NO_RELEVANT_ACTIVE_DATASOURCE_MESSAGE
+                )
                 results["metadata"]["type"] = "TEXT_TO_SQL"
 
             return results

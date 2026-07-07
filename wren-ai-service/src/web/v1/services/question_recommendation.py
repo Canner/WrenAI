@@ -396,10 +396,12 @@ class QuestionRecommendation:
         trace_id = kwargs.get("trace_id")
 
         try:
-            mdl = orjson.loads(input.mdl)
+            orjson.loads(input.mdl)
             retrieval_result = await self._pipelines["db_schema_retrieval"].run(
-                tables=[model["name"] for model in mdl["models"]],
+                query="",
+                histories=[],
                 project_id=input.project_id,
+                enable_column_pruning=False,
             )
             _retrieval_result = retrieval_result.get("construct_retrieval_results", {})
             documents = _retrieval_result.get("retrieval_results", [])

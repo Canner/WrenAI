@@ -160,7 +160,10 @@ Categories: {{categories}}
 {% endif %}
 
 {% if documents %}
-### DATABASE SCHEMA ###
+### ACTIVE DATASOURCE METADATA ###
+Use only this latest deployed metadata from the active datasource when generating
+recommended questions. Do not reuse tables, columns, or business terms from prior
+questions unless they are answerable from this metadata.
 {% for document in documents %}
     {{ document }}
 {% endfor %}
@@ -180,12 +183,6 @@ def prompt(
     max_categories: int,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    """
-    If previous_questions is provided, the MDL is omitted to allow the LLM to focus on
-    generating recommendations based on the question history. This helps provide more
-    contextually relevant questions that build on previous questions.
-    """
-
     _prompt = prompt_builder.run(
         documents=documents,
         previous_questions=previous_questions,
