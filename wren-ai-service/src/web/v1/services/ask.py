@@ -1912,6 +1912,81 @@ class AskService:
             or "this year" in normalized_query
             or bool(re.search(r"\b20\d{2}\b", normalized_query))
         )
+        wants_unique_customers_by_group = (
+            any(
+                term in normalized_query
+                for term in ("unique customer", "unique customers")
+            )
+            and "customer" in normalized_query
+            and "division" in normalized_query
+            and "market" in normalized_query
+            and any(term in normalized_query for term in ("highest", "top", "most"))
+            and any(term in normalized_query for term in ("each", "per "))
+        )
+        if wants_unique_customers_by_group:
+            selected = self._select_best_analytics_table(
+                tables,
+                [
+                    ("Market", "MarketType", "MarketName", "Region", "Country"),
+                    ("Division",),
+                    (
+                        "Customer",
+                        "CustomerName",
+                        "CustName",
+                        "CustNo",
+                        "CustomerNo",
+                        "CustomerCode",
+                        "Account",
+                        "AccountName",
+                        "Client",
+                        "ClientName",
+                    ),
+                ],
+                (),
+                wants_date=False,
+                allow_count_metric=True,
+            )
+            if selected:
+                table, dimensions, _measure, _date_column = selected
+                table_name = table.get("name")
+                if table_name and len(dimensions) >= 3:
+                    table_name = str(table_name)
+                    table_ref = self._quote_sql_identifier(table_name)
+                    market, division, customer = dimensions[:3]
+                    market_ref = f"{table_ref}.{self._quote_sql_identifier(market)}"
+                    division_ref = (
+                        f"{table_ref}.{self._quote_sql_identifier(division)}"
+                    )
+                    customer_ref = (
+                        f"{table_ref}.{self._quote_sql_identifier(customer)}"
+                    )
+                    where_clause = self._append_not_null_filters(
+                        "",
+                        [market_ref, division_ref, customer_ref],
+                    )
+                    return (
+                        "WITH grouped_results AS ("
+                        f"SELECT {market_ref} AS {self._quote_sql_identifier(market)}, "
+                        f"{division_ref} AS {self._quote_sql_identifier(division)}, "
+                        f"COUNT(DISTINCT {customer_ref}) AS \"UniqueCustomerCount\" "
+                        f"FROM {table_ref}"
+                        f"{where_clause} "
+                        f"GROUP BY {market_ref}, {division_ref}"
+                        "), ranked_results AS ("
+                        f"SELECT {self._quote_sql_identifier(market)}, "
+                        f"{self._quote_sql_identifier(division)}, "
+                        "\"UniqueCustomerCount\", "
+                        f"ROW_NUMBER() OVER (PARTITION BY {self._quote_sql_identifier(market)} "
+                        "ORDER BY \"UniqueCustomerCount\" DESC) AS \"rank\" "
+                        "FROM grouped_results"
+                        ") "
+                        f"SELECT {self._quote_sql_identifier(market)}, "
+                        f"{self._quote_sql_identifier(division)}, "
+                        "\"UniqueCustomerCount\" "
+                        "FROM ranked_results "
+                        "WHERE \"rank\" = 1 "
+                        "ORDER BY \"UniqueCustomerCount\" DESC"
+                    )
 
         if not dimension_candidates and wants_time_bucket:
             selected = self._select_best_analytics_table(
