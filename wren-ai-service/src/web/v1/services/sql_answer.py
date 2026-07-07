@@ -53,6 +53,26 @@ class SqlAnswerService:
             maxsize=maxsize, ttl=ttl
         )
 
+    async def _load_active_schema_contexts(
+        self, query: str, project_id: Optional[str]
+    ) -> list[str]:
+        retrieval_pipeline = self._pipelines.get("db_schema_retrieval")
+        if not retrieval_pipeline:
+            return []
+
+        retrieval_result = await retrieval_pipeline.run(
+            query=query,
+            project_id=project_id,
+        )
+        documents = retrieval_result.get("construct_retrieval_results", {}).get(
+            "retrieval_results", []
+        )
+        return [
+            document["table_ddl"]
+            for document in documents
+            if isinstance(document, dict) and document.get("table_ddl")
+        ]
+
     @observe(name="SQL Answer")
     @trace_metadata
     async def sql_answer(
@@ -93,6 +113,11 @@ class SqlAnswerService:
                 trace_id=trace_id,
             )
 
+            schema_contexts = await self._load_active_schema_contexts(
+                sql_answer_request.query,
+                sql_answer_request.project_id,
+            )
+
             asyncio.create_task(
                 self._pipelines["sql_answer"].run(
                     query=sql_answer_request.query,
@@ -102,6 +127,7 @@ class SqlAnswerService:
                     current_time=sql_answer_request.configurations.show_current_time(),
                     query_id=query_id,
                     custom_instruction=sql_answer_request.custom_instruction,
+                    contexts=schema_contexts,
                 )
             )
 

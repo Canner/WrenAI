@@ -189,6 +189,7 @@ def create_service_container(
         chart_service=services.ChartService(
             pipelines={
                 "sql_executor": _sql_executor_pipeline,
+                "db_schema_retrieval": _db_schema_retrieval_pipeline,
                 "chart_generation": generation.ChartGeneration(
                     **pipe_components["chart_generation"],
                 ),
@@ -206,6 +207,7 @@ def create_service_container(
         ),
         sql_answer_service=services.SqlAnswerService(
             pipelines={
+                "db_schema_retrieval": _db_schema_retrieval_pipeline,
                 "preprocess_sql_data": retrieval.PreprocessSqlData(
                     **pipe_components["preprocess_sql_data"],
                 ),

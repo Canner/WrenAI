@@ -80,6 +80,26 @@ class ChartService:
 
         return False
 
+    async def _load_active_schema_contexts(
+        self, query: str, project_id: Optional[str]
+    ) -> list[str]:
+        retrieval_pipeline = self._pipelines.get("db_schema_retrieval")
+        if not retrieval_pipeline:
+            return []
+
+        retrieval_result = await retrieval_pipeline.run(
+            query=query,
+            project_id=project_id,
+        )
+        documents = retrieval_result.get("construct_retrieval_results", {}).get(
+            "retrieval_results", []
+        )
+        return [
+            document["table_ddl"]
+            for document in documents
+            if isinstance(document, dict) and document.get("table_ddl")
+        ]
+
     @observe(name="Generate Chart")
     @trace_metadata
     async def chart(
@@ -154,6 +174,11 @@ class ChartService:
                 results["chart_result"] = deterministic_chart_result
                 return results
 
+            schema_contexts = await self._load_active_schema_contexts(
+                chart_request.query,
+                chart_request.project_id,
+            )
+
             chart_generation_result = await self._pipelines["chart_generation"].run(
                 query=chart_request.query,
                 sql=chart_request.sql,
@@ -161,6 +186,7 @@ class ChartService:
                 language=chart_request.configurations.language,
                 remove_data_from_chart_schema=chart_request.remove_data_from_chart_schema,
                 custom_instruction=chart_request.custom_instruction,
+                contexts=schema_contexts,
             )
             chart_result = chart_generation_result["post_process"]["results"]
 

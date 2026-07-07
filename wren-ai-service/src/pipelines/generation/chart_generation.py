@@ -42,6 +42,16 @@ Please provide your chain of thought reasoning, chart type and the vega-lite sch
 """
 
 chart_generation_user_prompt_template = """
+{% if documents %}
+### ACTIVE DATASOURCE METADATA ###
+This is the complete deployed metadata for the active datasource. Use it to
+understand the schema, tables, columns, metrics, views, and relationships behind
+the SQL before choosing a chart.
+{% for document in documents %}
+    {{ document }}
+{% endfor %}
+{% endif %}
+
 ### INPUT ###
 Question: {{ query }}
 SQL: {{ sql }}
@@ -70,6 +80,7 @@ def prompt(
     language: str,
     custom_instruction: str,
     prompt_builder: PromptBuilder,
+    documents: list[str] | None = None,
 ) -> dict:
     sample_data = preprocess_data.get("sample_data")
     sample_column_values = preprocess_data.get("sample_column_values")
@@ -81,6 +92,7 @@ def prompt(
         sample_column_values=sample_column_values,
         language=language,
         custom_instruction=custom_instruction,
+        documents=documents or [],
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
@@ -140,7 +152,11 @@ class ChartGeneration(BasicPipeline):
             "post_processor": ChartGenerationPostProcessor(),
         }
 
-        with open("src/pipelines/generation/utils/vega-lite-schema-v5.json", "r") as f:
+        with open(
+            "src/pipelines/generation/utils/vega-lite-schema-v5.json",
+            "r",
+            encoding="utf-8",
+        ) as f:
             _vega_schema = orjson.loads(f.read())
 
         self._configs = {
@@ -160,6 +176,7 @@ class ChartGeneration(BasicPipeline):
         language: str,
         remove_data_from_chart_schema: bool = True,
         custom_instruction: Optional[str] = None,
+        contexts: Optional[list[str]] = None,
     ) -> dict:
         logger.info("Chart Generation pipeline is running...")
         return await self._pipe.execute(
@@ -171,6 +188,7 @@ class ChartGeneration(BasicPipeline):
                 "language": language,
                 "remove_data_from_chart_schema": remove_data_from_chart_schema,
                 "custom_instruction": custom_instruction or "",
+                "documents": contexts or [],
                 **self._components,
                 **self._configs,
             },

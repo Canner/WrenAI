@@ -33,7 +33,10 @@ sql_generation_user_prompt_template = """
 ### TARGET DATA SOURCE ###
 {{ data_source }}
 
-### DATABASE SCHEMA ###
+### ACTIVE DATASOURCE METADATA ###
+This is the complete deployed metadata for the active datasource, including schema,
+tables, columns, metrics, views, and relationships. Use only this metadata when
+interpreting intent and generating SQL.
 {% for document in documents %}
     {{ document }}
 {% endfor %}
@@ -84,15 +87,12 @@ SQL:
 ### QUESTION ###
 User's Question: {{ query }}
 
-### BUSINESS ANALYTICS TERM MAPPING ###
-If the user asks about PCB repair trends, repair volume, repair counts, debug hours,
-turnaround time, resolved entries, failure category, sales performance, salesperson
-ranking, top customers, customer growth, revenue, margin, orders, or invoices, map
-those business terms to the closest explicit table and column names in DATABASE SCHEMA
-and VALID TABLE NAMES.
-Do not answer with general guidance when a SQL aggregation, comparison, trend, or chart is requested.
-Never reuse table or column names from SQL SAMPLES unless those exact names also appear
-in DATABASE SCHEMA or VALID TABLE NAMES for the active datasource.
+### INTENT AND SCHEMA GROUNDING ###
+Interpret the user's business terms by matching them to explicit tables, columns,
+metrics, views, and relationships in ACTIVE DATASOURCE METADATA. Do not answer with
+general guidance when the question can be answered with SQL over the active metadata.
+Never reuse table or column names from SQL SAMPLES unless those exact names also
+appear in ACTIVE DATASOURCE METADATA or VALID TABLE NAMES for the active datasource.
 
 {% if sql_generation_reasoning %}
 ### REASONING PLAN ###

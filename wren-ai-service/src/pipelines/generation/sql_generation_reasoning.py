@@ -22,7 +22,10 @@ logger = logging.getLogger("wren-ai-service")
 
 
 sql_generation_reasoning_user_prompt_template = """
-### DATABASE SCHEMA ###
+### ACTIVE DATASOURCE METADATA ###
+This is the complete deployed metadata for the active datasource, including schema,
+tables, columns, metrics, views, and relationships. Use only this metadata when
+planning SQL.
 {% for document in documents %}
     {{ document }}
 {% endfor %}

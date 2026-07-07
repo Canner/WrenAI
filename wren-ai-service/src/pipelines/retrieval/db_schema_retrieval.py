@@ -126,72 +126,7 @@ def _build_view_ddl(content: dict) -> str:
 
 ## Start of Pipeline
 def expand_business_terms_for_retrieval(query: str) -> str:
-    normalized = (query or "").lower()
-    analytics_terms = {
-        "business unit",
-        "pcb",
-        "repair",
-        "debug",
-        "turnaround",
-        "failure",
-        "failure code",
-        "failure category",
-        "failure pattern",
-        "resolved",
-        "trend",
-        "volume",
-        "count",
-        "counts",
-        "average",
-        "avg",
-        "chart",
-        "month",
-        "monthly",
-        "sales",
-        "sale",
-        "revenue",
-        "customer",
-        "customers",
-        "salesperson",
-        "sales person",
-        "sales rep",
-        "performance",
-        "ranking",
-        "rank",
-        "top",
-        "bottom",
-        "growth",
-        "fastest growing",
-        "order",
-        "orders",
-        "invoice",
-        "invoices",
-        "margin",
-        "profit",
-        "quantity",
-        "qty",
-        "amount",
-        "value",
-        "year",
-        "yearly",
-    }
-    if not any(term in normalized for term in analytics_terms):
-        return query
-
-    return "\n".join(
-        [
-            query,
-            "Business analytics aliases:",
-            "throughput trend volume count counts average total ranking top bottom grouped distribution",
-            "business unit manufacturing unit department location site plant team region category status",
-            "repair trends repair volume repair counts debug entries debug fixes failure code",
-            "monthly trend quarter grouped by month bar chart line chart",
-            "top common failures most common failure categories",
-            "failure patterns category occurrences material workorder serial number",
-            "sales revenue amount sales value sales performance salesperson ranking",
-            "customer sales top customers customer growth orders invoices margin quantity",
-        ]
-    )
+    return query
 
 
 def _is_project_wide_analysis_query(query: str) -> bool:
@@ -317,52 +252,6 @@ async def dbschema_retrieval(
     dbschema_retriever: Any,
     tables: Optional[list[str]] = None,
 ) -> list[Document]:
-    table_names = []
-    if tables:
-        table_names.extend(tables)
-    else:
-        retrieved_tables = table_retrieval.get("documents", [])
-        for table in retrieved_tables:
-            content = ast.literal_eval(table.content)
-            table_names.append(content["name"])
-
-    table_name_conditions = [
-        {"field": "name", "operator": "==", "value": table_name}
-        for table_name in table_names
-    ]
-
-    if table_name_conditions:
-        filters = {
-            "operator": "AND",
-            "conditions": [
-                {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-                {"operator": "OR", "conditions": table_name_conditions},
-            ],
-        }
-
-        if project_id:
-            filters["conditions"].append(
-                {"field": "project_id", "operator": "==", "value": project_id}
-            )
-
-        results = await dbschema_retriever.run(query_embedding=[], filters=filters)
-        documents = results["documents"]
-        if project_id and _is_project_wide_analysis_query(query):
-            all_project_results = await dbschema_retriever.run(
-                query_embedding=[],
-                filters={
-                    "operator": "AND",
-                    "conditions": [
-                        {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-                        {"field": "project_id", "operator": "==", "value": project_id},
-                    ],
-                },
-            )
-            documents = _dedupe_documents(
-                documents + all_project_results.get("documents", [])
-            )
-        return documents
-
     filters = {
         "operator": "AND",
         "conditions": [
@@ -375,7 +264,7 @@ async def dbschema_retrieval(
         )
 
     logger.info(
-        "No table-description matches found; falling back to all deployed schema for project_id %s",
+        "Loading complete deployed schema metadata for active project_id %s",
         project_id,
     )
     results = await dbschema_retriever.run(query_embedding=[], filters=filters)
@@ -460,15 +349,6 @@ def check_using_db_schemas_without_pruning(
         retrieval_result["table_ddl"] for retrieval_result in retrieval_results
     ]
     _token_count = len(encoding.encode(" ".join(table_ddls)))
-    if _token_count > context_window_size or enable_column_pruning:
-        return {
-            "db_schemas": [],
-            "tokens": _token_count,
-            "has_calculated_field": has_calculated_field,
-            "has_metric": has_metric,
-            "has_json_field": has_json_field,
-        }
-
     return {
         "db_schemas": retrieval_results,
         "tokens": _token_count,

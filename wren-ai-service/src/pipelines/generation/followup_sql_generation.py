@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import sys
 from typing import TYPE_CHECKING, Any
@@ -26,6 +28,7 @@ from src.pipelines.generation.utils.sql import (
 from src.pipelines.retrieval.sql_functions import SqlFunction
 from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 from src.utils import trace_cost
+
 if TYPE_CHECKING:
     from src.web.v1.services.ask import AskHistory
 else:
@@ -42,7 +45,10 @@ generate one SQL query to best answer user's question.
 ### TARGET DATA SOURCE ###
 {{ data_source }}
 
-### DATABASE SCHEMA ###
+### ACTIVE DATASOURCE METADATA ###
+This is the complete deployed metadata for the active datasource, including schema,
+tables, columns, metrics, views, and relationships. Use only this metadata when
+interpreting intent and generating SQL.
 {% for document in documents %}
     {{ document }}
 {% endfor %}
@@ -93,15 +99,13 @@ SQL:
 ### QUESTION ###
 User's Follow-up Question: {{ query }}
 
-### BUSINESS ANALYTICS TERM MAPPING ###
-If the user asks about PCB repair trends, repair volume, repair counts, debug hours,
-turnaround time, resolved entries, failure category, sales performance, salesperson
-ranking, top customers, customer growth, revenue, margin, orders, or invoices, map
-those business terms to the closest explicit table and column names in DATABASE SCHEMA
-and VALID TABLE NAMES.
-Never reuse table or column names from SQL SAMPLES or chat history unless those exact
-names also appear in DATABASE SCHEMA or VALID TABLE NAMES for the active datasource.
-Do not SUM or AVG string columns.
+### INTENT AND SCHEMA GROUNDING ###
+Interpret the user's business terms by matching them to explicit tables, columns,
+metrics, views, and relationships in ACTIVE DATASOURCE METADATA. Never reuse table
+or column names from SQL SAMPLES or chat history unless those exact names also
+appear in ACTIVE DATASOURCE METADATA or VALID TABLE NAMES for the active datasource.
+Only apply aggregate functions to columns whose active metadata type supports that
+operation.
 
 ### REASONING PLAN ###
 {{ sql_generation_reasoning }}

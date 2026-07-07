@@ -64,7 +64,10 @@ sql_correction_user_prompt_template = """
 {{ data_source }}
 
 {% if documents %}
-### DATABASE SCHEMA ###
+### ACTIVE DATASOURCE METADATA ###
+This is the complete deployed metadata for the active datasource, including schema,
+tables, columns, metrics, views, and relationships. Use only this metadata when
+correcting SQL.
 {% for document in documents %}
     {{ document }}
 {% endfor %}
@@ -106,12 +109,12 @@ Invalid SQL: {{ invalid_generation_result.sql }}
 Error Message: {{ invalid_generation_result.error }}
 
 ### CORRECTION GROUNDING ###
-Use DATABASE SCHEMA and VALID TABLE NAMES as the source of truth. If the invalid SQL
-uses a table such as bookexamples.sales, sales, orders, or customers that is not listed
-above, replace it with an explicitly listed table only when the listed schema supports
-the user's request. For sales performance, salesperson ranking, customer growth, revenue,
-margin, orders, or invoices, use only the active datasource's exposed sales/customer
-tables and numeric columns. Do not SUM or AVG string columns.
+Use ACTIVE DATASOURCE METADATA and VALID TABLE NAMES as the source of truth. If the
+invalid SQL references a table or column not listed above, replace it only when the
+active datasource metadata clearly contains an equivalent object that supports the
+user's request. Do not invent tables, columns, joins, metrics, or relationships.
+Only apply aggregate functions to columns whose active metadata type supports that
+operation.
 
 Let's think step by step.
 """
