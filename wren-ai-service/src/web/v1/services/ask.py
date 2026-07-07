@@ -1653,6 +1653,16 @@ class AskService:
 
         compact_query = re.sub(r"[^a-z0-9]", "", normalized_query)
 
+        if repair_failure_count_sql := self._build_repair_failure_count_sql(
+            query, table_ddls
+        ):
+            return repair_failure_count_sql
+
+        if monthly_repair_volume_sql := self._build_monthly_repair_volume_sql(
+            query, table_ddls
+        ):
+            return monthly_repair_volume_sql
+
         if operational_sql := self._build_schema_grounded_operational_sql(
             query, tables
         ):
@@ -1668,11 +1678,6 @@ class AskService:
 
         if contribution_sql := self._build_contribution_sql(query, tables):
             return contribution_sql
-
-        if monthly_repair_volume_sql := self._build_monthly_repair_volume_sql(
-            query, table_ddls
-        ):
-            return monthly_repair_volume_sql
 
         if categorical_count_sql := self._build_generic_categorical_count_sql(
             query, tables
@@ -3520,14 +3525,18 @@ class AskService:
             term in normalized_query
             for term in ("trend", "monthly", "month", "line chart", "over time")
         )
-        wants_elapsed_time = any(
-            term in normalized_query
-            for term in (
-                "time",
-                "duration",
-                "elapsed",
-                "turnaround",
-                "estimated",
+        wants_elapsed_time = (
+            not wants_trend
+            and any(
+                term in normalized_query
+                for term in (
+                    "duration",
+                    "elapsed",
+                    "turnaround",
+                    "estimated",
+                    "time spent",
+                    "time taken",
+                )
             )
         )
         wants_top = bool(re.search(r"\btop\s+\d+\b", normalized_query))
