@@ -5031,6 +5031,32 @@ class AskService:
                         documents, table_names, table_ddls = (
                             self._extract_retrieval_metadata(retrieval_result)
                         )
+                if not documents and self._is_data_analysis_query(user_query):
+                    logger.info(
+                        "Query-based schema retrieval returned no tables for data question; "
+                        "retrying full active deployed schema for query_id %s",
+                        query_id,
+                    )
+                    retrieval_result = await self._run_with_timeout(
+                        "Full active schema retrieval",
+                        self._pipelines["db_schema_retrieval"].run(
+                            query="",
+                            histories=[],
+                            project_id=ask_request.project_id,
+                            enable_column_pruning=False,
+                        ),
+                        timeout_seconds=min(
+                            self._schema_retrieval_timeout_seconds,
+                            self._pipeline_timeout_seconds,
+                            20,
+                        ),
+                    )
+                    _retrieval_result = retrieval_result.get(
+                        "construct_retrieval_results", {}
+                    )
+                    documents, table_names, table_ddls = (
+                        self._extract_retrieval_metadata(retrieval_result)
+                    )
                 logger.info(
                     "Retrieved tables for query_id %s: %s", query_id, table_names
                 )
