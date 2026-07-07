@@ -621,17 +621,7 @@ class AskService:
         if "product line" in normalized or "productline" in normalized:
             concept_groups.append({"product", "prod", "line", "productline"})
         if "pcb" in normalized:
-            concept_groups.append(
-                {
-                    "pcb",
-                    "board",
-                    "repair",
-                    "repairs",
-                    "debug",
-                    "failure",
-                    "failures",
-                }
-            )
+            concept_groups.append({"pcb", "board"})
         if "critical" in normalized:
             concept_groups.append({"critical", "severity", "priority"})
         if "cost" in normalized:
