@@ -2186,7 +2186,10 @@ class AskService:
                 "frequency",
                 "group by",
                 "grouped by",
+                "most often",
+                "often",
                 "pie chart",
+                "restored",
                 "status",
                 "type",
                 "category",
@@ -2247,6 +2250,20 @@ class AskService:
                     score += 80
                 if "type" in normalized_query and "type" in normalized_column:
                     score += 70
+                if (
+                    "destination" in normalized_query
+                    and "destination" in normalized_column
+                    and (
+                        "database" in normalized_query
+                        or "databases" in normalized_query
+                    )
+                    and (
+                        "name" in normalized_column
+                        or "phys" in normalized_column
+                        or "db" in normalized_column
+                    )
+                ):
+                    score += 140
                 if any(pattern == normalized_column for pattern in low_value_column_patterns):
                     score -= 100
                 elif any(

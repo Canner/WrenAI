@@ -677,6 +677,36 @@ def test_build_schema_grounded_sql_counts_categorical_status_values():
     )
 
 
+def test_build_schema_grounded_sql_counts_destination_databases_restored_most_often():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "Which destination databases were restored most often?",
+        [
+            """
+            CREATE TABLE dbo_db_policies (
+              id VARCHAR,
+              policy_name VARCHAR,
+              destination_phys_name VARCHAR,
+              restore_date TIMESTAMP,
+              restore_type VARCHAR,
+              status VARCHAR
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_db_policies"."destination_phys_name" AS '
+        '"destination_phys_name", '
+        'COUNT(*) AS "RecordCount" '
+        'FROM "dbo_db_policies" '
+        'WHERE "dbo_db_policies"."destination_phys_name" IS NOT NULL '
+        'GROUP BY "dbo_db_policies"."destination_phys_name" '
+        'ORDER BY COUNT(*) DESC'
+    )
+    assert "destination_database_name" not in sql
+
+
 def test_build_schema_grounded_sales_sql_for_yoy_waterfall_dimensions():
     service = AskService.__new__(AskService)
     sql = service._build_schema_grounded_sales_sql(
