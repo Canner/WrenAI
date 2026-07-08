@@ -1,5 +1,9 @@
 import { Knex } from 'knex';
-import { BaseRepository, IBasicRepository } from './baseRepository';
+import {
+  BaseRepository,
+  IBasicRepository,
+  IQueryOptions,
+} from './baseRepository';
 import {
   camelCase,
   isPlainObject,
@@ -17,8 +21,8 @@ export interface SchemaChange {
   projectId: number; // Reference to project.id
   change: DataSourceSchemaChange; // Schema change
   resolve: DataSourceSchemaResolve; // Save resolve
-  createdAt: string; // Created at
-  updateAt: string; // Updated at
+  createdAt?: Date | string; // Created at
+  updatedAt?: Date | string; // Updated at
 }
 
 export interface ISchemaChangeRepository
@@ -32,6 +36,28 @@ export class SchemaChangeRepository
 {
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'schema_change' });
+  }
+
+  public async createOne(
+    data: Partial<SchemaChange>,
+    queryOptions?: IQueryOptions,
+  ) {
+    return super.createOne(this.withTimestamps(data), queryOptions);
+  }
+
+  public async updateOne(
+    id: string | number,
+    data: Partial<SchemaChange>,
+    queryOptions?: IQueryOptions,
+  ) {
+    return super.updateOne(
+      id,
+      {
+        ...data,
+        updatedAt: data.updatedAt ?? new Date(),
+      },
+      queryOptions,
+    );
   }
 
   public async findLastSchemaChange(projectId: number) {
@@ -76,4 +102,13 @@ export class SchemaChangeRepository
     }) as SchemaChange;
     return formattedData;
   };
+
+  private withTimestamps(data: Partial<SchemaChange>): Partial<SchemaChange> {
+    const now = new Date();
+    return {
+      ...data,
+      createdAt: data.createdAt ?? now,
+      updatedAt: data.updatedAt ?? now,
+    };
+  }
 }
