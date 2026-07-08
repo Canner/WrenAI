@@ -3094,6 +3094,135 @@ mod test {
     }
 
     #[tokio::test]
+    async fn test_clac_unreferenced_column_pruned_not_denied() -> Result<()> {
+        // A CLS-protected column the query does NOT reference must be pruned,
+        // not denied — even when the model is referenced with a table alias
+        // (which builds a throwaway inner plan with empty required fields, so the
+        // model gets wildcard-expanded), and for `count(*)`. Before the fix, an
+        // aliased scan of `customer` — or `count(*)` — that never selected
+        // `c_name` still denied `customer.c_name`.
+        let ctx = create_wren_ctx(None, None);
+        let manifest = ManifestBuilder::new()
+            .catalog("wren")
+            .schema("test")
+            .model(
+                ModelBuilder::new("customer")
+                    .table_reference("customer")
+                    .column(ColumnBuilder::new("c_custkey", "int").build())
+                    .column(
+                        ColumnBuilder::new("c_name", "string")
+                            .column_level_access_control(
+                                "cls rule",
+                                vec![SessionProperty::new_required("session_level")],
+                                ColumnLevelOperator::Equals,
+                                "1",
+                            )
+                            .build(),
+                    )
+                    .column(
+                        ColumnBuilder::new("c_secret", "string")
+                            .column_level_access_control(
+                                "cls rule 2",
+                                vec![SessionProperty::new_required("session_level")],
+                                ColumnLevelOperator::Equals,
+                                "2",
+                            )
+                            .build(),
+                    )
+                    .primary_key("c_custkey")
+                    .build(),
+            )
+            .model(
+                ModelBuilder::new("orders")
+                    .table_reference("orders")
+                    .column(ColumnBuilder::new("o_orderkey", "int").build())
+                    .column(ColumnBuilder::new("o_custkey", "int").build())
+                    .primary_key("o_orderkey")
+                    .build(),
+            )
+            .relationship(
+                RelationshipBuilder::new("customer_orders")
+                    .model("customer")
+                    .model("orders")
+                    .join_type(JoinType::OneToMany)
+                    .condition("customer.c_custkey = orders.o_custkey")
+                    .build(),
+            )
+            .build();
+
+        // session_level=0 → NO access to the protected columns (c_name, c_secret).
+        let headers = Arc::new(build_headers(&[(
+            "session_level".to_string(),
+            Some("0".to_string()),
+        )]));
+        let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+            manifest.clone(),
+            headers.clone(),
+            Mode::Unparse,
+        )?);
+
+        // The protected columns are never referenced → each of these must succeed
+        // with them pruned, not denied.
+        let prune_cases = [
+            ("unaliased join", "SELECT customer.c_custkey, orders.o_orderkey FROM customer JOIN orders ON customer.c_custkey = orders.o_custkey"),
+            ("aliased join", "SELECT e.c_custkey, o.o_orderkey FROM customer e JOIN orders o ON e.c_custkey = o.o_custkey"),
+            ("aliased standalone", "SELECT e.c_custkey FROM customer e"),
+            ("unaliased standalone", "SELECT customer.c_custkey FROM customer"),
+            ("aliased count(*)", "SELECT count(*) FROM customer e"),
+            ("unaliased count(*)", "SELECT count(*) FROM customer"),
+            ("qualified wildcard", "SELECT e.* FROM customer e"),
+            ("bare wildcard", "SELECT * FROM customer"),
+        ];
+        for (label, sql) in prune_cases {
+            if let Err(e) = transform_sql_with_ctx(
+                &ctx,
+                Arc::clone(&analyzed_mdl),
+                &[],
+                headers.clone(),
+                sql,
+            )
+            .await
+            {
+                panic!(
+                    "[{label}] unreferenced CLS column should be pruned, not denied: {e}"
+                );
+            }
+        }
+
+        // An EXPLICIT reference to a protected column must still be denied, wherever
+        // it appears — the fix only prunes columns the query never references.
+        let deny_cases = [
+            ("aliased explicit select", "SELECT e.c_custkey, e.c_name FROM customer e JOIN orders o ON e.c_custkey = o.o_custkey"),
+            ("aliased explicit standalone", "SELECT e.c_name FROM customer e"),
+            ("unaliased explicit select", "SELECT c_name FROM customer"),
+            ("second protected column", "SELECT e.c_secret FROM customer e"),
+            ("explicit in WHERE", "SELECT e.c_custkey FROM customer e WHERE e.c_name = 'x'"),
+            ("explicit in GROUP BY", "SELECT count(*) FROM customer e GROUP BY e.c_name"),
+            ("explicit in JOIN ON", "SELECT e.c_custkey FROM customer e JOIN orders o ON e.c_name = o.o_custkey"),
+        ];
+        for (label, sql) in deny_cases {
+            match transform_sql_with_ctx(
+                &ctx,
+                Arc::clone(&analyzed_mdl),
+                &[],
+                headers.clone(),
+                sql,
+            )
+            .await
+            {
+                Ok(out) => {
+                    panic!("[{label}] must deny explicit CLS reference, got: {out}")
+                }
+                Err(e) => assert!(
+                    e.to_string().contains("violates access control rule"),
+                    "[{label}] expected CLS denial, got: {e}"
+                ),
+            }
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_calc_primary_key() -> Result<()> {
         let ctx = create_wren_ctx(None, None);
         let manifest = ManifestBuilder::new()

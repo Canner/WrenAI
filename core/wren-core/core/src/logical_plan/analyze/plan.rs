@@ -1046,6 +1046,25 @@ impl ModelSourceNode {
                     if column.is_calculated {
                         continue;
                     }
+                    // Prune columns the caller cannot access under column-level
+                    // security instead of denying. This is an *implicit* all-columns
+                    // expansion (a `count(*)`, or the throwaway inner plan built for
+                    // a model scan referenced with a table alias, whose required
+                    // columns are keyed by the alias so the model is wildcard-
+                    // expanded). A protected column the query never explicitly
+                    // selected must be dropped here — matching `SELECT *` semantics —
+                    // not turned into a hard permission error. Explicit references
+                    // still deny, because they arrive as named required fields (the
+                    // non-wildcard branch / ModelPlanNodeBuilder::build), not here.
+                    let (is_valid, _) = validate_clac_rule(
+                        model.name(),
+                        &column,
+                        &session_properties,
+                        Some(Arc::clone(&analyzed_wren_mdl)),
+                    )?;
+                    if !is_valid {
+                        continue;
+                    }
                     fields_buffer.insert((
                         Some(TableReference::bare(quoted(model.name()))),
                         Arc::new(Field::new(
