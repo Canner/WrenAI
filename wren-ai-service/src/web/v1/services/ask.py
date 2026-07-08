@@ -678,50 +678,12 @@ class AskService:
     def _invalid_unqualified_sql_identifiers(
         self, sql: str, schema_tables: list[dict[str, Any]]
     ) -> list[str]:
-        all_valid_columns = {
+        valid_columns = {
             str(column.get("name") or "").lower()
             for table in schema_tables
             for column in table.get("columns", [])
             if column.get("name")
         }
-        columns_by_table: dict[str, set[str]] = {}
-        for table in schema_tables:
-            table_name = str(table.get("name") or "").lower()
-            if not table_name:
-                continue
-            table_columns = {
-                str(column.get("name") or "").lower()
-                for column in table.get("columns", [])
-                if column.get("name")
-            }
-            columns_by_table[table_name] = table_columns
-            columns_by_table[table_name.split(".")[-1]] = table_columns
-
-        table_reference_pattern = re.compile(
-            r'\b(?:FROM|JOIN)\s+(?:"(?P<quoted>[^"]+)"|'
-            r"\[(?P<bracketed>[^\]]+)\]|(?P<bare>[A-Za-z_][A-Za-z0-9_.$]*))",
-            flags=re.IGNORECASE,
-        )
-        referenced_table_keys = {
-            (
-                next(value for value in match.groupdict().values() if value) or ""
-            ).lower()
-            for match in table_reference_pattern.finditer(sql or "")
-        }
-        referenced_column_sets = [
-            columns
-            for table_key in referenced_table_keys
-            for columns in [
-                columns_by_table.get(table_key)
-                or columns_by_table.get(table_key.split(".")[-1])
-            ]
-            if columns is not None
-        ]
-        valid_columns = (
-            referenced_column_sets[0]
-            if len(referenced_column_sets) == 1
-            else all_valid_columns
-        )
         valid_tables = {
             str(table.get("name") or "").lower()
             for table in schema_tables
