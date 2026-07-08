@@ -2,10 +2,18 @@
 
 import re
 from decimal import Decimal as PyDecimal
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
-import oracledb
 import pyarrow as pa
+
+# Lazy driver import: keep the module importable without the ``oracle`` extra so
+# URL-decode/helper tests run under plain unit deps (mirrors the mysql/mssql/
+# clickhouse connectors). ``oracledb`` is only touched when a connection is
+# actually made.
+try:
+    import oracledb
+except ImportError:  # pragma: no cover
+    oracledb = None
 
 from wren.connector.base import ConnectorABC
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
@@ -112,12 +120,20 @@ def _make_oracle_connection(connection_info):
     if hasattr(connection_info, "connection_url") and connection_info.connection_url:
         url = connection_info.connection_url.get_secret_value()
         parsed = urlparse(url)
+        # urlparse leaves percent-encoded characters in the userinfo/path, so
+        # decode them here. Credentials routinely contain reserved characters
+        # (``@ / : ?``) that MUST be percent-encoded in the URL; without
+        # decoding, oracledb receives the literal ``%40`` and auth fails. Use
+        # ``unquote`` (not ``unquote_plus``) so a literal ``+`` in a credential
+        # is preserved — ``+`` only means space in query strings, not userinfo.
+        # Mirrors the mssql/mysql connectors' ``unquote`` handling.
+        # (clickhouse uses ``unquote_plus``, which differs on literal ``+``.)
         return oracledb.connect(
-            user=parsed.username,
-            password=parsed.password,
+            user=unquote(parsed.username) if parsed.username else None,
+            password=unquote(parsed.password) if parsed.password else None,
             host=parsed.hostname,
             port=parsed.port or 1521,
-            service_name=parsed.path.lstrip("/"),
+            service_name=unquote(parsed.path.lstrip("/")),
         )
     if hasattr(connection_info, "dsn") and connection_info.dsn:
         return oracledb.connect(
