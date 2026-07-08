@@ -457,6 +457,116 @@ describe('QueryService', () => {
     expect(mockIbisAdaptor.dryRun).not.toHaveBeenCalled();
   });
 
+  it('should reject unqualified function arguments outside a single active manifest table', async () => {
+    await expect(
+      queryService.preview(
+        [
+          'SELECT user_id customer, COUNT(*) issue_count,',
+          'AVG(DATEDIFF(day, created_at, resolved_at)) avg_resolution_time',
+          'FROM "dbo_kb_article_feedback"',
+          "WHERE details LIKE '%device%' AND helpful = 0",
+          'GROUP BY user_id',
+          'ORDER BY issue_count DESC NULLS LAST',
+        ].join(' '),
+        {
+          project: { type: DataSourceName.POSTGRES, connectionInfo: {} },
+          manifest: {
+            models: [
+              {
+                name: 'dbo_kb_article_feedback',
+                tableReference: { table: 'dbo_kb_article_feedback' },
+                columns: [
+                  { name: 'detail_id', type: 'string', isCalculated: false },
+                  { name: 'history_id', type: 'string', isCalculated: false },
+                  {
+                    name: 'target_query_expression',
+                    type: 'string',
+                    isCalculated: false,
+                  },
+                  {
+                    name: 'execution_date',
+                    type: 'timestamp',
+                    isCalculated: false,
+                  },
+                  { name: 'result', type: 'string', isCalculated: false },
+                  { name: 'result_detail', type: 'string', isCalculated: false },
+                  {
+                    name: 'exception_message',
+                    type: 'string',
+                    isCalculated: false,
+                  },
+                  { name: 'exception', type: 'string', isCalculated: false },
+                  { name: 'id', type: 'string', isCalculated: false },
+                  { name: 'org_id', type: 'string', isCalculated: false },
+                  { name: 'article_id', type: 'string', isCalculated: false },
+                  { name: 'user_id', type: 'string', isCalculated: false },
+                  { name: 'helpful', type: 'integer', isCalculated: false },
+                  { name: 'reasons', type: 'string', isCalculated: false },
+                  { name: 'details', type: 'string', isCalculated: false },
+                  { name: 'created_at', type: 'timestamp', isCalculated: false },
+                ],
+              },
+            ],
+          },
+          dryRun: true,
+        },
+      ),
+    ).rejects.toThrow(
+      'Generated SQL references column(s) or expressions not valid for the active datasource metadata: resolved_at',
+    );
+
+    expect(mockIbisAdaptor.dryRun).not.toHaveBeenCalled();
+  });
+
+  it('should reject unqualified where and group columns outside a single active manifest table', async () => {
+    await expect(
+      queryService.preview(
+        'SELECT COUNT(*) AS "count" FROM "dbo_ai_workflows" WHERE role = \'admin\' GROUP BY debug_user',
+        {
+          project: { type: DataSourceName.POSTGRES, connectionInfo: {} },
+          manifest: {
+            models: [
+              {
+                name: 'dbo_ai_workflows',
+                tableReference: { table: 'dbo_ai_workflows' },
+                columns: [
+                  { name: 'id', type: 'string', isCalculated: false },
+                  { name: 'org_id', type: 'string', isCalculated: false },
+                  { name: 'repair_id', type: 'string', isCalculated: false },
+                  { name: 'workflow_name', type: 'string', isCalculated: false },
+                  { name: 'priority', type: 'string', isCalculated: false },
+                  { name: 'steps', type: 'string', isCalculated: false },
+                  {
+                    name: 'estimated_total_min',
+                    type: 'integer',
+                    isCalculated: false,
+                  },
+                  {
+                    name: 'source_inspection_id',
+                    type: 'string',
+                    isCalculated: false,
+                  },
+                  {
+                    name: 'created_by_user_id',
+                    type: 'string',
+                    isCalculated: false,
+                  },
+                  { name: 'created_at', type: 'timestamp', isCalculated: false },
+                  { name: 'updated_at', type: 'timestamp', isCalculated: false },
+                ],
+              },
+            ],
+          },
+          dryRun: true,
+        },
+      ),
+    ).rejects.toThrow(
+      'Generated SQL references column(s) or expressions not valid for the active datasource metadata: debug_user, role',
+    );
+
+    expect(mockIbisAdaptor.dryRun).not.toHaveBeenCalled();
+  });
+
   it('should reject numeric aggregates on non-numeric manifest columns before ibis planning', async () => {
     await expect(
       queryService.preview('SELECT AVG("orders"."quantity") FROM "orders"', {

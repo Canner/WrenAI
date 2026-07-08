@@ -469,6 +469,69 @@ def test_normalize_sql_column_references_to_schema_keeps_unknown_columns_invalid
     ) == ["dbo_qSales1.UnitPrice"]
 
 
+def test_find_invalid_column_references_rejects_unqualified_function_arguments():
+    sql = (
+        'SELECT user_id customer, COUNT(*) issue_count, '
+        'AVG(DATEDIFF(day, created_at, resolved_at)) avg_resolution_time '
+        'FROM "dbo_kb_article_feedback" '
+        "WHERE details LIKE '%device%' AND helpful = 0 "
+        "GROUP BY user_id "
+        "ORDER BY issue_count DESC NULLS LAST"
+    )
+
+    assert find_invalid_column_references(
+        sql,
+        {
+            "dbo_kb_article_feedback": [
+                "detail_id",
+                "history_id",
+                "target_query_expression",
+                "execution_date",
+                "result",
+                "result_detail",
+                "exception_message",
+                "exception",
+                "id",
+                "org_id",
+                "article_id",
+                "user_id",
+                "helpful",
+                "reasons",
+                "details",
+                "created_at",
+            ]
+        },
+    ) == ["resolved_at"]
+
+
+def test_find_invalid_column_references_rejects_unqualified_where_columns():
+    sql = (
+        'SELECT COUNT(*) AS "count" '
+        'FROM "dbo_ai_workflows" '
+        "WHERE role = 'admin' "
+        "GROUP BY debug_user"
+    )
+
+    assert find_invalid_column_references(
+        sql,
+        {
+            "dbo_ai_workflows": [
+                "id",
+                "org_id",
+                "repair_id",
+                "workflow_name",
+                "priority",
+                "steps",
+                "estimated_total_min",
+                "source_inspection_id",
+                "created_by_user_id",
+                "created_at",
+                "updated_at",
+            ]
+        },
+    ) == ["debug_user", "role"]
+
+
 def test_normalize_sql_column_references_to_schema_maps_kb_article_aliases():
     sql = (
         'SELECT "dbo_kb_articles"."article_type", COUNT(*) AS "RecordCount" '
