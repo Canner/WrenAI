@@ -337,12 +337,44 @@ def _build_mssql_connection(connection_info):
     )
 
 
+def _parse_mssql_connection_url(url: str):
+    """Parse an MSSQL URL after escaping raw brackets in userinfo only.
+
+    ``urllib.parse.urlparse`` treats ``[`` / ``]`` anywhere in the netloc as
+    IPv6 host delimiters. That is correct for hosts like ``mssql://[::1]/db``
+    but it raises ``ValueError`` on raw credentials such as
+    ``mssql://user:p[a]ss@host/db``. Sanitise only the userinfo segment so
+    valid IPv6 hosts still parse. Mirrors the MySQL connector helper.
+    """
+    scheme_idx = url.find("://")
+    if scheme_idx == -1:
+        return urlparse(url)
+
+    prefix = url[: scheme_idx + 3]
+    rest = url[scheme_idx + 3 :]
+
+    authority_end = len(rest)
+    for separator in "/?#":
+        idx = rest.find(separator)
+        if idx != -1:
+            authority_end = min(authority_end, idx)
+
+    authority = rest[:authority_end]
+    if "@" not in authority:
+        return urlparse(url)
+
+    userinfo, hostinfo = authority.rsplit("@", 1)
+    sanitized_userinfo = userinfo.replace("[", "%5B").replace("]", "%5D")
+    sanitized_url = f"{prefix}{sanitized_userinfo}@{hostinfo}{rest[authority_end:]}"
+    return urlparse(sanitized_url)
+
+
 def _connect_mssql_from_url(
     connection_url: str, base_kwargs: dict[str, Any] | None = None
 ):
     """Parse a ``mssql://user:pass@host:port/database`` URL and open a
     pyodbc connection using the same code path as the typed-info builder."""
-    parsed = urlparse(connection_url)
+    parsed = _parse_mssql_connection_url(connection_url)
     if parsed.scheme != "mssql":
         raise WrenError(
             ErrorCode.INVALID_CONNECTION_INFO,
