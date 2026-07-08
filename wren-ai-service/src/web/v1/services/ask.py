@@ -348,7 +348,7 @@ class AskService:
         query: str,
         histories: list[AskHistory] | None,
     ) -> bool:
-        return bool(histories) and self._needs_conversation_context(query)
+        return False
 
     def _rewrite_query_for_text_to_sql(self, query: str) -> str:
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
@@ -1075,6 +1075,86 @@ class AskService:
             for key in (base_key, separator_normalized_key, compact_parts_key)
             if key
         }
+
+    def _explicit_table_alias_keys_from_query(self, query: str | None) -> set[str]:
+        keys: set[str] = set()
+        for table_name in self._extract_explicit_table_names_from_query(query or ""):
+            keys.update(self._schema_identifier_alias_keys(table_name))
+        return keys
+
+    def _filter_retrieval_metadata_for_explicit_query(
+        self,
+        query: str,
+        documents: list[dict],
+    ) -> tuple[list[dict], list[str], list[str]]:
+        explicit_table_keys = self._explicit_table_alias_keys_from_query(query)
+        if not explicit_table_keys:
+            table_names, table_ddls = self._metadata_from_documents(documents)
+            return documents, table_names, table_ddls
+
+        matched_documents: list[dict] = []
+        for document in documents:
+            candidate_names = []
+            if isinstance(table_name := document.get("table_name"), str):
+                candidate_names.append(table_name)
+            if isinstance(table_ddl := document.get("table_ddl"), str):
+                candidate_names.extend(
+                    str(table.get("name") or "")
+                    for table in self._parse_schema_tables([table_ddl])
+                    if table.get("name")
+                )
+
+            candidate_keys: set[str] = set()
+            for candidate_name in candidate_names:
+                candidate_keys.update(self._schema_identifier_alias_keys(candidate_name))
+                candidate_keys.update(
+                    self._schema_identifier_alias_keys(
+                        re.split(r"[.$_]", str(candidate_name or ""))[-1]
+                    )
+                )
+            if explicit_table_keys.intersection(candidate_keys):
+                matched_documents.append(document)
+
+        table_names, table_ddls = self._metadata_from_documents(matched_documents)
+        return matched_documents, table_names, table_ddls
+
+    def _sql_references_explicit_table(
+        self,
+        sql: str,
+        query: str | None,
+    ) -> bool:
+        explicit_table_keys = self._explicit_table_alias_keys_from_query(query)
+        if not explicit_table_keys:
+            return True
+
+        table_reference_pattern = re.compile(
+            r'\b(?:FROM|JOIN)\s+(?:"(?P<quoted>[^"]+)"|'
+            r"\[(?P<bracketed>[^\]]+)\]|(?P<bare>[A-Za-z_][A-Za-z0-9_.$]*))",
+            flags=re.IGNORECASE,
+        )
+        referenced_tables = [
+            next(value for value in match.groupdict().values() if value)
+            for match in table_reference_pattern.finditer(sql)
+        ]
+
+        for table_reference in referenced_tables:
+            reference_keys = self._schema_identifier_alias_keys(table_reference)
+            reference_keys.update(
+                self._schema_identifier_alias_keys(
+                    re.split(r"[.$_]", str(table_reference or ""))[-1]
+                )
+            )
+            if explicit_table_keys.intersection(reference_keys):
+                return True
+
+        logger.warning(
+            "Ignoring SQL because it does not reference the explicitly requested table. "
+            "query=%s referenced_tables=%s sql=%s",
+            query,
+            referenced_tables,
+            sql,
+        )
+        return False
 
     def _table_matches_query(self, table_name: str, query: str) -> bool:
         query_keys = self._schema_identifier_alias_keys(query)
@@ -4000,6 +4080,11 @@ class AskService:
         self, retrieval_result: dict
     ) -> tuple[list[dict], list[str], list[str]]:
         documents = self._extract_retrieval_documents(retrieval_result)
+        return documents, *self._metadata_from_documents(documents)
+
+    def _metadata_from_documents(
+        self, documents: list[dict]
+    ) -> tuple[list[str], list[str]]:
         table_names = [
             table_name
             for document in documents
@@ -4012,7 +4097,7 @@ class AskService:
             if isinstance(table_ddl := document.get("table_ddl"), str)
             and table_ddl.strip()
         ]
-        return documents, table_names, table_ddls
+        return table_names, table_ddls
 
     async def _complete_sql_generation_context(
         self,
@@ -4658,6 +4743,9 @@ class AskService:
             )
             return None
 
+        if not self._sql_references_explicit_table(ask_result.sql, query):
+            return None
+
         if not self._sql_matches_question_intent(
             ask_result.sql,
             query,
@@ -4889,7 +4977,7 @@ class AskService:
                             query=user_query,
                             tables=explicit_table_names,
                             project_id=ask_request.project_id,
-                            histories=histories,
+                            histories=[],
                             enable_column_pruning=False,
                         ),
                         timeout_seconds=min(
@@ -4901,6 +4989,41 @@ class AskService:
                     documents, table_names, table_ddls = (
                         self._extract_retrieval_metadata(retrieval_result)
                     )
+                    documents, table_names, table_ddls = (
+                        self._filter_retrieval_metadata_for_explicit_query(
+                            user_query,
+                            documents,
+                        )
+                    )
+                    if not documents:
+                        logger.info(
+                            "Explicit table retrieval did not return requested active-schema table; "
+                            "loading full active schema. query_id=%s",
+                            query_id,
+                        )
+                        retrieval_result = await self._run_with_timeout(
+                            "Full active schema retrieval for explicit table",
+                            self._pipelines["db_schema_retrieval"].run(
+                                query="",
+                                project_id=ask_request.project_id,
+                                histories=[],
+                                enable_column_pruning=False,
+                            ),
+                            timeout_seconds=min(
+                                self._schema_retrieval_timeout_seconds,
+                                self._pipeline_timeout_seconds,
+                                20,
+                            ),
+                        )
+                        all_documents, _, _ = self._extract_retrieval_metadata(
+                            retrieval_result
+                        )
+                        documents, table_names, table_ddls = (
+                            self._filter_retrieval_metadata_for_explicit_query(
+                                user_query,
+                                all_documents,
+                            )
+                        )
                     _retrieval_result = retrieval_result.get(
                         "construct_retrieval_results", {}
                     )
@@ -4941,54 +5064,54 @@ class AskService:
                         explicit_sql, explicit_table_name = explicit_table_preview
                         if explicit_table_name not in table_names:
                             table_names.append(explicit_table_name)
-                        api_results = [
-                            AskResult(
-                                **{
-                                    "sql": explicit_sql,
-                                    "type": "llm",
-                                }
-                            )
-                        ]
-                        self._ask_results[query_id] = AskResultResponse(
-                            status="finished",
-                            type="TEXT_TO_SQL",
-                            response=api_results,
-                            rephrased_question=user_query,
-                            intent_reasoning="Explicit table preview request matched deployed schema.",
-                            retrieved_tables=table_names,
-                            trace_id=trace_id,
-                            is_followup=True if histories else False,
+                        ask_result = self._build_validated_ask_result_from_sql(
+                            explicit_sql,
+                            table_ddls,
+                            user_query,
                         )
-                        results["ask_result"] = api_results
-                        results["metadata"]["type"] = "TEXT_TO_SQL"
-                        return results
+                        if ask_result:
+                            api_results = [ask_result]
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="TEXT_TO_SQL",
+                                response=api_results,
+                                rephrased_question=user_query,
+                                intent_reasoning="Explicit table preview request matched deployed schema.",
+                                retrieved_tables=table_names,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                            )
+                            results["ask_result"] = api_results
+                            results["metadata"]["type"] = "TEXT_TO_SQL"
+                            return results
+                        invalid_sql = explicit_sql
 
                     if documents and (
                         deterministic_sql := self._build_schema_grounded_sales_sql(
                             user_query, table_ddls
                         )
                     ):
-                        api_results = [
-                            AskResult(
-                                **{
-                                    "sql": deterministic_sql,
-                                    "type": "llm",
-                                }
-                            )
-                        ]
-                        self._ask_results[query_id] = AskResultResponse(
-                            status="finished",
-                            type="TEXT_TO_SQL",
-                            response=api_results,
-                            rephrased_question=user_query,
-                            intent_reasoning="Explicit table request matched deployed schema and generated SQL locally.",
-                            retrieved_tables=table_names,
-                            trace_id=trace_id,
-                            is_followup=True if histories else False,
+                        ask_result = self._build_validated_ask_result_from_sql(
+                            deterministic_sql,
+                            table_ddls,
+                            user_query,
                         )
-                        results["ask_result"] = api_results
-                        results["metadata"]["type"] = "TEXT_TO_SQL"
-                        return results
+                        if ask_result:
+                            api_results = [ask_result]
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="TEXT_TO_SQL",
+                                response=api_results,
+                                rephrased_question=user_query,
+                                intent_reasoning="Explicit table request matched deployed schema and generated SQL locally.",
+                                retrieved_tables=table_names,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                            )
+                            results["ask_result"] = api_results
+                            results["metadata"]["type"] = "TEXT_TO_SQL"
+                            return results
+                        invalid_sql = deterministic_sql
 
                     if not documents:
                         error_message = (
@@ -5030,7 +5153,7 @@ class AskService:
                         "Schema retrieval",
                         self._pipelines["db_schema_retrieval"].run(
                             query=user_query,
-                            histories=histories,
+                            histories=[],
                             project_id=ask_request.project_id,
                             enable_column_pruning=False,
                         ),
@@ -5077,23 +5200,10 @@ class AskService:
                 if explicit_group_count_sql := self._build_explicit_group_count_sql(
                     user_query
                 ):
-                    table_column_reference = (
-                        self._extract_explicit_table_column_reference(user_query)
-                    )
-                    table_names = (
-                        [table_column_reference[0]] if table_column_reference else []
-                    )
-                    api_results = [
-                        AskResult(
-                            **{
-                                "sql": explicit_group_count_sql,
-                                "type": "llm",
-                            }
-                        )
-                    ]
+                    invalid_sql = explicit_group_count_sql
                     rephrased_question = user_query
                     logger.info(
-                        "Using explicit table-column grouped count SQL for query_id %s",
+                        "Deferring explicit grouped count SQL until active schema validation for query_id %s",
                         query_id,
                     )
 
@@ -5414,7 +5524,7 @@ class AskService:
                         "Schema retrieval",
                         self._pipelines["db_schema_retrieval"].run(
                             query=sql_user_query,
-                            histories=histories,
+                            histories=[],
                             project_id=ask_request.project_id,
                             enable_column_pruning=(
                                 enable_column_pruning
@@ -5449,10 +5559,17 @@ class AskService:
                 documents, table_names, table_ddls = (
                     self._extract_retrieval_metadata(retrieval_result)
                 )
-                if not documents:
-                    explicit_table_names = self._extract_explicit_table_names_from_query(
-                        user_query
+                explicit_table_names = self._extract_explicit_table_names_from_query(
+                    user_query
+                )
+                if explicit_table_names:
+                    documents, table_names, table_ddls = (
+                        self._filter_retrieval_metadata_for_explicit_query(
+                            user_query,
+                            documents,
+                        )
                     )
+                if not documents:
                     if explicit_table_names:
                         logger.info(
                             "Retrying schema retrieval for explicit tables query_id %s: %s",
@@ -5465,7 +5582,7 @@ class AskService:
                                 query=user_query,
                                 tables=explicit_table_names,
                                 project_id=ask_request.project_id,
-                                histories=histories,
+                                histories=[],
                                 enable_column_pruning=enable_column_pruning,
                             ),
                             timeout_seconds=min(
@@ -5478,6 +5595,12 @@ class AskService:
                         )
                         documents, table_names, table_ddls = (
                             self._extract_retrieval_metadata(retrieval_result)
+                        )
+                        documents, table_names, table_ddls = (
+                            self._filter_retrieval_metadata_for_explicit_query(
+                                user_query,
+                                documents,
+                            )
                         )
                 if not documents and self._is_data_analysis_query(user_query):
                     logger.info(
@@ -5505,6 +5628,13 @@ class AskService:
                     documents, table_names, table_ddls = (
                         self._extract_retrieval_metadata(retrieval_result)
                     )
+                    if explicit_table_names:
+                        documents, table_names, table_ddls = (
+                            self._filter_retrieval_metadata_for_explicit_query(
+                                user_query,
+                                documents,
+                            )
+                        )
                 logger.info(
                     "Retrieved tables for query_id %s: %s", query_id, table_names
                 )
@@ -5542,14 +5672,16 @@ class AskService:
                     )
                     if explicit_table_name not in table_names:
                         table_names.append(explicit_table_name)
-                    api_results = [
-                        AskResult(
-                            **{
-                                "sql": explicit_sql,
-                                "type": "llm",
-                            }
-                        )
-                    ]
+                    ask_result = self._build_validated_ask_result_from_sql(
+                        explicit_sql,
+                        table_ddls,
+                        user_query,
+                    )
+                    if ask_result:
+                        api_results = [ask_result]
+                    else:
+                        invalid_sql = explicit_sql
+                        error_message = "Explicit table preview SQL was not valid for the active datasource schema."
 
                 if not api_results and (
                     audit_log_activity_sql := self._build_audit_log_activity_sql(

@@ -41,10 +41,10 @@ def test_independent_question_does_not_reuse_historical_sql():
     )
 
 
-def test_contextual_followup_can_reuse_historical_sql():
+def test_contextual_followup_does_not_reuse_historical_sql():
     service = AskService(pipelines={})
 
-    assert service._should_reuse_historical_question_sql(
+    assert not service._should_reuse_historical_question_sql(
         "Use the same table and show it by month.",
         [AskHistory(question="previous", sql="SELECT 1")],
     )
