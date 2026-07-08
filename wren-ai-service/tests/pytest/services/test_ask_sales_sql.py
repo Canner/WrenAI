@@ -1518,6 +1518,36 @@ def test_build_schema_grounded_table_question_sql_for_monthly_created_at_count()
     )
 
 
+def test_build_schema_grounded_sales_sql_handles_how_monthly_record_count():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_sales_sql(
+        "how monthly record count by created_at in dbo.failure_patterns.",
+        [
+            """
+            CREATE TABLE dbo_failure_patterns (
+              id INTEGER,
+              name VARCHAR,
+              created_at TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT DATEPART(YEAR, "dbo_failure_patterns"."created_at") AS "year", '
+        'DATEPART(MONTH, "dbo_failure_patterns"."created_at") AS "month", '
+        'COUNT(*) AS "RecordCount" '
+        'FROM "dbo_failure_patterns" '
+        'WHERE "dbo_failure_patterns"."created_at" IS NOT NULL '
+        'GROUP BY DATEPART(YEAR, "dbo_failure_patterns"."created_at"), '
+        'DATEPART(MONTH, "dbo_failure_patterns"."created_at") '
+        'ORDER BY DATEPART(YEAR, "dbo_failure_patterns"."created_at") ASC, '
+        'DATEPART(MONTH, "dbo_failure_patterns"."created_at") ASC'
+    )
+    assert '"dbo_failure"."patterns"' not in sql
+
+
 def test_build_schema_grounded_table_question_sql_prefers_explicit_table_alias():
     service = AskService.__new__(AskService)
 
