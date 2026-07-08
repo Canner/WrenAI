@@ -904,27 +904,6 @@ class AskService:
         if not referenced_tables:
             return True
 
-        asks_manufacturing_throughput = "throughput" in normalized_query and any(
-            term in normalized_query
-            for term in ("manufacturing", "manufacturing unit", "manufacturing units")
-        )
-        if (
-            asks_manufacturing_throughput
-            and not self._query_allows_internal_debug_table(query)
-            and any(
-                self._is_internal_debug_table_name(table_reference)
-                for table_reference in referenced_tables
-            )
-        ):
-            logger.warning(
-                "Ignoring SQL because manufacturing throughput query selected an internal debug/staging table. "
-                "query=%s referenced_tables=%s sql=%s",
-                query,
-                referenced_tables,
-                sql,
-            )
-            return False
-
         referenced_table_tokens = set().union(
             *[self._schema_name_tokens(table) for table in referenced_tables]
         )
@@ -1134,36 +1113,6 @@ class AskService:
             for key in (base_key, separator_normalized_key, compact_parts_key)
             if key
         }
-
-    def _query_allows_internal_debug_table(self, query: str | None) -> bool:
-        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
-        return any(
-            term in normalized
-            for term in (
-                "debug",
-                "debugging",
-                "debug entries",
-                "debugentries",
-                "debug shelf",
-                "staging",
-                "internal",
-            )
-        )
-
-    def _is_internal_debug_table_name(self, table_name: str) -> bool:
-        normalized = str(table_name or "").lower()
-        return any(
-            token in normalized
-            for token in (
-                "debug",
-                "debugentries",
-                "staging",
-                "ai_job",
-                "sysdiagram",
-                "knex",
-                "migration",
-            )
-        )
 
     def _table_matches_query(self, table_name: str, query: str) -> bool:
         query_keys = self._schema_identifier_alias_keys(query)
@@ -2915,8 +2864,6 @@ class AskService:
                 "business units",
                 "different unit",
                 "different units",
-                "debug shelf",
-                "debug shelves",
             )
         )
 
@@ -2924,7 +2871,7 @@ class AskService:
             return None
 
         tables = self._parse_schema_tables(table_ddls)
-        unit_candidates = [
+        unit_candidates = (
             "BusinessUnit",
             "Business_Unit",
             "Business Unit",
@@ -2936,22 +2883,17 @@ class AskService:
             "unit_name",
             "BU",
             "division",
+            "Debug_Shelf",
+            "DebugShelf",
+            "debug shelf",
+            "shelf",
             "station",
             "workstation",
             "work_center",
             "workcenter",
             "line",
             "cell",
-        ]
-        if self._query_allows_internal_debug_table(query):
-            unit_candidates.extend(
-                (
-                    "Debug_Shelf",
-                    "DebugShelf",
-                    "debug shelf",
-                    "shelf",
-                )
-            )
+        )
         wants_temporal_trend = any(
             term in normalized for term in ("trend", "trends", "monthly", "over time")
         )
@@ -2969,38 +2911,28 @@ class AskService:
 
             table_name = str(candidate_table.get("name") or "")
             normalized_table_name = table_name.lower()
-            if self._is_internal_debug_table_name(
-                table_name
-            ) and not self._query_allows_internal_debug_table(query):
-                continue
-
             score = 100
             if timestamp_column:
                 score += 40
             if any(
                 token in normalized_table_name
                 for token in (
+                    "debug",
+                    "entry",
+                    "entries",
                     "production",
                     "event",
                     "events",
                     "repair",
                     "manufacturing",
-                    "factory",
-                    "throughput",
                 )
             ):
-                score += 50
-            if any(
-                token in normalized_table_name
-                for token in ("debug", "entry", "entries", "staging")
-            ):
-                score -= 80
+                score += 20
             if self._table_matches_query(table_name, query):
                 score += 15
-            if score > 0:
-                scored_unit_tables.append(
-                    (score, candidate_table, unit_column, timestamp_column)
-                )
+            scored_unit_tables.append(
+                (score, candidate_table, unit_column, timestamp_column)
+            )
 
         table = None
         preferred_unit_column = None
@@ -3060,8 +2992,6 @@ class AskService:
         has_business_unit = self._schema_contains(
             table_ddls, r"\bBusinessUnit\b", table_names=table_names
         )
-        if not self._query_allows_internal_debug_table(query):
-            return None
         if not (has_debug_entries and has_business_unit):
             return None
 
@@ -4847,36 +4777,30 @@ class AskService:
                         score += 25
 
             if wants_throughput_by_unit:
-                unit_column_candidates = [
-                    "BusinessUnit",
-                    "Business_Unit",
-                    "Business Unit",
-                    "manufacturing_unit",
-                    "manufacturing unit",
-                    "ManufacturingUnit",
-                    "unit",
-                    "unit_name",
-                    "BU",
-                    "division",
-                    "station",
-                    "workstation",
-                    "work_center",
-                    "workcenter",
-                    "line",
-                    "cell",
-                ]
-                if self._query_allows_internal_debug_table(query):
-                    unit_column_candidates.extend(
-                        (
-                            "Debug_Shelf",
-                            "DebugShelf",
-                            "debug shelf",
-                            "shelf",
-                        )
-                    )
                 unit_column = self._find_schema_column(
                     table,
-                    unit_column_candidates,
+                    (
+                        "BusinessUnit",
+                        "Business_Unit",
+                        "Business Unit",
+                        "manufacturing_unit",
+                        "manufacturing unit",
+                        "ManufacturingUnit",
+                        "unit",
+                        "unit_name",
+                        "BU",
+                        "division",
+                        "Debug_Shelf",
+                        "DebugShelf",
+                        "debug shelf",
+                        "shelf",
+                        "station",
+                        "workstation",
+                        "work_center",
+                        "workcenter",
+                        "line",
+                        "cell",
+                    ),
                 )
                 temporal_column = self._find_temporal_column_for_query(query, table)
                 if unit_column:
@@ -4885,10 +4809,6 @@ class AskService:
                     score += 300
                 if wants_temporal_trend and unit_column and temporal_column:
                     score += 300
-                if self._is_internal_debug_table_name(
-                    table_name
-                ) and not self._query_allows_internal_debug_table(query):
-                    score -= 1200
 
             if score > 0:
                 scored.append((score, index))
