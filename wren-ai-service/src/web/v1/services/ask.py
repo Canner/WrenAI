@@ -1219,6 +1219,23 @@ class AskService:
             return None
 
         tables = self._parse_schema_tables(table_ddls)
+        explicit_table_names = self._extract_explicit_table_names_from_query(query)
+        if explicit_table_names:
+            explicit_keys = {
+                key
+                for explicit_table_name in explicit_table_names
+                for key in self._schema_identifier_alias_keys(explicit_table_name)
+            }
+            explicit_tables = [
+                table
+                for table in tables
+                if explicit_keys.intersection(
+                    self._schema_identifier_alias_keys(str(table.get("name") or ""))
+                )
+            ]
+            if explicit_tables:
+                tables = explicit_tables
+
         table = self._find_best_schema_table_for_query(query, tables)
         if not table:
             return None
@@ -1336,6 +1353,12 @@ class AskService:
             return None
         if not re.search(
             r"\b(?:rows?|records?|data)\b", normalized_query, flags=re.IGNORECASE
+        ):
+            return None
+        if re.search(
+            r"\b(?:count|counts|monthly|month|trend|trends|by|per|each|distribution|group(?:ed)?|aggregate)\b",
+            normalized_query,
+            flags=re.IGNORECASE,
         ):
             return None
 

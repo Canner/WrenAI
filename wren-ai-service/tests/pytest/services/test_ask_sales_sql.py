@@ -127,6 +127,24 @@ def test_build_explicit_table_preview_sql_for_show_data_prompt():
     assert result == ('SELECT TOP 10 * FROM "CustomerMaster"', "CustomerMaster")
 
 
+def test_build_explicit_table_preview_sql_ignores_monthly_count_question():
+    service = AskService.__new__(AskService)
+
+    result = service._build_explicit_table_preview_sql(
+        "Show monthly record count by created_at in dbo.failure_patterns.",
+        [
+            """
+            CREATE TABLE dbo_failure_patterns (
+              id INTEGER,
+              created_at TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert result is None
+
+
 def test_extract_explicit_table_names_from_query():
     service = AskService.__new__(AskService)
 
@@ -1498,6 +1516,43 @@ def test_build_schema_grounded_table_question_sql_for_monthly_created_at_count()
         'ORDER BY DATEPART(YEAR, "dbo_failure_patterns"."created_at") ASC, '
         'DATEPART(MONTH, "dbo_failure_patterns"."created_at") ASC'
     )
+
+
+def test_build_schema_grounded_table_question_sql_prefers_explicit_table_alias():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_table_question_sql(
+        "Show monthly record count by created_at in dbo.failure_patterns.",
+        [
+            """
+            CREATE TABLE dbo_knowledge_articles (
+              id INTEGER,
+              policy_category_id INTEGER,
+              created_at TIMESTAMP
+            );
+            """,
+            """
+            CREATE TABLE dbo_failure_patterns (
+              id INTEGER,
+              name VARCHAR,
+              created_at TIMESTAMP
+            );
+            """,
+        ],
+    )
+
+    assert sql == (
+        'SELECT DATEPART(YEAR, "dbo_failure_patterns"."created_at") AS "year", '
+        'DATEPART(MONTH, "dbo_failure_patterns"."created_at") AS "month", '
+        'COUNT(*) AS "RecordCount" '
+        'FROM "dbo_failure_patterns" '
+        'WHERE "dbo_failure_patterns"."created_at" IS NOT NULL '
+        'GROUP BY DATEPART(YEAR, "dbo_failure_patterns"."created_at"), '
+        'DATEPART(MONTH, "dbo_failure_patterns"."created_at") '
+        'ORDER BY DATEPART(YEAR, "dbo_failure_patterns"."created_at") ASC, '
+        'DATEPART(MONTH, "dbo_failure_patterns"."created_at") ASC'
+    )
+    assert "dbo_knowledge_articles" not in sql
 
 
 def test_build_validated_ask_result_rejects_status_for_product_line_pcb_question():
