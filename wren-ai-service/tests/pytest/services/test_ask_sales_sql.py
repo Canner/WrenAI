@@ -231,41 +231,6 @@ def test_build_validated_ask_result_accepts_sql_for_explicit_table_alias():
     assert result is not None
 
 
-def test_filter_retrieval_metadata_for_explicit_query_keeps_only_named_table():
-    service = AskService.__new__(AskService)
-    documents = [
-        {
-            "table_name": "dbo_knowledge_articles",
-            "table_ddl": """
-            CREATE TABLE dbo_knowledge_articles (
-              id INTEGER,
-              last_run_date TIMESTAMP
-            );
-            """,
-        },
-        {
-            "table_name": "dbo_failure_patterns",
-            "table_ddl": """
-            CREATE TABLE dbo_failure_patterns (
-              id INTEGER,
-              created_at TIMESTAMP
-            );
-            """,
-        },
-    ]
-
-    filtered_documents, table_names, table_ddls = (
-        service._filter_retrieval_metadata_for_explicit_query(
-            "show monthly record count by created_at in dbo.failure_patterns.",
-            documents,
-        )
-    )
-
-    assert filtered_documents == [documents[1]]
-    assert table_names == ["dbo_failure_patterns"]
-    assert table_ddls == [documents[1]["table_ddl"]]
-
-
 def test_needs_conversation_context_only_for_true_followups():
     service = AskService.__new__(AskService)
 
