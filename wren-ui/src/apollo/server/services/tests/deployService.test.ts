@@ -82,6 +82,7 @@ describe('DeployService', () => {
     const projectId = 1;
 
     mockDeployLogRepository.findLastProjectDeployLog.mockResolvedValue({
+      id: 123,
       hash: deployService.createMDLHash(manifest, 1),
     });
 
@@ -89,6 +90,10 @@ describe('DeployService', () => {
 
     expect(response.status).toEqual(DeployStatusEnum.SUCCESS);
     expect(mockWrenAIAdaptor.deploy).not.toHaveBeenCalled();
+    expect(mockDeployLogRepository.updateOne).toHaveBeenCalledWith(123, {
+      status: DeployStatusEnum.SUCCESS,
+      error: null,
+    });
   });
 
   it('should create the same deployment hash for equivalent manifests', () => {

@@ -109,6 +109,10 @@ export class DeployService implements IDeployService {
           await this.deployLogRepository.findLastProjectDeployLog(projectId);
         if (lastDeploy && lastDeploy.hash === hash) {
           logger.log(`Model has been deployed, hash: ${hash}`);
+          await this.deployLogRepository.updateOne(lastDeploy.id, {
+            status: DeployStatusEnum.SUCCESS,
+            error: null,
+          });
           return { status: DeployStatusEnum.SUCCESS };
         }
       }
