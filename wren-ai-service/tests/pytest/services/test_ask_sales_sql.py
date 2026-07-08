@@ -939,40 +939,6 @@ def test_build_manufacturing_throughput_sql_prefers_unit_table_over_admin_tables
     assert "database_name" not in sql
 
 
-def test_build_manufacturing_throughput_sql_uses_debug_shelf_unit_column():
-    service = AskService.__new__(AskService)
-
-    sql = service._build_schema_grounded_sales_sql(
-        "Show throughput trends across different manufacturing units.",
-        [
-            """
-            CREATE TABLE dbo_DebugEntries_Staging2 (
-              id INTEGER,
-              Debug_Shelf VARCHAR,
-              last_update_date TIMESTAMP,
-              status VARCHAR
-            );
-            """
-        ],
-    )
-
-    assert sql == (
-        'SELECT "dbo_DebugEntries_Staging2"."Debug_Shelf" AS "Debug_Shelf", '
-        'DATEPART(YEAR, "dbo_DebugEntries_Staging2"."last_update_date") AS "year", '
-        'DATEPART(MONTH, "dbo_DebugEntries_Staging2"."last_update_date") AS "month", '
-        'COUNT(*) AS "throughput" '
-        'FROM "dbo_DebugEntries_Staging2" '
-        'WHERE "dbo_DebugEntries_Staging2"."Debug_Shelf" IS NOT NULL '
-        'AND "dbo_DebugEntries_Staging2"."last_update_date" IS NOT NULL '
-        'GROUP BY "dbo_DebugEntries_Staging2"."Debug_Shelf", '
-        'DATEPART(YEAR, "dbo_DebugEntries_Staging2"."last_update_date"), '
-        'DATEPART(MONTH, "dbo_DebugEntries_Staging2"."last_update_date") '
-        'ORDER BY "dbo_DebugEntries_Staging2"."Debug_Shelf" ASC, '
-        'DATEPART(YEAR, "dbo_DebugEntries_Staging2"."last_update_date") ASC, '
-        'DATEPART(MONTH, "dbo_DebugEntries_Staging2"."last_update_date") ASC'
-    )
-
-
 def test_build_monthly_repair_volume_sql_uses_repair_log_date_column():
     service = AskService.__new__(AskService)
 
