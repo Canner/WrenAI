@@ -61,7 +61,7 @@ impl RelationChain {
     #[allow(clippy::too_many_arguments)]
     pub fn with_chain(
         source: Self,
-        mut start: NodeIndex,
+        start: NodeIndex,
         iter: impl Iterator<Item = NodeIndex>,
         directed_graph: Graph<Dataset, DatasetLink>,
         model_required_fields: &HashMap<TableReference, BTreeSet<OrdExpr>>,
@@ -70,10 +70,22 @@ impl RelationChain {
         properties: SessionPropertiesRef,
     ) -> Result<Self> {
         let mut relation_chain = source;
+        // Track the most recently visited node so that we can walk both linear
+        // chains (A -> B -> C, where each link starts from the previously
+        // visited node) and star fan-outs (A -> B and A -> C, both starting
+        // from the base model). At each step we prefer an edge from the
+        // previous node; if none exists we fall back to an edge from the
+        // original starting node. This lets a single model project calculated
+        // columns that span multiple distinct relationships without truncating
+        // the join chain.
+        let mut prev = start;
 
         for next in iter {
             let target = directed_graph.node_weight(next).unwrap();
-            let Some(link_index) = directed_graph.find_edge(start, next) else {
+            let link_index = directed_graph
+                .find_edge(prev, next)
+                .or_else(|| directed_graph.find_edge(start, next));
+            let Some(link_index) = link_index else {
                 break;
             };
             let link = directed_graph.edge_weight(link_index).unwrap();
@@ -119,7 +131,7 @@ impl RelationChain {
                 link.condition.clone(),
                 Box::new(relation_chain),
             );
-            start = next;
+            prev = next;
         }
         Ok(relation_chain)
     }

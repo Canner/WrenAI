@@ -334,8 +334,19 @@ impl ModelPlanNodeBuilder {
             ));
         }
 
-        self.directed_graph
-            .add_node(Dataset::Model(Arc::clone(&model)));
+        // Ensure the base model is present as a node. If any calculated-column
+        // sub-graph already merged the base model in (the common case when the
+        // model has calculated columns), reuse it instead of adding a
+        // duplicate — duplicate base-model nodes break the join-chain walk in
+        // `RelationChain::with_chain`.
+        let base_dataset = Dataset::Model(Arc::clone(&model));
+        if !self
+            .directed_graph
+            .node_indices()
+            .any(|idx| self.directed_graph[idx] == base_dataset)
+        {
+            self.directed_graph.add_node(base_dataset);
+        }
         if !is_dag(&self.directed_graph) {
             return plan_err!("cyclic dependency detected: {}", model.name());
         }
@@ -901,10 +912,29 @@ fn merge_graph(
     graph: &mut Graph<Dataset, DatasetLink>,
     new_graph: &Graph<Dataset, DatasetLink>,
 ) -> Result<()> {
+    // Build a lookup of datasets already present in the destination graph so
+    // that nodes representing the same `Dataset` (typically the shared base
+    // model when merging multiple calculated-column sub-graphs) are reused
+    // instead of duplicated. Without this, `RelationChain::with_chain` walks
+    // the merged graph via `find_edge(start, next)` and silently truncates the
+    // chain at the first duplicate base-model node, dropping every relationship
+    // after the first one.
+    let mut existing: HashMap<Dataset, petgraph::graph::NodeIndex> = graph
+        .node_indices()
+        .map(|idx| (graph[idx].clone(), idx))
+        .collect();
+
     let mut node_map = HashMap::new();
     for node in new_graph.node_indices() {
-        let new_node = graph.add_node(new_graph[node].clone());
-        node_map.insert(node, new_node);
+        let dataset = new_graph[node].clone();
+        let dest_index = if let Some(&existing_idx) = existing.get(&dataset) {
+            existing_idx
+        } else {
+            let new_idx = graph.add_node(dataset.clone());
+            existing.insert(dataset, new_idx);
+            new_idx
+        };
+        node_map.insert(node, dest_index);
     }
 
     for edge in new_graph.edge_indices() {
@@ -913,7 +943,13 @@ fn merge_graph(
         };
         let source = node_map.get(&source).unwrap();
         let target = node_map.get(&target).unwrap();
-        graph.add_edge(*source, *target, new_graph[edge].clone());
+        // Skip duplicate edges between the same pair of nodes: the same
+        // relationship may appear in multiple calc-col sub-graphs (e.g. two
+        // calc cols traversing the same relationship), and adding parallel
+        // edges would produce redundant joins downstream.
+        if graph.find_edge(*source, *target).is_none() {
+            graph.add_edge(*source, *target, new_graph[edge].clone());
+        }
     }
     Ok(())
 }
