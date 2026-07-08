@@ -1546,6 +1546,38 @@ def test_build_validated_ask_result_rejects_unqualified_invalid_columns():
         )
 
 
+def test_build_validated_ask_result_rejects_column_from_different_active_table():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT policy_category_id AS "policy_category_id", '
+            'COUNT(*) AS "RecordCount" '
+            'FROM "dbo_knowledge_articles" '
+            "GROUP BY policy_category_id"
+        ),
+        [
+            """
+            CREATE TABLE dbo_knowledge_articles (
+              id VARCHAR,
+              policy_id VARCHAR,
+              category VARCHAR,
+              created_at TIMESTAMP
+            );
+            """,
+            """
+            CREATE TABLE dbo_policies (
+              id VARCHAR,
+              policy_category_id VARCHAR
+            );
+            """,
+        ],
+        "Show knowledge article count by policy category.",
+    )
+
+    assert result is None
+
+
 def test_build_validated_ask_result_accepts_unqualified_valid_columns():
     service = AskService.__new__(AskService)
 
