@@ -117,4 +117,118 @@ describe('AskingService', () => {
       expect(service.projectService.getProjectById).not.toHaveBeenCalled();
     });
   });
+
+  describe('recommendation question shortcut SQL', () => {
+    const trackedAskingResult = {
+      taskId: 42,
+      queryId: 'ask-query-id',
+      question: 'Show monthly record count',
+      status: 'UNDERSTANDING',
+      response: null,
+      error: null,
+    };
+
+    const createService = () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.projectService = {
+        getCurrentProject: jest.fn().mockResolvedValue({
+          id: 1,
+          language: 'EN',
+        }),
+        getProjectById: jest.fn().mockResolvedValue({
+          id: 1,
+          language: 'EN',
+        }),
+      };
+      service.deployService = {
+        getLastDeployment: jest.fn().mockResolvedValue({
+          hash: 'latest-deploy-hash',
+        }),
+      };
+      service.threadRepository = {
+        createOne: jest.fn().mockResolvedValue({ id: 7, projectId: 1 }),
+        findOneBy: jest.fn().mockResolvedValue({ id: 7, projectId: 1 }),
+      };
+      service.threadResponseRepository = {
+        createOne: jest.fn().mockResolvedValue({ id: 11, threadId: 7 }),
+        getResponsesWithThread: jest.fn().mockResolvedValue([]),
+      };
+      service.askingTaskTracker = {
+        createAskingTask: jest.fn().mockResolvedValue({
+          queryId: trackedAskingResult.queryId,
+        }),
+        getAskingResult: jest.fn().mockResolvedValue(trackedAskingResult),
+        bindThreadResponse: jest.fn().mockResolvedValue(undefined),
+      };
+      return service;
+    };
+
+    test('creates a normal asking task for a new thread instead of storing shortcut SQL', async () => {
+      const service = createService();
+
+      await service.createThread({
+        question: trackedAskingResult.question,
+        sql: 'SELECT stale_recommendation_sql',
+      });
+
+      expect(service.deployService.getLastDeployment).toHaveBeenCalledWith(1);
+      expect(service.askingTaskTracker.createAskingTask).toHaveBeenCalledWith({
+        query: trackedAskingResult.question,
+        histories: null,
+        deployId: 'latest-deploy-hash',
+        projectId: '1',
+        configurations: { language: 'EN' },
+        rerunFromCancelled: undefined,
+        previousTaskId: undefined,
+        threadResponseId: undefined,
+      });
+      expect(service.threadResponseRepository.createOne).toHaveBeenCalledWith({
+        threadId: 7,
+        question: trackedAskingResult.question,
+        sql: undefined,
+        askingTaskId: trackedAskingResult.taskId,
+      });
+      expect(service.askingTaskTracker.bindThreadResponse).toHaveBeenCalledWith(
+        trackedAskingResult.taskId,
+        trackedAskingResult.queryId,
+        7,
+        11,
+      );
+    });
+
+    test('creates a standalone asking task for current-thread recommendations', async () => {
+      const service = createService();
+      service.threadResponseRepository.getResponsesWithThread.mockResolvedValue([
+        { id: 1, question: 'Previous question', sql: 'SELECT 1' },
+      ]);
+
+      await service.createThreadResponse(
+        {
+          question: trackedAskingResult.question,
+          sql: 'SELECT stale_recommendation_sql',
+        },
+        7,
+      );
+
+      expect(service.projectService.getProjectById).toHaveBeenCalledWith(1);
+      expect(service.askingTaskTracker.createAskingTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          query: trackedAskingResult.question,
+          histories: null,
+          deployId: 'latest-deploy-hash',
+          projectId: '1',
+          configurations: { language: 'EN' },
+        }),
+      );
+      expect(
+        service.threadResponseRepository.getResponsesWithThread,
+      ).not.toHaveBeenCalled();
+      expect(service.threadResponseRepository.createOne).toHaveBeenCalledWith({
+        threadId: 7,
+        question: trackedAskingResult.question,
+        sql: undefined,
+        askingTaskId: trackedAskingResult.taskId,
+      });
+    });
+  });
 });
