@@ -172,65 +172,6 @@ def test_extract_explicit_table_names_from_using_clause():
     ) == []
 
 
-def test_build_validated_ask_result_rejects_sql_for_different_explicit_table():
-    service = AskService.__new__(AskService)
-    result = service._build_validated_ask_result_from_sql(
-        (
-            'SELECT DATEPART(YEAR, "dbo_knowledge_articles"."last_run_date") AS "year", '
-            'DATEPART(MONTH, "dbo_knowledge_articles"."last_run_date") AS "month", '
-            '"dbo_knowledge_articles"."category" AS "category", '
-            'COUNT(*) AS "RecordCount" '
-            'FROM "dbo_knowledge_articles" '
-            'GROUP BY DATEPART(YEAR, "dbo_knowledge_articles"."last_run_date"), '
-            'DATEPART(MONTH, "dbo_knowledge_articles"."last_run_date"), '
-            '"dbo_knowledge_articles"."category"'
-        ),
-        [
-            """
-            CREATE TABLE dbo_knowledge_articles (
-              id INTEGER,
-              last_run_date TIMESTAMP,
-              category VARCHAR
-            );
-            """,
-            """
-            CREATE TABLE dbo_failure_patterns (
-              id INTEGER,
-              created_at TIMESTAMP
-            );
-            """,
-        ],
-        "show monthly record count by created_at in dbo.failure_patterns.",
-    )
-
-    assert result is None
-
-
-def test_build_validated_ask_result_accepts_sql_for_explicit_table_alias():
-    service = AskService.__new__(AskService)
-    result = service._build_validated_ask_result_from_sql(
-        (
-            'SELECT DATEPART(YEAR, "dbo_failure_patterns"."created_at") AS "year", '
-            'DATEPART(MONTH, "dbo_failure_patterns"."created_at") AS "month", '
-            'COUNT(*) AS "RecordCount" '
-            'FROM "dbo_failure_patterns" '
-            'GROUP BY DATEPART(YEAR, "dbo_failure_patterns"."created_at"), '
-            'DATEPART(MONTH, "dbo_failure_patterns"."created_at")'
-        ),
-        [
-            """
-            CREATE TABLE dbo_failure_patterns (
-              id INTEGER,
-              created_at TIMESTAMP
-            );
-            """
-        ],
-        "show monthly record count by created_at in dbo.failure_patterns.",
-    )
-
-    assert result is not None
-
-
 def test_needs_conversation_context_only_for_true_followups():
     service = AskService.__new__(AskService)
 

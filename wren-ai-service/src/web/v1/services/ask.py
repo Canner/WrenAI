@@ -1124,47 +1124,6 @@ class AskService:
             for table_key in table_keys
         )
 
-    def _explicit_table_alias_keys_from_query(self, query: str | None) -> set[str]:
-        keys: set[str] = set()
-        for table_name in self._extract_explicit_table_names_from_query(query or ""):
-            keys.update(self._schema_identifier_alias_keys(table_name))
-        return keys
-
-    def _sql_references_explicit_table(
-        self,
-        sql: str,
-        query: str | None,
-    ) -> bool:
-        explicit_table_keys = self._explicit_table_alias_keys_from_query(query)
-        if not explicit_table_keys:
-            return True
-
-        table_reference_pattern = re.compile(
-            r'\b(?:FROM|JOIN)\s+(?:"(?P<quoted>[^"]+)"|'
-            r"\[(?P<bracketed>[^\]]+)\]|(?P<bare>[A-Za-z_][A-Za-z0-9_.$]*))",
-            flags=re.IGNORECASE,
-        )
-        referenced_tables = [
-            next(value for value in match.groupdict().values() if value)
-            for match in table_reference_pattern.finditer(sql)
-        ]
-
-        for table_reference in referenced_tables:
-            reference_keys = self._schema_identifier_alias_keys(table_reference)
-            short_reference = re.split(r"[.$_]", str(table_reference or ""))[-1]
-            reference_keys.update(self._schema_identifier_alias_keys(short_reference))
-            if explicit_table_keys.intersection(reference_keys):
-                return True
-
-        logger.warning(
-            "Ignoring SQL because it does not reference the explicitly requested table. "
-            "query=%s referenced_tables=%s sql=%s",
-            query,
-            referenced_tables,
-            sql,
-        )
-        return False
-
     def _find_best_schema_table_for_query(
         self, query: str, tables: list[dict[str, Any]]
     ) -> dict[str, Any] | None:
@@ -4908,9 +4867,6 @@ class AskService:
                 invalid_unqualified_identifiers,
                 ask_result.sql,
             )
-            return None
-
-        if not self._sql_references_explicit_table(ask_result.sql, query):
             return None
 
         if not self._sql_matches_question_intent(
