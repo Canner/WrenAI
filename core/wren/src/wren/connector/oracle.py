@@ -3,8 +3,16 @@
 from decimal import Decimal as PyDecimal
 from urllib.parse import unquote, urlparse
 
-import oracledb
 import pyarrow as pa
+
+# Lazy driver import: keep the module importable without the ``oracle`` extra so
+# URL-decode/helper tests run under plain unit deps (mirrors the mysql/mssql/
+# clickhouse connectors). ``oracledb`` is only touched when a connection is
+# actually made.
+try:
+    import oracledb
+except ImportError:  # pragma: no cover
+    oracledb = None
 
 from wren.connector.base import ConnectorABC
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError

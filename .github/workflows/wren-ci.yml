@@ -62,11 +62,8 @@ jobs:
           uv sync --locked --no-install-project
           uv run --no-sync maturin build
       - name: Install dependencies
-        # Install the `oracle` extra so tests/unit/test_oracle_url_decode.py
-        # (guarded by pytest.importorskip("oracledb")) actually runs here
-        # instead of silently skipping.
         run: |
-          uv sync --locked --extra oracle
+          uv sync --locked --no-install-project
           uv pip install --reinstall --no-index --find-links ../wren-core-py/target/wheels/ wren-core-py
       - name: Run unit tests
         # Run the whole tests/unit/ tree rather than filtering on `-m unit`:

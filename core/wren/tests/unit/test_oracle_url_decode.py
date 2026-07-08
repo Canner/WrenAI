@@ -6,19 +6,17 @@ escapes in place, so the connector must ``unquote`` them before handing them to
 ``oracledb.connect`` — otherwise auth fails with the literal ``%40`` etc.
 
 These tests patch ``oracledb.connect`` and assert on the decoded kwargs, so no
-live Oracle instance is required.
+live Oracle instance — and no ``oracle`` extra — is required. The connector
+lazy-imports ``oracledb``, so we inject a stand-in module attribute when the
+real driver isn't installed.
 """
 
 from __future__ import annotations
 
 from types import SimpleNamespace
 
-import pytest
-
-pytest.importorskip("oracledb")
-
-from wren.connector import oracle as oracle_mod  # noqa: E402
-from wren.connector.oracle import _make_oracle_connection  # noqa: E402
+from wren.connector import oracle as oracle_mod
+from wren.connector.oracle import _make_oracle_connection
 
 
 class _Secret:
@@ -36,7 +34,11 @@ def _capture_connect(monkeypatch) -> dict:
         captured.update(kwargs)
         return object()
 
-    monkeypatch.setattr(oracle_mod.oracledb, "connect", _fake_connect)
+    # The driver is lazy-imported and may be ``None`` when the ``oracle`` extra
+    # isn't installed; provide a stand-in namespace exposing ``connect``.
+    stub = oracle_mod.oracledb or SimpleNamespace()
+    monkeypatch.setattr(oracle_mod, "oracledb", stub)
+    monkeypatch.setattr(stub, "connect", _fake_connect, raising=False)
     return captured
 
 
