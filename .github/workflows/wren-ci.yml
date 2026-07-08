@@ -63,7 +63,7 @@ jobs:
           uv run --no-sync maturin build
       - name: Install dependencies
         run: |
-          uv sync --locked --no-install-project
+          uv sync --locked
           uv pip install --reinstall --no-index --find-links ../wren-core-py/target/wheels/ wren-core-py
       - name: Run unit tests
         # Run the whole tests/unit/ tree rather than filtering on `-m unit`:
