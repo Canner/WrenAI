@@ -1003,7 +1003,7 @@ def test_build_manufacturing_throughput_sql_uses_active_unit_and_date_columns():
     )
 
 
-def test_build_manufacturing_throughput_sql_prefers_unit_table_over_admin_tables():
+def test_build_manufacturing_throughput_sql_prefers_production_unit_table_over_admin_tables():
     service = AskService.__new__(AskService)
 
     sql = service._build_schema_grounded_sales_sql(
@@ -1022,6 +1022,13 @@ def test_build_manufacturing_throughput_sql_prefers_unit_table_over_admin_tables
             );
             """,
             """
+            CREATE TABLE dbo_production_events (
+              id INTEGER,
+              manufacturing_unit VARCHAR,
+              created_at TIMESTAMP
+            );
+            """,
+            """
             CREATE TABLE dbo_DebugEntries (
               DebugEntryId VARCHAR,
               BusinessUnit VARCHAR,
@@ -1033,29 +1040,50 @@ def test_build_manufacturing_throughput_sql_prefers_unit_table_over_admin_tables
     )
 
     assert sql == (
-        'SELECT "dbo_DebugEntries"."BusinessUnit" AS "BusinessUnit", '
-        'DATEPART(YEAR, "dbo_DebugEntries"."DateIn") AS "year", '
-        'DATEPART(MONTH, "dbo_DebugEntries"."DateIn") AS "month", '
+        'SELECT "dbo_production_events"."manufacturing_unit" AS "manufacturing_unit", '
+        'DATEPART(YEAR, "dbo_production_events"."created_at") AS "year", '
+        'DATEPART(MONTH, "dbo_production_events"."created_at") AS "month", '
         'COUNT(*) AS "throughput" '
-        'FROM "dbo_DebugEntries" '
-        'WHERE "dbo_DebugEntries"."BusinessUnit" IS NOT NULL '
-        'AND "dbo_DebugEntries"."DateIn" IS NOT NULL '
-        'GROUP BY "dbo_DebugEntries"."BusinessUnit", '
-        'DATEPART(YEAR, "dbo_DebugEntries"."DateIn"), '
-        'DATEPART(MONTH, "dbo_DebugEntries"."DateIn") '
-        'ORDER BY "dbo_DebugEntries"."BusinessUnit" ASC, '
-        'DATEPART(YEAR, "dbo_DebugEntries"."DateIn") ASC, '
-        'DATEPART(MONTH, "dbo_DebugEntries"."DateIn") ASC'
+        'FROM "dbo_production_events" '
+        'WHERE "dbo_production_events"."manufacturing_unit" IS NOT NULL '
+        'AND "dbo_production_events"."created_at" IS NOT NULL '
+        'GROUP BY "dbo_production_events"."manufacturing_unit", '
+        'DATEPART(YEAR, "dbo_production_events"."created_at"), '
+        'DATEPART(MONTH, "dbo_production_events"."created_at") '
+        'ORDER BY "dbo_production_events"."manufacturing_unit" ASC, '
+        'DATEPART(YEAR, "dbo_production_events"."created_at") ASC, '
+        'DATEPART(MONTH, "dbo_production_events"."created_at") ASC'
     )
     assert "dbo_ai_job_queue" not in sql
     assert "database_name" not in sql
+    assert "dbo_DebugEntries" not in sql
 
 
-def test_build_manufacturing_throughput_sql_uses_debug_shelf_unit_column():
+def test_build_manufacturing_throughput_sql_does_not_use_debug_shelf_for_manufacturing_units():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_manufacturing_throughput_sql(
+        "Show throughput trends across different manufacturing units.",
+        [
+            """
+            CREATE TABLE dbo_DebugEntries_Staging2 (
+              id INTEGER,
+              Debug_Shelf VARCHAR,
+              last_update_date TIMESTAMP,
+              status VARCHAR
+            );
+            """
+        ],
+    )
+
+    assert sql is None
+
+
+def test_build_manufacturing_throughput_sql_uses_debug_shelf_when_requested():
     service = AskService.__new__(AskService)
 
     sql = service._build_schema_grounded_sales_sql(
-        "Show throughput trends across different manufacturing units.",
+        "Show debug shelf throughput trends.",
         [
             """
             CREATE TABLE dbo_DebugEntries_Staging2 (
@@ -1083,6 +1111,36 @@ def test_build_manufacturing_throughput_sql_uses_debug_shelf_unit_column():
         'DATEPART(YEAR, "dbo_DebugEntries_Staging2"."last_update_date") ASC, '
         'DATEPART(MONTH, "dbo_DebugEntries_Staging2"."last_update_date") ASC'
     )
+
+
+def test_build_validated_ask_result_rejects_debug_staging_for_manufacturing_units():
+    service = AskService.__new__(AskService)
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT "dbo_DebugEntries_Staging2"."Debug_Shelf" AS "Debug_Shelf", '
+            'DATEPART(YEAR, "dbo_DebugEntries_Staging2"."last_update_date") AS "year", '
+            'DATEPART(MONTH, "dbo_DebugEntries_Staging2"."last_update_date") AS "month", '
+            'COUNT(*) AS "throughput" '
+            'FROM "dbo_DebugEntries_Staging2" '
+            'WHERE "dbo_DebugEntries_Staging2"."Debug_Shelf" IS NOT NULL '
+            'GROUP BY "dbo_DebugEntries_Staging2"."Debug_Shelf", '
+            'DATEPART(YEAR, "dbo_DebugEntries_Staging2"."last_update_date"), '
+            'DATEPART(MONTH, "dbo_DebugEntries_Staging2"."last_update_date")'
+        ),
+        [
+            """
+            CREATE TABLE dbo_DebugEntries_Staging2 (
+              id INTEGER,
+              Debug_Shelf VARCHAR,
+              last_update_date TIMESTAMP,
+              status VARCHAR
+            );
+            """
+        ],
+        "Show throughput trends across different manufacturing units.",
+    )
+
+    assert result is None
 
 
 def test_build_monthly_repair_volume_sql_uses_repair_log_date_column():
