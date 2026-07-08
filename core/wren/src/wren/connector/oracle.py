@@ -21,6 +21,38 @@ from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 _TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
 
 
+def _parse_oracle_connection_url(url: str):
+    """Parse an Oracle URL after escaping raw brackets in userinfo only.
+
+    ``urllib.parse.urlparse`` treats ``[`` / ``]`` anywhere in the netloc as
+    IPv6 host delimiters. That is correct for hosts like ``oracle://[::1]/db``
+    but it raises ``ValueError`` on raw credentials such as
+    ``oracle://user:p[a]ss@host/svc``. Sanitise only the userinfo segment so
+    valid IPv6 hosts still parse. Mirrors the MySQL connector helper.
+    """
+    scheme_idx = url.find("://")
+    if scheme_idx == -1:
+        return urlparse(url)
+
+    prefix = url[: scheme_idx + 3]
+    rest = url[scheme_idx + 3 :]
+
+    authority_end = len(rest)
+    for separator in "/?#":
+        idx = rest.find(separator)
+        if idx != -1:
+            authority_end = min(authority_end, idx)
+
+    authority = rest[:authority_end]
+    if "@" not in authority:
+        return urlparse(url)
+
+    userinfo, hostinfo = authority.rsplit("@", 1)
+    sanitized_userinfo = userinfo.replace("[", "%5B").replace("]", "%5D")
+    sanitized_url = f"{prefix}{sanitized_userinfo}@{hostinfo}{rest[authority_end:]}"
+    return urlparse(sanitized_url)
+
+
 def _strip_trailing_semicolon(sql: str) -> str:
     """Strip any trailing ``;`` characters and surrounding whitespace.
 
@@ -119,7 +151,7 @@ def _build_oracle_arrow_table(cursor) -> pa.Table:
 def _make_oracle_connection(connection_info):
     if hasattr(connection_info, "connection_url") and connection_info.connection_url:
         url = connection_info.connection_url.get_secret_value()
-        parsed = urlparse(url)
+        parsed = _parse_oracle_connection_url(url)
         # urlparse leaves percent-encoded characters in the userinfo/path, so
         # decode them here. Credentials routinely contain reserved characters
         # (``@ / : ?``) that MUST be percent-encoded in the URL; without
