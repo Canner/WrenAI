@@ -1733,6 +1733,11 @@ class AskService:
         ):
             return monthly_repair_volume_sql
 
+        if throughput_sql := self._build_manufacturing_throughput_sql(
+            query, table_ddls
+        ):
+            return throughput_sql
+
         if operational_sql := self._build_schema_grounded_operational_sql(
             query, tables
         ):
@@ -2755,6 +2760,16 @@ class AskService:
             "unit_name",
             "BU",
             "division",
+            "Debug_Shelf",
+            "DebugShelf",
+            "debug shelf",
+            "shelf",
+            "station",
+            "workstation",
+            "work_center",
+            "workcenter",
+            "line",
+            "cell",
         )
         wants_temporal_trend = any(
             term in normalized for term in ("trend", "trends", "monthly", "over time")
@@ -4042,6 +4057,10 @@ class AskService:
                 "salesperson",
                 "sales person",
                 "trend",
+                "throughput",
+                "manufacturing",
+                "unit",
+                "units",
                 "value",
             )
         ):
@@ -4640,6 +4659,16 @@ class AskService:
                         "unit_name",
                         "BU",
                         "division",
+                        "Debug_Shelf",
+                        "DebugShelf",
+                        "debug shelf",
+                        "shelf",
+                        "station",
+                        "workstation",
+                        "work_center",
+                        "workcenter",
+                        "line",
+                        "cell",
                     ),
                 )
                 temporal_column = self._find_temporal_column_for_query(query, table)
