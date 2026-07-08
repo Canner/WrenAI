@@ -1382,7 +1382,7 @@ export class AskingService implements IAskingService {
     input: AskingDetailTaskInput,
     payload: AskingPayload,
   ): Promise<TrackedAskingResult | undefined> {
-    if (input.trackedAskingResult || !input.question) {
+    if (input.trackedAskingResult || !input.sql || !input.question) {
       return input.trackedAskingResult;
     }
 

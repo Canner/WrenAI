@@ -230,31 +230,5 @@ describe('AskingService', () => {
         askingTaskId: trackedAskingResult.taskId,
       });
     });
-
-    test('also creates a normal asking task when direct question payload has no SQL', async () => {
-      const service = createService();
-
-      await service.createThreadResponse(
-        {
-          question: trackedAskingResult.question,
-        },
-        7,
-      );
-
-      expect(service.askingTaskTracker.createAskingTask).toHaveBeenCalledWith(
-        expect.objectContaining({
-          query: trackedAskingResult.question,
-          histories: null,
-          deployId: 'latest-deploy-hash',
-          projectId: '1',
-        }),
-      );
-      expect(service.threadResponseRepository.createOne).toHaveBeenCalledWith({
-        threadId: 7,
-        question: trackedAskingResult.question,
-        sql: undefined,
-        askingTaskId: trackedAskingResult.taskId,
-      });
-    });
   });
 });

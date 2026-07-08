@@ -135,14 +135,6 @@ def test_extract_explicit_table_names_from_query():
     ) == ["tblNewOrders"]
 
 
-def test_extract_explicit_table_names_from_in_clause_adds_deployed_table_candidate():
-    service = AskService.__new__(AskService)
-
-    assert service._extract_explicit_table_names_from_query(
-        "Show monthly record count by created_at in dbo.failure_patterns."
-    ) == ["dbo.failure_patterns", "dbo_failure_patterns", "failure_patterns"]
-
-
 def test_extract_explicit_table_names_from_using_clause():
     service = AskService.__new__(AskService)
 

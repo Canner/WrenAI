@@ -1208,7 +1208,7 @@ class AskService:
         wants_monthly_count = any(
             term in normalized
             for term in ("monthly", "by month", "per month", "month-wise")
-        ) and any(term in normalized for term in ("count", "record", "records", "rows"))
+        ) and any(term in normalized for term in ("count", "records", "rows"))
         if wants_monthly_count:
             date_column = self._find_temporal_column_for_query(query, table)
             if not date_column:
@@ -1345,14 +1345,13 @@ class AskService:
     def _extract_explicit_table_names_from_query(self, query: str) -> list[str]:
         table_names: list[str] = []
         for match in re.finditer(
-            r"\b(?:from|in|table|model)\s+([A-Za-z_][A-Za-z0-9_.$]*)",
+            r"\b(?:from|table|model)\s+([A-Za-z_][A-Za-z0-9_.$]*)",
             query or "",
             flags=re.IGNORECASE,
         ):
             table_name = match.group(1).strip(".,;:()[]{}")
-            for candidate in self._explicit_table_name_candidates(table_name):
-                if candidate and candidate not in table_names:
-                    table_names.append(candidate)
+            if table_name and table_name not in table_names:
+                table_names.append(table_name)
         for match in re.finditer(
             r"\busing\s+([A-Za-z_][A-Za-z0-9_.$]*)",
             query or "",
@@ -1366,23 +1365,6 @@ class AskService:
             ):
                 table_names.append(table_name)
         return table_names
-
-    def _explicit_table_name_candidates(self, table_name: str) -> list[str]:
-        table_name = str(table_name or "").strip(".,;:()[]{}")
-        if not table_name:
-            return []
-
-        candidates = [table_name]
-        dotted_parts = [part for part in re.split(r"[.$]", table_name) if part]
-        if len(dotted_parts) > 1:
-            candidates.append("_".join(dotted_parts))
-            candidates.append(dotted_parts[-1])
-
-        unique_candidates: list[str] = []
-        for candidate in candidates:
-            if candidate and candidate not in unique_candidates:
-                unique_candidates.append(candidate)
-        return unique_candidates
 
     def _build_direct_orders_sales_sql(self, query: str) -> str | None:
         return None
