@@ -35,7 +35,6 @@ import DataSourceSchemaDetector, {
 const logger = getLogger('ModelResolver');
 logger.level = 'debug';
 
-const syncedProjectIds = new Set<number>();
 const dirtyProjectIds = new Set<number>();
 
 export enum SyncStatusEnum {
@@ -236,15 +235,14 @@ export class ModelResolver {
         return { status: SyncStatusEnum.UNSYNCRONIZED };
       }
 
-      const isSynced =
-        syncedProjectIds.has(project.id) ||
-        !!lastDeploy ||
-        ctx.deployService.isSameDeployment(manifest, project.id, lastDeploy) ||
+      const lastDeployIsCurrent =
+        ctx.deployService.isSameDeployment(manifest, project.id, lastDeploy) &&
         (await this.isLastDeployNewerThanModelingChanges(
           ctx,
           project.id,
           lastDeploy,
         ));
+      const isSynced = lastDeployIsCurrent;
       return isSynced
         ? { status: SyncStatusEnum.SYNCRONIZED }
         : { status: SyncStatusEnum.UNSYNCRONIZED };
@@ -279,7 +277,6 @@ export class ModelResolver {
     );
     if (deployRes.status === 'SUCCESS') {
       dirtyProjectIds.delete(project.id);
-      syncedProjectIds.add(project.id);
     }
 
     if (deployRes.status === 'SUCCESS' && project.sampleDataset === null) {
@@ -355,7 +352,6 @@ export class ModelResolver {
 
   private markProjectDirty(projectId: number) {
     dirtyProjectIds.add(projectId);
-    syncedProjectIds.delete(projectId);
   }
 
   private async resolveModifiedSchemaChanges(ctx: IContext, projectId: number) {
