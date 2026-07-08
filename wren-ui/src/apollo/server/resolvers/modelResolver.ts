@@ -262,8 +262,15 @@ export class ModelResolver {
     const project = await this.prepareProjectForDeploy(ctx);
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     const lastDeploy = await ctx.deployService.getLastDeployment(project.id);
+    const hasModelingChangesAfterDeploy =
+      !(await this.isLastDeployNewerThanModelingChanges(
+        ctx,
+        project.id,
+        lastDeploy,
+      ));
     const shouldForceDeploy =
       args.force ||
+      hasModelingChangesAfterDeploy ||
       !ctx.deployService.isSameDeployment(manifest, project.id, lastDeploy);
     const deployRes = await ctx.deployService.deploy(
       manifest,
