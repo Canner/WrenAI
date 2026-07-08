@@ -2743,30 +2743,83 @@ class AskService:
             return None
 
         tables = self._parse_schema_tables(table_ddls)
-        table = self._find_best_schema_table_for_query(query, tables)
+        unit_candidates = (
+            "BusinessUnit",
+            "Business_Unit",
+            "Business Unit",
+            "manufacturing_unit",
+            "manufacturing unit",
+            "manufacturingunit",
+            "ManufacturingUnit",
+            "unit",
+            "unit_name",
+            "BU",
+            "division",
+        )
+        wants_temporal_trend = any(
+            term in normalized for term in ("trend", "trends", "monthly", "over time")
+        )
+        scored_unit_tables: list[tuple[int, dict[str, Any], str, str | None]] = []
+        for candidate_table in tables:
+            unit_column = self._find_schema_column(candidate_table, unit_candidates)
+            if not unit_column:
+                continue
+
+            timestamp_column = self._find_temporal_column_for_query(
+                query, candidate_table
+            )
+            if wants_temporal_trend and not timestamp_column:
+                continue
+
+            table_name = str(candidate_table.get("name") or "")
+            normalized_table_name = table_name.lower()
+            score = 100
+            if timestamp_column:
+                score += 40
+            if any(
+                token in normalized_table_name
+                for token in (
+                    "debug",
+                    "entry",
+                    "entries",
+                    "production",
+                    "event",
+                    "events",
+                    "repair",
+                    "manufacturing",
+                )
+            ):
+                score += 20
+            if self._table_matches_query(table_name, query):
+                score += 15
+            scored_unit_tables.append(
+                (score, candidate_table, unit_column, timestamp_column)
+            )
+
+        table = None
+        preferred_unit_column = None
+        preferred_timestamp_column = None
+        if scored_unit_tables:
+            _, table, preferred_unit_column, preferred_timestamp_column = sorted(
+                scored_unit_tables, key=lambda item: item[0], reverse=True
+            )[0]
+        else:
+            table = self._find_best_schema_table_for_query(query, tables)
+
         if table:
-            unit_column = self._find_schema_column(
-                table,
-                (
-                    "BusinessUnit",
-                    "business_unit",
-                    "manufacturing_unit",
-                    "manufacturingunit",
-                    "unit",
-                    "unit_name",
-                    "BU",
-                    "division",
-                ),
+            unit_column = preferred_unit_column or self._find_schema_column(
+                table, unit_candidates
             )
             if unit_column:
                 table_name = str(table.get("name") or "")
                 table_ref = self._quote_sql_identifier(table_name)
                 unit_ref = f"{table_ref}.{self._quote_sql_identifier(unit_column)}"
-                timestamp_column = self._find_temporal_column_for_query(query, table)
+                timestamp_column = (
+                    preferred_timestamp_column
+                    or self._find_temporal_column_for_query(query, table)
+                )
 
-                if timestamp_column and any(
-                    term in normalized for term in ("trend", "monthly", "over time")
-                ):
+                if timestamp_column and wants_temporal_trend:
                     timestamp_ref = (
                         f"{table_ref}.{self._quote_sql_identifier(timestamp_column)}"
                     )
@@ -4521,6 +4574,24 @@ class AskService:
             self._normalize_schema_token(table_name)
             for table_name in self._extract_explicit_table_names_from_query(query)
         }
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        wants_throughput_by_unit = "throughput" in normalized_query and any(
+            term in normalized_query
+            for term in (
+                "manufacturing unit",
+                "manufacturing units",
+                "business unit",
+                "business units",
+                "different unit",
+                "different units",
+                "unit",
+                "units",
+            )
+        )
+        wants_temporal_trend = any(
+            term in normalized_query
+            for term in ("trend", "trends", "monthly", "over time", "by month")
+        )
 
         scored: list[tuple[int, int]] = []
         for index, table in enumerate(parsed_tables):
@@ -4554,6 +4625,30 @@ class AskService:
                         score += 60
                     elif term in column_term or column_term in term:
                         score += 25
+
+            if wants_throughput_by_unit:
+                unit_column = self._find_schema_column(
+                    table,
+                    (
+                        "BusinessUnit",
+                        "Business_Unit",
+                        "Business Unit",
+                        "manufacturing_unit",
+                        "manufacturing unit",
+                        "ManufacturingUnit",
+                        "unit",
+                        "unit_name",
+                        "BU",
+                        "division",
+                    ),
+                )
+                temporal_column = self._find_temporal_column_for_query(query, table)
+                if unit_column:
+                    score += 500
+                if unit_column and temporal_column:
+                    score += 300
+                if wants_temporal_trend and unit_column and temporal_column:
+                    score += 300
 
             if score > 0:
                 scored.append((score, index))
