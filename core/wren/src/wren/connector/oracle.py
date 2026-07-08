@@ -101,7 +101,8 @@ def _make_oracle_connection(connection_info):
         # decoding, oracledb receives the literal ``%40`` and auth fails. Use
         # ``unquote`` (not ``unquote_plus``) so a literal ``+`` in a credential
         # is preserved — ``+`` only means space in query strings, not userinfo.
-        # Mirrors the mssql/mysql/clickhouse connectors.
+        # Mirrors the mssql/mysql connectors' ``unquote`` handling.
+        # (clickhouse uses ``unquote_plus``, which differs on literal ``+``.)
         return oracledb.connect(
             user=unquote(parsed.username) if parsed.username else None,
             password=unquote(parsed.password) if parsed.password else None,
