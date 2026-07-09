@@ -2610,6 +2610,171 @@ mod test {
         Ok(())
     }
 
+    /// Regression test for the multi-relationship calculated-column bug.
+    ///
+    /// A model with multiple calculated columns that traverse *different*
+    /// relationships used to fail at planning time because the merged dataset
+    /// graph contained duplicate copies of the base model (one per merged
+    /// sub-graph). `RelationChain::with_chain` located the next link via
+    /// `directed_graph.find_edge(start, next)`; when the second sub-graph
+    /// started with a duplicate base-model node, no edge was found from the
+    /// first relationship's terminal node and the chain was silently
+    /// truncated. The result was an error like
+    ///
+    ///     No field named __relation__1.<col_from_second_relationship>
+    ///
+    /// because only the first relationship's columns ended up in the
+    /// projection. `merge_graph` now dedupes nodes/edges by `Dataset`, the base
+    /// model is added conditionally, and `with_chain` prefers an edge from the
+    /// previously visited node (falling back to the start node) so star
+    /// fan-outs across multiple relationships plan correctly.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_multiple_relationship_calculated_columns() -> Result<()> {
+        // Run the transform on a dedicated thread with an enlarged stack:
+        // wren-core's plan analyzer uses deep recursion and can exceed the
+        // default 2 MiB test-thread stack when joining several relationships.
+        // Production tokio worker threads have a larger stack and are
+        // unaffected; this is not infinite recursion.
+        std::thread::Builder::new()
+            .stack_size(8 * 1024 * 1024)
+            .spawn(|| {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap();
+                rt.block_on(test_multiple_relationship_calculated_columns_inner())
+            })
+            .unwrap()
+            .join()
+            .unwrap()
+    }
+
+    async fn test_multiple_relationship_calculated_columns_inner() -> Result<()> {
+        let ctx = create_wren_ctx(None, None);
+
+        // dc_inventory has two distinct relationships: one to `product`, one to
+        // `market_retailer`. Three calculated columns reference those
+        // relationships: `market` and `retailer` go through `market_retailer`,
+        // `item_num` goes through `product`.
+        let manifest = ManifestBuilder::new()
+            .catalog("wren")
+            .schema("test")
+            .model(
+                ModelBuilder::new("dc_inventory")
+                    .table_reference("dc_inventory")
+                    .column(ColumnBuilder::new("keypm", "int").build())
+                    .column(ColumnBuilder::new("market_retailer_key", "int").build())
+                    .column(ColumnBuilder::new("oh_units", "int").build())
+                    .column(
+                        ColumnBuilder::new_relationship(
+                            "product",
+                            "product",
+                            "dc_inventory_to_product",
+                        )
+                        .build(),
+                    )
+                    .column(
+                        ColumnBuilder::new_relationship(
+                            "market_retailer",
+                            "market_retailer",
+                            "dc_inventory_to_market_retailer",
+                        )
+                        .build(),
+                    )
+                    .column(
+                        ColumnBuilder::new_calculated("market", "string")
+                            .expression("market_retailer.market")
+                            .build(),
+                    )
+                    .column(
+                        ColumnBuilder::new_calculated("retailer", "string")
+                            .expression("market_retailer.retailer")
+                            .build(),
+                    )
+                    .column(
+                        ColumnBuilder::new_calculated("item_num", "string")
+                            .expression("product.item_num")
+                            .build(),
+                    )
+                    .primary_key("keypm")
+                    .build(),
+            )
+            .model(
+                ModelBuilder::new("product")
+                    .table_reference("product")
+                    .column(ColumnBuilder::new("keypm", "int").build())
+                    .column(ColumnBuilder::new("item_num", "string").build())
+                    .primary_key("keypm")
+                    .build(),
+            )
+            .model(
+                ModelBuilder::new("market_retailer")
+                    .table_reference("market_retailer")
+                    .column(ColumnBuilder::new("market_retailer_key", "int").build())
+                    .column(ColumnBuilder::new("market", "string").build())
+                    .column(ColumnBuilder::new("retailer", "string").build())
+                    .primary_key("market_retailer_key")
+                    .build(),
+            )
+            .relationship(
+                RelationshipBuilder::new("dc_inventory_to_product")
+                    .model("dc_inventory")
+                    .model("product")
+                    .join_type(JoinType::ManyToOne)
+                    .condition("dc_inventory.keypm = product.keypm")
+                    .build(),
+            )
+            .relationship(
+                RelationshipBuilder::new("dc_inventory_to_market_retailer")
+                    .model("dc_inventory")
+                    .model("market_retailer")
+                    .join_type(JoinType::ManyToOne)
+                    .condition(
+                        "dc_inventory.market_retailer_key = market_retailer.market_retailer_key",
+                    )
+                    .build(),
+            )
+            .build();
+
+        let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+            manifest,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        )?);
+
+        // Reproduces the production failure: SELECT * forces all calculated
+        // columns to be projected, exercising both relationships.
+        let sql = "SELECT * FROM dc_inventory";
+        let result = transform_sql_with_ctx(
+            &ctx,
+            Arc::clone(&analyzed_mdl),
+            &[],
+            Arc::new(HashMap::new()),
+            sql,
+        )
+        .await;
+
+        // Before the fix this errors with:
+        //   Schema error: No field named __relation__N.item_num
+        // (or .market / .retailer depending on traversal order).
+        let transformed =
+            result.expect("multi-relationship calc cols should plan successfully");
+        // All three calc cols must be projected for SELECT *.
+        assert!(
+            transformed.contains("market"),
+            "transformed SQL missing 'market': {transformed}"
+        );
+        assert!(
+            transformed.contains("retailer"),
+            "transformed SQL missing 'retailer': {transformed}"
+        );
+        assert!(
+            transformed.contains("item_num"),
+            "transformed SQL missing 'item_num': {transformed}"
+        );
+        Ok(())
+    }
+
     #[tokio::test]
     async fn test_rlac_on_to_many_calculated_field() -> Result<()> {
         let ctx = create_wren_ctx(None, None);
