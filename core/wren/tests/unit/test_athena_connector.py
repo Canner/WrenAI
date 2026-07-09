@@ -224,9 +224,11 @@ def test_connector_query_passes_kwargs_and_kills_on_interrupt():
 
 
 def test_connector_query_returns_arrow_table_and_respects_limit():
+    # limit is pushed into SQL; the driver is expected to return only
+    # the limited result (as Athena would). Assert pushdown shape too.
     cursor = _make_cursor(
         [("id", "integer"), ("name", "varchar")],
-        [(1, "a"), (2, "b"), (3, "c")],
+        [(1, "a"), (2, "b")],
     )
     _pyathena_connection_mock.cursor.return_value = cursor
 
@@ -234,7 +236,9 @@ def test_connector_query_returns_arrow_table_and_respects_limit():
     table = conn.query("SELECT id, name FROM t", limit=2)
     assert table.num_rows == 2
     assert table.column("id").to_pylist() == [1, 2]
-    cursor.execute.assert_called_once_with("SELECT id, name FROM t")
+    cursor.execute.assert_called_once_with(
+        "SELECT * FROM (SELECT id, name FROM t) AS _wren_sub LIMIT 2"
+    )
 
 
 def test_connector_query_wraps_driver_errors():
