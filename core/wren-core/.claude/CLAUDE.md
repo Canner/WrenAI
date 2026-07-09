@@ -1,6 +1,6 @@
 # wren-core
 
-Rust semantic engine for Wren Engine. Handles MDL analysis, query planning, logical plan optimization, and SQL generation via Apache DataFusion (Canner fork).
+Rust semantic engine for Wren Engine. Handles MDL analysis, query planning, logical plan optimization, and SQL generation via Apache DataFusion (upstream, crates.io v53). Published to crates.io as `wren-semantic-core` (lib name `wren_core`).
 
 ## Workspace Layout
 
@@ -38,7 +38,7 @@ taplo fmt                                               # Format Cargo.toml file
 
 ## Dependencies
 
-- **DataFusion fork**: `https://github.com/Canner/datafusion.git` branch `canner/v49.0.1`
+- **DataFusion**: upstream `datafusion` v53 from crates.io (no longer the Canner fork)
 - **wren-core-base**: Shared manifest types from `../wren-core-base`
 
 ## Known Limitations
