@@ -26,9 +26,25 @@ def test_query_pushes_limit_into_sql_and_strips_semicolon():
     table = connector.query("SELECT 1 AS x;", limit=5)
 
     cursor.execute.assert_called_once_with(
-        "SELECT * FROM (SELECT 1 AS x) AS _wren_sub LIMIT 5"
+        "SELECT * FROM (\nSELECT 1 AS x\n) AS _wren_sub LIMIT 5"
     )
     assert table.num_rows == 2
+
+
+def test_query_limit_survives_trailing_line_comment():
+    # A trailing `-- comment` in the user SQL must not swallow the wrapper's
+    # closing paren, alias, or LIMIT clause; the newline terminates it.
+    connector = SnowflakeConnector.__new__(SnowflakeConnector)
+    connector.connection = MagicMock()
+    cursor = MagicMock()
+    connector.connection.cursor.return_value.__enter__.return_value = cursor
+    cursor.fetch_arrow_all.return_value = pa.table({"x": [1]})
+
+    connector.query("SELECT 1 AS x  -- pick one", limit=5)
+
+    cursor.execute.assert_called_once_with(
+        "SELECT * FROM (\nSELECT 1 AS x  -- pick one\n) AS _wren_sub LIMIT 5"
+    )
 
 
 def test_query_without_limit_runs_original_sql():
