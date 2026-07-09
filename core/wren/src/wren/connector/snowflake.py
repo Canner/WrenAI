@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
+import re
+
 import pyarrow as pa
 
 from wren.connector.base import ConnectorABC
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
-
-
-import re
 
 _TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
 
@@ -21,7 +20,6 @@ def _strip_trailing_semicolon(sql: str) -> str:
     postgres/redshift connectors.
     """
     return _TRAILING_SEMICOLONS_RE.sub("", sql)
-
 
 
 def _build_connection_params(connection_info) -> dict:
