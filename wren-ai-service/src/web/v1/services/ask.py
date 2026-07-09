@@ -1461,6 +1461,14 @@ class AskService:
             if table_name and table_name not in table_names:
                 table_names.append(table_name)
         for match in re.finditer(
+            r"\bin\s+(?:the\s+)?([A-Za-z_][A-Za-z0-9_.$]*)\s+table\b",
+            query or "",
+            flags=re.IGNORECASE,
+        ):
+            table_name = match.group(1).strip(".,;:()[]{}")
+            if table_name and table_name not in table_names:
+                table_names.append(table_name)
+        for match in re.finditer(
             r"\busing\s+([A-Za-z_][A-Za-z0-9_.$]*)",
             query or "",
             flags=re.IGNORECASE,
@@ -1472,8 +1480,16 @@ class AskService:
                 and table_name not in table_names
             ):
                 table_names.append(table_name)
-        if re.search(r"\brepair\s+logs?\b", query or "", flags=re.IGNORECASE):
+        if re.search(
+            r"\b(?:repair\s+logs?|repair\s+tickets?|board\s+models?)\b",
+            query or "",
+            flags=re.IGNORECASE,
+        ):
             for table_name in ("repair_logs", "dbo_repair_logs"):
+                if table_name not in table_names:
+                    table_names.append(table_name)
+        if re.search(r"\bticket\s+labels?\b", query or "", flags=re.IGNORECASE):
+            for table_name in ("ticket_labels", "dbo_ticket_labels"):
                 if table_name not in table_names:
                     table_names.append(table_name)
         return table_names
@@ -1778,6 +1794,9 @@ class AskService:
             return None
 
         compact_query = re.sub(r"[^a-z0-9]", "", normalized_query)
+
+        if pcb_direct_sql := self._build_pcb_direct_question_sql(query, table_ddls):
+            return pcb_direct_sql
 
         if repair_failure_count_sql := self._build_repair_failure_count_sql(
             query, table_ddls
@@ -3873,6 +3892,200 @@ class AskService:
             )
 
         return f'SELECT COUNT(*) AS "RecordCount" FROM {table_ref}'
+
+    def _build_pcb_direct_question_sql(
+        self, query: str, table_ddls: list[str]
+    ) -> str | None:
+        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized:
+            return None
+
+        tables = self._parse_schema_tables(table_ddls)
+        if not tables:
+            return None
+
+        repair_table = next(
+            (
+                table
+                for table in tables
+                if str(table.get("name") or "").lower() == "dbo_repair_logs"
+            ),
+            None,
+        )
+        ticket_label_table = next(
+            (
+                table
+                for table in tables
+                if str(table.get("name") or "").lower() == "dbo_ticket_labels"
+            ),
+            None,
+        )
+        limit = self._extract_requested_top_n(query, default_value=10)
+
+        if ticket_label_table and "ticket" in normalized and "label" in normalized:
+            label_column = self._find_first_schema_column(
+                ticket_label_table,
+                ("name", "label", "title", "value", "id"),
+            )
+            if label_column:
+                table_name = str(ticket_label_table.get("name") or "")
+                table_ref = self._quote_sql_identifier(table_name)
+                label_ref = f"{table_ref}.{self._quote_sql_identifier(label_column)}"
+                return (
+                    f"SELECT TOP {limit} {label_ref} AS "
+                    f"{self._quote_sql_identifier(label_column)}, "
+                    f'COUNT(*) AS "RecordCount" '
+                    f"FROM {table_ref} "
+                    f"WHERE {label_ref} IS NOT NULL "
+                    f"GROUP BY {label_ref} "
+                    f"ORDER BY COUNT(*) DESC"
+                )
+
+        if not repair_table:
+            return None
+
+        table_name = str(repair_table.get("name") or "")
+        table_ref = self._quote_sql_identifier(table_name)
+        board_model_column = self._find_schema_column(
+            repair_table, ("board_model", "boardModel", "board model", "product")
+        )
+        failure_code_column = self._find_schema_column(
+            repair_table, ("failure_code", "failureCode", "failure code", "failure")
+        )
+        created_at_column = self._find_schema_column(
+            repair_table,
+            ("created_at", "createdAt", "created", "date_received", "dateReceived"),
+            temporal=True,
+        )
+        priority_column = self._find_schema_column(repair_table, ("priority",))
+        status_column = self._find_schema_column(repair_table, ("status",))
+        id_column = self._find_schema_column(repair_table, ("id", "repair_id"))
+
+        asks_board_model_distribution = (
+            "board model" in normalized
+            and any(term in normalized for term in ("distribution", "over time", "trend"))
+        )
+        if asks_board_model_distribution and board_model_column and created_at_column:
+            board_ref = f"{table_ref}.{self._quote_sql_identifier(board_model_column)}"
+            date_ref = f"{table_ref}.{self._quote_sql_identifier(created_at_column)}"
+            return (
+                f"SELECT {board_ref} AS "
+                f"{self._quote_sql_identifier(board_model_column)}, "
+                f"DATEPART(YEAR, {date_ref}) AS \"year\", "
+                f"DATEPART(MONTH, {date_ref}) AS \"month\", "
+                f'COUNT(*) AS "RecordCount" '
+                f"FROM {table_ref} "
+                f"WHERE {board_ref} IS NOT NULL "
+                f"AND {date_ref} IS NOT NULL "
+                f"GROUP BY {board_ref}, DATEPART(YEAR, {date_ref}), "
+                f"DATEPART(MONTH, {date_ref}) "
+                f"ORDER BY DATEPART(YEAR, {date_ref}) ASC, "
+                f"DATEPART(MONTH, {date_ref}) ASC, {board_ref} ASC"
+            )
+
+        asks_recurring_failures_by_product = (
+            "recurring" in normalized
+            and "failure" in normalized
+            and ("product" in normalized or "pcb" in normalized)
+        )
+        if (
+            asks_recurring_failures_by_product
+            and board_model_column
+            and failure_code_column
+        ):
+            product_ref = f"{table_ref}.{self._quote_sql_identifier(board_model_column)}"
+            failure_ref = f"{table_ref}.{self._quote_sql_identifier(failure_code_column)}"
+            return (
+                f"SELECT {product_ref} AS "
+                f"{self._quote_sql_identifier(board_model_column)}, "
+                f"{failure_ref} AS "
+                f"{self._quote_sql_identifier(failure_code_column)}, "
+                f'COUNT(*) AS "failure_count" '
+                f"FROM {table_ref} "
+                f"WHERE {product_ref} IS NOT NULL "
+                f"AND {failure_ref} IS NOT NULL "
+                f"GROUP BY {product_ref}, {failure_ref} "
+                f'ORDER BY "failure_count" DESC'
+            )
+
+        asks_highest_priority_repairs = (
+            "repair" in normalized
+            and "priority" in normalized
+            and any(term in normalized for term in ("highest", "top", "high priority"))
+        )
+        if asks_highest_priority_repairs and priority_column:
+            priority_ref = f"{table_ref}.{self._quote_sql_identifier(priority_column)}"
+            select_refs = []
+            for column in (
+                id_column,
+                board_model_column,
+                failure_code_column,
+                status_column,
+                priority_column,
+                created_at_column,
+            ):
+                if column and column not in select_refs:
+                    select_refs.append(column)
+            select_sql = ", ".join(
+                f"{table_ref}.{self._quote_sql_identifier(column)} AS "
+                f"{self._quote_sql_identifier(column)}"
+                for column in select_refs
+            )
+            return (
+                f"SELECT TOP {limit} {select_sql} "
+                f"FROM {table_ref} "
+                f"WHERE {priority_ref} IS NOT NULL "
+                f"ORDER BY CASE LOWER({priority_ref}) "
+                f"WHEN 'critical' THEN 1 "
+                f"WHEN 'high' THEN 2 "
+                f"WHEN 'medium' THEN 3 "
+                f"WHEN 'low' THEN 4 "
+                f"ELSE 5 END"
+            )
+
+        asks_repair_ticket_distribution = (
+            "repair" in normalized
+            and "ticket" in normalized
+            and (
+                "distribution" in normalized
+                or "again distribution" in normalized
+                or "aging distribution" in normalized
+            )
+        )
+        if asks_repair_ticket_distribution:
+            if "aging" in normalized and created_at_column:
+                date_ref = f"{table_ref}.{self._quote_sql_identifier(created_at_column)}"
+                age_bucket = (
+                    f"CASE "
+                    f"WHEN DATEDIFF('day', {date_ref}, CURRENT_TIMESTAMP) <= 7 THEN '0-7 days' "
+                    f"WHEN DATEDIFF('day', {date_ref}, CURRENT_TIMESTAMP) <= 30 THEN '8-30 days' "
+                    f"WHEN DATEDIFF('day', {date_ref}, CURRENT_TIMESTAMP) <= 90 THEN '31-90 days' "
+                    f"ELSE '90+ days' END"
+                )
+                return (
+                    f'SELECT {age_bucket} AS "age_bucket", '
+                    f'COUNT(*) AS "ticket_count" '
+                    f"FROM {table_ref} "
+                    f"WHERE {date_ref} IS NOT NULL "
+                    f"GROUP BY {age_bucket} "
+                    f'ORDER BY "ticket_count" DESC'
+                )
+            distribution_column = status_column or priority_column or failure_code_column
+            if distribution_column:
+                dimension_ref = (
+                    f"{table_ref}.{self._quote_sql_identifier(distribution_column)}"
+                )
+                return (
+                    f"SELECT {dimension_ref} AS "
+                    f"{self._quote_sql_identifier(distribution_column)}, "
+                    f'COUNT(*) AS "ticket_count" '
+                    f"FROM {table_ref} "
+                    f"WHERE {dimension_ref} IS NOT NULL "
+                    f"GROUP BY {dimension_ref} "
+                    f'ORDER BY "ticket_count" DESC'
+                )
+
+        return None
 
     def _get_unqueryable_metric_message(
         self, query: str, table_ddls: list[str]

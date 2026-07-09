@@ -154,6 +154,17 @@ def test_extract_explicit_table_names_from_repair_logs_phrase():
     ) == ["repair_logs", "dbo_repair_logs"]
 
 
+def test_extract_explicit_table_names_from_pcb_repair_phrases():
+    service = AskService.__new__(AskService)
+
+    assert service._extract_explicit_table_names_from_query(
+        "How many different board models are present in the dbo.repair_logs table?"
+    ) == ["dbo.repair_logs", "repair_logs", "dbo_repair_logs"]
+    assert service._extract_explicit_table_names_from_query(
+        "Display top 10 ticket labels."
+    ) == ["ticket_labels", "dbo_ticket_labels"]
+
+
 def test_filter_retrieval_metadata_for_explicit_query_keeps_only_named_table():
     service = AskService.__new__(AskService)
     documents = [
@@ -1409,6 +1420,152 @@ def test_build_schema_grounded_table_question_sql_for_repair_log_failure_code_co
         'FROM "dbo_repair_logs" '
         'WHERE "dbo_repair_logs"."failure_code" IS NOT NULL '
         'GROUP BY "dbo_repair_logs"."failure_code" '
+        'ORDER BY COUNT(*) DESC'
+    )
+
+
+def test_build_pcb_direct_question_sql_for_board_model_distribution_over_time():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_analytics_sql(
+        "How many different board models are present in the dbo.repair_logs table, and what is their distribution over time?",
+        [
+            """
+            CREATE TABLE dbo_repair_logs (
+              id VARCHAR,
+              board_model VARCHAR,
+              failure_code VARCHAR,
+              status VARCHAR,
+              priority VARCHAR,
+              created_at TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_repair_logs"."board_model" AS "board_model", '
+        'DATEPART(YEAR, "dbo_repair_logs"."created_at") AS "year", '
+        'DATEPART(MONTH, "dbo_repair_logs"."created_at") AS "month", '
+        'COUNT(*) AS "RecordCount" '
+        'FROM "dbo_repair_logs" '
+        'WHERE "dbo_repair_logs"."board_model" IS NOT NULL '
+        'AND "dbo_repair_logs"."created_at" IS NOT NULL '
+        'GROUP BY "dbo_repair_logs"."board_model", '
+        'DATEPART(YEAR, "dbo_repair_logs"."created_at"), '
+        'DATEPART(MONTH, "dbo_repair_logs"."created_at") '
+        'ORDER BY DATEPART(YEAR, "dbo_repair_logs"."created_at") ASC, '
+        'DATEPART(MONTH, "dbo_repair_logs"."created_at") ASC, '
+        '"dbo_repair_logs"."board_model" ASC'
+    )
+
+
+def test_build_pcb_direct_question_sql_for_recurring_pcb_failures_by_product():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_analytics_sql(
+        "Show recurring PCB failures by product.",
+        [
+            """
+            CREATE TABLE dbo_repair_logs (
+              id VARCHAR,
+              board_model VARCHAR,
+              failure_code VARCHAR,
+              created_at TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_repair_logs"."board_model" AS "board_model", '
+        '"dbo_repair_logs"."failure_code" AS "failure_code", '
+        'COUNT(*) AS "failure_count" '
+        'FROM "dbo_repair_logs" '
+        'WHERE "dbo_repair_logs"."board_model" IS NOT NULL '
+        'AND "dbo_repair_logs"."failure_code" IS NOT NULL '
+        'GROUP BY "dbo_repair_logs"."board_model", '
+        '"dbo_repair_logs"."failure_code" '
+        'ORDER BY "failure_count" DESC'
+    )
+
+
+def test_build_pcb_direct_question_sql_for_highest_priority_repairs():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_analytics_sql(
+        "Which repair logs have the highest priority?",
+        [
+            """
+            CREATE TABLE dbo_repair_logs (
+              id VARCHAR,
+              board_model VARCHAR,
+              failure_code VARCHAR,
+              status VARCHAR,
+              priority VARCHAR,
+              created_at TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql is not None
+    assert sql.startswith('SELECT TOP 10 "dbo_repair_logs"."id" AS "id"')
+    assert 'FROM "dbo_repair_logs"' in sql
+    assert 'CASE LOWER("dbo_repair_logs"."priority")' in sql
+    assert "WHEN 'critical' THEN 1" in sql
+    assert "WHEN 'high' THEN 2" in sql
+
+
+def test_build_pcb_direct_question_sql_for_repair_ticket_distribution():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_analytics_sql(
+        "Show repair ticket again distribution.",
+        [
+            """
+            CREATE TABLE dbo_repair_logs (
+              id VARCHAR,
+              status VARCHAR,
+              priority VARCHAR,
+              created_at TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_repair_logs"."status" AS "status", '
+        'COUNT(*) AS "ticket_count" '
+        'FROM "dbo_repair_logs" '
+        'WHERE "dbo_repair_logs"."status" IS NOT NULL '
+        'GROUP BY "dbo_repair_logs"."status" '
+        'ORDER BY "ticket_count" DESC'
+    )
+
+
+def test_build_pcb_direct_question_sql_for_top_ticket_labels():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_analytics_sql(
+        "Display top 10 ticket labels.",
+        [
+            """
+            CREATE TABLE dbo_ticket_labels (
+              id VARCHAR,
+              name VARCHAR,
+              created_at TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT TOP 10 "dbo_ticket_labels"."name" AS "name", '
+        'COUNT(*) AS "RecordCount" '
+        'FROM "dbo_ticket_labels" '
+        'WHERE "dbo_ticket_labels"."name" IS NOT NULL '
+        'GROUP BY "dbo_ticket_labels"."name" '
         'ORDER BY COUNT(*) DESC'
     )
 
