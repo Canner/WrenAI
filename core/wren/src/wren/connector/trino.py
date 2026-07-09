@@ -11,7 +11,7 @@ import contextlib
 import datetime as dtlib
 import json
 from decimal import Decimal as PyDecimal
-from urllib.parse import parse_qsl, urlparse
+from urllib.parse import parse_qsl, unquote, urlparse
 
 import pyarrow as pa
 import sqlglot
@@ -322,14 +322,17 @@ def _parse_trino_url(url: str, extra_kwargs: dict | None) -> dict:
     if extra_kwargs:
         query_kwargs.update(extra_kwargs)
 
+    # urlparse leaves percent-encoded characters in userinfo/path, so decode
+    # them before they reach Trino. Use unquote (not unquote_plus) so a
+    # literal ``+`` in a credential is preserved.
     out: dict = {
         "host": parsed.hostname,
         "port": int(parsed.port or 8080),
-        "user": parsed.username,
-        "catalog": catalog,
-        "schema": schema,
+        "user": unquote(parsed.username),
+        "catalog": unquote(catalog) if catalog else None,
+        "schema": unquote(schema) if schema else None,
         "timezone": "UTC",
-        "_password": parsed.password,
+        "_password": unquote(parsed.password) if parsed.password else None,
     }
     if parsed.scheme == "trino+https":
         out["http_scheme"] = "https"

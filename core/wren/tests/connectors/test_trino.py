@@ -183,6 +183,25 @@ def test_parse_trino_url_accepts_explicit_username() -> None:
     assert out["schema"] == "schema"
 
 
+
+def test_parse_trino_url_decodes_user_password_and_identifiers() -> None:
+    """Credentials and path identifiers are percent-decoded with unquote."""
+    out = _parse_trino_url(
+        "trino://us%40er:p%40ss%2Fword@host:8080/my%2Fcatalog/my%20schema",
+        None,
+    )
+    assert out["user"] == "us@er"
+    assert out["_password"] == "p@ss/word"
+    assert out["catalog"] == "my/catalog"
+    assert out["schema"] == "my schema"
+
+
+def test_parse_trino_url_preserves_literal_plus_in_userinfo() -> None:
+    """``+`` in userinfo is a literal plus, not a form-encoded space."""
+    out = _parse_trino_url("trino://svc+etl:pw+1@host:8080/catalog/schema", None)
+    assert out["user"] == "svc+etl"
+    assert out["_password"] == "pw+1"
+
 def test_parse_trino_url_rejects_bad_scheme() -> None:
     with pytest.raises(WrenError) as exc:
         _parse_trino_url("http://alice@host:8080/c/s", None)
