@@ -716,9 +716,32 @@ export default class DataSourceSchemaDetector
       const existingColumns = modelColumns.filter(
         (column) => column.modelId === model.id && !column.isCalculated,
       );
+      const latestColumnNames = new Set(
+        latestTable.columns.map((column) => column.name),
+      );
+      const staleColumnNames = existingColumns
+        .filter((column) => !latestColumnNames.has(column.sourceColumnName))
+        .map((column) => column.sourceColumnName);
+      if (staleColumnNames.length) {
+        logger.info(
+          `Removing stale datasource column metadata "${staleColumnNames.join(
+            ', ',
+          )}" from model "${model.referenceName}".`,
+        );
+        await this.ctx.modelColumnRepository.deleteAllBySourceColumnNames(
+          model.id,
+          staleColumnNames,
+        );
+        hasSyncedMetadata = true;
+      }
+
       const usedReferenceNames = new Set(
         modelColumns
-          .filter((column) => column.modelId === model.id)
+          .filter(
+            (column) =>
+              column.modelId === model.id &&
+              !staleColumnNames.includes(column.sourceColumnName),
+          )
           .map((column) => column.referenceName.toLowerCase()),
       );
 
