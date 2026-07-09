@@ -35,6 +35,8 @@ import DataSourceSchemaDetector, {
 const logger = getLogger('ModelResolver');
 logger.level = 'debug';
 
+const dirtyProjectIds = new Set<number>();
+
 export enum SyncStatusEnum {
   IN_PROGRESS = 'IN_PROGRESS',
   SYNCRONIZED = 'SYNCRONIZED',
@@ -227,13 +229,12 @@ export class ModelResolver {
       }
 
       const project = await ctx.projectService.getCurrentProject();
+      if (dirtyProjectIds.has(project.id)) {
+        return { status: SyncStatusEnum.UNSYNCRONIZED };
+      }
+
       const lastDeploy = await ctx.deployService.getLastDeployment(project.id);
-      const isSynced = await this.isLastDeployNewerThanModelingChanges(
-        ctx,
-        project.id,
-        lastDeploy,
-      );
-      return isSynced
+      return lastDeploy
         ? { status: SyncStatusEnum.SYNCRONIZED }
         : { status: SyncStatusEnum.UNSYNCRONIZED };
     } catch (err: any) {
@@ -265,6 +266,9 @@ export class ModelResolver {
       project.id,
       shouldForceDeploy,
     );
+    if (deployRes.status === 'SUCCESS') {
+      dirtyProjectIds.delete(project.id);
+    }
     if (deployRes.status === 'SUCCESS' && project.sampleDataset === null) {
       ctx.projectService.generateProjectRecommendationQuestions().catch((err) =>
         logger.warn(
@@ -387,9 +391,8 @@ export class ModelResolver {
     return JSON.stringify(value);
   }
 
-  private markProjectDirty(_projectId: number) {
-    // Sync status is derived from persisted deploy/model state so project
-    // switching cannot leave stale in-memory dirty flags behind.
+  private markProjectDirty(projectId: number) {
+    dirtyProjectIds.add(projectId);
   }
 
   private async resolveModifiedSchemaChanges(ctx: IContext, projectId: number) {
