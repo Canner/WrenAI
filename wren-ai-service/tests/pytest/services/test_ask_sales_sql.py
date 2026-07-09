@@ -321,6 +321,48 @@ def test_prune_sql_generation_context_prefers_referenced_table_and_columns():
     assert pruned_ddls == [table_ddls[2]]
 
 
+def test_prune_sql_generation_context_keeps_related_join_table():
+    service = AskService.__new__(AskService)
+    table_ddls = [
+        """
+        CREATE TABLE dbo_Customers (
+          CustomerId VARCHAR,
+          CustomerName VARCHAR
+        );
+        """,
+        """
+        CREATE TABLE dbo_Products (
+          ProductId VARCHAR,
+          ProductName VARCHAR
+        );
+        """,
+        """
+        CREATE TABLE dbo_Orders (
+          OrderId VARCHAR,
+          CustomerId VARCHAR,
+          ProductId VARCHAR,
+          OrderDate TIMESTAMP,
+          FOREIGN KEY (CustomerId) REFERENCES dbo_Customers(CustomerId)
+        );
+        """,
+    ]
+    documents = [
+        {"table_name": "dbo_Customers", "table_ddl": table_ddls[0]},
+        {"table_name": "dbo_Products", "table_ddl": table_ddls[1]},
+        {"table_name": "dbo_Orders", "table_ddl": table_ddls[2]},
+    ]
+
+    _, table_names, _ = service._prune_sql_generation_context(
+        "Which customer names have the highest number of orders?",
+        documents,
+        [document["table_name"] for document in documents],
+        table_ddls,
+        max_tables=2,
+    )
+
+    assert table_names == ["dbo_Customers", "dbo_Orders"]
+
+
 def test_build_schema_grounded_sales_sql_for_top_markets():
     service = AskService.__new__(AskService)
     sql = service._build_schema_grounded_sales_sql(

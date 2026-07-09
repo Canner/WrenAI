@@ -4865,12 +4865,22 @@ class AskService:
         if not scored:
             return documents, table_names, table_ddls[:max_tables]
 
-        selected_indexes = [
-            index
-            for _, index in sorted(scored, key=lambda item: item[0], reverse=True)[
-                :max_tables
-            ]
+        sorted_scored_indexes = [
+            index for _, index in sorted(scored, key=lambda item: item[0], reverse=True)
         ]
+        core_limit = max(1, max_tables - 2) if max_tables > 2 else 1
+        selected_indexes = sorted_scored_indexes[:core_limit]
+        selected_indexes = self._expand_pruned_context_with_related_tables(
+            selected_indexes,
+            parsed_tables,
+            table_ddls,
+            max_tables=max_tables,
+        )
+        for index in sorted_scored_indexes:
+            if len(selected_indexes) >= max_tables:
+                break
+            if index not in selected_indexes:
+                selected_indexes.append(index)
         selected_indexes = sorted(selected_indexes)
         pruned_documents = [
             documents[index] for index in selected_indexes if index < len(documents)
@@ -4889,6 +4899,88 @@ class AskService:
             query,
         )
         return pruned_documents, pruned_table_names, pruned_table_ddls
+
+    def _expand_pruned_context_with_related_tables(
+        self,
+        selected_indexes: list[int],
+        parsed_tables: list[dict[str, Any]],
+        table_ddls: list[str],
+        *,
+        max_tables: int,
+    ) -> list[int]:
+        if len(selected_indexes) >= max_tables:
+            return selected_indexes[:max_tables]
+
+        selected: list[int] = list(dict.fromkeys(selected_indexes))
+        selected_set = set(selected)
+
+        def join_key_columns(table: dict[str, Any]) -> set[str]:
+            keys = set()
+            for column in table.get("columns", []):
+                column_name = str(column.get("name") or "")
+                normalized = self._normalize_schema_token(column_name)
+                if not normalized:
+                    continue
+                if (
+                    normalized == "id"
+                    or normalized.endswith("id")
+                    or normalized.endswith("no")
+                    or normalized.endswith("number")
+                    or normalized.endswith("code")
+                    or normalized.endswith("key")
+                ):
+                    keys.add(normalized)
+            return keys
+
+        selected_table_names = {
+            self._normalize_schema_token(
+                str(parsed_tables[index].get("name") or "")
+            )
+            for index in selected
+            if index < len(parsed_tables)
+        }
+        selected_join_keys: set[str] = set()
+        for index in selected:
+            if index < len(parsed_tables):
+                selected_join_keys.update(join_key_columns(parsed_tables[index]))
+
+        candidates: list[tuple[int, int]] = []
+        for index, table in enumerate(parsed_tables):
+            if index in selected_set:
+                continue
+
+            table_name = str(table.get("name") or "")
+            normalized_table_name = self._normalize_schema_token(table_name)
+            ddl = table_ddls[index] if index < len(table_ddls) else ""
+            normalized_ddl = self._normalize_schema_token(ddl)
+            table_join_keys = join_key_columns(table)
+
+            score = 0
+            shared_keys = selected_join_keys & table_join_keys
+            if shared_keys:
+                score += 20 + 5 * len(shared_keys)
+            if normalized_table_name and any(
+                selected_table
+                and (
+                    selected_table in normalized_ddl
+                    or normalized_table_name in selected_table
+                )
+                for selected_table in selected_table_names
+            ):
+                score += 40
+            if re.search(r"\b(?:foreign\s+key|references)\b", ddl, flags=re.IGNORECASE):
+                score += 15
+
+            if score > 0:
+                candidates.append((score, index))
+
+        for _, index in sorted(candidates, key=lambda item: item[0], reverse=True):
+            if len(selected) >= max_tables:
+                break
+            selected.append(index)
+            selected_set.add(index)
+
+        return selected
 
     def _is_valid_select_sql(self, sql: Optional[str]) -> bool:
         if not isinstance(sql, str):
