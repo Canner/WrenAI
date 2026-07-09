@@ -622,6 +622,87 @@ class AskService:
             return []
 
         concept_groups: list[set[str]] = []
+        compact_query = re.sub(r"[^a-z0-9]", "", normalized)
+        if (
+            "customer" in normalized
+            or "custname" in compact_query
+            or "custno" in compact_query
+        ):
+            concept_groups.append(
+                {
+                    "account",
+                    "client",
+                    "cust",
+                    "customer",
+                    "customername",
+                    "custname",
+                    "custno",
+                }
+            )
+        if "market segment" in normalized:
+            concept_groups.append(
+                {"market", "marketsegment", "segment", "markettype", "region"}
+            )
+        elif "market" in normalized:
+            concept_groups.append({"market", "markettype", "marketname", "segment"})
+        if "region" in normalized:
+            concept_groups.append(
+                {"region", "regional", "market", "area", "territory", "country"}
+            )
+        if "salesperson" in normalized or "sales person" in normalized:
+            concept_groups.append(
+                {"salesperson", "salesman", "salesrep", "rep", "owner"}
+            )
+        if "product type" in normalized or "producttype" in compact_query:
+            concept_groups.append({"prodtype", "producttype", "product", "type"})
+        elif "product" in normalized:
+            concept_groups.append(
+                {
+                    "item",
+                    "part",
+                    "prod",
+                    "prodcode",
+                    "prodname",
+                    "product",
+                    "productcode",
+                    "productname",
+                    "sku",
+                }
+            )
+        if "quantity" in normalized or re.search(r"\bqty\b", normalized):
+            concept_groups.append(
+                {"qty", "quantity", "salesqty", "orderqty", "invoiceqty"}
+            )
+        if any(
+            term in normalized
+            for term in (
+                "sales",
+                "sale",
+                "revenue",
+                "amount",
+                "value",
+                "order value",
+                "sales value",
+            )
+        ) and not any(
+            term in normalized for term in ("salesperson", "sales person", "sales rep")
+        ):
+            concept_groups.append(
+                {
+                    "amount",
+                    "fxsalesvalue",
+                    "invoiceamount",
+                    "invoicevalue",
+                    "net",
+                    "revenue",
+                    "salesamount",
+                    "salesvalue",
+                    "total",
+                    "value",
+                }
+            )
+        if any(term in normalized for term in ("order priority", "priorities")):
+            concept_groups.append({"priority", "orderpriority"})
         if "product line" in normalized or "productline" in normalized:
             concept_groups.append({"product", "prod", "line", "productline"})
         if "pcb" in normalized:

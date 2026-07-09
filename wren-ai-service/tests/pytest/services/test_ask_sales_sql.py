@@ -269,6 +269,77 @@ def test_build_validated_ask_result_accepts_sql_for_explicit_table_alias():
     assert result is not None
 
 
+def test_sql_intent_rejects_partial_customer_market_quantity_answer():
+    service = AskService.__new__(AskService)
+
+    assert not service._sql_matches_question_intent(
+        (
+            'SELECT "dbo_tblStageNewOrders3"."Market" AS "Market", '
+            'COUNT(*) AS "RecordCount" '
+            'FROM "dbo_tblStageNewOrders3" '
+            'GROUP BY "dbo_tblStageNewOrders3"."Market"'
+        ),
+        "Show total order quantity by customer and market segment.",
+        [
+            {
+                "name": "dbo_tblStageNewOrders3",
+                "columns": [
+                    {"name": "Market", "type": "VARCHAR"},
+                    {"name": "Customer", "type": "VARCHAR"},
+                    {"name": "OrderQty", "type": "FLOAT"},
+                ],
+            }
+        ],
+    )
+
+
+def test_sql_intent_accepts_customer_market_quantity_answer():
+    service = AskService.__new__(AskService)
+
+    assert service._sql_matches_question_intent(
+        (
+            'SELECT "dbo_tblNewOrders"."Customer" AS "Customer", '
+            '"dbo_tblNewOrders"."Market" AS "Market", '
+            'SUM("dbo_tblNewOrders"."OrderQty") AS "TotalOrderQty" '
+            'FROM "dbo_tblNewOrders" '
+            'GROUP BY "dbo_tblNewOrders"."Customer", "dbo_tblNewOrders"."Market"'
+        ),
+        "Show total order quantity by customer and market segment.",
+        [
+            {
+                "name": "dbo_tblNewOrders",
+                "columns": [
+                    {"name": "Customer", "type": "VARCHAR"},
+                    {"name": "Market", "type": "VARCHAR"},
+                    {"name": "OrderQty", "type": "FLOAT"},
+                ],
+            }
+        ],
+    )
+
+
+def test_sql_intent_rejects_product_sales_question_without_sales_or_region():
+    service = AskService.__new__(AskService)
+
+    assert not service._sql_matches_question_intent(
+        (
+            'SELECT "dbo_products"."products" AS "products" '
+            'FROM "dbo_products"'
+        ),
+        "Which products have the highest sales by region?",
+        [
+            {
+                "name": "dbo_products",
+                "columns": [
+                    {"name": "products", "type": "VARCHAR"},
+                    {"name": "Region", "type": "VARCHAR"},
+                    {"name": "SalesValue", "type": "FLOAT"},
+                ],
+            }
+        ],
+    )
+
+
 def test_needs_conversation_context_only_for_true_followups():
     service = AskService.__new__(AskService)
 
