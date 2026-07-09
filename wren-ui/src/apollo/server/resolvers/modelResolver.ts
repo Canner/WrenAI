@@ -382,7 +382,10 @@ export class ModelResolver {
         project,
       );
       if (version && version !== project.version) {
-        return await ctx.projectService.updateProject(project.id, { version });
+        return await ctx.projectService.updateProject(project.id, {
+          version,
+          updatedAt: project.updatedAt,
+        });
       }
     } catch (err: any) {
       logger.warn(

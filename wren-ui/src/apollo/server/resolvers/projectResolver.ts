@@ -663,6 +663,7 @@ export class ProjectResolver {
         if (version && version !== project.version) {
           project = await ctx.projectService.updateProject(project.id, {
             version,
+            updatedAt: project.updatedAt,
           });
         }
       } catch (err: any) {
