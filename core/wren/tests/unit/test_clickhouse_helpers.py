@@ -393,3 +393,22 @@ class TestClickHouseUrlKwargs:
             _FakeConnInfoFromUrl("clickhouse://user:pw@host/db?connect_timeout=10")
         )
         assert out["connect_timeout"] == "10"
+
+
+def test_clickhouse_url_allows_raw_brackets_in_password() -> None:
+    """Raw '[' / ']' in userinfo must not raise ValueError from urlparse."""
+    info = _FakeConnInfoFromUrl(
+        "clickhouse://user:p[a]ss@clickhouse-host:9000/analytics"
+    )
+    out = _build_clickhouse_client_kwargs(info)
+    assert out["username"] == "user"
+    assert out["password"] == "p[a]ss"
+    assert out["host"] == "clickhouse-host"
+
+
+def test_clickhouse_url_preserves_ipv6_host_with_bracketed_password() -> None:
+    info = _FakeConnInfoFromUrl("clickhouse://user:p[a]ss@[::1]:9000/analytics")
+    out = _build_clickhouse_client_kwargs(info)
+    assert out["host"] == "::1"
+    assert out["password"] == "p[a]ss"
+    assert out["username"] == "user"
