@@ -146,6 +146,14 @@ def test_extract_explicit_table_names_from_using_clause():
     ) == []
 
 
+def test_extract_explicit_table_names_from_repair_logs_phrase():
+    service = AskService.__new__(AskService)
+
+    assert service._extract_explicit_table_names_from_query(
+        "Count repair logs by failure_code in repair logs."
+    ) == ["repair_logs", "dbo_repair_logs"]
+
+
 def test_filter_retrieval_metadata_for_explicit_query_keeps_only_named_table():
     service = AskService.__new__(AskService)
     documents = [
@@ -1369,6 +1377,38 @@ def test_build_schema_grounded_table_question_sql_for_name_distribution():
         'FROM "dbo_failure_patterns" '
         'WHERE "dbo_failure_patterns"."name" IS NOT NULL '
         'GROUP BY "dbo_failure_patterns"."name" '
+        'ORDER BY COUNT(*) DESC'
+    )
+
+
+def test_build_schema_grounded_table_question_sql_for_repair_log_failure_code_count():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_table_question_sql(
+        "Count repair logs by failure_code in repair logs.",
+        [
+            """
+            CREATE TABLE dbo_repair_logs (
+              org_id VARCHAR,
+              id VARCHAR,
+              board_model VARCHAR,
+              failure_code VARCHAR,
+              status VARCHAR,
+              priority VARCHAR,
+              created_at TIMESTAMP,
+              updated_at TIMESTAMP,
+              data JSON
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_repair_logs"."failure_code" AS "failure_code", '
+        'COUNT(*) AS "RecordCount" '
+        'FROM "dbo_repair_logs" '
+        'WHERE "dbo_repair_logs"."failure_code" IS NOT NULL '
+        'GROUP BY "dbo_repair_logs"."failure_code" '
         'ORDER BY COUNT(*) DESC'
     )
 

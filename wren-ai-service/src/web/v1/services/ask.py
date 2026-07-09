@@ -1314,6 +1314,34 @@ class AskService:
         if wants_total_count:
             return f'SELECT COUNT(*) AS "RecordCount" FROM {table_ref}'
 
+        wants_grouped_count = (
+            any(
+                term in normalized
+                for term in (
+                    "count",
+                    "counts",
+                    "record count",
+                    "number of",
+                    "how many",
+                )
+            )
+            and re.search(r"\b(?:by|per|each|grouped by|group by)\b", normalized)
+        )
+        if wants_grouped_count:
+            dimension_column = self._find_dimension_column_for_query(query, table)
+            if not dimension_column:
+                return None
+            dimension_ref = f"{table_ref}.{self._quote_sql_identifier(dimension_column)}"
+            return (
+                f"SELECT {dimension_ref} AS "
+                f"{self._quote_sql_identifier(dimension_column)}, "
+                f'COUNT(*) AS "RecordCount" '
+                f"FROM {table_ref} "
+                f"WHERE {dimension_ref} IS NOT NULL "
+                f"GROUP BY {dimension_ref} "
+                f"ORDER BY COUNT(*) DESC"
+            )
+
         wants_distribution = any(
             term in normalized
             for term in (
@@ -1444,6 +1472,10 @@ class AskService:
                 and table_name not in table_names
             ):
                 table_names.append(table_name)
+        if re.search(r"\brepair\s+logs?\b", query or "", flags=re.IGNORECASE):
+            for table_name in ("repair_logs", "dbo_repair_logs"):
+                if table_name not in table_names:
+                    table_names.append(table_name)
         return table_names
 
     def _build_direct_orders_sales_sql(self, query: str) -> str | None:
