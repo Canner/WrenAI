@@ -29,7 +29,7 @@ import {
   getRelations,
   sampleDatasets,
 } from '@server/data';
-import { isEmpty, snakeCase } from 'lodash';
+import { snakeCase } from 'lodash';
 import { CompactTable, ProjectData } from '../services';
 import { DuckDBPrepareOptions } from '@server/adaptors/wrenEngineAdaptor';
 import DataSourceSchemaDetector, {
@@ -544,38 +544,6 @@ export class ProjectResolver {
       };
     }
 
-    const schemaDetector = new DataSourceSchemaDetector({
-      ctx,
-      projectId: project.id,
-    });
-    const currentChange = await schemaDetector.filterCurrentSchemaChange(
-      lastSchemaChange.change,
-    );
-    const staleResolvedTypes = Object.values(SchemaChangeType).filter((type) => {
-      const isResolved = lastSchemaChange.resolve[type];
-      return !isResolved && !!lastSchemaChange.change[type] && !currentChange[type];
-    });
-    if (staleResolvedTypes.length) {
-      await ctx.schemaChangeRepository.updateOne(lastSchemaChange.id, {
-        resolve: {
-          ...lastSchemaChange.resolve,
-          ...staleResolvedTypes.reduce(
-            (result, type) => ({ ...result, [type]: true }),
-            {},
-          ),
-        },
-      });
-    }
-
-    if (isEmpty(currentChange)) {
-      return {
-        deletedTables: null,
-        deletedColumns: null,
-        modifiedColumns: null,
-        lastSchemaChangeTime: lastSchemaChange.createdAt,
-      };
-    }
-
     const models = await ctx.modelRepository.findAllBy({
       projectId: project.id,
     });
@@ -587,10 +555,15 @@ export class ProjectResolver {
       modelIds,
     });
 
+    const schemaDetector = new DataSourceSchemaDetector({
+      ctx,
+      projectId: project.id,
+    });
+
     const resolves = lastSchemaChange.resolve;
     const unresolvedChanges = Object.keys(resolves).reduce((result, key) => {
       const isResolved = resolves[key];
-      const changes = currentChange[key];
+      const changes = lastSchemaChange.change[key];
       // return if resolved or no changes
       if (isResolved || !changes) return result;
 

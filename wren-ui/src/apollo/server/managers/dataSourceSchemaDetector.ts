@@ -138,53 +138,18 @@ export default class DataSourceSchemaDetector
     return createdModels.length > 0;
   }
 
-  public async filterCurrentSchemaChange(
-    schemaChange: DataSourceSchemaChange,
-  ): Promise<DataSourceSchemaChange> {
-    const latestSchema = await this.getLatestSchema();
-    const filteredChange: DataSourceSchemaChange = {};
-
-    const deletedTables = schemaChange[SchemaChangeType.DELETED_TABLES]?.filter(
-      (table) =>
-        !latestSchema.some((latestTable) =>
-          this.isSameIdentifier(latestTable.name, table.name),
-        ),
-    );
-    if (deletedTables?.length) {
-      filteredChange[SchemaChangeType.DELETED_TABLES] = deletedTables;
-    }
-
-    const deletedColumns = this.filterMissingColumns(
-      schemaChange[SchemaChangeType.DELETED_COLUMNS],
-      latestSchema,
-    );
-    if (deletedColumns.length) {
-      filteredChange[SchemaChangeType.DELETED_COLUMNS] = deletedColumns;
-    }
-
-    const modifiedColumns = this.filterModifiedColumns(
-      schemaChange[SchemaChangeType.MODIFIED_COLUMNS],
-      latestSchema,
-    );
-    if (modifiedColumns.length) {
-      filteredChange[SchemaChangeType.MODIFIED_COLUMNS] = modifiedColumns;
-    }
-
-    return filteredChange;
-  }
-
   private async createMissingModels(
     latestTables: CompactTable[],
     models: Model[],
   ): Promise<Model[]> {
+    const existingSourceTableNames = new Set(
+      models.map((model) => model.sourceTableName),
+    );
     const usedReferenceNames = new Set(
       models.map((model) => model.referenceName.toLowerCase()),
     );
     const missingTables = latestTables.filter(
-      (table) =>
-        !models.some((model) =>
-          this.isSameIdentifier(model.sourceTableName, table.name),
-        ),
+      (table) => !existingSourceTableNames.has(table.name),
     );
 
     if (!missingTables.length) {
@@ -224,8 +189,8 @@ export default class DataSourceSchemaDetector
     }
 
     const columnValues = models.flatMap((model) => {
-      const table = latestTables.find((table) =>
-        this.isSameIdentifier(table.name, model.sourceTableName),
+      const table = latestTables.find(
+        (table) => table.name === model.sourceTableName,
       );
       if (!table) {
         return [];
@@ -280,8 +245,8 @@ export default class DataSourceSchemaDetector
     columns: ModelColumn[],
   ) {
     const nestedColumnValues = models.flatMap((model) => {
-      const table = latestTables.find((table) =>
-        this.isSameIdentifier(table.name, model.sourceTableName),
+      const table = latestTables.find(
+        (table) => table.name === model.sourceTableName,
       );
       if (!table) {
         return [];
@@ -290,8 +255,8 @@ export default class DataSourceSchemaDetector
         (column) => column.modelId === model.id,
       );
       return table.columns.flatMap((compactColumn) => {
-        const column = modelColumns.find((column) =>
-          this.isSameIdentifier(column.sourceColumnName, compactColumn.name),
+        const column = modelColumns.find(
+          (column) => column.sourceColumnName === compactColumn.name,
         );
         if (!column) {
           return [];
@@ -412,10 +377,7 @@ export default class DataSourceSchemaDetector
               const modelColumn = modelColumns.find(
                 (modelColumn) =>
                   modelColumn.modelId === resource.modelId &&
-                  this.isSameIdentifier(
-                    modelColumn.sourceColumnName,
-                    column.sourceColumnName,
-                  ) &&
+                  modelColumn.sourceColumnName === column.sourceColumnName &&
                   !modelColumn.isCalculated,
               );
               if (!modelColumn || modelColumn.type === column.type) {
@@ -478,14 +440,13 @@ export default class DataSourceSchemaDetector
   ) {
     const affectedModels = models.filter(
       (model) =>
-        changes.findIndex((table) =>
-          this.isSameIdentifier(table.name, model.sourceTableName),
-        ) !== -1,
+        changes.findIndex((table) => table.name === model.sourceTableName) !==
+        -1,
     );
 
     const affectedResources = affectedModels.map((model) => {
-      const affectedColumns = changes.find((table) =>
-        this.isSameIdentifier(table.name, model.sourceTableName),
+      const affectedColumns = changes.find(
+        (table) => table.name === model.sourceTableName,
       ).columns;
 
       const allCalculatedFields = modelColumns.filter(
@@ -496,7 +457,7 @@ export default class DataSourceSchemaDetector
         (result, column) => {
           const affectedColumn = modelColumns.find(
             (modelColumn) =>
-              this.isSameIdentifier(modelColumn.sourceColumnName, column.name) &&
+              modelColumn.sourceColumnName === column.name &&
               modelColumn.modelId === model.id,
           );
 
@@ -586,8 +547,8 @@ export default class DataSourceSchemaDetector
     latestSchema: DataSourceSchema[],
   ) {
     const diffSchema = currentSchema.reduce((result, currentTable) => {
-      const lastestTable = latestSchema.find((table) =>
-        this.isSameIdentifier(table.name, currentTable.name),
+      const lastestTable = latestSchema.find(
+        (table) => table.name === currentTable.name,
       );
       // If the table is not found in the latest schema, it means the table has been deleted.
       if (!lastestTable) {
@@ -609,8 +570,8 @@ export default class DataSourceSchemaDetector
         const modifiedColumnChange = { name: currentTable.name, columns: [] };
 
         for (const currentColumn of diffColumns) {
-          const latestColumn = lastestTable.columns.find((column) =>
-            this.isSameIdentifier(column.name, currentColumn.name),
+          const latestColumn = lastestTable.columns.find(
+            (column) => column.name === currentColumn.name,
           );
           // If the column is not found in the latest schema, it means the column has been deleted.
           if (!latestColumn) {
@@ -724,7 +685,7 @@ export default class DataSourceSchemaDetector
     latestColumn: DataSourceSchema['columns'][number],
   ) {
     return (
-      this.isSameIdentifier(currentColumn.name, latestColumn.name) &&
+      currentColumn.name === latestColumn.name &&
       currentColumn.type === latestColumn.type
     );
   }
@@ -745,8 +706,8 @@ export default class DataSourceSchemaDetector
       await this.ctx.modelColumnRepository.findColumnsByModelIds(modelIds);
 
     for (const model of models) {
-      const latestTable = latestSchema.find((table) =>
-        this.isSameIdentifier(table.name, model.sourceTableName),
+      const latestTable = latestSchema.find(
+        (table) => table.name === model.sourceTableName,
       );
       if (!latestTable) {
         continue;
@@ -762,8 +723,8 @@ export default class DataSourceSchemaDetector
       );
 
       for (const latestColumn of latestTable.columns) {
-        const existingColumn = existingColumns.find((column) =>
-          this.isSameIdentifier(column.sourceColumnName, latestColumn.name),
+        const existingColumn = existingColumns.find(
+          (column) => column.sourceColumnName === latestColumn.name,
         );
 
         if (!existingColumn) {
@@ -857,91 +818,5 @@ export default class DataSourceSchemaDetector
       },
     });
     logger.info(`Schema change "${schemaChangeTypes}" resolved successfully.`);
-  }
-
-  private filterMissingColumns(
-    tables: DataSourceSchema[] | undefined,
-    latestSchema: DataSourceSchema[],
-  ): DataSourceSchema[] {
-    if (!tables?.length) {
-      return [];
-    }
-
-    return tables
-      .map((table) => {
-        const latestTable = latestSchema.find((latestTable) =>
-          this.isSameIdentifier(latestTable.name, table.name),
-        );
-        if (!latestTable) {
-          return table;
-        }
-
-        const columns = table.columns.filter(
-          (column) =>
-            !latestTable.columns.some((latestColumn) =>
-              this.isSameIdentifier(latestColumn.name, column.name),
-            ),
-        );
-        return { ...table, columns };
-      })
-      .filter((table) => table.columns.length > 0);
-  }
-
-  private filterModifiedColumns(
-    tables: DataSourceSchema[] | undefined,
-    latestSchema: DataSourceSchema[],
-  ): DataSourceSchema[] {
-    if (!tables?.length) {
-      return [];
-    }
-
-    return tables
-      .map((table) => {
-        const latestTable = latestSchema.find((latestTable) =>
-          this.isSameIdentifier(latestTable.name, table.name),
-        );
-        if (!latestTable) {
-          return table;
-        }
-
-        const columns = table.columns.filter((column) => {
-          const latestColumn = latestTable.columns.find((latestColumn) =>
-            this.isSameIdentifier(latestColumn.name, column.name),
-          );
-          return !!latestColumn && latestColumn.type !== column.type;
-        });
-        return { ...table, columns };
-      })
-      .filter((table) => table.columns.length > 0);
-  }
-
-  private isSameIdentifier(left?: string, right?: string): boolean {
-    const normalizedLeft = this.normalizeIdentifier(left);
-    const normalizedRight = this.normalizeIdentifier(right);
-    if (normalizedLeft === normalizedRight) {
-      return true;
-    }
-
-    const leftIsQualified = normalizedLeft.includes('.');
-    const rightIsQualified = normalizedRight.includes('.');
-    if (leftIsQualified && rightIsQualified) {
-      return false;
-    }
-
-    return (
-      this.getUnqualifiedIdentifier(normalizedLeft) ===
-      this.getUnqualifiedIdentifier(normalizedRight)
-    );
-  }
-
-  private normalizeIdentifier(value?: string): string {
-    return String(value || '')
-      .replace(/[\[\]"`]/g, '')
-      .trim()
-      .toLowerCase();
-  }
-
-  private getUnqualifiedIdentifier(value: string): string {
-    return value.split('.').pop() || value;
   }
 }
