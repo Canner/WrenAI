@@ -1535,35 +1535,6 @@ def test_build_schema_grounded_table_question_sql_for_highest_orders_by_customer
     )
 
 
-def test_schema_grounded_analytics_prefers_order_table_for_order_count_question():
-    service = AskService.__new__(AskService)
-
-    sql = service._build_schema_grounded_analytics_sql(
-        "Which customers have the highest number of orders?",
-        [
-            """
-            CREATE TABLE dbo_qMarginSales (
-              Customer VARCHAR,
-              OrdNo VARCHAR,
-              SalesValue DOUBLE
-            );
-            """,
-            """
-            CREATE TABLE dbo_tblNewOrders (
-              Customer VARCHAR,
-              OrdNo VARCHAR,
-              OrdDate TIMESTAMP
-            );
-            """,
-        ],
-    )
-
-    assert sql is not None
-    assert 'FROM "dbo_tblNewOrders"' in sql
-    assert 'FROM "dbo_qMarginSales"' not in sql
-    assert 'COUNT(DISTINCT "dbo_tblNewOrders"."OrdNo")' in sql
-
-
 def test_build_pcb_direct_question_sql_for_board_model_distribution_over_time():
     service = AskService.__new__(AskService)
 

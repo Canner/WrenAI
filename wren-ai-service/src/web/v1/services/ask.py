@@ -1745,9 +1745,7 @@ class AskService:
         measure_candidates: tuple[str, ...],
         wants_date: bool = False,
         allow_count_metric: bool = False,
-        query: str = "",
     ) -> tuple[dict[str, Any], list[str], str | None, str | None] | None:
-        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
         scored: list[
             tuple[int, dict[str, Any], list[str], str | None, str | None]
         ] = []
@@ -1798,54 +1796,6 @@ class AskService:
                 score += 3
             if "stage" in table_name:
                 score -= 8
-            if any(
-                term in normalized_query
-                for term in ("order", "orders", "new order", "new orders")
-            ):
-                order_column = self._find_schema_column(
-                    table,
-                    ("OrdNo", "OrderNo", "OrderId", "NewOrderId", "OrderNumber"),
-                )
-                if "order" in table_name:
-                    score += 30
-                if "neworder" in self._normalize_schema_token(table_name):
-                    score += 15
-                if order_column:
-                    score += 12
-                if "margin" in table_name and "margin" not in normalized_query:
-                    score -= 12
-            if "customer" in normalized_query:
-                if "customer" in table_name or "account" in table_name:
-                    score += 16
-                if self._find_schema_column(
-                    table,
-                    (
-                        "Customer",
-                        "CustomerName",
-                        "CustName",
-                        "CustNo",
-                        "CustomerNo",
-                        "CustomerCode",
-                        "Account",
-                        "AccountName",
-                    ),
-                ):
-                    score += 10
-            if any(
-                term in normalized_query for term in ("product", "products", "item")
-            ):
-                if "product" in table_name or "item" in table_name:
-                    score += 16
-            if any(
-                term in normalized_query
-                for term in ("sales", "revenue", "value", "amount")
-            ):
-                if "sales" in table_name:
-                    score += 12
-            if "invoice" in normalized_query and (
-                "invoice" in table_name or "inv" in table_name
-            ):
-                score += 20
 
             scored.append((score, table, dimensions, measure, date_column))
 
@@ -2160,7 +2110,6 @@ class AskService:
                 (),
                 wants_date=False,
                 allow_count_metric=True,
-                query=query,
             )
             if selected:
                 table, dimensions, _measure, _date_column = selected
@@ -2211,7 +2160,6 @@ class AskService:
                 measure_candidates,
                 wants_date=True,
                 allow_count_metric=wants_count_metric,
-                query=query,
             )
             if not selected:
                 return None
@@ -2253,7 +2201,6 @@ class AskService:
             measure_candidates,
             wants_date=wants_date,
             allow_count_metric=wants_order_count_metric or wants_count_metric,
-            query=query,
         )
         if not selected:
             return None
@@ -2560,7 +2507,6 @@ class AskService:
                 "Amount",
             ),
             wants_date=False,
-            query=query,
         )
         if not selected:
             return None
@@ -2817,7 +2763,6 @@ class AskService:
                 "Amount",
             ),
             wants_date=False,
-            query=query,
         )
         if not selected:
             return None
