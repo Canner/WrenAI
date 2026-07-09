@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { message } from 'antd';
 import { DataNode } from 'antd/es/tree';
 import { DiagramModel } from '@/utils/data';
@@ -46,6 +46,7 @@ export default function ModelTree(props: Props) {
   const { onOpenModelDrawer, models } = props;
 
   const schemaChangeModal = useModalAction();
+  const pendingResolveType = useRef<SchemaChangeType | null>(null);
   const [triggerDataSourceDetection, { loading: isDetecting }] =
     useTriggerDataSourceDetectionMutation({
       onError: (error) => console.error(error),
@@ -62,8 +63,8 @@ export default function ModelTree(props: Props) {
   const [resolveSchemaChange, { loading: isResolving }] =
     useResolveSchemaChangeMutation({
       onError: (error) => console.error(error),
-      onCompleted: async (_, options) => {
-        const { type } = options.variables?.where;
+      onCompleted: async () => {
+        const type = pendingResolveType.current;
         if (type === SchemaChangeType.DELETED_TABLES) {
           message.success('Source table deleted resolved successfully.');
         } else if (type === SchemaChangeType.DELETED_COLUMNS) {
@@ -75,6 +76,7 @@ export default function ModelTree(props: Props) {
         if (!getHasSchemaChange(data.schemaChange)) {
           schemaChangeModal.closeModal();
         }
+        pendingResolveType.current = null;
       },
       refetchQueries: [{ query: DIAGRAM }, { query: LIST_MODELS }],
     });
@@ -90,6 +92,7 @@ export default function ModelTree(props: Props) {
     schemaChangeModal.openModal();
   };
   const onResolveSchemaChange = (type: SchemaChangeType) => {
+    pendingResolveType.current = type;
     resolveSchemaChange({ variables: { where: { type } } });
   };
 
