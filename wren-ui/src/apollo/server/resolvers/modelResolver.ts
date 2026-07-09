@@ -229,13 +229,16 @@ export class ModelResolver {
       const project = await ctx.projectService.getCurrentProject();
       const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
       const lastDeploy = await ctx.deployService.getLastDeployment(project.id);
-      const lastDeployIsCurrent =
+      const isExactCurrentDeploy =
         ctx.deployService.isSameDeployment(manifest, project.id, lastDeploy) &&
         (await this.isLastDeployNewerThanModelingChanges(
           ctx,
           project.id,
           lastDeploy,
         ));
+      const lastDeployIsCurrent =
+        isExactCurrentDeploy ||
+        this.isSameDeploymentIgnoringColumnNullability(manifest, lastDeploy);
       const isSynced = lastDeployIsCurrent;
       return isSynced
         ? { status: SyncStatusEnum.SYNCRONIZED }
@@ -338,6 +341,57 @@ export class ModelResolver {
     }
     const time = new Date(value).getTime();
     return Number.isFinite(time) ? time : 0;
+  }
+
+  private isSameDeploymentIgnoringColumnNullability(
+    manifest: any,
+    lastDeploy?: { manifest?: any } | null,
+  ): boolean {
+    if (!lastDeploy?.manifest) {
+      return false;
+    }
+
+    return (
+      this.stableStringify(this.omitColumnNullability(lastDeploy.manifest)) ===
+      this.stableStringify(this.omitColumnNullability(manifest))
+    );
+  }
+
+  private omitColumnNullability(value: any): any {
+    if (Array.isArray(value)) {
+      return value.map((item) => this.omitColumnNullability(item));
+    }
+    if (!value || typeof value !== 'object') {
+      return value;
+    }
+
+    const result: Record<string, any> = {};
+    for (const key of Object.keys(value)) {
+      if (key === 'notNull') {
+        continue;
+      }
+      result[key] = this.omitColumnNullability(value[key]);
+    }
+    return result;
+  }
+
+  private stableStringify(value: any): string {
+    if (Array.isArray(value)) {
+      const serializedItems = value.map((item) => this.stableStringify(item));
+      if (value.every((item) => item && typeof item === 'object')) {
+        serializedItems.sort();
+      }
+      return `[${serializedItems.join(',')}]`;
+    }
+
+    if (value && typeof value === 'object') {
+      return `{${Object.keys(value)
+        .sort()
+        .map((key) => `${JSON.stringify(key)}:${this.stableStringify(value[key])}`)
+        .join(',')}}`;
+    }
+
+    return JSON.stringify(value);
   }
 
   private markProjectDirty(_projectId: number) {
