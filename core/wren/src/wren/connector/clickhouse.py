@@ -245,7 +245,6 @@ def _parse_secure_flag(value: Any) -> bool:
     return bool(value)
 
 
-
 def _parse_clickhouse_connection_url(url: str):
     """Parse a ClickHouse URL after escaping raw brackets in userinfo only.
 
