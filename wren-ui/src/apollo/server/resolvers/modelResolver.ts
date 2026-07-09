@@ -227,19 +227,12 @@ export class ModelResolver {
       }
 
       const project = await ctx.projectService.getCurrentProject();
-      const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
       const lastDeploy = await ctx.deployService.getLastDeployment(project.id);
-      const isExactCurrentDeploy =
-        ctx.deployService.isSameDeployment(manifest, project.id, lastDeploy) &&
-        (await this.isLastDeployNewerThanModelingChanges(
-          ctx,
-          project.id,
-          lastDeploy,
-        ));
-      const lastDeployIsCurrent =
-        isExactCurrentDeploy ||
-        this.isSameDeploymentIgnoringColumnNullability(manifest, lastDeploy);
-      const isSynced = lastDeployIsCurrent;
+      const isSynced = await this.isLastDeployNewerThanModelingChanges(
+        ctx,
+        project.id,
+        lastDeploy,
+      );
       return isSynced
         ? { status: SyncStatusEnum.SYNCRONIZED }
         : { status: SyncStatusEnum.UNSYNCRONIZED };
