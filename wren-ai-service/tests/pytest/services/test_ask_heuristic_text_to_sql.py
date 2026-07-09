@@ -594,3 +594,58 @@ def test_complete_sql_generation_context_refetches_full_selected_schema():
             "enable_column_pruning": False,
         }
     ]
+
+
+def test_prune_sql_generation_context_preserves_all_required_business_entities():
+    service = AskService(pipelines={})
+    documents = [
+        {
+            "table_name": "dbo_SalesQuantityByRegion",
+            "table_ddl": """
+            CREATE TABLE dbo_SalesQuantityByRegion (
+              Region VARCHAR,
+              SalesQuantity INT
+            );
+            """,
+        },
+        {
+            "table_name": "dbo_SalesQuantityByCustomer",
+            "table_ddl": """
+            CREATE TABLE dbo_SalesQuantityByCustomer (
+              CustomerName VARCHAR,
+              SalesQuantity INT
+            );
+            """,
+        },
+        {
+            "table_name": "dbo_InventoryItems",
+            "table_ddl": """
+            CREATE TABLE dbo_InventoryItems (
+              ItemID INT PRIMARY KEY,
+              SKU VARCHAR,
+              ItemDescription VARCHAR
+            );
+            """,
+        },
+        {
+            "table_name": "dbo_SalesOrderDetails",
+            "table_ddl": """
+            CREATE TABLE dbo_SalesOrderDetails (
+              SalesOrderDetailID INT PRIMARY KEY,
+              ItemID INT,
+              Quantity INT,
+              FOREIGN KEY (ItemID) REFERENCES dbo_InventoryItems(ItemID)
+            );
+            """,
+        },
+    ]
+
+    _, table_names, _ = service._prune_sql_generation_context(
+        "Show me the products based on sales quantity.",
+        documents,
+        [document["table_name"] for document in documents],
+        [document["table_ddl"] for document in documents],
+        max_tables=2,
+    )
+
+    assert table_names == ["dbo_InventoryItems", "dbo_SalesOrderDetails"]

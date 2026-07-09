@@ -93,6 +93,12 @@ metrics, views, and relationships in ACTIVE DATASOURCE METADATA. Do not answer w
 general guidance when the question can be answered with SQL over the active metadata.
 Never reuse table or column names from SQL SAMPLES unless those exact names also
 appear in ACTIVE DATASOURCE METADATA or VALID TABLE NAMES for the active datasource.
+Before writing SQL, identify every business entity and measure requested by the full
+question. If those entities live in different tables, include every required table and
+join only through explicit relationships or matching key columns shown in ACTIVE
+DATASOURCE METADATA. Do not stop after the first matching table. If the active
+metadata does not contain the table, column, or relationship needed to answer, do not
+invent it.
 
 {% if sql_generation_reasoning %}
 ### REASONING PLAN ###

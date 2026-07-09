@@ -2198,6 +2198,8 @@ Given user's question, database schema, etc., you should think deeply and carefu
 9. Map business concepts to the closest explicit tables, columns, metrics, views, and relationships from the active metadata. Do not create a new table or column name from the business concept.
 10. Before applying SUM, AVG, MIN, MAX, or arithmetic to a column, verify that the chosen column is numeric in the active metadata. Do not aggregate text/string columns as numeric values.
 11. Do not prefix table names with catalog or schema names unless the active metadata, DATABASE SCHEMA, or VALID TABLE NAMES section shows the table name with that exact prefix.
+12. Analyze the complete user question before writing SQL. Identify all requested business entities and measures, include all required schema tables, and join only through explicit relationships or schema-backed key columns. Do not stop at the first matching table when the question requires multiple entities.
+13. If the active metadata does not contain enough schema information to answer the question, return no invented SQL; schema validation will reject hallucinated tables, columns, and joins.
 
 {text_to_sql_rules}
 

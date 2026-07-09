@@ -4858,6 +4858,171 @@ class AskService:
         }
         return {term for term in terms if term}
 
+    def _table_concept_match_score(
+        self,
+        table: dict[str, Any],
+        concept_group: set[str],
+    ) -> int:
+        concept_keys = {
+            self._normalize_schema_token(concept)
+            for concept in concept_group
+            if concept
+        }
+        concept_keys = {key for key in concept_keys if key}
+        if not concept_keys:
+            return 0
+
+        table_name = str(table.get("name") or "")
+        table_key = self._normalize_schema_token(table_name)
+        table_tokens = {
+            self._normalize_schema_token(token)
+            for token in self._schema_name_tokens(table_name)
+        }
+        table_tokens = {token for token in table_tokens if token}
+
+        score = 0
+        for concept_key in concept_keys:
+            if concept_key == table_key:
+                score += 180
+            elif concept_key in table_tokens:
+                score += 120
+            elif concept_key and concept_key in table_key:
+                score += 80
+
+        for column in table.get("columns", []):
+            column_name = str(column.get("name") or "")
+            column_key = self._normalize_schema_token(column_name)
+            column_tokens = {
+                self._normalize_schema_token(token)
+                for token in self._schema_name_tokens(column_name)
+            }
+            column_tokens = {token for token in column_tokens if token}
+
+            for concept_key in concept_keys:
+                if concept_key == column_key:
+                    score += 120
+                elif concept_key in column_tokens:
+                    score += 100
+                elif concept_key and concept_key in column_key:
+                    score += 45
+
+        return score
+
+    def _required_concept_table_indexes(
+        self,
+        query: str,
+        parsed_tables: list[dict[str, Any]],
+        table_ddls: list[str] | None = None,
+    ) -> list[int]:
+        selected_indexes: list[int] = []
+        selected_set: set[int] = set()
+        relationship_indexes = self._relationship_table_indexes(
+            table_ddls or [],
+            parsed_tables,
+        )
+
+        for concept_group in self._required_sql_concept_groups(query):
+            candidates = []
+            for index, table in enumerate(parsed_tables):
+                score = self._table_concept_match_score(table, concept_group)
+                if score <= 0:
+                    continue
+
+                neighbor_indexes: set[int] = set()
+                for key in self._table_alias_keys(str(table.get("name") or "")):
+                    neighbor_indexes.update(relationship_indexes.get(key, set()))
+                if neighbor_indexes & selected_set:
+                    score += 175
+
+                candidates.append((score, index))
+            candidates = [
+                (score, index) for score, index in candidates if score > 0
+            ]
+            if not candidates:
+                continue
+
+            score, index = max(candidates, key=lambda item: item[0])
+            if index not in selected_set:
+                selected_indexes.append(index)
+                selected_set.add(index)
+                logger.info(
+                    "Preserving schema table for required query concept. "
+                    "query=%s concept=%s table=%s score=%s",
+                    query,
+                    sorted(concept_group),
+                    parsed_tables[index].get("name"),
+                    score,
+                )
+
+        return selected_indexes
+
+    def _table_alias_keys(self, table_name: str) -> set[str]:
+        raw_table_name = str(table_name or "")
+        keys = self._schema_identifier_alias_keys(raw_table_name)
+        short_name = re.split(r"[.$]", raw_table_name)[-1]
+        keys.update(self._schema_identifier_alias_keys(short_name))
+        if "_" in short_name:
+            keys.update(self._schema_identifier_alias_keys(short_name.split("_", 1)[1]))
+        return {key for key in keys if key}
+
+    def _relationship_table_indexes(
+        self,
+        table_ddls: list[str],
+        parsed_tables: list[dict[str, Any]],
+    ) -> dict[str, set[int]]:
+        relationship_indexes: dict[str, set[int]] = {}
+        table_key_to_index: dict[str, int] = {}
+
+        for index, table in enumerate(parsed_tables):
+            for key in self._table_alias_keys(str(table.get("name") or "")):
+                table_key_to_index[key] = index
+
+        for source_index, ddl in enumerate(table_ddls or []):
+            if not isinstance(ddl, str):
+                continue
+            if source_index >= len(parsed_tables):
+                continue
+
+            source_name = str(parsed_tables[source_index].get("name") or "")
+            source_keys = self._table_alias_keys(source_name)
+            for relationship_match in re.finditer(
+                r"\bFOREIGN\s+KEY\s*\([^)]+\)\s+REFERENCES\s+"
+                r'(?:"(?P<quoted>[^"]+)"|\[(?P<bracketed>[^\]]+)\]|'
+                r"`(?P<backticked>[^`]+)`|(?P<bare>[A-Za-z_][A-Za-z0-9_.$]*))"
+                r"\s*\([^)]+\)",
+                ddl,
+                flags=re.IGNORECASE,
+            ):
+                target_name = next(
+                    (
+                        value
+                        for value in relationship_match.groupdict().values()
+                        if value
+                    ),
+                    "",
+                )
+                target_index = None
+                for target_key in self._table_alias_keys(target_name):
+                    if target_key in table_key_to_index:
+                        target_index = table_key_to_index[target_key]
+                        break
+                if target_index is None:
+                    continue
+
+                target_keys = self._table_alias_keys(
+                    str(parsed_tables[target_index].get("name") or target_name)
+                )
+                for source_key in source_keys:
+                    relationship_indexes.setdefault(source_key, set()).add(
+                        target_index
+                    )
+                for target_key in target_keys:
+                    relationship_indexes.setdefault(target_key, set()).add(
+                        source_index
+                    )
+
+        return relationship_indexes
+
     def _prune_sql_generation_context(
         self,
         query: str,
@@ -4924,7 +5089,16 @@ class AskService:
             index for _, index in sorted(scored, key=lambda item: item[0], reverse=True)
         ]
         core_limit = max(1, max_tables - 2) if max_tables > 2 else 1
-        selected_indexes = sorted_scored_indexes[:core_limit]
+        selected_indexes = self._required_concept_table_indexes(
+            query,
+            parsed_tables,
+            table_ddls,
+        )
+        for index in sorted_scored_indexes:
+            if len(selected_indexes) >= core_limit:
+                break
+            if index not in selected_indexes:
+                selected_indexes.append(index)
         selected_indexes = self._expand_pruned_context_with_related_tables(
             selected_indexes,
             parsed_tables,
@@ -4968,6 +5142,31 @@ class AskService:
 
         selected: list[int] = list(dict.fromkeys(selected_indexes))
         selected_set = set(selected)
+        relationship_indexes = self._relationship_table_indexes(
+            table_ddls,
+            parsed_tables,
+        )
+
+        def add_relationship_neighbors() -> None:
+            for selected_index in list(selected):
+                if selected_index >= len(parsed_tables):
+                    continue
+                table_name = str(parsed_tables[selected_index].get("name") or "")
+                neighbor_indexes: set[int] = set()
+                for key in self._table_alias_keys(table_name):
+                    neighbor_indexes.update(relationship_indexes.get(key, set()))
+
+                for neighbor_index in sorted(neighbor_indexes):
+                    if len(selected) >= max_tables:
+                        return
+                    if neighbor_index in selected_set:
+                        continue
+                    selected.append(neighbor_index)
+                    selected_set.add(neighbor_index)
+
+        add_relationship_neighbors()
+        if len(selected) >= max_tables:
+            return selected[:max_tables]
 
         def join_key_columns(table: dict[str, Any]) -> set[str]:
             keys = set()
