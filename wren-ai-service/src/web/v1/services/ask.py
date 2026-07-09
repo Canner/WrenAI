@@ -1469,6 +1469,18 @@ class AskService:
             if table_name and table_name not in table_names:
                 table_names.append(table_name)
         for match in re.finditer(
+            r"\bin\s+([A-Za-z_][A-Za-z0-9_.$]*)",
+            query or "",
+            flags=re.IGNORECASE,
+        ):
+            table_name = match.group(1).strip(".,;:()[]{}")
+            if (
+                table_name
+                and ("." in table_name or "_" in table_name)
+                and table_name not in table_names
+            ):
+                table_names.append(table_name)
+        for match in re.finditer(
             r"\busing\s+([A-Za-z_][A-Za-z0-9_.$]*)",
             query or "",
             flags=re.IGNORECASE,

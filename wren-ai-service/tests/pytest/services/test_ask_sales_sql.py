@@ -146,6 +146,17 @@ def test_extract_explicit_table_names_from_using_clause():
     ) == []
 
 
+def test_extract_explicit_table_names_from_in_clause():
+    service = AskService.__new__(AskService)
+
+    assert service._extract_explicit_table_names_from_query(
+        "Which customers have the highest number of orders in dbo.tblNewOrders?"
+    ) == ["dbo.tblNewOrders"]
+    assert service._extract_explicit_table_names_from_query(
+        "Which customers have the highest number of orders in market?"
+    ) == []
+
+
 def test_extract_explicit_table_names_from_repair_logs_phrase():
     service = AskService.__new__(AskService)
 
@@ -1288,6 +1299,37 @@ def test_build_validated_ask_result_rejects_status_when_failure_field_matches_qu
             """
         ],
         "What is the error rate for different types of failures?",
+    )
+
+    assert result is None
+
+
+def test_build_validated_ask_result_rejects_sql_for_wrong_explicit_table():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT "dbo_qMarginSales"."Customer" AS "Customer", '
+            'COUNT(DISTINCT "dbo_qMarginSales"."OrdNo") AS "OrderCount" '
+            'FROM "dbo_qMarginSales" '
+            'WHERE "dbo_qMarginSales"."Customer" IS NOT NULL '
+            'GROUP BY "dbo_qMarginSales"."Customer"'
+        ),
+        [
+            """
+            CREATE TABLE dbo_tblNewOrders (
+              Customer VARCHAR,
+              OrdNo VARCHAR
+            );
+            """,
+            """
+            CREATE TABLE dbo_qMarginSales (
+              Customer VARCHAR,
+              OrdNo VARCHAR
+            );
+            """,
+        ],
+        "Which customers have the highest number of orders in dbo.tblNewOrders?",
     )
 
     assert result is None
