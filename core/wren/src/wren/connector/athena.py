@@ -315,13 +315,20 @@ class AthenaConnector(ConnectorABC):
         self.connection = connect(**_build_connect_kwargs(connection_info))
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
+        # Push LIMIT into Athena when requested so Presto/Trino-flavoured
+        # engines can stop early instead of us downloading a full result and
+        # slicing in Python. Subquery-wrap + trailing-semicolon strip keeps
+        # composition valid for client SQL terminated with ``;``.
+        executed = sql
+        if limit is not None:
+            executed = (
+                f"SELECT * FROM ({_strip_trailing_semicolon(sql)}) "
+                f"AS _wren_sub LIMIT {int(limit)}"
+            )
         try:
             with contextlib.closing(self.connection.cursor()) as cursor:
-                cursor.execute(sql)
-                table = _build_athena_arrow_table(cursor)
-            if limit is not None:
-                table = table.slice(0, limit)
-            return table
+                cursor.execute(executed)
+                return _build_athena_arrow_table(cursor)
         except (WrenError, TimeoutError):
             raise
         except Exception as e:
@@ -329,7 +336,7 @@ class AthenaConnector(ConnectorABC):
                 ErrorCode.INVALID_SQL,
                 str(e),
                 phase=ErrorPhase.SQL_EXECUTION,
-                metadata={DIALECT_SQL: sql},
+                metadata={DIALECT_SQL: executed},
             ) from e
 
     def dry_run(self, sql: str) -> None:
