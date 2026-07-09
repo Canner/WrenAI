@@ -26,12 +26,12 @@ multi-thread = ["tokio/rt-multi-thread"]
 async-trait = { workspace = true }
 csv = "1.3.0"
 datafusion = { workspace = true, features = [
-  "nested_expressions",
-  "crypto_expressions",
-  "datetime_expressions",
-  "encoding_expressions",
-  "regex_expressions",
-  "unicode_expressions",
+    "nested_expressions",
+    "crypto_expressions",
+    "datetime_expressions",
+    "encoding_expressions",
+    "regex_expressions",
+    "unicode_expressions",
 ] }
 
 datafusion-session = { workspace = true }
