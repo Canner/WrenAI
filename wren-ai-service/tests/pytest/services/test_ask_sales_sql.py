@@ -1466,6 +1466,33 @@ def test_build_schema_grounded_table_question_sql_for_repair_log_failure_code_co
     )
 
 
+def test_build_schema_grounded_table_question_sql_for_highest_orders_by_customer():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_table_question_sql(
+        "Which customers have the highest number of orders in dbo.tblNewOrders?",
+        [
+            """
+            CREATE TABLE dbo_tblNewOrders (
+              Customer VARCHAR,
+              OrdNo VARCHAR,
+              OrdDate TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT TOP 10 "dbo_tblNewOrders"."Customer" AS "Customer", '
+        'COUNT(DISTINCT "dbo_tblNewOrders"."OrdNo") AS "RecordCount" '
+        'FROM "dbo_tblNewOrders" '
+        'WHERE "dbo_tblNewOrders"."Customer" IS NOT NULL '
+        'AND LTRIM(RTRIM("dbo_tblNewOrders"."Customer")) <> \'\' '
+        'GROUP BY "dbo_tblNewOrders"."Customer" '
+        'ORDER BY COUNT(DISTINCT "dbo_tblNewOrders"."OrdNo") DESC'
+    )
+
+
 def test_build_pcb_direct_question_sql_for_board_model_distribution_over_time():
     service = AskService.__new__(AskService)
 

@@ -1327,19 +1327,37 @@ class AskService:
             )
             and re.search(r"\b(?:by|per|each|grouped by|group by)\b", normalized)
         )
-        if wants_grouped_count:
+        wants_ranked_count = any(
+            term in normalized for term in ("highest", "top", "most", "largest")
+        ) and any(
+            term in normalized
+            for term in ("count", "counts", "number of", "orders", "records", "rows")
+        )
+        if wants_grouped_count or wants_ranked_count:
             dimension_column = self._find_dimension_column_for_query(query, table)
             if not dimension_column:
                 return None
             dimension_ref = f"{table_ref}.{self._quote_sql_identifier(dimension_column)}"
+            count_column = None
+            if any(term in normalized for term in ("order", "orders")):
+                count_column = self._find_schema_column(
+                    table,
+                    ("OrdNo", "OrderNo", "OrderId", "OrderID", "id"),
+                )
+            count_expression = (
+                f"COUNT(DISTINCT {table_ref}.{self._quote_sql_identifier(count_column)})"
+                if count_column
+                else "COUNT(*)"
+            )
             return (
-                f"SELECT {dimension_ref} AS "
+                f"SELECT TOP {limit} {dimension_ref} AS "
                 f"{self._quote_sql_identifier(dimension_column)}, "
-                f'COUNT(*) AS "RecordCount" '
+                f'{count_expression} AS "RecordCount" '
                 f"FROM {table_ref} "
                 f"WHERE {dimension_ref} IS NOT NULL "
+                f"AND LTRIM(RTRIM({dimension_ref})) <> '' "
                 f"GROUP BY {dimension_ref} "
-                f"ORDER BY COUNT(*) DESC"
+                f"ORDER BY {count_expression} DESC"
             )
 
         wants_distribution = any(
