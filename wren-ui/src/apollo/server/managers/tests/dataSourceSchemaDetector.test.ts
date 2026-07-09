@@ -166,4 +166,47 @@ describe('DataSourceSchemaDetector', () => {
       }),
     );
   });
+
+  it('does not report schema changes for qualified or case-only identifier differences', async () => {
+    const model = {
+      id: 10,
+      projectId,
+      sourceTableName: 'dbo.Repair_Logs',
+    };
+    const existingColumn = {
+      id: 20,
+      modelId: 10,
+      isCalculated: false,
+      displayName: 'Created At',
+      referenceName: 'created_at',
+      sourceColumnName: 'created_at',
+      type: 'datetime',
+      notNull: false,
+      isPk: false,
+      properties: null,
+    };
+    const ctx = createContext({
+      models: [model],
+      columns: [existingColumn],
+      latestTables: [
+        {
+          name: '[repair_logs]',
+          columns: [
+            {
+              name: '[Created_At]',
+              type: 'datetime',
+              notNull: false,
+            },
+          ],
+        },
+      ],
+    });
+
+    const detector = new DataSourceSchemaDetector({ ctx, projectId });
+
+    await expect(detector.detectSchemaChange()).resolves.toBe(false);
+    expect(ctx.schemaChangeRepository.createOne).not.toHaveBeenCalled();
+    expect(ctx.modelColumnRepository.createOne).not.toHaveBeenCalled();
+    expect(ctx.modelColumnRepository.updateOne).not.toHaveBeenCalled();
+  });
 });
