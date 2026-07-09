@@ -2494,6 +2494,46 @@ _SQL_RESERVED_ALIASES = {
     "limit",
     "union",
 }
+_SQL_NON_COLUMN_IDENTIFIERS = {
+    *_SQL_RESERVED_ALIASES,
+    "and",
+    "as",
+    "asc",
+    "between",
+    "by",
+    "case",
+    "cast",
+    "count",
+    "date",
+    "dateadd",
+    "datediff",
+    "datepart",
+    "day",
+    "desc",
+    "distinct",
+    "else",
+    "end",
+    "false",
+    "from",
+    "getdate",
+    "hour",
+    "in",
+    "is",
+    "like",
+    "max",
+    "min",
+    "month",
+    "not",
+    "null",
+    "or",
+    "select",
+    "sum",
+    "then",
+    "top",
+    "true",
+    "when",
+    "year",
+}
 
 
 def _normalize_sql_identifier(identifier: str) -> str:
@@ -2513,6 +2553,89 @@ def _quote_sql_identifier(identifier: str) -> str:
 
 def _compact_sql_identifier(identifier: str) -> str:
     return re.sub(r"[^a-z0-9]", "", str(identifier or "").lower())
+
+
+def _strip_sql_literals(sql: str) -> str:
+    without_strings = re.sub(r"'(?:''|[^'])*'", " ", sql)
+    return re.sub(r"\b\d+(?:\.\d+)?\b", " ", without_strings)
+
+
+def _extract_clause_bodies(
+    sql: str, clause: str, terminators: list[str]
+) -> list[str]:
+    terminator_pattern = "|".join(rf"\b{terminator}\b" for terminator in terminators)
+    pattern = re.compile(
+        rf"\b{clause}\b(?P<body>.*?)(?={terminator_pattern}|$)",
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    return [match.group("body") or "" for match in pattern.finditer(sql)]
+
+
+def _find_unqualified_column_candidates(sql: str) -> set[str]:
+    bodies = [
+        *_extract_clause_bodies(
+            sql,
+            r"WHERE",
+            [r"GROUP\s+BY", r"ORDER\s+BY", "HAVING", "LIMIT", "FETCH", "UNION"],
+        ),
+        *_extract_clause_bodies(
+            sql,
+            r"HAVING",
+            [r"GROUP\s+BY", r"ORDER\s+BY", "LIMIT", "FETCH", "UNION"],
+        ),
+        *_extract_clause_bodies(
+            sql,
+            r"ON",
+            [
+                "WHERE",
+                r"GROUP\s+BY",
+                r"ORDER\s+BY",
+                "HAVING",
+                "JOIN",
+                "LIMIT",
+                "FETCH",
+                "UNION",
+            ],
+        ),
+        *_extract_clause_bodies(
+            sql,
+            r"GROUP\s+BY",
+            [r"ORDER\s+BY", "HAVING", "LIMIT", "FETCH", "UNION"],
+        ),
+    ]
+    candidates: set[str] = set()
+    identifier_pattern = re.compile(_SQL_IDENTIFIER_PATTERN, flags=re.IGNORECASE)
+
+    for body in bodies:
+        searchable_body = _strip_sql_literals(body)
+        for match in identifier_pattern.finditer(searchable_body):
+            token = match.group(0)
+            before = searchable_body[: match.start()].rstrip()
+            after = searchable_body[match.end() :].lstrip()
+            identifier = _normalize_sql_identifier(token)
+            normalized = identifier.lower()
+            if (
+                not identifier
+                or normalized in _SQL_NON_COLUMN_IDENTIFIERS
+                or before.endswith(".")
+                or after.startswith(".")
+                or after.startswith("(")
+            ):
+                continue
+            candidates.add(identifier)
+
+    function_argument_pattern = re.compile(
+        rf"\b[A-Za-z_][A-Za-z0-9_$]*\s*\(\s*"
+        rf"(?:DISTINCT\s+)?(?P<arg>{_SQL_IDENTIFIER_PATTERN})"
+        rf"(?:\s*\.\s*(?P<column>{_SQL_IDENTIFIER_PATTERN}))?",
+        flags=re.IGNORECASE,
+    )
+    for match in function_argument_pattern.finditer(_strip_sql_literals(sql)):
+        column = _normalize_sql_identifier(match.group("column") or match.group("arg"))
+        if column and column != "*" and column.lower() not in _SQL_NON_COLUMN_IDENTIFIERS:
+            candidates.add(column)
+
+    return candidates
 
 
 def _sql_identifier_alias_candidates(identifier: str) -> set[str]:
@@ -3037,6 +3160,20 @@ def find_invalid_column_references(
                     and _compact_sql_identifier(column) not in valid_compact_columns
                 ):
                     invalid_references.append(column)
+        table_aliases = {
+            alias.lower()
+            for alias, alias_table in aliases.items()
+            if alias_table == table_name
+        }
+        for column in _find_unqualified_column_candidates(sql):
+            normalized_column = column.lower()
+            if (
+                normalized_column in table_aliases
+                or normalized_column in valid_columns
+                or _compact_sql_identifier(column) in valid_compact_columns
+            ):
+                continue
+            invalid_references.append(column)
 
     return sorted(set(invalid_references))
 

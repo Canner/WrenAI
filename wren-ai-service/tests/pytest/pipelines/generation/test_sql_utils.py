@@ -74,6 +74,20 @@ def test_column_validation_rejects_invalid_unqualified_projection_alias():
     ) == ["categories"]
 
 
+def test_column_validation_rejects_invalid_unqualified_filter_column():
+    assert find_invalid_column_references(
+        'SELECT id FROM "policies" WHERE policy_category_id = 1',
+        {"policies": ["id", "policy_name"]},
+    ) == ["policy_category_id"]
+
+
+def test_column_validation_rejects_invalid_unqualified_function_argument():
+    assert find_invalid_column_references(
+        'SELECT COUNT(policy_category_id) FROM "policies"',
+        {"policies": ["id", "policy_name"]},
+    ) == ["policy_category_id"]
+
+
 def test_column_validation_allows_valid_unqualified_projection_for_single_table():
     assert find_invalid_column_references(
         'SELECT status AS repair_status FROM "dbo_repair_logs"',

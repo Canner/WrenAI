@@ -532,6 +532,55 @@ const isNumericColumnType = (type?: string) =>
 const isDefined = <T>(value: T | undefined | null): value is T =>
   value !== undefined && value !== null;
 
+const SQL_NON_COLUMN_IDENTIFIERS = new Set([
+  'and',
+  'as',
+  'asc',
+  'between',
+  'by',
+  'case',
+  'cast',
+  'count',
+  'date',
+  'dateadd',
+  'datediff',
+  'datepart',
+  'day',
+  'desc',
+  'distinct',
+  'else',
+  'end',
+  'false',
+  'from',
+  'getdate',
+  'group',
+  'having',
+  'hour',
+  'in',
+  'is',
+  'join',
+  'left',
+  'like',
+  'limit',
+  'max',
+  'min',
+  'month',
+  'not',
+  'null',
+  'on',
+  'or',
+  'order',
+  'right',
+  'select',
+  'sum',
+  'then',
+  'top',
+  'true',
+  'when',
+  'where',
+  'year',
+]);
+
 const splitTopLevelSqlList = (body: string) => {
   const items: string[] = [];
   let current = '';
@@ -598,6 +647,109 @@ const extractSimpleProjectionColumns = (sql: string) => {
     });
   }
   return columns;
+};
+
+const stripSqlLiterals = (sql: string) =>
+  sql
+    .replace(/'(?:''|[^'])*'/g, ' ')
+    .replace(/\b\d+(?:\.\d+)?\b/g, ' ');
+
+const extractClauseBody = (
+  sql: string,
+  clause: string,
+  terminators: string[],
+) => {
+  const pattern = new RegExp(
+    String.raw`\b${clause}\b(?<body>.*?)(?=${
+      terminators.map((word) => String.raw`\b${word}\b`).join('|')
+    }|$)`,
+    'gis',
+  );
+  const bodies: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(sql))) {
+    bodies.push(match.groups?.body || '');
+  }
+  return bodies;
+};
+
+const extractPotentialUnqualifiedColumnReferences = (sql: string) => {
+  const bodies = [
+    ...extractClauseBody(sql, 'WHERE', [
+      'GROUP\\s+BY',
+      'ORDER\\s+BY',
+      'HAVING',
+      'LIMIT',
+      'FETCH',
+      'UNION',
+    ]),
+    ...extractClauseBody(sql, 'HAVING', [
+      'GROUP\\s+BY',
+      'ORDER\\s+BY',
+      'LIMIT',
+      'FETCH',
+      'UNION',
+    ]),
+    ...extractClauseBody(sql, 'ON', [
+      'WHERE',
+      'GROUP\\s+BY',
+      'ORDER\\s+BY',
+      'HAVING',
+      'JOIN',
+      'LIMIT',
+      'FETCH',
+      'UNION',
+    ]),
+    ...extractClauseBody(sql, 'GROUP\\s+BY', [
+      'ORDER\\s+BY',
+      'HAVING',
+      'LIMIT',
+      'FETCH',
+      'UNION',
+    ]),
+  ];
+  const identifiers = new Set<string>();
+  const identifierPattern = new RegExp(SQL_IDENTIFIER_PATTERN, 'gi');
+
+  for (const body of bodies) {
+    const searchableBody = stripSqlLiterals(body);
+    let match: RegExpExecArray | null;
+    while ((match = identifierPattern.exec(searchableBody))) {
+      const token = match[0];
+      const before = searchableBody.slice(0, match.index).trimEnd();
+      const after = searchableBody.slice(match.index + token.length).trimStart();
+      const identifier = normalizeSqlIdentifier(token);
+      const normalized = identifier.toLowerCase();
+      if (
+        !identifier ||
+        SQL_NON_COLUMN_IDENTIFIERS.has(normalized) ||
+        before.endsWith('.') ||
+        after.startsWith('.') ||
+        after.startsWith('(')
+      ) {
+        continue;
+      }
+      identifiers.add(identifier);
+    }
+  }
+
+  const functionArgumentPattern = new RegExp(
+    String.raw`\b[A-Za-z_][A-Za-z0-9_$]*\s*\(\s*(?:DISTINCT\s+)?(${SQL_IDENTIFIER_PATTERN})(?:\s*\.\s*(${SQL_IDENTIFIER_PATTERN}))?`,
+    'gi',
+  );
+  let match: RegExpExecArray | null;
+  while ((match = functionArgumentPattern.exec(stripSqlLiterals(sql)))) {
+    const column = normalizeSqlIdentifier(match[2] || match[1]);
+    if (
+      column &&
+      column !== '*' &&
+      !SQL_NON_COLUMN_IDENTIFIERS.has(column.toLowerCase())
+    ) {
+      identifiers.add(column);
+    }
+  }
+
+  return [...identifiers];
 };
 
 const findSqlReferenceValidationErrors = (
@@ -683,6 +835,24 @@ const findSqlReferenceValidationErrors = (
       ) {
         errors.push(column);
       }
+    });
+
+    const tableAliases = new Set(
+      [...aliases.entries()]
+        .filter(([, aliasSchema]) => aliasSchema === schema)
+        .map(([alias]) => alias.toLowerCase()),
+    );
+    const validCompactColumns = new Set([...schema.columns.keys()]);
+    extractPotentialUnqualifiedColumnReferences(sql).forEach((column) => {
+      const normalizedColumn = column.toLowerCase();
+      if (
+        tableAliases.has(normalizedColumn) ||
+        schema.columns.has(normalizedColumn) ||
+        validCompactColumns.has(compactSqlIdentifier(column))
+      ) {
+        return;
+      }
+      errors.push(column);
     });
   }
 

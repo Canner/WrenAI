@@ -457,6 +457,59 @@ describe('QueryService', () => {
     expect(mockIbisAdaptor.dryRun).not.toHaveBeenCalled();
   });
 
+  it('should reject unqualified filter columns outside a single active manifest table', async () => {
+    await expect(
+      queryService.preview(
+        'SELECT id FROM "policies" WHERE policy_category_id = 1',
+        {
+          project: { type: DataSourceName.MSSQL, connectionInfo: {} },
+          manifest: {
+            models: [
+              {
+                name: 'policies',
+                tableReference: { table: 'policies' },
+                columns: [
+                  { name: 'id', type: 'integer', isCalculated: false },
+                  { name: 'policy_name', type: 'string', isCalculated: false },
+                ],
+              },
+            ],
+          },
+          dryRun: true,
+        },
+      ),
+    ).rejects.toThrow(
+      'Generated SQL references column(s) or expressions not valid for the active datasource metadata: policy_category_id',
+    );
+
+    expect(mockIbisAdaptor.dryRun).not.toHaveBeenCalled();
+  });
+
+  it('should reject unknown unqualified function argument columns before ibis planning', async () => {
+    await expect(
+      queryService.preview('SELECT COUNT(policy_category_id) FROM "policies"', {
+        project: { type: DataSourceName.MSSQL, connectionInfo: {} },
+        manifest: {
+          models: [
+            {
+              name: 'policies',
+              tableReference: { table: 'policies' },
+              columns: [
+                { name: 'id', type: 'integer', isCalculated: false },
+                { name: 'policy_name', type: 'string', isCalculated: false },
+              ],
+            },
+          ],
+        },
+        dryRun: true,
+      }),
+    ).rejects.toThrow(
+      'Generated SQL references column(s) or expressions not valid for the active datasource metadata: policy_category_id',
+    );
+
+    expect(mockIbisAdaptor.dryRun).not.toHaveBeenCalled();
+  });
+
   it('should reject numeric aggregates on non-numeric manifest columns before ibis planning', async () => {
     await expect(
       queryService.preview('SELECT AVG("orders"."quantity") FROM "orders"', {
