@@ -13,7 +13,6 @@ from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.common import clean_up_new_lines, retrieve_metadata
-from src.pipelines.generation.semantic_sql import compile_semantic_sql
 from src.pipelines.generation.utils.sql import (
     SQLGenPostProcessor,
     construct_ask_history_messages,
@@ -268,36 +267,6 @@ class FollowUpSQLGeneration(BasicPipeline):
         logger.info("Follow-Up SQL Generation pipeline is running...")
 
         metadata = await retrieve_metadata(project_id or "", self._retriever)
-        data_source = metadata.get("data_source", "local_file")
-
-        deterministic_result = compile_semantic_sql(
-            query=query,
-            documents=contexts,
-            semantic_analysis=schema_intent_analysis,
-            data_source=data_source,
-        )
-        if deterministic_result:
-            logger.info(
-                "Deterministic semantic SQL compiler produced follow-up SQL for query: %s",
-                query,
-            )
-            post_process_result = await self._components["post_processor"].run(
-                [deterministic_result.sql],
-                project_id=project_id,
-                use_dry_plan=use_dry_plan,
-                data_source=data_source,
-                allow_dry_plan_fallback=allow_dry_plan_fallback,
-                valid_table_names=construct_valid_table_names(contexts),
-                valid_table_columns=construct_valid_table_columns(contexts),
-                query=query,
-                semantic_analysis=schema_intent_analysis,
-            )
-            if post_process_result.get("valid_generation_result"):
-                return {"post_process": post_process_result}
-            logger.info(
-                "Deterministic follow-up SQL rejected by post processor; falling back to LLM. error=%s",
-                post_process_result.get("invalid_generation_result", {}).get("error"),
-            )
 
         return await self._pipe.execute(
             ["post_process"],
@@ -315,7 +284,7 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "sql_functions": sql_functions,
                 "use_dry_plan": use_dry_plan,
                 "allow_dry_plan_fallback": allow_dry_plan_fallback,
-                "data_source": data_source,
+                "data_source": metadata.get("data_source", "local_file"),
                 "sql_knowledge": sql_knowledge,
                 "schema_intent_analysis": schema_intent_analysis,
                 **self._components,
