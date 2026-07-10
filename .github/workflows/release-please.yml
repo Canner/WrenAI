@@ -29,6 +29,11 @@ jobs:
       wren-pydantic--release_created: ${{ steps.release.outputs['sdk/wren-pydantic--release_created'] }}
       wren-pydantic--tag_name: ${{ steps.release.outputs['sdk/wren-pydantic--tag_name'] }}
       wren-pydantic--version: ${{ steps.release.outputs['sdk/wren-pydantic--version'] }}
+      # The three Rust core crates share one version via the linked-versions
+      # plugin and release together, so gating on wren-semantic-core covers all.
+      wren-semantic-core--release_created: ${{ steps.release.outputs['core/wren-core--release_created'] }}
+      wren-semantic-core--tag_name: ${{ steps.release.outputs['core/wren-core--tag_name'] }}
+      wren-semantic-core--version: ${{ steps.release.outputs['core/wren-core--version'] }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -103,6 +108,21 @@ jobs:
     with:
       version: ${{ needs.release-please.outputs['wren-pydantic--version'] }}
       tag_name: ${{ needs.release-please.outputs['wren-pydantic--tag_name'] }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # Publishes wren-manifest-macro, wren-core-base, and wren-semantic-core to
+  # crates.io bottom-up in one run. The three crates are linked to a single
+  # version, so a release always bumps all three together — gating on the
+  # wren-semantic-core output is sufficient.
+  publish-wren-crates:
+    needs: release-please
+    if: needs.release-please.outputs['wren-semantic-core--release_created'] == 'true'
+    uses: ./.github/workflows/publish-wren-crates.yml
+    with:
+      version: ${{ needs.release-please.outputs['wren-semantic-core--version'] }}
+      tag_name: ${{ needs.release-please.outputs['wren-semantic-core--tag_name'] }}
     permissions:
       contents: read
       id-token: write
