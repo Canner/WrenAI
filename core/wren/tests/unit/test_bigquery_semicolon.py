@@ -40,31 +40,27 @@ def test_query_without_limit_still_strips_only_when_composing_none() -> None:
 
 def test_dry_run_strips_trailing_semicolon() -> None:
     connector, client = _make_mock_connector()
-    fake_bq = type("BQ", (), {
-        "QueryJobConfig": staticmethod(lambda **kw: type("C", (), kw)()),
-    })
     import sys
+    import types
     from unittest.mock import patch
-    with patch.dict(sys.modules, {"google": MagicMock(), "google.cloud": MagicMock(), "google.cloud.bigquery": fake_bq}):
-        # Still import-side effect free: inject simple stub
-        import types
-        fake_mod = types.ModuleType("google.cloud.bigquery")
-        class QueryJobConfig:
-            def __init__(self, dry_run=False, use_query_cache=True):
-                self.dry_run = dry_run
-                self.use_query_cache = use_query_cache
-        fake_mod.QueryJobConfig = QueryJobConfig
-        with patch.dict(sys.modules, {
-            "google": types.ModuleType("google"),
-            "google.cloud": types.ModuleType("google.cloud"),
-            "google.cloud.bigquery": fake_mod,
-            "google.oauth2": types.ModuleType("google.oauth2"),
-            "google.oauth2.service_account": types.ModuleType("google.oauth2.service_account"),
-        }):
-            connector.dry_run("SELECT 1;  \n")
+    fake_mod = types.ModuleType("google.cloud.bigquery")
+    class QueryJobConfig:
+        def __init__(self, dry_run=False, use_query_cache=True):
+            self.dry_run = dry_run
+            self.use_query_cache = use_query_cache
+    fake_mod.QueryJobConfig = QueryJobConfig
+    with patch.dict(sys.modules, {
+        "google": types.ModuleType("google"),
+        "google.cloud": types.ModuleType("google.cloud"),
+        "google.cloud.bigquery": fake_mod,
+        "google.oauth2": types.ModuleType("google.oauth2"),
+        "google.oauth2.service_account": types.ModuleType("google.oauth2.service_account"),
+    }):
+        connector.dry_run("SELECT 1;  \n")
     (sent,), kwargs = client.query.call_args
     assert sent == "SELECT 1"
     assert kwargs["job_config"].dry_run is True
+    assert kwargs["job_config"].use_query_cache is False
 
 
 def test_helper_preserves_literal_semicolon() -> None:
