@@ -1080,7 +1080,7 @@ def _rewrite_mssql_limit_clause(sql: str) -> str:
     if re.match(r"\s*SELECT\s+DISTINCT\b", without_limit, flags=re.IGNORECASE):
         return re.sub(
             r"\bSELECT\s+DISTINCT\b",
-            f"SELECT DISTINCT TOP {limit}",
+            f"SELECT DISTINCT TOP ({limit})",
             without_limit,
             count=1,
             flags=re.IGNORECASE,
@@ -1089,7 +1089,7 @@ def _rewrite_mssql_limit_clause(sql: str) -> str:
     if re.match(r"\s*SELECT\b", without_limit, flags=re.IGNORECASE):
         return re.sub(
             r"\bSELECT\b",
-            f"SELECT TOP {limit}",
+            f"SELECT TOP ({limit})",
             without_limit,
             count=1,
             flags=re.IGNORECASE,
@@ -1458,7 +1458,7 @@ def _rewrite_mssql_limit_clause(sql: str) -> str:
 
     return re.sub(
         r"\bSELECT\s+(DISTINCT\s+)?",
-        lambda match: f"{match.group(0)}TOP {limit} ",
+        lambda match: f"{match.group(0)}TOP ({limit}) ",
         without_limit,
         count=1,
         flags=re.IGNORECASE,
@@ -1484,8 +1484,21 @@ def _normalize_identifier_quote_syntax(sql: str) -> str:
     return normalized
 
 
+def _normalize_mssql_top_clause(sql: str) -> str:
+    return re.sub(
+        r"\bSELECT\s+(DISTINCT\s+)?TOP\s+(\d+)\b",
+        lambda match: (
+            f"SELECT {match.group(1) or ''}TOP ({match.group(2)})"
+        ),
+        sql,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+
+
 def normalize_generation_result_sql(sql: str, data_source: str | None = None) -> str:
     normalized = _normalize_identifier_quote_syntax(sql)
+    normalized = _normalize_mssql_top_clause(normalized)
     normalized_data_source = normalize_data_source(data_source)
 
     if normalized_data_source == "MSSQL":
@@ -2410,6 +2423,15 @@ def construct_semantic_schema_contract(
         "Validation requirement: every required mapping must be represented in the SQL. "
         "Do not substitute identifiers for metrics, entities for identifiers, or COUNT(*) "
         "for a requested business measure unless the semantic intent explicitly requests a record count."
+    )
+    lines.append(
+        "Ranking requirement: for top/bottom/ranked questions, include ORDER BY on the mapped metric "
+        "and a row limit such as LIMIT N, FETCH FIRST N ROWS ONLY, or MSSQL/Wren-safe TOP (N)."
+    )
+    lines.append(
+        "Schema safety requirement: use only tables and columns present in this contract or the "
+        "retrieved DATABASE SCHEMA. Do not add unrequested date filters or common timestamp columns "
+        "such as created_at unless they are explicitly listed and the user asked for a time constraint."
     )
 
     return "\n".join(lines)
@@ -3632,6 +3654,80 @@ def _semantic_analysis_dict_items(
     return [item for item in value if isinstance(item, dict)]
 
 
+_SEMANTIC_CONCEPT_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "as",
+    "by",
+    "for",
+    "from",
+    "in",
+    "of",
+    "on",
+    "or",
+    "the",
+    "to",
+    "with",
+    "dbo",
+    "tbl",
+    "table",
+    "view",
+    "dim",
+    "fact",
+}
+
+_SEMANTIC_CONCEPT_SYNONYMS = {
+    "acct": {"account", "customer"},
+    "account": {"acct", "customer", "client"},
+    "accounts": {"acct", "account", "customer", "client"},
+    "amt": {"amount", "value", "total"},
+    "amount": {"amt", "value", "total"},
+    "bill": {"invoice"},
+    "billing": {"invoice"},
+    "client": {"account", "customer"},
+    "clients": {"account", "customer"},
+    "cust": {"customer", "client", "account"},
+    "customer": {"cust", "client", "account"},
+    "customers": {"cust", "client", "account", "customer"},
+    "desc": {"description", "name"},
+    "description": {"desc", "name"},
+    "inv": {"invoice"},
+    "invoice": {"inv", "bill", "billing"},
+    "invoices": {"inv", "invoice", "bill", "billing"},
+    "name": {"description", "label"},
+    "no": {"number", "identifier", "id"},
+    "num": {"number", "identifier", "id"},
+    "number": {"no", "num", "identifier", "id"},
+    "qty": {"quantity"},
+    "quantity": {"qty"},
+    "total": {"amount", "value", "sum"},
+    "value": {"amount", "total"},
+}
+
+
+def _semantic_concept_tokens(value: Any) -> set[str]:
+    text = str(value or "")
+    if not text:
+        return set()
+
+    text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text)
+    text = re.sub(r"[^A-Za-z0-9]+", " ", text)
+    tokens = {
+        token.lower()
+        for token in text.split()
+        if len(token) > 1 and token.lower() not in _SEMANTIC_CONCEPT_STOPWORDS
+    }
+    for token in list(tokens):
+        if token.endswith("ies") and len(token) > 4:
+            tokens.add(f"{token[:-3]}y")
+        elif token.endswith("s") and len(token) > 3:
+            tokens.add(token[:-1])
+    for token in list(tokens):
+        tokens.update(_SEMANTIC_CONCEPT_SYNONYMS.get(token, set()))
+    return tokens
+
+
 def _has_semantic_analysis(semantic_analysis: dict[str, Any] | None) -> bool:
     if not isinstance(semantic_analysis, dict) or not semantic_analysis:
         return False
@@ -3750,15 +3846,42 @@ def _semantic_candidate_support_error(
 def _required_concept_mapping_support_error(
     semantic_analysis: dict[str, Any],
 ) -> str | None:
+    schema_bound_concept_types = {
+        "dimension",
+        "entity",
+        "filter",
+        "identifier",
+        "metric",
+        "relationship",
+        "time",
+    }
+    mapped_schema_objects = [
+        schema_object
+        for mapping in _semantic_concept_mappings(semantic_analysis)
+        for schema_object in _mapping_schema_objects(mapping)
+    ]
+    mapped_schema_objects.extend(
+        _semantic_analysis_items(semantic_analysis, "supported_schema_objects")
+    )
+
     unsupported_required_concepts = []
     for mapping in _semantic_concept_mappings(semantic_analysis):
         if mapping.get("required_in_sql") is False:
+            continue
+        concept_type = _mapping_concept_type(mapping)
+        if concept_type not in schema_bound_concept_types:
             continue
         if _mapping_schema_objects(mapping):
             continue
 
         request_concept = _mapping_request_concept(mapping)
-        concept_type = _mapping_concept_type(mapping)
+        concept_tokens = _semantic_concept_tokens(request_concept)
+        if concept_type == "entity" and concept_tokens:
+            if any(
+                concept_tokens & _semantic_concept_tokens(schema_object)
+                for schema_object in mapped_schema_objects
+            ):
+                continue
         if request_concept:
             unsupported_required_concepts.append(
                 f"{request_concept} ({concept_type or 'concept'})"
@@ -4014,10 +4137,27 @@ def _validate_sql_against_concept_mappings(
     )
     has_limit = bool(
         re.search(
-            r"\b(?:LIMIT|TOP\s*\(|FETCH\s+FIRST)\b",
+            r"\b(?:LIMIT|TOP\s*(?:\(\s*)?\d+|FETCH\s+FIRST)\b",
             sql or "",
             flags=re.IGNORECASE,
         )
+    )
+    schema_bound_concept_types = {
+        "dimension",
+        "entity",
+        "filter",
+        "identifier",
+        "metric",
+        "relationship",
+        "time",
+    }
+    mapped_schema_objects = [
+        schema_object
+        for mapping in mappings
+        for schema_object in _mapping_schema_objects(mapping)
+    ]
+    mapped_schema_objects.extend(
+        _semantic_analysis_items(semantic_analysis, "supported_schema_objects")
     )
 
     for mapping in mappings:
@@ -4028,6 +4168,15 @@ def _validate_sql_against_concept_mappings(
         request_concept = _mapping_request_concept(mapping)
         schema_objects = _mapping_schema_objects(mapping)
         if not schema_objects:
+            if concept_type not in schema_bound_concept_types:
+                continue
+            concept_tokens = _semantic_concept_tokens(request_concept)
+            if concept_type == "entity" and concept_tokens:
+                if any(
+                    concept_tokens & _semantic_concept_tokens(schema_object)
+                    for schema_object in mapped_schema_objects
+                ):
+                    continue
             return (
                 "The semantic analysis did not map the required "
                 f"{concept_type or 'concept'} '{request_concept}' to a schema "
@@ -4165,11 +4314,22 @@ def _validate_sql_against_semantic_analysis(
                 "dimensions or time grain identified in the semantic analysis."
             )
 
-    if ranking and not re.search(
-        r"\b(?:ORDER\s+BY|LIMIT|TOP\s*\(|FETCH\s+FIRST)\b",
-        sql or "",
-        flags=re.IGNORECASE,
-    ):
+    if ranking:
+        has_ranking_order = bool(
+            re.search(r"\bORDER\s+BY\b", sql or "", flags=re.IGNORECASE)
+        )
+        has_ranking_limit = bool(
+            re.search(
+                r"\b(?:LIMIT|TOP\s*(?:\(\s*)?\d+|FETCH\s+FIRST)\b",
+                sql or "",
+                flags=re.IGNORECASE,
+            )
+        )
+    else:
+        has_ranking_order = True
+        has_ranking_limit = True
+
+    if ranking and (not has_ranking_order or not has_ranking_limit):
         return (
             "Generated SQL does not include sorting or limiting logic required "
             "by the ranking intent."

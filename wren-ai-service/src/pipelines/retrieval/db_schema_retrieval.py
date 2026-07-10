@@ -47,15 +47,18 @@ The database schema includes tables, columns, primary keys, foreign keys, relati
 8. For each selected table, provide a concise reason for why the table is semantically relevant.
 9. For each selected column, provide a concise reason for why the column is necessary.
 10. Populate `concept_mappings` for every important concept in the request. Each mapping must classify the concept, list only directly supporting schema objects, state whether it must appear in SQL, and include a confidence score between 0 and 1.
-11. Populate `interpretations` when the request has more than one plausible schema interpretation. Rank interpretations by semantic relevance, confidence, and schema support; mark the selected interpretation only when it is clearly the best supported one. Keep non-selected high-confidence interpretations so the SQL pipeline can retry the next-best mapping if validation fails.
-12. Populate `candidate_schema_scores` with ranked candidates. Score each candidate by full concept coverage, semantic fit, relationship viability, metric validity, and whether it satisfies filters/time/ranking/aggregation requirements. Reject partial lexical matches even when a table or column name looks similar.
-13. Select only the highest-confidence candidate whose mappings completely cover all required concepts. If no candidate fully covers the request, set `is_fully_supported` to false and list missing or ambiguous requirements instead of selecting a partial mapping.
-14. If RETRY CONTEXT is provided, treat rejected schema objects as failed mappings. Do not select those objects again unless every complete candidate is exhausted; explain any reuse in `support_reasoning`.
-15. If a "." is included in columns, put the name before the first dot into chosen columns.
-16. The number of columns chosen must match the number of reasoning.
-17. Final chosen columns must be only column names, don't prefix it with table names.
-18. If the chosen column is a child column of a STRUCT type column, choose the parent column instead of the child column.
-19. If the schema cannot answer the question, return the closest directly relevant schema objects only if they explain the limitation. Do not select unrelated fallback tables.
+11. Broad business entities can be satisfied by the selected table plus the best descriptive or identifier column for that entity. For example, an entity such as customer may map to a customer name, customer number, account, client, or similar descriptive/identifier column when that is the active schema's representation. Do not leave an entity unmapped when a selected dimension or identifier column represents it.
+12. When the user asks for a top/bottom/ranking query, map the ranked dimension and ranked metric separately. The SQL generator must be able to ORDER BY the metric and limit rows.
+13. Do not add filters or time constraints that are not requested or implied by the user. Only map date/time concepts when the user asks for a time period, trend, date filter, or date dimension.
+14. Populate `interpretations` when the request has more than one plausible schema interpretation. Rank interpretations by semantic relevance, confidence, and schema support; mark the selected interpretation only when it is clearly the best supported one. Keep non-selected high-confidence interpretations so the SQL pipeline can retry the next-best mapping if validation fails.
+15. Populate `candidate_schema_scores` with ranked candidates. Score each candidate by full concept coverage, semantic fit, relationship viability, metric validity, and whether it satisfies filters/time/ranking/aggregation requirements. Reject partial lexical matches even when a table or column name looks similar.
+16. Select only the highest-confidence candidate whose mappings completely cover all required concepts. If no candidate fully covers the request, set `is_fully_supported` to false and list missing or ambiguous requirements instead of selecting a partial mapping.
+17. If RETRY CONTEXT is provided, treat rejected schema objects as failed mappings. Do not select those objects again unless every complete candidate is exhausted; explain any reuse in `support_reasoning`.
+18. If a "." is included in columns, put the name before the first dot into chosen columns.
+19. The number of columns chosen must match the number of reasoning.
+20. Final chosen columns must be only column names, don't prefix it with table names.
+21. If the chosen column is a child column of a STRUCT type column, choose the parent column instead of the child column.
+22. If the schema cannot answer the question, return the closest directly relevant schema objects only if they explain the limitation. Do not select unrelated fallback tables.
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:
@@ -363,6 +366,34 @@ _RANKING_SCHEMA_TERMS = {
     "top",
 }
 
+_GENERIC_SEMANTIC_SYNONYMS = {
+    "acct": {"account", "customer"},
+    "account": {"acct", "customer", "client"},
+    "accounts": {"acct", "account", "customer", "client"},
+    "amt": {"amount", "value", "total"},
+    "amount": {"amt", "value", "total"},
+    "bill": {"invoice"},
+    "billing": {"invoice"},
+    "client": {"account", "customer"},
+    "clients": {"account", "customer"},
+    "cust": {"customer", "client", "account"},
+    "customer": {"cust", "client", "account"},
+    "customers": {"cust", "client", "account", "customer"},
+    "desc": {"description", "name"},
+    "description": {"desc", "name"},
+    "inv": {"invoice"},
+    "invoice": {"inv", "bill", "billing"},
+    "invoices": {"inv", "invoice", "bill", "billing"},
+    "name": {"description", "label"},
+    "no": {"number", "identifier", "id"},
+    "num": {"number", "identifier", "id"},
+    "number": {"no", "num", "identifier", "id"},
+    "qty": {"quantity"},
+    "quantity": {"qty"},
+    "total": {"amount", "value", "sum"},
+    "value": {"amount", "total"},
+}
+
 
 def _semantic_tokens(value: Any) -> set[str]:
     text = str(value or "")
@@ -381,6 +412,8 @@ def _semantic_tokens(value: Any) -> set[str]:
             tokens.add(f"{token[:-3]}y")
         elif token.endswith("s") and len(token) > 3:
             tokens.add(token[:-1])
+    for token in list(tokens):
+        tokens.update(_GENERIC_SEMANTIC_SYNONYMS.get(token, set()))
     return tokens
 
 
