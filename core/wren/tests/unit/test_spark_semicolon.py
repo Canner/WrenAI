@@ -15,9 +15,6 @@ def _make_mock_connector() -> tuple[SparkConnector, MagicMock]:
 
 def test_query_strips_trailing_semicolon_before_sql() -> None:
     connector, session = _make_mock_connector()
-    df = MagicMock()
-    df.attrs = {}
-    dfto = MagicMock()
     # pandas DF mock for pa.Table.from_pandas
     import pandas as pd
 
