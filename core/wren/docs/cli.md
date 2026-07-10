@@ -74,7 +74,7 @@ Both flat and MCP/web envelope formats are accepted:
 
 ## `wren memory` — Schema & Query Memory
 
-LanceDB-backed semantic memory for MDL schema search and NL→SQL retrieval. Install with the `main` extra bundle (includes `memory`, `interactive`, `ui`):
+Qdrant-backed semantic memory for MDL schema search and NL→SQL retrieval. Install with the `main` extra bundle (includes `memory`, `interactive`, `ui`):
 
 ```bash
 pip install 'wrenai[main]'   # includes memory, interactive, ui
@@ -82,7 +82,7 @@ pip install 'wrenai[main]'   # includes memory, interactive, ui
 
 All `memory` subcommands accept `--path DIR` to override the default storage location (`~/.wren/memory/`).
 
-> **Note:** The `memory` extra bundles ~800MB of large unsigned native libraries (lancedb plus sentence-transformers/torch). On macOS, the first command that loads the memory stack can trigger a one-time XProtect/Gatekeeper scan and pause for up to about a minute before it finishes; this is normal macOS behavior, not a Wren error, and happens once per install or fresh virtual environment. With lazy memory loading, lightweight non-`memory` commands are unaffected — the scan is deferred to your first real memory use, not eliminated.
+> **Note:** The `memory` extra bundles ~800MB of large unsigned native libraries (qdrant plus Volcengine Ark embeddings/torch). On macOS, the first command that loads the memory stack can trigger a one-time XProtect/Gatekeeper scan and pause for up to about a minute before it finishes; this is normal macOS behavior, not a Wren error, and happens once per install or fresh virtual environment. With lazy memory loading, lightweight non-`memory` commands are unaffected — the scan is deferred to your first real memory use, not eliminated.
 
 ### Hybrid strategy: full text vs. embedding search
 
@@ -104,7 +104,7 @@ The default threshold (30,000 chars) can be overridden with `--threshold`.
 
 ### `wren memory index`
 
-Parse the MDL manifest and index all schema items (models, columns, relationships, views) into LanceDB with local embeddings.
+Parse the MDL manifest and index all schema items (models, columns, relationships, views) into Qdrant with local embeddings.
 
 ```bash
 wren memory index                          # uses ~/.wren/mdl.json
@@ -138,7 +138,7 @@ wren memory watch --reindex-on-start  # ensure the index is fresh before the fir
 
 ### `wren memory describe`
 
-Print the full schema as structured plain text. No embedding or LanceDB required — this is a pure transformation of the MDL manifest into a human/LLM-readable format.
+Print the full schema as structured plain text. No embedding or Qdrant required — this is a pure transformation of the MDL manifest into a human/LLM-readable format.
 
 ```bash
 wren memory describe                          # uses ~/.wren/mdl.json

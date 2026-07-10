@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -14,8 +15,8 @@ from wren_langchain._prompt import build_system_prompt
 from wren_langchain._providers.connection import ProfileConnectionProvider
 from wren_langchain._providers.mdl_source import ProjectMDLSource
 from wren_langchain._providers.memory import (
-    LocalLanceDBMemoryProvider,
     NoopMemoryProvider,
+    QdrantMemoryProvider,
 )
 from wren_langchain._tools import build_runtime_tools
 from wren_langchain._tools_memory import build_memory_tools
@@ -34,7 +35,7 @@ class WrenToolkit:
         project_path: Path,
         mdl_source: ProjectMDLSource,
         connection_provider: ProfileConnectionProvider,
-        memory_provider: LocalLanceDBMemoryProvider | NoopMemoryProvider,
+        memory_provider: QdrantMemoryProvider | NoopMemoryProvider,
     ):
         self._project_path = project_path
         self._mdl_source = mdl_source
@@ -44,8 +45,8 @@ class WrenToolkit:
         # every query. The engine itself is rebuilt per call so manifest
         # changes are picked up read-through.
         self._connector_cache: Any = None
-        # MemoryStore is heavy (loads sentence-transformer model) — cache
-        # the instance and let LanceDB handle data versioning internally.
+        # MemoryStore opens a Qdrant client + Ark embedding client on first
+        # use - cache the instance so we don't reconnect on every call.
         self._memory_store_cache: Any = None
 
     # ── Memory subscope (exposed as toolkit.memory) ────────────────────────
@@ -161,10 +162,11 @@ class WrenToolkit:
     ) -> WrenToolkit:
         """Build a toolkit from a CLI-prepared Wren project directory.
 
-        Memory is auto-detected from ``<path>/.wren/memory/``: present →
-        memory tools are exposed, absent → only the 3 runtime tools.
-        To enable, run ``wren memory index`` in the project; to disable,
-        delete the directory. There is no kwarg to override.
+        Memory is auto-detected from ``QDRANT_URL``: set (plus
+        ``VOLC_ARK_API_KEY`` for embeddings) -> memory tools are exposed,
+        unset -> only the 3 runtime tools. To enable, point ``QDRANT_URL``
+        at a Qdrant server and run ``wren memory index``. There is no kwarg
+        to override.
         """
         project_path = Path(path).expanduser().resolve()
 
@@ -220,10 +222,11 @@ class WrenToolkit:
     @staticmethod
     def _resolve_memory_provider(
         project_path: Path,
-    ) -> LocalLanceDBMemoryProvider | NoopMemoryProvider:
-        memory_dir = project_path / ".wren" / "memory"
-        # Require a directory (not a regular file or broken symlink) so we
-        # never construct LocalLanceDBMemoryProvider against an invalid root.
-        if memory_dir.is_dir():
-            return LocalLanceDBMemoryProvider(memory_path=memory_dir)
+    ) -> QdrantMemoryProvider | NoopMemoryProvider:
+        # Memory is enabled when a Qdrant server is configured. The local
+        # <project>/.wren/memory/ marker no longer applies (Qdrant is a
+        # remote server); QDRANT_URL is the single switch. Project .env is
+        # already loaded by _load_project_dotenv before this runs.
+        if os.environ.get("QDRANT_URL"):
+            return QdrantMemoryProvider()
         return NoopMemoryProvider()

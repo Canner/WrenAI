@@ -1,6 +1,6 @@
 """Generate canonical NL-SQL seed pairs from an MDL manifest.
 
-Pure functions — no LanceDB or embedding dependency.
+Pure functions — no Qdrant or embedding dependency.
 """
 
 from __future__ import annotations

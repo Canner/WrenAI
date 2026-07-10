@@ -9,7 +9,7 @@ cd wren
 just install          # uv sync — prebuilt wren-core-py wheel from PyPI (no Rust build)
 just install-all      # with all optional extras (including memory)
 just install-extra <extra>   # e.g. just install-extra postgres
-just install-memory   # install memory extra (lancedb + sentence-transformers)
+just install-memory   # install memory extra (qdrant-client + openai -> Volcengine Ark)
 just install-local    # engine dev: uv sync + build local wheel + overlay (needs Rust)
 just use-local-core   # rebuild + re-overlay local wheel after a Rust change
 just dev              # run `wren` CLI
@@ -58,13 +58,13 @@ Uses `uv` (not Poetry). `pyproject.toml` uses `hatchling` as build backend.
 
 ## Memory Module (Optional)
 
-`wren/src/wren/memory/` — LanceDB-backed semantic memory for schema and query retrieval. Install via `wren[memory]`.
+`wren/src/wren/memory/` — Qdrant-backed semantic memory for schema and query retrieval. Install via `wren[memory]`.
 
 - **`WrenMemory`** — Main API: `index_manifest()`, `get_context()`, `store_query()`, `recall_queries()`, `describe_schema()`, `schema_is_current()`, `status()`, `reset()`
-- Uses sentence-transformers for embedding MDL schema items and NL↔SQL query pairs
+- Uses Volcengine Ark (OpenAI-compatible) for embedding MDL schema items and NL↔SQL query pairs
 - **Seed queries** (`seed_queries.py`): On index, generates canonical NL-SQL pairs from the MDL manifest to bootstrap the query history
 - CLI: `wren memory index|fetch|store|recall` subcommands (auto-registered when extras installed)
-- Backing store: LanceDB (local or remote via opendal)
+- Backing store: Qdrant (remote server, configured via `QDRANT_URL`; embeddings via `VOLC_ARK_API_KEY`)
 
 ## Optional Extras
 

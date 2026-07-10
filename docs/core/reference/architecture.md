@@ -104,7 +104,7 @@ It includes:
 - **MDL source files** - models, relationships, views, cubes, and project metadata.
 - **`knowledge/`** - business rules (`rules/`) and confirmed NL→SQL pairs (`sql/`), the source of truth for memory.
 - **`target/mdl.json`** - compiled MDL manifest used by the engine.
-- **`.wren/memory/`** - derived, optional LanceDB index rebuilt from `knowledge/` for semantic retrieval.
+- **`.wren/memory/`** - derived, optional Qdrant index rebuilt from `knowledge/` for semantic retrieval.
 
 Connection profiles live separately in `~/.wren/profiles.yml` so credentials stay environment-specific.
 
@@ -170,7 +170,7 @@ Supported data sources include PostgreSQL, MySQL, BigQuery, Snowflake, DuckDB, C
 
 ### Memory layer
 
-The [memory system](/oss/concepts/memory_system) is a LanceDB-backed retrieval layer with two primary collections:
+The [memory system](/oss/concepts/memory_system) is a Qdrant-backed retrieval layer with two primary collections:
 
 | Collection | Contents | Purpose |
 | --- | --- | --- |
@@ -235,8 +235,8 @@ wren memory store           -> append a new NL-SQL pair to query_history
 | `sqlglot` | SQL parsing, qualification, and dialect transpilation. |
 | Database connectors | Execution layer for supported data sources. |
 | `pyarrow` | Query result representation. |
-| `lancedb` | Vector storage for memory. |
-| `sentence-transformers` | Local embeddings for memory search. |
+| `qdrant` | Vector storage for memory. |
+| `Volcengine Ark embeddings` | Local embeddings for memory search. |
 | `typer` | CLI framework. |
 | `pydantic` | Configuration and connection validation. |
 

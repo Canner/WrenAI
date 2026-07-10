@@ -37,7 +37,7 @@
 
 * **wren:** add v5 project layout (schema_version 5) ([#2386](https://github.com/Canner/WrenAI/issues/2386)) ([d50b9bc](https://github.com/Canner/WrenAI/commit/d50b9bcc58d4242e39b3d728c328b446e074997d))
 * **wren:** case-aware column & model binding in the CTE rewriter ([#2400](https://github.com/Canner/WrenAI/issues/2400)) ([58f3f51](https://github.com/Canner/WrenAI/commit/58f3f5113ef2da7189541e4ad2b89182e6f86a48))
-* **wren:** v5 project layout — knowledge/ first-class, memory decoupled from LanceDB ([#2399](https://github.com/Canner/WrenAI/issues/2399)) ([3e34906](https://github.com/Canner/WrenAI/commit/3e34906e4b690f454e0435e57fda8ec60a1b1595))
+* **wren:** v5 project layout — knowledge/ first-class, memory decoupled from Qdrant ([#2399](https://github.com/Canner/WrenAI/issues/2399)) ([3e34906](https://github.com/Canner/WrenAI/commit/3e34906e4b690f454e0435e57fda8ec60a1b1595))
 
 
 ### Bug Fixes
@@ -163,7 +163,7 @@
 * add wren-core-wasm module with browser WASM support ([#1568](https://github.com/Canner/wren-engine/issues/1568)) ([4f9201b](https://github.com/Canner/wren-engine/commit/4f9201b7f98ce34fba9069b10da7a52b2c338b8b))
 * **wren-core:** add refSql model support ([#1555](https://github.com/Canner/wren-engine/issues/1555)) ([bdaddf2](https://github.com/Canner/wren-engine/commit/bdaddf25bb9c10287b7f2062e727c26ac0e76303))
 * **wren:** add `wren docs connection-info` CLI command ([#1507](https://github.com/Canner/wren-engine/issues/1507)) ([87efbfd](https://github.com/Canner/wren-engine/commit/87efbfdb91aece1c46999a3cc1bae72b77de778b))
-* **wren:** add LanceDB-backed memory layer for schema and query retrieval ([#1494](https://github.com/Canner/wren-engine/issues/1494)) ([dfdff01](https://github.com/Canner/wren-engine/commit/dfdff010371f649abfa999b9fd08a729b81b15f2))
+* **wren:** add Qdrant-backed memory layer for schema and query retrieval ([#1494](https://github.com/Canner/wren-engine/issues/1494)) ([dfdff01](https://github.com/Canner/wren-engine/commit/dfdff010371f649abfa999b9fd08a729b81b15f2))
 * **wren:** add memory list, forget, dump & load commands ([#1531](https://github.com/Canner/wren-engine/issues/1531)) ([de424e8](https://github.com/Canner/wren-engine/commit/de424e8b08d4125456895935e99dfd79ddd21f3f))
 * **wren:** add profile management for named connection profiles ([#1509](https://github.com/Canner/wren-engine/issues/1509)) ([b086576](https://github.com/Canner/wren-engine/commit/b086576fbc0ead4ce46af915403a5c7268eac525))
 * **wren:** add standalone wren Python SDK package ([#1471](https://github.com/Canner/wren-engine/issues/1471)) ([41f3f21](https://github.com/Canner/wren-engine/commit/41f3f21f97aba6418b087c1d6437183fdd30f2b3))

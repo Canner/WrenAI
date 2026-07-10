@@ -13,7 +13,7 @@ version; the per-version notes below cover anything beyond the automatic restamp
 
 Version 5 keeps the per-folder MDL layout and adds **`knowledge/`** as a first-class home
 for business rules and NL→SQL pairs — the content that previously lived in
-`instructions.md`, `queries.yml`, and the LanceDB memory index.
+`instructions.md`, `queries.yml`, and the Qdrant memory index.
 
 > New projects from `wren context init` are already v5 — these steps are only for projects
 > created before v5.
@@ -42,11 +42,11 @@ mv instructions.md knowledge/rules/general.md
 ### 3. Migrate semantic memory to markdown
 
 In v5 the markdown files under `knowledge/sql/` are the **source of truth** for NL→SQL
-pairs; the LanceDB index becomes a derived artifact rebuilt from them (like
+pairs; the Qdrant index becomes a derived artifact rebuilt from them (like
 `target/mdl.json` is rebuilt from your YAML).
 
-If you have an existing LanceDB memory at `~/.wren/memory`, export it (requires the
-`memory` extra to read LanceDB):
+If you have an existing Qdrant memory at `~/.wren/memory`, export it (requires the
+`memory` extra to read Qdrant):
 
 ```bash
 wren memory export                 # query_history → knowledge/sql/*.md
@@ -56,7 +56,7 @@ wren memory reset                  # once verified — drops the derived index o
 ```
 
 `export` preserves each pair's source and timestamp, deduplicates by question, and **never
-deletes LanceDB** — you reset it yourself after verifying. Auto-generated seed pairs are
+deletes Qdrant** — you reset it yourself after verifying. Auto-generated seed pairs are
 skipped (they're regenerated on `index`); pass `--include-seed` to keep them. `queries.yml`
 is still loaded on `index` for the transition, but new pairs from `wren memory store` now
 land in `knowledge/sql/`.

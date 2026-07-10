@@ -5,8 +5,8 @@ from wren.profile import _reset_env_loaded_for_tests
 
 from wren_langchain import WrenToolkit
 from wren_langchain._providers.memory import (
-    LocalLanceDBMemoryProvider,
     NoopMemoryProvider,
+    QdrantMemoryProvider,
 )
 from wren_langchain.exceptions import WrenToolkitInitError
 
@@ -41,17 +41,18 @@ def test_from_project_relative_path_resolves(
     assert isinstance(toolkit, WrenToolkit)
 
 
-def test_memory_auto_detect_disabled_when_dir_missing(tmp_project, fake_active_profile):
-    """Without .wren/memory/, memory auto-detects as Noop."""
+def test_memory_auto_detect_disabled_when_qdrant_url_unset(tmp_project, fake_active_profile, monkeypatch):
+    """Without QDRANT_URL, memory auto-detects as Noop."""
+    monkeypatch.delenv("QDRANT_URL", raising=False)
     toolkit = WrenToolkit.from_project(tmp_project)
     assert isinstance(toolkit._memory, NoopMemoryProvider)
 
 
-def test_memory_auto_detect_enabled_when_dir_exists(tmp_project, fake_active_profile):
-    """With .wren/memory/, memory auto-detects as LocalLanceDB."""
-    (tmp_project / ".wren" / "memory").mkdir(parents=True)
+def test_memory_auto_detect_enabled_when_qdrant_url_set(tmp_project, fake_active_profile, monkeypatch):
+    """With QDRANT_URL set, memory auto-detects as Qdrant."""
+    monkeypatch.setenv("QDRANT_URL", "http://localhost:6333")
     toolkit = WrenToolkit.from_project(tmp_project)
-    assert isinstance(toolkit._memory, LocalLanceDBMemoryProvider)
+    assert isinstance(toolkit._memory, QdrantMemoryProvider)
 
 
 def test_from_project_loads_dotenv_from_project_path(tmp_project, monkeypatch):

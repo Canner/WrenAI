@@ -64,7 +64,7 @@ cd core/wren
 just install              # uv sync (locked prebuilt wren-core-py wheel from PyPI; no Rust build)
 just install-all          # with all optional extras (incl. memory)
 just install-extra <e>    # e.g. just install-extra postgres
-just install-memory       # memory extra (lancedb + sentence-transformers)
+just install-memory       # memory extra (qdrant + Volcengine Ark embeddings)
 just install-local        # engine dev: uv sync + build local wheel + overlay
 just use-local-core       # rebuild + re-overlay after Rust changes
 just dev                  # run `wren` CLI

@@ -1,6 +1,6 @@
 """Extract indexable records from an MDL manifest dict.
 
-Pure functions — no LanceDB or embedding dependency.
+Pure functions — no Qdrant or embedding dependency.
 """
 
 from __future__ import annotations
@@ -222,7 +222,7 @@ def extract_schema_items(manifest: dict) -> list[dict]:
 
     Each record contains a ``text`` field (synthesised description for
     embedding) plus structured metadata columns that match the
-    ``schema_items`` LanceDB table schema.
+    ``schema_items`` Qdrant table schema.
     """
     now = datetime.now(timezone.utc)
     mdl_h = manifest_hash(manifest)

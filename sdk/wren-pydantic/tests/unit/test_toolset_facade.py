@@ -6,7 +6,15 @@ import inspect
 
 from pydantic_ai import FunctionToolset
 
+import pytest
+
 from wren_pydantic import WrenToolkit
+
+
+@pytest.fixture(autouse=True)
+def _isolate_qdrant_url(monkeypatch):
+    """Each test starts with QDRANT_URL unset (memory disabled) unless a test opts in."""
+    monkeypatch.delenv("QDRANT_URL", raising=False)
 
 
 def _registered_names(toolset: FunctionToolset) -> list[str]:
@@ -63,11 +71,11 @@ def test_toolset_returns_fresh_instance_each_call(tmp_project, fake_active_profi
     assert a is not b
 
 
-def test_toolset_includes_memory_tools_when_memory_dir_exists(
-    tmp_project, fake_active_profile
+def test_toolset_includes_memory_tools_when_qdrant_url_set(
+    tmp_project, fake_active_profile, monkeypatch
 ):
-    """When .wren/memory/ exists, the toolset gains the 3 memory tools."""
-    (tmp_project / ".wren" / "memory").mkdir(parents=True)
+    """When QDRANT_URL is set, the toolset gains the 3 memory tools."""
+    monkeypatch.setenv("QDRANT_URL", "http://localhost:6333")
 
     toolkit = WrenToolkit.from_project(tmp_project)
     ts = toolkit.toolset()
@@ -84,9 +92,9 @@ def test_toolset_includes_memory_tools_when_memory_dir_exists(
 
 
 def test_toolset_drops_store_query_when_include_memory_write_false(
-    tmp_project, fake_active_profile
+    tmp_project, fake_active_profile, monkeypatch
 ):
-    (tmp_project / ".wren" / "memory").mkdir(parents=True)
+    monkeypatch.setenv("QDRANT_URL", "http://localhost:6333")
 
     toolkit = WrenToolkit.from_project(tmp_project)
     ts = toolkit.toolset(include_memory_write=False)

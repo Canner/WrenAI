@@ -8,15 +8,17 @@ from wren_langchain import WrenToolkit
 from wren_langchain.exceptions import MemoryNotEnabledError
 
 
-def _enable_memory(tmp_project):
-    """Helper: create .wren/memory directory so memory auto-enables."""
-    (tmp_project / ".wren" / "memory").mkdir(parents=True)
+def _enable_memory(tmp_project, monkeypatch):
+    """Helper: set QDRANT_URL so memory auto-enables."""
+    monkeypatch.setenv("QDRANT_URL", "http://localhost:6333")
     return tmp_project
 
 
-def test_memory_fetch_calls_get_context_with_manifest(tmp_project, fake_active_profile):
+def test_memory_fetch_calls_get_context_with_manifest(
+    tmp_project, fake_active_profile, monkeypatch
+):
     """toolkit.memory.fetch passes the loaded manifest to MemoryStore.get_context."""
-    project = _enable_memory(tmp_project)
+    project = _enable_memory(tmp_project, monkeypatch)
     fake_store = MagicMock(name="MemoryStore")
     fake_store.get_context.return_value = {"strategy": "search", "results": []}
 
@@ -34,8 +36,10 @@ def test_memory_fetch_calls_get_context_with_manifest(tmp_project, fake_active_p
     assert "manifest" in kwargs
 
 
-def test_memory_recall_calls_recall_queries(tmp_project, fake_active_profile):
-    project = _enable_memory(tmp_project)
+def test_memory_recall_calls_recall_queries(
+    tmp_project, fake_active_profile, monkeypatch
+):
+    project = _enable_memory(tmp_project, monkeypatch)
     fake_store = MagicMock(name="MemoryStore")
     fake_store.recall_queries.return_value = [{"nl": "x", "sql": "SELECT 1"}]
 
@@ -48,8 +52,10 @@ def test_memory_recall_calls_recall_queries(tmp_project, fake_active_profile):
     fake_store.recall_queries.assert_called_once_with(query="top customers", limit=5)
 
 
-def test_memory_store_calls_store_query(tmp_project, fake_active_profile):
-    project = _enable_memory(tmp_project)
+def test_memory_store_calls_store_query(
+    tmp_project, fake_active_profile, monkeypatch
+):
+    project = _enable_memory(tmp_project, monkeypatch)
     fake_store = MagicMock(name="MemoryStore")
 
     toolkit = WrenToolkit.from_project(project)
@@ -69,19 +75,24 @@ def test_memory_store_calls_store_query(tmp_project, fake_active_profile):
     assert kwargs["tags"] == "revenue,ranking"
 
 
-def test_memory_fetch_raises_when_memory_disabled(tmp_project, fake_active_profile):
+def test_memory_fetch_raises_when_memory_disabled(
+    tmp_project, fake_active_profile, monkeypatch
+):
     """Direct API access when memory is disabled raises MemoryNotEnabledError."""
+    monkeypatch.delenv("QDRANT_URL", raising=False)
     toolkit = WrenToolkit.from_project(tmp_project)
 
     with pytest.raises(MemoryNotEnabledError):
         toolkit.memory.fetch("anything")
 
 
-def test_memory_store_rejects_tags_containing_commas(tmp_project, fake_active_profile):
+def test_memory_store_rejects_tags_containing_commas(
+    tmp_project, fake_active_profile, monkeypatch
+):
     """Commas separate tags in the underlying storage format. A tag like
-    "revenue, Q1" would silently corrupt the round-trip if passed through —
+    "revenue, Q1" would silently corrupt the round-trip if passed through -
     we reject early with ValueError instead."""
-    project = _enable_memory(tmp_project)
+    project = _enable_memory(tmp_project, monkeypatch)
     fake_store = MagicMock(name="MemoryStore")
 
     toolkit = WrenToolkit.from_project(project)
@@ -93,9 +104,11 @@ def test_memory_store_rejects_tags_containing_commas(tmp_project, fake_active_pr
     fake_store.store_query.assert_not_called()
 
 
-def test_memory_store_caches_across_calls(tmp_project, fake_active_profile):
+def test_memory_store_caches_across_calls(
+    tmp_project, fake_active_profile, monkeypatch
+):
     """The MemoryStore instance is constructed once and reused across operations."""
-    project = _enable_memory(tmp_project)
+    project = _enable_memory(tmp_project, monkeypatch)
     fake_store = MagicMock(name="MemoryStore")
     fake_store.get_context.return_value = {}
     fake_store.recall_queries.return_value = []

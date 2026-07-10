@@ -107,7 +107,7 @@ wren context upgrade             # apply
 wren context upgrade --to 5      # target a specific version
 ```
 
-To migrate `instructions.md` and the LanceDB memory into `knowledge/`, see
+To migrate `instructions.md` and the Qdrant memory into `knowledge/`, see
 [Migration](./migration.md).
 
 ---
@@ -131,7 +131,7 @@ Use this to check which fields are needed before creating a profile.
 ## `wren memory` — Schema & Query Memory
 
 Schema and NL-SQL memory. NL→SQL pairs live in `knowledge/sql/*.md` (the source of truth);
-the LanceDB index is a derived artifact rebuilt from them.
+the Qdrant index is a derived artifact rebuilt from them.
 
 `store`, `index`, and `recall` work **without** any extra — pairs are written to and
 searched over `knowledge/sql/` directly (token/substring matching). Install the `memory`
@@ -143,12 +143,12 @@ pip install 'wrenai[memory]'
 pip install 'wrenai[memory,main]'
 ```
 
-The backend is chosen automatically — LanceDB when the extra is installed, otherwise the
-dependency-free grep backend. Force one with `WREN_MEMORY_BACKEND=grep|lancedb`. All
-`memory` subcommands accept `--path DIR` to override the LanceDB storage location
+The backend is chosen automatically — Qdrant when the extra is installed, otherwise the
+dependency-free grep backend. Force one with `WREN_MEMORY_BACKEND=grep|qdrant`. All
+`memory` subcommands accept `--path DIR` to override the Qdrant storage location
 (`~/.wren/memory/`).
 
-> **Note:** The `memory` extra bundles ~800MB of large unsigned native libraries (lancedb plus sentence-transformers/torch). On macOS, the first command that loads the memory stack can trigger a one-time XProtect/Gatekeeper scan and pause for up to about a minute before it finishes; this is normal macOS behavior, not a Wren error, and happens once per install or fresh virtual environment. With lazy memory loading, lightweight non-`memory` commands are unaffected — the scan is deferred to your first real memory use, not eliminated.
+> **Note:** The `memory` extra bundles ~800MB of large unsigned native libraries (qdrant plus Volcengine Ark embeddings/torch). On macOS, the first command that loads the memory stack can trigger a one-time XProtect/Gatekeeper scan and pause for up to about a minute before it finishes; this is normal macOS behavior, not a Wren error, and happens once per install or fresh virtual environment. With lazy memory loading, lightweight non-`memory` commands are unaffected — the scan is deferred to your first real memory use, not eliminated.
 
 ### Hybrid strategy: full text vs. embedding search
 
@@ -188,7 +188,7 @@ stale schema while you are actively modelling. Polls `target/mdl.json` and
 equivalent of `wren memory index`. A reindex that fails leaves the change pending and is
 retried on the next poll — an update is never silently dropped. Runs until `Ctrl+C`.
 
-Requires the `memory` extra (the index it maintains is LanceDB-backed). With the grep
+Requires the `memory` extra (the index it maintains is Qdrant-backed). With the grep
 backend there is no derived index to keep fresh, so this command exits with a message.
 
 | Flag | Description |
@@ -207,7 +207,7 @@ wren memory watch --reindex-on-start     # ensure the index is fresh before the 
 
 ### `wren memory describe`
 
-Print the full schema as structured plain text. No embedding or LanceDB required — this is a pure transformation of the MDL manifest into a human/LLM-readable format.
+Print the full schema as structured plain text. No embedding or Qdrant required — this is a pure transformation of the MDL manifest into a human/LLM-readable format.
 
 ```bash
 wren memory describe                          # uses ~/.wren/mdl.json
@@ -239,7 +239,7 @@ wren memory fetch -q "order date" --threshold 50000 --output json
 ### `wren memory store`
 
 Store a natural-language-to-SQL pair. Writes `knowledge/sql/<slug>.md` (the source of
-truth, no extra required), then indexes it into LanceDB when the `memory` extra is present.
+truth, no extra required), then indexes it into Qdrant when the `memory` extra is present.
 
 ```bash
 wren memory store \
@@ -267,9 +267,9 @@ wren memory recall -q "monthly revenue" --datasource mysql --limit 5 --output js
 
 ### `wren memory export`
 
-One-time migration: export an existing LanceDB `query_history` into `knowledge/sql/*.md`
-(source, timestamp, and dedup preserved). Requires the `memory` extra to read LanceDB;
-leaves LanceDB intact. See [Migration](./migration.md).
+One-time migration: export an existing Qdrant `query_history` into `knowledge/sql/*.md`
+(source, timestamp, and dedup preserved). Requires the `memory` extra to read Qdrant;
+leaves Qdrant intact. See [Migration](./migration.md).
 
 ```bash
 wren memory export                 # query_history → knowledge/sql/*.md
@@ -298,7 +298,7 @@ wren memory status
 
 ### `wren memory reset`
 
-Drop the derived LanceDB index. Your `knowledge/sql/*.md` source files are **preserved** —
+Drop the derived Qdrant index. Your `knowledge/sql/*.md` source files are **preserved** —
 rebuild the index any time with `wren memory index`.
 
 ```bash

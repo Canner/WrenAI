@@ -63,7 +63,7 @@ the same JSON shape. See `_LAYOUT_VERSION_MAP` in `context.py`.
 │
 ├── .wren/                          # runtime state (gitignored)
 │   ├── apps.yml                    #   GenBI app index — machine-written by `wren genbi register`
-│   └── memory/                     #   LanceDB semantic-memory index
+│   └── memory/                     #   Qdrant semantic-memory index
 └── target/
     └── mdl.json                    # build artifact (gitignored) — `wren context build` output
 ```

@@ -235,7 +235,7 @@ elsewhere on the same machine.
 - **One toolkit per agent.** If you need to query multiple Wren projects, build separate agents.
 - **Memory is auto-detected** from `.wren/memory/` and there is no kwarg to override. To enable, run `wren memory index`; to disable, delete the directory.
 - **No hot reload mechanism.** `target/mdl.json` is re-read on every tool call, so `wren context build` updates from CLI are picked up automatically. Profile changes require constructing a new toolkit.
-- **Don't run `wren memory index` while an agent is using the same project.** The index operation drops and recreates the LanceDB schema table; concurrent reads may transiently fail.
+- **Don't run `wren memory index` while an agent is using the same project.** The index operation drops and recreates the Qdrant schema table; concurrent reads may transiently fail.
 
 ## License
 

@@ -1,7 +1,7 @@
 """Markdown source-of-truth for NL→SQL memory pairs (``knowledge/sql/<slug>.md``).
 
-Dependency-free: no LanceDB / pyarrow / sentence-transformers. The markdown file
-is the source of truth; the LanceDB index (when the ``memory`` extra is
+Dependency-free: no Qdrant / pyarrow / Volcengine Ark embeddings. The markdown file
+is the source of truth; the Qdrant index (when the ``memory`` extra is
 installed) is a derived artifact built from it — mirroring how ``wren context
 build`` compiles YAML into ``target/mdl.json``.
 

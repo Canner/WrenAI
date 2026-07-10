@@ -85,7 +85,7 @@ DuckDB is included by default, so no extra is needed. For other data sources, ap
 
 > **Available extras:**
 > - `postgres`, `mysql`, `bigquery`, `snowflake`, `clickhouse`, `trino`, `mssql`, `databricks`, `redshift`, `athena`, `oracle`, `spark`: data source connectors
-> - `memory`: LanceDB-backed semantic memory (NL-SQL recall, embedding retrieval). **Optional** but recommended for the quickstart.
+> - `memory`: Qdrant-backed semantic memory (NL-SQL recall, embedding retrieval). **Optional** but recommended for the quickstart.
 > - `main`: interactive prompts + browser-based profile UI
 
 Verify the installation:
@@ -244,7 +244,7 @@ Claude Code will:
 7. **Validate and build**: `wren context validate` → `wren context build`
 8. **Index memory**: `wren memory index` (generates seed NL-SQL examples)
 
-> **Tip:** If `wren memory index` (the indexing step above) seems to hang for tens of seconds on macOS, it hasn't. That first `wren memory` command loads large unsigned native libraries (lancedb and torch, ~800MB), and macOS runs a one-time XProtect security scan the first time they execute. This is expected macOS behavior, not a Wren problem, and it's a one-off: every later `wren memory` command runs at normal speed. To avoid the pause during a live demo, run any `wren memory` command once right after install and let it finish.
+> **Tip:** If `wren memory index` (the indexing step above) seems to hang for tens of seconds on macOS, it hasn't. That first `wren memory` command loads large unsigned native libraries (qdrant and torch, ~800MB), and macOS runs a one-time XProtect security scan the first time they execute. This is expected macOS behavior, not a Wren problem, and it's a one-off: every later `wren memory` command runs at normal speed. To avoid the pause during a live demo, run any `wren memory` command once right after install and let it finish.
 
 After completion, verify the project:
 
@@ -386,7 +386,7 @@ After setup, your project directory looks like this:
 │   ├── rules/                  # your business rules
 │   └── sql/                    # confirmed NL→SQL pairs (wren memory store)
 ├── .wren/
-│   └── memory/                 # LanceDB index (auto-managed)
+│   └── memory/                 # Qdrant index (auto-managed)
 └── target/
     └── mdl.json                # compiled manifest
 ```

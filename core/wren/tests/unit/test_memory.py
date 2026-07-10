@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import uuid
+
 import pytest
 
 from wren.memory.schema_indexer import (
@@ -416,20 +419,28 @@ class TestDescribeSchema:
 
 
 # ── MemoryStore integration tests ─────────────────────────────────────────
-# These require lancedb + sentence-transformers (wren[memory] extra).
+# These require qdrant + Volcengine Ark embeddings (wren[memory] extra).
 
 
 @pytest.fixture
-def memory_store(tmp_path):
-    """Create a MemoryStore backed by a temp directory."""
-    pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
-    pytest.importorskip(
-        "sentence_transformers", reason="wren[memory] extras not installed"
-    )
+def memory_store():
+    """Create a MemoryStore backed by a throwaway Qdrant collection set."""
+    pytest.importorskip("qdrant_client", reason="wren[memory] extras not installed")
+    pytest.importorskip("openai", reason="wren[memory] extras not installed")
+    url = os.environ.get("QDRANT_URL")
+    if not url:
+        pytest.skip("QDRANT_URL not set; run a Qdrant server for integration tests")
 
+    from wren.memory.embeddings import FakeEmbedding  # noqa: PLC0415
     from wren.memory.store import MemoryStore  # noqa: PLC0415
 
-    return MemoryStore(path=tmp_path)
+    store = MemoryStore(
+        url=url,
+        embedding=FakeEmbedding(dim=8),
+        collection_prefix=f"test{uuid.uuid4().hex[:8]}",
+    )
+    yield store
+    store.reset()
 
 
 @pytest.mark.unit
@@ -496,7 +507,7 @@ class TestMemoryStore:
 
     def test_status(self, memory_store):
         info = memory_store.status()
-        assert "path" in info
+        assert "url" in info
         assert "tables" in info
 
         memory_store.index_schema(_MANIFEST)
@@ -525,16 +536,24 @@ class TestMemoryStore:
 
 
 @pytest.fixture
-def wren_memory(tmp_path):
-    """Create a WrenMemory instance backed by a temp directory."""
-    pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
-    pytest.importorskip(
-        "sentence_transformers", reason="wren[memory] extras not installed"
-    )
+def wren_memory():
+    """Create a WrenMemory instance backed by a throwaway Qdrant collection set."""
+    pytest.importorskip("qdrant_client", reason="wren[memory] extras not installed")
+    pytest.importorskip("openai", reason="wren[memory] extras not installed")
+    url = os.environ.get("QDRANT_URL")
+    if not url:
+        pytest.skip("QDRANT_URL not set; run a Qdrant server for integration tests")
 
     from wren.memory import WrenMemory  # noqa: PLC0415
+    from wren.memory.embeddings import FakeEmbedding  # noqa: PLC0415
 
-    return WrenMemory(path=tmp_path)
+    mem = WrenMemory(
+        url=url,
+        embedding=FakeEmbedding(dim=8),
+        collection_prefix=f"wm{uuid.uuid4().hex[:8]}",
+    )
+    yield mem
+    mem.reset()
 
 
 @pytest.mark.unit
@@ -551,7 +570,7 @@ class TestWrenMemory:
             nl_query="find expensive orders",
             sql_query="SELECT * FROM orders WHERE o_totalprice > 1000",
         )
-        recalled = wren_memory.recall_queries("costly orders")
+        recalled = wren_memory.recall_queries("costly orders", limit=100)
         assert len(recalled) >= 1
         assert any(r["nl_query"] == "find expensive orders" for r in recalled)
 
@@ -572,22 +591,16 @@ class TestWrenMemory:
 @pytest.mark.unit
 class TestMemoryStoreSeedLifecycle:
     def test_index_schema_seeds_query_history(self, memory_store):
-        from wren.memory.seed_queries import SEED_TAG  # noqa: PLC0415
 
         result = memory_store.index_schema(_MANIFEST, seed_queries=True)
         assert result["seed_queries"] > 0
 
-        table = memory_store._db.open_table("query_history")
-        df = table.to_pandas()
-        seeds = df[df["tags"] == SEED_TAG]
-        assert len(seeds) == result["seed_queries"]
+        assert memory_store.count_queries_by_source("seed") == result["seed_queries"]
 
     def test_index_schema_no_seed_flag(self, memory_store):
         result = memory_store.index_schema(_MANIFEST, seed_queries=False)
         assert result["seed_queries"] == 0
-        from wren.memory.store import _table_names  # noqa: PLC0415
-
-        assert "query_history" not in _table_names(memory_store._db)
+        assert "query_history" not in memory_store.status()["tables"]
 
     def test_reindex_replaces_seeds_preserves_user_queries(self, memory_store):
         from wren.memory.seed_queries import SEED_TAG  # noqa: PLC0415
@@ -603,21 +616,19 @@ class TestMemoryStoreSeedLifecycle:
             sql_query="SELECT * FROM orders ORDER BY o_totalprice DESC LIMIT 10",
         )
 
-        table = memory_store._db.open_table("query_history")
-        total_before = table.count_rows()
+        _, total_before = memory_store.list_queries(limit=1_000_000)
         assert total_before == seed_count + 1
 
         # Re-index — seeds should be replaced, user entry preserved
         second = memory_store.index_schema(_MANIFEST, seed_queries=True)
         assert second["seed_queries"] == seed_count
 
-        table = memory_store._db.open_table("query_history")
-        df = table.to_pandas()
-        seeds = df[df["tags"] == SEED_TAG]
-        user_rows = df[df["tags"] != SEED_TAG]
+        rows, _ = memory_store.list_queries(limit=1_000_000)
+        seeds = [r for r in rows if r.get("tags", "") == SEED_TAG]
+        user_rows = [r for r in rows if r.get("tags", "") != SEED_TAG]
         assert len(seeds) == seed_count
         assert len(user_rows) == 1
-        assert "expensive orders" in user_rows.iloc[0]["nl_query"]
+        assert "expensive orders" in user_rows[0]["nl_query"]
 
     def test_recall_returns_seed_entries(self, memory_store):
         from wren.memory.seed_queries import SEED_TAG  # noqa: PLC0415
@@ -696,21 +707,24 @@ class TestMemoryStoreList:
 class TestMemoryStoreForget:
     def test_forget_by_ids(self, memory_store):
         _seed_pairs(memory_store, 3)
-        deleted = memory_store.forget_queries_by_ids([0])
+        rows, _ = memory_store.list_queries(limit=10)
+        deleted = memory_store.forget_queries_by_ids([rows[0]["_row_id"]])
         assert deleted == 1
         _, total = memory_store.list_queries()
         assert total == 2
 
     def test_forget_by_ids_multiple(self, memory_store):
         _seed_pairs(memory_store, 5)
-        deleted = memory_store.forget_queries_by_ids([0, 2, 4])
+        rows, _ = memory_store.list_queries(limit=10)
+        ids = [r["_row_id"] for r in rows[:3]]
+        deleted = memory_store.forget_queries_by_ids(ids)
         assert deleted == 3
         _, total = memory_store.list_queries()
         assert total == 2
 
     def test_forget_by_ids_invalid(self, memory_store):
         _seed_pairs(memory_store, 2)
-        deleted = memory_store.forget_queries_by_ids([99])
+        deleted = memory_store.forget_queries_by_ids(["00000000-0000-0000-0000-000000000000"])
         assert deleted == 0
         _, total = memory_store.list_queries()
         assert total == 2
@@ -864,7 +878,7 @@ class TestYamlRoundTrip:
 
 @pytest.mark.unit
 class TestMarkdownSourcedIndex:
-    """index/recall/reset treat LanceDB as a derived index over knowledge/sql/."""
+    """index/recall/reset treat Qdrant as a derived index over knowledge/sql/."""
 
     def test_load_query_pairs_index_is_convergent(self, memory_store, tmp_path):
         from wren.memory.markdown import (  # noqa: PLC0415
@@ -902,37 +916,51 @@ class TestMarkdownSourcedIndex:
         hits = memory_store.recall_queries("revenue", limit=3)
         assert any("SUM(amount)" in h["sql_query"] for h in hits)
 
-    def test_lancedb_backend_via_get_index(self, tmp_path, monkeypatch):
-        """With the extra, get_index resolves to LanceDBIndex and recalls semantically."""
-        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
-        pytest.importorskip(
-            "sentence_transformers", reason="wren[memory] extras not installed"
-        )
-        monkeypatch.setenv("WREN_MEMORY_BACKEND", "lancedb")
+    def test_qdrant_backend_via_get_index(self, tmp_path, monkeypatch):
+        """With the extra + QDRANT_URL, get_index resolves to QdrantIndex and recalls."""
+        pytest.importorskip("qdrant_client", reason="wren[memory] extras not installed")
+        pytest.importorskip("openai", reason="wren[memory] extras not installed")
+        url = os.environ.get("QDRANT_URL")
+        if not url:
+            pytest.skip("QDRANT_URL not set; run a Qdrant server for integration tests")
+        monkeypatch.setenv("WREN_MEMORY_BACKEND", "qdrant")
+        from wren.memory.embeddings import FakeEmbedding  # noqa: PLC0415
         from wren.memory.index_backend import get_index  # noqa: PLC0415
         from wren.memory.markdown import write_query_markdown  # noqa: PLC0415
 
         write_query_markdown(tmp_path, "Total revenue", "SELECT SUM(amount) FROM o")
-        idx = get_index(tmp_path, str(tmp_path / ".wren" / "memory"))
-        assert idx.name == "lancedb"
+        idx = get_index(
+            tmp_path,
+            url=url,
+            embedding=FakeEmbedding(),
+            collection_prefix=f"gi{uuid.uuid4().hex[:8]}",
+        )
+        assert idx.name == "qdrant"
         idx.rebuild()
         hits = idx.search("revenue", limit=3)
         assert any("SUM(amount)" in h["sql_query"] for h in hits)
 
     def test_cli_export_migrates_query_history_to_markdown(self, tmp_path, monkeypatch):
-        """`wren memory export` writes existing LanceDB pairs to knowledge/sql/."""
-        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
-        pytest.importorskip(
-            "sentence_transformers", reason="wren[memory] extras not installed"
-        )
+        """`wren memory export` writes existing Qdrant pairs to knowledge/sql/."""
+        pytest.importorskip("qdrant_client", reason="wren[memory] extras not installed")
+        pytest.importorskip("openai", reason="wren[memory] extras not installed")
+        url = os.environ.get("QDRANT_URL")
+        if not url:
+            pytest.skip("QDRANT_URL not set; run a Qdrant server for integration tests")
         from typer.testing import CliRunner  # noqa: PLC0415
 
         from wren.cli import app  # noqa: PLC0415
+        from wren.memory.embeddings import FakeEmbedding  # noqa: PLC0415
         from wren.memory.markdown import parse_query_markdown  # noqa: PLC0415
         from wren.memory.store import MemoryStore  # noqa: PLC0415
 
         monkeypatch.setenv("WREN_PROJECT_HOME", str(tmp_path))
-        store = MemoryStore(path=str(tmp_path / ".wren" / "memory"))
+        monkeypatch.setenv("QDRANT_URL", url)
+        monkeypatch.setenv("VOLC_ARK_API_KEY", "fake-key")
+        # export constructs its own MemoryStore with the default "wren" prefix;
+        # write there too, and reset around the test for isolation.
+        store = MemoryStore(url=url, embedding=FakeEmbedding(dim=8))
+        store.reset()
         store.store_query("Top revenue", "SELECT SUM(amount) FROM o", tags="source:user")
         store.store_query("A seed query", "SELECT 1", tags="source:seed")
 

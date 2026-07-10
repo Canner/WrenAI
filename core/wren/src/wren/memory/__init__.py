@@ -1,17 +1,15 @@
-"""Wren Memory — LanceDB-backed schema and query memory.
+"""Wren Memory - Qdrant-backed schema and query memory.
 
 Public API for programmatic use::
 
     from wren.memory import WrenMemory
 
-    mem = WrenMemory()
+    mem = WrenMemory()  # reads QDRANT_URL / VOLC_ARK_API_KEY from the env
     mem.index_manifest(manifest_dict)
     ctx = mem.get_context(manifest_dict, "customer orders")
 """
 
 from __future__ import annotations
-
-from pathlib import Path
 
 
 class WrenMemory:
@@ -19,14 +17,31 @@ class WrenMemory:
 
     Parameters
     ----------
-    path:
-        LanceDB storage directory.  Defaults to ``~/.wren/memory/``.
+    url:
+        Qdrant server URL.  Defaults to ``$QDRANT_URL`` (required).
+    api_key:
+        Qdrant API key.  Defaults to ``$QDRANT_API_KEY``.
+    embedding:
+        Custom :class:`~wren.memory.embeddings.EmbeddingProvider`.  Defaults to
+        :class:`~wren.memory.embeddings.VolcArkEmbedding`.
     """
 
-    def __init__(self, path: str | Path | None = None):
+    def __init__(
+        self,
+        *,
+        url: str | None = None,
+        api_key: str | None = None,
+        embedding=None,
+        collection_prefix: str | None = None,
+    ):
         from wren.memory.store import MemoryStore  # noqa: PLC0415
 
-        self._store = MemoryStore(path=path)
+        self._store = MemoryStore(
+            url=url,
+            api_key=api_key,
+            embedding=embedding,
+            collection_prefix=collection_prefix,
+        )
 
     def index_manifest(
         self,
@@ -35,7 +50,7 @@ class WrenMemory:
         replace: bool = True,
         seed_queries: bool = True,
     ) -> dict:
-        """Index MDL schema into LanceDB.
+        """Index MDL schema into Qdrant.
 
         Returns {"schema_items": int, "seed_queries": int}.
         """
@@ -83,7 +98,7 @@ class WrenMemory:
         datasource: str | None = None,
         tags: str | None = None,
     ) -> None:
-        """Store a NL→SQL pair for future few-shot retrieval."""
+        """Store a NL->SQL pair for future few-shot retrieval."""
         self._store.store_query(nl_query, sql_query, datasource=datasource, tags=tags)
 
     def recall_queries(
@@ -93,7 +108,7 @@ class WrenMemory:
         limit: int = 3,
         datasource: str | None = None,
     ) -> list[dict]:
-        """Search past NL→SQL pairs by semantic similarity."""
+        """Search past NL->SQL pairs by semantic similarity."""
         return self._store.recall_queries(query, limit=limit, datasource=datasource)
 
     def schema_is_current(self, manifest: dict) -> bool:
@@ -101,11 +116,11 @@ class WrenMemory:
         return self._store.schema_is_current(manifest)
 
     def status(self) -> dict:
-        """Return index statistics (path, table row counts)."""
+        """Return index statistics (url, collection row counts)."""
         return self._store.status()
 
     def reset(self) -> None:
-        """Drop all memory tables."""
+        """Drop all memory collections."""
         self._store.reset()
 
 

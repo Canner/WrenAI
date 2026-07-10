@@ -1,7 +1,7 @@
 """O4 — knowledge/sql/*.md is the source of truth for NL→SQL memory.
 
 These run in the unit job (no `memory` extra): markdown writing is
-dependency-free and `wren memory store` must work without LanceDB.
+dependency-free and `wren memory store` must work without Qdrant.
 """
 
 from __future__ import annotations

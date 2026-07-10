@@ -609,8 +609,8 @@ app.add_typer(skills_app)
 
 # The `memory` subcommand group is always registered: `wren memory store`
 # writes knowledge/sql/*.md without the optional `memory` extra, and the
-# lancedb-backed commands degrade with a clear "install wren[memory]" message.
-# Importing memory_app stays light — lancedb / the heavy ML stack are imported
+# qdrant-backed commands degrade with a clear "install wren[memory]" message.
+# Importing memory_app stays light — qdrant / the heavy ML stack are imported
 # lazily inside the commands that need them, never at CLI startup.
 from wren.memory.cli import memory_app  # noqa: E402
 

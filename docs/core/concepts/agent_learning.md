@@ -34,7 +34,7 @@ Four artifacts capture different layers of learning — explicit, inspectable fi
 | **MDL** (`models/`, `views/`, `relationships.yml`) | Structural and semantic contract: what data exists, how it relates, which calculations are reusable | `loyalty_v3` is the canonical loyalty table; `revenue = price * qty - refunds` | `wren context build`, manual edits, agent-proposed changes |
 | **`knowledge/rules/`** | Business rules and operating policy the schema can't carry | "active customer excludes service accounts"; "always filter `is_deleted = false`" | Manual edits or agent-proposed changes |
 | **`knowledge/sql/`** | Confirmed natural-language-to-SQL pairs, one markdown file each — the source of truth for recall | "top customers by revenue" → the accepted SQL | `wren memory store`, manual edits |
-| **Memory index** (`.wren/memory/`) | Derived retrieval index over MDL + `knowledge/` (optional LanceDB, else grep) | rebuilt any time, gitignored | `wren memory index` |
+| **Memory index** (`.wren/memory/`) | Derived retrieval index over MDL + `knowledge/` (optional Qdrant, else grep) | rebuilt any time, gitignored | `wren memory index` |
 
 MDL says what the data *means*. `knowledge/rules/` says how your team wants it *used*. `knowledge/sql/` records what has *worked*. The first three are version-controlled files in your repo; the memory index is a derived artifact rebuilt from them. Together they are the context layer the rest of the docs refer to — see [What does Wren AI mean by context?](/oss/concepts/what_is_context).
 

@@ -105,7 +105,7 @@ my_project/
 ├── target/
 │   └── mdl.json              # compiled MDL — `wren context build`
 └── .wren/                    # project-local runtime state (gitignore-able)
-    ├── memory/               #   LanceDB semantic index over knowledge/sql/ — `wren memory index`
+    ├── memory/               #   Qdrant semantic index over knowledge/sql/ — `wren memory index`
     └── apps.yml              #   GenBI app index — written by `wren genbi register`
 ```
 
@@ -249,7 +249,7 @@ wren context build
 
 Some versions add content beyond the automatic restamp — e.g. **v5** introduces
 `knowledge/` and makes it the home for business rules and NL→SQL memory, so there are extra
-steps to move `instructions.md` and an existing LanceDB index across. Per-version steps live
+steps to move `instructions.md` and an existing Qdrant index across. Per-version steps live
 in the [Migration reference](/oss/reference/migration).
 
 ## When to come back here

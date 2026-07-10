@@ -2,7 +2,7 @@
 
 These run in the unit CI job: they exercise the change-detection + reindex
 loop logic in :mod:`wren.memory.watch` using only the standard library, plus
-the CLI's grep-backend guard. No `memory` extra (LanceDB) is required, so the
+the CLI's grep-backend guard. No `memory` extra (Qdrant) is required, so the
 feature's core behaviour is guarded in every CI run, not skipped.
 """
 

@@ -205,4 +205,4 @@ Cross-project joins must happen in Python, not in SQL — each project has its o
 - **Synchronous tools only.** LangChain auto-bridges to a thread pool when tools run in async LangGraph; multi-tenant servers serving >32 concurrent users may exhaust the default executor.
 - **One toolkit per agent.** For multiple Wren projects, build separate toolkits + agents and federate in Python.
 - **No hot reload.** `target/mdl.json` is re-read per tool call so `wren context build` updates are picked up live; profile changes require constructing a new toolkit.
-- **Don't run `wren memory index` while an agent is using the same project.** The index operation drops and recreates the LanceDB schema table; concurrent reads may transiently fail.
+- **Don't run `wren memory index` while an agent is using the same project.** The index operation drops and recreates the Qdrant schema table; concurrent reads may transiently fail.

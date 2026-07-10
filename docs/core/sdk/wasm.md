@@ -384,6 +384,6 @@ binary. There is no UMD or CommonJS build.
 - **Upstream DataFusion (not the Canner fork).** WASM doesn't need the
   unparser fixes; the trade-off is that some advanced wren-core analyzer
   paths that depend on fork-only behaviour aren't exercised here.
-- **No memory module.** Semantic-search memory (LanceDB) is a server-side
+- **No memory module.** Semantic-search memory (Qdrant) is a server-side
   feature exposed by `wren-langchain` / `wren-pydantic` — not available in
   the WASM SDK.

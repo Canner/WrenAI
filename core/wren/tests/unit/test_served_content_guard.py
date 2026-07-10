@@ -82,7 +82,7 @@ _UNIVERSAL_FLAGS = {"--help"}
 _TOP_LEVEL_COMMANDS: set[str] = {p.split()[0] for p in COMMANDS if p}
 
 # Flags on `wren memory ...` cannot be introspected here without the memory
-# extras installed (lancedb + sentence-transformers). Skip flag validation for
+# extras installed (qdrant + Volcengine Ark embeddings). Skip flag validation for
 # memory commands; the command path itself is still validated via the
 # allow-list above.
 _SKIP_FLAG_VALIDATION_FOR_GROUPS = {"memory"}

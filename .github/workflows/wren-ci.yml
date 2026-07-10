@@ -165,6 +165,16 @@ jobs:
   test-memory:
     name: memory tests
     runs-on: ubuntu-latest
+    services:
+      qdrant:
+        image: qdrant/qdrant:latest
+        ports:
+          - 6333:6333
+        options: >-
+          --health-cmd "bash -c '</dev/tcp/localhost/6333'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
     defaults:
       run:
         working-directory: core/wren
@@ -196,12 +206,7 @@ jobs:
         run: |
           uv sync --locked --extra memory
           uv pip install --reinstall --no-index --find-links ../wren-core-py/target/wheels/ wren-core-py
-      - name: Cache sentence-transformers model
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/huggingface
-          key: hf-paraphrase-MiniLM-L3-v2
       - name: Run memory tests
         env:
-          WREN_EMBEDDING_MODEL: paraphrase-MiniLM-L3-v2
+          QDRANT_URL: http://localhost:6333
         run: uv run --no-sync pytest tests/unit/test_memory.py -v

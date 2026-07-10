@@ -39,7 +39,7 @@ my_project/
 ├── instructions.md                # deprecated — move into knowledge/rules/ (still read)
 ├── queries.yml                    # legacy NL-SQL pairs — superseded by knowledge/sql/
 ├── .wren/                         # runtime state (gitignored)
-│   └── memory/                    # derived LanceDB index (optional; rebuilt from knowledge/sql/)
+│   └── memory/                    # derived Qdrant index (optional; rebuilt from knowledge/sql/)
 └── target/
     └── mdl.json                   # build output (gitignored)
 ```
@@ -390,7 +390,7 @@ target/
 .wren/memory/
 ```
 
-Source YAML and the `knowledge/` base (rules, glossary, metrics, caveats, and the NL→SQL pairs under `knowledge/sql/`) are committed. `target/mdl.json` is derived; `.wren/memory/` is a binary LanceDB index rebuilt from `knowledge/sql/` — commit the `knowledge/sql/*.md` pairs, not the index.
+Source YAML and the `knowledge/` base (rules, glossary, metrics, caveats, and the NL→SQL pairs under `knowledge/sql/`) are committed. `target/mdl.json` is derived; `.wren/memory/` is a binary Qdrant index rebuilt from `knowledge/sql/` — commit the `knowledge/sql/*.md` pairs, not the index.
 
 ## See also
 

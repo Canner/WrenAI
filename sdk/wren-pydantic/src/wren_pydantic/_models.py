@@ -80,10 +80,10 @@ class FetchContextResult(BaseModel):
 class RecalledPair(BaseModel):
     """One NL→SQL pair returned by ``wren_recall_queries``.
 
-    Field names mirror Core's LanceDB row keys verbatim. ``tags`` is a
+    Field names mirror Core's Qdrant payload keys verbatim. ``tags`` is a
     comma-joined string (Core's storage format, not a list) — the SDK
     surfaces it raw and lets the agent split if it needs to. ``score``
-    is aliased to LanceDB's ``_distance`` field and only present after a
+    is Qdrant's cosine similarity ``score`` and only present after a
     vector search; seeded pairs from ``queries.yml`` have no score.
 
     Extra keys (e.g. ``text``, ``created_at``) from Core are tolerated

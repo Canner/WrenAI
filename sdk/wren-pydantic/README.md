@@ -160,7 +160,7 @@ already captures its own state.
   call so `wren context build` updates are picked up automatically. Profile
   changes require constructing a new toolkit.
 - **Don't run `wren memory index` while an agent is using the same project.**
-  The index operation drops and recreates the LanceDB schema table;
+  The index operation drops and recreates the Qdrant schema table;
   concurrent reads may transiently fail.
 
 ## License

@@ -26,9 +26,33 @@ pairs live in `knowledge/sql/*.md`, and business rules in `knowledge/rules/`. Th
 plain files you commit and review like any other source.
 
 On top of that markdown, Wren builds a **derived index** for retrieval. With the optional
-`memory` extra it's a [LanceDB](https://lancedb.com/) embedding index under `.wren/memory/`
-(gitignored, rebuildable any time); without it, a dependency-free grep backend searches the
+`memory` extra it's a [Qdrant](https://qdrant.com/) embedding index on a remote Qdrant server (`QDRANT_URL`, rebuildable any time); without it, a dependency-free grep backend searches the
 markdown directly. Either way the index is disposable — `knowledge/` is the durable layer.
+
+## Configuration
+
+The Qdrant + Volcengine Ark embedding backend reads its settings from environment
+variables, which may live in `.env` instead of your shell:
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `QDRANT_URL` | Qdrant server URL (required to enable the Qdrant backend) | - |
+| `QDRANT_API_KEY` | Qdrant API key (authenticated clusters) | - |
+| `VOLC_ARK_API_KEY` | Volcengine Ark (火山方舟) API key for embeddings | - |
+| `VOLC_ARK_BASE_URL` | Ark base URL | `https://ark.cn-beijing.volces.com/api/v3` |
+| `WREN_EMBEDDING_MODEL` | Ark embedding model name | `doubao-embedding-text-240715` |
+| `WREN_EMBEDDING_PROVIDER` | `fake` = local dev (no API key); unset = Volcengine Ark | unset (Ark) |
+| `WREN_EMBEDDING_BATCH_SIZE` | Texts per Ark embedding API call | `10` |
+| `WREN_MEMORY_BACKEND` | Force `grep` or `qdrant` (else auto-detect) | auto |
+
+`wren memory` commands load `.env` automatically (same loader as connection
+profiles): `$CWD/.env`, the project-root `.env` next to `wren_project.yml`, and
+`~/.wren/.env`. Shell-exported vars take precedence over `.env`. Example `.env`:
+
+```bash
+QDRANT_URL=http://localhost:6333
+VOLC_ARK_API_KEY=your-ark-key
+```
 
 The index covers two kinds of content:
 
@@ -41,15 +65,15 @@ The index covers two kinds of content:
 
 The source of truth is the same either way — only the retrieval engine differs:
 
-| | With `memory` extra (LanceDB) | Without it (grep, default) |
+| | With `memory` extra (Qdrant) | Without it (grep, default) |
 | --- | --- | --- |
 | NL→SQL `recall` | **Semantic** — embedding similarity, so paraphrases match (store *"monthly revenue"*, recall *"sales per month"*) | **Lexical** — token overlap + substring over `knowledge/sql/*.md`, read directly at query time. Paraphrases with no shared words won't match |
-| Persistent index | LanceDB under `.wren/memory/` (built by `index`/`store`) | None — the markdown *is* the index, so `index` is a no-op |
+| Persistent index | Qdrant on a remote server (built by `index`/`store`) | None — the markdown *is* the index, so `index` is a no-op |
 | Schema search (`fetch`) | Available (embedding retrieval over schema items) | **Not available** — needs embeddings; large schemas should install the extra |
 
 The grep backend is the zero-dependency fallback: it works out of the box and keeps
 `store`/`recall` available, at lower recall quality. Install the extra (or set
-`WREN_MEMORY_BACKEND=lancedb`) for semantic recall and schema search; nothing about your
+`WREN_MEMORY_BACKEND=qdrant`) for semantic recall and schema search; nothing about your
 `knowledge/` files changes when you switch.
 
 ## How memory is used
@@ -107,11 +131,11 @@ See the [Refine answer quality](/oss/guides/refine) recipe and [CLI reference](/
 
 Sharing is just committing `knowledge/`. The NL→SQL pairs in `knowledge/sql/*.md` are
 plain, reviewable files — commit them and every environment picks them up; the next
-`wren memory index` rebuilds the local index from them. The derived index under
-`.wren/memory/` stays gitignored, because it's reproducible from the markdown rather than
+`wren memory index` rebuilds the Qdrant index from them. The derived index lives
+server-side (nothing to gitignore), because it's reproducible from the markdown rather than
 the collaboration surface itself.
 
-(Have an older project whose history is still in a LanceDB index? `wren memory export`
+(Have an older project whose history is still in a Qdrant index? `wren memory export`
 writes it out to `knowledge/sql/*.md` — see [Migration](/oss/reference/migration).)
 
 ## In short

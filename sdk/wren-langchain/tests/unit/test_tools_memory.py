@@ -2,19 +2,27 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from wren_langchain import WrenToolkit
 
 
-def _enable_memory(tmp_project):
-    (tmp_project / ".wren" / "memory").mkdir(parents=True)
+@pytest.fixture(autouse=True)
+def _isolate_qdrant_url(monkeypatch):
+    """Each test starts with QDRANT_URL unset (memory disabled) unless a test opts in."""
+    monkeypatch.delenv("QDRANT_URL", raising=False)
+
+
+def _enable_memory(tmp_project, monkeypatch):
+    monkeypatch.setenv("QDRANT_URL", "http://localhost:6333")
     return tmp_project
 
 
 def test_get_tools_returns_six_tools_when_memory_enabled(
-    tmp_project, fake_active_profile
+    tmp_project, fake_active_profile, monkeypatch
 ):
     """Memory enabled → 3 runtime + 3 memory tools."""
-    project = _enable_memory(tmp_project)
+    project = _enable_memory(tmp_project, monkeypatch)
     fake_store = MagicMock(name="MemoryStore")
 
     with patch("wren_langchain._providers.memory.MemoryStore", return_value=fake_store):
@@ -32,9 +40,9 @@ def test_get_tools_returns_six_tools_when_memory_enabled(
 
 
 def test_include_memory_write_false_removes_store_query(
-    tmp_project, fake_active_profile
+    tmp_project, fake_active_profile, monkeypatch
 ):
-    project = _enable_memory(tmp_project)
+    project = _enable_memory(tmp_project, monkeypatch)
     fake_store = MagicMock(name="MemoryStore")
 
     with patch("wren_langchain._providers.memory.MemoryStore", return_value=fake_store):
@@ -47,7 +55,7 @@ def test_include_memory_write_false_removes_store_query(
 
 
 def test_include_memory_write_true_is_no_op_when_memory_disabled(
-    tmp_project, fake_active_profile
+    tmp_project, fake_active_profile, monkeypatch
 ):
     """When the project has no .wren/memory/, include_memory_write=True must
     silently produce no memory tools — not raise, not warn, not partially
@@ -70,8 +78,8 @@ def test_include_memory_write_true_is_no_op_when_memory_disabled(
         assert "wren_query" in names
 
 
-def test_wren_fetch_context_full_strategy(tmp_project, fake_active_profile):
-    project = _enable_memory(tmp_project)
+def test_wren_fetch_context_full_strategy(tmp_project, fake_active_profile, monkeypatch):
+    project = _enable_memory(tmp_project, monkeypatch)
     fake_store = MagicMock(name="MemoryStore")
     fake_store.get_context.return_value = {
         "strategy": "full",
@@ -88,8 +96,8 @@ def test_wren_fetch_context_full_strategy(tmp_project, fake_active_profile):
     assert "Schema text" in envelope["content"]
 
 
-def test_wren_fetch_context_search_strategy(tmp_project, fake_active_profile):
-    project = _enable_memory(tmp_project)
+def test_wren_fetch_context_search_strategy(tmp_project, fake_active_profile, monkeypatch):
+    project = _enable_memory(tmp_project, monkeypatch)
     fake_store = MagicMock(name="MemoryStore")
     fake_store.get_context.return_value = {
         "strategy": "search",
@@ -110,8 +118,8 @@ def test_wren_fetch_context_search_strategy(tmp_project, fake_active_profile):
     assert "[column] orders.id" in envelope["content"]
 
 
-def test_wren_recall_queries_formats_as_numbered_list(tmp_project, fake_active_profile):
-    project = _enable_memory(tmp_project)
+def test_wren_recall_queries_formats_as_numbered_list(tmp_project, fake_active_profile, monkeypatch):
+    project = _enable_memory(tmp_project, monkeypatch)
     fake_store = MagicMock(name="MemoryStore")
     fake_store.recall_queries.return_value = [
         {"nl_query": "top customers", "sql_query": "SELECT * FROM customers"},
@@ -131,9 +139,9 @@ def test_wren_recall_queries_formats_as_numbered_list(tmp_project, fake_active_p
 
 
 def test_wren_store_query_returns_short_success_message(
-    tmp_project, fake_active_profile
+    tmp_project, fake_active_profile, monkeypatch
 ):
-    project = _enable_memory(tmp_project)
+    project = _enable_memory(tmp_project, monkeypatch)
     fake_store = MagicMock(name="MemoryStore")
 
     with patch("wren_langchain._providers.memory.MemoryStore", return_value=fake_store):

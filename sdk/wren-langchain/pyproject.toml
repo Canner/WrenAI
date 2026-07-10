@@ -65,8 +65,8 @@ oracle     = ["wrenai[oracle]>=0.7.0"]
 
 # ── Memory extra ──────────────────────────────────────────────────────────
 # Required to use the three memory tools (wren_fetch_context,
-# wren_recall_queries, wren_store_query). Pulls in LanceDB and the
-# sentence-transformer model deps via wrenai.
+# wren_recall_queries, wren_store_query). Pulls in the Qdrant client and
+# Volcengine Ark (openai) embedding deps via wrenai.
 #
 # Without this, the toolkit auto-detects no memory and exposes only the
 # three runtime tools.
@@ -82,7 +82,7 @@ dev = [
   "pytest>=8",
   "pytest-mock>=3",
   "ruff>=0.4",
-  # Tests run real DuckDB + LanceDB integrations, so memory deps are required.
+  # Tests run real DuckDB + Qdrant integrations, so memory deps are required.
   "wrenai[memory]>=0.7.0",
 ]
 
@@ -107,8 +107,8 @@ ignore = ["E501"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-# Default run skips tests marked `slow` (currently the LanceDB integration
-# tests which load a sentence-transformer model, ~30-40s). Run them explicitly
+# Default run skips tests marked `slow` (currently the Qdrant integration
+# tests which need a Qdrant server + Ark embeddings, ~30-40s). Run them explicitly
 # with `pytest -m slow` or `pytest -m "slow or not slow"` for everything.
 addopts = "-ra -m \"not slow\""
 markers = [

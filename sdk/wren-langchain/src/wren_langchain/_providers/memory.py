@@ -1,41 +1,41 @@
 """Memory providers resolve where the long-lived context store lives.
 
-v0.1 ships:
-  - ``LocalLanceDBMemoryProvider``: opens a ``MemoryStore`` against a local
-    ``.wren/memory/`` directory.
+This fork points memory at a remote Qdrant server with Volcengine Ark
+embeddings:
+  - ``QdrantMemoryProvider``: opens a ``MemoryStore`` against ``$QDRANT_URL``
+    (embeddings via ``$VOLC_ARK_API_KEY``).
   - ``NoopMemoryProvider``: signals that memory is disabled. Direct API calls
     raise ``MemoryNotEnabledError``; LLM-facing tools are filtered out.
 
 Auto-selection is performed by ``WrenToolkit.from_project`` based on whether
-``<project>/.wren/memory/`` exists.
+``QDRANT_URL`` is set.
 """
-
-from pathlib import Path
 
 from wren.memory.store import MemoryStore
 
 from wren_langchain.exceptions import MemoryNotEnabledError
 
 
-class LocalLanceDBMemoryProvider:
-    """Lazily opens a local LanceDB-backed ``MemoryStore`` on first use."""
+class QdrantMemoryProvider:
+    """Lazily opens a Qdrant-backed ``MemoryStore`` on first use."""
 
     enabled = True
 
-    def __init__(self, *, memory_path: Path):
-        self._memory_path = memory_path
+    def __init__(self, *, url: str | None = None, api_key: str | None = None):
+        self._url = url
+        self._api_key = api_key
 
     def open(self) -> MemoryStore:
-        return MemoryStore(path=self._memory_path)
+        return MemoryStore(url=self._url, api_key=self._api_key)
 
 
 class NoopMemoryProvider:
-    """Inert provider used when no ``.wren/memory/`` exists in the project."""
+    """Inert provider used when ``QDRANT_URL`` is not configured."""
 
     enabled = False
 
     def open(self) -> MemoryStore:
         raise MemoryNotEnabledError(
             "memory is not enabled for this toolkit. "
-            "Run `wren memory index` in your project to enable it."
+            "Set QDRANT_URL (and VOLC_ARK_API_KEY), then run `wren memory index`."
         )

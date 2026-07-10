@@ -58,18 +58,18 @@ def test_grep_rebuild_and_status_and_reset(tmp_path):
 
 
 def test_resolve_backend_env_override():
-    from wren.memory.index_backend import _extra_available  # noqa: PLC0415
+    from wren.memory.index_backend import _qdrant_available  # noqa: PLC0415
 
     assert resolve_backend("grep") == "grep"
-    # explicit lancedb is honored only when its extra is importable, else grep
-    assert resolve_backend("lancedb") == ("lancedb" if _extra_available() else "grep")
+    # explicit qdrant is honored only when extra + QDRANT_URL are available, else grep
+    assert resolve_backend("qdrant") == ("qdrant" if _qdrant_available() else "grep")
     # unrecognized values fall back to auto-detection
-    assert resolve_backend("bogus") in {"grep", "lancedb"}
+    assert resolve_backend("bogus") in {"grep", "qdrant"}
 
 
 def test_get_index_normalizes_explicit_backend(tmp_path):
     # explicit backend is stripped/lowercased before selection
-    assert isinstance(get_index(tmp_path, "x", backend=" GREP "), GrepIndex)
+    assert isinstance(get_index(tmp_path, backend=" GREP "), GrepIndex)
 
 
 # ── CLI commands over the grep backend (no extra needed) ───────────────────
@@ -113,3 +113,20 @@ def test_cli_status_and_reset_and_check_grep(tmp_path, monkeypatch):
     check = runner.invoke(app, ["memory", "check"])
     assert check.exit_code == 0, check.output
     assert "always in sync" in check.output
+
+
+# -- .env loading (memory group callback) --
+
+def test_memory_callback_loads_dotenv(tmp_path, monkeypatch):
+    """`wren memory <cmd>` loads .env (QDRANT_URL/VOLC_ARK_API_KEY) before running."""
+    import wren.profile  # noqa: PLC0415
+
+    called = []
+    monkeypatch.setattr(wren.profile, "_ensure_env_loaded", lambda: called.append(True))
+    monkeypatch.delenv("QDRANT_URL", raising=False)
+    monkeypatch.setenv("WREN_PROJECT_HOME", str(tmp_path))
+    (tmp_path / "wren_project.yml").write_text("schema_version: 1")
+
+    result = runner.invoke(app, ["memory", "status"])
+    assert result.exit_code == 0, result.output
+    assert called, "memory group callback did not invoke _ensure_env_loaded"

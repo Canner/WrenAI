@@ -36,7 +36,7 @@ Override the entire global directory with `WREN_HOME`.
 | `instructions.md` | Deprecated — move into `knowledge/rules/` (still read if present). | ⚠️ legacy |
 | `queries.yml` | Legacy NL-SQL pairs — superseded by `knowledge/sql/`. | ⚠️ legacy |
 | `.env` | Per-project `.env` for `${VAR}` interpolation. | ❌ gitignore |
-| `.wren/memory/` | Derived LanceDB index (rebuilt from `knowledge/sql/`). | ❌ gitignore |
+| `.wren/memory/` | Derived Qdrant index (rebuilt from `knowledge/sql/`). | ❌ gitignore |
 | `target/mdl.json` | Compiled MDL manifest (rebuildable). | ❌ gitignore |
 
 ## Environment variables

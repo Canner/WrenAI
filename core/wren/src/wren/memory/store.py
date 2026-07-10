@@ -1,18 +1,29 @@
-"""LanceDB-backed memory store for schema items and query history."""
+"""Qdrant-backed memory store for schema items and query history.
+
+Replaces the previous local vector store. Qdrant runs as a remote server
+(``QDRANT_URL``); each Wren project indexes into two collections:
+``{prefix}_schema_items`` and ``{prefix}_query_history``. Markdown
+(``knowledge/sql/``) and the MDL manifest remain the source of truth - the
+Qdrant index is a derived artifact rebuilt by ``wren memory index``.
+"""
 
 from __future__ import annotations
 
+import os
+import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 
-import pyarrow as pa
-
-from wren.memory.embeddings import (
-    _DEFAULT_DIM,
-    _DEFAULT_MODEL,
-    get_embedding_function,
-    warm_up,
+from qdrant_client import QdrantClient
+from qdrant_client.models import (
+    Distance,
+    FieldCondition,
+    Filter,
+    MatchValue,
+    PointStruct,
+    VectorParams,
 )
+
+from wren.memory.embeddings import EmbeddingProvider, get_default_embedding
 from wren.memory.schema_indexer import (
     SCHEMA_DESCRIBE_THRESHOLD,
     describe_schema,
@@ -20,87 +31,110 @@ from wren.memory.schema_indexer import (
     manifest_hash,
 )
 
-_WREN_MEMORY_DIR = Path.home() / ".wren" / "memory"
-
 _SCHEMA_TABLE = "schema_items"
 _QUERY_TABLE = "query_history"
+_DEFAULT_PREFIX = "wren"
 
 
-def _esc(value: str) -> str:
-    """Escape single quotes for LanceDB where-clause literals."""
-    return value.replace("'", "''")
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
-def _schema_items_arrow_schema(dim: int = _DEFAULT_DIM) -> pa.Schema:
-    return pa.schema(
-        [
-            pa.field("text", pa.utf8()),
-            pa.field("vector", pa.list_(pa.float32(), dim)),
-            pa.field("item_type", pa.utf8()),
-            pa.field("model_name", pa.utf8()),
-            pa.field("item_name", pa.utf8()),
-            pa.field("data_type", pa.utf8()),
-            pa.field("expression", pa.utf8()),
-            pa.field("is_calculated", pa.bool_()),
-            pa.field("mdl_hash", pa.utf8()),
-            pa.field("indexed_at", pa.timestamp("us", tz="UTC")),
-        ]
-    )
+def _condition(key: str, value) -> FieldCondition:
+    """Build a Qdrant equality filter condition."""
+    return FieldCondition(key=key, match=MatchValue(value=value))
 
 
-def _query_history_arrow_schema(dim: int = _DEFAULT_DIM) -> pa.Schema:
-    return pa.schema(
-        [
-            pa.field("text", pa.utf8()),
-            pa.field("vector", pa.list_(pa.float32(), dim)),
-            pa.field("nl_query", pa.utf8()),
-            pa.field("sql_query", pa.utf8()),
-            pa.field("datasource", pa.utf8()),
-            pa.field("created_at", pa.timestamp("us", tz="UTC")),
-            pa.field("tags", pa.utf8()),
-        ]
-    )
-
-
-def _table_names(db) -> list[str]:
-    """Get table names, compatible with lancedb >=0.30 (ListTablesResponse)."""
-    result = db.list_tables()
-    if isinstance(result, list):
-        return result
-    return result.tables
+def _serialize_payload(payload: dict) -> dict:
+    """Make a payload JSON-safe for Qdrant (datetime -> ISO string)."""
+    safe: dict = {}
+    for k, v in payload.items():
+        if hasattr(v, "isoformat"):
+            safe[k] = v.isoformat()
+        else:
+            safe[k] = v
+    return safe
 
 
 class MemoryStore:
-    """Manage LanceDB tables for schema and query memory.
+    """Manage Qdrant collections for schema and query memory.
 
     Parameters
     ----------
-    path:
-        Directory for LanceDB storage.  Defaults to ``~/.wren/memory/``.
-    model_name:
-        Sentence-transformers model name.  ``None`` → default multilingual model.
+    url:
+        Qdrant server URL.  Defaults to ``$QDRANT_URL`` (required).
+    api_key:
+        Qdrant API key for authenticated clusters.  Defaults to
+        ``$QDRANT_API_KEY``.
+    embedding:
+        :class:`EmbeddingProvider` used to vectorize text.  Defaults to
+        :class:`VolcArkEmbedding` (reads Ark env vars).  Tests inject a
+        :class:`~wren.memory.embeddings.FakeEmbedding`.
+    collection_prefix:
+        Prefix for collection names, to isolate projects sharing one Qdrant.
     """
 
     def __init__(
         self,
-        path: str | Path | None = None,
-        model_name: str | None = None,
-    ):
-        import lancedb  # noqa: PLC0415
+        url: str | None = None,
+        api_key: str | None = None,
+        embedding: EmbeddingProvider | None = None,
+        collection_prefix: str = _DEFAULT_PREFIX,
+    ) -> None:
+        resolved_url = url or os.environ.get("QDRANT_URL")
+        if not resolved_url:
+            raise RuntimeError(
+                "QDRANT_URL is not set. Point it at a Qdrant server, e.g. "
+                "http://localhost:6333 (or pass url=... explicitly)."
+            )
+        self._url = resolved_url
+        self._prefix = collection_prefix or _DEFAULT_PREFIX
+        self._embedding = embedding or get_default_embedding()
+        self._client = QdrantClient(
+            url=resolved_url,
+            api_key=api_key or os.environ.get("QDRANT_API_KEY"),
+        )
 
-        resolved = Path(path).expanduser() if path else _WREN_MEMORY_DIR
-        resolved.mkdir(parents=True, exist_ok=True)
-        self._path = resolved
-        self._db = lancedb.connect(str(resolved))
-        self._embed_fn = get_embedding_function(model_name or _DEFAULT_MODEL)
-        # Trigger model loading silently and derive vector dimension.
-        self._dim = warm_up(self._embed_fn)
+    @property
+    def embedding(self) -> EmbeddingProvider:
+        return self._embedding
 
-    def _schema_table_schema(self) -> pa.Schema:
-        return _schema_items_arrow_schema(dim=self._dim)
+    def _schema_collection(self) -> str:
+        return f"{self._prefix}_{_SCHEMA_TABLE}"
 
-    def _query_table_schema(self) -> pa.Schema:
-        return _query_history_arrow_schema(dim=self._dim)
+    def _query_collection(self) -> str:
+        return f"{self._prefix}_{_QUERY_TABLE}"
+
+    def _ensure_collection(self, name: str) -> None:
+        """Create the collection with the embedding dimension if absent."""
+        if not self._client.collection_exists(name):
+            self._client.create_collection(
+                collection_name=name,
+                vectors_config=VectorParams(
+                    size=self._embedding.dim,
+                    distance=Distance.COSINE,
+                ),
+            )
+
+    def _scroll_all(
+        self, collection: str, flt: Filter | None = None
+    ) -> list:
+        """Scroll every point in *collection* (optionally filtered)."""
+        points: list = []
+        offset = None
+        while True:
+            batch, offset = self._client.scroll(
+                collection_name=collection,
+                scroll_filter=flt,
+                limit=256,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            points.extend(batch)
+            if offset is None:
+                break
+        return points
 
     # ── Schema indexing ───────────────────────────────────────────────────
 
@@ -120,37 +154,28 @@ class MemoryStore:
         Returns {"schema_items": int, "seed_queries": int}.
         """
         items = extract_schema_items(manifest)
-        table_exists = _SCHEMA_TABLE in _table_names(self._db)
+        coll = self._schema_collection()
+        exists = self._client.collection_exists(coll)
 
         if not items:
-            if replace and table_exists:
-                self._db.drop_table(_SCHEMA_TABLE)
+            if replace and exists:
+                self._client.delete_collection(coll)
             schema_count = 0
         else:
+            payloads = [_serialize_payload(item) for item in items]
             texts = [item["text"] for item in items]
-            vectors = self._embed_fn.compute_source_embeddings(texts)
-
-            for item, vec in zip(items, vectors):
-                item["vector"] = vec
-
+            vectors = self._embedding.embed_texts(texts)
+            points = [
+                PointStruct(id=str(uuid.uuid4()), vector=vec, payload=p)
+                for p, vec in zip(payloads, vectors)
+            ]
             if replace:
-                if table_exists:
-                    self._db.drop_table(_SCHEMA_TABLE)
-                self._db.create_table(
-                    _SCHEMA_TABLE,
-                    items,
-                    schema=self._schema_table_schema(),
-                )
+                if exists:
+                    self._client.delete_collection(coll)
+                self._ensure_collection(coll)
             else:
-                if table_exists:
-                    tbl = self._db.open_table(_SCHEMA_TABLE)
-                    tbl.add(items)
-                else:
-                    self._db.create_table(
-                        _SCHEMA_TABLE,
-                        items,
-                        schema=self._schema_table_schema(),
-                    )
+                self._ensure_collection(coll)
+            self._client.upsert(collection_name=coll, points=points)
             schema_count = len(items)
 
         seed_count = 0
@@ -166,16 +191,17 @@ class MemoryStore:
             generate_seed_queries,
         )
 
-        # Remove old seeds (tagged 'source:seed') but keep user entries
-        if _QUERY_TABLE in _table_names(self._db):
-            table = self._db.open_table(_QUERY_TABLE)
-            table.delete(f"tags = '{SEED_TAG}'")
+        qcoll = self._query_collection()
+        if self._client.collection_exists(qcoll):
+            self._client.delete(
+                collection_name=qcoll,
+                points_selector=Filter(must=[_condition("tags", SEED_TAG)]),
+            )
 
         pairs = generate_seed_queries(manifest)
         if not pairs:
             return 0
 
-        # Insert new seeds via the existing store_query() method
         for pair in pairs:
             self.store_query(
                 nl_query=pair["nl"],
@@ -188,18 +214,22 @@ class MemoryStore:
     def schema_is_current(self, manifest: dict) -> bool:
         """Check whether the indexed schema matches *manifest*.
 
-        Returns ``True`` only when every row in the schema table carries
-        the current manifest hash (i.e. no stale rows from a previous
-        manifest remain).
+        Returns ``True`` only when every point in the schema collection
+        carries the current manifest hash (i.e. no stale points from a
+        previous manifest remain).
         """
-        if _SCHEMA_TABLE not in _table_names(self._db):
+        coll = self._schema_collection()
+        if not self._client.collection_exists(coll):
             return False
-        table = self._db.open_table(_SCHEMA_TABLE)
-        if table.count_rows() == 0:
+        if self._client.count(coll, exact=True).count == 0:
             return False
         current_hash = manifest_hash(manifest)
-        df = table.to_pandas()
-        return bool((df["mdl_hash"] == current_hash).all())
+        hashes = {
+            p.payload.get("mdl_hash")
+            for p in self._scroll_all(coll)
+            if p.payload
+        }
+        return bool(hashes) and hashes == {current_hash}
 
     # ── Plain-text / hybrid ────────────────────────────────────────────────
 
@@ -251,28 +281,35 @@ class MemoryStore:
         mdl_hash: str | None = None,
     ) -> list[dict]:
         """Embedding search over indexed schema items (internal)."""
-        if _SCHEMA_TABLE not in _table_names(self._db):
+        coll = self._schema_collection()
+        if not self._client.collection_exists(coll):
             return []
 
-        table = self._db.open_table(_SCHEMA_TABLE)
-        q = table.search(
-            self._embed_fn.compute_query_embeddings(query)[0],
-        )
-
-        where_parts: list[str] = []
+        qvec = self._embedding.embed_texts([query])[0]
+        must: list[FieldCondition] = []
         if mdl_hash:
-            where_parts.append(f"mdl_hash = '{_esc(mdl_hash)}'")
+            must.append(_condition("mdl_hash", mdl_hash))
         if item_type:
-            where_parts.append(f"item_type = '{_esc(item_type)}'")
+            must.append(_condition("item_type", item_type))
         if model_name:
-            where_parts.append(f"model_name = '{_esc(model_name)}'")
-        if where_parts:
-            q = q.where(" AND ".join(where_parts))
+            must.append(_condition("model_name", model_name))
+        flt = Filter(must=must) if must else None
 
-        results = q.limit(limit).to_list()
-        for r in results:
-            r.pop("vector", None)
-        return results
+        result = self._client.query_points(
+            collection_name=coll,
+            query=qvec,
+            query_filter=flt,
+            limit=limit,
+            with_payload=True,
+            with_vectors=False,
+        )
+        out: list[dict] = []
+        for scored in result.points:
+            payload = dict(scored.payload) if scored.payload else {}
+            payload.pop("vector", None)
+            payload["score"] = scored.score
+            out.append(payload)
+        return out
 
     # ── Query history ─────────────────────────────────────────────────────
 
@@ -284,29 +321,26 @@ class MemoryStore:
         datasource: str | None = None,
         tags: str | None = None,
     ) -> None:
-        """Store a NL→SQL pair with embedding of the NL query."""
-        now = datetime.now(timezone.utc)
-        vectors = self._embed_fn.compute_source_embeddings([nl_query])
-
-        record = {
-            "text": nl_query,
-            "vector": vectors[0],
-            "nl_query": nl_query,
-            "sql_query": sql_query,
-            "datasource": datasource or "",
-            "created_at": now,
-            "tags": tags or "",
-        }
-
-        if _QUERY_TABLE in _table_names(self._db):
-            table = self._db.open_table(_QUERY_TABLE)
-            table.add([record])
-        else:
-            self._db.create_table(
-                _QUERY_TABLE,
-                [record],
-                schema=self._query_table_schema(),
-            )
+        """Store a NL->SQL pair with embedding of the NL query."""
+        qcoll = self._query_collection()
+        self._ensure_collection(qcoll)
+        vec = self._embedding.embed_texts([nl_query])[0]
+        payload = _serialize_payload(
+            {
+                "text": nl_query,
+                "nl_query": nl_query,
+                "sql_query": sql_query,
+                "datasource": datasource or "",
+                "created_at": datetime.now(timezone.utc),
+                "tags": tags or "",
+            }
+        )
+        self._client.upsert(
+            collection_name=qcoll,
+            points=[
+                PointStruct(id=str(uuid.uuid4()), vector=vec, payload=payload)
+            ],
+        )
 
     def recall_queries(
         self,
@@ -315,22 +349,28 @@ class MemoryStore:
         limit: int = 3,
         datasource: str | None = None,
     ) -> list[dict]:
-        """Search past NL→SQL pairs by semantic similarity."""
-        if _QUERY_TABLE not in _table_names(self._db):
+        """Search past NL->SQL pairs by semantic similarity."""
+        qcoll = self._query_collection()
+        if not self._client.collection_exists(qcoll):
             return []
 
-        table = self._db.open_table(_QUERY_TABLE)
-        q = table.search(
-            self._embed_fn.compute_query_embeddings(query)[0],
+        qvec = self._embedding.embed_texts([query])[0]
+        flt = Filter(must=[_condition("datasource", datasource)]) if datasource else None
+        result = self._client.query_points(
+            collection_name=qcoll,
+            query=qvec,
+            query_filter=flt,
+            limit=limit,
+            with_payload=True,
+            with_vectors=False,
         )
-
-        if datasource:
-            q = q.where(f"datasource = '{_esc(datasource)}'")
-
-        results = q.limit(limit).to_list()
-        for r in results:
-            r.pop("vector", None)
-        return results
+        out: list[dict] = []
+        for scored in result.points:
+            payload = dict(scored.payload) if scored.payload else {}
+            payload.pop("vector", None)
+            payload["score"] = scored.score
+            out.append(payload)
+        return out
 
     # ── Query listing & management ───────────────────────────────────────
 
@@ -344,68 +384,62 @@ class MemoryStore:
         """List query_history pairs.
 
         Returns (rows, total_count).  Rows include ``_row_id`` for use
-        with :meth:`forget_queries_by_ids`.  The ``_row_id`` is the
-        positional index in the *unfiltered* table so it can be passed
-        directly to :meth:`forget_queries_by_ids`.
+        with :meth:`forget_queries_by_ids`.  ``_row_id`` is the Qdrant
+        point id (a UUID string).
         """
-        if _QUERY_TABLE not in _table_names(self._db):
+        qcoll = self._query_collection()
+        if not self._client.collection_exists(qcoll):
             return [], 0
 
-        table = self._db.open_table(_QUERY_TABLE)
-        df = table.to_pandas()
-        # Ensure a clean 0-based index matching the unfiltered table.
-        df = df.reset_index(drop=True)
-        if source:
-            df = df[df["tags"] == f"source:{source}"]
-        total = len(df)
-        df = df.sort_values("created_at", ascending=False)
-        rows = df.iloc[offset : offset + limit]
-        results = rows.drop(columns=["vector"], errors="ignore").to_dict("records")
-        # Attach the *original* DataFrame index so forget_queries_by_ids
-        # deletes the correct rows even when a source filter is applied.
-        for idx, (orig_idx, _) in zip(range(len(results)), rows.iterrows()):
-            results[idx]["_row_id"] = orig_idx
-        return results, total
+        flt = (
+            Filter(must=[_condition("tags", f"source:{source}")])
+            if source
+            else None
+        )
+        total = self._client.count(qcoll, count_filter=flt, exact=True).count
+
+        points = self._scroll_all(qcoll, flt)
+        # Most recent first (created_at is an ISO string).
+        points.sort(key=lambda p: (p.payload or {}).get("created_at", ""), reverse=True)
+        rows: list[dict] = []
+        for p in points[offset : offset + limit]:
+            payload = dict(p.payload) if p.payload else {}
+            payload.pop("vector", None)
+            payload["_row_id"] = p.id
+            rows.append(payload)
+        return rows, total
 
     def count_queries_by_source(self, source: str) -> int:
         """Return the number of query_history rows matching *source* tag."""
-        if _QUERY_TABLE not in _table_names(self._db):
+        qcoll = self._query_collection()
+        if not self._client.collection_exists(qcoll):
             return 0
-        table = self._db.open_table(_QUERY_TABLE)
-        df = table.to_pandas()
-        return int((df["tags"] == f"source:{source}").sum())
+        flt = Filter(must=[_condition("tags", f"source:{source}")])
+        return self._client.count(qcoll, count_filter=flt, exact=True).count
 
-    def forget_queries_by_ids(self, row_ids: list[int]) -> int:
-        """Delete rows at the given positional indices.  Returns deleted count."""
-        if _QUERY_TABLE not in _table_names(self._db):
+    def forget_queries_by_ids(self, row_ids: list[str]) -> int:
+        """Delete points by Qdrant point id.  Returns deleted count."""
+        qcoll = self._query_collection()
+        if not self._client.collection_exists(qcoll):
             return 0
-        table = self._db.open_table(_QUERY_TABLE)
-        df = table.to_pandas()
-        to_delete = sorted({i for i in row_ids if 0 <= i < len(df)})
-        if not to_delete:
+        valid = [rid for rid in row_ids if rid is not None]
+        if not valid:
             return 0
-        keep = df.drop(index=to_delete).reset_index(drop=True)
-        # Rebuild the table with remaining rows
-        self._db.drop_table(_QUERY_TABLE)
-        if len(keep) == 0:
-            return len(to_delete)
-        keep_arrow = pa.Table.from_pandas(keep, schema=self._query_table_schema())
-        self._db.create_table(
-            _QUERY_TABLE,
-            keep_arrow,
-            schema=self._query_table_schema(),
-        )
-        return len(to_delete)
+        before = self._client.count(qcoll, exact=True).count
+        self._client.delete(collection_name=qcoll, points_selector=valid)
+        after = self._client.count(qcoll, exact=True).count
+        return before - after
 
     def forget_queries_by_source(self, source: str) -> int:
         """Delete all query_history rows matching *source* tag.  Returns deleted count."""
-        if _QUERY_TABLE not in _table_names(self._db):
+        qcoll = self._query_collection()
+        if not self._client.collection_exists(qcoll):
             return 0
-        table = self._db.open_table(_QUERY_TABLE)
-        where = f"tags = 'source:{_esc(source)}'"
-        before = table.count_rows()
-        table.delete(where)
-        return before - table.count_rows()
+        flt = Filter(must=[_condition("tags", f"source:{source}")])
+        before = self._client.count(qcoll, exact=True).count
+        self._client.delete(collection_name=qcoll, points_selector=flt)
+        after = self._client.count(qcoll, exact=True).count
+        return before - after
 
     # ── Dump / Load ──────────────────────────────────────────────────────
 
@@ -415,36 +449,46 @@ class MemoryStore:
         source: str | None = None,
     ) -> list[dict]:
         """Export all query_history pairs (without vector column)."""
-        if _QUERY_TABLE not in _table_names(self._db):
+        qcoll = self._query_collection()
+        if not self._client.collection_exists(qcoll):
             return []
-        table = self._db.open_table(_QUERY_TABLE)
-        df = table.to_pandas()
-        if source:
-            df = df[df["tags"] == f"source:{source}"]
-        df = df.sort_values("created_at", ascending=True)
-        return df.drop(columns=["vector"], errors="ignore").to_dict("records")
+        flt = (
+            Filter(must=[_condition("tags", f"source:{source}")])
+            if source
+            else None
+        )
+        points = self._scroll_all(qcoll, flt)
+        points.sort(key=lambda p: (p.payload or {}).get("created_at", ""))
+        rows: list[dict] = []
+        for p in points:
+            payload = dict(p.payload) if p.payload else {}
+            payload.pop("vector", None)
+            rows.append(payload)
+        return rows
 
     def _existing_pairs_index(
         self,
-    ) -> tuple[set[tuple[str, str]], dict[str, list[int]]]:
+    ) -> tuple[set[tuple[str, str]], dict[str, list[str]]]:
         """Build lookup indexes from existing query_history.
 
         Returns
         -------
-        (exact_set, nl_to_rowids)
+        (exact_set, nl_to_ids)
             *exact_set*: ``{(nl_query, sql_query)}`` for skip dedup.
-            *nl_to_rowids*: ``{nl_query: [positional_indices]}`` for upsert.
+            *nl_to_ids*: ``{nl_query: [point_ids]}`` for upsert.
         """
-        if _QUERY_TABLE not in _table_names(self._db):
+        qcoll = self._query_collection()
+        if not self._client.collection_exists(qcoll):
             return set(), {}
-        table = self._db.open_table(_QUERY_TABLE)
-        df = table.to_pandas()
-        exact_set: set[tuple[str, str]] = set(zip(df["nl_query"], df["sql_query"]))
-        # Collect *all* row ids per nl_query so upsert removes every duplicate.
-        nl_to_rowids: dict[str, list[int]] = {}
-        for idx, nl in zip(df.index, df["nl_query"]):
-            nl_to_rowids.setdefault(nl, []).append(idx)
-        return exact_set, nl_to_rowids
+        exact_set: set[tuple[str, str]] = set()
+        nl_to_ids: dict[str, list[str]] = {}
+        for p in self._scroll_all(qcoll):
+            payload = p.payload or {}
+            nl = payload.get("nl_query")
+            sql = payload.get("sql_query")
+            exact_set.add((nl, sql))
+            nl_to_ids.setdefault(nl, []).append(p.id)
+        return exact_set, nl_to_ids
 
     def load_queries(
         self,
@@ -473,7 +517,7 @@ class MemoryStore:
                 loaded += 1
             return {"loaded": loaded, "skipped": 0, "updated": 0}
 
-        exact_set, nl_to_rowids = self._existing_pairs_index()
+        exact_set, nl_to_ids = self._existing_pairs_index()
 
         if upsert:
             # Deduplicate input by nl_query (last occurrence wins).
@@ -482,12 +526,11 @@ class MemoryStore:
                 seen_nl[p["nl"]] = p
             deduped = list(seen_nl.values())
 
-            # Batch: collect IDs to delete, then delete once, then insert all.
-            ids_to_delete = []
+            ids_to_delete: list[str] = []
             updated = 0
             for p in deduped:
-                if p["nl"] in nl_to_rowids:
-                    ids_to_delete.extend(nl_to_rowids[p["nl"]])
+                if p["nl"] in nl_to_ids:
+                    ids_to_delete.extend(nl_to_ids[p["nl"]])
                     updated += 1
             if ids_to_delete:
                 self.forget_queries_by_ids(ids_to_delete)
@@ -525,14 +568,17 @@ class MemoryStore:
 
     def status(self) -> dict:
         """Return index statistics."""
-        info: dict = {"path": str(self._path), "tables": {}}
-        for name in _table_names(self._db):
-            table = self._db.open_table(name)
-            info["tables"][name] = table.count_rows()
+        info: dict = {"url": self._url, "tables": {}}
+        for name, coll in (
+            (_SCHEMA_TABLE, self._schema_collection()),
+            (_QUERY_TABLE, self._query_collection()),
+        ):
+            if self._client.collection_exists(coll):
+                info["tables"][name] = self._client.count(coll, exact=True).count
         return info
 
     def reset(self) -> None:
-        """Drop Wren memory tables."""
-        for name in (_SCHEMA_TABLE, _QUERY_TABLE):
-            if name in _table_names(self._db):
-                self._db.drop_table(name)
+        """Drop Wren memory collections."""
+        for coll in (self._schema_collection(), self._query_collection()):
+            if self._client.collection_exists(coll):
+                self._client.delete_collection(coll)

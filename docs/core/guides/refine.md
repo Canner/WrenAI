@@ -27,7 +27,7 @@ pip install "wrenai[memory]"
 pip install "wrenai[memory,postgres]"
 ```
 
-With the extra, recall is embedding-based and LanceDB caches the index; without it, the
+With the extra, recall is embedding-based and Qdrant caches the index; without it, the
 same commands fall back to the dependency-free grep backend.
 
 ## The flow today

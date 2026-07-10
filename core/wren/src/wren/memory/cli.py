@@ -13,19 +13,31 @@ import yaml
 
 memory_app = typer.Typer(
     name="memory",
-    help="Schema and query memory backed by LanceDB.",
+    help="Schema and query memory backed by Qdrant.",
 )
 
-_WREN_HOME = Path(os.environ.get("WREN_HOME", Path.home() / ".wren"))
+
+@memory_app.callback()
+def _load_env_before_memory_commands() -> None:
+    """Load .env before any memory command runs.
+
+    Reuses the profile env loader so QDRANT_URL / VOLC_ARK_API_KEY may
+    live in .env instead of the shell: $CWD/.env, the project-root .env
+    (next to wren_project.yml), and ~/.wren/.env. Shell-exported vars
+    still win (override=False).
+    """
+    from wren.profile import _ensure_env_loaded  # noqa: PLC0415
+
+    _ensure_env_loaded()
 
 # ── Shared option types ───────────────────────────────────────────────────
 
-PathOpt = Annotated[
+UrlOpt = Annotated[
     Optional[str],
     typer.Option(
-        "--path",
+        "--url",
         "-p",
-        help="LanceDB storage directory. Defaults to <project>/.wren/memory/.",
+        help="Qdrant server URL. Overrides $QDRANT_URL.",
     ),
 ]
 MdlOpt = Annotated[
@@ -44,14 +56,9 @@ OutputOpt = Annotated[
 # ── Helpers ───────────────────────────────────────────────────────────────
 
 
-def _default_memory_path() -> Path:
-    """Return the project-local memory path, or ~/.wren/memory/ as fallback."""
-    try:
-        from wren.context import discover_project_path  # noqa: PLC0415
-
-        return discover_project_path() / ".wren" / "memory"
-    except (SystemExit, Exception):
-        return _WREN_HOME / "memory"
+def _default_url() -> str | None:
+    """Return the Qdrant URL from the environment, if configured."""
+    return os.environ.get("QDRANT_URL")
 
 
 def _load_manifest(mdl: str | None) -> dict:
@@ -84,19 +91,22 @@ def _load_manifest(mdl: str | None) -> dict:
         raise typer.Exit(1)
 
 
-def _get_store(path: str | None):
+def _get_store(url: str | None):
     """Lazy-import and construct a MemoryStore."""
-    resolved = path or str(_default_memory_path())
+    resolved = url or _default_url()
+    if not resolved:
+        typer.echo(
+            "Error: QDRANT_URL is not set. Point it at a Qdrant server, e.g. "
+            "export QDRANT_URL=http://localhost:6333, or pass --url.",
+            err=True,
+        )
+        raise typer.Exit(1)
     try:
         from wren.memory.store import MemoryStore  # noqa: PLC0415
 
-        return MemoryStore(path=resolved)
+        return MemoryStore(url=resolved)
     except ModuleNotFoundError as e:
-        if (e.name or "").split(".")[0] not in {
-            "lancedb",
-            "sentence_transformers",
-            "pyarrow",
-        }:
+        if (e.name or "").split(".")[0] not in {"qdrant_client", "openai"}:
             raise
         typer.echo(
             "Error: wren[memory] extras not installed. "
@@ -150,7 +160,7 @@ def _print_results(results: list[dict], output: str) -> None:
 @memory_app.command()
 def index(
     mdl: MdlOpt = None,
-    path: PathOpt = None,
+    url: UrlOpt = None,
     include_instructions: Annotated[
         bool,
         typer.Option(
@@ -169,7 +179,7 @@ def index(
 ) -> None:
     """Index the project for recall.
 
-    With the ``memory`` extra: builds the LanceDB semantic index (schema + seed
+    With the ``memory`` extra: builds the Qdrant semantic index (schema + seed
     + knowledge/sql pairs). Without it: the grep backend reads knowledge/sql/*.md
     directly, so there is nothing to build.
     """
@@ -186,7 +196,7 @@ def index(
             raise typer.Exit(1)
         n = len(load_query_pairs(project_path))
         typer.echo(
-            f"grep backend: {n} pair(s) in knowledge/sql/ — no index build needed."
+            f"grep backend: {n} pair(s) in knowledge/sql/ - no index build needed."
         )
         typer.echo(
             "`wren memory recall` works over grep; semantic schema search "
@@ -219,7 +229,7 @@ def index(
         ):
             pass  # instructions are optional; never fail index because of them
 
-    mem_store = _get_store(path)
+    mem_store = _get_store(url)
     result = mem_store.index_schema(manifest, seed_queries=not no_seed)
     typer.echo(
         f"Indexed {result['schema_items']} schema items"
@@ -238,7 +248,7 @@ def index(
 
             md_pairs = load_query_pairs(project_path)
             if md_pairs:
-                # upsert → re-running index converges on the markdown content.
+                # upsert -> re-running index converges on the markdown content.
                 res = mem_store.load_queries(md_pairs, upsert=True)
                 typer.echo(
                     f"Indexed {res['loaded'] + res['updated']} pair(s) from "
@@ -315,7 +325,7 @@ def fetch(
             "--threshold", help="Character threshold for full vs search strategy"
         ),
     ] = None,
-    path: PathOpt = None,
+    url: UrlOpt = None,
     output: OutputOpt = "table",
 ) -> None:
     """Get schema context for an LLM.
@@ -324,7 +334,7 @@ def fetch(
     embedding search with optional --type and --model filters.
     """
     manifest = _load_manifest(mdl)
-    store = _get_store(path)
+    store = _get_store(url)
     kwargs: dict = {"limit": limit, "item_type": item_type, "model_name": model_name}
     if threshold is not None:
         kwargs["threshold"] = threshold
@@ -355,12 +365,12 @@ def store(
     sql: Annotated[str, typer.Option("--sql", help="Corresponding SQL query")],
     datasource: Annotated[Optional[str], typer.Option("--datasource", "-d")] = None,
     tags: Annotated[Optional[str], typer.Option("--tags")] = None,
-    path: PathOpt = None,
+    url: UrlOpt = None,
 ) -> None:
-    """Store a NL→SQL pair as knowledge/sql/<slug>.md (source of truth), then index it.
+    """Store a NL->SQL pair as knowledge/sql/<slug>.md (source of truth), then index it.
 
     The markdown file is always written (no extra required). When the ``memory``
-    extra is installed, the pair is also indexed into LanceDB for semantic recall.
+    extra is installed, the pair is also indexed into Qdrant for semantic recall.
     """
     from wren.context import discover_project_path  # noqa: PLC0415
     from wren.memory.markdown import write_query_markdown  # noqa: PLC0415
@@ -377,22 +387,19 @@ def store(
     )
     typer.echo(f"Stored: {md_path}")
 
-    # Best-effort: index into LanceDB when the memory extra is available.
+    # Best-effort: index into Qdrant when the memory extra is available.
     try:
         from wren.memory.store import MemoryStore  # noqa: PLC0415
 
-        resolved = path or str(_default_memory_path())
-        MemoryStore(path=resolved).store_query(
-            nl, sql, datasource=datasource, tags=tags
-        )
+        resolved = url or _default_url()
+        if resolved:
+            MemoryStore(url=resolved).store_query(
+                nl, sql, datasource=datasource, tags=tags
+            )
     except ModuleNotFoundError as e:
-        if (e.name or "").split(".")[0] not in {
-            "lancedb",
-            "sentence_transformers",
-            "pyarrow",
-        }:
+        if (e.name or "").split(".")[0] not in {"qdrant_client", "openai"}:
             raise
-        # memory extra not installed — markdown-only; run `wren memory index` later.
+        # memory extra not installed - markdown-only; run `wren memory index` later.
 
 
 @memory_app.command()
@@ -400,10 +407,10 @@ def recall(
     query: Annotated[str, typer.Option("--query", "-q", help="Search query")],
     limit: Annotated[int, typer.Option("--limit", "-l")] = 3,
     datasource: Annotated[Optional[str], typer.Option("--datasource", "-d")] = None,
-    path: PathOpt = None,
+    url: UrlOpt = None,
     output: OutputOpt = "table",
 ) -> None:
-    """Search past NL→SQL pairs over knowledge/sql/.
+    """Search past NL->SQL pairs over knowledge/sql/.
 
     Uses semantic search with the ``memory`` extra, or dependency-free token
     matching (grep backend) without it.
@@ -416,7 +423,7 @@ def recall(
     except SystemExit as e:
         typer.echo(str(e), err=True)
         raise typer.Exit(1)
-    idx = get_index(project, path or str(_default_memory_path()))
+    idx = get_index(project, url=url)
     results = idx.search(query, limit=limit, datasource=datasource)
     _annotate_markdown_paths(results)
     _print_results(results, output)
@@ -433,7 +440,7 @@ def _annotate_markdown_paths(results: list[dict]) -> None:
         from wren.memory.markdown import load_query_pairs  # noqa: PLC0415
 
         project = discover_project_path()
-    except (SystemExit, Exception):  # noqa: BLE001 — annotation is optional
+    except (SystemExit, Exception):  # noqa: BLE001 - annotation is optional
         return
     nl_to_path = {p["nl"]: p["path"] for p in load_query_pairs(project)}
     for r in results:
@@ -444,7 +451,7 @@ def _annotate_markdown_paths(results: list[dict]) -> None:
 
 @memory_app.command()
 def status(
-    path: PathOpt = None,
+    url: UrlOpt = None,
 ) -> None:
     """Show memory backend and index statistics."""
     from wren.context import discover_project_path  # noqa: PLC0415
@@ -455,14 +462,17 @@ def status(
     except SystemExit as e:
         typer.echo(str(e), err=True)
         raise typer.Exit(1)
-    info = get_index(project, path or str(_default_memory_path())).status()
+    info = get_index(project, url=url).status()
     typer.echo(f"Backend: {info['backend']}")
     if info["backend"] == "grep":
         typer.echo(f"  knowledge/sql: {info['pairs']} pair(s)")
         return
+    server_url = info.get("url")
+    if server_url:
+        typer.echo(f"  url: {server_url}")
     tables = info.get("tables", {})
     if not tables:
-        typer.echo("No tables indexed yet.")
+        typer.echo("No collections indexed yet.")
         return
     for name, count in tables.items():
         typer.echo(f"  {name}: {count} rows")
@@ -470,14 +480,14 @@ def status(
 
 @memory_app.command()
 def reset(
-    path: PathOpt = None,
+    url: UrlOpt = None,
     force: Annotated[
         bool, typer.Option("--force", "-f", help="Skip confirmation")
     ] = False,
 ) -> None:
     """Drop the derived memory index. knowledge/sql/*.md is preserved.
 
-    The LanceDB index is a derived artifact — after reset, run `wren memory
+    The Qdrant index is a derived artifact - after reset, run `wren memory
     index` to rebuild it from the markdown source of truth.
     """
     from wren.context import discover_project_path  # noqa: PLC0415
@@ -488,9 +498,9 @@ def reset(
     except SystemExit as e:
         typer.echo(str(e), err=True)
         raise typer.Exit(1)
-    idx = get_index(project, path or str(_default_memory_path()))
+    idx = get_index(project, url=url)
     if idx.name == "grep":
-        typer.echo("grep backend has no derived index — knowledge/sql/ is the source.")
+        typer.echo("grep backend has no derived index - knowledge/sql/ is the source.")
         return
     if not force:
         confirm = typer.confirm(
@@ -507,7 +517,7 @@ def reset(
 
 @memory_app.command()
 def check(
-    path: PathOpt = None,
+    url: UrlOpt = None,
 ) -> None:
     """Report drift between knowledge/sql/*.md (source) and the derived index."""
     from wren.context import discover_project_path  # noqa: PLC0415
@@ -520,11 +530,11 @@ def check(
         typer.echo(str(e), err=True)
         raise typer.Exit(1)
 
-    idx = get_index(project, path or str(_default_memory_path()))
+    idx = get_index(project, url=url)
     if idx.name == "grep":
         n = len(load_query_pairs(project))
         typer.echo(
-            f"grep backend: knowledge/sql/ is the index ({n} pair(s)) — always in sync."
+            f"grep backend: knowledge/sql/ is the index ({n} pair(s)) - always in sync."
         )
         return
 
@@ -540,7 +550,7 @@ def check(
         if _parse_source(r.get("tags")) not in ("seed", "view")
     }
 
-    # Compare user pairs only — seed/view rows aren't markdown-backed.
+    # Compare user pairs only - seed/view rows aren't markdown-backed.
     missing = md_nls - indexed_user  # in markdown but not indexed as a user pair
     stale = indexed_user - md_nls  # user-indexed but no longer in markdown
 
@@ -551,10 +561,10 @@ def check(
         typer.echo("In sync.")
         return
     if missing:
-        typer.echo(f"  {len(missing)} not indexed — run `wren memory index`.")
+        typer.echo(f"  {len(missing)} not indexed - run `wren memory index`.")
     if stale:
         typer.echo(
-            f"  {len(stale)} user pair(s) indexed without markdown — "
+            f"  {len(stale)} user pair(s) indexed without markdown - "
             "stale index, run `wren memory index`."
         )
 
@@ -562,7 +572,7 @@ def check(
 @memory_app.command()
 def watch(
     mdl: MdlOpt = None,
-    path: PathOpt = None,
+    url: UrlOpt = None,
     interval: Annotated[
         float,
         typer.Option(
@@ -593,9 +603,9 @@ def watch(
     their content fingerprint changes, runs the equivalent of
     ``wren memory index`` so semantic recall never serves a stale schema while
     you are actively modelling. A reindex that fails leaves the change pending
-    and is retried on the next poll — an update is never silently dropped.
+    and is retried on the next poll - an update is never silently dropped.
 
-    Requires the ``memory`` extra (the index it maintains is LanceDB-backed).
+    Requires the ``memory`` extra (the index it maintains is Qdrant-backed).
     With the grep backend there is no derived index to keep fresh.
     """
     from wren.context import discover_project_path  # noqa: PLC0415
@@ -604,7 +614,7 @@ def watch(
 
     if resolve_backend() == "grep":
         typer.echo(
-            "grep backend: knowledge/sql/ IS the index — nothing to watch. "
+            "grep backend: knowledge/sql/ IS the index - nothing to watch. "
             "Install `wrenai[memory]` for a derived index to keep fresh.",
             err=True,
         )
@@ -619,7 +629,7 @@ def watch(
     # The watcher polls <project_path>/target/mdl.json + <project_path>/knowledge/sql,
     # but the reindex reads --mdl and load_query_pairs(project_path). If an explicit
     # --mdl points outside the watched project root we'd watch one tree and index a
-    # mixed one — fail fast instead of silently building a cross-project index.
+    # mixed one - fail fast instead of silently building a cross-project index.
     if mdl:
         mdl_path = Path(mdl).expanduser().resolve()
         root = project_path.resolve()
@@ -638,7 +648,7 @@ def watch(
 
     def _reindex() -> None:
         manifest = _load_manifest(mdl)
-        mem_store = _get_store(path)
+        mem_store = _get_store(url)
         result = mem_store.index_schema(manifest, seed_queries=True)
         from wren.memory.markdown import load_query_pairs  # noqa: PLC0415
 
@@ -655,7 +665,7 @@ def watch(
 
     def _on_event(event: str) -> None:
         if event == "change-detected":
-            typer.echo("Change detected — reindexing...", err=True)
+            typer.echo("Change detected - reindexing...", err=True)
         elif event == "reindex-error":
             typer.echo(
                 "Reindex failed; change kept pending, will retry next poll.",
@@ -687,7 +697,7 @@ def watch(
 
 @memory_app.command()
 def export(
-    path: PathOpt = None,
+    url: UrlOpt = None,
     include_seed: Annotated[
         bool,
         typer.Option(
@@ -696,11 +706,11 @@ def export(
         ),
     ] = False,
 ) -> None:
-    """One-time migration: export the LanceDB query_history into knowledge/sql/*.md.
+    """One-time migration: export the Qdrant query_history into knowledge/sql/*.md.
 
     Reads the existing index (requires the ``memory`` extra) and writes each
-    NL→SQL pair to the markdown source of truth, preserving source and
-    timestamp. The same NL updates one file (dedup). LanceDB is left intact —
+    NL->SQL pair to the markdown source of truth, preserving source and
+    timestamp. The same NL updates one file (dedup). Qdrant is left intact -
     run `wren memory index` to rebuild, then `wren memory reset` once verified.
     """
     from wren.context import discover_project_path  # noqa: PLC0415
@@ -712,7 +722,7 @@ def export(
         typer.echo(str(e), err=True)
         raise typer.Exit(1)
 
-    mem_store = _get_store(path)  # requires the memory extra to read LanceDB
+    mem_store = _get_store(url)  # requires the memory extra to read Qdrant
     rows = mem_store.dump_queries()
     exported, skipped = 0, 0
     for r in rows:
@@ -722,7 +732,10 @@ def export(
             skipped += 1
             continue
         created = r.get("created_at")
-        created_at = created.isoformat() if hasattr(created, "isoformat") else None
+        if hasattr(created, "isoformat"):
+            created_at = created.isoformat()
+        else:
+            created_at = created or None
         write_query_markdown(
             project,
             nl,
@@ -752,10 +765,10 @@ def list_queries(
     limit: Annotated[int, typer.Option("--limit", "-n", help="Max rows to show")] = 20,
     offset: Annotated[int, typer.Option("--offset", help="Skip first N rows")] = 0,
     output: OutputOpt = "table",
-    path: PathOpt = None,
+    url: UrlOpt = None,
 ) -> None:
     """Browse stored NL-SQL pairs."""
-    mem_store = _get_store(path)
+    mem_store = _get_store(url)
     rows, total = mem_store.list_queries(source=source, limit=limit, offset=offset)
     if not rows:
         typer.echo("No pairs found.")
@@ -778,7 +791,7 @@ def _format_choice_label(row: dict, max_nl: int = 40, max_sql: int = 50) -> str:
         source = "view"
     nl = row.get("nl_query", "")[:max_nl]
     sql = row.get("sql_query", "").replace("\n", " ")[:max_sql]
-    return f'[{source}] "{nl}" → {sql}'
+    return f'[{source}] "{nl}" -> {sql}'
 
 
 def _interactive_forget(mem_store, source: str | None, limit: int) -> None:
@@ -824,8 +837,8 @@ def _interactive_forget(mem_store, source: str | None, limit: int) -> None:
 @memory_app.command("forget")
 def forget(
     ids: Annotated[
-        Optional[list[int]],
-        typer.Option("--id", help="Row IDs to forget (non-interactive)"),
+        Optional[list[str]],
+        typer.Option("--id", help="Point IDs to forget (non-interactive)"),
     ] = None,
     source: Annotated[
         Optional[str],
@@ -839,14 +852,17 @@ def forget(
         int,
         typer.Option("--limit", "-n", help="Max rows to load in interactive mode"),
     ] = 50,
-    path: PathOpt = None,
+    url: UrlOpt = None,
 ) -> None:
     """Remove NL-SQL pairs from memory.
 
     Default: interactive checkbox UI.
     With --id or --force: non-interactive mode for scripts and agents.
+
+    Note: ``--id`` takes Qdrant point IDs (shown as ``_row_id`` by
+    ``wren memory list``), not positional indices.
     """
-    mem_store = _get_store(path)
+    mem_store = _get_store(url)
 
     # ── Non-interactive: --id specified ──
     if ids:
@@ -932,10 +948,10 @@ def dump(
             help="Output file ('-' for stdout). Default: project queries.yml or stdout.",
         ),
     ] = None,
-    path: PathOpt = None,
+    url: UrlOpt = None,
 ) -> None:
     """Export NL-SQL pairs to YAML."""
-    mem_store = _get_store(path)
+    mem_store = _get_store(url)
     rows = mem_store.dump_queries(source=source)
     if not rows:
         typer.echo("No pairs to dump.", err=True)
@@ -977,7 +993,7 @@ def load(
         bool,
         typer.Option("--dry-run", help="Validate and count only, don't write"),
     ] = False,
-    path: PathOpt = None,
+    url: UrlOpt = None,
 ) -> None:
     """Import NL-SQL pairs from YAML.
 
@@ -1003,7 +1019,7 @@ def load(
 
     # ── Validate ──
     if not isinstance(doc, dict) or "pairs" not in doc:
-        typer.echo("Error: invalid YAML — missing 'pairs' key.", err=True)
+        typer.echo("Error: invalid YAML - missing 'pairs' key.", err=True)
         raise typer.Exit(1)
     version = doc.get("version", 1)
     if version != 1:
@@ -1039,7 +1055,7 @@ def load(
         raise typer.Exit()
 
     # ── Load ──
-    mem_store = _get_store(path)
+    mem_store = _get_store(url)
     result = mem_store.load_queries(pairs, overwrite=overwrite, upsert=upsert)
 
     # ── Report ──
