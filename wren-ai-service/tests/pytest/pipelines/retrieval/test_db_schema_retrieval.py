@@ -7,7 +7,6 @@ from src.pipelines.retrieval.db_schema_retrieval import (
     dbschema_retrieval,
     expand_business_terms_for_retrieval,
     prompt,
-    rank_semantic_schema_candidates,
 )
 
 
@@ -31,114 +30,6 @@ def test_expand_business_terms_for_retrieval_leaves_query_unchanged():
     query = "Explain what this workspace does"
 
     assert expand_business_terms_for_retrieval(query) == query
-
-
-def test_rank_semantic_schema_candidates_prefers_complete_business_concept_coverage():
-    candidates = rank_semantic_schema_candidates(
-        query="Show top 10 customers by invoice amount",
-        construct_db_schemas=[
-            {
-                "type": "TABLE",
-                "name": "dbo_ytblES002_1",
-                "comment": "",
-                "columns": [
-                    {
-                        "name": "Name_of_Reported_Received",
-                        "data_type": "varchar",
-                        "comment": "reported received name",
-                    },
-                    {
-                        "name": "Refund_Amount",
-                        "data_type": "decimal",
-                        "comment": "refund amount",
-                    },
-                ],
-            },
-            {
-                "type": "TABLE",
-                "name": "dbo_tblFactSales",
-                "comment": "invoice sales facts by customer",
-                "columns": [
-                    {
-                        "name": "invoice",
-                        "data_type": "varchar",
-                        "comment": "invoice identifier",
-                    },
-                    {
-                        "name": "customer_id",
-                        "data_type": "varchar",
-                        "comment": "customer identifier",
-                    },
-                    {
-                        "name": "Amount_Received",
-                        "data_type": "decimal",
-                        "comment": "invoice amount received",
-                    },
-                ],
-            },
-        ],
-    )
-
-    assert candidates[0]["table_name"] == "dbo_tblFactSales"
-    assert "customer" in candidates[0]["matched_query_terms"]
-    assert "amount" in candidates[0]["matched_query_terms"]
-    assert candidates[0]["confidence"] > candidates[1]["confidence"]
-
-
-def test_rank_semantic_schema_candidates_penalizes_retry_rejected_schema_objects():
-    candidates = rank_semantic_schema_candidates(
-        query="Show top 10 customers by invoice amount",
-        construct_db_schemas=[
-            {
-                "type": "TABLE",
-                "name": "dbo_tblFactSales",
-                "comment": "invoice sales facts by customer",
-                "columns": [
-                    {
-                        "name": "customer_id",
-                        "data_type": "varchar",
-                        "comment": "customer identifier",
-                    },
-                    {
-                        "name": "Amount_Received",
-                        "data_type": "decimal",
-                        "comment": "invoice amount received",
-                    },
-                ],
-            },
-            {
-                "type": "TABLE",
-                "name": "dbo_qSales",
-                "comment": "invoice analytics by account",
-                "columns": [
-                    {
-                        "name": "Account",
-                        "data_type": "varchar",
-                        "comment": "customer account",
-                    },
-                    {
-                        "name": "InvoiceAmount",
-                        "data_type": "decimal",
-                        "comment": "invoice amount",
-                    },
-                ],
-            },
-        ],
-        semantic_retry_context={
-            "rejected_schema_objects": [
-                "dbo_tblFactSales.customer_id",
-                "dbo_tblFactSales.Amount_Received",
-            ]
-        },
-    )
-
-    assert candidates[0]["table_name"] == "dbo_qSales"
-    rejected_candidate = next(
-        candidate
-        for candidate in candidates
-        if candidate["table_name"] == "dbo_tblFactSales"
-    )
-    assert rejected_candidate["rejected_by_retry"] is True
 
 
 @pytest.mark.asyncio
@@ -308,13 +199,11 @@ def test_prompt_includes_semantic_retry_context():
     class PromptBuilder:
         def run(self, **kwargs):
             retry_context = kwargs["semantic_retry_context"]
-            candidate_context = kwargs["semantic_candidate_context"]
             return {
                 "prompt": (
                     f"retry={retry_context['retry_attempt']} "
                     f"error={retry_context['validation_error']} "
-                    f"rejected={','.join(retry_context['rejected_schema_objects'])} "
-                    f"candidates={candidate_context[0]['table_name']}"
+                    f"rejected={','.join(retry_context['rejected_schema_objects'])}"
                 )
             }
 
@@ -349,4 +238,3 @@ def test_prompt_includes_semantic_retry_context():
     assert "retry=2" in result["prompt"]
     assert "Generic count" in result["prompt"]
     assert "dbo_ytblES002_1.Name_of_Reported_Received" in result["prompt"]
-    assert "candidates=invoices" in result["prompt"]
