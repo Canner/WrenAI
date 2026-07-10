@@ -23,14 +23,37 @@ def _strip_trailing_semicolon(sql: str) -> str:
     return _TRAILING_SEMICOLONS_RE.sub("", sql)
 
 
+def _has_outer_limit(sql: str) -> bool:
+    """True when *sql* already ends with a top-level LIMIT or FETCH.
+
+    Only the outer tail is inspected so a subquery ``LIMIT`` inside parentheses
+    or a string literal does not suppress pushdown. Rough but safe: after
+    stripping a trailing semicolon, look for LIMIT/FETCH as the last clause.
+    """
+    cleaned = _strip_trailing_semicolon(sql).rstrip()
+    # Drop a trailing closers? Keep simple — music box MySQL still appends; we
+    # only skip when the outermost statement clearly already limits rows.
+    tail = cleaned.split("\n")[-1].strip()
+    return bool(re.match(r"(?i)^(LIMIT|FETCH)\b", tail)) or bool(
+        re.search(r"(?i)\bLIMIT\s+\d+(\s+OFFSET\s+\d+)?\s*\Z", cleaned)
+        or re.search(r"(?i)\bFETCH\s+(FIRST|NEXT)\b.*\bROWS?\b\s*\Z", cleaned)
+    )
+
+
 def _apply_limit(sql: str, limit: int) -> str:
     """Push LIMIT into the Snowflake SQL text.
 
     Client-side Arrow slicing still downloads a full result stage. Append
     ``LIMIT n`` after stripping a trailing semicolon so the warehouse can
     short-circuit, matching Athena/MySQL append style.
+
+    If the outer statement already has a LIMIT/FETCH, leave it unchanged to
+    avoid ``... LIMIT 10\\nLIMIT 5`` (CodeRabbit #2466).
     """
-    return f"{_strip_trailing_semicolon(sql)}\nLIMIT {int(limit)}"
+    cleaned = _strip_trailing_semicolon(sql)
+    if _has_outer_limit(cleaned):
+        return cleaned
+    return f"{cleaned}\nLIMIT {int(limit)}"
 
 
 def _build_connection_params(connection_info) -> dict:
