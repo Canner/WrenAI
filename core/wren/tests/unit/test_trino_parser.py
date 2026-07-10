@@ -22,7 +22,6 @@ from wren.connector.trino import (
 )
 from wren.model.error import ErrorCode, WrenError
 
-
 # ---------------------------------------------------------------------------
 # Type-string parser and column builder.
 # ---------------------------------------------------------------------------
