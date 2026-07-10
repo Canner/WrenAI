@@ -3502,20 +3502,6 @@ def _semantic_analysis_items(
     return []
 
 
-def _semantic_analysis_dict_items(
-    semantic_analysis: dict[str, Any] | None,
-    key: str,
-) -> list[dict[str, Any]]:
-    if not isinstance(semantic_analysis, dict):
-        return []
-
-    value = semantic_analysis.get(key)
-    if not isinstance(value, list):
-        return []
-
-    return [item for item in value if isinstance(item, dict)]
-
-
 def _has_semantic_analysis(semantic_analysis: dict[str, Any] | None) -> bool:
     if not isinstance(semantic_analysis, dict) or not semantic_analysis:
         return False
@@ -3531,49 +3517,11 @@ def _has_semantic_analysis(semantic_analysis: dict[str, Any] | None) -> bool:
         "time_constraints",
         "ranking",
         "supported_schema_objects",
-        "concept_mappings",
-        "interpretations",
         "missing_requirements",
         "ambiguous_requirements",
         "support_reasoning",
     }
     return any(semantic_analysis.get(key) for key in semantic_keys)
-
-
-def _schema_interpretation_clarification_error(
-    semantic_analysis: dict[str, Any],
-) -> str | None:
-    interpretations = _semantic_analysis_dict_items(
-        semantic_analysis, "interpretations"
-    )
-    if not interpretations:
-        return None
-
-    selected_interpretations = [
-        str(interpretation.get("description") or "").strip()
-        for interpretation in interpretations
-        if interpretation.get("is_selected") is True
-        and str(interpretation.get("description") or "").strip()
-    ]
-    if len(selected_interpretations) > 1:
-        return (
-            "The request has multiple selected schema interpretations: "
-            f"{', '.join(selected_interpretations)}. Please clarify which one to use."
-        )
-
-    clarification_interpretations = [
-        str(interpretation.get("description") or "").strip()
-        for interpretation in interpretations
-        if interpretation.get("needs_clarification") is True
-        and str(interpretation.get("description") or "").strip()
-    ]
-    if clarification_interpretations:
-        return (
-            "The request needs clarification before SQL generation: "
-            f"{', '.join(clarification_interpretations)}."
-        )
-
-    return None
 
 
 def get_schema_intent_analysis_error(
@@ -3600,11 +3548,6 @@ def get_schema_intent_analysis_error(
             "The request has multiple equally plausible schema interpretations: "
             f"{', '.join(ambiguous_requirements)}. Please clarify which one to use."
         )
-
-    if interpretation_error := _schema_interpretation_clarification_error(
-        semantic_analysis
-    ):
-        return interpretation_error
 
     if semantic_analysis.get("is_fully_supported") is False:
         support_reasoning = str(semantic_analysis.get("support_reasoning") or "").strip()
@@ -3641,253 +3584,6 @@ def _semantic_analysis_requests_record_count(
     )
 
 
-def _semantic_concept_mappings(
-    semantic_analysis: dict[str, Any] | None,
-) -> list[dict[str, Any]]:
-    return _semantic_analysis_dict_items(semantic_analysis, "concept_mappings")
-
-
-def _schema_object_parts(schema_object: str) -> list[str]:
-    return [
-        _normalize_sql_identifier(part.strip())
-        for part in str(schema_object or "").split(".")
-        if part.strip()
-    ]
-
-
-def _schema_object_table_matches(
-    referenced_table: str,
-    expected_table: str,
-) -> bool:
-    referenced_suffixes = {
-        suffix.lower() for suffix in _table_reference_suffixes(referenced_table)
-    }
-    expected_suffixes = {
-        suffix.lower() for suffix in _table_reference_suffixes(expected_table)
-    }
-    return bool(referenced_suffixes & expected_suffixes)
-
-
-def _sql_contains_identifier(sql: str, identifier: str) -> bool:
-    identifier = _normalize_sql_identifier(str(identifier or "").strip())
-    if not identifier:
-        return False
-
-    escaped = re.escape(identifier)
-    quoted_identifier_pattern = rf'(?:"{escaped}"|`{escaped}`|\[{escaped}\])'
-    bare_identifier_pattern = rf"(?<![A-Za-z0-9_$]){escaped}(?![A-Za-z0-9_$])"
-    return bool(
-        re.search(
-            rf"(?:{quoted_identifier_pattern}|{bare_identifier_pattern})",
-            sql or "",
-            flags=re.IGNORECASE,
-        )
-    )
-
-
-def _sql_references_table(sql: str, table_name: str) -> bool:
-    table_name = str(table_name or "").strip()
-    if not table_name:
-        return False
-
-    table_candidates = {table_name, *_table_reference_suffixes(table_name)}
-    return any(_sql_contains_identifier(sql, candidate) for candidate in table_candidates)
-
-
-def _sql_references_schema_object(
-    sql: str,
-    schema_object: str,
-    valid_table_columns: dict[str, list[str]],
-) -> bool:
-    parts = _schema_object_parts(schema_object)
-    if not parts:
-        return False
-
-    if len(parts) == 1:
-        return _sql_contains_identifier(sql, parts[0])
-
-    expected_column = parts[-1]
-    expected_table = ".".join(parts[:-1])
-    aliases = _extract_table_aliases(sql, valid_table_columns)
-
-    for match in _SQL_QUALIFIED_COLUMN_PATTERN.finditer(sql or ""):
-        qualifier = _normalize_sql_identifier(match.group("qualifier"))
-        column = _normalize_sql_identifier(match.group("column"))
-        referenced_table = aliases.get(qualifier.lower(), qualifier)
-        if (
-            column.lower() == expected_column.lower()
-            and _schema_object_table_matches(referenced_table, expected_table)
-        ):
-            return True
-
-    if _sql_references_table(sql, expected_table) and _sql_contains_identifier(
-        sql, expected_column
-    ):
-        return True
-
-    return False
-
-
-def _sql_references_schema_object_table(
-    sql: str,
-    schema_object: str,
-) -> bool:
-    parts = _schema_object_parts(schema_object)
-    if len(parts) < 2:
-        return _sql_references_table(sql, schema_object)
-    return _sql_references_table(sql, ".".join(parts[:-1]))
-
-
-def _mapping_schema_objects(mapping: dict[str, Any]) -> list[str]:
-    value = mapping.get("schema_objects")
-    if isinstance(value, str):
-        return [value] if value.strip() else []
-    if isinstance(value, list):
-        return [
-            str(item).strip()
-            for item in value
-            if item is not None and str(item).strip()
-        ]
-    return []
-
-
-def _mapping_concept_type(mapping: dict[str, Any]) -> str:
-    return str(mapping.get("concept_type") or "").strip().lower()
-
-
-def _mapping_request_concept(mapping: dict[str, Any]) -> str:
-    return str(mapping.get("request_concept") or "requested concept").strip()
-
-
-def _requested_aggregate_functions(*texts: str) -> set[str]:
-    joined = " ".join(text for text in texts if text).lower()
-    aggregate_terms = {
-        "SUM": r"\b(?:sum|total)\b",
-        "AVG": r"\b(?:avg|average|mean)\b",
-        "MIN": r"\b(?:min|minimum|lowest|smallest)\b",
-        "MAX": r"\b(?:max|maximum|highest|largest)\b",
-        "COUNT": r"\b(?:count|number of|how many|volume)\b",
-    }
-    return {
-        function
-        for function, pattern in aggregate_terms.items()
-        if re.search(pattern, joined, flags=re.IGNORECASE)
-    }
-
-
-def _sql_has_aggregate_function(sql: str, function_name: str) -> bool:
-    return bool(
-        re.search(
-            rf"\b{re.escape(function_name)}\s*\(",
-            sql or "",
-            flags=re.IGNORECASE,
-        )
-    )
-
-
-def _validate_sql_against_concept_mappings(
-    semantic_analysis: dict[str, Any],
-    sql: str,
-    valid_table_columns: dict[str, list[str]],
-) -> str | None:
-    mappings = _semantic_concept_mappings(semantic_analysis)
-    if not mappings:
-        return None
-
-    requests_record_count = _semantic_analysis_requests_record_count(
-        semantic_analysis
-    )
-    aggregation_text = " ".join(
-        _semantic_analysis_items(semantic_analysis, "aggregations")
-    )
-    has_grouping = bool(re.search(r"\bGROUP\s+BY\b", sql or "", flags=re.IGNORECASE))
-    has_ordering = bool(
-        re.search(r"\bORDER\s+BY\b", sql or "", flags=re.IGNORECASE)
-    )
-    has_limit = bool(
-        re.search(
-            r"\b(?:LIMIT|TOP\s*\(|FETCH\s+FIRST)\b",
-            sql or "",
-            flags=re.IGNORECASE,
-        )
-    )
-
-    for mapping in mappings:
-        if mapping.get("required_in_sql") is False:
-            continue
-
-        concept_type = _mapping_concept_type(mapping)
-        request_concept = _mapping_request_concept(mapping)
-        schema_objects = _mapping_schema_objects(mapping)
-        if not schema_objects:
-            return (
-                "The semantic analysis did not map the required "
-                f"{concept_type or 'concept'} '{request_concept}' to a schema "
-                "object. I cannot generate unrelated SQL."
-            )
-
-        references_concept = any(
-            _sql_references_schema_object(sql, schema_object, valid_table_columns)
-            for schema_object in schema_objects
-        )
-        if (
-            not references_concept
-            and concept_type == "metric"
-            and requests_record_count
-            and _sql_is_plain_count(sql)
-        ):
-            references_concept = any(
-                _sql_references_schema_object_table(sql, schema_object)
-                for schema_object in schema_objects
-            )
-
-        if not references_concept:
-            return (
-                "Generated SQL does not reference schema objects mapped to the "
-                f"required {concept_type or 'concept'} '{request_concept}': "
-                f"{', '.join(schema_objects)}."
-            )
-
-        if concept_type == "metric":
-            if _sql_is_plain_count(sql) and not requests_record_count:
-                return (
-                    "Generated SQL answers with a generic record count, but the "
-                    f"requested metric '{request_concept}' maps to "
-                    f"{', '.join(schema_objects)} and must be retrieved or "
-                    "calculated from that schema object."
-                )
-
-            requested_functions = _requested_aggregate_functions(
-                request_concept,
-                str(mapping.get("mapping_reason") or ""),
-                aggregation_text,
-            )
-            for function_name in requested_functions:
-                if function_name == "COUNT" and requests_record_count:
-                    continue
-                if not _sql_has_aggregate_function(sql, function_name):
-                    return (
-                        "Generated SQL does not use the aggregation required "
-                        f"for metric '{request_concept}': {function_name}."
-                    )
-
-        if concept_type in {"dimension", "time"} and _AGGREGATE_PATTERN.search(
-            sql or ""
-        ) and not has_grouping:
-            return (
-                "Generated SQL aggregates results without grouping by the "
-                f"required {concept_type} '{request_concept}'."
-            )
-
-        if concept_type == "ranking" and (not has_ordering or not has_limit):
-            return (
-                "Generated SQL does not include sorting and limiting logic "
-                f"required by ranking concept '{request_concept}'."
-            )
-
-    return None
-
-
 def _validate_sql_against_semantic_analysis(
     semantic_analysis: dict[str, Any] | None,
     sql: str,
@@ -3898,13 +3594,6 @@ def _validate_sql_against_semantic_analysis(
 
     if analysis_error := get_schema_intent_analysis_error(semantic_analysis):
         return analysis_error
-
-    if mapping_error := _validate_sql_against_concept_mappings(
-        semantic_analysis,
-        sql,
-        valid_table_columns,
-    ):
-        return mapping_error
 
     analytical_intent = str(
         semantic_analysis.get("analytical_intent") or ""
