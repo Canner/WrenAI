@@ -3,7 +3,7 @@ from __future__ import annotations
 import urllib
 from enum import StrEnum, auto
 from typing import Any
-from urllib.parse import unquote_plus
+from urllib.parse import unquote
 
 from wren.model import (
     AthenaConnectionInfo,
@@ -173,17 +173,21 @@ class DataSource(StrEnum):
                 ErrorCode.INVALID_CONNECTION_INFO,
                 "Invalid connection URL for ClickHouse",
             )
+        # Credentials and the database name are percent-encoded in the URL
+        # (e.g. a password ``p@ss/w:rd`` is written ``p%40ss%2Fw%3Ard``). Decode
+        # with ``unquote`` (not ``unquote_plus``) so a literal ``+`` in a
+        # credential survives instead of being turned into a space.
         kwargs = {}
         if parsed.username:
-            kwargs["user"] = parsed.username
+            kwargs["user"] = unquote(parsed.username)
         if parsed.password:
-            kwargs["password"] = unquote_plus(parsed.password)
+            kwargs["password"] = unquote(parsed.password)
         if parsed.hostname:
             kwargs["host"] = parsed.hostname
         if parsed.port:
             kwargs["port"] = str(parsed.port)
         if database := parsed.path[1:]:
-            kwargs["database"] = database
+            kwargs["database"] = unquote(database)
         parsed_kwargs = dict(urllib.parse.parse_qsl(parsed.query))
         if "secure" in parsed_kwargs:
             kwargs["secure"] = self._safe_strtobool(parsed_kwargs["secure"])
