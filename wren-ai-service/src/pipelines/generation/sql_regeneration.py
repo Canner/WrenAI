@@ -46,11 +46,9 @@ please carefully review the reasoning, and then generate a new SQL query that ma
 While generating the new SQL query, you should use the original SQL query as a reference.
 While generating the new SQL query, make sure to use the database schema to generate the SQL query.
 Before returning SQL, validate that the selected schema elements directly support
-the key entities, measures, dimensions, filters, time ranges, relationships,
-sorting, chart/dashboard requirements, and aggregations from the user's question
-or reasoning. Reuse the previous semantic context and original SQL where correct,
-but fix schema, join, alias, GROUP BY, aggregation, and filter mistakes. Do not
-replace an unsupported request with a generic COUNT(*) or unrelated table query.
+the key entities, metrics, dimensions, filters, time ranges, relationships, and
+aggregations from the user's question or reasoning. Do not replace an unsupported
+request with a generic COUNT(*) or unrelated table query.
 
 {text_to_sql_rules}
 
@@ -120,12 +118,6 @@ improving the original SQL.
 {% endif %}
 SQL generation reasoning: {{ sql_generation_reasoning }}
 Original SQL query: {{ sql }}
-
-### REGENERATION REQUIREMENTS ###
-Preserve the business question and semantic schema contract. Use active metadata
-to correct only the parts that are wrong: tables, columns, aliases, joins, filters,
-GROUP BY, HAVING, ORDER BY, aggregation, limits, date predicates, and chart/dashboard
-dataset shape. Avoid SELECT * and do not add unrelated columns or tables.
 
 Let's think step by step.
 """

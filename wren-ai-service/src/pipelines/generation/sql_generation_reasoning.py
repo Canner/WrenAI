@@ -55,30 +55,12 @@ Current Time: {{ current_time }}
 
 {% if semantic_schema_contract %}
 ### SEMANTIC SCHEMA CONTRACT ###
-Use this contract for entities, measures, dimensions, filters, joins, normalized
-date ranges, aggregations, sorting, ranking, chart requirements, dashboard
-requirements, and analytical intent. If it shows missing or ambiguous requirements,
-state that limitation in the plan instead of planning unrelated SQL.
+Use this contract for entities, metrics, dimensions, filters, joins, time
+constraints, aggregations, ranking, and analytical intent. If it shows missing or
+ambiguous requirements, state that limitation in the plan instead of planning
+unrelated SQL.
 {{ semantic_schema_contract }}
 {% endif %}
-
-### PLANNING REQUIREMENTS ###
-Build a schema-grounded SQL plan, not example-specific SQL. Resolve synonyms from
-table names, column names, descriptions, metadata, metrics, views, foreign keys,
-and semantic relationships. Identify the exact business entities, measures,
-dimensions, filters, date windows, sort direction, top/bottom limits, joins, and
-chart/dashboard requirements needed by the question.
-For multi-table questions, choose a trusted join path from foreign keys or semantic
-relationships and include the join keys. If no path exists, say clarification or
-schema support is required.
-Resolve relative dates such as today, yesterday, this/last week, this/last month,
-this/last quarter, this/last year, last 30 days, last 90 days, and rolling 12
-months against Current Time.
-Infer aggregation from language: total/sum -> SUM for measures, average -> AVG,
-number/count/how many -> COUNT, min/max -> MIN/MAX, top/bottom/highest/lowest ->
-ORDER BY with a limit.
-Plan only required columns. Avoid SELECT *. Preserve conversational context for
-follow-up wording and apply only the requested change.
 
 Let's think step by step.
 """

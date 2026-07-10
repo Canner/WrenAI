@@ -1,6 +1,5 @@
 import logging
 import sys
-from datetime import datetime
 from typing import Any
 
 from hamilton import base
@@ -88,7 +87,6 @@ SQL:
 
 ### QUESTION ###
 User's Question: {{ query }}
-Current Time: {{ current_time }}
 
 {% if semantic_schema_contract %}
 ### SEMANTIC SCHEMA CONTRACT ###
@@ -101,24 +99,10 @@ metrics, views, and relationships in ACTIVE DATASOURCE METADATA. Do not answer w
 general guidance when the question can be answered with SQL over the active metadata.
 Never reuse table or column names from SQL SAMPLES unless those exact names also
 appear in ACTIVE DATASOURCE METADATA or VALID TABLE NAMES for the active datasource.
-Resolve business synonyms and different phrasings through schema names, column names,
-descriptions, metadata, metrics, views, foreign keys, and semantic relationships.
-For multi-table questions, choose only the tables needed and connect them with
-explicit INNER JOIN or LEFT JOIN conditions from foreign keys or semantic
-relationships. If no trustworthy relationship exists, do not invent a join.
-Resolve relative date phrases against Current Time and express them as concrete
-filter predicates on real temporal columns.
-Infer aggregation from language: total/sum -> SUM when a measure is requested,
-average -> AVG, number/count/how many -> COUNT, min/max/highest/lowest -> MIN/MAX
-or ranking as appropriate.
-For chart or dashboard requests, return the optimized aggregated dataset needed
-for the chart/KPI/summary, with suitable grouping, sorting, and limits.
-Avoid SELECT *. Select only required columns, push filters before joins where
-possible, and limit rows for retrieval/ranking requests.
 Before writing SQL, validate that the selected schema elements directly support every
-key entity, measure, dimension, filter, time range, join, sorting, chart, dashboard,
-and aggregation in the question. If the schema cannot support the requested
-information, do not replace the request with a generic COUNT(*) or unrelated table query.
+key entity, metric, dimension, filter, time range, relationship, and aggregation in
+the question. If the schema cannot support the requested information, do not replace
+the request with a generic COUNT(*) or unrelated table query.
 
 {% if sql_generation_reasoning %}
 ### REASONING PLAN ###
@@ -161,7 +145,6 @@ def prompt(
     )
     _prompt = prompt_builder.run(
         query=query,
-        current_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         data_source=data_source,
         documents=documents,
         has_pcb_context=has_pcb_context,

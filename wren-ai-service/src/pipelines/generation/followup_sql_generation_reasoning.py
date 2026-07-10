@@ -70,26 +70,12 @@ Current Time: {{ current_time }}
 
 {% if semantic_schema_contract %}
 ### SEMANTIC SCHEMA CONTRACT ###
-Use this contract for entities, measures, dimensions, filters, joins, normalized
-date ranges, aggregations, sorting, ranking, chart requirements, dashboard
-requirements, and analytical intent. If it shows missing or ambiguous requirements,
-state that limitation in the plan instead of planning unrelated SQL.
+Use this contract for entities, metrics, dimensions, filters, joins, time
+constraints, aggregations, ranking, and analytical intent. If it shows missing or
+ambiguous requirements, state that limitation in the plan instead of planning
+unrelated SQL.
 {{ semantic_schema_contract }}
 {% endif %}
-
-### FOLLOW-UP PLANNING REQUIREMENTS ###
-Use query history to resolve references such as same, that, previous, it, those,
-them, filter, period, metric, table, result, or chart. Reuse the previous schema
-context and apply only the requested change unless the user asks for a new analysis.
-Resolve synonyms from active metadata, metrics, views, foreign keys, and semantic
-relationships. Identify required entities, measures, dimensions, filters, date
-windows, sort direction, top/bottom limits, joins, and chart/dashboard dataset
-shape.
-For multi-table follow-ups, choose a trusted join path from foreign keys or semantic
-relationships and include the join keys. If no path exists, say clarification or
-schema support is required.
-Resolve relative dates against Current Time. Plan only required columns and avoid
-SELECT *.
 
 Let's think step by step.
 """

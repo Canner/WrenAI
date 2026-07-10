@@ -1772,105 +1772,6 @@ def test_validate_sql_intent_alignment_allows_semantic_count_metric():
     assert error is None
 
 
-def test_validate_sql_intent_alignment_rejects_missing_schema_backed_measure():
-    error = validate_sql_intent_alignment(
-        "Show total invoice amount by customer",
-        'SELECT "invoices"."customer_id", SUM("invoices"."tax_amount") '
-        'AS "total_invoice_amount" FROM "invoices" '
-        'GROUP BY "invoices"."customer_id"',
-        {"invoices": ["customer_id", "invoice_amount", "tax_amount"]},
-    )
-
-    assert error is not None
-    assert "invoice amount" in error
-    assert "invoices.invoice_amount" in error
-
-
-def test_validate_sql_intent_alignment_rejects_missing_requested_aggregation():
-    error = validate_sql_intent_alignment(
-        "Show average order value by region",
-        'SELECT "orders"."region", SUM("orders"."order_value") AS "order_value" '
-        'FROM "orders" GROUP BY "orders"."region"',
-        {"orders": ["region", "order_value"]},
-    )
-
-    assert error is not None
-    assert "AVG" in error
-
-
-def test_validate_sql_intent_alignment_rejects_ranking_without_order_or_limit():
-    error = validate_sql_intent_alignment(
-        "Show top 10 customers by invoice amount",
-        'SELECT "invoices"."customer_id", '
-        'SUM("invoices"."invoice_amount") AS "total_invoice_amount" '
-        'FROM "invoices" GROUP BY "invoices"."customer_id"',
-        {"invoices": ["customer_id", "invoice_amount"]},
-    )
-
-    assert error is not None
-    assert "ORDER BY" in error
-
-
-def test_validate_sql_intent_alignment_rejects_time_filter_without_predicate():
-    error = validate_sql_intent_alignment(
-        "Show monthly order count for the last 12 months",
-        'SELECT DATEPART(YEAR, "orders"."created_at") AS "year", '
-        'DATEPART(MONTH, "orders"."created_at") AS "month", '
-        'COUNT(*) AS "order_count" FROM "orders" '
-        'GROUP BY DATEPART(YEAR, "orders"."created_at"), '
-        'DATEPART(MONTH, "orders"."created_at")',
-        {"orders": ["id", "created_at"]},
-    )
-
-    assert error is not None
-    assert "WHERE or HAVING" in error
-
-
-def test_validate_sql_intent_alignment_rejects_missing_group_by_column():
-    error = validate_sql_intent_alignment(
-        "Show total invoice amount by customer and region",
-        'SELECT "invoices"."customer_id", "invoices"."region", '
-        'SUM("invoices"."invoice_amount") AS "total_invoice_amount" '
-        'FROM "invoices" GROUP BY "invoices"."customer_id"',
-        {"invoices": ["customer_id", "region", "invoice_amount"]},
-    )
-
-    assert error is not None
-    assert "not present in GROUP BY" in error
-
-
-def test_validate_sql_intent_alignment_allows_schema_backed_business_question():
-    error = validate_sql_intent_alignment(
-        "Show top 10 customers by total invoice amount last month as a bar chart",
-        'SELECT TOP 10 "invoices"."customer_id", '
-        'SUM("invoices"."invoice_amount") AS "total_invoice_amount" '
-        'FROM "invoices" '
-        'WHERE "invoices"."created_at" >= \'2026-06-01 00:00:00\' '
-        'AND "invoices"."created_at" < \'2026-07-01 00:00:00\' '
-        'GROUP BY "invoices"."customer_id" '
-        'ORDER BY "total_invoice_amount" DESC',
-        {"invoices": ["customer_id", "invoice_amount", "created_at"]},
-    )
-
-    assert error is None
-
-
-def test_validate_sql_intent_alignment_rejects_join_without_condition():
-    error = validate_sql_intent_alignment(
-        "Show order amount by customer region",
-        'SELECT "customers"."region", SUM("orders"."order_amount") '
-        'AS "total_order_amount" FROM "orders" JOIN "customers" '
-        'GROUP BY "customers"."region"',
-        {
-            "orders": ["customer_id", "order_amount"],
-            "customers": ["customer_id", "region"],
-        },
-    )
-
-    assert error is not None
-    assert "ON or USING" in error
-
-
 def test_validate_sql_intent_alignment_rejects_unmapped_metric_substitution():
     error = validate_sql_intent_alignment(
         "Show invoice amount by customer",
@@ -2059,28 +1960,6 @@ def test_construct_semantic_schema_contract_prioritizes_concept_mappings():
     assert "Ranked schema interpretations" in contract
     assert "selected" in contract
     assert "Do not substitute identifiers for metrics" in contract
-
-
-def test_construct_semantic_schema_contract_includes_generic_planning_requirements():
-    contract = construct_semantic_schema_contract(
-        {
-            "analytical_intent": "dashboard",
-            "metrics": ["invoice amount"],
-            "dimensions": ["customer"],
-            "date_ranges": ["last month: 2026-06-01 to 2026-07-01"],
-            "sorting": ["invoice amount descending"],
-            "chart_requirements": ["bar chart by customer"],
-            "dashboard_requirements": ["KPI total invoice amount"],
-            "join_paths": ["invoices.customer_id -> customers.id"],
-            "is_fully_supported": True,
-        }
-    )
-
-    assert "Date ranges: last month" in contract
-    assert "Sorting: invoice amount descending" in contract
-    assert "Chart requirements: bar chart by customer" in contract
-    assert "Dashboard requirements: KPI total invoice amount" in contract
-    assert "Join paths: invoices.customer_id -> customers.id" in contract
 
 
 def test_construct_semantic_schema_contract_allows_legacy_analysis_without_mappings():

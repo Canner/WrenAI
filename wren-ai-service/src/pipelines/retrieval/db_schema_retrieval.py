@@ -37,27 +37,25 @@ You are a highly skilled data analyst. Your goal is to examine the provided acti
 The database schema includes tables, columns, primary keys, foreign keys, relationships, and any relevant constraints.
 
 ### INSTRUCTIONS ###
-1. First perform a semantic analysis of the user's request. Identify intended business entities, identifiers, descriptive attributes, metrics, dimensions, filters, aggregations, relationships, time constraints, ranking requirements, chart requirements, dashboard/KPI requirements, and analytical intent such as retrieval, detailed records, summary, comparison, trend analysis, dashboard, KPI, ranking, or record count.
+1. First perform a semantic analysis of the user's request. Identify intended business entities, identifiers, descriptive attributes, metrics, dimensions, filters, aggregations, relationships, time constraints, ranking requirements, and analytical intent such as retrieval, detailed records, summary, comparison, trend analysis, dashboard, KPI, ranking, or record count.
 2. Map each business term to explicit schema objects only when the active schema directly supports that term. Distinguish entities such as customer/order/invoice/product from identifiers such as order ID or invoice number, descriptive attributes, and measurable metrics such as amount, quantity, cost, profit, revenue, or duration.
-3. Understand synonyms and different phrasings by using table names, column names, descriptions, metadata, metrics, views, foreign keys, and semantic relationships. Do not rely on hardcoded examples or default tables.
-4. Select tables and columns by semantic fit to the full request, not by isolated keyword overlap or commonly used default tables.
-5. Include join keys and relationship columns needed to connect selected tables. Prefer explicit foreign keys and semantic relationships. For multi-table questions, identify a join path; if no trustworthy path exists, record the missing relationship instead of selecting unrelated tables.
-6. Normalize relative date language such as today, yesterday, this/last week, this/last month, this/last quarter, this/last year, last 30 days, last 90 days, and rolling 12 months into date requirements using Current Time when available.
-7. If the schema does not support a requested entity, metric, dimension, filter, time range, aggregation, chart, dashboard, or ranking requirement, record it in `missing_requirements`.
-8. If multiple schema interpretations are equally plausible and the question does not disambiguate them, record them in `ambiguous_requirements`.
-9. Set `is_fully_supported` to false when any required request component is missing or ambiguous.
-10. For each selected table, provide a concise reason for why the table is semantically relevant.
-11. For each selected column, provide a concise reason for why the column is necessary.
-12. Populate `concept_mappings` for every important concept in the request. Each mapping must classify the concept, list only directly supporting schema objects, state whether it must appear in SQL, and include a confidence score between 0 and 1.
-13. Populate `interpretations` when the request has more than one plausible schema interpretation. Rank interpretations by semantic relevance, confidence, and schema support; mark the selected interpretation only when it is clearly the best supported one. Keep non-selected high-confidence interpretations so the SQL pipeline can retry the next-best mapping if validation fails.
-14. Populate `candidate_schema_scores` with ranked candidates. Score each candidate by full concept coverage, semantic fit, relationship viability, metric validity, and whether it satisfies filters/time/ranking/chart/dashboard/aggregation requirements. Reject partial lexical matches even when a table or column name looks similar.
-15. Select only the highest-confidence candidate whose mappings completely cover all required concepts. If no candidate fully covers the request, set `is_fully_supported` to false and list missing or ambiguous requirements instead of selecting a partial mapping.
-16. If RETRY CONTEXT is provided, treat rejected schema objects as failed mappings. Do not select those objects again unless every complete candidate is exhausted; explain any reuse in `support_reasoning`.
-17. If a "." is included in columns, put the name before the first dot into chosen columns.
-18. The number of columns chosen must match the number of reasoning.
-19. Final chosen columns must be only column names, don't prefix it with table names.
-20. If the chosen column is a child column of a STRUCT type column, choose the parent column instead of the child column.
-21. If the schema cannot answer the question, return the closest directly relevant schema objects only if they explain the limitation. Do not select unrelated fallback tables.
+3. Select tables and columns by semantic fit to the full request, not by isolated keyword overlap or commonly used default tables.
+4. Include join keys and relationship columns needed to connect selected tables. Do not invent relationships or foreign keys.
+5. If the schema does not support a requested entity, metric, dimension, filter, time range, aggregation, or ranking requirement, record it in `missing_requirements`.
+6. If multiple schema interpretations are equally plausible and the question does not disambiguate them, record them in `ambiguous_requirements`.
+7. Set `is_fully_supported` to false when any required request component is missing or ambiguous.
+8. For each selected table, provide a concise reason for why the table is semantically relevant.
+9. For each selected column, provide a concise reason for why the column is necessary.
+10. Populate `concept_mappings` for every important concept in the request. Each mapping must classify the concept, list only directly supporting schema objects, state whether it must appear in SQL, and include a confidence score between 0 and 1.
+11. Populate `interpretations` when the request has more than one plausible schema interpretation. Rank interpretations by semantic relevance, confidence, and schema support; mark the selected interpretation only when it is clearly the best supported one. Keep non-selected high-confidence interpretations so the SQL pipeline can retry the next-best mapping if validation fails.
+12. Populate `candidate_schema_scores` with ranked candidates. Score each candidate by full concept coverage, semantic fit, relationship viability, metric validity, and whether it satisfies filters/time/ranking/aggregation requirements. Reject partial lexical matches even when a table or column name looks similar.
+13. Select only the highest-confidence candidate whose mappings completely cover all required concepts. If no candidate fully covers the request, set `is_fully_supported` to false and list missing or ambiguous requirements instead of selecting a partial mapping.
+14. If RETRY CONTEXT is provided, treat rejected schema objects as failed mappings. Do not select those objects again unless every complete candidate is exhausted; explain any reuse in `support_reasoning`.
+15. If a "." is included in columns, put the name before the first dot into chosen columns.
+16. The number of columns chosen must match the number of reasoning.
+17. Final chosen columns must be only column names, don't prefix it with table names.
+18. If the chosen column is a child column of a STRUCT type column, choose the parent column instead of the child column.
+19. If the schema cannot answer the question, return the closest directly relevant schema objects only if they explain the limitation. Do not select unrelated fallback tables.
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:
@@ -73,12 +71,7 @@ Please provide your response as a JSON object, structured as follows:
         "aggregations": ["aggregation or calculation requirements"],
         "relationships": ["required joins or relationships"],
         "time_constraints": ["time filters, grains, or trend requirements"],
-        "date_ranges": ["normalized relative date requirements such as start/end dates or rolling windows"],
         "ranking": ["top/bottom/order/limit requirements"],
-        "sorting": ["sort fields and direction requirements"],
-        "chart_requirements": ["requested or inferred chart type, x/y encodings, series, and grain"],
-        "dashboard_requirements": ["requested KPI, chart, summary, and insight sections"],
-        "join_paths": ["foreign key or semantic relationship path needed to connect selected tables"],
         "supported_schema_objects": ["table.column or metric names that directly support the request"],
         "candidate_schema_scores": [
             {
@@ -1061,12 +1054,7 @@ class SemanticAnalysis(BaseModel):
     aggregations: list[str] = Field(default_factory=list)
     relationships: list[str] = Field(default_factory=list)
     time_constraints: list[str] = Field(default_factory=list)
-    date_ranges: list[str] = Field(default_factory=list)
     ranking: list[str] = Field(default_factory=list)
-    sorting: list[str] = Field(default_factory=list)
-    chart_requirements: list[str] = Field(default_factory=list)
-    dashboard_requirements: list[str] = Field(default_factory=list)
-    join_paths: list[str] = Field(default_factory=list)
     supported_schema_objects: list[str] = Field(default_factory=list)
     candidate_schema_scores: list[SemanticCandidateSchemaScore] = Field(
         default_factory=list

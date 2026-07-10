@@ -2218,7 +2218,7 @@ Given user's question, database schema, etc., you should think deeply and carefu
 9. Map business concepts to the closest explicit tables, columns, metrics, views, and relationships from the active metadata. Do not create a new table or column name from the business concept.
 10. Before applying SUM, AVG, MIN, MAX, or arithmetic to a column, verify that the chosen column is numeric in the active metadata. Do not aggregate text/string columns as numeric values.
 11. Do not prefix table names with catalog or schema names unless the active metadata, DATABASE SCHEMA, or VALID TABLE NAMES section shows the table name with that exact prefix.
-12. Before generating SQL, validate that the selected schema elements directly support all key entities, measures, dimensions, filters, sorting, chart shape, time ranges, relationships, and aggregations mentioned or implied by the question.
+12. Before generating SQL, validate that the selected schema elements directly support all key entities, metrics, dimensions, filters, time ranges, relationships, and aggregations mentioned or implied by the question.
 13. Do not answer a specific business metric, trend, summary, comparison, dashboard, or analysis request with a generic record-count query unless the user explicitly asks only for record count.
 14. If the required information cannot be derived from the available active schema, return the closest schema-grounded limitation instead of inventing unrelated SQL.
 15. If a SEMANTIC SCHEMA CONTRACT is provided, it is the primary source of truth for selecting tables, columns, metrics, joins, filters, grouping, sorting, and date logic. Generate SQL from the highest-confidence validated concept-to-schema mappings in that contract and do not independently infer substitute schema objects.
@@ -2331,14 +2331,9 @@ def construct_semantic_schema_contract(
         ("Dimensions", "dimensions"),
         ("Filters", "filters"),
         ("Time constraints", "time_constraints"),
-        ("Date ranges", "date_ranges"),
         ("Aggregations", "aggregations"),
         ("Ranking", "ranking"),
-        ("Sorting", "sorting"),
-        ("Chart requirements", "chart_requirements"),
-        ("Dashboard requirements", "dashboard_requirements"),
         ("Relationships", "relationships"),
-        ("Join paths", "join_paths"),
         ("Supported schema objects", "supported_schema_objects"),
     ):
         lines.extend(_format_semantic_list(label, _semantic_analysis_items(semantic_analysis, key)))
@@ -3436,536 +3431,6 @@ _DIMENSION_TERMS = {
     "department",
     "location",
 }
-_BUSINESS_INTENT_STOP_WORDS = {
-    "a",
-    "an",
-    "and",
-    "are",
-    "as",
-    "at",
-    "be",
-    "by",
-    "chart",
-    "create",
-    "data",
-    "each",
-    "for",
-    "from",
-    "give",
-    "graph",
-    "how",
-    "in",
-    "is",
-    "me",
-    "of",
-    "on",
-    "or",
-    "please",
-    "show",
-    "table",
-    "the",
-    "to",
-    "with",
-}
-_SCHEMA_CONCEPT_GENERIC_TOKENS = {
-    "amount",
-    "at",
-    "code",
-    "count",
-    "date",
-    "day",
-    "description",
-    "dt",
-    "id",
-    "ids",
-    "key",
-    "month",
-    "name",
-    "no",
-    "number",
-    "num",
-    "pct",
-    "percent",
-    "percentage",
-    "price",
-    "quantity",
-    "qty",
-    "rate",
-    "time",
-    "timestamp",
-    "total",
-    "type",
-    "value",
-    "year",
-}
-_TEMPORAL_SCHEMA_TOKENS = {
-    "at",
-    "created",
-    "date",
-    "day",
-    "ended",
-    "modified",
-    "month",
-    "started",
-    "time",
-    "timestamp",
-    "updated",
-    "week",
-    "year",
-}
-_CHART_TERMS = {
-    "area chart",
-    "bar chart",
-    "chart",
-    "donut chart",
-    "graph",
-    "line chart",
-    "pie chart",
-    "plot",
-    "scatter plot",
-    "visualization",
-}
-_RANKING_TERMS = {
-    "bottom",
-    "highest",
-    "largest",
-    "lowest",
-    "most",
-    "rank",
-    "ranked",
-    "ranking",
-    "smallest",
-    "top",
-}
-_SORTING_TERMS = {
-    "ascending",
-    "descending",
-    "order by",
-    "ordered by",
-    "sort",
-    "sorted",
-}
-
-
-def _singularize_business_token(token: str) -> str:
-    token = token.lower()
-    if len(token) > 4 and token.endswith("ies"):
-        return f"{token[:-3]}y"
-    if len(token) > 3 and token.endswith("es"):
-        return token[:-2]
-    if len(token) > 3 and token.endswith("s"):
-        return token[:-1]
-    return token
-
-
-def _business_intent_tokens(text: str | None) -> list[str]:
-    spaced = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", str(text or ""))
-    return [
-        _singularize_business_token(token)
-        for token in re.findall(r"[A-Za-z0-9]+", spaced.lower())
-        if token and token not in _BUSINESS_INTENT_STOP_WORDS
-    ]
-
-
-def _schema_column_concept_keys(column_name: str) -> set[tuple[str, ...]]:
-    tokens = tuple(_business_intent_tokens(column_name))
-    if not tokens:
-        return set()
-
-    keys: set[tuple[str, ...]] = {tokens}
-    token_set = set(tokens)
-    informative_tokens = tuple(
-        token for token in tokens if token not in _SCHEMA_CONCEPT_GENERIC_TOKENS
-    )
-    metric_tokens = {
-        "amount",
-        "cost",
-        "count",
-        "price",
-        "profit",
-        "quantity",
-        "qty",
-        "rate",
-        "revenue",
-        "sales",
-        "total",
-        "value",
-    }
-    identifier_suffix_tokens = {"code", "id", "ids", "key", "no", "number"}
-    if informative_tokens and (
-        len(informative_tokens) > 1
-        or not token_set.intersection(metric_tokens)
-        and (
-            not token_set.intersection(identifier_suffix_tokens)
-            or bool(set(informative_tokens).intersection(_DIMENSION_TERMS))
-        )
-    ):
-        keys.add(informative_tokens)
-
-    if len(tokens) > 1:
-        without_suffix = tuple(
-            token
-            for token in tokens
-            if token not in {"id", "ids", "key", "name", "number", "no", "code"}
-        )
-        if without_suffix and (
-            len(without_suffix) > 1
-            or bool(set(without_suffix).intersection(_DIMENSION_TERMS))
-        ):
-            keys.add(without_suffix)
-
-    for token in tokens:
-        if token in _SCHEMA_CONCEPT_GENERIC_TOKENS or token in _DIMENSION_TERMS:
-            keys.add((token,))
-
-    return {key for key in keys if key}
-
-
-def _query_mentions_concept(
-    concept_tokens: tuple[str, ...],
-    query_tokens: set[str],
-    asks_time_analysis: bool,
-) -> bool:
-    if not concept_tokens:
-        return False
-
-    if set(concept_tokens).issubset(query_tokens):
-        return True
-
-    if set(concept_tokens).intersection({"code", "id", "ids", "key", "no", "number"}):
-        return False
-
-    meaningful_tokens = [
-        token
-        for token in concept_tokens
-        if token not in _SCHEMA_CONCEPT_GENERIC_TOKENS
-    ]
-    if len(meaningful_tokens) != 1:
-        return False
-
-    token = meaningful_tokens[0]
-    if token not in query_tokens:
-        return False
-
-    if set(concept_tokens) & _TEMPORAL_SCHEMA_TOKENS and not asks_time_analysis:
-        return False
-
-    return len(token) >= 4 or token in _DIMENSION_TERMS
-
-
-def _infer_query_schema_requirements(
-    query: str,
-    valid_table_columns: dict[str, list[str]],
-) -> dict[str, set[str]]:
-    query_tokens = set(_business_intent_tokens(query))
-    if not query_tokens:
-        return {}
-
-    asks_time_analysis = _query_requests_time_analysis(query)
-    requirements: dict[str, set[str]] = {}
-
-    for table_name, columns in valid_table_columns.items():
-        if not table_name:
-            continue
-        table_tokens = tuple(
-            token
-            for token in _business_intent_tokens(table_name)
-            if token not in {"dbo", "public", "schema", "table", "tbl"}
-        )
-        table_informative_tokens = tuple(
-            token
-            for token in table_tokens
-            if token not in _SCHEMA_CONCEPT_GENERIC_TOKENS
-        )
-        for concept_tokens in {table_tokens, table_informative_tokens}:
-            if _query_mentions_concept(
-                concept_tokens,
-                query_tokens,
-                asks_time_analysis,
-            ):
-                requirements.setdefault(" ".join(concept_tokens), set()).add(
-                    str(table_name)
-                )
-
-        for column_name in columns or []:
-            if not column_name:
-                continue
-            for concept_tokens in _schema_column_concept_keys(str(column_name)):
-                if not _query_mentions_concept(
-                    concept_tokens,
-                    query_tokens,
-                    asks_time_analysis,
-                ):
-                    continue
-                concept = " ".join(concept_tokens)
-                requirements.setdefault(concept, set()).add(
-                    f"{table_name}.{column_name}"
-                )
-
-    return {
-        concept: objects
-        for concept, objects in requirements.items()
-        if objects and not _is_ambiguous_schema_concept(concept, objects)
-    }
-
-
-def _is_ambiguous_schema_concept(concept: str, schema_objects: set[str]) -> bool:
-    if len(schema_objects) <= 1:
-        return False
-
-    concept_compact = _compact_sql_identifier(concept)
-    column_names = {
-        _schema_object_parts(schema_object)[-1]
-        for schema_object in schema_objects
-        if _schema_object_parts(schema_object)
-    }
-    compact_columns = {
-        _compact_sql_identifier(column_name) for column_name in column_names
-    }
-
-    if concept_compact in compact_columns:
-        return False
-
-    return len(compact_columns) > 1
-
-
-def _sql_references_any_schema_object(
-    sql: str,
-    schema_objects: set[str],
-    valid_table_columns: dict[str, list[str]],
-) -> bool:
-    return any(
-        _sql_references_schema_object(sql, schema_object, valid_table_columns)
-        for schema_object in schema_objects
-    )
-
-
-def _sql_has_ordering(sql: str) -> bool:
-    return bool(re.search(r"\bORDER\s+BY\b", sql or "", flags=re.IGNORECASE))
-
-
-def _sql_has_limit(sql: str) -> bool:
-    return bool(
-        re.search(
-            r"\b(?:LIMIT\s+\d+|TOP\s*\(?\s*\d+\s*\)?|FETCH\s+FIRST\s+\d+)\b",
-            sql or "",
-            flags=re.IGNORECASE,
-        )
-    )
-
-
-def _sql_has_filter_predicate(sql: str) -> bool:
-    return bool(
-        re.search(r"\b(?:WHERE|HAVING)\b", sql or "", flags=re.IGNORECASE)
-    )
-
-
-def _query_requests_ranking(query: str) -> bool:
-    return _contains_phrase(query, _RANKING_TERMS)
-
-
-def _query_requests_sorting(query: str) -> bool:
-    return _query_requests_ranking(query) or _contains_phrase(query, _SORTING_TERMS)
-
-
-def _query_requests_limited_ranking(query: str) -> bool:
-    normalized = str(query or "").lower()
-    return bool(
-        re.search(r"\b(?:top|bottom)\s+\d+\b", normalized)
-        or re.search(r"\b(?:top|bottom|highest|lowest|largest|smallest)\b", normalized)
-    )
-
-
-def _query_requests_chart(query: str) -> bool:
-    return _contains_phrase(query, _CHART_TERMS)
-
-
-def _query_requests_time_filter(query: str) -> bool:
-    normalized = str(query or "").lower()
-    return bool(
-        re.search(
-            r"\b(?:last|next|previous|prior|this)\s+"
-            r"(?:\d+\s+)?(?:day|week|month|quarter|year)s?\b",
-            normalized,
-        )
-        or re.search(r"\b(?:between|since|before|after)\b", normalized)
-    )
-
-
-def _query_requests_literal_filter(query: str) -> bool:
-    normalized = str(query or "").lower()
-    if re.search(r"'[^']+'|\"[^\"]+\"", query or ""):
-        return True
-    return bool(
-        re.search(
-            r"\b(?:where|only|exclude|excluding|filtered by|filter by|with status|"
-            r"with category|for status|for category|for region|for country|"
-            r"for market|for customer|for product)\b",
-            normalized,
-        )
-    )
-
-
-def _requested_query_aggregate_functions(query: str) -> set[str]:
-    normalized = str(query or "").lower()
-    functions: set[str] = set()
-
-    if re.search(r"\b(?:avg|average|mean)\b", normalized):
-        functions.add("AVG")
-    if re.search(r"\b(?:min|minimum)\b", normalized):
-        functions.add("MIN")
-    if re.search(r"\b(?:max|maximum)\b", normalized):
-        functions.add("MAX")
-    if re.search(r"\b(?:count|number of|how many|record count|row count)\b", normalized):
-        functions.add("COUNT")
-    elif re.search(r"\bsum\b", normalized) or (
-        re.search(r"\btotal\b", normalized)
-        and _query_requests_specific_metric(normalized)
-    ):
-        functions.add("SUM")
-
-    return functions
-
-
-def _simple_groupable_expression_key(expression: str) -> str | None:
-    expression = _strip_projection_alias(
-        re.sub(r"^\s*DISTINCT\s+", "", expression, flags=re.IGNORECASE)
-    ).strip()
-    expression = re.sub(
-        r"^\s*TOP\s*\(?\s*\d+\s*\)?\s+",
-        "",
-        expression,
-        flags=re.IGNORECASE,
-    )
-    if not expression or expression == "*":
-        return None
-    if _AGGREGATE_PATTERN.search(expression):
-        return None
-    if re.search(r"\b(?:CASE|SELECT|OVER)\b", expression, flags=re.IGNORECASE):
-        return None
-
-    return re.sub(r"\s+", "", expression).strip().lower()
-
-
-def _validate_group_by_for_aggregates(sql: str) -> str | None:
-    if not _AGGREGATE_PATTERN.search(sql or ""):
-        return None
-
-    select_spans = _find_select_list_spans(sql)
-    if not select_spans:
-        return None
-
-    group_bodies = _extract_clause_bodies(
-        sql,
-        r"GROUP\s+BY",
-        ["HAVING", r"ORDER\s+BY", "LIMIT", "FETCH", "UNION"],
-    )
-    if not group_bodies:
-        return None
-
-    grouped_keys = {
-        key
-        for body in group_bodies
-        for item in _split_top_level_select_items(body)
-        if (key := _simple_groupable_expression_key(item))
-    }
-    if not grouped_keys:
-        return None
-
-    for start, end in select_spans:
-        for item in _split_top_level_select_items(sql[start:end]):
-            key = _simple_groupable_expression_key(item)
-            if not key or key in grouped_keys:
-                continue
-            return (
-                "Generated SQL selects a non-aggregated expression that is not "
-                f"present in GROUP BY: {item.strip()}."
-            )
-
-    return None
-
-
-def _validate_query_schema_requirements(
-    query: str,
-    sql: str,
-    valid_table_columns: dict[str, list[str]],
-) -> str | None:
-    if group_by_error := _validate_group_by_for_aggregates(sql):
-        return group_by_error
-
-    schema_requirements = _infer_query_schema_requirements(
-        query,
-        valid_table_columns,
-    )
-    for concept, schema_objects in sorted(schema_requirements.items()):
-        if _sql_references_any_schema_object(
-            sql,
-            schema_objects,
-            valid_table_columns,
-        ):
-            continue
-        return (
-            "Generated SQL does not reference schema objects that match the "
-            f"requested business concept '{concept}': "
-            f"{', '.join(sorted(schema_objects))}."
-        )
-
-    for function_name in _requested_query_aggregate_functions(query):
-        if function_name == "COUNT" and _sql_is_plain_count(sql):
-            continue
-        if not _sql_has_aggregate_function(sql, function_name):
-            return (
-                "Generated SQL does not use the aggregation requested by the "
-                f"business question: {function_name}."
-            )
-
-    asks_ranking = _query_requests_ranking(query)
-    asks_sorting = _query_requests_sorting(query)
-    if asks_sorting and not _sql_has_ordering(sql):
-        return (
-            "Generated SQL does not include ORDER BY required by the requested "
-            "sorting or ranking intent."
-        )
-
-    if asks_ranking and _query_requests_limited_ranking(query) and not _sql_has_limit(sql):
-        return (
-            "Generated SQL does not include a limit/TOP clause required by the "
-            "requested top/bottom ranking intent."
-        )
-
-    if (
-        (_query_requests_time_filter(query) or _query_requests_literal_filter(query))
-        and not _sql_has_filter_predicate(sql)
-    ):
-        return (
-            "Generated SQL does not include a WHERE or HAVING predicate required "
-            "by the requested filter or time range."
-        )
-
-    if _query_requests_chart(query):
-        if (asks_ranking or _query_requests_grouped_analysis(query)) and not re.search(
-            r"\bGROUP\s+BY\b", sql or "", flags=re.IGNORECASE
-        ):
-            return (
-                "Generated SQL does not group the dataset required for the "
-                "requested chart dimension."
-            )
-        if asks_ranking and not _sql_has_ordering(sql):
-            return (
-                "Generated SQL does not sort the dataset required for the "
-                "requested chart ranking."
-            )
-
-    if re.search(r"\bJOIN\b", sql or "", flags=re.IGNORECASE):
-        if re.search(r"\bCROSS\s+JOIN\b", sql or "", flags=re.IGNORECASE):
-            return None
-        if not re.search(r"\b(?:ON|USING)\b", sql or "", flags=re.IGNORECASE):
-            return (
-                "Generated SQL joins tables without an ON or USING condition. "
-                "Use explicit schema relationships for JOINs."
-            )
-
-    return None
 
 
 def _contains_phrase(text: str, terms: set[str] | tuple[str, ...]) -> bool:
@@ -4180,12 +3645,7 @@ def _has_semantic_analysis(semantic_analysis: dict[str, Any] | None) -> bool:
         "aggregations",
         "relationships",
         "time_constraints",
-        "date_ranges",
         "ranking",
-        "sorting",
-        "chart_requirements",
-        "dashboard_requirements",
-        "join_paths",
         "supported_schema_objects",
         "candidate_schema_scores",
         "concept_mappings",
@@ -4442,40 +3902,6 @@ def _sql_references_table(sql: str, table_name: str) -> bool:
     return any(_sql_contains_identifier(sql, candidate) for candidate in table_candidates)
 
 
-def _sql_references_unqualified_column_expression(sql: str, column_name: str) -> bool:
-    expected_column = _normalize_sql_identifier(str(column_name or ""))
-    if not expected_column:
-        return False
-
-    expected_lower = expected_column.lower()
-    expected_compact = _compact_sql_identifier(expected_column)
-    candidate_columns = {
-        _normalize_sql_identifier(column)
-        for column in _find_unqualified_column_candidates(sql)
-    }
-
-    for start, end in _find_select_list_spans(sql):
-        for item in _split_top_level_select_items(sql[start:end]):
-            expression = _strip_projection_alias(
-                re.sub(r"^\s*DISTINCT\s+", "", item, flags=re.IGNORECASE)
-            )
-            searchable_expression = _strip_sql_literals(expression)
-            for match in re.finditer(_SQL_IDENTIFIER_PATTERN, searchable_expression):
-                before = searchable_expression[: match.start()].rstrip()
-                after = searchable_expression[match.end() :].lstrip()
-                if before.endswith(".") or after.startswith("."):
-                    continue
-                identifier = _normalize_sql_identifier(match.group(0))
-                if identifier and identifier.lower() not in _SQL_NON_COLUMN_IDENTIFIERS:
-                    candidate_columns.add(identifier)
-
-    return any(
-        candidate.lower() == expected_lower
-        or _compact_sql_identifier(candidate) == expected_compact
-        for candidate in candidate_columns
-    )
-
-
 def _sql_references_schema_object(
     sql: str,
     schema_object: str,
@@ -4505,7 +3931,7 @@ def _sql_references_schema_object(
     if _sql_references_table(sql, expected_table) and _sql_contains_identifier(
         sql, expected_column
     ):
-        return _sql_references_unqualified_column_expression(sql, expected_column)
+        return True
 
     return False
 
@@ -4697,16 +4123,7 @@ def _validate_sql_against_semantic_analysis(
     time_constraints = _semantic_analysis_items(
         semantic_analysis, "time_constraints"
     )
-    date_ranges = _semantic_analysis_items(semantic_analysis, "date_ranges")
     ranking = _semantic_analysis_items(semantic_analysis, "ranking")
-    sorting = _semantic_analysis_items(semantic_analysis, "sorting")
-    chart_requirements = _semantic_analysis_items(
-        semantic_analysis, "chart_requirements"
-    )
-    dashboard_requirements = _semantic_analysis_items(
-        semantic_analysis, "dashboard_requirements"
-    )
-    join_paths = _semantic_analysis_items(semantic_analysis, "join_paths")
     requests_record_count = _semantic_analysis_requests_record_count(
         semantic_analysis
     )
@@ -4731,9 +4148,7 @@ def _validate_sql_against_semantic_analysis(
             "or analytical calculations from the active schema."
         )
 
-    if (time_constraints or date_ranges) and not _sql_has_temporal_reference(
-        sql, valid_table_columns
-    ):
+    if time_constraints and not _sql_has_temporal_reference(sql, valid_table_columns):
         return (
             "Generated SQL does not use a temporal field or supported date/time "
             "expression, but the semantic analysis identified time constraints "
@@ -4750,15 +4165,6 @@ def _validate_sql_against_semantic_analysis(
                 "dimensions or time grain identified in the semantic analysis."
             )
 
-    has_sorting_order = bool(
-        re.search(r"\bORDER\s+BY\b", sql or "", flags=re.IGNORECASE)
-    )
-    if sorting and not has_sorting_order:
-        return (
-            "Generated SQL does not include sorting logic required "
-            "by the ranking intent or sorting intent."
-        )
-
     if ranking and not re.search(
         r"\b(?:ORDER\s+BY|LIMIT|TOP\s*\(|FETCH\s+FIRST)\b",
         sql or "",
@@ -4767,27 +4173,6 @@ def _validate_sql_against_semantic_analysis(
         return (
             "Generated SQL does not include sorting or limiting logic required "
             "by the ranking intent."
-        )
-
-    if join_paths and re.search(r"\bJOIN\b", sql or "", flags=re.IGNORECASE):
-        if not re.search(r"\b(?:ON|USING)\b", sql or "", flags=re.IGNORECASE):
-            return (
-                "Generated SQL does not use explicit join conditions required "
-                "by the semantic join path."
-            )
-
-    if chart_requirements and _AGGREGATE_PATTERN.search(sql or "") and dimensions:
-        if not re.search(r"\bGROUP\s+BY\b", sql or "", flags=re.IGNORECASE):
-            return (
-                "Generated SQL does not group the aggregated dataset required "
-                "by the chart requirements."
-            )
-
-    if dashboard_requirements and _sql_is_plain_count(sql) and not requests_record_count:
-        return (
-            "Generated SQL answers a dashboard request with only a generic record "
-            "count. Use the KPI, chart, summary, and insight requirements from "
-            "the semantic analysis."
         )
 
     if aggregations and not _AGGREGATE_PATTERN.search(sql or ""):
@@ -4856,14 +4241,6 @@ def validate_sql_intent_alignment(
                 "dimension. Use an explicit schema column for the requested grouping, "
                 "or report that the schema does not expose that dimension."
             )
-
-    schema_requirement_error = _validate_query_schema_requirements(
-        normalized_query,
-        sql,
-        valid_table_columns,
-    )
-    if schema_requirement_error:
-        return schema_requirement_error
 
     missing_metric_terms = _missing_metric_support(
         normalized_query,
