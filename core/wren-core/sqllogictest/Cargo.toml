@@ -23,7 +23,7 @@ rust_decimal = { version = "1.27.0" }
 sqllogictest = "0.28.4"
 thiserror = "2.0.3"
 tokio = { workspace = true }
-wren-core = { path = "../core" }
+wren-core = { path = "../core", package = "wren-semantic-core" }
 
 itertools = "0.14.0"
 object_store = { version = "0.12.3", default-features = false }

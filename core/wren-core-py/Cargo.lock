@@ -2267,16 +2267,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "petgraph-evcxr"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c164f0ab4e02b69ff6172de80d9c1a31a9dd21c15c7b728b632442a19c9fd96"
-dependencies = [
- "base64",
- "petgraph",
-]
-
-[[package]]
 name = "phf"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3604,28 +3594,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wren-core"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "csv",
- "datafusion",
- "datafusion-session",
- "env_logger",
- "itertools",
- "log",
- "parking_lot",
- "petgraph",
- "petgraph-evcxr",
- "regex",
- "serde",
- "serde_json",
- "serde_with",
- "tokio",
- "wren-core-base",
-]
-
-[[package]]
 name = "wren-core-base"
 version = "0.1.0"
 dependencies = [
@@ -3653,8 +3621,8 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
- "wren-core",
  "wren-core-base",
+ "wren-semantic-core",
 ]
 
 [[package]]
@@ -3663,6 +3631,26 @@ version = "0.1.0"
 dependencies = [
  "quote",
  "syn",
+]
+
+[[package]]
+name = "wren-semantic-core"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "csv",
+ "datafusion",
+ "datafusion-session",
+ "itertools",
+ "log",
+ "parking_lot",
+ "petgraph",
+ "regex",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "tokio",
+ "wren-core-base",
 ]
 
 [[package]]
