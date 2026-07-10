@@ -87,12 +87,24 @@ SQL:
 ### QUESTION ###
 User's Question: {{ query }}
 
+{% if schema_intent_analysis %}
+### SCHEMA INTENT ANALYSIS ###
+This is the pre-generation semantic analysis of the user's request against the
+active deployed schema. Use it as a contract for table, column, metric, dimension,
+filter, time, relationship, aggregation, and ranking selection.
+{{ schema_intent_analysis }}
+{% endif %}
+
 ### INTENT AND SCHEMA GROUNDING ###
 Interpret the user's business terms by matching them to explicit tables, columns,
 metrics, views, and relationships in ACTIVE DATASOURCE METADATA. Do not answer with
 general guidance when the question can be answered with SQL over the active metadata.
 Never reuse table or column names from SQL SAMPLES unless those exact names also
 appear in ACTIVE DATASOURCE METADATA or VALID TABLE NAMES for the active datasource.
+Before writing SQL, validate that the selected schema elements directly support every
+key entity, metric, dimension, filter, time range, relationship, and aggregation in
+the question. If the schema cannot support the requested information, do not replace
+the request with a generic COUNT(*) or unrelated table query.
 
 {% if sql_generation_reasoning %}
 ### REASONING PLAN ###
@@ -118,6 +130,7 @@ def prompt(
     has_json_field: bool = False,
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
+    schema_intent_analysis: dict[str, Any] | None = None,
 ) -> dict:
     schema_context = "\n".join(documents or []).lower()
     has_pcb_context = any(
@@ -157,6 +170,7 @@ def prompt(
         ),
         sql_samples=sql_samples,
         sql_functions=sql_functions,
+        schema_intent_analysis=schema_intent_analysis,
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
@@ -185,10 +199,12 @@ async def post_process(
     post_processor: SQLGenPostProcessor,
     documents: list[str],
     data_source: str,
+    query: str,
     project_id: str | None = None,
     use_dry_plan: bool = False,
     allow_dry_plan_fallback: bool = True,
     allow_data_preview: bool = False,
+    schema_intent_analysis: dict[str, Any] | None = None,
 ) -> dict:
     return await post_processor.run(
         generate_sql.get("replies"),
@@ -199,6 +215,8 @@ async def post_process(
         allow_data_preview=allow_data_preview,
         valid_table_names=construct_valid_table_names(documents),
         valid_table_columns=construct_valid_table_columns(documents),
+        query=query,
+        semantic_analysis=schema_intent_analysis,
     )
 
 
@@ -250,6 +268,7 @@ class SQLGeneration(BasicPipeline):
         allow_dry_plan_fallback: bool = True,
         allow_data_preview: bool = False,
         sql_knowledge: SqlKnowledge | None = None,
+        schema_intent_analysis: dict[str, Any] | None = None,
     ):
         logger.info("SQL Generation pipeline is running...")
 
@@ -268,6 +287,7 @@ class SQLGeneration(BasicPipeline):
                 "has_metric": has_metric,
                 "has_json_field": has_json_field,
                 "sql_functions": sql_functions,
+                "schema_intent_analysis": schema_intent_analysis,
                 "use_dry_plan": use_dry_plan,
                 "allow_dry_plan_fallback": allow_dry_plan_fallback,
                 "data_source": metadata.get("data_source", "local_file"),

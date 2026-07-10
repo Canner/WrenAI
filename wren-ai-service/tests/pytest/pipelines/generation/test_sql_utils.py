@@ -5,6 +5,7 @@ from src.pipelines.generation.utils.sql import (
     extract_sql_generation_result,
     find_invalid_column_references,
     find_invalid_table_references,
+    get_schema_intent_analysis_error,
     get_json_field_instructions,
     get_metric_instructions,
     normalize_data_source,
@@ -13,6 +14,7 @@ from src.pipelines.generation.utils.sql import (
     normalize_sql_table_references_to_schema,
     get_sql_generation_system_prompt,
     get_text_to_sql_rules,
+    validate_sql_intent_alignment,
 )
 
 
@@ -1550,3 +1552,177 @@ def test_normalize_generation_result_sql_rewrites_kb_article_created_by_for_mssq
     assert "created_by," not in normalized
     assert "GROUP BY created_by" not in normalized
     assert '"created_by_user_id"' in normalized
+
+
+def test_validate_sql_intent_alignment_rejects_generic_count_for_metric_request():
+    error = validate_sql_intent_alignment(
+        "Show revenue trend by month",
+        'SELECT COUNT(*) AS "RecordCount" FROM "orders"',
+        {"orders": ["created_at", "order_id"]},
+    )
+
+    assert error is not None
+    assert "generic record count" in error
+
+
+def test_validate_sql_intent_alignment_rejects_trend_without_temporal_field():
+    error = validate_sql_intent_alignment(
+        "Show monthly order volume",
+        'SELECT "orders"."status", COUNT(*) AS "RecordCount" '
+        'FROM "orders" GROUP BY "orders"."status"',
+        {"orders": ["status", "order_id"]},
+    )
+
+    assert error is not None
+    assert "temporal field" in error
+
+
+def test_validate_sql_intent_alignment_allows_schema_supported_metric_trend():
+    error = validate_sql_intent_alignment(
+        "Show revenue trend by month",
+        'SELECT DATEPART(YEAR, "orders"."created_at") AS "year", '
+        'DATEPART(MONTH, "orders"."created_at") AS "month", '
+        'SUM("orders"."revenue") AS "revenue" '
+        'FROM "orders" '
+        'GROUP BY DATEPART(YEAR, "orders"."created_at"), '
+        'DATEPART(MONTH, "orders"."created_at")',
+        {"orders": ["created_at", "revenue"]},
+    )
+
+    assert error is None
+
+
+def test_validate_sql_intent_alignment_allows_explicit_record_count():
+    error = validate_sql_intent_alignment(
+        "How many records are in orders?",
+        'SELECT COUNT(*) AS "RecordCount" FROM "orders"',
+        {"orders": ["id"]},
+    )
+
+    assert error is None
+
+
+def test_validate_sql_intent_alignment_allows_temporal_record_count_filter():
+    error = validate_sql_intent_alignment(
+        "How many orders were created last month?",
+        'SELECT COUNT(*) AS "RecordCount" FROM "orders" '
+        'WHERE "orders"."created_at" >= \'2026-06-01 00:00:00\' '
+        'AND "orders"."created_at" < \'2026-07-01 00:00:00\'',
+        {"orders": ["created_at", "id"]},
+    )
+
+    assert error is None
+
+
+def test_validate_sql_intent_alignment_rejects_time_bucket_without_grouping():
+    error = validate_sql_intent_alignment(
+        "Show monthly order volume",
+        'SELECT COUNT(*) AS "RecordCount" FROM "orders" '
+        'WHERE "orders"."created_at" IS NOT NULL',
+        {"orders": ["created_at", "id"]},
+    )
+
+    assert error is not None
+    assert "generic record count" in error
+
+
+def test_validate_sql_intent_alignment_allows_duration_metric_without_trend():
+    error = validate_sql_intent_alignment(
+        "Show average turnaround time by status",
+        'SELECT "repairs"."status", AVG("repairs"."turnaround_hours") '
+        'AS "avg_turnaround_hours" FROM "repairs" GROUP BY "repairs"."status"',
+        {"repairs": ["status", "turnaround_hours"]},
+    )
+
+    assert error is None
+
+
+def test_get_schema_intent_analysis_error_reports_missing_requirements():
+    error = get_schema_intent_analysis_error(
+        {
+            "missing_requirements": ["net income metric"],
+            "support_reasoning": "No metric maps to net income.",
+        }
+    )
+
+    assert error is not None
+    assert "net income metric" in error
+
+
+def test_get_schema_intent_analysis_error_requests_clarification_for_ambiguity():
+    error = get_schema_intent_analysis_error(
+        {
+            "ambiguous_requirements": [
+                "amount could map to gross_amount or net_amount"
+            ],
+        }
+    )
+
+    assert error is not None
+    assert "Please clarify" in error
+
+
+def test_get_schema_intent_analysis_error_reports_unsupported_analysis():
+    error = get_schema_intent_analysis_error(
+        {
+            "is_fully_supported": False,
+            "support_reasoning": "No relationship connects invoices to products.",
+        }
+    )
+
+    assert error is not None
+    assert "No relationship connects invoices to products" in error
+
+
+def test_validate_sql_intent_alignment_uses_semantic_analysis_for_metric_count_mismatch():
+    error = validate_sql_intent_alignment(
+        "Show invoice amount by customer",
+        'SELECT COUNT(*) AS "RecordCount" FROM "invoices"',
+        {"invoices": ["customer_id", "invoice_amount"]},
+        semantic_analysis={
+            "analytical_intent": "summary",
+            "entities": ["invoice", "customer"],
+            "metrics": ["invoice amount"],
+            "dimensions": ["customer"],
+            "is_fully_supported": True,
+        },
+    )
+
+    assert error is not None
+    assert "generic record count" in error
+
+
+def test_validate_sql_intent_alignment_uses_semantic_analysis_for_ranking():
+    error = validate_sql_intent_alignment(
+        "Top customers by invoice amount",
+        'SELECT "invoices"."customer_id", SUM("invoices"."invoice_amount") '
+        'AS "total_invoice_amount" FROM "invoices" GROUP BY "invoices"."customer_id"',
+        {"invoices": ["customer_id", "invoice_amount"]},
+        semantic_analysis={
+            "analytical_intent": "ranking",
+            "metrics": ["invoice amount"],
+            "dimensions": ["customer"],
+            "ranking": ["top customers by invoice amount"],
+            "is_fully_supported": True,
+        },
+    )
+
+    assert error is not None
+    assert "ranking intent" in error
+
+
+def test_validate_sql_intent_alignment_allows_semantic_count_metric():
+    error = validate_sql_intent_alignment(
+        "Show total order count",
+        'SELECT COUNT(*) AS "order_count" FROM "orders"',
+        {"orders": ["id"]},
+        semantic_analysis={
+            "analytical_intent": "summary",
+            "entities": ["order"],
+            "metrics": ["order count"],
+            "aggregations": ["count orders"],
+            "is_fully_supported": True,
+        },
+    )
+
+    assert error is None

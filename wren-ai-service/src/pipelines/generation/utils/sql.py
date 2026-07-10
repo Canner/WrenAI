@@ -1543,6 +1543,8 @@ class SQLGenPostProcessor:
         allow_data_preview: bool = False,
         valid_table_names: list[str] | None = None,
         valid_table_columns: dict[str, list[str]] | None = None,
+        query: str | None = None,
+        semantic_analysis: dict[str, Any] | None = None,
     ) -> dict:
         try:
             cleaned_generation_result = extract_sql_generation_result(replies[0])
@@ -1613,6 +1615,24 @@ class SQLGenPostProcessor:
                             "Use only these valid table columns exactly as shown: "
                             f"{valid_column_list}"
                         ),
+                        "correlation_id": "",
+                    },
+                }
+
+            intent_validation_error = validate_sql_intent_alignment(
+                query,
+                cleaned_generation_result,
+                valid_table_columns or {},
+                semantic_analysis=semantic_analysis,
+            )
+            if intent_validation_error:
+                return {
+                    "valid_generation_result": {},
+                    "invalid_generation_result": {
+                        "sql": cleaned_generation_result,
+                        "original_sql": cleaned_generation_result,
+                        "type": "SCHEMA_INTENT_VALIDATION",
+                        "error": intent_validation_error,
                         "correlation_id": "",
                     },
                 }
@@ -2198,6 +2218,9 @@ Given user's question, database schema, etc., you should think deeply and carefu
 9. Map business concepts to the closest explicit tables, columns, metrics, views, and relationships from the active metadata. Do not create a new table or column name from the business concept.
 10. Before applying SUM, AVG, MIN, MAX, or arithmetic to a column, verify that the chosen column is numeric in the active metadata. Do not aggregate text/string columns as numeric values.
 11. Do not prefix table names with catalog or schema names unless the active metadata, DATABASE SCHEMA, or VALID TABLE NAMES section shows the table name with that exact prefix.
+12. Before generating SQL, validate that the selected schema elements directly support all key entities, metrics, dimensions, filters, time ranges, relationships, and aggregations mentioned or implied by the question.
+13. Do not answer a specific business metric, trend, summary, comparison, dashboard, or analysis request with a generic record-count query unless the user explicitly asks only for record count.
+14. If the required information cannot be derived from the available active schema, return the closest schema-grounded limitation instead of inventing unrelated SQL.
 
 {text_to_sql_rules}
 
@@ -3183,6 +3206,552 @@ def format_valid_table_columns(valid_table_columns: dict[str, list[str]]) -> str
         f"{table}: {', '.join(columns)}"
         for table, columns in sorted(valid_table_columns.items())
     )
+
+
+_PLAIN_COUNT_SQL_PATTERN = re.compile(
+    r"^\s*SELECT\s+COUNT\s*\(\s*\*\s*\)(?:\s+AS\s+"
+    r'(?:"[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_$]*))?\s+'
+    rf"FROM\s+{_SQL_IDENTIFIER_PATTERN}(?:\s*\.\s*{_SQL_IDENTIFIER_PATTERN})*"
+    r"(?:\s+WHERE\s+.+?)?\s*(?:ORDER\s+BY\s+.+?)?(?:LIMIT\s+\d+\s*)?$",
+    flags=re.IGNORECASE | re.DOTALL,
+)
+_AGGREGATE_PATTERN = re.compile(
+    r"\b(?:SUM|AVG|MIN|MAX|COUNT)\s*\(",
+    flags=re.IGNORECASE,
+)
+_SPECIFIC_METRIC_TERM_GROUPS: dict[str, tuple[str, ...]] = {
+    "revenue": ("revenue", "sales", "sale", "amount", "value", "price", "total"),
+    "sales": ("sales", "sale", "revenue", "amount", "value", "price"),
+    "profit": ("profit", "margin", "income", "earnings"),
+    "cost": ("cost", "expense", "spend", "charge"),
+    "amount": ("amount", "value", "price", "total", "sum"),
+    "value": ("value", "amount", "price", "total"),
+    "quantity": ("quantity", "qty", "volume", "units", "count"),
+    "average": ("average", "avg", "mean"),
+    "avg": ("avg", "average", "mean"),
+    "rate": ("rate", "ratio", "percent", "percentage"),
+    "ratio": ("ratio", "rate", "percent", "percentage"),
+    "percentage": ("percentage", "percent", "pct", "rate"),
+    "percent": ("percent", "percentage", "pct", "rate"),
+    "duration": ("duration", "turnaround", "elapsed", "cycle", "leadtime", "time"),
+    "turnaround": ("turnaround", "duration", "elapsed", "cycle", "leadtime", "time"),
+}
+_ANALYSIS_TERMS = {
+    "analysis",
+    "analyze",
+    "dashboard",
+    "summary",
+    "summarize",
+    "trend",
+    "compare",
+    "comparison",
+    "breakdown",
+    "distribution",
+    "performance",
+    "ranking",
+    "top",
+    "bottom",
+    "highest",
+    "lowest",
+}
+_COUNT_VOLUME_TERMS = {
+    "count",
+    "counts",
+    "number",
+    "volume",
+    "records",
+    "record",
+    "rows",
+    "row",
+    "how many",
+}
+_TEMPORAL_TERMS = {
+    "date",
+    "timestamp",
+    "month",
+    "monthly",
+    "year",
+    "yearly",
+    "week",
+    "weekly",
+    "day",
+    "daily",
+    "quarter",
+    "quarterly",
+    "trend",
+    "over time",
+}
+_TEMPORAL_IDENTIFIER_TERMS = {
+    "date",
+    "time",
+    "timestamp",
+    "month",
+    "year",
+    "week",
+    "day",
+    "quarter",
+    "created",
+    "updated",
+    "modified",
+    "started",
+    "ended",
+    "closed",
+    "approved",
+}
+_DIMENSION_TERMS = {
+    "category",
+    "type",
+    "status",
+    "source",
+    "region",
+    "country",
+    "market",
+    "customer",
+    "product",
+    "salesperson",
+    "owner",
+    "assignee",
+    "division",
+    "department",
+    "location",
+}
+
+
+def _contains_phrase(text: str, terms: set[str] | tuple[str, ...]) -> bool:
+    normalized = f" {str(text or '').lower()} "
+    return any(f" {term.lower()} " in normalized for term in terms if " " in term) or any(
+        re.search(rf"\b{re.escape(term.lower())}\b", normalized)
+        for term in terms
+        if " " not in term
+    )
+
+
+def _query_requests_specific_metric(query: str) -> bool:
+    normalized = str(query or "").lower()
+    if not normalized:
+        return False
+
+    return any(
+        re.search(rf"\b{re.escape(term)}\b", normalized)
+        for term in _SPECIFIC_METRIC_TERM_GROUPS
+    )
+
+
+def _query_requests_count_volume(query: str) -> bool:
+    return _contains_phrase(query, _COUNT_VOLUME_TERMS)
+
+
+def _query_requests_time_analysis(query: str) -> bool:
+    normalized = str(query or "").lower()
+    if _contains_phrase(normalized, _TEMPORAL_TERMS):
+        return True
+
+    return bool(
+        re.search(
+            r"\b(?:last|next|previous|prior|this)\s+"
+            r"(?:\d+\s+)?(?:day|week|month|quarter|year)s?\b",
+            normalized,
+        )
+        or re.search(r"\b(?:between|since|before|after)\b", normalized)
+    )
+
+
+def _query_requests_time_bucket(query: str) -> bool:
+    normalized = str(query or "").lower()
+    return bool(
+        _contains_phrase(
+            normalized,
+            {
+                "daily",
+                "weekly",
+                "monthly",
+                "quarterly",
+                "yearly",
+                "trend",
+                "over time",
+                "time series",
+            },
+        )
+        or re.search(
+            r"\b(?:by|per|for each)\s+"
+            r"(?:day|week|month|quarter|year)s?\b",
+            normalized,
+        )
+    )
+
+
+def _query_requests_grouped_analysis(query: str) -> bool:
+    normalized = str(query or "").lower()
+    return bool(
+        re.search(r"\b(?:by|per|across)\s+[A-Za-z_][A-Za-z0-9_ -]*", normalized)
+        or re.search(r"\bfor each\s+[A-Za-z_][A-Za-z0-9_ -]*", normalized)
+        or _contains_phrase(normalized, {"breakdown", "distribution", "grouped"})
+    )
+
+
+def _sql_is_plain_count(sql: str) -> bool:
+    if re.search(r"\bGROUP\s+BY\b", sql, flags=re.IGNORECASE):
+        return False
+    return bool(_PLAIN_COUNT_SQL_PATTERN.match(sql or ""))
+
+
+def _compacted_schema_identifiers(
+    valid_table_columns: dict[str, list[str]],
+) -> set[str]:
+    identifiers: set[str] = set()
+    for table, columns in valid_table_columns.items():
+        identifiers.add(_compact_sql_identifier(table))
+        for column in columns or []:
+            identifiers.add(_compact_sql_identifier(column))
+    return {identifier for identifier in identifiers if identifier}
+
+
+def _compacted_sql_identifiers(sql: str) -> set[str]:
+    identifiers = {
+        _compact_sql_identifier(identifier)
+        for identifier in re.findall(
+            r'"([^"]+)"|`([^`]+)`|\[([^\]]+)\]|\b([A-Za-z_][A-Za-z0-9_$]*)\b',
+            sql or "",
+        )
+        for identifier in identifier
+        if identifier
+    }
+    return {identifier for identifier in identifiers if identifier}
+
+
+def _sql_references_term_group(sql: str, terms: tuple[str, ...]) -> bool:
+    sql_identifiers = _compacted_sql_identifiers(sql)
+    compact_terms = {_compact_sql_identifier(term) for term in terms}
+    return any(
+        term
+        and any(term in identifier or identifier in term for identifier in sql_identifiers)
+        for term in compact_terms
+    )
+
+
+def _schema_supports_term_group(
+    valid_table_columns: dict[str, list[str]],
+    terms: tuple[str, ...],
+) -> bool:
+    schema_identifiers = _compacted_schema_identifiers(valid_table_columns)
+    compact_terms = {_compact_sql_identifier(term) for term in terms}
+    return any(
+        term
+        and any(term in identifier or identifier in term for identifier in schema_identifiers)
+        for term in compact_terms
+    )
+
+
+def _missing_metric_support(
+    query: str,
+    sql: str,
+    valid_table_columns: dict[str, list[str]],
+) -> list[str]:
+    normalized_query = str(query or "").lower()
+    missing_terms: list[str] = []
+
+    for term, group in _SPECIFIC_METRIC_TERM_GROUPS.items():
+        if not re.search(rf"\b{re.escape(term)}\b", normalized_query):
+            continue
+        if _sql_references_term_group(sql, group):
+            continue
+        if not _schema_supports_term_group(valid_table_columns, group):
+            missing_terms.append(term)
+
+    return sorted(set(missing_terms))
+
+
+def _sql_has_temporal_reference(
+    sql: str,
+    valid_table_columns: dict[str, list[str]],
+) -> bool:
+    if re.search(
+        r"\b(?:DATEPART|DATE_TRUNC|DATETRUNC|EXTRACT|TO_TIMESTAMP|CAST)\s*\(",
+        sql or "",
+        flags=re.IGNORECASE,
+    ):
+        return True
+
+    return _sql_references_term_group(
+        sql,
+        tuple(_TEMPORAL_IDENTIFIER_TERMS),
+    ) or any(
+        _schema_supports_term_group({table: [column]}, tuple(_TEMPORAL_IDENTIFIER_TERMS))
+        and _sql_references_term_group(sql, (column,))
+        for table, columns in valid_table_columns.items()
+        for column in columns
+    )
+
+
+def _semantic_analysis_items(
+    semantic_analysis: dict[str, Any] | None,
+    key: str,
+) -> list[str]:
+    if not isinstance(semantic_analysis, dict):
+        return []
+
+    value = semantic_analysis.get(key)
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    if isinstance(value, list):
+        return [
+            str(item).strip()
+            for item in value
+            if item is not None and str(item).strip()
+        ]
+    return []
+
+
+def _has_semantic_analysis(semantic_analysis: dict[str, Any] | None) -> bool:
+    if not isinstance(semantic_analysis, dict) or not semantic_analysis:
+        return False
+    semantic_keys = {
+        "analytical_intent",
+        "entities",
+        "identifiers",
+        "metrics",
+        "dimensions",
+        "filters",
+        "aggregations",
+        "relationships",
+        "time_constraints",
+        "ranking",
+        "supported_schema_objects",
+        "missing_requirements",
+        "ambiguous_requirements",
+        "support_reasoning",
+    }
+    return any(semantic_analysis.get(key) for key in semantic_keys)
+
+
+def get_schema_intent_analysis_error(
+    semantic_analysis: dict[str, Any] | None,
+) -> str | None:
+    if not _has_semantic_analysis(semantic_analysis):
+        return None
+
+    missing_requirements = _semantic_analysis_items(
+        semantic_analysis, "missing_requirements"
+    )
+    if missing_requirements:
+        return (
+            "The active datasource schema does not expose the information needed "
+            "to answer the request: "
+            f"{', '.join(missing_requirements)}. I cannot generate unrelated SQL."
+        )
+
+    ambiguous_requirements = _semantic_analysis_items(
+        semantic_analysis, "ambiguous_requirements"
+    )
+    if ambiguous_requirements:
+        return (
+            "The request has multiple equally plausible schema interpretations: "
+            f"{', '.join(ambiguous_requirements)}. Please clarify which one to use."
+        )
+
+    if semantic_analysis.get("is_fully_supported") is False:
+        support_reasoning = str(semantic_analysis.get("support_reasoning") or "").strip()
+        if support_reasoning:
+            return (
+                "The selected schema does not fully support the request: "
+                f"{support_reasoning}"
+            )
+        return (
+            "The selected schema does not fully support every required component "
+            "of the request. I cannot generate unrelated SQL."
+        )
+
+    return None
+
+
+def _semantic_analysis_requests_record_count(
+    semantic_analysis: dict[str, Any],
+) -> bool:
+    analytical_intent = str(semantic_analysis.get("analytical_intent") or "").lower()
+    if analytical_intent == "record_count":
+        return True
+
+    semantic_text = " ".join(
+        item
+        for key in ("metrics", "aggregations")
+        for item in _semantic_analysis_items(semantic_analysis, key)
+    )
+    return bool(
+        re.search(
+            r"\b(?:count|number of|volume|record count|row count|count records|count rows|number of records)\b",
+            semantic_text.lower(),
+        )
+    )
+
+
+def _validate_sql_against_semantic_analysis(
+    semantic_analysis: dict[str, Any] | None,
+    sql: str,
+    valid_table_columns: dict[str, list[str]],
+) -> str | None:
+    if not _has_semantic_analysis(semantic_analysis):
+        return None
+
+    if analysis_error := get_schema_intent_analysis_error(semantic_analysis):
+        return analysis_error
+
+    analytical_intent = str(
+        semantic_analysis.get("analytical_intent") or ""
+    ).strip().lower()
+    metrics = _semantic_analysis_items(semantic_analysis, "metrics")
+    dimensions = _semantic_analysis_items(semantic_analysis, "dimensions")
+    aggregations = _semantic_analysis_items(semantic_analysis, "aggregations")
+    time_constraints = _semantic_analysis_items(
+        semantic_analysis, "time_constraints"
+    )
+    ranking = _semantic_analysis_items(semantic_analysis, "ranking")
+    requests_record_count = _semantic_analysis_requests_record_count(
+        semantic_analysis
+    )
+    analytical_sql_intents = {
+        "summary",
+        "comparison",
+        "trend",
+        "dashboard",
+        "kpi",
+        "ranking",
+    }
+
+    if _sql_is_plain_count(sql) and (
+        (metrics and not requests_record_count)
+        or dimensions
+        or ranking
+        or (analytical_intent in analytical_sql_intents and not requests_record_count)
+    ):
+        return (
+            "Generated SQL answers with a generic record count, but the semantic "
+            "analysis requires specific business metrics, dimensions, ranking, "
+            "or analytical calculations from the active schema."
+        )
+
+    if time_constraints and not _sql_has_temporal_reference(sql, valid_table_columns):
+        return (
+            "Generated SQL does not use a temporal field or supported date/time "
+            "expression, but the semantic analysis identified time constraints "
+            "or trend requirements."
+        )
+
+    if (dimensions or analytical_intent == "trend") and _AGGREGATE_PATTERN.search(
+        sql or ""
+    ):
+        has_grouping = bool(re.search(r"\bGROUP\s+BY\b", sql or "", flags=re.IGNORECASE))
+        if not has_grouping:
+            return (
+                "Generated SQL aggregates results without grouping by the "
+                "dimensions or time grain identified in the semantic analysis."
+            )
+
+    if ranking and not re.search(
+        r"\b(?:ORDER\s+BY|LIMIT|TOP\s*\(|FETCH\s+FIRST)\b",
+        sql or "",
+        flags=re.IGNORECASE,
+    ):
+        return (
+            "Generated SQL does not include sorting or limiting logic required "
+            "by the ranking intent."
+        )
+
+    if aggregations and not _AGGREGATE_PATTERN.search(sql or ""):
+        return (
+            "Generated SQL does not include the aggregation required by the "
+            "semantic analysis."
+        )
+
+    return None
+
+
+def validate_sql_intent_alignment(
+    query: str | None,
+    sql: str,
+    valid_table_columns: dict[str, list[str]] | None = None,
+    semantic_analysis: dict[str, Any] | None = None,
+) -> str | None:
+    valid_table_columns = valid_table_columns or {}
+
+    semantic_validation_error = _validate_sql_against_semantic_analysis(
+        semantic_analysis,
+        sql,
+        valid_table_columns,
+    )
+    if semantic_validation_error:
+        return semantic_validation_error
+
+    if not query:
+        return None
+
+    normalized_query = str(query or "").lower()
+    asks_specific_metric = _query_requests_specific_metric(normalized_query)
+    asks_count_volume = _query_requests_count_volume(normalized_query)
+    asks_time_analysis = _query_requests_time_analysis(normalized_query)
+    asks_time_bucket = _query_requests_time_bucket(normalized_query)
+    asks_grouped_analysis = _query_requests_grouped_analysis(normalized_query)
+    asks_analysis = _contains_phrase(normalized_query, _ANALYSIS_TERMS)
+
+    if _sql_is_plain_count(sql) and (
+        asks_specific_metric
+        or asks_time_bucket
+        or asks_grouped_analysis
+        or (asks_analysis and not asks_count_volume)
+    ):
+        return (
+            "Generated SQL answers with a generic record count, but the question "
+            "asks for a specific metric, trend, grouping, comparison, dashboard, "
+            "or analysis. Select schema elements that directly support the "
+            "requested business intent, or report that the schema does not expose them."
+        )
+
+    if asks_time_analysis and not _sql_has_temporal_reference(sql, valid_table_columns):
+        return (
+            "Generated SQL does not use a temporal field or supported date/time "
+            "expression, but the question asks for a time range or trend. The "
+            "active schema must expose a relevant date/time column to answer this."
+        )
+
+    if (asks_grouped_analysis or asks_time_bucket) and _AGGREGATE_PATTERN.search(
+        sql or ""
+    ):
+        has_grouping = bool(re.search(r"\bGROUP\s+BY\b", sql or "", flags=re.IGNORECASE))
+        if not has_grouping:
+            return (
+                "Generated SQL aggregates results without grouping by the requested "
+                "dimension. Use an explicit schema column for the requested grouping, "
+                "or report that the schema does not expose that dimension."
+            )
+
+    missing_metric_terms = _missing_metric_support(
+        normalized_query,
+        sql,
+        valid_table_columns,
+    )
+    if missing_metric_terms:
+        missing = ", ".join(missing_metric_terms)
+        return (
+            "The active schema does not expose columns or metrics that directly "
+            f"support the requested business term(s): {missing}. Do not generate "
+            "an unrelated query."
+        )
+
+    if asks_grouped_analysis and _contains_phrase(normalized_query, _DIMENSION_TERMS):
+        missing_dimensions = [
+            term
+            for term in _DIMENSION_TERMS
+            if re.search(rf"\b{re.escape(term)}\b", normalized_query)
+            and not _sql_references_term_group(sql, (term,))
+            and not _schema_supports_term_group(valid_table_columns, (term,))
+        ]
+        if missing_dimensions:
+            return (
+                "The active schema does not expose the requested grouping "
+                f"dimension(s): {', '.join(sorted(missing_dimensions))}. Do not "
+                "generate an unrelated query."
+            )
+
+    return None
 
 
 def construct_ask_history_messages(

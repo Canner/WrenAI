@@ -7,6 +7,7 @@ from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
+from src.pipelines.generation.utils.sql import get_schema_intent_analysis_error
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest
 from src.web.v1.services.ask import AskError, AskResult
@@ -106,6 +107,7 @@ class AskFeedbackService:
         invalid_sql = None
         sql_knowledge = None
         allow_sql_knowledge_retrieval = self._allow_sql_knowledge_retrieval
+        schema_intent_analysis = {}
 
         try:
             if not self._is_stopped(query_id, self._ask_feedback_results):
@@ -159,6 +161,9 @@ class AskFeedbackService:
                 )
                 has_metric = _retrieval_result.get("has_metric", False)
                 has_json_field = _retrieval_result.get("has_json_field", False)
+                schema_intent_analysis = _retrieval_result.get(
+                    "semantic_analysis", {}
+                )
                 documents = _retrieval_result.get("retrieval_results", [])
                 table_ddls = [document.get("table_ddl") for document in documents]
                 sql_samples = sql_samples_task["formatted_output"].get("documents", [])
@@ -167,6 +172,21 @@ class AskFeedbackService:
                 )
 
             if not self._is_stopped(query_id, self._ask_feedback_results):
+                if semantic_support_error := get_schema_intent_analysis_error(
+                    schema_intent_analysis
+                ):
+                    self._ask_feedback_results[query_id] = AskFeedbackResultResponse(
+                        status="failed",
+                        error=AskError(
+                            code="NO_RELEVANT_SQL",
+                            message=semantic_support_error,
+                        ),
+                        trace_id=trace_id,
+                    )
+                    results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
+                    results["metadata"]["error_message"] = semantic_support_error
+                    return results
+
                 self._ask_feedback_results[query_id] = AskFeedbackResultResponse(
                     status="generating",
                     trace_id=trace_id,
@@ -178,6 +198,7 @@ class AskFeedbackService:
                     contexts=table_ddls,
                     sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
                     sql=ask_feedback_request.sql,
+                    query=ask_feedback_request.question,
                     project_id=ask_feedback_request.project_id,
                     sql_samples=sql_samples,
                     instructions=instructions,
@@ -186,6 +207,7 @@ class AskFeedbackService:
                     has_json_field=has_json_field,
                     sql_functions=sql_functions,
                     sql_knowledge=sql_knowledge,
+                    schema_intent_analysis=schema_intent_analysis,
                 )
 
                 if sql_valid_result := text_to_sql_generation_results["post_process"][
@@ -202,7 +224,10 @@ class AskFeedbackService:
                 elif failed_dry_run_result := text_to_sql_generation_results[
                     "post_process"
                 ]["invalid_generation_result"]:
-                    if failed_dry_run_result["type"] != "TIME_OUT":
+                    if failed_dry_run_result["type"] not in {
+                        "TIME_OUT",
+                        "SCHEMA_INTENT_VALIDATION",
+                    }:
                         original_sql = failed_dry_run_result["original_sql"]
                         invalid_sql = failed_dry_run_result["sql"]
                         error_message = failed_dry_run_result["error"]
@@ -248,6 +273,8 @@ class AskFeedbackService:
                             project_id=ask_feedback_request.project_id,
                             sql_functions=sql_functions,
                             sql_knowledge=sql_knowledge,
+                            query=ask_feedback_request.question,
+                            schema_intent_analysis=schema_intent_analysis,
                         )
 
                         if valid_generation_result := sql_correction_results[

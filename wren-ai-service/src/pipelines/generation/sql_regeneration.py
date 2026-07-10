@@ -44,6 +44,10 @@ You are a great ANSI SQL expert. Now you are given database schema, SQL generati
 please carefully review the reasoning, and then generate a new SQL query that matches the reasoning.
 While generating the new SQL query, you should use the original SQL query as a reference.
 While generating the new SQL query, make sure to use the database schema to generate the SQL query.
+Before returning SQL, validate that the selected schema elements directly support
+the key entities, metrics, dimensions, filters, time ranges, relationships, and
+aggregations from the user's question or reasoning. Do not replace an unsupported
+request with a generic COUNT(*) or unrelated table query.
 
 {text_to_sql_rules}
 
@@ -102,6 +106,15 @@ SQL:
 {% endif %}
 
 ### QUESTION ###
+{% if query %}
+User's Question: {{ query }}
+{% endif %}
+{% if schema_intent_analysis %}
+### SCHEMA INTENT ANALYSIS ###
+This is the semantic contract for regenerated SQL. Preserve this intent while
+improving the original SQL.
+{{ schema_intent_analysis }}
+{% endif %}
 SQL generation reasoning: {{ sql_generation_reasoning }}
 Original SQL query: {{ sql }}
 
@@ -117,6 +130,8 @@ def prompt(
     sql: str,
     prompt_builder: PromptBuilder,
     data_source: str,
+    query: str | None = None,
+    schema_intent_analysis: dict[str, Any] | None = None,
     sql_samples: list[dict] | None = None,
     instructions: list[dict] | None = None,
     has_calculated_field: bool = False,
@@ -129,6 +144,8 @@ def prompt(
         sql=sql,
         data_source=data_source,
         documents=documents,
+        query=query,
+        schema_intent_analysis=schema_intent_analysis,
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
@@ -176,7 +193,9 @@ async def post_process(
     post_processor: SQLGenPostProcessor,
     documents: list[str],
     data_source: str,
+    query: str | None = None,
     project_id: str | None = None,
+    schema_intent_analysis: dict[str, Any] | None = None,
 ) -> dict:
     return await post_processor.run(
         regenerate_sql.get("replies"),
@@ -184,6 +203,8 @@ async def post_process(
         data_source=data_source,
         valid_table_names=construct_valid_table_names(documents),
         valid_table_columns=construct_valid_table_columns(documents),
+        query=query,
+        semantic_analysis=schema_intent_analysis,
     )
 
 
@@ -228,6 +249,8 @@ class SQLRegeneration(BasicPipeline):
         has_json_field: bool = False,
         sql_functions: list[SqlFunction] | None = None,
         sql_knowledge: SqlKnowledge | None = None,
+        query: str | None = None,
+        schema_intent_analysis: dict[str, Any] | None = None,
     ):
         logger.info("SQL Regeneration pipeline is running...")
 
@@ -237,6 +260,8 @@ class SQLRegeneration(BasicPipeline):
                 "documents": contexts,
                 "sql_generation_reasoning": sql_generation_reasoning,
                 "sql": sql,
+                "query": query,
+                "schema_intent_analysis": schema_intent_analysis,
                 "sql_samples": sql_samples,
                 "instructions": instructions,
                 "project_id": project_id,

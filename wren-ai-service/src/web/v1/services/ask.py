@@ -11,6 +11,7 @@ from src.core.pipeline import BasicPipeline
 from src.pipelines.generation.utils.sql import (
     construct_valid_table_columns,
     construct_valid_table_names,
+    get_schema_intent_analysis_error,
     normalize_sql_column_references_to_schema,
     normalize_sql_table_references_to_schema,
 )
@@ -1288,7 +1289,7 @@ class AskService:
         wants_monthly_count = any(
             term in normalized
             for term in ("monthly", "by month", "per month", "month-wise")
-        ) and any(term in normalized for term in ("count", "records", "rows"))
+        ) and any(term in normalized for term in ("count", "record", "records", "rows"))
         if wants_monthly_count:
             date_column = self._find_temporal_column_for_query(query, table)
             if not date_column:
@@ -1471,21 +1472,23 @@ class AskService:
     def _extract_explicit_table_names_from_query(self, query: str) -> list[str]:
         table_names: list[str] = []
         for match in re.finditer(
-            r"\b(?:from|table|model)\s+([A-Za-z_][A-Za-z0-9_.$]*)",
+            r"\b(?:from|in|table|model)\s+([A-Za-z_][A-Za-z0-9_.$]*)",
             query or "",
             flags=re.IGNORECASE,
         ):
             table_name = match.group(1).strip(".,;:()[]{}")
-            if table_name and table_name not in table_names:
-                table_names.append(table_name)
+            for candidate in self._explicit_table_name_candidates(table_name):
+                if candidate and candidate not in table_names:
+                    table_names.append(candidate)
         for match in re.finditer(
             r"\bin\s+(?:the\s+)?([A-Za-z_][A-Za-z0-9_.$]*)\s+table\b",
             query or "",
             flags=re.IGNORECASE,
         ):
             table_name = match.group(1).strip(".,;:()[]{}")
-            if table_name and table_name not in table_names:
-                table_names.append(table_name)
+            for candidate in self._explicit_table_name_candidates(table_name):
+                if candidate and candidate not in table_names:
+                    table_names.append(candidate)
         for match in re.finditer(
             r"\bin\s+([A-Za-z_][A-Za-z0-9_.$]*)",
             query or "",
@@ -1495,9 +1498,10 @@ class AskService:
             if (
                 table_name
                 and ("." in table_name or "_" in table_name)
-                and table_name not in table_names
             ):
-                table_names.append(table_name)
+                for candidate in self._explicit_table_name_candidates(table_name):
+                    if candidate and candidate not in table_names:
+                        table_names.append(candidate)
         for match in re.finditer(
             r"\busing\s+([A-Za-z_][A-Za-z0-9_.$]*)",
             query or "",
@@ -1507,9 +1511,10 @@ class AskService:
             if (
                 table_name
                 and ("." in table_name or "_" in table_name)
-                and table_name not in table_names
             ):
-                table_names.append(table_name)
+                for candidate in self._explicit_table_name_candidates(table_name):
+                    if candidate and candidate not in table_names:
+                        table_names.append(candidate)
         if re.search(
             r"\b(?:repair\s+logs?|repair\s+tickets?|board\s+models?)\b",
             query or "",
@@ -1523,6 +1528,24 @@ class AskService:
                 if table_name not in table_names:
                     table_names.append(table_name)
         return table_names
+
+    def _explicit_table_name_candidates(self, table_name: str) -> list[str]:
+        table_name = str(table_name or "").strip(".,;:()[]{}")
+        if not table_name:
+            return []
+
+        candidates = [table_name]
+        dotted_parts = [part for part in re.split(r"[.$]", table_name) if part]
+        if len(dotted_parts) > 1:
+            underscored = "_".join(dotted_parts)
+            candidates.append(underscored)
+            candidates.append(dotted_parts[-1])
+
+        normalized_candidates: list[str] = []
+        for candidate in candidates:
+            if candidate and candidate not in normalized_candidates:
+                normalized_candidates.append(candidate)
+        return normalized_candidates
 
     def _build_direct_orders_sales_sql(self, query: str) -> str | None:
         return None
@@ -5298,6 +5321,7 @@ class AskService:
         allow_dry_plan_fallback = ask_request.allow_dry_plan_fallback
         sql_knowledge = None
         understanding_timeout_seconds = min(self._pipeline_timeout_seconds, 20)
+        schema_intent_analysis: dict[str, Any] = {}
 
         try:
             sql_user_query = user_query
@@ -5978,6 +6002,9 @@ class AskService:
                 _retrieval_result = retrieval_result.get(
                     "construct_retrieval_results", {}
                 )
+                schema_intent_analysis = _retrieval_result.get(
+                    "semantic_analysis", {}
+                )
                 documents, table_names, table_ddls = (
                     self._extract_retrieval_metadata(retrieval_result)
                 )
@@ -6014,6 +6041,9 @@ class AskService:
                         )
                         _retrieval_result = retrieval_result.get(
                             "construct_retrieval_results", {}
+                        )
+                        schema_intent_analysis = _retrieval_result.get(
+                            "semantic_analysis", {}
                         )
                         documents, table_names, table_ddls = (
                             self._extract_retrieval_metadata(retrieval_result)
@@ -6319,6 +6349,32 @@ class AskService:
                     results["metadata"]["type"] = "TEXT_TO_SQL"
                     return results
 
+                if semantic_support_error := get_schema_intent_analysis_error(
+                    schema_intent_analysis
+                ):
+                    logger.info(
+                        "ask pipeline - NO_RELEVANT_SQL due to schema intent analysis: %s",
+                        user_query,
+                    )
+                    if not self._is_stopped(query_id, self._ask_results):
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="failed",
+                            type="TEXT_TO_SQL",
+                            error=AskError(
+                                code="NO_RELEVANT_SQL",
+                                message=semantic_support_error,
+                            ),
+                            rephrased_question=rephrased_question,
+                            intent_reasoning=intent_reasoning,
+                            retrieved_tables=table_names,
+                            trace_id=trace_id,
+                            is_followup=True if histories else False,
+                        )
+                    results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
+                    results["metadata"]["error_message"] = semantic_support_error
+                    results["metadata"]["type"] = "TEXT_TO_SQL"
+                    return results
+
                 if not documents:
                     if heuristic_sql := self._build_heuristic_text_to_sql_fallback(
                         user_query, table_ddls, table_names=table_names
@@ -6451,6 +6507,7 @@ class AskService:
                                     instructions=instructions,
                                     configuration=ask_request.configurations,
                                     query_id=query_id,
+                                    schema_intent_analysis=schema_intent_analysis,
                                 ),
                             )
                         ).get("post_process", {})
@@ -6473,6 +6530,7 @@ class AskService:
                                     instructions=instructions,
                                     configuration=ask_request.configurations,
                                     query_id=query_id,
+                                    schema_intent_analysis=schema_intent_analysis,
                                 ),
                             )
                         ).get("post_process", {})
@@ -6561,6 +6619,7 @@ class AskService:
                                 use_dry_plan=use_dry_plan,
                                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                                 sql_knowledge=sql_knowledge,
+                                schema_intent_analysis=schema_intent_analysis,
                             ),
                         )
                     else:
@@ -6580,6 +6639,7 @@ class AskService:
                                 use_dry_plan=use_dry_plan,
                                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                                 sql_knowledge=sql_knowledge,
+                                schema_intent_analysis=schema_intent_analysis,
                             ),
                         )
                 except TimeoutError as generation_timeout:
@@ -6617,6 +6677,7 @@ class AskService:
                         if failed_dry_run_result["type"] in {
                             "TIME_OUT",
                             "UNSUPPORTED_SQL",
+                            "SCHEMA_INTENT_VALIDATION",
                         }:
                             invalid_sql = failed_dry_run_result.get("sql", invalid_sql)
                             error_message = failed_dry_run_result.get(
@@ -6678,6 +6739,7 @@ class AskService:
                                 sql_functions=sql_functions,
                                 sql_knowledge=sql_knowledge,
                                 query=sql_user_query,
+                                schema_intent_analysis=schema_intent_analysis,
                             ),
                         )
 
