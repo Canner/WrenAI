@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from hamilton import base
@@ -99,6 +100,7 @@ SQL:
 
 ### QUESTION ###
 User's Follow-up Question: {{ query }}
+Current Time: {{ current_time }}
 
 {% if semantic_schema_contract %}
 ### SEMANTIC SCHEMA CONTRACT ###
@@ -112,10 +114,21 @@ or column names from SQL SAMPLES or chat history unless those exact names also
 appear in ACTIVE DATASOURCE METADATA or VALID TABLE NAMES for the active datasource.
 Only apply aggregate functions to columns whose active metadata type supports that
 operation.
+Reuse the previous SQL and summary for unresolved references such as same, that,
+those, previous, it, filter, sort, period, table, chart, or metric. Apply only the
+requested follow-up change instead of regenerating the entire analysis from scratch.
+Resolve business synonyms and different phrasings through active metadata, foreign
+keys, and semantic relationships. For multi-table follow-ups, connect tables with
+explicit INNER JOIN or LEFT JOIN conditions from trusted relationships only.
+Resolve relative date phrases against Current Time. Infer aggregation, sorting,
+limits, and chart/dashboard datasets from the follow-up wording.
+Avoid SELECT *. Select only required columns, keep existing filters unless the user
+changes them, push new filters before joins where possible, and limit rows for
+retrieval/ranking requests.
 Before writing SQL, validate that the selected schema elements directly support every
-key entity, metric, dimension, filter, time range, relationship, and aggregation in
-the follow-up question. If the schema cannot support the requested information, do
-not replace the request with a generic COUNT(*) or unrelated table query.
+key entity, measure, dimension, filter, time range, join, sorting, chart, dashboard,
+and aggregation in the follow-up question. If the schema cannot support the requested
+information, do not replace the request with a generic COUNT(*) or unrelated table query.
 
 ### REASONING PLAN ###
 {{ sql_generation_reasoning }}
@@ -143,6 +156,7 @@ def prompt(
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
+        current_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         data_source=data_source,
         documents=documents,
         valid_table_names=construct_valid_table_names(documents),

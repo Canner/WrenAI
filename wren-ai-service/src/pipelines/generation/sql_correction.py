@@ -122,10 +122,14 @@ active datasource metadata clearly contains an equivalent object that supports t
 user's request. Do not invent tables, columns, joins, metrics, or relationships.
 Only apply aggregate functions to columns whose active metadata type supports that
 operation.
+Preserve the user's business intent, including entities, measures, dimensions,
+filters, date ranges, joins, sorting, top/bottom limits, chart/dashboard dataset
+shape, and aggregation. Fix obvious table/column/alias/GROUP BY/JOIN mistakes only
+when the active metadata supports the correction.
 Before returning corrected SQL, validate that it still directly supports every key
-entity, metric, dimension, filter, time range, relationship, and aggregation in the
-user's question. Do not replace an unsupported request with a generic COUNT(*) or
-unrelated table query.
+entity, measure, dimension, filter, time range, relationship, sorting requirement,
+chart/dashboard requirement, and aggregation in the user's question. Do not replace
+an unsupported request with a generic COUNT(*) or unrelated table query.
 
 Let's think step by step.
 """
