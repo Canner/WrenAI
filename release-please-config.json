@@ -2,6 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "separate-pull-requests": true,
   "include-component-in-tag": true,
+  "group-pull-request-title-pattern": "chore${scope}: release wren-rust-core libraries",
   "packages": {
     "core/wren-core-py": {
       "component": "wren-core-py",
