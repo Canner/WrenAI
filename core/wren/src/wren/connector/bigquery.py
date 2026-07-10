@@ -1,10 +1,36 @@
 import base64
+import re
 from json import loads
 
 import pyarrow as pa
 from loguru import logger
 
 from wren.connector.base import ConnectorABC
+
+_TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
+
+
+def _strip_trailing_semicolon(sql: str) -> str:
+    """Strip trailing ``;`` / whitespace for BigQuery jobs.
+
+    BigQuery job submission is more lenient than engines that subquery-wrap,
+    but a trailing semicolon still breaks when SQL is later composed, and
+    multi-statement batches with a terminal ``;`` are not the interface we
+    expose for single-statement GenBI queries. Only the terminating run is
+    stripped so ``SELECT ';'`` literals remain.
+    """
+    return _TRAILING_SEMICOLONS_RE.sub("", sql)
+
+
+def _apply_limit(sql: str, limit: int) -> str:
+    """Push LIMIT into SQL rather than relying solely on API max_results.
+
+    ``max_results`` only caps the page size of job results-reading; it does
+    not rewrite the query plan and still fetches a full result set stage that
+    can be expensive. Append ``LIMIT n`` after stripping a trailing semicolon
+    (mirrors Athena/MySQL pushdown helpers) so the engine short-circuits.
+    """
+    return f"{_strip_trailing_semicolon(sql)}\nLIMIT {int(limit)}"
 
 
 class BigQueryConnector(ConnectorABC):
@@ -37,13 +63,16 @@ class BigQueryConnector(ConnectorABC):
         self.connection = client
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
-        return self.connection.query(sql).result(max_results=limit).to_arrow()
+        if limit is not None:
+            sql = _apply_limit(sql, limit)
+        return self.connection.query(sql).result().to_arrow()
 
     def dry_run(self, sql: str) -> None:
         from google.cloud import bigquery  # noqa: PLC0415
 
         self.connection.query(
-            sql, job_config=bigquery.QueryJobConfig(dry_run=True, use_query_cache=False)
+            _strip_trailing_semicolon(sql),
+            job_config=bigquery.QueryJobConfig(dry_run=True, use_query_cache=False),
         )
 
     def close(self) -> None:
