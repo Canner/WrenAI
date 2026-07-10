@@ -71,9 +71,14 @@
     },
     "core/wren-core": {
       "component": "wren-semantic-core",
-      "release-type": "rust",
+      "release-type": "simple",
       "bump-minor-pre-major": true,
       "extra-files": [
+        {
+          "path": "Cargo.toml",
+          "type": "toml",
+          "jsonpath": "$.workspace.package.version"
+        },
         {
           "path": "Cargo.toml",
           "type": "toml",
