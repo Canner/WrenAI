@@ -10,7 +10,7 @@ from src.core.pipeline import BasicPipeline
 from src.pipelines.generation.utils.sql import get_schema_intent_analysis_error
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest
-from src.web.v1.services.ask import AskError, AskResult, AskService
+from src.web.v1.services.ask import AskError, AskResult
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -224,36 +224,21 @@ class AskFeedbackService:
                 elif failed_dry_run_result := text_to_sql_generation_results[
                     "post_process"
                 ]["invalid_generation_result"]:
-                    rejected_schema_objects: set[str] = set()
-                    semantic_retry_attempt = 0
-                    while (
-                        failed_dry_run_result
-                        and failed_dry_run_result["type"] == "SCHEMA_INTENT_VALIDATION"
-                        and semantic_retry_attempt < 3
-                        and not api_results
-                    ):
-                        semantic_retry_attempt += 1
+                    if failed_dry_run_result["type"] == "SCHEMA_INTENT_VALIDATION":
                         semantic_retry_error = failed_dry_run_result.get("error", "")
-                        retry_context = AskService._semantic_retry_context(
-                            schema_intent_analysis,
-                            semantic_retry_error,
-                            semantic_retry_attempt,
-                            rejected_schema_objects,
-                        )
                         semantic_retry_query = (
                             f"{ask_feedback_request.question}\n\n"
                             "The previous regenerated SQL failed semantic validation: "
                             f"{semantic_retry_error}\n"
-                            "Perform a fresh semantic retrieval. Select the next "
-                            "highest-confidence complete concept-to-schema mapping. "
-                            "Do not reuse rejected schema objects from RETRY CONTEXT."
+                            "Re-run semantic schema retrieval and choose the next "
+                            "highest-confidence concept-to-schema mapping that "
+                            "directly supports the user's requested entities, "
+                            "metrics, dimensions, filters, time constraints, "
+                            "aggregations, relationships, and ranking."
                         )
                         logger.info(
-                            "feedback_semantic_retry_attempt=%s query_id=%s validation_failure=%s rejected_schema_objects=%s",
-                            semantic_retry_attempt,
+                            "Retrying semantic schema retrieval after feedback intent validation failure for query_id %s",
                             query_id,
-                            semantic_retry_error,
-                            sorted(rejected_schema_objects),
                         )
                         retry_retrieval_result = await self._pipelines[
                             "db_schema_retrieval"
@@ -261,8 +246,7 @@ class AskFeedbackService:
                             query=semantic_retry_query,
                             histories=[],
                             project_id=ask_feedback_request.project_id,
-                            enable_column_pruning=True,
-                            semantic_retry_context=retry_context,
+                            enable_column_pruning=enable_column_pruning,
                         )
                         retry_construct_result = retry_retrieval_result.get(
                             "construct_retrieval_results", {}
@@ -270,25 +254,6 @@ class AskFeedbackService:
                         retry_schema_intent_analysis = retry_construct_result.get(
                             "semantic_analysis", {}
                         )
-                        retry_selected_objects = set(
-                            AskService._semantic_schema_objects(
-                                retry_schema_intent_analysis
-                            )
-                        )
-                        if retry_selected_objects and retry_selected_objects.issubset(
-                            rejected_schema_objects
-                        ):
-                            error_message = (
-                                "Semantic schema retrieval retry selected only previously rejected schema objects."
-                            )
-                            logger.info(
-                                "feedback_semantic_retry_rejected_repeated_contract query_id=%s attempt=%s schema_objects=%s",
-                                query_id,
-                                semantic_retry_attempt,
-                                sorted(retry_selected_objects),
-                            )
-                            break
-
                         retry_documents = retry_construct_result.get(
                             "retrieval_results", []
                         )
@@ -301,91 +266,59 @@ class AskFeedbackService:
                         retry_support_error = get_schema_intent_analysis_error(
                             retry_schema_intent_analysis
                         )
-                        if not retry_table_ddls or retry_support_error:
-                            error_message = retry_support_error or (
-                                "Semantic schema retrieval retry did not find a supported mapping for the request."
+                        if retry_table_ddls and not retry_support_error:
+                            schema_intent_analysis = retry_schema_intent_analysis
+                            documents = retry_documents
+                            table_ddls = retry_table_ddls
+                            has_calculated_field = retry_construct_result.get(
+                                "has_calculated_field", False
                             )
-                            logger.info(
-                                "feedback_semantic_retry_candidate_rejected query_id=%s attempt=%s reason=%s selected_objects=%s",
-                                query_id,
-                                semantic_retry_attempt,
-                                error_message,
-                                sorted(retry_selected_objects),
+                            has_metric = retry_construct_result.get(
+                                "has_metric", False
                             )
-                            rejected_schema_objects.update(retry_selected_objects)
-                            break
-
-                        schema_intent_analysis = retry_schema_intent_analysis
-                        rejected_schema_objects.update(retry_selected_objects)
-                        documents = retry_documents
-                        table_ddls = retry_table_ddls
-                        has_calculated_field = retry_construct_result.get(
-                            "has_calculated_field", False
-                        )
-                        has_metric = retry_construct_result.get("has_metric", False)
-                        has_json_field = retry_construct_result.get(
-                            "has_json_field", False
-                        )
-                        logger.info(
-                            "feedback_semantic_retry_candidate_selected query_id=%s attempt=%s schema_objects=%s",
-                            query_id,
-                            semantic_retry_attempt,
-                            sorted(retry_selected_objects),
-                        )
-
-                        text_to_sql_generation_results = await self._pipelines[
-                            "sql_regeneration"
-                        ].run(
-                            contexts=table_ddls,
-                            sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
-                            sql=ask_feedback_request.sql,
-                            query=ask_feedback_request.question,
-                            project_id=ask_feedback_request.project_id,
-                            sql_samples=sql_samples,
-                            instructions=instructions,
-                            has_calculated_field=has_calculated_field,
-                            has_metric=has_metric,
-                            has_json_field=has_json_field,
-                            sql_functions=sql_functions,
-                            sql_knowledge=sql_knowledge,
-                            schema_intent_analysis=schema_intent_analysis,
-                        )
-
-                        if sql_valid_result := text_to_sql_generation_results[
-                            "post_process"
-                        ]["valid_generation_result"]:
-                            api_results = [
-                                AskResult(
-                                    **{
-                                        "sql": sql_valid_result.get("sql"),
-                                        "type": "llm",
-                                    }
-                                )
-                            ]
-                            logger.info(
-                                "feedback_semantic_retry_candidate_accepted query_id=%s attempt=%s",
-                                query_id,
-                                semantic_retry_attempt,
+                            has_json_field = retry_construct_result.get(
+                                "has_json_field", False
                             )
-                            break
 
-                        failed_dry_run_result = text_to_sql_generation_results[
-                            "post_process"
-                        ]["invalid_generation_result"]
-                        invalid_sql = failed_dry_run_result.get("sql", invalid_sql)
-                        error_message = failed_dry_run_result.get(
-                            "error", error_message
-                        )
-                        logger.info(
-                            "feedback_semantic_retry_candidate_failed_validation query_id=%s attempt=%s error=%s",
-                            query_id,
-                            semantic_retry_attempt,
-                            error_message,
-                        )
+                            text_to_sql_generation_results = await self._pipelines[
+                                "sql_regeneration"
+                            ].run(
+                                contexts=table_ddls,
+                                sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
+                                sql=ask_feedback_request.sql,
+                                query=ask_feedback_request.question,
+                                project_id=ask_feedback_request.project_id,
+                                sql_samples=sql_samples,
+                                instructions=instructions,
+                                has_calculated_field=has_calculated_field,
+                                has_metric=has_metric,
+                                has_json_field=has_json_field,
+                                sql_functions=sql_functions,
+                                sql_knowledge=sql_knowledge,
+                                schema_intent_analysis=schema_intent_analysis,
+                            )
+
+                            if sql_valid_result := text_to_sql_generation_results[
+                                "post_process"
+                            ]["valid_generation_result"]:
+                                api_results = [
+                                    AskResult(
+                                        **{
+                                            "sql": sql_valid_result.get("sql"),
+                                            "type": "llm",
+                                        }
+                                    )
+                                ]
+                            else:
+                                failed_dry_run_result = text_to_sql_generation_results[
+                                    "post_process"
+                                ]["invalid_generation_result"]
+                        elif retry_support_error:
+                            error_message = retry_support_error
 
                     if api_results:
                         pass
-                    elif failed_dry_run_result and failed_dry_run_result["type"] not in {
+                    elif failed_dry_run_result["type"] not in {
                         "TIME_OUT",
                         "SCHEMA_INTENT_VALIDATION",
                     }:
