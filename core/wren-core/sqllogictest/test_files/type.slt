@@ -1,0 +1,19 @@
+query II
+select cast(1 as int64) as c1, cast(1 as int32) as c2
+----
+1 1
+
+query RR
+select cast(1.0 as float64) as c1, cast(1.0 as float32) as c2
+----
+1 1
+
+
+query PPPP
+select 
+    cast('2000-01-01 10:00:00' as datetime),
+    cast('2000-01-01 10:00:00.123' as datetime),
+    cast('2000-01-01 10:00:00.123456' as datetime),
+    cast('2000-01-01 10:00:00.123456789' as datetime)
+----
+2000-01-01T10:00:00 2000-01-01T10:00:00.123 2000-01-01T10:00:00.123456 2000-01-01T10:00:00.123456789

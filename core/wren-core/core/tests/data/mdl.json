@@ -1,0 +1,143 @@
+{
+  "catalog": "test",
+  "schema": "test",
+  "models": [
+    {
+      "name": "customer",
+      "tableReference": {
+        "catalog": "",
+        "schema": "",
+        "table": "customer"
+      },
+      "columns": [
+        {
+          "name": "c_custkey",
+          "type": "integer"
+        },
+        {
+          "name": "c_name",
+          "type": "varchar"
+        },
+        {
+          "name": "custkey_plus",
+          "type": "integer",
+          "expression": "c_custkey + 1",
+          "isCalculated": true
+        },
+        {
+          "name": "orders",
+          "type": "orders",
+          "relationship": "CustomerOrders",
+          "properties": {
+            "description": "This is a customer orders relationship",
+            "maintainer": "test"
+          }
+        }
+      ],
+      "primaryKey": "c_custkey",
+      "properties": {
+        "description": "This is a customer table",
+        "maintainer": "test"
+      }
+    },
+    {
+      "name": "profile",
+      "tableReference": {
+        "table": "profile"
+      },
+      "columns": [
+        {
+          "name": "p_custkey",
+          "type": "integer"
+        },
+        {
+          "name": "p_phone",
+          "type": "varchar"
+        },
+        {
+          "name": "p_sex",
+          "type": "varchar"
+        },
+        {
+          "name": "customer",
+          "type": "customer",
+          "relationship": "CustomerProfile"
+        },
+        {
+          "name": "totalcost",
+          "type": "integer",
+          "isCalculated": true,
+          "expression": "sum(customer.orders.o_totalprice)"
+        }
+      ],
+      "primaryKey": "p_custkey"
+    },
+    {
+      "name": "orders",
+      "tableReference": {
+        "catalog": "",
+        "schema": "",
+        "table": "orders"
+      },
+      "columns": [
+        {
+          "name": "o_orderkey",
+          "type": "integer"
+        },
+        {
+          "name": "o_custkey",
+          "type": "integer"
+        },
+        {
+          "name": "o_totalprice",
+          "type": "integer"
+        },
+        {
+          "name": "customer",
+          "type": "customer",
+          "relationship": "CustomerOrders"
+        },
+        {
+          "name": "customer_name",
+          "type": "varchar",
+          "expression": "customer.c_name",
+          "isCalculated": true
+        },
+        {
+          "name": "orderkey_plus_custkey",
+          "type": "integer",
+          "expression": "o_orderkey + o_custkey",
+          "isCalculated": true
+        },
+        {
+          "name": "hash_orderkey",
+          "type": "varchar",
+          "expression": "md5(o_orderkey)",
+          "isCalculated": true
+        }
+      ],
+      "primaryKey": "o_orderkey"
+    }
+  ],
+  "relationships": [
+    {
+      "name": "CustomerOrders",
+      "models": ["customer", "orders"],
+      "joinType": "ONE_TO_MANY",
+      "condition": "customer.c_custkey = orders.o_custkey"
+    },
+    {
+      "name" : "CustomerProfile",
+      "models": ["customer", "profile"],
+      "joinType": "ONE_TO_ONE",
+      "condition": "customer.c_custkey = profile.p_custkey"
+    }
+  ],
+  "views": [
+    {
+      "name": "customer_view",
+      "statement": "select * from test.test.customer"
+    }
+  ],
+  "dataSource": "mysql"
+}

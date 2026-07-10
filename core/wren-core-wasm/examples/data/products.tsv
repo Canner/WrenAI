@@ -1,0 +1,9 @@
+product_id	name	category	unit_price	in_stock
+P001	Wren T-Shirt	apparel	19.99	true
+P002	DataFusion Mug	merch	12.50	true
+P003	Arrow Sticker Pack	stationery	4.99	true
+P004	Parquet Hoodie	apparel	49.00	false
+P005	SQL Sticker	stationery	2.50	true
+P006	Engineering Notebook	stationery	14.95	true
+P007	Wren Cap	apparel	22.00	false
+P008	Datafest Pin	merch	6.75	true

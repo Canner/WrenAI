@@ -1,0 +1,104 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "wrenai"
+version = "0.12.0"
+description = "Wren AI CLI and Python SDK — semantic SQL layer for 20+ data sources"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Wren AI", email = "contact@getwren.ai" }]
+keywords = ["wrenai", "wren", "sql", "semantic", "semantic-layer", "mdl", "datafusion", "data-modeling", "analytics", "database", "cli", "sdk", "python"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+  "wren-core-py>=0.7.1",
+  "duckdb>=1.5.0",
+  # >=29 required: the CTE rewriter and policy read the ``with_`` / ``from_``
+  # Expression arg keys, which sqlglot renamed from ``with`` / ``from`` in 28.
+  "sqlglot>=29",
+  "typer>=0.12",
+  "pydantic>=2",
+  "pyarrow>=14",
+  "pyarrow-hotfix>=0.6",
+  "loguru>=0.7",
+  "opendal>=0.45",
+  "pandas>=2",
+  "boto3>=1.26",
+  "pyyaml>=6.0",
+  # Reads `.env` files so profile values like `password: ${POSTGRES_PASSWORD}`
+  # resolve at connection time without the secret living in profiles.yml.
+  "python-dotenv>=1.0",
+  # Transitive dependency constraints for security patches
+  "requests>=2.33.0",
+  "pyasn1>=0.6.3",
+  "pyopenssl>=26.0.0",
+  "urllib3>=2.7.0",
+  "lxml>=6.1.0",
+]
+
+[project.optional-dependencies]
+postgres = ["psycopg[binary]>=3"]
+mysql = ["mysqlclient>=2.2"]
+bigquery = ["google-cloud-bigquery>=3.40,<4", "google-auth"]
+snowflake = ["snowflake-connector-python[pandas]>=3.10"]
+clickhouse = ["clickhouse-connect>=0.8"]
+trino = ["trino>=0.333,<1"]
+mssql = ["pyodbc>=5,<6"]
+databricks = ["databricks-sql-connector", "databricks-sdk"]
+redshift = ["redshift_connector"]
+spark = ["pyspark>=3.5"]
+athena = ["pyathena[pandas]>=3"]
+oracle = ["oracledb>=2"]
+memory = ["lancedb>=0.6", "sentence-transformers>=2.2"]
+interactive = ["InquirerPy>=0.3.4"]
+ui = ["starlette>=0.37", "uvicorn>=0.29", "jinja2>=3.1", "python-multipart>=0.0.9"]
+main = ["wrenai[interactive,ui]"]
+all = [
+  "wrenai[postgres,mysql,bigquery,snowflake,clickhouse,trino,mssql,databricks,redshift,athena,oracle,spark,main,memory]",
+]
+
+[project.scripts]
+wren = "wren.cli:app"
+
+[project.urls]
+Homepage = "https://getwren.ai"
+Repository = "https://github.com/Canner/WrenAI"
+Issues = "https://github.com/Canner/WrenAI/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wren"]
+artifacts = [
+    "src/wren/templates/*.html",
+    "src/wren/skills_content/**/*.md",
+    "src/wren/skills_content/**/*.py",
+    "src/wren/ask_templates/*.tmpl",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "PLC"]
+ignore = [
+  "E501", # line-too-long, enforced by ruff format
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.4",
+    "orjson>=3",
+    "testcontainers[postgres,mysql]>=4",
+    "httpx>=0.27",
+    "duckdb>=1.5.0",
+]

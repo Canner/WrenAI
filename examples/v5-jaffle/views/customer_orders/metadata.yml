@@ -1,0 +1,7 @@
+name: customer_orders
+statement: |
+  SELECT c.name AS customer_name, o.id AS order_id, o.amount
+  FROM orders o
+  JOIN customers c ON o.customer_id = c.id
+properties:
+  description: Flattened order lines joined to their customer.

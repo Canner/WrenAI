@@ -1,0 +1,31 @@
+default:
+    @just --list --unsorted
+
+install:
+    uv sync --no-install-project
+
+env := env("ENV", "dev")
+release_flag := if env == "prod" { "--release" } else { "" }
+
+build:
+    rm -rf target/wheels
+    uv run --no-sync maturin build {{ release_flag }}
+
+develop:
+    uv run --no-sync maturin develop
+
+test-rs:
+    cargo test --no-default-features
+
+test-py:
+    uv run --no-sync pytest
+
+test: test-rs test-py
+
+alias fmt := format
+
+format:
+    cargo fmt
+    uv run --no-sync ruff format .
+    uv run --no-sync ruff check --fix .
+    taplo fmt

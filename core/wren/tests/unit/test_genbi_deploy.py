@@ -1,0 +1,404 @@
+"""Behavior tests for `wren genbi deploy` — token discovery + providers."""
+
+from __future__ import annotations
+
+import json
+import types
+from pathlib import Path
+
+import pytest
+import yaml
+from typer.testing import CliRunner
+
+import wren.genbi.providers.cloudflare as cloudflare
+import wren.genbi.providers.vercel as vercel
+from wren.cli import app
+from wren.genbi.tokens import resolve_token
+
+runner = CliRunner()
+
+pytestmark = pytest.mark.unit
+
+
+@pytest.fixture(autouse=True)
+def _isolate_env_loading(monkeypatch):
+    """Make token discovery hermetic.
+
+    ``resolve_token``'s tier-2 calls ``wren.profile._ensure_env_loaded()``,
+    which merges ``~/.wren/.env`` (and any cwd ``.env``) into ``os.environ``.
+    Without neutralizing it, these tests depend on the developer's machine —
+    a real ``VERCEL_TOKEN`` in ``~/.wren/.env`` makes the missing-token cases
+    pass spuriously and can even trigger a real provider API call. Tests must
+    only see tokens they set via ``setenv`` (tier 1) or a project ``.env``
+    (tier 3).
+    """
+    import wren.profile  # noqa: PLC0415
+
+    monkeypatch.setattr(wren.profile, "_ensure_env_loaded", lambda: None)
+
+
+def _make_deployable_project(tmp_path: Path) -> Path:
+    (tmp_path / "wren_project.yml").write_text(
+        'schema_version: 2\nname: test_proj\nversion: "1.0"\n'
+        "catalog: wren\nschema: public\ndata_source: duckdb\n"
+    )
+    app_dir = tmp_path / "apps" / "myapp"
+    (app_dir / "data").mkdir(parents=True)
+    (app_dir / "index.html").write_text("<html><body>GenBI</body></html>")
+    (app_dir / "mdl.json").write_text(json.dumps({"models": [{}]}))
+    (app_dir / "data" / "orders.parquet").write_bytes(b"PAR1fake")
+    result = runner.invoke(app, ["genbi", "register", "myapp", "-p", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    return tmp_path
+
+
+# ── TokenResolver ──────────────────────────────────────────────────────────
+
+
+def test_token_from_environment_wins(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / ".env").write_text("VERCEL_TOKEN=from-dotenv\n")
+    monkeypatch.setenv("VERCEL_TOKEN", "from-env")
+
+    assert resolve_token("VERCEL_TOKEN", tmp_path) == "from-env"
+
+
+def test_token_falls_back_to_project_dotenv(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("VERCEL_TOKEN", raising=False)
+    (tmp_path / ".env").write_text("VERCEL_TOKEN=from-dotenv\n")
+
+    assert resolve_token("VERCEL_TOKEN", tmp_path) == "from-dotenv"
+
+
+def test_token_absent_returns_none(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("VERCEL_TOKEN", raising=False)
+
+    assert resolve_token("VERCEL_TOKEN", tmp_path) is None
+
+
+# ── Vercel deploy ──────────────────────────────────────────────────────────
+
+
+class _FakeTransport:
+    """Captures provider HTTP requests and returns canned responses."""
+
+    def __init__(self, response: dict) -> None:
+        self.calls: list[dict] = []
+        self.response = response
+
+    def __call__(self, *, method: str, url: str, headers: dict, payload: dict) -> dict:
+        self.calls.append(
+            {"method": method, "url": url, "headers": headers, "payload": payload}
+        )
+        return self.response
+
+
+def test_deploy_vercel_uploads_and_persists_state(tmp_path: Path, monkeypatch) -> None:
+    project = _make_deployable_project(tmp_path)
+    monkeypatch.setenv("VERCEL_TOKEN", "tok-123")
+    fake = _FakeTransport(
+        {"id": "dpl_1", "url": "myapp-abc.vercel.app", "projectId": "prj_9"}
+    )
+    monkeypatch.setattr(vercel, "_request", fake)
+
+    result = runner.invoke(
+        app, ["genbi", "deploy", "myapp", "--provider", "vercel", "-p", str(project)]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "https://myapp-abc.vercel.app" in result.output
+    # request construction
+    call = fake.calls[0]
+    assert "api.vercel.com" in call["url"]
+    assert call["headers"]["Authorization"] == "Bearer tok-123"
+    filenames = {f["file"] for f in call["payload"]["files"]}
+    assert "index.html" in filenames and "mdl.json" in filenames
+    assert call["payload"].get("target") != "production"  # preview by default
+    # deploy state persisted
+    index = yaml.safe_load((project / ".wren" / "apps.yml").read_text())
+    entry = index["apps"]["myapp"]
+    assert entry["status"] == "deployed"
+    assert entry["deploy"]["provider"] == "vercel"
+    assert entry["deploy"]["project_id"] == "prj_9"
+    assert entry["deploy"]["last_url"] == "https://myapp-abc.vercel.app"
+    assert entry["deploy"]["environment"] == "preview"
+    # no secrets in the index
+    assert "tok-123" not in (project / ".wren" / "apps.yml").read_text()
+
+
+def test_deploy_prod_flag_targets_production(tmp_path: Path, monkeypatch) -> None:
+    project = _make_deployable_project(tmp_path)
+    monkeypatch.setenv("VERCEL_TOKEN", "tok-123")
+    fake = _FakeTransport({"id": "dpl_1", "url": "myapp.vercel.app"})
+    monkeypatch.setattr(vercel, "_request", fake)
+
+    result = runner.invoke(
+        app,
+        [
+            "genbi",
+            "deploy",
+            "myapp",
+            "--provider",
+            "vercel",
+            "--prod",
+            "-p",
+            str(project),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert fake.calls[0]["payload"]["target"] == "production"
+    index = yaml.safe_load((project / ".wren" / "apps.yml").read_text())
+    assert index["apps"]["myapp"]["deploy"]["environment"] == "production"
+
+
+def test_deploy_without_token_gives_actionable_error(tmp_path, monkeypatch) -> None:
+    project = _make_deployable_project(tmp_path)
+    monkeypatch.delenv("VERCEL_TOKEN", raising=False)
+
+    result = runner.invoke(
+        app, ["genbi", "deploy", "myapp", "--provider", "vercel", "-p", str(project)]
+    )
+
+    assert result.exit_code != 0
+    assert "VERCEL_TOKEN" in result.output
+
+
+def test_deploy_runs_verify_first_and_aborts_on_failure(tmp_path, monkeypatch) -> None:
+    project = _make_deployable_project(tmp_path)
+    (project / "apps" / "myapp" / "mdl.json").unlink()  # break the app
+    monkeypatch.setenv("VERCEL_TOKEN", "tok-123")
+    fake = _FakeTransport({"id": "dpl_1", "url": "x.vercel.app"})
+    monkeypatch.setattr(vercel, "_request", fake)
+
+    result = runner.invoke(
+        app, ["genbi", "deploy", "myapp", "--provider", "vercel", "-p", str(project)]
+    )
+
+    assert result.exit_code != 0
+    assert "mdl.json" in result.output
+    assert fake.calls == []  # nothing was uploaded
+
+
+def test_deploy_unregistered_app_errors(tmp_path, monkeypatch) -> None:
+    project = _make_deployable_project(tmp_path)
+    runner.invoke(app, ["genbi", "remove", "myapp", "-p", str(project)])
+    monkeypatch.setenv("VERCEL_TOKEN", "tok-123")
+
+    result = runner.invoke(
+        app, ["genbi", "deploy", "myapp", "--provider", "vercel", "-p", str(project)]
+    )
+
+    assert result.exit_code != 0
+    assert "not registered" in result.output
+
+
+def test_deploy_unknown_provider_errors(tmp_path) -> None:
+    project = _make_deployable_project(tmp_path)
+
+    result = runner.invoke(
+        app, ["genbi", "deploy", "myapp", "--provider", "bogus", "-p", str(project)]
+    )
+
+    assert result.exit_code != 0
+    assert "provider" in result.output.lower()
+
+
+# ── Cloudflare deploy (shells out to wrangler) ──────────────────────────────
+
+
+class _FakeWrangler:
+    """Stub for cloudflare._run — returns queued CompletedProcess-likes."""
+
+    def __init__(self, results: list) -> None:
+        self.results = list(results)
+        self.calls: list[dict] = []
+
+    def __call__(self, cmd, *, env, cwd=None):
+        self.calls.append({"cmd": cmd, "env": env, "cwd": cwd})
+        return self.results.pop(0)
+
+
+def _proc(stdout: str = "", stderr: str = "", returncode: int = 0):
+    return types.SimpleNamespace(returncode=returncode, stdout=stdout, stderr=stderr)
+
+
+def _patch_wrangler(monkeypatch, results: list) -> _FakeWrangler:
+    monkeypatch.setattr(cloudflare, "_wrangler_cmd", lambda: ["wrangler"])
+    fake = _FakeWrangler(results)
+    monkeypatch.setattr(cloudflare, "_run", fake)
+    return fake
+
+
+def test_deploy_cloudflare_invokes_wrangler_and_persists_state(
+    tmp_path, monkeypatch
+) -> None:
+    project = _make_deployable_project(tmp_path)
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "cf-tok")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct-42")
+    fake = _patch_wrangler(
+        monkeypatch,
+        [
+            _proc(),  # project create
+            _proc(stdout="✨ Deployment complete! https://abc123.myapp.pages.dev"),
+        ],
+    )
+
+    result = runner.invoke(
+        app,
+        ["genbi", "deploy", "myapp", "--provider", "cloudflare", "-p", str(project)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "https://abc123.myapp.pages.dev" in result.output
+    # deploy command construction
+    deploy_call = fake.calls[-1]
+    assert deploy_call["cmd"][:3] == ["wrangler", "pages", "deploy"]
+    assert "--project-name" in deploy_call["cmd"] and "myapp" in deploy_call["cmd"]
+    assert "--branch" in deploy_call["cmd"] and "preview" in deploy_call["cmd"]
+    assert deploy_call["cwd"] == str(project / "apps" / "myapp")
+    # token travels via env, NEVER argv
+    for call in fake.calls:
+        assert "cf-tok" not in " ".join(call["cmd"])
+        assert call["env"]["CLOUDFLARE_API_TOKEN"] == "cf-tok"
+        assert call["env"]["CLOUDFLARE_ACCOUNT_ID"] == "acct-42"
+    # deploy state persisted; no secret in the index
+    index = yaml.safe_load((project / ".wren" / "apps.yml").read_text())
+    entry = index["apps"]["myapp"]
+    assert entry["status"] == "deployed"
+    assert entry["deploy"]["provider"] == "cloudflare"
+    assert entry["deploy"]["account_id"] == "acct-42"
+    assert entry["deploy"]["last_url"] == "https://abc123.myapp.pages.dev"
+    assert "cf-tok" not in (project / ".wren" / "apps.yml").read_text()
+
+
+def test_deploy_cloudflare_prod_uses_production_branch(tmp_path, monkeypatch) -> None:
+    project = _make_deployable_project(tmp_path)
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "cf-tok")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct-42")
+    fake = _patch_wrangler(
+        monkeypatch,
+        [_proc(), _proc(stdout="https://myapp.pages.dev")],
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "genbi",
+            "deploy",
+            "myapp",
+            "--provider",
+            "cloudflare",
+            "--prod",
+            "-p",
+            str(project),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    deploy_cmd = fake.calls[-1]["cmd"]
+    assert deploy_cmd[deploy_cmd.index("--branch") + 1] == "main"
+
+
+def test_deploy_cloudflare_tolerates_existing_project(tmp_path, monkeypatch) -> None:
+    project = _make_deployable_project(tmp_path)
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "cf-tok")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct-42")
+    _patch_wrangler(
+        monkeypatch,
+        [
+            _proc(stderr="A project with this name already exists", returncode=1),
+            _proc(stdout="https://abc.myapp.pages.dev"),
+        ],
+    )
+
+    result = runner.invoke(
+        app,
+        ["genbi", "deploy", "myapp", "--provider", "cloudflare", "-p", str(project)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "https://abc.myapp.pages.dev" in result.output
+
+
+def test_deploy_cloudflare_requires_account_id(tmp_path, monkeypatch) -> None:
+    project = _make_deployable_project(tmp_path)
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "cf-tok")
+    monkeypatch.delenv("CLOUDFLARE_ACCOUNT_ID", raising=False)
+
+    result = runner.invoke(
+        app,
+        ["genbi", "deploy", "myapp", "--provider", "cloudflare", "-p", str(project)],
+    )
+
+    assert result.exit_code != 0
+    assert "CLOUDFLARE_ACCOUNT_ID" in result.output
+
+
+def test_deploy_cloudflare_errors_when_wrangler_missing(tmp_path, monkeypatch) -> None:
+    project = _make_deployable_project(tmp_path)
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "cf-tok")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct-42")
+    monkeypatch.setattr(cloudflare, "_wrangler_cmd", lambda: None)
+
+    result = runner.invoke(
+        app,
+        ["genbi", "deploy", "myapp", "--provider", "cloudflare", "-p", str(project)],
+    )
+
+    assert result.exit_code != 0
+    assert "wrangler" in result.output.lower()
+
+
+def test_deploy_cloudflare_surfaces_wrangler_failure(tmp_path, monkeypatch) -> None:
+    project = _make_deployable_project(tmp_path)
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "cf-tok")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct-42")
+    _patch_wrangler(
+        monkeypatch,
+        [_proc(), _proc(stderr="Authentication error [code: 10000]", returncode=1)],
+    )
+
+    result = runner.invoke(
+        app,
+        ["genbi", "deploy", "myapp", "--provider", "cloudflare", "-p", str(project)],
+    )
+
+    assert result.exit_code != 0
+    assert "wrangler pages deploy failed" in result.output
+
+
+# ── Never fabricate a deployment URL ────────────────────────────────────────
+
+
+def test_deploy_vercel_fails_when_response_omits_url(tmp_path, monkeypatch) -> None:
+    project = _make_deployable_project(tmp_path)
+    monkeypatch.setenv("VERCEL_TOKEN", "tok-123")
+    monkeypatch.setattr(vercel, "_request", _FakeTransport({"id": "dpl_1"}))  # no url
+
+    result = runner.invoke(
+        app, ["genbi", "deploy", "myapp", "--provider", "vercel", "-p", str(project)]
+    )
+
+    assert result.exit_code != 0
+    assert "did not include a deployment URL" in result.output
+    # a missing URL must not be persisted as a successful deploy
+    index = yaml.safe_load((project / ".wren" / "apps.yml").read_text())
+    assert index["apps"]["myapp"]["status"] != "deployed"
+
+
+def test_deploy_cloudflare_fails_when_no_url_in_output(tmp_path, monkeypatch) -> None:
+    project = _make_deployable_project(tmp_path)
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "cf-tok")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct-42")
+    _patch_wrangler(
+        monkeypatch,
+        [_proc(), _proc(stdout="deployed, but no url printed", returncode=0)],
+    )
+
+    result = runner.invoke(
+        app,
+        ["genbi", "deploy", "myapp", "--provider", "cloudflare", "-p", str(project)],
+    )
+
+    assert result.exit_code != 0
+    assert "could not determine the deployment URL" in result.output

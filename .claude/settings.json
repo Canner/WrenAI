@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd wren-ui && yarn:*)",
+      "Bash(cd wren-ai-service && just:*)",
+      "Bash(cd wren-ai-service && poetry run:*)",
+      "Bash(cd wren-ai-service && poetry install:*)",
+      "Bash(cd wren-launcher && make:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(gh pr:*)",
+      "Bash(gh run:*)",
+      "Bash(ls:*)",
+      "Bash(wc:*)"
+    ]
+  }
+}

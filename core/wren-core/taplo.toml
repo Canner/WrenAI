@@ -1,0 +1,62 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+## https://taplo.tamasfe.dev/configuration/file.html
+
+include = ["**/Cargo.toml"]
+
+[formatting]
+# Align consecutive entries vertically.
+align_entries = false
+# Append trailing commas for multi-line arrays.
+array_trailing_comma = true
+# Expand arrays to multiple lines that exceed the maximum column width.
+array_auto_expand = true
+# Collapse arrays that don't exceed the maximum column width and don't contain comments.
+array_auto_collapse = false
+# Omit white space padding from single-line arrays
+compact_arrays = true
+# Omit white space padding from the start and end of inline tables.
+compact_inline_tables = false
+# Maximum column width in characters, affects array expansion and collapse, this doesn't take whitespace into account.
+# Note that this is not set in stone, and works on a best-effort basis.
+column_width = 120
+# Indent based on tables and arrays of tables and their subtables, subtables out of order are not indented.
+indent_tables = false
+# The substring that is used for indentation, should be tabs or spaces (but technically can be anything).
+indent_string = '    '
+# Add trailing newline at the end of the file if not present.
+trailing_newline = true
+# Alphabetically reorder keys that are not separated by empty lines.
+reorder_keys = false
+# Maximum amount of allowed consecutive blank lines. This does not affect the whitespace at the end of the document, as it is always stripped.
+allowed_blank_lines = 1
+# Use CRLF for line endings.
+crlf = false
+
+[[rule]]
+keys = [
+    "build-dependencies",
+    "dependencies",
+    "dev-dependencies",
+    "workspace.dependencies",
+]
+formatting = { reorder_keys = true }
+
+[[rule]]
+keys = ["package"]
+formatting = { reorder_keys = false }

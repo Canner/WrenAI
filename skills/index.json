@@ -1,0 +1,23 @@
+{
+  "name": "wrenai",
+  "description": "Discovery stub for the Wren AI agent skill bundle. The actual workflow guides and prompt helpers live inside the wren CLI (`pip install wrenai`) and are served by `wren skills get` / `wren ask`.",
+  "homepage": "https://wren.ai",
+  "repository": "https://github.com/Canner/WrenAI",
+  "license": "Apache-2.0",
+  "skills": [
+    {
+      "name": "wren",
+      "description": "Wren CLI discovery stub. The actual workflow guides live inside the wren CLI; this stub teaches an AI agent to call `wren skills list`, `wren skills get <name>`, and `wren ask <prompt> --guided|--direct`. Use whenever the user asks a data question, wants to install / set up Wren Engine, connect a new database, load SaaS data via dlt, generate or regenerate an MDL project, enrich a project with business context, or build & deploy a shareable GenBI web app / dashboard from a project's semantic layer (Vercel / Cloudflare).",
+      "tags": [
+        "wren",
+        "discovery-stub",
+        "cli",
+        "sql",
+        "mdl",
+        "semantic-layer",
+        "genbi"
+      ],
+      "repository": "https://github.com/Canner/WrenAI/tree/main/skills/wren"
+    }
+  ]
+}

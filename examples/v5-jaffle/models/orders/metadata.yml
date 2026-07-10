@@ -1,0 +1,22 @@
+name: orders
+properties:
+  description: One row per customer order, with the order amount in USD.
+columns:
+  - name: id
+    type: INTEGER
+    is_calculated: false
+    not_null: true
+    is_primary_key: true
+    properties: {}
+  - name: customer_id
+    type: INTEGER
+    is_calculated: false
+    not_null: false
+    properties: {}
+  - name: amount
+    type: DOUBLE
+    is_calculated: false
+    not_null: false
+    properties: {}
+primary_key: id
+cached: false

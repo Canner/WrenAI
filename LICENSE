@@ -1,0 +1,51 @@
+WrenAI License Overview
+=======================
+
+WrenAI is multi-licensed. The license that applies depends on the path within
+this repository. Full license texts are provided alongside this file at the
+repository root: `LICENSE-APACHE-2.0`, `LICENSE-CC-BY-4.0`, and
+`LICENSE-AGPL-3.0`.
+
+Path → License map
+------------------
+
+  | Path                          | License                                       |
+  | ----------------------------- | --------------------------------------------- |
+  | `core/**`                     | Apache License 2.0 (see LICENSE-APACHE-2.0)   |
+  | `sdk/**`                      | Apache License 2.0                            |
+  | `skills/**`                   | Apache License 2.0                            |
+  | `examples/**`                 | Apache License 2.0                            |
+  | `docs/**`                     | CC BY 4.0 International (see LICENSE-CC-BY-4.0) |
+  | Everything else (root files)  | Apache License 2.0                            |
+
+Future AGPL-3.0 modules
+-----------------------
+
+This repository may, in the future, introduce modules licensed under the GNU
+Affero General Public License v3.0 only ("AGPL-3.0-only"). The full text of
+that license is provided here pre-emptively at `LICENSE-AGPL-3.0`. When such
+modules are introduced, the table above will be updated to reflect their
+paths.
+
+Per-package metadata
+--------------------
+
+Published packages declare their effective license in their package manifest
+(Cargo.toml `license`, pyproject.toml `license`, package.json `"license"`).
+Where the manifest and this file disagree, the manifest is authoritative for
+that package's published artifacts; this file remains authoritative for
+sources distributed only via this repository.
+
+Mixed redistribution
+--------------------
+
+If you redistribute a subset of this repository that spans multiple paths in
+the table above, you must comply with each applicable license simultaneously
+for the corresponding paths.
+
+Trademarks
+----------
+
+The names "Wren", "WrenAI", and the project's logos are trademarks of Canner,
+Inc. and are not licensed under any of the licenses referenced above. Their
+use is governed separately; see the trademark policy.

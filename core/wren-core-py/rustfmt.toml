@@ -1,0 +1,2 @@
+edition = "2021"
+max_width = 90

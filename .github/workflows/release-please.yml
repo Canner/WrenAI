@@ -1,0 +1,128 @@
+name: Release Please
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    if: ${{ github.repository == 'Canner/WrenAI' }}
+    runs-on: ubuntu-latest
+    outputs:
+      wren-core-py--release_created: ${{ steps.release.outputs['core/wren-core-py--release_created'] }}
+      wren-core-py--tag_name: ${{ steps.release.outputs['core/wren-core-py--tag_name'] }}
+      wren-core-py--version: ${{ steps.release.outputs['core/wren-core-py--version'] }}
+      wren--release_created: ${{ steps.release.outputs['core/wren--release_created'] }}
+      wren--tag_name: ${{ steps.release.outputs['core/wren--tag_name'] }}
+      wren--version: ${{ steps.release.outputs['core/wren--version'] }}
+      wren-core-wasm--release_created: ${{ steps.release.outputs['core/wren-core-wasm--release_created'] }}
+      wren-core-wasm--tag_name: ${{ steps.release.outputs['core/wren-core-wasm--tag_name'] }}
+      wren-core-wasm--version: ${{ steps.release.outputs['core/wren-core-wasm--version'] }}
+      wren-langchain--release_created: ${{ steps.release.outputs['sdk/wren-langchain--release_created'] }}
+      wren-langchain--tag_name: ${{ steps.release.outputs['sdk/wren-langchain--tag_name'] }}
+      wren-langchain--version: ${{ steps.release.outputs['sdk/wren-langchain--version'] }}
+      wren-pydantic--release_created: ${{ steps.release.outputs['sdk/wren-pydantic--release_created'] }}
+      wren-pydantic--tag_name: ${{ steps.release.outputs['sdk/wren-pydantic--tag_name'] }}
+      wren-pydantic--version: ${{ steps.release.outputs['sdk/wren-pydantic--version'] }}
+      # The three Rust core crates share one version via the linked-versions
+      # plugin and release together, so gating on wren-semantic-core covers all.
+      wren-semantic-core--release_created: ${{ steps.release.outputs['core/wren-core--release_created'] }}
+      wren-semantic-core--tag_name: ${{ steps.release.outputs['core/wren-core--tag_name'] }}
+      wren-semantic-core--version: ${{ steps.release.outputs['core/wren-core--version'] }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish-wren-core-py:
+    needs: release-please
+    if: needs.release-please.outputs['wren-core-py--release_created'] == 'true'
+    uses: ./.github/workflows/publish-wren-core-py.yml
+    with:
+      version: ${{ needs.release-please.outputs['wren-core-py--version'] }}
+      tag_name: ${{ needs.release-please.outputs['wren-core-py--tag_name'] }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # After wren-core-py is published, relock the downstream core/wren SDK against
+  # the new engine binding and open a PR. Runs only if publish-wren-core-py
+  # succeeded, so we never bump to a version that failed to publish.
+  sync-wren-core-py-lock:
+    needs: [release-please, publish-wren-core-py]
+    if: needs.release-please.outputs['wren-core-py--release_created'] == 'true'
+    uses: ./.github/workflows/sync-wren-core-py-lock.yml
+    with:
+      version: ${{ needs.release-please.outputs['wren-core-py--version'] }}
+    permissions:
+      contents: write
+      pull-requests: write
+
+  publish-wren:
+    needs: release-please
+    if: needs.release-please.outputs['wren--release_created'] == 'true'
+    uses: ./.github/workflows/publish-wren.yml
+    with:
+      version: ${{ needs.release-please.outputs['wren--version'] }}
+      tag_name: ${{ needs.release-please.outputs['wren--tag_name'] }}
+    permissions:
+      contents: read
+      id-token: write
+
+  publish-wren-core-wasm:
+    needs: release-please
+    if: needs.release-please.outputs['wren-core-wasm--release_created'] == 'true'
+    uses: ./.github/workflows/publish-wren-core-wasm.yml
+    with:
+      version: ${{ needs.release-please.outputs['wren-core-wasm--version'] }}
+      tag_name: ${{ needs.release-please.outputs['wren-core-wasm--tag_name'] }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # release-please outputs come from conventional-commit aggregation, not from
+  # untrusted issue/PR event payloads, so direct ${{ ... }} interpolation is
+  # safe here. Same pattern as the publish jobs above.
+  publish-wren-langchain:
+    needs: release-please
+    if: needs.release-please.outputs['wren-langchain--release_created'] == 'true'
+    uses: ./.github/workflows/publish-wren-langchain.yml
+    with:
+      version: ${{ needs.release-please.outputs['wren-langchain--version'] }}
+      tag_name: ${{ needs.release-please.outputs['wren-langchain--tag_name'] }}
+    permissions:
+      contents: read
+      id-token: write
+
+  publish-wren-pydantic:
+    needs: release-please
+    if: needs.release-please.outputs['wren-pydantic--release_created'] == 'true'
+    uses: ./.github/workflows/publish-wren-pydantic.yml
+    with:
+      version: ${{ needs.release-please.outputs['wren-pydantic--version'] }}
+      tag_name: ${{ needs.release-please.outputs['wren-pydantic--tag_name'] }}
+    permissions:
+      contents: read
+      id-token: write
+
+  # Publishes wren-manifest-macro, wren-core-base, and wren-semantic-core to
+  # crates.io bottom-up in one run. The three crates are linked to a single
+  # version, so a release always bumps all three together — gating on the
+  # wren-semantic-core output is sufficient.
+  publish-wren-crates:
+    needs: release-please
+    if: needs.release-please.outputs['wren-semantic-core--release_created'] == 'true'
+    uses: ./.github/workflows/publish-wren-crates.yml
+    with:
+      version: ${{ needs.release-please.outputs['wren-semantic-core--version'] }}
+      tag_name: ${{ needs.release-please.outputs['wren-semantic-core--tag_name'] }}
+    permissions:
+      contents: read
+      id-token: write

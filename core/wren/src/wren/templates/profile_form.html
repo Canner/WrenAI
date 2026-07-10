@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wren – Add Profile</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+</head>
+<body>
+<main class="container" style="max-width:520px">
+  <hgroup style="margin-bottom:1.5rem">
+    <h2 style="margin-bottom:0">Add Profile</h2>
+    <p style="margin:0;color:var(--pico-muted-color)">
+      Configure connection for <strong>{{ profile_name }}</strong>
+    </p>
+  </hgroup>
+
+  <form hx-post="/save" hx-target="#result" hx-swap="innerHTML">
+    <input type="hidden" name="_profile_name" value="{{ profile_name }}">
+
+    <label>
+      Data Source
+      <select name="datasource"
+              hx-get="/fields"
+              hx-target="#fields"
+              hx-swap="innerHTML"
+              hx-trigger="change"
+              hx-include="[name='datasource']">
+        <option value="">— select —</option>
+        {% for ds in datasource_options %}
+        <option value="{{ ds }}">{{ ds }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <div id="fields"></div>
+
+    <button type="submit" style="width:auto">Save Profile</button>
+  </form>
+  <div id="result" style="min-height:1.4em;margin-top:.4rem"></div>
+</main>
+
+<script>
+function handleFileBase64(fileInput, fieldName) {
+  var hidden = document.getElementById('fb64-' + fieldName);
+  var status = document.getElementById('fb64-status-' + fieldName);
+  var file = fileInput.files[0];
+  if (!file) { hidden.value = ''; status.textContent = ''; return; }
+  var reader = new FileReader();
+  reader.onload = function() {
+    var bytes = new Uint8Array(reader.result);
+    var binary = '';
+    for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    hidden.value = btoa(binary);
+    status.textContent = '✓ ' + file.name + ' loaded';
+    status.style.color = 'var(--pico-primary)';
+  };
+  reader.onerror = function() {
+    hidden.value = '';
+    status.textContent = '✗ Failed to read file';
+    status.style.color = 'var(--pico-color-red-500)';
+  };
+  reader.readAsArrayBuffer(file);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "separate-pull-requests": true,
+  "include-component-in-tag": true,
+  "group-pull-request-title-pattern": "chore${scope}: release wren-rust-core libraries",
+  "packages": {
+    "core/wren-core-py": {
+      "component": "wren-core-py",
+      "release-type": "python",
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        "Cargo.toml",
+        {
+          "path": "uv.lock",
+          "type": "toml",
+          "jsonpath": "$.package[?(@.name.value=='wren-core-py')].version"
+        }
+      ]
+    },
+    "core/wren": {
+      "component": "wren",
+      "release-type": "python",
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        {
+          "path": "uv.lock",
+          "type": "toml",
+          "jsonpath": "$.package[?(@.name.value=='wrenai')].version"
+        }
+      ]
+    },
+    "core/wren-core-wasm": {
+      "component": "wren-core-wasm",
+      "release-type": "node",
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        "Cargo.toml"
+      ]
+    },
+    "sdk/wren-langchain": {
+      "component": "wren-langchain",
+      "release-type": "python",
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        "src/wren_langchain/__init__.py"
+      ]
+    },
+    "sdk/wren-pydantic": {
+      "component": "wren-pydantic",
+      "release-type": "python",
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        "src/wren_pydantic/__init__.py"
+      ]
+    },
+    "core/wren-core-base/manifest-macro": {
+      "component": "wren-manifest-macro",
+      "release-type": "rust",
+      "bump-minor-pre-major": true
+    },
+    "core/wren-core-base": {
+      "component": "wren-core-base",
+      "release-type": "rust",
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        {
+          "path": "Cargo.toml",
+          "type": "toml",
+          "jsonpath": "$.dependencies.wren-manifest-macro.version"
+        }
+      ]
+    },
+    "core/wren-core": {
+      "component": "wren-semantic-core",
+      "release-type": "simple",
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        {
+          "path": "Cargo.toml",
+          "type": "toml",
+          "jsonpath": "$.workspace.package.version"
+        },
+        {
+          "path": "Cargo.toml",
+          "type": "toml",
+          "jsonpath": "$.workspace.dependencies.wren-core-base.version"
+        }
+      ]
+    }
+  },
+  "plugins": [
+    {
+      "type": "linked-versions",
+      "groupName": "wren-rust-core",
+      "components": [
+        "wren-manifest-macro",
+        "wren-core-base",
+        "wren-semantic-core"
+      ]
+    }
+  ]
+}

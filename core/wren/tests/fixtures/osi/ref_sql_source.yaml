@@ -1,0 +1,19 @@
+version: "0.2.0"
+semantic_model:
+  - name: derived
+    datasets:
+      - name: active_users
+        source: |
+          SELECT u.id, u.email
+          FROM users u
+          WHERE u.is_active = true
+        primary_key: [id]
+        custom_extensions:
+          - vendor_name: WREN
+            data: |
+              {"column_types": {"id": "BIGINT", "email": "VARCHAR"}}
+        fields:
+          - name: id
+            expression: id
+          - name: email
+            expression: email

@@ -1,0 +1,76 @@
+default:
+    @just --list
+
+# -- Build ----------------------------------------------------------
+
+# Build everything: WASM binary + TypeScript SDK → dist/
+build: build-wasm build-dist
+
+# Build WASM binary only (wasm-pack → pkg/)
+build-wasm:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ "$(uname)" == "Darwin" ]]; then
+        export CC_wasm32_unknown_unknown=/opt/homebrew/opt/llvm/bin/clang
+        export AR_wasm32_unknown_unknown=/opt/homebrew/opt/llvm/bin/llvm-ar
+        export CFLAGS_wasm32_unknown_unknown="--target=wasm32-unknown-unknown"
+    fi
+    wasm-pack build --target web --release
+
+# Build WASM binary (debug, faster compile)
+build-wasm-dev:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ "$(uname)" == "Darwin" ]]; then
+        export CC_wasm32_unknown_unknown=/opt/homebrew/opt/llvm/bin/clang
+        export AR_wasm32_unknown_unknown=/opt/homebrew/opt/llvm/bin/llvm-ar
+        export CFLAGS_wasm32_unknown_unknown="--target=wasm32-unknown-unknown"
+    fi
+    wasm-pack build --target web --dev
+
+# Assemble dist/ from pkg/ + TypeScript wrapper
+build-dist:
+    npm install
+    node scripts/build.mjs
+
+# -- Test -----------------------------------------------------------
+
+# Run SDK integration tests (requires dist/)
+test:
+    node --test sdk/tests/index.test.mjs
+
+# TypeScript type check only
+typecheck:
+    npx tsc -p sdk/tsconfig.json --noEmit
+
+# -- Examples -------------------------------------------------------
+
+# Serve examples on localhost:8787 (requires pkg/ from build-wasm)
+serve:
+    node examples/serve.mjs
+
+# -- Size -----------------------------------------------------------
+
+# Report WASM binary size (raw + gzip)
+size:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    wasm="dist/wren_core_wasm_bg.wasm"
+    if [[ ! -f "$wasm" ]]; then
+        wasm="pkg/wren_core_wasm_bg.wasm"
+    fi
+    if [[ ! -f "$wasm" ]]; then
+        echo "No WASM binary found. Run 'just build' first."
+        exit 1
+    fi
+    raw=$(stat -f%z "$wasm" 2>/dev/null || stat -c%s "$wasm")
+    gzip=$(gzip -c "$wasm" | wc -c | tr -d ' ')
+    raw_mb=$(awk "BEGIN {printf \"%.1f\", $raw / 1048576}")
+    gzip_mb=$(awk "BEGIN {printf \"%.1f\", $gzip / 1048576}")
+    echo "WASM binary: ${raw_mb} MB raw, ${gzip_mb} MB gzip"
+
+# -- Clean ----------------------------------------------------------
+
+# Remove build artifacts
+clean:
+    rm -rf pkg/ dist/ target/

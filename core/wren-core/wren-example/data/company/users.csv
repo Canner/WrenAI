@@ -1,0 +1,10 @@
+id,email,name,tenant_id,department,role
+1001-u1,user1@acme.com,Alice,1acdef01-aaaa-aaaa-aaaa-aaaaaaaaaaaa,sales,MEMBER
+1002-u2,user2@acme.com,Bob,1acdef01-aaaa-aaaa-aaaa-aaaaaaaaaaaa,hr,MEMBER
+1003-u3,admin@acme.com,Carol,1acdef01-aaaa-aaaa-aaaa-aaaaaaaaaaaa,engineering,ADMIN
+1004-u4,user3@acme.com,David,1acdef01-aaaa-aaaa-aaaa-aaaaaaaaaaaa,finance,MEMBER
+1005-u5,user4@acme.com,Eve,1acdef01-aaaa-aaaa-aaaa-aaaaaaaaaaaa,product,MEMBER
+2001-u6,user5@globex.com,Frank,2bcdef02-bbbb-bbbb-bbbb-bbbbbbbbbbbb,sales,MEMBER
+2002-u7,user6@globex.com,Grace,2bcdef02-bbbb-bbbb-bbbb-bbbbbbbbbbbb,engineering,MEMBER
+2003-u8,admin@globex.com,Hank,2bcdef02-bbbb-bbbb-bbbb-bbbbbbbbbbbb,hr,ADMIN
+2004-u9,user7@globex.com,Ivy,2bcdef02-bbbb-bbbb-bbbb-bbbbbbbbbbbb,marketing,MEMBER

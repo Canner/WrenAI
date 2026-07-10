@@ -1,0 +1,16 @@
+id,customer,region,status,amount,created_at
+1,Alice,NA,open,150.00,2024-01-15
+2,Bob,EU,open,200.50,2024-01-20
+3,Alice,NA,closed,300.75,2024-02-10
+4,Bob,EU,open,100.00,2024-02-15
+5,Carol,APAC,cancelled,50.25,2024-02-28
+6,Alice,NA,open,250.00,2024-03-05
+7,Carol,APAC,closed,175.50,2024-03-12
+8,Dan,EU,open,425.00,2024-03-22
+9,Dan,EU,cancelled,30.00,2024-04-02
+10,Alice,NA,closed,600.00,2024-04-18
+11,Carol,APAC,open,220.75,2024-05-03
+12,Bob,EU,closed,380.25,2024-05-19
+13,Alice,NA,open,95.00,2024-05-25
+14,Dan,EU,open,310.50,2024-06-08
+15,Carol,APAC,closed,475.00,2024-06-20

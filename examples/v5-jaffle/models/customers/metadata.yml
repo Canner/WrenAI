@@ -1,0 +1,21 @@
+name: customers
+properties:
+  description: One row per customer. name may be NULL for guest checkouts.
+table_reference:
+  catalog: ""
+  schema: public
+  table: customers
+columns:
+  - name: id
+    type: INTEGER
+    is_calculated: false
+    not_null: true
+    is_primary_key: true
+    properties: {}
+  - name: name
+    type: VARCHAR
+    is_calculated: false
+    not_null: false
+    properties: {}
+primary_key: id
+cached: false

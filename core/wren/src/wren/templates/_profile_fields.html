@@ -1,0 +1,47 @@
+{% if fields %}
+  {% if variants %}
+  <label>
+    Type
+    <select name="_variant"
+            hx-get="/fields"
+            hx-target="#fields"
+            hx-swap="innerHTML"
+            hx-trigger="change"
+            hx-include="[name='datasource'],[name='_variant']">
+      {% for v in variants %}
+      <option value="{{ v }}" {% if v == current_variant %}selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% endif %}
+
+  {% for field in fields %}
+    {% if field.input_type == 'hidden' %}
+      <input type="hidden" name="{{ field.name }}" value="{{ field.default if field.default is not none else '' }}">
+    {% elif field.input_type == 'file_base64' %}
+    <label>
+      {{ field.label }}
+      <input type="hidden" name="{{ field.name }}" id="fb64-{{ field.name }}" value="">
+      <input type="file" id="fb64-file-{{ field.name }}"
+        {% if field.accept %}accept="{{ field.accept }}"{% endif %}
+        onchange="handleFileBase64(this, '{{ field.name }}')">
+      <small id="fb64-status-{{ field.name }}"></small>
+      {% if field.hint %}<small style="color:var(--pico-muted-color)">{{ field.hint }}</small>{% endif %}
+    </label>
+    {% else %}
+    <label>
+      {{ field.label }}
+      <input type="{{ field.input_type }}" name="{{ field.name }}"
+             placeholder="{{ field.placeholder or '' }}"
+             value="{{ field.default if field.default is not none else '' }}">
+      {% if field.hint %}<small style="color:var(--pico-muted-color)">{{ field.hint }}</small>{% endif %}
+    </label>
+    {% endif %}
+  {% endfor %}
+{% elif datasource %}
+  <label>
+    Connection JSON
+    <textarea name="_json" rows="5" placeholder='{"key": "value"}'></textarea>
+  </label>
+  <small style="color:var(--pico-muted-color)">No predefined fields for <code>{{ datasource }}</code>.</small>
+{% endif %}

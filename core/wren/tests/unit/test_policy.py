@@ -1,0 +1,544 @@
+"""Unit tests for wren.policy — SQL policy validation.
+
+These tests use sqlglot parsing only and do not require a database or wren-core.
+"""
+
+from __future__ import annotations
+
+import pytest
+from sqlglot import exp, parse_one
+
+from wren.config import WrenConfig
+from wren.model.error import ErrorCode, WrenError
+from wren.policy import validate_sql_policy
+
+pytestmark = pytest.mark.unit
+
+_MODELS = {"orders", "customers"}
+
+
+# ── Table validation ──────────────────────────────────────────────────────
+
+
+def test_valid_query_all_tables_in_mdl():
+    ast = parse_one('SELECT * FROM "orders"', dialect="duckdb")
+    config = WrenConfig(strict_mode=True)
+    validate_sql_policy(ast, _MODELS, config)
+
+
+def test_table_not_in_mdl_raises():
+    ast = parse_one("SELECT * FROM pg_shadow", dialect="postgres")
+    config = WrenConfig(strict_mode=True)
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, config)
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+    assert "pg_shadow" in str(exc_info.value)
+
+
+def test_user_cte_not_flagged():
+    sql = "WITH foo AS (SELECT 1 AS x) SELECT * FROM foo"
+    ast = parse_one(sql, dialect="duckdb")
+    config = WrenConfig(strict_mode=True)
+    validate_sql_policy(ast, _MODELS, config)
+
+
+def test_mixed_mdl_and_non_mdl_table_raises():
+    sql = 'SELECT * FROM "orders" JOIN secret_table ON 1=1'
+    ast = parse_one(sql, dialect="duckdb")
+    config = WrenConfig(strict_mode=True)
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, config)
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+    assert "secret_table" in str(exc_info.value)
+
+
+def test_strict_mode_off_allows_unknown_table():
+    ast = parse_one("SELECT * FROM unknown_table", dialect="duckdb")
+    config = WrenConfig(strict_mode=False)
+    validate_sql_policy(ast, _MODELS, config)
+
+
+def test_subquery_alias_not_flagged():
+    sql = "SELECT * FROM (SELECT 1 AS x) AS t"
+    ast = parse_one(sql, dialect="duckdb")
+    config = WrenConfig(strict_mode=True)
+    # 't' is a subquery alias, not a real table — but sqlglot doesn't emit
+    # an exp.Table for it, so this should pass without error.
+    # The only table nodes come from real FROM references.
+    validate_sql_policy(ast, _MODELS, config)
+
+
+def test_multiple_valid_tables():
+    sql = 'SELECT * FROM "orders" o JOIN "customers" c ON o.id = c.id'
+    ast = parse_one(sql, dialect="duckdb")
+    config = WrenConfig(strict_mode=True)
+    validate_sql_policy(ast, _MODELS, config)
+
+
+# ── Denied functions ──────────────────────────────────────────────────────
+
+
+def test_denied_function_raises():
+    ast = parse_one("SELECT pg_read_file('/etc/passwd')", dialect="postgres")
+    config = WrenConfig(denied_functions=frozenset(["pg_read_file"]))
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, config)
+    assert exc_info.value.error_code == ErrorCode.BLOCKED_FUNCTION
+    assert "pg_read_file" in str(exc_info.value)
+
+
+def test_denied_function_case_insensitive():
+    ast = parse_one("SELECT PG_READ_FILE('/etc/passwd')", dialect="postgres")
+    config = WrenConfig(denied_functions=frozenset(["pg_read_file"]))
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, config)
+    assert exc_info.value.error_code == ErrorCode.BLOCKED_FUNCTION
+
+
+def test_allowed_function_passes():
+    ast = parse_one('SELECT COUNT(*) FROM "orders"', dialect="duckdb")
+    config = WrenConfig(denied_functions=frozenset(["pg_read_file"]))
+    validate_sql_policy(ast, _MODELS, config)
+
+
+def test_builtin_function_on_denied_list():
+    ast = parse_one('SELECT COUNT(*) FROM "orders"', dialect="duckdb")
+    config = WrenConfig(denied_functions=frozenset(["count"]))
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, config)
+    assert exc_info.value.error_code == ErrorCode.BLOCKED_FUNCTION
+
+
+def test_denied_function_reclassified_by_sqlglot():
+    """A denied name still matches when sqlglot maps it to a concrete subclass.
+
+    sqlglot >=29 parses ``version()`` on postgres into ``exp.CurrentVersion``
+    (``type(node).key == "currentversion"``), not ``exp.Anonymous``. Denying
+    ``"version"`` must still block it via the canonical-key expansion.
+    """
+    ast = parse_one("SELECT version()", dialect="postgres")
+    # Guard the premise: the test only exercises the canonical-key expansion if
+    # sqlglot actually reclassified version() off exp.Anonymous.
+    func = next(ast.find_all(exp.Func))
+    assert not isinstance(func, exp.Anonymous), (
+        "version() should be reclassified to a concrete subclass in this "
+        "sqlglot version"
+    )
+    config = WrenConfig(denied_functions=frozenset(["version"]))
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, config)
+    assert exc_info.value.error_code == ErrorCode.BLOCKED_FUNCTION
+
+
+def test_nested_denied_function():
+    sql = "SELECT * FROM (SELECT dblink('host=evil', 'SELECT 1') AS x) AS t"
+    ast = parse_one(sql, dialect="postgres")
+    config = WrenConfig(denied_functions=frozenset(["dblink"]))
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, config)
+    assert exc_info.value.error_code == ErrorCode.BLOCKED_FUNCTION
+
+
+def test_no_denied_list_allows_everything():
+    ast = parse_one("SELECT pg_read_file('/etc/passwd')", dialect="postgres")
+    config = WrenConfig(denied_functions=frozenset())
+    validate_sql_policy(ast, _MODELS, config)
+
+
+def test_empty_denied_list_allows_everything():
+    ast = parse_one("SELECT dblink('host=evil', 'SELECT 1')", dialect="postgres")
+    config = WrenConfig()
+    validate_sql_policy(ast, _MODELS, config)
+
+
+# ── Combined strict_mode + denied_functions ───────────────────────────────
+
+
+def test_strict_mode_and_denied_functions_together():
+    # ``pg_read_file`` is BOTH a known data reader (always blocked in strict
+    # mode, in all positions — issue #2409) and on the user denylist. The
+    # strict-mode reader guard runs first, so MODEL_NOT_FOUND fires; either
+    # security control rejecting the query is the correct, fail-closed result.
+    sql = 'SELECT pg_read_file(o_orderkey) FROM "orders"'
+    ast = parse_one(sql, dialect="postgres")
+    config = WrenConfig(strict_mode=True, denied_functions=frozenset(["pg_read_file"]))
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, config)
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+
+
+def test_denied_reader_function_without_strict_mode_uses_denylist():
+    # Without strict mode the data-reader guard does not run, so a reader is
+    # only rejected via the explicit denylist (BLOCKED_FUNCTION).
+    sql = "SELECT pg_read_file('/etc/passwd')"
+    ast = parse_one(sql, dialect="postgres")
+    config = WrenConfig(strict_mode=False, denied_functions=frozenset(["pg_read_file"]))
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, config)
+    assert exc_info.value.error_code == ErrorCode.BLOCKED_FUNCTION
+
+
+# ── CTE scope shadowing ──────────────────────────────────────────────────
+
+
+def test_nested_cte_does_not_shadow_outer_table():
+    """A CTE defined inside a subquery must not hide an outer FROM reference."""
+    sql = """
+    SELECT *
+    FROM secret_table
+    WHERE EXISTS (
+      WITH secret_table AS (SELECT 1)
+      SELECT 1 FROM secret_table
+    )
+    """
+    ast = parse_one(sql, dialect="duckdb")
+    config = WrenConfig(strict_mode=True)
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, config)
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+    assert "secret_table" in str(exc_info.value)
+
+
+def test_outer_cte_visible_in_body():
+    """A CTE defined at the top level should be visible in the main SELECT."""
+    sql = 'WITH tmp AS (SELECT 1 AS x FROM "orders") SELECT * FROM tmp'
+    ast = parse_one(sql, dialect="duckdb")
+    config = WrenConfig(strict_mode=True)
+    validate_sql_policy(ast, _MODELS, config)
+
+
+# ── Table-valued functions ────────────────────────────────────────────────
+
+
+def test_tvf_read_csv_blocked():
+    ast = parse_one("SELECT * FROM read_csv('s3://bucket/file.csv')", dialect="duckdb")
+    config = WrenConfig(strict_mode=True)
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, config)
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+
+
+def test_tvf_generate_series_blocked():
+    sql = "SELECT * FROM generate_series(1, 10) AS t(x)"
+    ast = parse_one(sql, dialect="postgres")
+    config = WrenConfig(strict_mode=True)
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, config)
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+
+
+def test_unnest_row_expansion_allowed():
+    # UNNEST is a row-expansion operator, not a data source: it restructures an
+    # array/struct already in query scope, so it reads nothing outside the
+    # manifest and must not be blocked in strict mode.
+    sql = "SELECT * FROM unnest(ARRAY[1,2,3]) AS t(x)"
+    ast = parse_one(sql, dialect="duckdb")
+    config = WrenConfig(strict_mode=True)
+    validate_sql_policy(ast, _MODELS, config)
+
+
+def test_tvf_allowed_when_not_strict():
+    ast = parse_one("SELECT * FROM read_csv('file.csv')", dialect="duckdb")
+    config = WrenConfig(strict_mode=False)
+    validate_sql_policy(ast, _MODELS, config)
+
+
+def test_unnest_model_column_allowed():
+    # UNNEST over a governed model column reached via JOIN is row-expansion of
+    # an in-scope column (RLAC/CLAC already apply to ``orders.items``); it must
+    # NOT be false-blocked as a non-model source. UNNEST parses to exp.Unnest
+    # (an exp.Func subclass) with no exp.Table node, so the FROM/JOIN func scan
+    # sees it — the row-expansion allow-list lets it through.
+    sql = "SELECT * FROM orders CROSS JOIN UNNEST(orders.items) AS t(item)"
+    ast = parse_one(sql, dialect="trino")
+    config = WrenConfig(strict_mode=True)
+    validate_sql_policy(ast, _MODELS, config)
+
+
+def test_unnest_over_reader_tvf_now_blocked():
+    # Closes the gap previously pinned as "known" (issue #2409 section C).
+    #
+    # ``UNNEST(read_csv(...))`` USED to be allowed because the data-source guard
+    # only governed the top-level FROM/JOIN slot and the inner reader
+    # contributed no exp.Table node. As of the all-positions data-reader scan,
+    # the nested ``read_csv`` is seen and blocked regardless of the UNNEST
+    # wrapper — closing the path-traversal / SSRF / exfiltration hole.
+    sql = "SELECT * FROM orders CROSS JOIN UNNEST(read_csv('s3://b/f.csv')) AS t(c)"
+    ast = parse_one(sql, dialect="duckdb")
+    config = WrenConfig(strict_mode=True)
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, config)
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+
+
+def test_tvf_generate_series_in_join_blocked():
+    sql = "SELECT * FROM orders JOIN generate_series(1, 10) AS g(x) ON true"
+    ast = parse_one(sql, dialect="postgres")
+    config = WrenConfig(strict_mode=True)
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, config)
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+
+
+def test_lateral_flatten_model_column_allowed():
+    # Snowflake FLATTEN over a governed model column, reached via a LATERAL
+    # comma-join, parses to exp.Lateral wrapping exp.Explode. After unwrapping
+    # the LATERAL, it is a row-expansion operator over an in-scope column — it
+    # restructures ``orders.items`` rather than reading a new source, so it
+    # must be allowed rather than false-blocked.
+    sql = "SELECT * FROM orders, LATERAL FLATTEN(input => orders.items) f"
+    ast = parse_one(sql, dialect="snowflake")
+    config = WrenConfig(strict_mode=True)
+    validate_sql_policy(ast, _MODELS, config)
+
+
+def test_tvf_lateral_generate_series_in_join_blocked():
+    # generate_series IS a data-generating source (not row-expansion of an
+    # in-scope column), so a LATERAL-wrapped generate_series reached via JOIN
+    # must still be blocked.
+    sql = "SELECT * FROM orders CROSS JOIN LATERAL generate_series(1, 3) g"
+    ast = parse_one(sql, dialect="snowflake")
+    config = WrenConfig(strict_mode=True)
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, config)
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+
+
+def test_join_between_two_mdl_models_allowed():
+    # Guard against over-blocking: a plain JOIN between two manifest models
+    # must still pass.
+    sql = "SELECT * FROM orders o JOIN customers c ON o.customer_id = c.id"
+    ast = parse_one(sql, dialect="trino")
+    config = WrenConfig(strict_mode=True)
+    validate_sql_policy(ast, _MODELS, config)
+
+
+# ── Data-reading TVFs governed in ALL positions (issue #2409, section C) ───
+#
+# Strict mode previously blocked data-reading table-valued functions (read_csv,
+# read_parquet, dblink, postgres_scan, ...) ONLY in the top-level FROM/JOIN
+# source slot. A reader smuggled into a projection, a WHERE/IN subquery, or a
+# nested function argument bypassed MDL governance entirely — a real
+# path-traversal / SSRF / exfiltration hole. These tests assert the reader is
+# now fail-closed in every AST position, while legitimate queries still pass.
+
+
+def test_reader_in_source_position_blocked():
+    ast = parse_one("SELECT * FROM read_csv('/etc/passwd')", dialect="duckdb")
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, WrenConfig(strict_mode=True))
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+
+
+def test_reader_in_projection_blocked():
+    # BYPASS before fix: a reader in the SELECT list is not a FROM/JOIN source,
+    # so the source-only scan never saw it.
+    ast = parse_one("SELECT read_csv('/etc/passwd')", dialect="duckdb")
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, WrenConfig(strict_mode=True))
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+
+
+def test_reader_in_where_subquery_blocked():
+    # BYPASS before fix: reader hidden in a WHERE ... IN (subquery).
+    sql = "SELECT * FROM orders WHERE id IN (SELECT read_csv('/etc/passwd'))"
+    ast = parse_one(sql, dialect="duckdb")
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, WrenConfig(strict_mode=True))
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+
+
+def test_reader_nested_in_unnest_arg_blocked():
+    # BYPASS before fix: reader as a nested arg of a row-expansion op.
+    sql = "SELECT * FROM orders CROSS JOIN UNNEST(read_csv('s3://b/f.csv')) AS t(c)"
+    ast = parse_one(sql, dialect="duckdb")
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, WrenConfig(strict_mode=True))
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+
+
+def test_reader_nested_in_function_arg_blocked():
+    # BYPASS before fix: reader buried inside another scalar function call.
+    sql = "SELECT length(read_text('/etc/passwd')) FROM orders"
+    ast = parse_one(sql, dialect="duckdb")
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, WrenConfig(strict_mode=True))
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+
+
+def test_anonymous_reader_glob_in_projection_blocked():
+    # ``glob`` parses to exp.Anonymous on every dialect — matched by raw name.
+    ast = parse_one("SELECT glob('/etc/*') FROM orders", dialect="duckdb")
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, WrenConfig(strict_mode=True))
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+
+
+def test_dblink_remote_reader_blocked():
+    # External-database reader (lateral movement / SSRF) in source position.
+    sql = "SELECT * FROM dblink('host=evil', 'SELECT 1') AS t(x int)"
+    ast = parse_one(sql, dialect="postgres")
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, WrenConfig(strict_mode=True))
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+
+
+def test_postgres_scan_external_db_blocked():
+    sql = "SELECT * FROM postgres_scan('host=evil', 'public', 'secrets')"
+    ast = parse_one(sql, dialect="duckdb")
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, WrenConfig(strict_mode=True))
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+
+
+def test_reader_case_insensitive_blocked():
+    ast = parse_one("SELECT READ_CSV('/etc/passwd')", dialect="duckdb")
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, WrenConfig(strict_mode=True))
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+
+
+def test_mysql_load_file_reader_in_projection_blocked():
+    # ``load_file`` is the same arbitrary-file-read primitive as read_csv, via
+    # a first-class connector (MySQL). It must be blocked in a projection just
+    # like the duckdb reader family (goldmedal review on PR #2419).
+    ast = parse_one("SELECT load_file('/etc/passwd')", dialect="mysql")
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, WrenConfig(strict_mode=True))
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+
+
+def test_postgres_filesystem_enumeration_readers_blocked():
+    # Postgres filesystem enumeration / stat readers in a projection.
+    for sql in (
+        "SELECT pg_stat_file('/etc/passwd')",
+        "SELECT pg_ls_waldir()",
+        "SELECT pg_ls_logdir()",
+        "SELECT pg_ls_tmpdir()",
+    ):
+        ast = parse_one(sql, dialect="postgres")
+        with pytest.raises(WrenError) as exc_info:
+            validate_sql_policy(ast, _MODELS, WrenConfig(strict_mode=True))
+        assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND, sql
+
+
+def test_duckdb_spatial_and_sniff_readers_blocked():
+    # duckdb sniff / spatial readers over arbitrary paths, in a projection.
+    for sql in (
+        "SELECT sniff_csv('/etc/passwd') FROM orders",
+        "SELECT st_read('/x.shp') FROM orders",
+    ):
+        ast = parse_one(sql, dialect="duckdb")
+        with pytest.raises(WrenError) as exc_info:
+            validate_sql_policy(ast, _MODELS, WrenConfig(strict_mode=True))
+        assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND, sql
+
+
+def test_reader_error_message_does_not_leak_argument():
+    # The error must report only the function name, never the full expression
+    # (which would echo the path / URL / DSN back into messages and logs).
+    ast = parse_one("SELECT read_csv('/etc/passwd')", dialect="duckdb")
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, WrenConfig(strict_mode=True))
+    assert "/etc/passwd" not in str(exc_info.value)
+
+
+def test_reader_not_blocked_when_strict_off():
+    # The reader guard is a strict-mode control; without strict mode (and no
+    # denylist) the query is allowed, preserving non-governed behaviour.
+    ast = parse_one("SELECT read_csv('/etc/passwd')", dialect="duckdb")
+    validate_sql_policy(ast, _MODELS, WrenConfig(strict_mode=False))
+
+
+def test_reader_can_never_be_opted_in_as_source_func():
+    # allowed_source_functions must NEVER unblock a data reader — only
+    # generators are opt-in-able. A reader on the allowlist is still blocked.
+    sql = "SELECT * FROM read_csv('/etc/passwd') AS t(c)"
+    ast = parse_one(sql, dialect="duckdb")
+    config = WrenConfig(
+        strict_mode=True, allowed_source_functions=frozenset(["read_csv"])
+    )
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, config)
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+
+
+# ── No false positives: legitimate queries still pass ─────────────────────
+
+
+def test_legit_query_with_column_named_like_reader_passes():
+    # An identifier that collides with a reader name (quoted column / alias) is
+    # not a function call — _check_data_readers must only reject exp.Func nodes,
+    # never plain identifiers.
+    ast = parse_one('SELECT "read_csv" FROM "orders"', dialect="duckdb")
+    validate_sql_policy(ast, _MODELS, WrenConfig(strict_mode=True))
+    ast2 = parse_one('SELECT o_orderkey AS "read_csv" FROM "orders"', dialect="duckdb")
+    validate_sql_policy(ast2, _MODELS, WrenConfig(strict_mode=True))
+
+
+def test_legit_aggregate_and_scalar_funcs_pass():
+    sql = 'SELECT COUNT(*), UPPER(o_status), SUM(o_total) FROM "orders"'
+    ast = parse_one(sql, dialect="duckdb")
+    validate_sql_policy(ast, _MODELS, WrenConfig(strict_mode=True))
+
+
+def test_legit_join_and_cte_pass_with_strict():
+    sql = (
+        'WITH t AS (SELECT * FROM "orders") '
+        'SELECT * FROM t JOIN "customers" c ON t.customer_id = c.id'
+    )
+    ast = parse_one(sql, dialect="duckdb")
+    validate_sql_policy(ast, _MODELS, WrenConfig(strict_mode=True))
+
+
+# ── Category B: synthetic generators (issue #2409) ────────────────────────
+
+
+def test_generator_blocked_by_default():
+    sql = "SELECT * FROM generate_series(1, 10) AS t(x)"
+    ast = parse_one(sql, dialect="postgres")
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, WrenConfig(strict_mode=True))
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND
+
+
+def test_generator_allowed_when_opted_in():
+    sql = "SELECT * FROM generate_series(1, 10) AS t(x)"
+    config = WrenConfig(
+        strict_mode=True, allowed_source_functions=frozenset(["generate_series"])
+    )
+    for dialect in ("postgres", "duckdb"):
+        ast = parse_one(sql, dialect=dialect)
+        validate_sql_policy(ast, _MODELS, config)
+
+
+def test_generator_in_join_allowed_when_opted_in():
+    sql = "SELECT * FROM orders JOIN generate_series(1, 10) AS g(x) ON true"
+    ast = parse_one(sql, dialect="postgres")
+    config = WrenConfig(
+        strict_mode=True, allowed_source_functions=frozenset(["generate_series"])
+    )
+    validate_sql_policy(ast, _MODELS, config)
+
+
+def test_optin_generator_does_not_unblock_distinct_generator():
+    # Opting in `generate_series` must not silently allow a generator that
+    # parses to a DISTINCT class/name. On postgres `sequence` stays
+    # exp.Anonymous(name="sequence"), distinct from generate_series's
+    # ExplodingGenerateSeries, so it remains blocked.
+    #
+    # Caveat (documented, not a bug): on some dialects sqlglot collapses
+    # `sequence`/`range`/`generate_series` onto the SAME class (e.g. trino
+    # `sequence` -> exp.GenerateSeries). Where the AST cannot distinguish them,
+    # opting one in opts in the class. That is acceptable for category B:
+    # generators carry no exfiltration risk (only DoS), and an operator opting
+    # in any generator has accepted bounded-range responsibility. Readers
+    # (category C) are never affected — they can never be opted in.
+    sql = "SELECT * FROM sequence(1, 10) AS t(x)"
+    ast = parse_one(sql, dialect="postgres")
+    config = WrenConfig(
+        strict_mode=True, allowed_source_functions=frozenset(["generate_series"])
+    )
+    with pytest.raises(WrenError) as exc_info:
+        validate_sql_policy(ast, _MODELS, config)
+    assert exc_info.value.error_code == ErrorCode.MODEL_NOT_FOUND

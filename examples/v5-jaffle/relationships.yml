@@ -1,0 +1,7 @@
+relationships:
+  - name: orders_customer
+    models:
+      - orders
+      - customers
+    join_type: MANY_TO_ONE
+    condition: orders.customer_id = customers.id

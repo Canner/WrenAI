@@ -1,0 +1,21 @@
+name: Pull request title validator
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - synchronize
+
+permissions:
+  pull-requests: read
+
+jobs:
+  validator:
+    name: validate-pull-request-title
+    runs-on: ubuntu-latest
+    steps:
+      - name: validate pull request title
+        uses: kontrolplane/pull-request-title-validator@v1.3.2
+        with:
+          types: "feat,fix,perf,deps,revert,docs,chore,refactor,test,build,ci"

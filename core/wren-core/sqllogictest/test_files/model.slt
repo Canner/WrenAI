@@ -1,0 +1,84 @@
+statement ok
+SELECT * from wrenai.public."Orders"
+
+statement ok
+SELECT * from public."Orders"
+
+statement ok
+SELECT * from "Orders"
+
+statement ok
+select cast("Freight_value" as int) + cast("Price" as int) from wrenai.public."Order_items"
+
+statement ok
+select "Product_id" from wrenai.public."Order_items" where cast("Freight_value" as double) > 10.0
+
+statement ok
+select "Product_id" from wrenai.public."Order_items" where "Freight_value" > 10.0
+
+statement ok
+select "Product_id", min("Price") from wrenai.public."Order_items" group by "Product_id"
+
+statement ok
+select "Product_id", min("Price") from wrenai.public."Order_items" where "Freight_value" > 10.0 group by "Product_id"
+
+statement ok
+select * from wrenai.public."Order_items";
+
+statement ok
+select * from wrenai.public."Customers";
+
+statement ok
+select count(*) from wrenai.public."Order_items";
+
+statement ok
+select sum("Price") over (order by "Product_id") from wrenai.public."Order_items" limit 1;
+
+# check the count of order_items won't be increased by the relationship calculation
+query B
+select cnt1 = cnt2 from (select count(*) as cnt1 from (select "Customer_state" from wrenai.public."Order_items")), (select count(*) as cnt2 from datafusion.public.order_items) limit 1;
+----
+true
+
+query I rowsort
+WITH w1 as (select "Id" from "Order_items" where "Price" in
+    (select distinct "Price" from "Order_items" order by "Price" DESC LIMIT 5))
+select * from w1;
+----
+123
+175
+178
+201
+56
+9
+
+# TODO: occurred fatal runtime error: stack overflow
+#query B
+#select actual = expected from (select "Totalprice" as actual from wrenai.public."Orders" where "Order_id" = '76754c0e642c8f99a8c3fcb8a14ac700'), (select sum(price) as expected from datafusion.public.order_items where order_id = '76754c0e642c8f99a8c3fcb8a14ac700') limit 1;
+#----
+#true
+
+query IR
+select "Id", "Price" from "Order_items" where "Order_id" in (SELECT "Order_id" FROM "Orders" WHERE "Customer_id" = 'f6c39f83de772dd502809cee2fee4c41')
+----
+105 287.4
+
+query T
+select "Customer_id" from wrenai.public."Orders" where exists (select 1 from wrenai.public."Order_items" where "Orders"."Order_id" = "Order_items"."Order_id") order by 1 limit 5;
+----
+0049e8442c2a3e4a8d1ff5a9549abd53
+024dad8e71332c433bc9a494565b9c49
+02d1b5b8831241174c6ef13efd35abbd
+04eafb40a16989307464f27f1fed8907
+0732c0881c70ebcda536a4b14e9db106
+
+query RIITRTTT
+select * from "Order_items" where "Order_id" in ('03c83b31dbc387f83f1b5579b53182fb', '08cbb1d4cd574b126569b208fd4b26ea')
+----
+14.68 1 1 03c83b31dbc387f83f1b5579b53182fb 119.8 a04087ab6a96ffa041f8a2701a72b616 2023/1/15 7:26 CA
+6.9 4 1 08cbb1d4cd574b126569b208fd4b26ea 287.4 588531f8ec37e7d5ff5b7b22ea0488f8 2022/10/19 19:35 CA
+
+query RIITRTTT
+select * from "Order_items" where "Order_id" = '03c83b31dbc387f83f1b5579b53182fb'
+----
+14.68 1 1 03c83b31dbc387f83f1b5579b53182fb 119.8 a04087ab6a96ffa041f8a2701a72b616 2023/1/15 7:26 CA

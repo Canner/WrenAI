@@ -1,0 +1,8 @@
+function_type,name,return_type,param_names,param_types,description
+scalar,add_two,int,"f1,f2","int,int","Adds two numbers together."
+window,max_if,int,,,"If the condition is true, returns the maximum value in the window."
+scalar,json_extract,jsonb,"input,pattern","jsonb,text","Extracts a value from a JSON object."
+scalar,add_custom,int,,"int,int","Adds two numbers together."
+scalar,test_same_as_input_array,same_as_input_first_array_element,,,"Returns the greatest value from the first array."
+scalar,test_return_type,same_as_input,,,"Returns the same type as the input."
+scalar,test_without_param_type,string,,,"Without param type"

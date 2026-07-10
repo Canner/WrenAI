@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>wren-core-wasm: Cube Explorer</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; max-width: 1100px; margin: 1.5em auto; padding: 0 1em; color: #333; }
+        h1 { margin: 0 0 0.2em; }
+        .sub { color: #666; margin: 0 0 1em; font-size: 0.95em; }
+        .log { padding: 0.3em 0.6em; margin: 0.2em 0; border-left: 3px solid #666; font-size: 0.85em; }
+        .ok { border-color: #2a2; color: #2a2; }
+        .err { border-color: #a22; color: #a22; }
+        .layout { display: grid; grid-template-columns: 1fr 1.4fr; gap: 1.5em; }
+        @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+        .panel { border: 1px solid #ddd; border-radius: 6px; padding: 0.8em 1em; }
+        .panel h3 { margin: 0 0 0.6em; font-size: 1.05em; }
+        .field { margin: 0.45em 0; }
+        .field label { display: block; font-size: 0.85em; color: #555; margin-bottom: 0.15em; }
+        .checks { display: flex; flex-wrap: wrap; gap: 0.3em 0.8em; padding: 0.3em 0; }
+        .checks label { font-size: 0.9em; color: #333; }
+        select, input[type="text"], input[type="number"] { width: 100%; box-sizing: border-box; padding: 0.3em 0.4em; font-size: 0.9em; font-family: inherit; }
+        button { padding: 0.4em 0.9em; margin-right: 0.4em; cursor: pointer; font-size: 0.9em; }
+        button.primary { background: #2962ff; color: white; border: 1px solid #1a4ec2; }
+        .filter-row { display: grid; grid-template-columns: 1fr 130px 1.4fr 24px; gap: 0.3em; align-items: center; margin: 0.25em 0; }
+        .filter-row button { padding: 0 0.5em; line-height: 1; }
+        pre { background: #f7f7f7; padding: 0.7em; border-radius: 4px; font-size: 0.8em; overflow-x: auto; margin: 0.4em 0; }
+        table { border-collapse: collapse; margin: 0.4em 0; width: 100%; font-size: 0.85em; }
+        th, td { border: 1px solid #ddd; padding: 0.25em 0.55em; text-align: left; }
+        th { background: #f4f4f4; }
+        details { margin: 0.4em 0; }
+        details summary { cursor: pointer; font-size: 0.85em; color: #555; }
+        .row-meta { font-size: 0.85em; color: #666; margin: 0.3em 0; }
+    </style>
+</head>
+<body>
+    <h1>Cube Explorer</h1>
+    <p class="sub">Build <code>cubeQuery()</code> inputs by clicking. Useful for exploring what an agent can do without writing JSON by hand.</p>
+    <div id="log"></div>
+
+    <div class="layout">
+        <div class="panel">
+            <h3>Available cubes</h3>
+            <div class="field">
+                <label for="cube-select">Cube</label>
+                <select id="cube-select" disabled></select>
+            </div>
+            <details>
+                <summary>Cube schema</summary>
+                <pre id="cube-schema"></pre>
+            </details>
+
+            <h3 style="margin-top: 1.2em;">Build query</h3>
+
+            <div class="field">
+                <label>Measures (one or more)</label>
+                <div id="measures" class="checks"></div>
+            </div>
+
+            <div class="field">
+                <label>Dimensions</label>
+                <div id="dimensions" class="checks"></div>
+            </div>
+
+            <div class="field">
+                <label>Time dimension (optional)</label>
+                <div class="filter-row" style="grid-template-columns: 1fr 130px 1fr;">
+                    <select id="td-name"></select>
+                    <select id="td-granularity">
+                        <option value="">(no bucket)</option>
+                        <option value="year">year</option>
+                        <option value="quarter">quarter</option>
+                        <option value="month">month</option>
+                        <option value="week">week</option>
+                        <option value="day">day</option>
+                        <option value="hour">hour</option>
+                        <option value="minute">minute</option>
+                    </select>
+                    <input type="text" id="td-range" placeholder="2024-01-01,2025-01-01 (optional)">
+                </div>
+            </div>
+
+            <div class="field">
+                <label>Filters</label>
+                <div id="filters"></div>
+                <button id="add-filter" type="button">+ Add filter</button>
+            </div>
+
+            <div class="field" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5em;">
+                <div>
+                    <label>Limit</label>
+                    <input type="number" id="limit" min="1" placeholder="(none)">
+                </div>
+                <div>
+                    <label>Offset</label>
+                    <input type="number" id="offset" min="0" placeholder="(none)">
+                </div>
+            </div>
+
+            <div style="margin-top: 0.8em;">
+                <button id="run" class="primary" disabled>Run cubeQuery</button>
+                <button id="reset" type="button">Reset</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>Generated CubeQuery JSON</h3>
+            <pre id="query-json">{}</pre>
+
+            <h3>Result</h3>
+            <div class="row-meta" id="result-meta"></div>
+            <div id="result"></div>
+            <details>
+                <summary>Raw JSON</summary>
+                <pre id="result-raw"></pre>
+            </details>
+        </div>
+    </div>
+
+    <script type="module">
+        import init, { WrenEngine } from '../pkg/wren_core_wasm.js';
+
+        // ── Demo MDL ──
+        const mdl = {
+            catalog: 'wren',
+            schema: 'public',
+            models: [{
+                name: 'orders',
+                tableReference: { table: 'orders' },
+                columns: [
+                    { name: 'id', type: 'INTEGER' },
+                    { name: 'customer', type: 'VARCHAR' },
+                    { name: 'region', type: 'VARCHAR' },
+                    { name: 'status', type: 'VARCHAR' },
+                    { name: 'amount', type: 'DOUBLE' },
+                    { name: 'created_at', type: 'DATE' },
+                ],
+            }],
+            relationships: [], views: [],
+            cubes: [{
+                name: 'order_metrics',
+                baseObject: 'orders',
+                measures: [
+                    { name: 'revenue',     expression: 'SUM(amount)', type: 'DOUBLE' },
+                    { name: 'order_count', expression: 'COUNT(*)',    type: 'BIGINT' },
+                    { name: 'avg_order',   expression: 'revenue / order_count', type: 'DOUBLE' },
+                    { name: 'max_amount',  expression: 'MAX(amount)', type: 'DOUBLE' },
+                ],
+                dimensions: [
+                    { name: 'status',   expression: 'status',   type: 'VARCHAR' },
+                    { name: 'customer', expression: 'customer', type: 'VARCHAR' },
+                    { name: 'region',   expression: 'region',   type: 'VARCHAR' },
+                ],
+                timeDimensions: [
+                    { name: 'created_at', expression: 'created_at', type: 'DATE' },
+                ],
+                hierarchies: { time_drill: ['created_at'] },
+            }],
+        };
+
+        // Spread across regions / customers / months so groupings are interesting.
+        const data = [
+            { id:  1, customer: 'Alice', region: 'NA', status: 'open',      amount: 150, created_at: '2024-01-15' },
+            { id:  2, customer: 'Bob',   region: 'EU', status: 'open',      amount: 200, created_at: '2024-01-20' },
+            { id:  3, customer: 'Alice', region: 'NA', status: 'closed',    amount: 300, created_at: '2024-02-10' },
+            { id:  4, customer: 'Bob',   region: 'EU', status: 'open',      amount: 100, created_at: '2024-02-15' },
+            { id:  5, customer: 'Carol', region: 'APAC', status: 'cancelled', amount:  50, created_at: '2024-02-28' },
+            { id:  6, customer: 'Alice', region: 'NA', status: 'open',      amount: 250, created_at: '2024-03-05' },
+            { id:  7, customer: 'Carol', region: 'APAC', status: 'closed',  amount: 175, created_at: '2024-03-12' },
+            { id:  8, customer: 'Dan',   region: 'EU', status: 'open',      amount: 425, created_at: '2024-03-22' },
+            { id:  9, customer: 'Dan',   region: 'EU', status: 'cancelled', amount:  30, created_at: '2024-04-02' },
+            { id: 10, customer: 'Alice', region: 'NA', status: 'closed',    amount: 600, created_at: '2024-04-18' },
+            { id: 11, customer: 'Carol', region: 'APAC', status: 'open',    amount: 220, created_at: '2024-05-03' },
+            { id: 12, customer: 'Bob',   region: 'EU', status: 'closed',    amount: 380, created_at: '2024-05-19' },
+        ];
+
+        // ── DOM helpers ──
+        const $ = (id) => document.getElementById(id);
+        const logEl = $('log');
+        function log(msg, ok = true) {
+            const div = document.createElement('div');
+            div.className = `log ${ok ? 'ok' : 'err'}`;
+            div.textContent = msg;
+            logEl.appendChild(div);
+        }
+
+        function escapeHtml(v) {
+            return String(v)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        const OPERATORS = ['eq', 'neq', 'in', 'not_in', 'gt', 'gte', 'lt', 'lte',
+                           'contains', 'starts_with', 'is_null', 'is_not_null'];
+
+        // ── State ──
+        let engine = null;
+        let currentCube = null;
+        let filterIdSeq = 0;
+
+        function checkboxGroup(containerId, items, namePrefix) {
+            const container = $(containerId);
+            container.innerHTML = '';
+            for (const item of items) {
+                const id = `${namePrefix}-${item.name}`;
+                const label = document.createElement('label');
+                const input = document.createElement('input');
+                input.type = 'checkbox';
+                input.id = id;
+                input.value = item.name;
+                const typeSpan = document.createElement('span');
+                typeSpan.style.color = '#999';
+                typeSpan.style.fontSize = '0.85em';
+                typeSpan.textContent = item.type || '';
+                label.appendChild(input);
+                label.appendChild(document.createTextNode(` ${item.name} `));
+                label.appendChild(typeSpan);
+                container.appendChild(label);
+            }
+        }
+
+        function getCheckedValues(containerId) {
+            return [...$(containerId).querySelectorAll('input:checked')].map(el => el.value);
+        }
+
+        function renderFilters() {
+            const container = $('filters');
+            container.innerHTML = '';
+            for (const f of filterRows) {
+                const row = document.createElement('div');
+                row.className = 'filter-row';
+                const dimOptions = [...currentCube.dimensions, ...currentCube.timeDimensions]
+                    .map(d => `<option value="${escapeHtml(d.name)}" ${f.dim === d.name ? 'selected' : ''}>${escapeHtml(d.name)}</option>`).join('');
+                const opOptions = OPERATORS
+                    .map(o => `<option value="${escapeHtml(o)}" ${f.op === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('');
+                const placeholder = (f.op === 'in' || f.op === 'not_in')
+                    ? 'a,b,c'
+                    : 'value (or empty for is_null/is_not_null)';
+                row.innerHTML = `
+                    <select data-fid="${escapeHtml(f.id)}" data-attr="dim">${dimOptions}</select>
+                    <select data-fid="${escapeHtml(f.id)}" data-attr="op">${opOptions}</select>
+                    <input type="text" data-fid="${escapeHtml(f.id)}" data-attr="value" value="${escapeHtml(f.value || '')}"
+                           placeholder="${escapeHtml(placeholder)}">
+                    <button type="button" data-fid="${escapeHtml(f.id)}" data-action="del" title="Remove">×</button>`;
+                container.appendChild(row);
+            }
+        }
+
+        let filterRows = [];
+
+        function addFilter() {
+            const dim = currentCube.dimensions[0]?.name
+                     || currentCube.timeDimensions[0]?.name
+                     || '';
+            filterRows.push({ id: ++filterIdSeq, dim, op: 'eq', value: '' });
+            renderFilters();
+        }
+
+        function readFilterRows() {
+            const result = [];
+            for (const f of filterRows) {
+                const dim = $('filters').querySelector(`[data-fid="${f.id}"][data-attr="dim"]`).value;
+                const op  = $('filters').querySelector(`[data-fid="${f.id}"][data-attr="op"]`).value;
+                const raw = $('filters').querySelector(`[data-fid="${f.id}"][data-attr="value"]`).value;
+                const filter = { dimension: dim, operator: op };
+                if (op === 'is_null' || op === 'is_not_null') {
+                    // No value.
+                } else if (op === 'in' || op === 'not_in') {
+                    filter.value = raw.split(',').map(s => s.trim()).filter(Boolean);
+                } else if (raw !== '') {
+                    // Try numeric first; fall back to string.
+                    const n = Number(raw);
+                    filter.value = (!Number.isNaN(n) && raw.trim() !== '') ? n : raw;
+                }
+                result.push(filter);
+            }
+            return result;
+        }
+
+        function buildQuery() {
+            if (!currentCube) return null;
+            const measures = getCheckedValues('measures');
+            const dimensions = getCheckedValues('dimensions');
+            const q = { cube: currentCube.name, measures };
+            if (dimensions.length) q.dimensions = dimensions;
+
+            const tdName = $('td-name').value;
+            const tdGran = $('td-granularity').value;
+            if (tdName && tdGran) {
+                const td = { dimension: tdName, granularity: tdGran };
+                const range = $('td-range').value.trim();
+                if (range) {
+                    const parts = range.split(',').map(s => s.trim());
+                    if (parts.length === 2) td.dateRange = parts;
+                }
+                q.timeDimensions = [td];
+            }
+
+            const filters = readFilterRows();
+            if (filters.length) q.filters = filters;
+
+            const limit = $('limit').value;
+            if (limit !== '') q.limit = Number(limit);
+            const offset = $('offset').value;
+            if (offset !== '') q.offset = Number(offset);
+
+            return q;
+        }
+
+        function renderTable(rows) {
+            if (!rows.length) return '<p>No rows.</p>';
+            const keys = Object.keys(rows[0]);
+            return '<table><tr>' + keys.map(k => `<th>${escapeHtml(k)}</th>`).join('')
+                + '</tr>' + rows.map(r => '<tr>' + keys.map(k => `<td>${escapeHtml(r[k] ?? '')}</td>`).join('') + '</tr>').join('')
+                + '</table>';
+        }
+
+        function renderError(containerId, msg) {
+            const el = $(containerId);
+            el.innerHTML = '';
+            const div = document.createElement('div');
+            div.className = 'log err';
+            div.textContent = msg;
+            el.appendChild(div);
+        }
+
+        async function runQuery() {
+            const q = buildQuery();
+            if (!q) return;
+            if (!q.measures || !q.measures.length) {
+                renderError('result', 'Pick at least one measure.');
+                return;
+            }
+            try {
+                const t = performance.now();
+                const json = await engine.cubeQuery(JSON.stringify(q));
+                const rows = JSON.parse(json || '[]');
+                const ms = (performance.now() - t).toFixed(1);
+                $('result-meta').textContent = `${rows.length} row(s) in ${ms}ms`;
+                $('result').innerHTML = renderTable(rows);
+                $('result-raw').textContent = JSON.stringify(rows, null, 2);
+            } catch (e) {
+                $('result-meta').textContent = '';
+                renderError('result', e.message || String(e));
+                $('result-raw').textContent = '';
+            }
+        }
+
+        function syncQueryDisplay() {
+            const q = buildQuery();
+            $('query-json').textContent = q ? JSON.stringify(q, null, 2) : '{}';
+        }
+
+        function loadCube(cube) {
+            currentCube = cube;
+            $('cube-schema').textContent = JSON.stringify(cube, null, 2);
+            checkboxGroup('measures', cube.measures, 'm');
+            checkboxGroup('dimensions', cube.dimensions, 'd');
+
+            const tdSel = $('td-name');
+            tdSel.innerHTML = cube.timeDimensions
+                .map(td => `<option value="${escapeHtml(td.name)}">${escapeHtml(td.name)}</option>`).join('');
+            if (!cube.timeDimensions.length) {
+                tdSel.innerHTML = '<option value="">(none defined)</option>';
+            }
+
+            filterRows = [];
+            renderFilters();
+
+            // Sensible default: first measure + first dimension.
+            const firstMeasure = $('measures').querySelector('input');
+            if (firstMeasure) firstMeasure.checked = true;
+            const firstDim = $('dimensions').querySelector('input');
+            if (firstDim) firstDim.checked = true;
+            syncQueryDisplay();
+        }
+
+        function attachAutoSync() {
+            for (const ev of ['change', 'input']) {
+                document.addEventListener(ev, e => {
+                    if (e.target.closest('#measures, #dimensions, #filters, #td-name, #td-granularity, #td-range, #limit, #offset')) {
+                        syncQueryDisplay();
+                    }
+                });
+            }
+            $('filters').addEventListener('click', e => {
+                if (e.target.dataset?.action === 'del') {
+                    const fid = Number(e.target.dataset.fid);
+                    filterRows = filterRows.filter(f => f.id !== fid);
+                    renderFilters();
+                    syncQueryDisplay();
+                }
+            });
+            $('add-filter').addEventListener('click', () => { addFilter(); syncQueryDisplay(); });
+            $('run').addEventListener('click', runQuery);
+            $('reset').addEventListener('click', () => { loadCube(currentCube); });
+        }
+
+        // ── Boot ──
+        try {
+            await init();
+            engine = new WrenEngine();
+            log('Engine ready');
+
+            await engine.registerJson('orders', JSON.stringify(data));
+            log(`Registered "orders" (${data.length} rows)`);
+
+            await engine.loadMDL(JSON.stringify(mdl), '');
+            log('MDL loaded');
+
+            const cubes = JSON.parse(engine.listCubes() || '[]');
+            const sel = $('cube-select');
+            sel.innerHTML = cubes.map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('');
+            sel.disabled = false;
+            sel.addEventListener('change', e => {
+                const c = cubes.find(c => c.name === e.target.value);
+                if (c) loadCube(c);
+            });
+
+            attachAutoSync();
+            loadCube(cubes[0]);
+            $('run').disabled = false;
+
+            // Auto-run the default selection so the page lands populated.
+            runQuery();
+        } catch (e) {
+            log(`Init failed: ${e.message || e}`, false);
+            console.error(e);
+        }
+    </script>
+</body>
+</html>

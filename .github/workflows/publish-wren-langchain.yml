@@ -1,0 +1,120 @@
+name: Publish wren-langchain to PyPI
+
+# Mirrors .github/workflows/publish-wren.yml. Inputs come from
+# workflow_call (orchestrated by release-please or manual dispatch wrapper),
+# not from untrusted issue/PR/comment events, so direct `${{ inputs.* }}`
+# interpolation is safe in run/env contexts here. If you ever wire this to
+# a public event source, switch to `env:` + shell variables first.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version number (e.g. 0.1.0 or 0.1.0rc1)"
+        required: true
+        type: string
+      tag_name:
+        description: "Git tag to checkout (e.g. wren-langchain-v0.1.0)"
+        required: true
+        type: string
+      pypi_target:
+        description: "Publish target (pypi or testpypi)"
+        required: false
+        type: string
+        default: "pypi"
+
+permissions:
+  # Workflow-wide default = read-only. The publish job scopes its own
+  # id-token: write below; build/validate-inputs run user code and don't
+  # need to mint OIDC tokens.
+  contents: read
+
+jobs:
+  validate-inputs:
+    name: Validate workflow inputs
+    runs-on: ubuntu-latest
+    steps:
+      # Reject typos like "test-pypi" / "PYPI" before they accidentally route
+      # to production: only the exact strings "pypi" or "testpypi" are valid.
+      - name: Check pypi_target
+        env:
+          PYPI_TARGET: ${{ inputs.pypi_target }}
+        run: |
+          case "$PYPI_TARGET" in
+            pypi|testpypi) ;;
+            *)
+              echo "::error::Invalid pypi_target '$PYPI_TARGET'. Expected 'pypi' or 'testpypi'."
+              exit 1
+              ;;
+          esac
+
+  build:
+    name: Build distribution
+    needs: validate-inputs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Set version
+        env:
+          VERSION: ${{ inputs.version }}
+        shell: python
+        run: |
+          import re, os, sys
+          version = os.environ["VERSION"]
+          if not re.fullmatch(r"\d+\.\d+\.\d+(rc\d+)?", version):
+              print(f"::error::Unsupported version format: {version!r}. Expected X.Y.Z or X.Y.ZrcN.")
+              sys.exit(1)
+          for path, pattern in [
+              ("sdk/wren-langchain/pyproject.toml", r'^(version\s*=\s*)".*?"'),
+              ("sdk/wren-langchain/src/wren_langchain/__init__.py", r'^(__version__\s*=\s*)".*?"'),
+          ]:
+              # Explicit utf-8 — pyproject.toml description and __init__.py docstring
+              # both contain non-ASCII; relying on platform default could corrupt them.
+              text = open(path, encoding="utf-8").read()
+              text, n = re.subn(pattern, rf'\1"{version}"', text, count=1, flags=re.MULTILINE)
+              if n != 1:
+                  print(f"::error::Failed to update version in {path}")
+                  sys.exit(1)
+              open(path, "w", encoding="utf-8").write(text)
+      - name: Install build tool
+        run: pip install build
+      - name: Build sdist and wheel
+        run: python -m build
+        working-directory: sdk/wren-langchain
+      - name: Upload distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: sdk/wren-langchain/dist/
+
+  publish:
+    name: Publish to ${{ inputs.pypi_target }}
+    needs: build
+    runs-on: ubuntu-latest
+    # Scoped to publish only — least-privilege per least-privilege principle.
+    # `id-token: write` is what authenticates to PyPI via OIDC Trusted Publishing.
+    permissions:
+      contents: read
+      id-token: write
+    environment:
+      name: ${{ inputs.pypi_target }}
+      url: ${{ inputs.pypi_target == 'pypi' && 'https://pypi.org/project/wren-langchain/' || 'https://test.pypi.org/project/wren-langchain/' }}
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: List artifacts
+        run: ls -lhR dist/
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: ${{ inputs.pypi_target == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
+          packages-dir: dist/
+          attestations: false

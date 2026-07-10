@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+dist/
+build/
+.venv/
+
+# Local scratch scripts users create at the package root for ad-hoc testing
+# (e.g. agent.py, agent_with_memory_check.py from the local-testing-guide).
+# Anything in tests/ and src/wren_langchain/ stays tracked.
+/agent*.py

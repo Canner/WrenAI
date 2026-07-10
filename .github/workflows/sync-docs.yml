@@ -1,0 +1,76 @@
+name: Sync Docs to Website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/core/introduction.mdx'
+      - 'docs/core/get_started/**'
+      - 'docs/core/concepts/**'
+      - 'docs/core/guides/**'
+      - 'docs/core/reference/**'
+      - 'docs/core/sdk/**'
+
+permissions:
+  contents: read
+
+jobs:
+  sync-docs:
+    if: ${{ github.repository == 'Canner/WrenAI' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout WrenAI
+        uses: actions/checkout@v4
+
+      - name: Checkout doc website
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.DOCS_REPO }}
+          token: ${{ secrets.CROSS_REPO_TOKEN }}
+          path: _docs-site
+          ref: ${{ vars.DOCS_REPO_BRANCH }}
+
+      - name: Sync doc directories
+        run: |
+          TARGET="_docs-site/docs/oss"
+          mkdir -p "${TARGET}"
+
+          # Sync top-level files
+          cp "docs/core/introduction.mdx" "${TARGET}/introduction.mdx"
+
+          # Sync directories — additive overlay
+          # No rm -rf: this action ONLY copies/overwrites. Stale files left
+          # behind by source-side renames/deletions must be cleaned up
+          # MANUALLY by a maintainer in the docs site repo.
+          # The plural folder names (concepts, guides) are deliberately
+          # different from GenBI legacy's singular names (concept, guide,
+          # under docs/oss/genbi/ on the docs site) to keep them in
+          # separate trees under docs/oss/.
+          for dir in get_started concepts guides reference sdk; do
+            mkdir -p "${TARGET}/${dir}"
+            cp -r "docs/core/${dir}/." "${TARGET}/${dir}/"
+          done
+
+      - name: Check for changes
+        id: diff
+        working-directory: _docs-site
+        run: |
+          git diff --quiet && echo "changed=false" >> "$GITHUB_OUTPUT" || echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create PR
+        if: steps.diff.outputs.changed == 'true'
+        working-directory: _docs-site
+        env:
+          GH_TOKEN: ${{ secrets.CROSS_REPO_TOKEN }}
+        run: |
+          BRANCH="sync/core-docs-${GITHUB_SHA::8}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "${BRANCH}"
+          git add -A
+          git commit -m "docs: sync from WrenAI@${GITHUB_SHA::8}"
+          git push origin "${BRANCH}"
+          gh pr create \
+            --title "docs: sync Wren AI Core docs from WrenAI" \
+            --body "Auto-synced from [WrenAI@\`${GITHUB_SHA::8}\`](https://github.com/Canner/WrenAI/commit/${GITHUB_SHA})." \
+            --base "${{ vars.DOCS_REPO_BRANCH }}"

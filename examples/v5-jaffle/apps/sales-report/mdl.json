@@ -1,0 +1,119 @@
+{
+  "catalog": "wren",
+  "schema": "public",
+  "models": [
+    {
+      "name": "customers",
+      "properties": {
+        "description": "One row per customer. name may be NULL for guest checkouts."
+      },
+      "tableReference": {
+        "catalog": "",
+        "schema": "public",
+        "table": "customers"
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "isCalculated": false,
+          "notNull": true,
+          "isPrimaryKey": true,
+          "properties": {}
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {}
+        }
+      ],
+      "primaryKey": "id",
+      "cached": false
+    },
+    {
+      "name": "orders",
+      "properties": {
+        "description": "One row per customer order, with the order amount in USD."
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "isCalculated": false,
+          "notNull": true,
+          "isPrimaryKey": true,
+          "properties": {}
+        },
+        {
+          "name": "customer_id",
+          "type": "INTEGER",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {}
+        },
+        {
+          "name": "amount",
+          "type": "DOUBLE",
+          "isCalculated": false,
+          "notNull": false,
+          "properties": {}
+        }
+      ],
+      "primaryKey": "id",
+      "cached": false,
+      "refSql": "SELECT id, customer_id, amount FROM public.raw_orders"
+    }
+  ],
+  "relationships": [
+    {
+      "name": "orders_customer",
+      "models": [
+        "orders",
+        "customers"
+      ],
+      "joinType": "MANY_TO_ONE",
+      "condition": "orders.customer_id = customers.id"
+    }
+  ],
+  "views": [
+    {
+      "name": "customer_orders",
+      "statement": "SELECT c.name AS customer_name, o.id AS order_id, o.amount\nFROM orders o\nJOIN customers c ON o.customer_id = c.id\n",
+      "properties": {
+        "description": "Flattened order lines joined to their customer."
+      }
+    }
+  ],
+  "cubes": [
+    {
+      "name": "order_metrics",
+      "baseObject": "orders",
+      "measures": [
+        {
+          "name": "total_revenue",
+          "expression": "SUM(amount)",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "order_count",
+          "expression": "COUNT(*)",
+          "type": "BIGINT"
+        }
+      ],
+      "dimensions": [
+        {
+          "name": "customer_id",
+          "expression": "customer_id",
+          "type": "INTEGER"
+        }
+      ],
+      "properties": {
+        "description": "Pre-aggregated order revenue and counts per customer."
+      }
+    }
+  ],
+  "dataSource": "postgres",
+  "layoutVersion": 3
+}

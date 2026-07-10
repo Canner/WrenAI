@@ -1,0 +1,96 @@
+name: wren-pydantic CI
+
+# Trigger sources are controlled events (pull_request, push to main,
+# workflow_dispatch). No untrusted issue / comment / external payload is
+# interpolated into run/env contexts in this file. ${{ matrix.* }} and
+# ${{ github.* }} usages below are confined to YAML-level fields
+# (name, with, group), not run scripts.
+
+permissions:
+  # Lint / test / build only — no PR comments, statuses, or labels written.
+  contents: read
+
+on:
+  pull_request:
+    paths:
+      - 'sdk/wren-pydantic/**'
+      - '.github/workflows/sdk-pydantic-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'sdk/wren-pydantic/**'
+      - '.github/workflows/sdk-pydantic-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: sdk/wren-pydantic
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Ubuntu's system Python is PEP 668 externally-managed; use a hosted
+      # toolcache Python so `uv pip install --system` is allowed to write.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: astral-sh/setup-uv@v4
+      - name: Install package + dev deps
+        run: uv pip install --system -e ".[dev]"
+      - name: ruff check
+        run: ruff check .
+      - name: ruff format check
+        run: ruff format --check .
+
+  test:
+    name: tests (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: astral-sh/setup-uv@v4
+      - name: Install package + dev deps
+        run: uv pip install --system -e ".[dev]"
+      - name: Run default test suite
+        # pytest config skips tests marked `slow` (LanceDB + sentence-transformer
+        # heavyweights). Slow tests are opt-in locally; we add a dedicated CI
+        # job for them later if worth the runner cost.
+        run: pytest -v
+
+  build:
+    name: build sdist + wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: astral-sh/setup-uv@v4
+      - name: Install build tool
+        run: uv pip install --system build
+      - name: Build distributions
+        run: python -m build
+      - name: Verify LICENSE bundled in wheel
+        run: |
+          set -euo pipefail
+          unzip -l dist/wren_pydantic-*.whl | grep -q "dist-info/licenses/LICENSE"
+          echo "LICENSE present in wheel"
+      - name: Upload distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: wren-pydantic-dist
+          path: sdk/wren-pydantic/dist/

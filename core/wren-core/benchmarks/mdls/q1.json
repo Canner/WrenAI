@@ -1,0 +1,82 @@
+{
+    "schema": "wrenai",
+    "catalog": "public",
+    "sampleDataFolder": "",
+    "dataSource": "POSTGRES",
+    "models": [
+                {
+            "name": "public_accounts_table",
+            "columns": [
+                {
+                    "name": "user_name",
+                    "type": "VARCHAR"
+                },
+                {
+                    "name": "status_flag",
+                    "type": "BOOL"
+                },
+                {
+                    "name": "account_id",
+                    "type": "VARCHAR"
+                },
+                {
+                    "name": "created_date",
+                    "type": "TIMESTAMP"
+                }
+            ],
+            "tableReference": {
+                "catalog": "pg",
+                "schema": "public",
+                "table": "accounts_table"
+            }
+        },
+        {
+            "name": "public_challenges_table",
+            "columns": [
+                {
+                    "name": "account_ref",
+                    "type": "VARCHAR"
+                },
+                {
+                    "name": "end_time",
+                    "type": "TIMESTAMP"
+                },
+                {
+                    "name": "challenge_id",
+                    "type": "VARCHAR"
+                },
+                {
+                    "name": "challenge_ref",
+                    "type": "VARCHAR"
+                },
+                {
+                    "name": "challenge_status",
+                    "type": "BIGINT"
+                }
+            ],
+            "tableReference": {
+                "catalog": "pg",
+                "schema": "public",
+                "table": "challenges_table"
+            }
+        },
+        {
+            "name": "public_users_table",
+            "columns": [
+                {
+                    "name": "user_id",
+                    "type": "VARCHAR"
+                },
+                {
+                    "name": "email_address",
+                    "type": "VARCHAR"
+                }
+            ],
+            "tableReference": {
+                "catalog": "pg",
+                "schema": "public",
+                "table": "users_table"
+            }
+        }
+    ]
+}

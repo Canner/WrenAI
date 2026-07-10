@@ -1,0 +1,4 @@
+function_type,name,return_type,description
+scalar,add_two,int,"Adds two numbers together."
+aggregate,median,int,"Returns the median value of a numeric column.".
+window,max_if,int,"If the condition is true, returns the maximum value in the window."

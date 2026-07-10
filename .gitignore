@@ -1,0 +1,73 @@
+# ---- IDE & editors ----
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+*.swp
+*~
+.run/
+
+# ---- OS ----
+.DS_Store
+__MACOSX/
+
+# ---- Environment files (templates kept) ----
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+
+# ---- Secrets / credentials ----
+*.pem
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+.python-version
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+venv/
+.venv/
+
+# ---- Rust ----
+target/
+**/*.rs.bk
+*.pdb
+
+# ---- WebAssembly (wasm-pack) ----
+pkg/
+
+# ---- Node / TypeScript (skills, sdks, wasm consumers) ----
+node_modules/
+.pnp
+.pnp.js
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.tsbuildinfo
+
+# ---- SQLite (memory layer caches) ----
+*.sqlite
+*.sqlite3
+
+# ---- Local caches & temporary files ----
+local_cache/
+.tmp/
+.tmp
+
+# ---- Claude Code worktrees (local dev only) ----
+**/.claude/worktrees/

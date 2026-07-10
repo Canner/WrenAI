@@ -1,0 +1,31 @@
+id,tenant_id,department,created_by,title,content,status,created_at
+d001,1acdef01-aaaa-aaaa-aaaa-aaaaaaaaaaaa,sales,1001-u1,Sales Q1,Report for Q1,DRAFT,2025-04-01 10:00:00
+d002,1acdef01-aaaa-aaaa-aaaa-aaaaaaaaaaaa,sales,1001-u1,Sales Q2,Final Q2 numbers,PUBLISHED,2025-04-10 12:00:00
+d003,1acdef01-aaaa-aaaa-aaaa-aaaaaaaaaaaa,hr,1002-u2,HR Policy,Draft HR policy,DRAFT,2025-04-05 09:30:00
+d004,1acdef01-aaaa-aaaa-aaaa-aaaaaaaaaaaa,engineering,1003-u3,Infra Notes,Infra scaling plan,PUBLISHED,2025-04-12 15:00:00
+d005,1acdef01-aaaa-aaaa-aaaa-aaaaaaaaaaaa,finance,1004-u4,Q1 Financials,Q1 Revenue,PUBLISHED,2025-04-03 11:20:00
+d006,1acdef01-aaaa-aaaa-aaaa-aaaaaaaaaaaa,product,1005-u5,Feature Spec,Spec for v2,REJECTED,2025-04-07 14:00:00
+d007,2bcdef02-bbbb-bbbb-bbbb-bbbbbbbbbbbb,sales,2001-u6,Q1 Leads,Lead list,PUBLISHED,2025-04-08 14:20:00
+d008,2bcdef02-bbbb-bbbb-bbbb-bbbbbbbbbbbb,engineering,2002-u7,Dev Plan,Backend roadmap,DRAFT,2025-04-09 09:00:00
+d009,2bcdef02-bbbb-bbbb-bbbb-bbbbbbbbbbbb,hr,2003-u8,Policy Memo,Hiring freeze,PUBLISHED,2025-04-11 16:00:00
+d010,2bcdef02-bbbb-bbbb-bbbb-bbbbbbbbbbbb,marketing,2004-u9,Campaign A,Ad campaign A,REJECTED,2025-04-13 17:45:00
+d011,2bcdef02-bbbb-bbbb-bbbb-bbbbbbbbbbbb,finance,2002-u7,Doc 11,Content of doc 11,PUBLISHED,2025-04-15 16:00:00
+d012,1acdef01-aaaa-aaaa-aaaa-aaaaaaaaaaaa,product,1001-u1,Doc 12,Content of doc 12,PUBLISHED,2025-04-09 14:00:00
+d013,1acdef01-aaaa-aaaa-aaaa-aaaaaaaaaaaa,engineering,1003-u3,Doc 13,Content of doc 13,PUBLISHED,2025-04-14 14:00:00
+d014,1acdef01-aaaa-aaaa-aaaa-aaaaaaaaaaaa,marketing,1004-u4,Doc 14,Content of doc 14,PUBLISHED,2025-04-12 10:00:00
+d015,1acdef01-aaaa-aaaa-aaaa-aaaaaaaaaaaa,engineering,1003-u3,Doc 15,Content of doc 15,DRAFT,2025-04-08 18:00:00
+d016,2bcdef02-bbbb-bbbb-bbbb-bbbbbbbbbbbb,sales,2002-u7,Doc 16,Content of doc 16,PUBLISHED,2025-04-14 16:00:00
+d017,2bcdef02-bbbb-bbbb-bbbb-bbbbbbbbbbbb,hr,2003-u8,Doc 17,Content of doc 17,PUBLISHED,2025-04-12 08:00:00
+d018,2bcdef02-bbbb-bbbb-bbbb-bbbbbbbbbbbb,finance,2003-u8,Doc 18,Content of doc 18,REJECTED,2025-04-11 18:00:00
+d019,1acdef01-aaaa-aaaa-aaaa-aaaaaaaaaaaa,finance,1003-u3,Doc 19,Content of doc 19,PUBLISHED,2025-04-10 11:00:00
+d020,2bcdef02-bbbb-bbbb-bbbb-bbbbbbbbbbbb,hr,2003-u8,Doc 20,Content of doc 20,REJECTED,2025-04-06 16:00:00
+d021,2bcdef02-bbbb-bbbb-bbbb-bbbbbbbbbbbb,engineering,2002-u7,Doc 21,Content of doc 21,REJECTED,2025-04-02 12:00:00
+d022,1acdef01-aaaa-aaaa-aaaa-aaaaaaaaaaaa,hr,1001-u1,Doc 22,Content of doc 22,REJECTED,2025-04-08 17:00:00
+d023,1acdef01-aaaa-aaaa-aaaa-aaaaaaaaaaaa,product,1002-u2,Doc 23,Content of doc 23,DRAFT,2025-04-01 18:00:00
+d024,1acdef01-aaaa-aaaa-aaaa-aaaaaaaaaaaa,product,1001-u1,Doc 24,Content of doc 24,PUBLISHED,2025-04-11 09:00:00
+d025,1acdef01-aaaa-aaaa-aaaa-aaaaaaaaaaaa,finance,1004-u4,Doc 25,Content of doc 25,REJECTED,2025-04-14 13:00:00
+d026,2bcdef02-bbbb-bbbb-bbbb-bbbbbbbbbbbb,engineering,2002-u7,Doc 26,Content of doc 26,REJECTED,2025-04-02 09:00:00
+d027,2bcdef02-bbbb-bbbb-bbbb-bbbbbbbbbbbb,sales,2004-u9,Doc 27,Content of doc 27,REJECTED,2025-04-13 09:00:00
+d028,2bcdef02-bbbb-bbbb-bbbb-bbbbbbbbbbbb,engineering,2002-u7,Doc 28,Content of doc 28,DRAFT,2025-04-07 10:00:00
+d029,1acdef01-aaaa-aaaa-aaaa-aaaaaaaaaaaa,hr,1002-u2,Doc 29,Content of doc 29,REJECTED,2025-04-04 14:00:00
+d030,1acdef01-aaaa-aaaa-aaaa-aaaaaaaaaaaa,product,1002-u2,Doc 30,Content of doc 30,REJECTED,2025-04-04 08:00:00

@@ -1,0 +1,23 @@
+[package]
+name = "wren-manifest-macro"
+version = "0.2.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Proc macro for generating Python-binding manifest types for the Wren semantic engine"
+homepage = "https://getwren.ai"
+repository = "https://github.com/Canner/WrenAI"
+keywords = ["macro", "proc-macro", "pyo3", "wren", "mdl"]
+categories = ["development-tools::procedural-macro-helpers"]
+
+[dependencies]
+syn = { version = "2.0", default-features = false, features = [
+  "printing",
+  "parsing",
+  "proc-macro",
+] }
+quote = "1.0"
+
+[lib]
+proc-macro = true
+name = "manifest_macro"
+path = "src/lib.rs"

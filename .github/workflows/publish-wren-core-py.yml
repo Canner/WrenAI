@@ -1,0 +1,170 @@
+name: Publish wren-core-py to PyPI
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version number (e.g. 0.2.0)"
+        required: true
+        type: string
+      tag_name:
+        description: "Git tag to checkout (e.g. wren-core-py-v0.2.0)"
+        required: true
+        type: string
+      pypi_target:
+        description: "Publish target (pypi or testpypi)"
+        required: false
+        type: string
+        default: "pypi"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-wheels:
+    name: Build wheel — ${{ matrix.os }} (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+          - os: macos-15
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Set version
+        env:
+          VERSION: ${{ inputs.version }}
+        shell: python
+        run: |
+          import re, os, sys
+          version = os.environ["VERSION"]
+          if re.fullmatch(r"\d+\.\d+\.\d+", version):
+              cargo_version = version
+          elif re.fullmatch(r"\d+\.\d+\.\d+rc\d+", version):
+              cargo_version = re.sub(r"(\d+\.\d+\.\d+)rc(\d+)", r"\1-rc.\2", version)
+          else:
+              print(f"::error::Unsupported version format: {version!r}. Expected X.Y.Z or X.Y.ZrcN.")
+              sys.exit(1)
+          for path, ver in [
+              ("core/wren-core-py/Cargo.toml", cargo_version),
+              ("core/wren-core-py/pyproject.toml", version),
+          ]:
+              text = open(path).read()
+              text, n = re.subn(r'^(version\s*=\s*)".*?"', rf'\1"{ver}"', text, count=1, flags=re.MULTILINE)
+              if n != 1:
+                  print(f"::error::Failed to update version in {path}")
+                  sys.exit(1)
+              open(path, "w").write(text)
+          lock = open("core/wren-core-py/Cargo.lock").read()
+          lock, n = re.subn(
+              r'(name = "wren-core-py"\nversion = )".*?"',
+              rf'\1"{cargo_version}"',
+              lock, count=1,
+          )
+          if n != 1:
+              print("::error::Failed to update wren-core-py version in Cargo.lock")
+              sys.exit(1)
+          open("core/wren-core-py/Cargo.lock", "w").write(lock)
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist
+          manylinux: auto
+          working-directory: core/wren-core-py
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.target }}
+          path: core/wren-core-py/dist/*.whl
+
+  build-sdist:
+    name: Build sdist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Set version
+        env:
+          VERSION: ${{ inputs.version }}
+        shell: python
+        run: |
+          import re, os, sys
+          version = os.environ["VERSION"]
+          if re.fullmatch(r"\d+\.\d+\.\d+", version):
+              cargo_version = version
+          elif re.fullmatch(r"\d+\.\d+\.\d+rc\d+", version):
+              cargo_version = re.sub(r"(\d+\.\d+\.\d+)rc(\d+)", r"\1-rc.\2", version)
+          else:
+              print(f"::error::Unsupported version format: {version!r}. Expected X.Y.Z or X.Y.ZrcN.")
+              sys.exit(1)
+          for path, ver in [
+              ("core/wren-core-py/Cargo.toml", cargo_version),
+              ("core/wren-core-py/pyproject.toml", version),
+          ]:
+              text = open(path).read()
+              text, n = re.subn(r'^(version\s*=\s*)".*?"', rf'\1"{ver}"', text, count=1, flags=re.MULTILINE)
+              if n != 1:
+                  print(f"::error::Failed to update version in {path}")
+                  sys.exit(1)
+              open(path, "w").write(text)
+          lock = open("core/wren-core-py/Cargo.lock").read()
+          lock, n = re.subn(
+              r'(name = "wren-core-py"\nversion = )".*?"',
+              rf'\1"{cargo_version}"',
+              lock, count=1,
+          )
+          if n != 1:
+              print("::error::Failed to update wren-core-py version in Cargo.lock")
+              sys.exit(1)
+          open("core/wren-core-py/Cargo.lock", "w").write(lock)
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+          working-directory: core/wren-core-py
+      - name: Upload sdist
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: core/wren-core-py/dist/*.tar.gz
+
+  publish:
+    name: Publish to ${{ inputs.pypi_target }}
+    needs: [build-wheels, build-sdist]
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.pypi_target }}
+      url: ${{ inputs.pypi_target == 'pypi' && 'https://pypi.org/project/wren-core-py/' || 'https://test.pypi.org/project/wren-core-py/' }}
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: List artifacts
+        run: ls -lhR dist/
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: ${{ inputs.pypi_target == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
+          packages-dir: dist/
+          attestations: false
