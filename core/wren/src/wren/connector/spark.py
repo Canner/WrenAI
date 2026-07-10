@@ -1,7 +1,22 @@
+import re
+
 import pyarrow as pa
 
 from wren.connector.base import ConnectorABC
 from wren.model import SparkConnectionInfo
+
+_TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
+
+
+def _strip_trailing_semicolon(sql: str) -> str:
+    """Strip trailing ``;`` / whitespace so Spark Connect does not treat input as multi-statement.
+
+    ``SparkSession.sql`` / connect clients commonly reject or mishandle a trailing
+    semicolon when composing limits or dry-runs. Only the terminating run is
+    removed so ``SELECT ';'`` literals stay intact — same pattern as postgres /
+    redshift / duckdb connectors.
+    """
+    return _TRAILING_SEMICOLONS_RE.sub("", sql)
 
 
 class SparkConnector(ConnectorABC):
@@ -22,7 +37,7 @@ class SparkConnector(ConnectorABC):
         )
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
-        df = self.connection.sql(sql).toPandas()
+        df = self.connection.sql(_strip_trailing_semicolon(sql)).toPandas()
         if hasattr(df, "attrs") and df.attrs:
             df.attrs = {
                 k: v
@@ -35,7 +50,7 @@ class SparkConnector(ConnectorABC):
         return arrow_table
 
     def dry_run(self, sql: str) -> None:
-        self.connection.sql(sql).limit(0).count()
+        self.connection.sql(_strip_trailing_semicolon(sql)).limit(0).count()
 
     def close(self) -> None:
         if self._closed:
