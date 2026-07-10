@@ -15,6 +15,7 @@ from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQLGenPostProcessor,
     construct_instructions,
+    construct_semantic_schema_contract,
     construct_valid_table_columns,
     construct_valid_table_names,
     get_sql_generation_model_kwargs,
@@ -102,11 +103,11 @@ or add catalog/schema prefixes unless the table name is shown that way here.
 {% if query %}
 User's Question: {{ query }}
 {% endif %}
-{% if schema_intent_analysis %}
-### SCHEMA INTENT ANALYSIS ###
+{% if semantic_schema_contract %}
+### SEMANTIC SCHEMA CONTRACT ###
 This is the semantic contract for the corrected SQL. Preserve this intent while
 fixing syntax or planner errors.
-{{ schema_intent_analysis }}
+{{ semantic_schema_contract }}
 {% endif %}
 {% if invalid_generation_result.original_sql %}
 Original SQL: {{ invalid_generation_result.original_sql }}
@@ -148,7 +149,9 @@ def prompt(
         documents=documents,
         valid_table_names=construct_valid_table_names(documents),
         invalid_generation_result=invalid_generation_result,
-        schema_intent_analysis=schema_intent_analysis,
+        semantic_schema_contract=construct_semantic_schema_contract(
+            schema_intent_analysis
+        ),
         instructions=construct_instructions(
             instructions=instructions,
         ),

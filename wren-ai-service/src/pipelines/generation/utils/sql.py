@@ -2221,6 +2221,7 @@ Given user's question, database schema, etc., you should think deeply and carefu
 12. Before generating SQL, validate that the selected schema elements directly support all key entities, metrics, dimensions, filters, time ranges, relationships, and aggregations mentioned or implied by the question.
 13. Do not answer a specific business metric, trend, summary, comparison, dashboard, or analysis request with a generic record-count query unless the user explicitly asks only for record count.
 14. If the required information cannot be derived from the available active schema, return the closest schema-grounded limitation instead of inventing unrelated SQL.
+15. If a SEMANTIC SCHEMA CONTRACT is provided, it is the primary source of truth for selecting tables, columns, metrics, joins, filters, grouping, sorting, and date logic. Generate SQL from the highest-confidence validated concept-to-schema mappings in that contract and do not independently infer substitute schema objects.
 
 {text_to_sql_rules}
 
@@ -2297,6 +2298,121 @@ def construct_instructions(
         ]
 
     return _instructions
+
+
+def _format_semantic_list(label: str, values: list[str]) -> list[str]:
+    if not values:
+        return []
+    return [f"{label}: {', '.join(values)}"]
+
+
+def construct_semantic_schema_contract(
+    semantic_analysis: dict[str, Any] | None,
+) -> str:
+    if not _has_semantic_analysis(semantic_analysis):
+        return ""
+
+    lines: list[str] = [
+        "Use this semantic schema contract as the primary source of truth for SQL generation.",
+        "Generate SQL only from schema objects listed here or in the selected retrieval metadata.",
+        "Do not infer alternative tables, columns, metrics, joins, or identifiers independently.",
+    ]
+
+    analytical_intent = str(
+        semantic_analysis.get("analytical_intent") or ""
+    ).strip()
+    if analytical_intent:
+        lines.append(f"Analytical intent: {analytical_intent}")
+
+    for label, key in (
+        ("Entities", "entities"),
+        ("Identifiers", "identifiers"),
+        ("Metrics", "metrics"),
+        ("Dimensions", "dimensions"),
+        ("Filters", "filters"),
+        ("Time constraints", "time_constraints"),
+        ("Aggregations", "aggregations"),
+        ("Ranking", "ranking"),
+        ("Relationships", "relationships"),
+        ("Supported schema objects", "supported_schema_objects"),
+    ):
+        lines.extend(_format_semantic_list(label, _semantic_analysis_items(semantic_analysis, key)))
+
+    concept_mappings = _semantic_concept_mappings(semantic_analysis)
+    if concept_mappings:
+        lines.append("Required concept-to-schema mappings:")
+        for mapping in concept_mappings:
+            schema_objects = _mapping_schema_objects(mapping)
+            required = "required" if mapping.get("required_in_sql") is not False else "optional"
+            confidence = mapping.get("confidence")
+            confidence_text = (
+                f", confidence={confidence}"
+                if confidence is not None and str(confidence).strip()
+                else ""
+            )
+            mapping_reason = str(mapping.get("mapping_reason") or "").strip()
+            reason_text = f" Reason: {mapping_reason}" if mapping_reason else ""
+            lines.append(
+                "- "
+                f"{_mapping_request_concept(mapping)} "
+                f"({_mapping_concept_type(mapping) or 'concept'}, {required}"
+                f"{confidence_text}) -> {', '.join(schema_objects) or 'NO_MAPPING'}."
+                f"{reason_text}"
+            )
+
+    interpretations = _semantic_analysis_dict_items(
+        semantic_analysis, "interpretations"
+    )
+    if interpretations:
+        lines.append("Ranked schema interpretations:")
+        for interpretation in interpretations:
+            description = str(interpretation.get("description") or "").strip()
+            if not description:
+                continue
+            selected = "selected" if interpretation.get("is_selected") is True else "candidate"
+            confidence = interpretation.get("confidence")
+            confidence_text = (
+                f", confidence={confidence}"
+                if confidence is not None and str(confidence).strip()
+                else ""
+            )
+            schema_objects = interpretation.get("schema_objects")
+            if isinstance(schema_objects, list):
+                schema_text = ", ".join(
+                    str(item).strip()
+                    for item in schema_objects
+                    if item is not None and str(item).strip()
+                )
+            else:
+                schema_text = ""
+            schema_suffix = f" Objects: {schema_text}." if schema_text else ""
+            lines.append(
+                f"- {description} ({selected}{confidence_text}).{schema_suffix}"
+            )
+
+    missing_requirements = _semantic_analysis_items(
+        semantic_analysis, "missing_requirements"
+    )
+    if missing_requirements:
+        lines.append(f"Missing requirements: {', '.join(missing_requirements)}")
+
+    ambiguous_requirements = _semantic_analysis_items(
+        semantic_analysis, "ambiguous_requirements"
+    )
+    if ambiguous_requirements:
+        lines.append(f"Ambiguous requirements: {', '.join(ambiguous_requirements)}")
+
+    support_reasoning = str(semantic_analysis.get("support_reasoning") or "").strip()
+    if support_reasoning:
+        lines.append(f"Support reasoning: {support_reasoning}")
+
+    lines.append(
+        "Validation requirement: every required mapping must be represented in the SQL. "
+        "Do not substitute identifiers for metrics, entities for identifiers, or COUNT(*) "
+        "for a requested business measure unless the semantic intent explicitly requests a record count."
+    )
+
+    return "\n".join(lines)
 
 
 def _parse_semantic_metadata_content(content: str) -> Any | None:

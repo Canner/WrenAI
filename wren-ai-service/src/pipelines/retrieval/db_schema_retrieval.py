@@ -46,7 +46,7 @@ The database schema includes tables, columns, primary keys, foreign keys, relati
 8. For each selected table, provide a concise reason for why the table is semantically relevant.
 9. For each selected column, provide a concise reason for why the column is necessary.
 10. Populate `concept_mappings` for every important concept in the request. Each mapping must classify the concept, list only directly supporting schema objects, state whether it must appear in SQL, and include a confidence score between 0 and 1.
-11. Populate `interpretations` when the request has more than one plausible schema interpretation. Rank interpretations by semantic relevance and mark the selected interpretation only when it is clearly the best supported one.
+11. Populate `interpretations` when the request has more than one plausible schema interpretation. Rank interpretations by semantic relevance, confidence, and schema support; mark the selected interpretation only when it is clearly the best supported one. Keep non-selected high-confidence interpretations so the SQL pipeline can retry the next-best mapping if validation fails.
 12. If a "." is included in columns, put the name before the first dot into chosen columns.
 13. The number of columns chosen must match the number of reasoning.
 14. Final chosen columns must be only column names, don't prefix it with table names.
