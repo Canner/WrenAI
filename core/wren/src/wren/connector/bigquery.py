@@ -22,6 +22,12 @@ def _strip_trailing_semicolon(sql: str) -> str:
     return _TRAILING_SEMICOLONS_RE.sub("", sql)
 
 
+def _has_outer_limit(sql: str) -> bool:
+    """True when *sql* already ends with a top-level LIMIT clause."""
+    cleaned = _strip_trailing_semicolon(sql).rstrip()
+    return bool(re.search(r"(?i)\bLIMIT\s+\d+(\s+OFFSET\s+\d+)?\s*\Z", cleaned))
+
+
 def _apply_limit(sql: str, limit: int) -> str:
     """Push LIMIT into SQL rather than relying solely on API max_results.
 
@@ -30,7 +36,10 @@ def _apply_limit(sql: str, limit: int) -> str:
     can be expensive. Append ``LIMIT n`` after stripping a trailing semicolon
     (mirrors Athena/MySQL pushdown helpers) so the engine short-circuits.
     """
-    return f"{_strip_trailing_semicolon(sql)}\nLIMIT {int(limit)}"
+    cleaned = _strip_trailing_semicolon(sql)
+    if _has_outer_limit(cleaned):
+        return cleaned
+    return f"{cleaned}\nLIMIT {int(limit)}"
 
 
 class BigQueryConnector(ConnectorABC):
