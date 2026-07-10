@@ -45,11 +45,13 @@ The database schema includes tables, columns, primary keys, foreign keys, relati
 7. Set `is_fully_supported` to false when any required request component is missing or ambiguous.
 8. For each selected table, provide a concise reason for why the table is semantically relevant.
 9. For each selected column, provide a concise reason for why the column is necessary.
-10. If a "." is included in columns, put the name before the first dot into chosen columns.
-11. The number of columns chosen must match the number of reasoning.
-12. Final chosen columns must be only column names, don't prefix it with table names.
-13. If the chosen column is a child column of a STRUCT type column, choose the parent column instead of the child column.
-14. If the schema cannot answer the question, return the closest directly relevant schema objects only if they explain the limitation. Do not select unrelated fallback tables.
+10. Populate `concept_mappings` for every important concept in the request. Each mapping must classify the concept, list only directly supporting schema objects, state whether it must appear in SQL, and include a confidence score between 0 and 1.
+11. Populate `interpretations` when the request has more than one plausible schema interpretation. Rank interpretations by semantic relevance and mark the selected interpretation only when it is clearly the best supported one.
+12. If a "." is included in columns, put the name before the first dot into chosen columns.
+13. The number of columns chosen must match the number of reasoning.
+14. Final chosen columns must be only column names, don't prefix it with table names.
+15. If the chosen column is a child column of a STRUCT type column, choose the parent column instead of the child column.
+16. If the schema cannot answer the question, return the closest directly relevant schema objects only if they explain the limitation. Do not select unrelated fallback tables.
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:
@@ -67,6 +69,24 @@ Please provide your response as a JSON object, structured as follows:
         "time_constraints": ["time filters, grains, or trend requirements"],
         "ranking": ["top/bottom/order/limit requirements"],
         "supported_schema_objects": ["table.column or metric names that directly support the request"],
+        "concept_mappings": [
+            {
+                "request_concept": "business concept from the user request",
+                "concept_type": "entity | identifier | dimension | metric | filter | time | aggregation | ranking | relationship | comparison",
+                "schema_objects": ["table.column, table, view, metric, or relationship object that directly supports the concept"],
+                "required_in_sql": true,
+                "confidence": 0.0,
+                "mapping_reason": "Why these schema objects semantically support the concept"
+            }
+        ],
+        "interpretations": [
+            {
+                "description": "Possible interpretation of the request",
+                "schema_objects": ["schema objects used by this interpretation"],
+                "confidence": 0.0,
+                "is_selected": true
+            }
+        ],
         "missing_requirements": ["required request components not supported by the schema"],
         "ambiguous_requirements": ["request components with multiple equally plausible schema mappings"],
         "is_fully_supported": true,
@@ -523,6 +543,22 @@ class MatchingTable(BaseModel):
     table_selection_reason: str
 
 
+class SemanticConceptMapping(BaseModel):
+    request_concept: str = ""
+    concept_type: str = ""
+    schema_objects: list[str] = Field(default_factory=list)
+    required_in_sql: bool = True
+    confidence: float | None = None
+    mapping_reason: str = ""
+
+
+class SemanticInterpretation(BaseModel):
+    description: str = ""
+    schema_objects: list[str] = Field(default_factory=list)
+    confidence: float | None = None
+    is_selected: bool = False
+
+
 class SemanticAnalysis(BaseModel):
     analytical_intent: str = ""
     entities: list[str] = Field(default_factory=list)
@@ -535,6 +571,8 @@ class SemanticAnalysis(BaseModel):
     time_constraints: list[str] = Field(default_factory=list)
     ranking: list[str] = Field(default_factory=list)
     supported_schema_objects: list[str] = Field(default_factory=list)
+    concept_mappings: list[SemanticConceptMapping] = Field(default_factory=list)
+    interpretations: list[SemanticInterpretation] = Field(default_factory=list)
     missing_requirements: list[str] = Field(default_factory=list)
     ambiguous_requirements: list[str] = Field(default_factory=list)
     is_fully_supported: bool | None = None

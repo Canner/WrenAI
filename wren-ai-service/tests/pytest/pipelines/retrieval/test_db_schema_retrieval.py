@@ -102,6 +102,24 @@ def test_construct_retrieval_results_preserves_semantic_analysis():
                     "entities": ["invoice"],
                     "metrics": ["invoice amount"],
                     "dimensions": ["customer"],
+                    "concept_mappings": [
+                      {
+                        "request_concept": "invoice amount",
+                        "concept_type": "metric",
+                        "schema_objects": ["invoices.invoice_amount"],
+                        "required_in_sql": true,
+                        "confidence": 0.95,
+                        "mapping_reason": "invoice_amount stores invoice value"
+                      }
+                    ],
+                    "interpretations": [
+                      {
+                        "description": "Summarize invoice amount by customer",
+                        "schema_objects": ["invoices.customer_id", "invoices.invoice_amount"],
+                        "confidence": 0.9,
+                        "is_selected": true
+                      }
+                    ],
                     "is_fully_supported": true
                   },
                   "results": [
@@ -155,6 +173,10 @@ def test_construct_retrieval_results_preserves_semantic_analysis():
     )
 
     assert result["semantic_analysis"]["metrics"] == ["invoice amount"]
+    assert result["semantic_analysis"]["concept_mappings"][0]["schema_objects"] == [
+        "invoices.invoice_amount"
+    ]
+    assert result["semantic_analysis"]["interpretations"][0]["is_selected"] is True
     assert result["retrieval_results"][0]["table_name"] == "invoices"
     assert "invoice_amount" in result["retrieval_results"][0]["table_ddl"]
     assert "internal_note" not in result["retrieval_results"][0]["table_ddl"]

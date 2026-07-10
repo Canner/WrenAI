@@ -1726,3 +1726,147 @@ def test_validate_sql_intent_alignment_allows_semantic_count_metric():
     )
 
     assert error is None
+
+
+def test_validate_sql_intent_alignment_rejects_unmapped_metric_substitution():
+    error = validate_sql_intent_alignment(
+        "Show invoice amount by customer",
+        'SELECT "invoices"."customer_id", COUNT(*) AS "invoice_amount" '
+        'FROM "invoices" GROUP BY "invoices"."customer_id"',
+        {"invoices": ["customer_id", "invoice_amount"]},
+        semantic_analysis={
+            "analytical_intent": "summary",
+            "metrics": ["invoice amount"],
+            "dimensions": ["customer"],
+            "aggregations": ["sum invoice amount"],
+            "concept_mappings": [
+                {
+                    "request_concept": "invoice amount",
+                    "concept_type": "metric",
+                    "schema_objects": ["invoices.invoice_amount"],
+                    "required_in_sql": True,
+                    "confidence": 0.95,
+                }
+            ],
+            "is_fully_supported": True,
+        },
+    )
+
+    assert error is not None
+    assert "invoice amount" in error
+    assert "invoices.invoice_amount" in error
+
+
+def test_validate_sql_intent_alignment_allows_mapped_metric_sql():
+    error = validate_sql_intent_alignment(
+        "Show total invoice amount by customer",
+        'SELECT "invoices"."customer_id", '
+        'SUM("invoices"."invoice_amount") AS "total_invoice_amount" '
+        'FROM "invoices" GROUP BY "invoices"."customer_id"',
+        {"invoices": ["customer_id", "invoice_amount"]},
+        semantic_analysis={
+            "analytical_intent": "summary",
+            "metrics": ["invoice amount"],
+            "dimensions": ["customer"],
+            "aggregations": ["sum invoice amount"],
+            "concept_mappings": [
+                {
+                    "request_concept": "invoice amount",
+                    "concept_type": "metric",
+                    "schema_objects": ["invoices.invoice_amount"],
+                    "required_in_sql": True,
+                    "confidence": 0.95,
+                },
+                {
+                    "request_concept": "customer",
+                    "concept_type": "dimension",
+                    "schema_objects": ["invoices.customer_id"],
+                    "required_in_sql": True,
+                    "confidence": 0.9,
+                },
+            ],
+            "is_fully_supported": True,
+        },
+    )
+
+    assert error is None
+
+
+def test_validate_sql_intent_alignment_rejects_missing_mapped_dimension():
+    error = validate_sql_intent_alignment(
+        "Show total invoice amount by customer",
+        'SELECT SUM("invoices"."invoice_amount") AS "total_invoice_amount" '
+        'FROM "invoices"',
+        {"invoices": ["customer_id", "invoice_amount"]},
+        semantic_analysis={
+            "analytical_intent": "summary",
+            "metrics": ["invoice amount"],
+            "dimensions": ["customer"],
+            "aggregations": ["sum invoice amount"],
+            "concept_mappings": [
+                {
+                    "request_concept": "customer",
+                    "concept_type": "dimension",
+                    "schema_objects": ["invoices.customer_id"],
+                    "required_in_sql": True,
+                }
+            ],
+            "is_fully_supported": True,
+        },
+    )
+
+    assert error is not None
+    assert "customer" in error
+
+
+def test_validate_sql_intent_alignment_rejects_mapped_ranking_without_limit():
+    error = validate_sql_intent_alignment(
+        "Top customers by invoice amount",
+        'SELECT "invoices"."customer_id", '
+        'SUM("invoices"."invoice_amount") AS "total_invoice_amount" '
+        'FROM "invoices" GROUP BY "invoices"."customer_id" '
+        'ORDER BY "total_invoice_amount" DESC',
+        {"invoices": ["customer_id", "invoice_amount"]},
+        semantic_analysis={
+            "analytical_intent": "ranking",
+            "metrics": ["invoice amount"],
+            "dimensions": ["customer"],
+            "ranking": ["top customers by invoice amount"],
+            "aggregations": ["sum invoice amount"],
+            "concept_mappings": [
+                {
+                    "request_concept": "top customers",
+                    "concept_type": "ranking",
+                    "schema_objects": ["invoices.customer_id"],
+                    "required_in_sql": True,
+                }
+            ],
+            "is_fully_supported": True,
+        },
+    )
+
+    assert error is not None
+    assert "sorting and limiting" in error
+
+
+def test_get_schema_intent_analysis_error_rejects_multiple_selected_interpretations():
+    error = get_schema_intent_analysis_error(
+        {
+            "interpretations": [
+                {
+                    "description": "Use gross amount",
+                    "confidence": 0.88,
+                    "is_selected": True,
+                },
+                {
+                    "description": "Use net amount",
+                    "confidence": 0.87,
+                    "is_selected": True,
+                },
+            ],
+            "is_fully_supported": True,
+        }
+    )
+
+    assert error is not None
+    assert "multiple selected schema interpretations" in error
