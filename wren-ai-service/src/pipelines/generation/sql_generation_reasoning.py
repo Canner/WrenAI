@@ -52,15 +52,6 @@ User's Question: {{ query }}
 Language: {{ language }}
 Current Time: {{ current_time }}
 
-{% if schema_intent_analysis %}
-### SCHEMA INTENT ANALYSIS ###
-Use this semantic analysis as the planning contract for entities, metrics,
-dimensions, filters, joins, time constraints, aggregations, ranking, and analytical
-intent. If it shows missing or ambiguous requirements, state that limitation in the
-plan instead of planning unrelated SQL.
-{{ schema_intent_analysis }}
-{% endif %}
-
 Let's think step by step.
 """
 
@@ -74,7 +65,6 @@ def prompt(
     instructions: list[dict],
     prompt_builder: PromptBuilder,
     configuration: Configuration | None = Configuration(),
-    schema_intent_analysis: dict[str, Any] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
@@ -85,7 +75,6 @@ def prompt(
         ),
         language=configuration.language,
         current_time=configuration.show_current_time(),
-        schema_intent_analysis=schema_intent_analysis,
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
@@ -174,7 +163,6 @@ class SQLGenerationReasoning(BasicPipeline):
         instructions: Optional[list[str]] = None,
         configuration: Configuration = Configuration(),
         query_id: Optional[str] = None,
-        schema_intent_analysis: dict[str, Any] | None = None,
     ):
         logger.info("SQL Generation Reasoning pipeline is running...")
         return await self._pipe.execute(
@@ -186,7 +174,6 @@ class SQLGenerationReasoning(BasicPipeline):
                 "instructions": instructions or [],
                 "configuration": configuration,
                 "query_id": query_id,
-                "schema_intent_analysis": schema_intent_analysis,
                 **self._components,
             },
         )

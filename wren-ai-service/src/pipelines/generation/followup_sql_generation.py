@@ -99,14 +99,6 @@ SQL:
 ### QUESTION ###
 User's Follow-up Question: {{ query }}
 
-{% if schema_intent_analysis %}
-### SCHEMA INTENT ANALYSIS ###
-This is the pre-generation semantic analysis of the follow-up request against the
-active deployed schema. Use it as a contract for table, column, metric, dimension,
-filter, time, relationship, aggregation, and ranking selection.
-{{ schema_intent_analysis }}
-{% endif %}
-
 ### INTENT AND SCHEMA GROUNDING ###
 Interpret the user's business terms by matching them to explicit tables, columns,
 metrics, views, and relationships in ACTIVE DATASOURCE METADATA. Never reuse table
@@ -114,10 +106,6 @@ or column names from SQL SAMPLES or chat history unless those exact names also
 appear in ACTIVE DATASOURCE METADATA or VALID TABLE NAMES for the active datasource.
 Only apply aggregate functions to columns whose active metadata type supports that
 operation.
-Before writing SQL, validate that the selected schema elements directly support every
-key entity, metric, dimension, filter, time range, relationship, and aggregation in
-the follow-up question. If the schema cannot support the requested information, do
-not replace the request with a generic COUNT(*) or unrelated table query.
 
 ### REASONING PLAN ###
 {{ sql_generation_reasoning }}
@@ -141,7 +129,6 @@ def prompt(
     has_json_field: bool = False,
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
-    schema_intent_analysis: dict[str, Any] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
@@ -167,7 +154,6 @@ def prompt(
         ),
         sql_samples=sql_samples,
         sql_functions=sql_functions,
-        schema_intent_analysis=schema_intent_analysis,
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
@@ -200,11 +186,9 @@ async def post_process(
     post_processor: SQLGenPostProcessor,
     documents: list[str],
     data_source: str,
-    query: str,
     project_id: str | None = None,
     use_dry_plan: bool = False,
     allow_dry_plan_fallback: bool = True,
-    schema_intent_analysis: dict[str, Any] | None = None,
 ) -> dict:
     return await post_processor.run(
         generate_sql_in_followup.get("replies"),
@@ -214,8 +198,6 @@ async def post_process(
         allow_dry_plan_fallback=allow_dry_plan_fallback,
         valid_table_names=construct_valid_table_names(documents),
         valid_table_columns=construct_valid_table_columns(documents),
-        query=query,
-        semantic_analysis=schema_intent_analysis,
     )
 
 
@@ -267,7 +249,6 @@ class FollowUpSQLGeneration(BasicPipeline):
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
         sql_knowledge: SqlKnowledge | None = None,
-        schema_intent_analysis: dict[str, Any] | None = None,
     ):
         logger.info("Follow-Up SQL Generation pipeline is running...")
 
@@ -287,7 +268,6 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "has_metric": has_metric,
                 "has_json_field": has_json_field,
                 "sql_functions": sql_functions,
-                "schema_intent_analysis": schema_intent_analysis,
                 "use_dry_plan": use_dry_plan,
                 "allow_dry_plan_fallback": allow_dry_plan_fallback,
                 "data_source": metadata.get("data_source", "local_file"),

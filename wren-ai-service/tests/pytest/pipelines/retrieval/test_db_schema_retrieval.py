@@ -3,7 +3,6 @@ from haystack import Document
 
 from src.pipelines.retrieval.db_schema_retrieval import (
     _is_project_wide_analysis_query,
-    construct_retrieval_results,
     dbschema_retrieval,
     expand_business_terms_for_retrieval,
 )
@@ -88,73 +87,3 @@ async def test_dbschema_retrieval_loads_complete_active_project_schema():
             {"field": "project_id", "operator": "==", "value": "project-1"},
         ],
     }
-
-
-def test_construct_retrieval_results_preserves_semantic_analysis():
-    result = construct_retrieval_results(
-        check_using_db_schemas_without_pruning={"db_schemas": []},
-        filter_columns_in_tables={
-            "replies": [
-                """
-                {
-                  "semantic_analysis": {
-                    "analytical_intent": "summary",
-                    "entities": ["invoice"],
-                    "metrics": ["invoice amount"],
-                    "dimensions": ["customer"],
-                    "is_fully_supported": true
-                  },
-                  "results": [
-                    {
-                      "table_name": "invoices",
-                      "table_selection_reason": "Contains invoice facts.",
-                      "table_contents": {
-                        "chain_of_thought_reasoning": [
-                          "Needed to group by customer.",
-                          "Needed to sum invoice amount."
-                        ],
-                        "columns": ["customer_id", "invoice_amount"]
-                      }
-                    }
-                  ]
-                }
-                """
-            ]
-        },
-        construct_db_schemas=[
-            {
-                "type": "TABLE",
-                "name": "invoices",
-                "comment": "",
-                "columns": [
-                    {
-                        "type": "COLUMN",
-                        "name": "customer_id",
-                        "data_type": "varchar",
-                        "comment": "",
-                        "is_primary_key": False,
-                    },
-                    {
-                        "type": "COLUMN",
-                        "name": "invoice_amount",
-                        "data_type": "double",
-                        "comment": "",
-                        "is_primary_key": False,
-                    },
-                    {
-                        "type": "COLUMN",
-                        "name": "internal_note",
-                        "data_type": "varchar",
-                        "comment": "",
-                        "is_primary_key": False,
-                    },
-                ],
-            }
-        ],
-        dbschema_retrieval=[],
-    )
-
-    assert result["semantic_analysis"]["metrics"] == ["invoice amount"]
-    assert result["retrieval_results"][0]["table_name"] == "invoices"
-    assert "invoice_amount" in result["retrieval_results"][0]["table_ddl"]
-    assert "internal_note" not in result["retrieval_results"][0]["table_ddl"]

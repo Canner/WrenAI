@@ -10,7 +10,7 @@ from hamilton.async_driver import AsyncDriver
 from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
@@ -31,47 +31,23 @@ logger = logging.getLogger("wren-ai-service")
 
 table_columns_selection_system_prompt = """
 ### TASK ###
-You are a highly skilled data analyst. Your goal is to examine the provided active deployed database schema, interpret the posed question, and identify the specific tables, columns, metrics, views, and relationships required to construct an accurate SQL query.
+You are a highly skilled data analyst. Your goal is to examine the provided database schema, interpret the posed question, and identify the specific columns from the relevant tables required to construct an accurate SQL query.
 
 The database schema includes tables, columns, primary keys, foreign keys, relationships, and any relevant constraints.
 
 ### INSTRUCTIONS ###
-1. First perform a semantic analysis of the user's request. Identify intended business entities, identifiers, descriptive attributes, metrics, dimensions, filters, aggregations, relationships, time constraints, ranking requirements, and analytical intent such as retrieval, detailed records, summary, comparison, trend analysis, dashboard, KPI, ranking, or record count.
-2. Map each business term to explicit schema objects only when the active schema directly supports that term. Distinguish entities such as customer/order/invoice/product from identifiers such as order ID or invoice number, descriptive attributes, and measurable metrics such as amount, quantity, cost, profit, revenue, or duration.
-3. Select tables and columns by semantic fit to the full request, not by isolated keyword overlap or commonly used default tables.
-4. Include join keys and relationship columns needed to connect selected tables. Do not invent relationships or foreign keys.
-5. If the schema does not support a requested entity, metric, dimension, filter, time range, aggregation, or ranking requirement, record it in `missing_requirements`.
-6. If multiple schema interpretations are equally plausible and the question does not disambiguate them, record them in `ambiguous_requirements`.
-7. Set `is_fully_supported` to false when any required request component is missing or ambiguous.
-8. For each selected table, provide a concise reason for why the table is semantically relevant.
-9. For each selected column, provide a concise reason for why the column is necessary.
-10. If a "." is included in columns, put the name before the first dot into chosen columns.
-11. The number of columns chosen must match the number of reasoning.
-12. Final chosen columns must be only column names, don't prefix it with table names.
-13. If the chosen column is a child column of a STRUCT type column, choose the parent column instead of the child column.
-14. If the schema cannot answer the question, return the closest directly relevant schema objects only if they explain the limitation. Do not select unrelated fallback tables.
+1. Carefully analyze the schema and identify the essential tables and columns needed to answer the question.
+2. For each table, provide a clear and concise reasoning for why specific columns are selected.
+3. List each reason as part of a step-by-step chain of thought, justifying the inclusion of each column.
+4. If a "." is included in columns, put the name before the first dot into chosen columns.
+5. The number of columns chosen must match the number of reasoning.
+6. Final chosen columns must be only column names, don't prefix it with table names.
+7. If the chosen column is a child column of a STRUCT type column, choose the parent column instead of the child column.
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:
 
 {
-    "semantic_analysis": {
-        "analytical_intent": "retrieval | detailed_records | summary | comparison | trend | dashboard | kpi | ranking | record_count | other",
-        "entities": ["business entities requested by the user"],
-        "identifiers": ["identifier fields requested by the user"],
-        "metrics": ["business metrics or measures requested by the user"],
-        "dimensions": ["grouping or descriptive dimensions requested by the user"],
-        "filters": ["filters or predicates requested by the user"],
-        "aggregations": ["aggregation or calculation requirements"],
-        "relationships": ["required joins or relationships"],
-        "time_constraints": ["time filters, grains, or trend requirements"],
-        "ranking": ["top/bottom/order/limit requirements"],
-        "supported_schema_objects": ["table.column or metric names that directly support the request"],
-        "missing_requirements": ["required request components not supported by the schema"],
-        "ambiguous_requirements": ["request components with multiple equally plausible schema mappings"],
-        "is_fully_supported": true,
-        "support_reasoning": "Concise explanation of whether the selected schema fully supports the request"
-    },
     "results": [
         {
             "table_selection_reason": "Reason for selecting tablename1",
@@ -106,7 +82,6 @@ Please provide your response as a JSON object, structured as follows:
 - Each table key must list only the columns relevant to answering the question.
 - Provide a reasoning list (`chain_of_thought_reasoning`) for each table, explaining why each column is necessary.
 - Provide the reason of selecting the table in (`table_selection_reason`) for each table.
-- Populate `semantic_analysis` before `results`; use it to verify the selected schema directly supports the request.
 - Be logical, concise, and ensure the output strictly follows the required JSON format.
 - Use table name used in the "Create Table" statement, don't use "alias".
 - Match Column names with the definition in the "Create Table" statement.
@@ -380,7 +355,6 @@ def check_using_db_schemas_without_pruning(
         "has_calculated_field": has_calculated_field,
         "has_metric": has_metric,
         "has_json_field": has_json_field,
-        "semantic_analysis": {},
     }
 
 
@@ -431,9 +405,9 @@ def construct_retrieval_results(
     dbschema_retrieval: list[Document],
 ) -> dict[str, Any]:
     if filter_columns_in_tables:
-        retrieval_payload = orjson.loads(filter_columns_in_tables["replies"][0])
-        columns_and_tables_needed = retrieval_payload.get("results", [])
-        semantic_analysis = retrieval_payload.get("semantic_analysis") or {}
+        columns_and_tables_needed = orjson.loads(
+            filter_columns_in_tables["replies"][0]
+        )["results"]
 
         # we need to change the below code to match the new schema of structured output
         # the objective of this loop is to change the structure of JSON to match the needed format
@@ -493,7 +467,6 @@ def construct_retrieval_results(
             "has_calculated_field": has_calculated_field,
             "has_metric": has_metric,
             "has_json_field": has_json_field,
-            "semantic_analysis": semantic_analysis,
         }
     else:
         retrieval_results = check_using_db_schemas_without_pruning["db_schemas"]
@@ -505,9 +478,6 @@ def construct_retrieval_results(
             ],
             "has_metric": check_using_db_schemas_without_pruning["has_metric"],
             "has_json_field": check_using_db_schemas_without_pruning["has_json_field"],
-            "semantic_analysis": check_using_db_schemas_without_pruning.get(
-                "semantic_analysis", {}
-            ),
         }
 
 
@@ -523,26 +493,7 @@ class MatchingTable(BaseModel):
     table_selection_reason: str
 
 
-class SemanticAnalysis(BaseModel):
-    analytical_intent: str = ""
-    entities: list[str] = Field(default_factory=list)
-    identifiers: list[str] = Field(default_factory=list)
-    metrics: list[str] = Field(default_factory=list)
-    dimensions: list[str] = Field(default_factory=list)
-    filters: list[str] = Field(default_factory=list)
-    aggregations: list[str] = Field(default_factory=list)
-    relationships: list[str] = Field(default_factory=list)
-    time_constraints: list[str] = Field(default_factory=list)
-    ranking: list[str] = Field(default_factory=list)
-    supported_schema_objects: list[str] = Field(default_factory=list)
-    missing_requirements: list[str] = Field(default_factory=list)
-    ambiguous_requirements: list[str] = Field(default_factory=list)
-    is_fully_supported: bool | None = None
-    support_reasoning: str = ""
-
-
 class RetrievalResults(BaseModel):
-    semantic_analysis: SemanticAnalysis | None = None
     results: list[MatchingTable]
 
 

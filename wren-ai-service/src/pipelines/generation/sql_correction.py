@@ -102,12 +102,6 @@ or add catalog/schema prefixes unless the table name is shown that way here.
 {% if query %}
 User's Question: {{ query }}
 {% endif %}
-{% if schema_intent_analysis %}
-### SCHEMA INTENT ANALYSIS ###
-This is the semantic contract for the corrected SQL. Preserve this intent while
-fixing syntax or planner errors.
-{{ schema_intent_analysis }}
-{% endif %}
 {% if invalid_generation_result.original_sql %}
 Original SQL: {{ invalid_generation_result.original_sql }}
 {% endif %}
@@ -121,10 +115,6 @@ active datasource metadata clearly contains an equivalent object that supports t
 user's request. Do not invent tables, columns, joins, metrics, or relationships.
 Only apply aggregate functions to columns whose active metadata type supports that
 operation.
-Before returning corrected SQL, validate that it still directly supports every key
-entity, metric, dimension, filter, time range, relationship, and aggregation in the
-user's question. Do not replace an unsupported request with a generic COUNT(*) or
-unrelated table query.
 
 Let's think step by step.
 """
@@ -140,7 +130,6 @@ def prompt(
     query: str | None = None,
     instructions: list[dict] | None = None,
     sql_functions: list[SqlFunction] | None = None,
-    schema_intent_analysis: dict[str, Any] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
@@ -148,7 +137,6 @@ def prompt(
         documents=documents,
         valid_table_names=construct_valid_table_names(documents),
         invalid_generation_result=invalid_generation_result,
-        schema_intent_analysis=schema_intent_analysis,
         instructions=construct_instructions(
             instructions=instructions,
         ),
@@ -181,11 +169,9 @@ async def post_process(
     post_processor: SQLGenPostProcessor,
     documents: List[Document],
     data_source: str,
-    query: str | None = None,
     project_id: str | None = None,
     use_dry_plan: bool = False,
     allow_dry_plan_fallback: bool = True,
-    schema_intent_analysis: dict[str, Any] | None = None,
 ) -> dict:
     return await post_processor.run(
         generate_sql_correction.get("replies"),
@@ -195,8 +181,6 @@ async def post_process(
         allow_dry_plan_fallback=allow_dry_plan_fallback,
         valid_table_names=construct_valid_table_names(documents),
         valid_table_columns=construct_valid_table_columns(documents),
-        query=query,
-        semantic_analysis=schema_intent_analysis,
     )
 
 
@@ -243,7 +227,6 @@ class SQLCorrection(BasicPipeline):
         allow_dry_plan_fallback: bool = True,
         sql_knowledge: SqlKnowledge | None = None,
         query: str | None = None,
-        schema_intent_analysis: dict[str, Any] | None = None,
     ):
         logger.info("SQLCorrection pipeline is running...")
 
@@ -255,7 +238,6 @@ class SQLCorrection(BasicPipeline):
                 "invalid_generation_result": invalid_generation_result,
                 "documents": contexts,
                 "query": query,
-                "schema_intent_analysis": schema_intent_analysis,
                 "instructions": instructions,
                 "sql_functions": sql_functions,
                 "project_id": project_id,
