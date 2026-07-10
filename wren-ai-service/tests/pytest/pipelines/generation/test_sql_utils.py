@@ -1,6 +1,5 @@
 from src.pipelines.generation.utils.sql import (
     contains_unsupported_mssql_json_access,
-    construct_semantic_schema_contract,
     construct_valid_table_columns,
     construct_valid_table_names,
     extract_sql_generation_result,
@@ -1871,66 +1870,3 @@ def test_get_schema_intent_analysis_error_rejects_multiple_selected_interpretati
 
     assert error is not None
     assert "multiple selected schema interpretations" in error
-
-
-def test_construct_semantic_schema_contract_prioritizes_concept_mappings():
-    contract = construct_semantic_schema_contract(
-        {
-            "analytical_intent": "summary",
-            "entities": ["invoice"],
-            "metrics": ["invoice amount"],
-            "dimensions": ["customer"],
-            "aggregations": ["sum invoice amount"],
-            "supported_schema_objects": [
-                "invoices.customer_id",
-                "invoices.invoice_amount",
-            ],
-            "concept_mappings": [
-                {
-                    "request_concept": "invoice amount",
-                    "concept_type": "metric",
-                    "schema_objects": ["invoices.invoice_amount"],
-                    "required_in_sql": True,
-                    "confidence": 0.95,
-                    "mapping_reason": "invoice_amount stores the requested measure",
-                }
-            ],
-            "interpretations": [
-                {
-                    "description": "Summarize invoice amount by customer",
-                    "schema_objects": [
-                        "invoices.customer_id",
-                        "invoices.invoice_amount",
-                    ],
-                    "confidence": 0.9,
-                    "is_selected": True,
-                }
-            ],
-            "is_fully_supported": True,
-        }
-    )
-
-    assert "primary source of truth" in contract
-    assert "Required concept-to-schema mappings" in contract
-    assert "invoice amount (metric, required, confidence=0.95)" in contract
-    assert "invoices.invoice_amount" in contract
-    assert "Ranked schema interpretations" in contract
-    assert "selected" in contract
-    assert "Do not substitute identifiers for metrics" in contract
-
-
-def test_construct_semantic_schema_contract_allows_legacy_analysis_without_mappings():
-    contract = construct_semantic_schema_contract(
-        {
-            "analytical_intent": "trend",
-            "metrics": ["order volume"],
-            "time_constraints": ["monthly"],
-            "supported_schema_objects": ["orders.created_at", "orders.id"],
-            "is_fully_supported": True,
-        }
-    )
-
-    assert "Analytical intent: trend" in contract
-    assert "Metrics: order volume" in contract
-    assert "orders.created_at" in contract
-    assert "Required concept-to-schema mappings" not in contract

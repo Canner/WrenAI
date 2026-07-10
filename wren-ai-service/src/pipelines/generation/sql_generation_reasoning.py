@@ -13,7 +13,6 @@ from src.core.provider import LLMProvider
 from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.sql import (
     construct_instructions,
-    construct_semantic_schema_contract,
     sql_generation_reasoning_system_prompt,
 )
 from src.utils import trace_cost
@@ -53,13 +52,13 @@ User's Question: {{ query }}
 Language: {{ language }}
 Current Time: {{ current_time }}
 
-{% if semantic_schema_contract %}
-### SEMANTIC SCHEMA CONTRACT ###
-Use this contract for entities, metrics, dimensions, filters, joins, time
-constraints, aggregations, ranking, and analytical intent. If it shows missing or
-ambiguous requirements, state that limitation in the plan instead of planning
-unrelated SQL.
-{{ semantic_schema_contract }}
+{% if schema_intent_analysis %}
+### SCHEMA INTENT ANALYSIS ###
+Use this semantic analysis as the planning contract for entities, metrics,
+dimensions, filters, joins, time constraints, aggregations, ranking, and analytical
+intent. If it shows missing or ambiguous requirements, state that limitation in the
+plan instead of planning unrelated SQL.
+{{ schema_intent_analysis }}
 {% endif %}
 
 Let's think step by step.
@@ -86,9 +85,7 @@ def prompt(
         ),
         language=configuration.language,
         current_time=configuration.show_current_time(),
-        semantic_schema_contract=construct_semantic_schema_contract(
-            schema_intent_analysis
-        ),
+        schema_intent_analysis=schema_intent_analysis,
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 

@@ -17,7 +17,6 @@ from src.pipelines.generation.utils.sql import (
     SQLGenPostProcessor,
     construct_ask_history_messages,
     construct_instructions,
-    construct_semantic_schema_contract,
     construct_valid_table_columns,
     construct_valid_table_names,
     get_calculated_field_instructions,
@@ -100,9 +99,12 @@ SQL:
 ### QUESTION ###
 User's Follow-up Question: {{ query }}
 
-{% if semantic_schema_contract %}
-### SEMANTIC SCHEMA CONTRACT ###
-{{ semantic_schema_contract }}
+{% if schema_intent_analysis %}
+### SCHEMA INTENT ANALYSIS ###
+This is the pre-generation semantic analysis of the follow-up request against the
+active deployed schema. Use it as a contract for table, column, metric, dimension,
+filter, time, relationship, aggregation, and ranking selection.
+{{ schema_intent_analysis }}
 {% endif %}
 
 ### INTENT AND SCHEMA GROUNDING ###
@@ -165,9 +167,7 @@ def prompt(
         ),
         sql_samples=sql_samples,
         sql_functions=sql_functions,
-        semantic_schema_contract=construct_semantic_schema_contract(
-            schema_intent_analysis
-        ),
+        schema_intent_analysis=schema_intent_analysis,
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 

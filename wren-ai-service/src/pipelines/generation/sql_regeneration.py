@@ -14,7 +14,6 @@ from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.sql import (
     SQLGenPostProcessor,
     construct_instructions,
-    construct_semantic_schema_contract,
     construct_valid_table_columns,
     construct_valid_table_names,
     get_calculated_field_instructions,
@@ -110,11 +109,11 @@ SQL:
 {% if query %}
 User's Question: {{ query }}
 {% endif %}
-{% if semantic_schema_contract %}
-### SEMANTIC SCHEMA CONTRACT ###
+{% if schema_intent_analysis %}
+### SCHEMA INTENT ANALYSIS ###
 This is the semantic contract for regenerated SQL. Preserve this intent while
 improving the original SQL.
-{{ semantic_schema_contract }}
+{{ schema_intent_analysis }}
 {% endif %}
 SQL generation reasoning: {{ sql_generation_reasoning }}
 Original SQL query: {{ sql }}
@@ -146,9 +145,7 @@ def prompt(
         data_source=data_source,
         documents=documents,
         query=query,
-        semantic_schema_contract=construct_semantic_schema_contract(
-            schema_intent_analysis
-        ),
+        schema_intent_analysis=schema_intent_analysis,
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
