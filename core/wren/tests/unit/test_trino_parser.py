@@ -232,14 +232,14 @@ def test_trino_connector_import_error_has_install_hint(monkeypatch) -> None:
     assert "pip install 'wrenai[trino]'" in msg
 
 
-def test_native_connector_does_not_import_ibis() -> None:
+def test_native_connector_does_not_import_ibis(monkeypatch) -> None:
     # Acceptance criterion: importing the native trino connector must not
     # pull ibis into sys.modules (the new module is independent of
     # ibis-framework[trino]).
     import sys  # noqa: PLC0415
 
-    sys.modules.pop("ibis", None)
-    sys.modules.pop("wren.connector.trino", None)
+    monkeypatch.delitem(sys.modules, "ibis", raising=False)
+    monkeypatch.delitem(sys.modules, "wren.connector.trino", raising=False)
     import wren.connector.trino  # noqa: F401, PLC0415
 
     assert "ibis" not in sys.modules
