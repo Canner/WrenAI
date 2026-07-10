@@ -26,11 +26,13 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::ControlFlow;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::vec;
 use tokio::runtime::Runtime;
 use wren_core::array::{AsArray, GenericByteArray};
-use wren_core::ast::{Expr, LimitClause, Statement, Value, ValueWithSpan, visit_statements_mut};
+use wren_core::ast::{
+    visit_statements_mut, Expr, LimitClause, Statement, Value, ValueWithSpan,
+};
 use wren_core::datatypes::GenericStringType;
 use wren_core::dialect::GenericDialect;
 use wren_core::ipc::writer::StreamWriter;
@@ -47,7 +49,6 @@ use wren_core_base::mdl::DataSource;
 
 /// The Python wrapper for the Wren Core session context.
 #[pyclass(name = "SessionContext")]
-#[derive(Clone)]
 pub struct PySessionContext {
     /// Base context — physical tables are registered here.
     /// Used as the source for `load_mdl()` (two-phase init).
@@ -57,6 +58,16 @@ pub struct PySessionContext {
     mdl: Arc<AnalyzedWrenMDL>,
     properties: Arc<HashMap<String, Option<String>>>,
     runtime: Arc<Runtime>,
+    /// Serializes engine calls on this context. `transform_sql` re-applies
+    /// the MDL catalog onto the context's shared catalog list on every call
+    /// (`apply_wren_on_ctx` -> `register_table_with_mdl`), while `query`,
+    /// `dry_run`, and `list_tables` read that same shared list, so two
+    /// concurrent calls on the same context can observe each other's
+    /// half-registered catalogs. The GIL used to provide this serialization
+    /// implicitly; now that the GIL is released around blocking work, keep
+    /// the same per-context ordering with a lock. Calls on *different*
+    /// contexts run in parallel.
+    call_lock: Arc<Mutex<()>>,
 }
 
 impl Hash for PySessionContext {
@@ -75,6 +86,7 @@ impl Default for PySessionContext {
             mdl: Arc::new(AnalyzedWrenMDL::default()),
             properties: Arc::new(HashMap::new()),
             runtime: Arc::new(Runtime::new().unwrap()),
+            call_lock: Arc::new(Mutex::new(())),
         }
     }
 }
@@ -88,6 +100,7 @@ impl PySessionContext {
     #[new]
     #[pyo3(signature = (mdl_base64=None, remote_functions_path=None, properties=None, data_source=None))]
     pub fn new(
+        py: Python<'_>,
         mdl_base64: Option<&str>,
         remote_functions_path: Option<&str>,
         properties: Option<Py<PyAny>>,
@@ -102,6 +115,7 @@ impl PySessionContext {
             let config = SessionConfig::default().with_information_schema(true);
             let ctx = wren_core::mdl::create_wren_ctx(Some(config), data_source.as_ref());
             Self::register_function_by_data_source(
+                py,
                 data_source.as_ref(),
                 remote_functions_path,
                 &runtime,
@@ -114,6 +128,7 @@ impl PySessionContext {
                 mdl: Arc::new(AnalyzedWrenMDL::default()),
                 properties: Arc::new(HashMap::new()),
                 runtime: Arc::new(runtime),
+                call_lock: Arc::new(Mutex::new(())),
             });
         };
 
@@ -134,13 +149,14 @@ impl PySessionContext {
         let ctx = wren_core::mdl::create_wren_ctx(Some(config), data_source.as_ref());
 
         Self::register_function_by_data_source(
+            py,
             data_source.as_ref(),
             remote_functions_path,
             &runtime,
             &ctx,
         )?;
 
-        Python::attach(|py: Python<'_>| {
+        {
             let properties_map = if let Some(obj) = properties {
                 let obj = obj.as_ref();
                 if obj.is_none(py) {
@@ -182,22 +198,26 @@ impl PySessionContext {
             ) {
                 Ok(analyzed_mdl) => {
                     let analyzed_mdl = Arc::new(analyzed_mdl);
-                    let unparser_ctx = runtime
-                        .block_on(apply_wren_on_ctx(
-                            &ctx,
-                            Arc::clone(&analyzed_mdl),
-                            Arc::clone(&properties_ref),
-                            mdl::context::Mode::Unparse,
-                        ))
+                    let unparser_ctx = py
+                        .detach(|| {
+                            runtime.block_on(apply_wren_on_ctx(
+                                &ctx,
+                                Arc::clone(&analyzed_mdl),
+                                Arc::clone(&properties_ref),
+                                mdl::context::Mode::Unparse,
+                            ))
+                        })
                         .map_err(CoreError::from)?;
 
-                    let exec_ctx = runtime
-                        .block_on(apply_wren_on_ctx(
-                            &ctx,
-                            Arc::clone(&analyzed_mdl),
-                            Arc::clone(&properties_ref),
-                            mdl::context::Mode::LocalRuntime,
-                        ))
+                    let exec_ctx = py
+                        .detach(|| {
+                            runtime.block_on(apply_wren_on_ctx(
+                                &ctx,
+                                Arc::clone(&analyzed_mdl),
+                                Arc::clone(&properties_ref),
+                                mdl::context::Mode::LocalRuntime,
+                            ))
+                        })
                         .map_err(CoreError::from)?;
 
                     Ok(Self {
@@ -207,6 +227,7 @@ impl PySessionContext {
                         mdl: analyzed_mdl,
                         runtime: Arc::new(runtime),
                         properties: properties_ref,
+                        call_lock: Arc::new(Mutex::new(())),
                     })
                 }
                 Err(e) => Err(CoreError::new(
@@ -214,34 +235,45 @@ impl PySessionContext {
                 )
                 .into()),
             }
-        })
+        }
     }
 
     /// Transform the given Wren SQL to the equivalent Planned SQL.
     #[pyo3(signature = (sql=None))]
-    pub fn transform_sql(&self, sql: Option<&str>) -> PyResult<String> {
+    pub fn transform_sql(&self, py: Python<'_>, sql: Option<&str>) -> PyResult<String> {
         env_logger::try_init().ok();
         let Some(sql) = sql else {
             return Err(CoreError::new("SQL is required").into());
         };
-        self.runtime
-            .block_on(mdl::transform_sql_with_ctx(
+        // Own the SQL so no Python-borrowed data crosses into the detached
+        // section, then release the GIL for the duration of the blocking call.
+        let sql = sql.to_owned();
+        py.detach(|| {
+            let _guard = self.lock_calls();
+            self.runtime.block_on(mdl::transform_sql_with_ctx(
                 &self.ctx,
                 Arc::clone(&self.mdl),
                 // the ctx has been initialized when PySessionContext is created
                 // so we can pass the empty array here
                 &[],
                 Arc::clone(&self.properties),
-                sql,
+                &sql,
             ))
-            .map_err(|e| PyErr::from(CoreError::from(e)))
+        })
+        .map_err(|e| PyErr::from(CoreError::from(e)))
     }
 
     /// Get the available functions in the session context.
-    pub fn get_available_functions(&self) -> PyResult<Vec<PyRemoteFunction>> {
-        let registered_functions: Vec<PyRemoteFunction> = self
-            .runtime
-            .block_on(Self::get_registered_functions(&self.exec_ctx))
+    pub fn get_available_functions(
+        &self,
+        py: Python<'_>,
+    ) -> PyResult<Vec<PyRemoteFunction>> {
+        let registered_functions: Vec<PyRemoteFunction> = py
+            .detach(|| {
+                let _guard = self.lock_calls();
+                self.runtime
+                    .block_on(Self::get_registered_functions(&self.exec_ctx))
+            })
             .map_err(CoreError::from)?
             .into_iter()
             .map(|f| f.into())
@@ -251,11 +283,18 @@ impl PySessionContext {
 
     pub fn get_available_function(
         &self,
+        py: Python<'_>,
         function_name: &str,
     ) -> PyResult<Vec<PyRemoteFunction>> {
-        let functions = self
-            .runtime
-            .block_on(Self::get_registered_function(function_name, &self.exec_ctx))
+        let function_name = function_name.to_owned();
+        let functions = py
+            .detach(|| {
+                let _guard = self.lock_calls();
+                self.runtime.block_on(Self::get_registered_function(
+                    &function_name,
+                    &self.exec_ctx,
+                ))
+            })
             .map_err(CoreError::from)?
             .into_iter()
             .map(PyRemoteFunction::from)
@@ -281,7 +320,12 @@ impl PySessionContext {
         }
         let _ = visit_statements_mut(&mut statements, |stmt| {
             if let Statement::Query(q) = stmt {
-                if let Some(LimitClause::LimitOffset { limit, offset, limit_by }) = &q.limit_clause {
+                if let Some(LimitClause::LimitOffset {
+                    limit,
+                    offset,
+                    limit_by,
+                }) = &q.limit_clause
+                {
                     if let Some(Expr::Value(ValueWithSpan {
                         value: Value::Number(n, is),
                         ..
@@ -290,7 +334,9 @@ impl PySessionContext {
                         if let Ok(curr) = n.parse::<usize>() {
                             if curr > pushdown {
                                 q.limit_clause = Some(LimitClause::LimitOffset {
-                                    limit: Some(Expr::Value(Value::Number(pushdown.to_string(), *is).into())),
+                                    limit: Some(Expr::Value(
+                                        Value::Number(pushdown.to_string(), *is).into(),
+                                    )),
                                     offset: offset.clone(),
                                     limit_by: limit_by.clone(),
                                 });
@@ -298,14 +344,18 @@ impl PySessionContext {
                         }
                     } else if limit.is_none() {
                         q.limit_clause = Some(LimitClause::LimitOffset {
-                            limit: Some(Expr::Value(Value::Number(pushdown.to_string(), false).into())),
+                            limit: Some(Expr::Value(
+                                Value::Number(pushdown.to_string(), false).into(),
+                            )),
                             offset: offset.clone(),
                             limit_by: limit_by.clone(),
                         });
                     }
                 } else {
                     q.limit_clause = Some(LimitClause::LimitOffset {
-                        limit: Some(Expr::Value(Value::Number(pushdown.to_string(), false).into())),
+                        limit: Some(Expr::Value(
+                            Value::Number(pushdown.to_string(), false).into(),
+                        )),
                         offset: None,
                         limit_by: vec![],
                     });
@@ -318,83 +368,109 @@ impl PySessionContext {
 
     /// Execute SQL using DataFusion LocalRuntime and return results as Arrow IPC stream bytes.
     #[pyo3(signature = (sql))]
-    pub fn query(&self, sql: &str) -> PyResult<Vec<u8>> {
-        let (batches, schema) = self
-            .runtime
-            .block_on(async {
-                let df = self.exec_ctx.sql(sql).await?;
-                let schema = df.schema().inner().clone();
-                let batches = df.collect().await?;
-                Ok::<_, wren_core::DataFusionError>((batches, schema))
-            })
-            .map_err(CoreError::from)?;
+    pub fn query(&self, py: Python<'_>, sql: &str) -> PyResult<Vec<u8>> {
+        let sql = sql.to_owned();
+        py.detach(|| {
+            let _guard = self.lock_calls();
+            let (batches, schema) = self
+                .runtime
+                .block_on(async {
+                    let df = self.exec_ctx.sql(&sql).await?;
+                    let schema = df.schema().inner().clone();
+                    let batches = df.collect().await?;
+                    Ok::<_, wren_core::DataFusionError>((batches, schema))
+                })
+                .map_err(CoreError::from)?;
 
-        let mut buf = Vec::new();
-        {
-            let mut writer = StreamWriter::try_new(&mut buf, &schema)
-                .map_err(|e| CoreError::new(&e.to_string()))?;
-            for batch in &batches {
+            let mut buf = Vec::new();
+            {
+                let mut writer = StreamWriter::try_new(&mut buf, &schema)
+                    .map_err(|e| CoreError::new(&e.to_string()))?;
+                for batch in &batches {
+                    writer
+                        .write(batch)
+                        .map_err(|e| CoreError::new(&e.to_string()))?;
+                }
                 writer
-                    .write(batch)
+                    .finish()
                     .map_err(|e| CoreError::new(&e.to_string()))?;
             }
-            writer
-                .finish()
-                .map_err(|e| CoreError::new(&e.to_string()))?;
-        }
-        Ok(buf)
+            Ok(buf)
+        })
     }
 
     /// Register a Parquet file as a named table.
     /// Tables registered on base_ctx are visible to exec_ctx via shared catalog.
     #[pyo3(signature = (name, path))]
-    pub fn register_parquet(&self, name: &str, path: &str) -> PyResult<()> {
-        self.runtime
-            .block_on(
-                self.base_ctx
-                    .register_parquet(name, path, ParquetReadOptions::default()),
-            )
-            .map_err(CoreError::from)?;
+    pub fn register_parquet(
+        &self,
+        py: Python<'_>,
+        name: &str,
+        path: &str,
+    ) -> PyResult<()> {
+        let (name, path) = (name.to_owned(), path.to_owned());
+        py.detach(|| {
+            let _guard = self.lock_calls();
+            self.runtime.block_on(self.base_ctx.register_parquet(
+                &name,
+                &path,
+                ParquetReadOptions::default(),
+            ))
+        })
+        .map_err(CoreError::from)?;
         Ok(())
     }
 
     /// Register a CSV file as a named table.
     /// Tables registered on base_ctx are visible to exec_ctx via shared catalog.
     #[pyo3(signature = (name, path))]
-    pub fn register_csv(&self, name: &str, path: &str) -> PyResult<()> {
-        self.runtime
-            .block_on(
-                self.base_ctx
-                    .register_csv(name, path, CsvReadOptions::default()),
-            )
-            .map_err(CoreError::from)?;
+    pub fn register_csv(&self, py: Python<'_>, name: &str, path: &str) -> PyResult<()> {
+        let (name, path) = (name.to_owned(), path.to_owned());
+        py.detach(|| {
+            let _guard = self.lock_calls();
+            self.runtime.block_on(self.base_ctx.register_csv(
+                &name,
+                &path,
+                CsvReadOptions::default(),
+            ))
+        })
+        .map_err(CoreError::from)?;
         Ok(())
     }
 
     /// List registered table names in the execution context.
-    pub fn list_tables(&self) -> PyResult<Vec<String>> {
-        let catalog_names = self.exec_ctx.catalog_names();
-        let mut tables = Vec::new();
-        for catalog_name in &catalog_names {
-            if let Some(catalog) = self.exec_ctx.catalog(catalog_name) {
-                for schema_name in catalog.schema_names() {
-                    if let Some(schema) = catalog.schema(&schema_name) {
-                        tables.extend(schema.table_names());
+    pub fn list_tables(&self, py: Python<'_>) -> PyResult<Vec<String>> {
+        // No block_on here, but the traversal reads the shared catalog
+        // list, so it must be ordered against catalog re-registration in
+        // transform/query/load_mdl via the same per-context lock.
+        py.detach(|| {
+            let _guard = self.lock_calls();
+            let catalog_names = self.exec_ctx.catalog_names();
+            let mut tables = Vec::new();
+            for catalog_name in &catalog_names {
+                if let Some(catalog) = self.exec_ctx.catalog(catalog_name) {
+                    for schema_name in catalog.schema_names() {
+                        if let Some(schema) = catalog.schema(&schema_name) {
+                            tables.extend(schema.table_names());
+                        }
                     }
                 }
             }
-        }
-        Ok(tables)
+            Ok(tables)
+        })
     }
 
     /// Dry-run SQL (EXPLAIN) to validate without executing.
     #[pyo3(signature = (sql))]
-    pub fn dry_run(&self, sql: &str) -> PyResult<String> {
-        let result = self
-            .runtime
-            .block_on(async {
-                let df = self.exec_ctx.sql(&format!("EXPLAIN {sql}")).await?;
-                df.collect().await
+    pub fn dry_run(&self, py: Python<'_>, sql: &str) -> PyResult<String> {
+        let sql = sql.to_owned();
+        let result = py
+            .detach(|| {
+                let _guard = self.lock_calls();
+                self.runtime.block_on(async {
+                    let df = self.exec_ctx.sql(&format!("EXPLAIN {sql}")).await?;
+                    df.collect().await
+                })
             })
             .map_err(CoreError::from)?;
         Ok(wren_core::util::pretty::pretty_format_batches(&result)
@@ -405,32 +481,35 @@ impl PySessionContext {
     /// Load MDL and apply semantic layer rules (two-phase init).
     /// Call this after registering physical tables to enable the semantic layer.
     #[pyo3(signature = (mdl_base64))]
-    pub fn load_mdl(&mut self, mdl_base64: &str) -> PyResult<()> {
+    pub fn load_mdl(&mut self, py: Python<'_>, mdl_base64: &str) -> PyResult<()> {
         let manifest = to_manifest(mdl_base64)?;
 
         // Extract physical table providers from base_ctx so the MDL can
         // resolve table references to real data during LocalRuntime execution.
-        let register_tables = self.runtime.block_on(async {
-            let mut tables = HashMap::new();
-            for catalog_name in self.base_ctx.catalog_names() {
-                if let Some(catalog) = self.base_ctx.catalog(&catalog_name) {
-                    for schema_name in catalog.schema_names() {
-                        if let Some(schema) = catalog.schema(&schema_name) {
-                            for table_name in schema.table_names() {
-                                let full_ref = format!(
-                                    "{catalog_name}.{schema_name}.{table_name}"
-                                );
-                                if let Ok(Some(provider)) =
-                                    schema.table(&table_name).await
-                                {
-                                    tables.insert(full_ref, provider);
+        let register_tables = py.detach(|| {
+            let _guard = self.lock_calls();
+            self.runtime.block_on(async {
+                let mut tables = HashMap::new();
+                for catalog_name in self.base_ctx.catalog_names() {
+                    if let Some(catalog) = self.base_ctx.catalog(&catalog_name) {
+                        for schema_name in catalog.schema_names() {
+                            if let Some(schema) = catalog.schema(&schema_name) {
+                                for table_name in schema.table_names() {
+                                    let full_ref = format!(
+                                        "{catalog_name}.{schema_name}.{table_name}"
+                                    );
+                                    if let Ok(Some(provider)) =
+                                        schema.table(&table_name).await
+                                    {
+                                        tables.insert(full_ref, provider);
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
-            tables
+                tables
+            })
         });
 
         let analyzed_mdl = Arc::new(
@@ -438,25 +517,29 @@ impl PySessionContext {
                 .map_err(CoreError::from)?,
         );
 
-        let unparser_ctx = self
-            .runtime
-            .block_on(apply_wren_on_ctx(
-                &self.base_ctx,
-                Arc::clone(&analyzed_mdl),
-                Arc::clone(&self.properties),
-                mdl::context::Mode::Unparse,
-            ))
-            .map_err(CoreError::from)?;
+        let (unparser_ctx, exec_ctx) = py.detach(|| {
+            let _guard = self.lock_calls();
+            let unparser_ctx = self
+                .runtime
+                .block_on(apply_wren_on_ctx(
+                    &self.base_ctx,
+                    Arc::clone(&analyzed_mdl),
+                    Arc::clone(&self.properties),
+                    mdl::context::Mode::Unparse,
+                ))
+                .map_err(CoreError::from)?;
 
-        let exec_ctx = self
-            .runtime
-            .block_on(apply_wren_on_ctx(
-                &self.base_ctx,
-                Arc::clone(&analyzed_mdl),
-                Arc::clone(&self.properties),
-                mdl::context::Mode::LocalRuntime,
-            ))
-            .map_err(CoreError::from)?;
+            let exec_ctx = self
+                .runtime
+                .block_on(apply_wren_on_ctx(
+                    &self.base_ctx,
+                    Arc::clone(&analyzed_mdl),
+                    Arc::clone(&self.properties),
+                    mdl::context::Mode::LocalRuntime,
+                ))
+                .map_err(CoreError::from)?;
+            Ok::<_, PyErr>((unparser_ctx, exec_ctx))
+        })?;
 
         self.ctx = unparser_ctx;
         self.exec_ctx = exec_ctx;
@@ -466,6 +549,16 @@ impl PySessionContext {
 }
 
 impl PySessionContext {
+    /// Take the per-context call lock. Must only be called from inside a
+    /// `py.detach(..)` closure (i.e. with the GIL released): blocking on
+    /// this lock while holding the GIL could deadlock against a thread
+    /// that holds the lock and is about to re-acquire the GIL.
+    fn lock_calls(&self) -> std::sync::MutexGuard<'_, ()> {
+        self.call_lock
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+
     fn register_remote_function(
         ctx: &wren_core::SessionContext,
         mut remote_function: RemoteFunction,
@@ -553,6 +646,7 @@ impl PySessionContext {
     }
 
     fn register_function_by_data_source(
+        py: Python<'_>,
         data_source: Option<&DataSource>,
         remote_functions_path: Option<&str>,
         runtime: &Runtime,
@@ -569,8 +663,8 @@ impl PySessionContext {
                     .map(|f| f.into())
                     .collect::<Vec<_>>();
 
-                let registered_functions = runtime
-                    .block_on(Self::get_registered_functions(ctx))
+                let registered_functions = py
+                    .detach(|| runtime.block_on(Self::get_registered_functions(ctx)))
                     .map(|functions| {
                         functions
                             .into_iter()
