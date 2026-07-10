@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import re
+
 import pyarrow as pa
+
 from wren.connector.base import ConnectorABC
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
-
-import re
 
 _TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
 
