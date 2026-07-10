@@ -14,7 +14,6 @@ from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.sql import (
     SQLGenPostProcessor,
     construct_instructions,
-    construct_semantic_schema_contract,
     construct_valid_table_columns,
     construct_valid_table_names,
     get_calculated_field_instructions,
@@ -102,10 +101,6 @@ SQL:
 {% endfor %}
 {% endif %}
 
-{% if semantic_schema_contract %}
-{{ semantic_schema_contract }}
-{% endif %}
-
 ### QUESTION ###
 SQL generation reasoning: {{ sql_generation_reasoning }}
 Original SQL query: {{ sql }}
@@ -129,7 +124,6 @@ def prompt(
     has_json_field: bool = False,
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
-    schema_intent_analysis: dict[str, Any] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         sql=sql,
@@ -154,9 +148,6 @@ def prompt(
         ),
         sql_samples=sql_samples,
         sql_functions=sql_functions,
-        semantic_schema_contract=construct_semantic_schema_contract(
-            schema_intent_analysis
-        ),
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
@@ -186,8 +177,6 @@ async def post_process(
     documents: list[str],
     data_source: str,
     project_id: str | None = None,
-    query: str | None = None,
-    schema_intent_analysis: dict[str, Any] | None = None,
 ) -> dict:
     return await post_processor.run(
         regenerate_sql.get("replies"),
@@ -195,8 +184,6 @@ async def post_process(
         data_source=data_source,
         valid_table_names=construct_valid_table_names(documents),
         valid_table_columns=construct_valid_table_columns(documents),
-        query=query,
-        semantic_analysis=schema_intent_analysis,
     )
 
 
@@ -241,8 +228,6 @@ class SQLRegeneration(BasicPipeline):
         has_json_field: bool = False,
         sql_functions: list[SqlFunction] | None = None,
         sql_knowledge: SqlKnowledge | None = None,
-        query: str | None = None,
-        schema_intent_analysis: dict[str, Any] | None = None,
     ):
         logger.info("SQL Regeneration pipeline is running...")
 
@@ -255,8 +240,6 @@ class SQLRegeneration(BasicPipeline):
                 "sql_samples": sql_samples,
                 "instructions": instructions,
                 "project_id": project_id,
-                "query": query,
-                "schema_intent_analysis": schema_intent_analysis,
                 "has_calculated_field": has_calculated_field,
                 "has_metric": has_metric,
                 "has_json_field": has_json_field,

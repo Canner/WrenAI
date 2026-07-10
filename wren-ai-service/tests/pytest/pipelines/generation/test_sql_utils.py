@@ -7,14 +7,12 @@ from src.pipelines.generation.utils.sql import (
     find_invalid_table_references,
     get_json_field_instructions,
     get_metric_instructions,
-    get_schema_intent_analysis_error,
     normalize_data_source,
     normalize_generation_result_sql,
     normalize_sql_column_references_to_schema,
     normalize_sql_table_references_to_schema,
     get_sql_generation_system_prompt,
     get_text_to_sql_rules,
-    validate_sql_intent_alignment,
 )
 
 
@@ -260,72 +258,6 @@ def test_schema_validation_ignores_null_table_metadata():
         'SELECT * FROM "dbo_tblSales"',
         [None, "dbo_tblSales"],
     ) == []
-
-
-def test_schema_intent_validation_rejects_generic_count_for_requested_metric():
-    semantic_analysis = {
-        "analytical_intent": "ranking",
-        "metrics": ["invoice amount"],
-        "concept_mappings": [
-            {
-                "request_concept": "invoice amount",
-                "concept_type": "metric",
-                "schema_objects": ["dbo_tblFactSales.invoice_amount"],
-                "required_in_sql": True,
-            }
-        ],
-    }
-
-    error = validate_sql_intent_alignment(
-        "Show top customers by invoice amount",
-        'SELECT COUNT(*) AS "RecordCount" FROM "dbo_tblFactSales"',
-        {"dbo_tblFactSales": ["invoice_amount"]},
-        semantic_analysis=semantic_analysis,
-    )
-
-    assert "generic record count" in error
-
-
-def test_schema_intent_validation_requires_ranking_shape():
-    semantic_analysis = {
-        "analytical_intent": "ranking",
-        "ranking": ["top 10"],
-        "concept_mappings": [
-            {
-                "request_concept": "invoice amount",
-                "concept_type": "metric",
-                "schema_objects": ["dbo_tblFactSales.invoice_amount"],
-                "required_in_sql": True,
-            }
-        ],
-    }
-
-    error = validate_sql_intent_alignment(
-        "Show top 10 customers by invoice amount",
-        'SELECT SUM("dbo_tblFactSales"."invoice_amount") AS "invoice_amount" '
-        'FROM "dbo_tblFactSales"',
-        {"dbo_tblFactSales": ["invoice_amount"]},
-        semantic_analysis=semantic_analysis,
-    )
-
-    assert "sorting and limiting" in error
-
-
-def test_schema_intent_analysis_reports_missing_required_mapping():
-    semantic_analysis = {
-        "concept_mappings": [
-            {
-                "request_concept": "customer",
-                "concept_type": "entity",
-                "schema_objects": [],
-                "required_in_sql": True,
-            }
-        ]
-    }
-
-    assert "did not map required request concepts" in get_schema_intent_analysis_error(
-        semantic_analysis
-    )
 
 
 def test_schema_validation_ignores_null_column_metadata():

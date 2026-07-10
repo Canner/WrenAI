@@ -14,7 +14,6 @@ from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQLGenPostProcessor,
     construct_instructions,
-    construct_semantic_schema_contract,
     construct_valid_table_columns,
     construct_valid_table_names,
     get_calculated_field_instructions,
@@ -85,10 +84,6 @@ SQL:
 {% endfor %}
 {% endif %}
 
-{% if semantic_schema_contract %}
-{{ semantic_schema_contract }}
-{% endif %}
-
 ### QUESTION ###
 User's Question: {{ query }}
 
@@ -123,7 +118,6 @@ def prompt(
     has_json_field: bool = False,
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
-    schema_intent_analysis: dict[str, Any] | None = None,
 ) -> dict:
     schema_context = "\n".join(documents or []).lower()
     has_pcb_context = any(
@@ -163,9 +157,6 @@ def prompt(
         ),
         sql_samples=sql_samples,
         sql_functions=sql_functions,
-        semantic_schema_contract=construct_semantic_schema_contract(
-            schema_intent_analysis
-        ),
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
@@ -198,8 +189,6 @@ async def post_process(
     use_dry_plan: bool = False,
     allow_dry_plan_fallback: bool = True,
     allow_data_preview: bool = False,
-    query: str | None = None,
-    schema_intent_analysis: dict[str, Any] | None = None,
 ) -> dict:
     return await post_processor.run(
         generate_sql.get("replies"),
@@ -210,8 +199,6 @@ async def post_process(
         allow_data_preview=allow_data_preview,
         valid_table_names=construct_valid_table_names(documents),
         valid_table_columns=construct_valid_table_columns(documents),
-        query=query,
-        semantic_analysis=schema_intent_analysis,
     )
 
 
@@ -263,7 +250,6 @@ class SQLGeneration(BasicPipeline):
         allow_dry_plan_fallback: bool = True,
         allow_data_preview: bool = False,
         sql_knowledge: SqlKnowledge | None = None,
-        schema_intent_analysis: dict[str, Any] | None = None,
     ):
         logger.info("SQL Generation pipeline is running...")
 
@@ -287,7 +273,6 @@ class SQLGeneration(BasicPipeline):
                 "data_source": metadata.get("data_source", "local_file"),
                 "allow_data_preview": allow_data_preview,
                 "sql_knowledge": sql_knowledge,
-                "schema_intent_analysis": schema_intent_analysis,
                 **self._components,
             },
         )

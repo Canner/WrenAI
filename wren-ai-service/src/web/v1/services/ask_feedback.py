@@ -120,11 +120,8 @@ class AskFeedbackService:
                     instructions_task,
                 ) = await asyncio.gather(
                     self._pipelines["db_schema_retrieval"].run(
-                        query=ask_feedback_request.question,
                         tables=ask_feedback_request.tables,
                         project_id=ask_feedback_request.project_id,
-                        histories=[],
-                        enable_column_pruning=True,
                     ),
                     self._pipelines["sql_pairs_retrieval"].run(
                         query=ask_feedback_request.question,
@@ -162,9 +159,6 @@ class AskFeedbackService:
                 )
                 has_metric = _retrieval_result.get("has_metric", False)
                 has_json_field = _retrieval_result.get("has_json_field", False)
-                schema_intent_analysis = _retrieval_result.get(
-                    "semantic_analysis", {}
-                )
                 documents = _retrieval_result.get("retrieval_results", [])
                 table_ddls = [document.get("table_ddl") for document in documents]
                 sql_samples = sql_samples_task["formatted_output"].get("documents", [])
@@ -192,8 +186,6 @@ class AskFeedbackService:
                     has_json_field=has_json_field,
                     sql_functions=sql_functions,
                     sql_knowledge=sql_knowledge,
-                    query=ask_feedback_request.question,
-                    schema_intent_analysis=schema_intent_analysis,
                 )
 
                 if sql_valid_result := text_to_sql_generation_results["post_process"][
@@ -256,8 +248,6 @@ class AskFeedbackService:
                             project_id=ask_feedback_request.project_id,
                             sql_functions=sql_functions,
                             sql_knowledge=sql_knowledge,
-                            query=ask_feedback_request.question,
-                            schema_intent_analysis=schema_intent_analysis,
                         )
 
                         if valid_generation_result := sql_correction_results[
