@@ -1,4 +1,7 @@
+import pytest
+
 from src.pipelines.generation.utils.sql import (
+    SQLGenPostProcessor,
     contains_unsupported_mssql_json_access,
     construct_semantic_schema_contract,
     construct_valid_table_columns,
@@ -49,6 +52,23 @@ def test_schema_validation_allows_qualified_suffix_table_references():
         'SELECT * FROM "wrenai"."public"."dbo_repair_logs"',
         ["dbo_repair_logs"],
     ) == []
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_rejects_placeholder_schema_references_before_dry_run():
+    post_processor = SQLGenPostProcessor(engine=None)
+
+    result = await post_processor.run(
+        replies=['SELECT * FROM <table_name>'],
+        valid_table_names=["customers"],
+        valid_table_columns={"customers": ["CustName"]},
+        query="Show all customers",
+    )
+
+    invalid_result = result["invalid_generation_result"]
+    assert invalid_result["type"] == "SCHEMA_VALIDATION"
+    assert invalid_result["invalid_schema_objects"] == ["table_name"]
+    assert "placeholder schema references" in invalid_result["error"]
 
 
 def test_column_validation_allows_qualified_suffix_table_references():
