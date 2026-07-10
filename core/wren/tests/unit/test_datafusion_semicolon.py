@@ -59,3 +59,25 @@ def test_helper_preserves_semicolon_inside_string_literal() -> None:
 
 def test_helper_no_trailing_semicolon_unchanged() -> None:
     assert _strip_trailing_semicolon("SELECT 1") == "SELECT 1"
+
+
+def test_dry_run_strips_trailing_semicolon() -> None:
+    connector, ctx = _make_mock_connector()
+    connector.dry_run("SELECT 1;")
+    (sent,), _ = ctx.dry_run.call_args
+    assert sent == "SELECT 1"
+    assert not sent.endswith(";")
+
+
+def test_dry_run_strips_semicolon_and_whitespace() -> None:
+    connector, ctx = _make_mock_connector()
+    connector.dry_run("SELECT 1;  \n")
+    (sent,), _ = ctx.dry_run.call_args
+    assert sent == "SELECT 1"
+
+
+def test_dry_run_preserves_semicolon_inside_string_literal() -> None:
+    connector, ctx = _make_mock_connector()
+    connector.dry_run("SELECT ';' AS x")
+    (sent,), _ = ctx.dry_run.call_args
+    assert sent == "SELECT ';' AS x"

@@ -56,7 +56,11 @@ class DataFusionConnector(ConnectorABC):
         return reader.read_all()
 
     def dry_run(self, sql: str) -> None:
-        self.ctx.dry_run(sql)
+        # Trailing semicolons break DataFusion's dry-run path the same way they
+        # break the LIMIT subquery wrap (``SELECT 1;`` is a multi-statement batch
+        # the planner rejects). Strip only the terminating run so ';' inside
+        # string literals stays intact — same helper already used by ``query``.
+        self.ctx.dry_run(_strip_trailing_semicolon(sql))
 
     def close(self) -> None:
         pass
