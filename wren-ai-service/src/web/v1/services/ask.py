@@ -6829,30 +6829,14 @@ class AskService:
                 ]["invalid_generation_result"]:
                     rejected_schema_objects: set[str] = set()
                     semantic_retry_attempt = 0
-                    semantic_retriable_validation_types = {
-                        "SCHEMA_INTENT_VALIDATION",
-                        "SCHEMA_VALIDATION",
-                    }
                     while (
                         failed_dry_run_result
-                        and semantic_pipeline_active
-                        and failed_dry_run_result["type"]
-                        in semantic_retriable_validation_types
+                        and failed_dry_run_result["type"] == "SCHEMA_INTENT_VALIDATION"
                         and semantic_retry_attempt < 3
                         and not api_results
                     ):
                         semantic_retry_attempt += 1
                         semantic_retry_error = failed_dry_run_result.get("error", "")
-                        invalid_schema_objects = failed_dry_run_result.get(
-                            "invalid_schema_objects"
-                        )
-                        if isinstance(invalid_schema_objects, list):
-                            rejected_schema_objects.update(
-                                str(schema_object).strip()
-                                for schema_object in invalid_schema_objects
-                                if schema_object is not None
-                                and str(schema_object).strip()
-                            )
                         retry_context = self._semantic_retry_context(
                             schema_intent_analysis,
                             semantic_retry_error,
@@ -6909,8 +6893,7 @@ class AskService:
                                     semantic_retry_attempt,
                                     sorted(retry_selected_objects),
                                 )
-                                rejected_schema_objects.update(retry_selected_objects)
-                                continue
+                                break
 
                             retry_documents, retry_table_names, retry_table_ddls = (
                                 self._extract_retrieval_metadata(
@@ -6932,7 +6915,7 @@ class AskService:
                                     sorted(retry_selected_objects),
                                 )
                                 rejected_schema_objects.update(retry_selected_objects)
-                                continue
+                                break
 
                             _retrieval_result = retry_construct_result
                             schema_intent_analysis = retry_schema_intent_analysis
@@ -7029,8 +7012,6 @@ class AskService:
                                     "invalid_generation_result"
                                 ]
                             )
-                            if not failed_dry_run_result:
-                                break
                             invalid_sql = failed_dry_run_result.get(
                                 "sql", invalid_sql
                             )
@@ -7056,16 +7037,6 @@ class AskService:
                         if api_results:
                             break
                         if not failed_dry_run_result:
-                            break
-                        if (
-                            semantic_pipeline_active
-                            and failed_dry_run_result["type"]
-                            in semantic_retriable_validation_types
-                        ):
-                            invalid_sql = failed_dry_run_result.get("sql", invalid_sql)
-                            error_message = failed_dry_run_result.get(
-                                "error", error_message
-                            )
                             break
                         if failed_dry_run_result["type"] in {
                             "TIME_OUT",

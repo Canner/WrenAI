@@ -1496,28 +1496,6 @@ def _normalize_mssql_top_clause(sql: str) -> str:
     )
 
 
-def _extract_placeholder_schema_references(sql: str) -> list[str]:
-    placeholders = re.findall(r"<\s*([^<>]+?)\s*>", sql or "")
-    placeholder_refs = [
-        str(placeholder).strip()
-        for placeholder in placeholders
-        if str(placeholder).strip()
-    ]
-
-    placeholder_names = re.findall(
-        r"\b(?:dbo_)?(?:table|column|schema|database|field|metric|dimension|date|amount|customer)_?name\b",
-        sql or "",
-        flags=re.IGNORECASE,
-    )
-    placeholder_refs.extend(
-        str(name).strip()
-        for name in placeholder_names
-        if str(name).strip()
-    )
-
-    return sorted(set(placeholder_refs))
-
-
 def normalize_generation_result_sql(sql: str, data_source: str | None = None) -> str:
     normalized = _normalize_identifier_quote_syntax(sql)
     normalized = _normalize_mssql_top_clause(normalized)
@@ -1608,27 +1586,6 @@ class SQLGenPostProcessor:
                     },
                 }
 
-            placeholder_schema_references = _extract_placeholder_schema_references(
-                cleaned_generation_result
-            )
-            if placeholder_schema_references:
-                invalid_placeholder_list = ", ".join(placeholder_schema_references)
-                return {
-                    "valid_generation_result": {},
-                    "invalid_generation_result": {
-                        "sql": cleaned_generation_result,
-                        "original_sql": cleaned_generation_result,
-                        "type": "SCHEMA_VALIDATION",
-                        "error": (
-                            "Generated SQL contains placeholder schema references "
-                            f"that are not active datasource objects: {invalid_placeholder_list}. "
-                            "Use only concrete table and column names from the active metadata."
-                        ),
-                        "invalid_schema_objects": placeholder_schema_references,
-                        "correlation_id": "",
-                    },
-                }
-
             invalid_table_references = find_invalid_table_references(
                 cleaned_generation_result,
                 valid_table_names or [],
@@ -1648,7 +1605,6 @@ class SQLGenPostProcessor:
                             "Use only these valid table names exactly as shown: "
                             f"{valid_table_list}"
                         ),
-                        "invalid_schema_objects": invalid_table_references,
                         "correlation_id": "",
                     },
                 }
@@ -1672,7 +1628,6 @@ class SQLGenPostProcessor:
                             "Use only these valid table columns exactly as shown: "
                             f"{valid_column_list}"
                         ),
-                        "invalid_schema_objects": invalid_column_references,
                         "correlation_id": "",
                     },
                 }
