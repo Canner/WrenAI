@@ -15,6 +15,7 @@ from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQLGenPostProcessor,
     construct_instructions,
+    construct_semantic_schema_contract,
     construct_valid_table_columns,
     construct_valid_table_names,
     get_sql_generation_model_kwargs,
@@ -98,6 +99,10 @@ or add catalog/schema prefixes unless the table name is shown that way here.
 {% endfor %}
 {% endif %}
 
+{% if semantic_schema_contract %}
+{{ semantic_schema_contract }}
+{% endif %}
+
 ### QUESTION ###
 {% if query %}
 User's Question: {{ query }}
@@ -130,6 +135,7 @@ def prompt(
     query: str | None = None,
     instructions: list[dict] | None = None,
     sql_functions: list[SqlFunction] | None = None,
+    schema_intent_analysis: dict[str, Any] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
@@ -141,6 +147,9 @@ def prompt(
             instructions=instructions,
         ),
         sql_functions=sql_functions,
+        semantic_schema_contract=construct_semantic_schema_contract(
+            schema_intent_analysis
+        ),
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
@@ -172,6 +181,8 @@ async def post_process(
     project_id: str | None = None,
     use_dry_plan: bool = False,
     allow_dry_plan_fallback: bool = True,
+    query: str | None = None,
+    schema_intent_analysis: dict[str, Any] | None = None,
 ) -> dict:
     return await post_processor.run(
         generate_sql_correction.get("replies"),
@@ -181,6 +192,8 @@ async def post_process(
         allow_dry_plan_fallback=allow_dry_plan_fallback,
         valid_table_names=construct_valid_table_names(documents),
         valid_table_columns=construct_valid_table_columns(documents),
+        query=query,
+        semantic_analysis=schema_intent_analysis,
     )
 
 
@@ -227,6 +240,7 @@ class SQLCorrection(BasicPipeline):
         allow_dry_plan_fallback: bool = True,
         sql_knowledge: SqlKnowledge | None = None,
         query: str | None = None,
+        schema_intent_analysis: dict[str, Any] | None = None,
     ):
         logger.info("SQLCorrection pipeline is running...")
 
@@ -238,6 +252,7 @@ class SQLCorrection(BasicPipeline):
                 "invalid_generation_result": invalid_generation_result,
                 "documents": contexts,
                 "query": query,
+                "schema_intent_analysis": schema_intent_analysis,
                 "instructions": instructions,
                 "sql_functions": sql_functions,
                 "project_id": project_id,

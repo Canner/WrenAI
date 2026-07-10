@@ -11,6 +11,7 @@ from src.core.pipeline import BasicPipeline
 from src.pipelines.generation.utils.sql import (
     construct_valid_table_columns,
     construct_valid_table_names,
+    get_schema_intent_analysis_error,
     normalize_sql_column_references_to_schema,
     normalize_sql_table_references_to_schema,
 )
@@ -4429,6 +4430,94 @@ class AskService:
         ]
         return table_names, table_ddls
 
+    def _semantic_analysis_has_contract(
+        self, semantic_analysis: dict[str, Any] | None
+    ) -> bool:
+        if not isinstance(semantic_analysis, dict) or not semantic_analysis:
+            return False
+        if semantic_analysis.get("supported_schema_objects"):
+            return True
+        mappings = semantic_analysis.get("concept_mappings")
+        if isinstance(mappings, list) and any(
+            isinstance(mapping, dict) and mapping.get("schema_objects")
+            for mapping in mappings
+        ):
+            return True
+        candidates = semantic_analysis.get("candidate_schema_scores")
+        if isinstance(candidates, list) and any(
+            isinstance(candidate, dict)
+            and candidate.get("is_complete") is True
+            and candidate.get("schema_objects")
+            for candidate in candidates
+        ):
+            return True
+        return False
+
+    def _semantic_schema_objects(
+        self, semantic_analysis: dict[str, Any] | None
+    ) -> list[str]:
+        if not isinstance(semantic_analysis, dict):
+            return []
+        schema_objects: list[str] = []
+        supported = semantic_analysis.get("supported_schema_objects")
+        if isinstance(supported, list):
+            schema_objects.extend(str(item).strip() for item in supported if item)
+        mappings = semantic_analysis.get("concept_mappings")
+        if isinstance(mappings, list):
+            for mapping in mappings:
+                if not isinstance(mapping, dict):
+                    continue
+                mapped_objects = mapping.get("schema_objects")
+                if isinstance(mapped_objects, str) and mapped_objects.strip():
+                    schema_objects.append(mapped_objects.strip())
+                elif isinstance(mapped_objects, list):
+                    schema_objects.extend(
+                        str(item).strip() for item in mapped_objects if item
+                    )
+        return list(dict.fromkeys(item for item in schema_objects if item))
+
+    def _semantic_retry_context(
+        self,
+        *,
+        semantic_analysis: dict[str, Any] | None,
+        invalid_generation_result: dict[str, Any] | None,
+        retry_attempt: int,
+    ) -> dict[str, Any]:
+        invalid_generation_result = invalid_generation_result or {}
+        rejected_schema_objects = self._semantic_schema_objects(semantic_analysis)
+        invalid_schema_objects = invalid_generation_result.get("invalid_schema_objects")
+        if isinstance(invalid_schema_objects, list):
+            rejected_schema_objects.extend(
+                str(item).strip() for item in invalid_schema_objects if item
+            )
+        elif isinstance(invalid_schema_objects, str) and invalid_schema_objects.strip():
+            rejected_schema_objects.append(invalid_schema_objects.strip())
+
+        selected_candidates = []
+        if isinstance(semantic_analysis, dict):
+            candidates = semantic_analysis.get("candidate_schema_scores")
+            if isinstance(candidates, list):
+                selected_candidates = [
+                    candidate
+                    for candidate in candidates
+                    if isinstance(candidate, dict)
+                    and (
+                        candidate.get("is_complete") is True
+                        or candidate.get("schema_objects")
+                    )
+                ][:3]
+
+        return {
+            "retry_attempt": retry_attempt,
+            "failure_type": invalid_generation_result.get("type"),
+            "failure_reason": invalid_generation_result.get("error"),
+            "rejected_sql": invalid_generation_result.get("sql"),
+            "rejected_schema_objects": list(
+                dict.fromkeys(item for item in rejected_schema_objects if item)
+            ),
+            "rejected_candidates": selected_candidates,
+        }
+
     async def _complete_sql_generation_context(
         self,
         *,
@@ -5280,6 +5369,9 @@ class AskService:
         table_names = []
         table_ddls = []
         _retrieval_result = {}
+        schema_intent_analysis: dict[str, Any] = {}
+        semantic_pipeline_active = False
+        semantic_contract_available = False
         error_message = None
         invalid_sql = None
         allow_sql_generation_reasoning = (
@@ -5400,7 +5492,7 @@ class AskService:
                             tables=explicit_table_names,
                             project_id=ask_request.project_id,
                             histories=[],
-                            enable_column_pruning=False,
+                            enable_column_pruning=True,
                         ),
                         timeout_seconds=min(
                             self._schema_retrieval_timeout_seconds,
@@ -5426,10 +5518,10 @@ class AskService:
                         retrieval_result = await self._run_with_timeout(
                             "Full active schema retrieval for explicit table",
                             self._pipelines["db_schema_retrieval"].run(
-                                query="",
+                                query=user_query,
                                 project_id=ask_request.project_id,
                                 histories=[],
-                                enable_column_pruning=False,
+                                enable_column_pruning=True,
                             ),
                             timeout_seconds=min(
                                 self._schema_retrieval_timeout_seconds,
@@ -5449,14 +5541,30 @@ class AskService:
                     _retrieval_result = retrieval_result.get(
                         "construct_retrieval_results", {}
                     )
+                    schema_intent_analysis = _retrieval_result.get(
+                        "semantic_analysis", {}
+                    )
+                    semantic_pipeline_active = True
+                    semantic_contract_available = self._semantic_analysis_has_contract(
+                        schema_intent_analysis
+                    )
+                    logger.info(
+                        "sql_generation_pipeline_decision query_id=%s semantic_pipeline_active=%s semantic_contract_available=%s selected_schema_objects=%s",
+                        query_id,
+                        semantic_pipeline_active,
+                        semantic_contract_available,
+                        self._semantic_schema_objects(schema_intent_analysis),
+                    )
                     logger.info(
                         "Retrieved explicit tables for query_id %s: %s",
                         query_id,
                         table_names,
                     )
 
-                    if table_question_sql := self._build_schema_grounded_table_question_sql(
+                    if not semantic_pipeline_active and (
+                        table_question_sql := self._build_schema_grounded_table_question_sql(
                         user_query, table_ddls
+                        )
                     ):
                         ask_result = self._build_validated_ask_result_from_sql(
                             table_question_sql,
@@ -5480,8 +5588,10 @@ class AskService:
                             return results
                         invalid_sql = table_question_sql
 
-                    if explicit_table_preview := self._build_explicit_table_preview_sql(
+                    if not semantic_pipeline_active and (
+                        explicit_table_preview := self._build_explicit_table_preview_sql(
                         user_query, table_ddls
+                        )
                     ):
                         explicit_sql, explicit_table_name = explicit_table_preview
                         if explicit_table_name not in table_names:
@@ -5508,7 +5618,7 @@ class AskService:
                             return results
                         invalid_sql = explicit_sql
 
-                    if documents and (
+                    if not semantic_pipeline_active and documents and (
                         deterministic_sql := self._build_schema_grounded_sales_sql(
                             user_query, table_ddls
                         )
@@ -5948,10 +6058,7 @@ class AskService:
                             query=sql_user_query,
                             histories=[],
                             project_id=ask_request.project_id,
-                            enable_column_pruning=(
-                                enable_column_pruning
-                                and not self._is_data_analysis_query(user_query)
-                            ),
+                            enable_column_pruning=True,
                         ),
                         timeout_seconds=self._schema_retrieval_timeout_seconds,
                     )
@@ -5963,12 +6070,12 @@ class AskService:
                         error,
                     )
                     retrieval_result = await self._run_with_timeout(
-                        "Deployed schema fallback retrieval",
+                        "Semantic schema retry after retrieval timeout",
                         self._pipelines["db_schema_retrieval"].run(
-                            query="",
+                            query=sql_user_query,
                             histories=[],
                             project_id=ask_request.project_id,
-                            enable_column_pruning=False,
+                            enable_column_pruning=True,
                         ),
                         timeout_seconds=min(
                             self._schema_retrieval_timeout_seconds,
@@ -5977,6 +6084,20 @@ class AskService:
                     )
                 _retrieval_result = retrieval_result.get(
                     "construct_retrieval_results", {}
+                )
+                schema_intent_analysis = _retrieval_result.get(
+                    "semantic_analysis", {}
+                )
+                semantic_pipeline_active = True
+                semantic_contract_available = self._semantic_analysis_has_contract(
+                    schema_intent_analysis
+                )
+                logger.info(
+                    "sql_generation_pipeline_decision query_id=%s semantic_pipeline_active=%s semantic_contract_available=%s selected_schema_objects=%s",
+                    query_id,
+                    semantic_pipeline_active,
+                    semantic_contract_available,
+                    self._semantic_schema_objects(schema_intent_analysis),
                 )
                 documents, table_names, table_ddls = (
                     self._extract_retrieval_metadata(retrieval_result)
@@ -6005,7 +6126,7 @@ class AskService:
                                 tables=explicit_table_names,
                                 project_id=ask_request.project_id,
                                 histories=[],
-                                enable_column_pruning=enable_column_pruning,
+                                enable_column_pruning=True,
                             ),
                             timeout_seconds=min(
                                 self._schema_retrieval_timeout_seconds,
@@ -6014,6 +6135,13 @@ class AskService:
                         )
                         _retrieval_result = retrieval_result.get(
                             "construct_retrieval_results", {}
+                        )
+                        schema_intent_analysis = _retrieval_result.get(
+                            "semantic_analysis", {}
+                        )
+                        semantic_pipeline_active = True
+                        semantic_contract_available = self._semantic_analysis_has_contract(
+                            schema_intent_analysis
                         )
                         documents, table_names, table_ddls = (
                             self._extract_retrieval_metadata(retrieval_result)
@@ -6024,7 +6152,11 @@ class AskService:
                                 documents,
                             )
                         )
-                if not documents and self._is_data_analysis_query(user_query):
+                if (
+                    not semantic_pipeline_active
+                    and not documents
+                    and self._is_data_analysis_query(user_query)
+                ):
                     logger.info(
                         "Query-based schema retrieval returned no tables for data question; "
                         "retrying full active deployed schema for query_id %s",
@@ -6047,6 +6179,13 @@ class AskService:
                     _retrieval_result = retrieval_result.get(
                         "construct_retrieval_results", {}
                     )
+                    schema_intent_analysis = _retrieval_result.get(
+                        "semantic_analysis", {}
+                    )
+                    semantic_pipeline_active = True
+                    semantic_contract_available = self._semantic_analysis_has_contract(
+                        schema_intent_analysis
+                    )
                     documents, table_names, table_ddls = (
                         self._extract_retrieval_metadata(retrieval_result)
                     )
@@ -6061,7 +6200,7 @@ class AskService:
                     "Retrieved tables for query_id %s: %s", query_id, table_names
                 )
 
-                if not api_results and (
+                if not semantic_pipeline_active and not api_results and (
                     table_question_sql := self._build_schema_grounded_table_question_sql(
                         user_query, table_ddls
                     )
@@ -6081,7 +6220,7 @@ class AskService:
                         invalid_sql = table_question_sql
                         error_message = "Schema-grounded table SQL was not valid for the active datasource schema."
 
-                if not api_results and (
+                if not semantic_pipeline_active and not api_results and (
                     explicit_table_preview := self._build_explicit_table_preview_sql(
                         user_query, table_ddls
                     )
@@ -6105,7 +6244,7 @@ class AskService:
                         invalid_sql = explicit_sql
                         error_message = "Explicit table preview SQL was not valid for the active datasource schema."
 
-                if not api_results and (
+                if not semantic_pipeline_active and not api_results and (
                     audit_log_activity_sql := self._build_audit_log_activity_sql(
                         user_query, table_ddls, table_names=table_names
                     )
@@ -6129,6 +6268,7 @@ class AskService:
 
                 if (
                     not api_results
+                    and not semantic_pipeline_active
                     and self._is_data_analysis_query(user_query)
                     and (
                         schema_grounded_sql := self._build_schema_grounded_analytics_sql(
@@ -6153,16 +6293,20 @@ class AskService:
                             "Schema-grounded SQL was not valid for the active datasource schema and question intent."
                         )
 
-                if not api_results and any(
-                    term in user_query.lower()
-                    for term in (
-                        "pcb",
-                        "repair",
-                        "failure",
-                        "business unit",
-                        "business units",
-                        "product line",
-                        "product family",
+                if (
+                    not semantic_pipeline_active
+                    and not api_results
+                    and any(
+                        term in user_query.lower()
+                        for term in (
+                            "pcb",
+                            "repair",
+                            "failure",
+                            "business unit",
+                            "business units",
+                            "product line",
+                            "product family",
+                        )
                     )
                 ):
                     operational_sql = self._build_schema_grounded_analytics_sql(
@@ -6186,7 +6330,7 @@ class AskService:
                                 "Schema-grounded operational SQL was not valid for the active datasource schema and question intent."
                             )
 
-                if not api_results and (
+                if not semantic_pipeline_active and not api_results and (
                     deterministic_sales_sql := self._build_schema_grounded_sales_sql(
                         user_query, table_ddls
                     )
@@ -6210,6 +6354,7 @@ class AskService:
 
                 should_retry_full_schema = (
                     not api_results
+                    and not semantic_pipeline_active
                     and self._is_data_analysis_query(user_query)
                     and "db_schema_retrieval" in self._pipelines
                 )
@@ -6319,7 +6464,7 @@ class AskService:
                     results["metadata"]["type"] = "TEXT_TO_SQL"
                     return results
 
-                if not documents:
+                if not semantic_pipeline_active and not documents:
                     if heuristic_sql := self._build_heuristic_text_to_sql_fallback(
                         user_query, table_ddls, table_names=table_names
                     ):
@@ -6406,12 +6551,23 @@ class AskService:
                     table_ddls=table_ddls,
                 )
                 if completed_retrieval_result:
-                    _retrieval_result = completed_retrieval_result
+                    completed_semantic_analysis = completed_retrieval_result.get(
+                        "semantic_analysis", {}
+                    )
+                    if self._semantic_analysis_has_contract(
+                        completed_semantic_analysis
+                    ):
+                        _retrieval_result = completed_retrieval_result
+                        schema_intent_analysis = completed_semantic_analysis
+                        semantic_pipeline_active = True
+                        semantic_contract_available = True
 
             sql_generation_histories = histories
             if self._is_data_analysis_query(
                 sql_user_query
-            ) and not self._needs_conversation_context(sql_user_query):
+            ) and not self._needs_conversation_context(
+                sql_user_query
+            ) and not semantic_pipeline_active:
                 sql_generation_histories = []
                 allow_sql_generation_reasoning = False
                 allow_sql_knowledge_retrieval = False
@@ -6420,10 +6576,31 @@ class AskService:
                     "Using fast standalone SQL generation path for query_id %s",
                     query_id,
                 )
+            elif semantic_pipeline_active:
+                logger.info(
+                    "fast_standalone_sql_generation_disabled query_id=%s reason=semantic_pipeline_active",
+                    query_id,
+                )
+
+            if (
+                semantic_pipeline_active
+                and not semantic_contract_available
+                and not api_results
+            ):
+                error_message = (
+                    "Semantic schema retrieval did not produce a complete active-schema "
+                    "contract for this request. I cannot generate unrelated SQL."
+                )
+                logger.info(
+                    "semantic_pipeline_no_contract query_id=%s reason=%s",
+                    query_id,
+                    error_message,
+                )
 
             if (
                 not self._is_stopped(query_id, self._ask_results)
                 and not api_results
+                and (not semantic_pipeline_active or semantic_contract_available)
                 and allow_sql_generation_reasoning
             ):
                 self._ask_results[query_id] = AskResultResponse(
@@ -6495,7 +6672,11 @@ class AskService:
                     is_followup=True if histories else False,
                 )
 
-            if not self._is_stopped(query_id, self._ask_results) and not api_results:
+            if (
+                not self._is_stopped(query_id, self._ask_results)
+                and not api_results
+                and (not semantic_pipeline_active or semantic_contract_available)
+            ):
                 self._ask_results[query_id] = AskResultResponse(
                     status="generating",
                     type="TEXT_TO_SQL",
@@ -6561,6 +6742,7 @@ class AskService:
                                 use_dry_plan=use_dry_plan,
                                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                                 sql_knowledge=sql_knowledge,
+                                schema_intent_analysis=schema_intent_analysis,
                             ),
                         )
                     else:
@@ -6580,12 +6762,14 @@ class AskService:
                                 use_dry_plan=use_dry_plan,
                                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                                 sql_knowledge=sql_knowledge,
+                                schema_intent_analysis=schema_intent_analysis,
                             ),
                         )
                 except TimeoutError as generation_timeout:
                     logger.warning(
-                        "SQL generation timed out for query_id %s; trying schema-grounded fallback: %s",
+                        "SQL generation timed out for query_id %s; semantic_pipeline_active=%s error=%s",
                         query_id,
+                        semantic_pipeline_active,
                         generation_timeout,
                     )
                     text_to_sql_generation_results = {
@@ -6613,7 +6797,210 @@ class AskService:
                 elif failed_dry_run_result := text_to_sql_generation_results[
                     "post_process"
                 ]["invalid_generation_result"]:
-                    while current_sql_correction_retries < max_sql_correction_retries:
+                    semantic_validation_failure_types = {
+                        "SCHEMA_INTENT_VALIDATION",
+                        "SCHEMA_VALIDATION",
+                        "DRY_RUN",
+                    }
+                    semantic_retry_attempt = 0
+                    max_semantic_retries = 3
+                    while (
+                        semantic_pipeline_active
+                        and failed_dry_run_result
+                        and failed_dry_run_result.get("type")
+                        in semantic_validation_failure_types
+                        and semantic_retry_attempt < max_semantic_retries
+                        and not api_results
+                    ):
+                        semantic_retry_attempt += 1
+                        retry_context = self._semantic_retry_context(
+                            semantic_analysis=schema_intent_analysis,
+                            invalid_generation_result=failed_dry_run_result,
+                            retry_attempt=semantic_retry_attempt,
+                        )
+                        logger.info(
+                            "semantic_sql_retry_start query_id=%s retry_attempt=%s failure_type=%s rejected_schema_objects=%s failure_reason=%s",
+                            query_id,
+                            semantic_retry_attempt,
+                            failed_dry_run_result.get("type"),
+                            retry_context.get("rejected_schema_objects"),
+                            failed_dry_run_result.get("error"),
+                        )
+
+                        retrieval_result = await self._run_with_timeout(
+                            "Semantic schema retry retrieval",
+                            self._pipelines["db_schema_retrieval"].run(
+                                query=sql_user_query,
+                                histories=[],
+                                project_id=ask_request.project_id,
+                                enable_column_pruning=True,
+                                semantic_retry_context=retry_context,
+                            ),
+                            timeout_seconds=self._schema_retrieval_timeout_seconds,
+                        )
+                        _retrieval_result = retrieval_result.get(
+                            "construct_retrieval_results", {}
+                        )
+                        schema_intent_analysis = _retrieval_result.get(
+                            "semantic_analysis", {}
+                        )
+                        semantic_pipeline_active = True
+                        semantic_contract_available = self._semantic_analysis_has_contract(
+                            schema_intent_analysis
+                        )
+                        documents, table_names, table_ddls = (
+                            self._extract_retrieval_metadata(retrieval_result)
+                        )
+                        has_calculated_field = _retrieval_result.get(
+                            "has_calculated_field", False
+                        )
+                        has_metric = _retrieval_result.get("has_metric", False)
+                        has_json_field = _retrieval_result.get("has_json_field", False)
+                        semantic_support_error = get_schema_intent_analysis_error(
+                            schema_intent_analysis
+                        )
+                        logger.info(
+                            "semantic_sql_retry_contract query_id=%s retry_attempt=%s semantic_pipeline_active=%s semantic_contract_available=%s selected_schema_objects=%s support_error=%s",
+                            query_id,
+                            semantic_retry_attempt,
+                            semantic_pipeline_active,
+                            semantic_contract_available,
+                            self._semantic_schema_objects(schema_intent_analysis),
+                            semantic_support_error,
+                        )
+                        if (
+                            not semantic_contract_available
+                            or not documents
+                            or semantic_support_error
+                        ):
+                            invalid_sql = failed_dry_run_result.get(
+                                "sql", invalid_sql
+                            )
+                            error_message = semantic_support_error or (
+                                "Semantic schema retrieval did not produce a complete active-schema contract."
+                            )
+                            logger.info(
+                                "semantic_sql_retry_rejected query_id=%s retry_attempt=%s reason=%s",
+                                query_id,
+                                semantic_retry_attempt,
+                                error_message,
+                            )
+                            continue
+
+                        if sql_generation_histories:
+                            retry_generation_results = await self._run_with_timeout(
+                                "Follow-up semantic SQL retry generation",
+                                self._pipelines["followup_sql_generation"].run(
+                                    query=sql_user_query,
+                                    contexts=table_ddls,
+                                    sql_generation_reasoning=sql_generation_reasoning,
+                                    histories=sql_generation_histories,
+                                    project_id=ask_request.project_id,
+                                    sql_samples=sql_samples,
+                                    instructions=instructions,
+                                    has_calculated_field=has_calculated_field,
+                                    has_metric=has_metric,
+                                    has_json_field=has_json_field,
+                                    sql_functions=sql_functions,
+                                    use_dry_plan=use_dry_plan,
+                                    allow_dry_plan_fallback=allow_dry_plan_fallback,
+                                    sql_knowledge=sql_knowledge,
+                                    schema_intent_analysis=schema_intent_analysis,
+                                ),
+                            )
+                        else:
+                            retry_generation_results = await self._run_with_timeout(
+                                "Semantic SQL retry generation",
+                                self._pipelines["sql_generation"].run(
+                                    query=sql_user_query,
+                                    contexts=table_ddls,
+                                    sql_generation_reasoning=sql_generation_reasoning,
+                                    project_id=ask_request.project_id,
+                                    sql_samples=sql_samples,
+                                    instructions=instructions,
+                                    has_calculated_field=has_calculated_field,
+                                    has_metric=has_metric,
+                                    has_json_field=has_json_field,
+                                    sql_functions=sql_functions,
+                                    use_dry_plan=use_dry_plan,
+                                    allow_dry_plan_fallback=allow_dry_plan_fallback,
+                                    sql_knowledge=sql_knowledge,
+                                    schema_intent_analysis=schema_intent_analysis,
+                                ),
+                            )
+
+                        retry_post_process = retry_generation_results.get(
+                            "post_process", {}
+                        )
+                        if retry_valid_result := retry_post_process.get(
+                            "valid_generation_result"
+                        ):
+                            if ask_result := self._build_validated_ask_result_from_sql(
+                                retry_valid_result.get("sql"),
+                                table_ddls,
+                                sql_user_query,
+                            ):
+                                logger.info(
+                                    "semantic_sql_retry_accepted query_id=%s retry_attempt=%s selected_schema_objects=%s",
+                                    query_id,
+                                    semantic_retry_attempt,
+                                    self._semantic_schema_objects(
+                                        schema_intent_analysis
+                                    ),
+                                )
+                                api_results = [ask_result]
+                                failed_dry_run_result = {}
+                                break
+                            invalid_sql = retry_valid_result.get("sql")
+                            error_message = (
+                                "Semantic SQL retry generated SQL that failed active-schema validation."
+                            )
+                            failed_dry_run_result = {
+                                "type": "SCHEMA_INTENT_VALIDATION",
+                                "sql": invalid_sql,
+                                "original_sql": invalid_sql,
+                                "error": error_message,
+                            }
+                        else:
+                            failed_dry_run_result = retry_post_process.get(
+                                "invalid_generation_result", {}
+                            )
+                            invalid_sql = failed_dry_run_result.get(
+                                "sql", invalid_sql
+                            )
+                            error_message = failed_dry_run_result.get(
+                                "error", error_message
+                            )
+                            logger.info(
+                                "semantic_sql_retry_failed query_id=%s retry_attempt=%s failure_type=%s error=%s",
+                                query_id,
+                                semantic_retry_attempt,
+                                failed_dry_run_result.get("type"),
+                                error_message,
+                            )
+
+                    if semantic_pipeline_active and not api_results:
+                        current_sql_correction_retries = max_sql_correction_retries
+                        if failed_dry_run_result:
+                            invalid_sql = failed_dry_run_result.get(
+                                "sql", invalid_sql
+                            )
+                            error_message = failed_dry_run_result.get(
+                                "error", error_message
+                            )
+                        logger.info(
+                            "semantic_pipeline_exhausted query_id=%s retry_attempts=%s error=%s invalid_sql=%s",
+                            query_id,
+                            semantic_retry_attempt,
+                            error_message,
+                            invalid_sql,
+                        )
+
+                    while (
+                        failed_dry_run_result
+                        and not api_results
+                        and current_sql_correction_retries < max_sql_correction_retries
+                    ):
                         if failed_dry_run_result["type"] in {
                             "TIME_OUT",
                             "UNSUPPORTED_SQL",
@@ -6678,6 +7065,7 @@ class AskService:
                                 sql_functions=sql_functions,
                                 sql_knowledge=sql_knowledge,
                                 query=sql_user_query,
+                                schema_intent_analysis=schema_intent_analysis,
                             ),
                         )
 
@@ -6720,8 +7108,10 @@ class AskService:
                 results["ask_result"] = api_results
                 results["metadata"]["type"] = "TEXT_TO_SQL"
             else:
-                if heuristic_sql := self._build_heuristic_text_to_sql_fallback(
-                    user_query, table_ddls, table_names=table_names
+                if not semantic_pipeline_active and (
+                    heuristic_sql := self._build_heuristic_text_to_sql_fallback(
+                        user_query, table_ddls, table_names=table_names
+                    )
                 ):
                     logger.info(
                         "Using heuristic text-to-sql fallback for query_id %s: %s",
@@ -6756,16 +7146,31 @@ class AskService:
 
                 logger.exception(f"ask pipeline - NO_RELEVANT_SQL: {user_query}")
                 if not self._is_stopped(query_id, self._ask_results):
-                    self._ask_results[query_id] = (
-                        self._build_no_relevant_active_datasource_response(
-                            trace_id,
-                            rephrased_question=rephrased_question,
-                            intent_reasoning=intent_reasoning,
-                            retrieved_tables=table_names,
-                            sql_generation_reasoning=sql_generation_reasoning,
-                            is_followup=True if histories else False,
+                    if semantic_pipeline_active and error_message:
+                        self._ask_results[query_id] = (
+                            self._build_failed_text_to_sql_response(
+                                trace_id,
+                                error_message,
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                retrieved_tables=table_names,
+                                sql_generation_reasoning=sql_generation_reasoning,
+                                invalid_sql=invalid_sql,
+                                is_followup=True if histories else False,
+                                code="NO_RELEVANT_SQL",
+                            )
                         )
-                    )
+                    else:
+                        self._ask_results[query_id] = (
+                            self._build_no_relevant_active_datasource_response(
+                                trace_id,
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                retrieved_tables=table_names,
+                                sql_generation_reasoning=sql_generation_reasoning,
+                                is_followup=True if histories else False,
+                            )
+                        )
                 if error_message or invalid_sql:
                     logger.info(
                         "Suppressed technical SQL failure for query_id %s. "
@@ -6774,9 +7179,13 @@ class AskService:
                         error_message,
                         invalid_sql,
                     )
-                results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
+                results["metadata"]["error_type"] = (
+                    "NO_RELEVANT_SQL" if semantic_pipeline_active else "NO_RELEVANT_DATA"
+                )
                 results["metadata"]["error_message"] = (
-                    NO_RELEVANT_ACTIVE_DATASOURCE_MESSAGE
+                    error_message
+                    if semantic_pipeline_active and error_message
+                    else NO_RELEVANT_ACTIVE_DATASOURCE_MESSAGE
                 )
                 results["metadata"]["type"] = "TEXT_TO_SQL"
 
