@@ -47,11 +47,14 @@ The database schema includes tables, columns, primary keys, foreign keys, relati
 9. For each selected column, provide a concise reason for why the column is necessary.
 10. Populate `concept_mappings` for every important concept in the request. Each mapping must classify the concept, list only directly supporting schema objects, state whether it must appear in SQL, and include a confidence score between 0 and 1.
 11. Populate `interpretations` when the request has more than one plausible schema interpretation. Rank interpretations by semantic relevance, confidence, and schema support; mark the selected interpretation only when it is clearly the best supported one. Keep non-selected high-confidence interpretations so the SQL pipeline can retry the next-best mapping if validation fails.
-12. If a "." is included in columns, put the name before the first dot into chosen columns.
-13. The number of columns chosen must match the number of reasoning.
-14. Final chosen columns must be only column names, don't prefix it with table names.
-15. If the chosen column is a child column of a STRUCT type column, choose the parent column instead of the child column.
-16. If the schema cannot answer the question, return the closest directly relevant schema objects only if they explain the limitation. Do not select unrelated fallback tables.
+12. Populate `candidate_schema_scores` with ranked candidates. Score each candidate by full concept coverage, semantic fit, relationship viability, metric validity, and whether it satisfies filters/time/ranking/aggregation requirements. Reject partial lexical matches even when a table or column name looks similar.
+13. Select only the highest-confidence candidate whose mappings completely cover all required concepts. If no candidate fully covers the request, set `is_fully_supported` to false and list missing or ambiguous requirements instead of selecting a partial mapping.
+14. If RETRY CONTEXT is provided, treat rejected schema objects as failed mappings. Do not select those objects again unless every complete candidate is exhausted; explain any reuse in `support_reasoning`.
+15. If a "." is included in columns, put the name before the first dot into chosen columns.
+16. The number of columns chosen must match the number of reasoning.
+17. Final chosen columns must be only column names, don't prefix it with table names.
+18. If the chosen column is a child column of a STRUCT type column, choose the parent column instead of the child column.
+19. If the schema cannot answer the question, return the closest directly relevant schema objects only if they explain the limitation. Do not select unrelated fallback tables.
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:
@@ -69,6 +72,17 @@ Please provide your response as a JSON object, structured as follows:
         "time_constraints": ["time filters, grains, or trend requirements"],
         "ranking": ["top/bottom/order/limit requirements"],
         "supported_schema_objects": ["table.column or metric names that directly support the request"],
+        "candidate_schema_scores": [
+            {
+                "candidate_id": "candidate-1",
+                "schema_objects": ["table.column objects included in this candidate"],
+                "covered_concepts": ["request concepts this candidate supports"],
+                "missing_concepts": ["request concepts this candidate cannot support"],
+                "confidence": 0.0,
+                "is_complete": true,
+                "selection_reason": "Why this candidate is accepted or rejected"
+            }
+        ],
         "concept_mappings": [
             {
                 "request_concept": "business concept from the user request",
@@ -145,6 +159,17 @@ table_columns_selection_user_prompt_template = """
 
 ### INPUT ###
 {{ question }}
+
+{% if semantic_retry_context %}
+### RETRY CONTEXT ###
+Previous semantic SQL validation failed. Discard the previous contract and do not reuse rejected schema mappings unless no other complete candidate exists.
+Validation failure: {{ semantic_retry_context.validation_error }}
+Retry attempt: {{ semantic_retry_context.retry_attempt }}
+Rejected schema objects:
+{% for schema_object in semantic_retry_context.rejected_schema_objects %}
+- {{ schema_object }}
+{% endfor %}
+{% endif %}
 """
 
 
@@ -394,6 +419,16 @@ def check_using_db_schemas_without_pruning(
         retrieval_result["table_ddl"] for retrieval_result in retrieval_results
     ]
     _token_count = len(encoding.encode(" ".join(table_ddls)))
+    if enable_column_pruning or _token_count > context_window_size:
+        return {
+            "db_schemas": [],
+            "tokens": _token_count,
+            "has_calculated_field": has_calculated_field,
+            "has_metric": has_metric,
+            "has_json_field": has_json_field,
+            "semantic_analysis": {},
+        }
+
     return {
         "db_schemas": retrieval_results,
         "tokens": _token_count,
@@ -411,6 +446,7 @@ def prompt(
     prompt_builder: PromptBuilder,
     check_using_db_schemas_without_pruning: dict,
     histories: list[AskHistory],
+    semantic_retry_context: dict[str, Any] | None = None,
 ) -> dict:
     if not check_using_db_schemas_without_pruning["db_schemas"]:
         db_schemas = [
@@ -424,7 +460,11 @@ def prompt(
 
         query = "\n".join(previous_query_summaries) + "\n" + query
 
-        _prompt = prompt_builder.run(question=query, db_schemas=db_schemas)
+        _prompt = prompt_builder.run(
+            question=query,
+            db_schemas=db_schemas,
+            semantic_retry_context=semantic_retry_context or {},
+        )
         return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
     else:
         return {}
@@ -454,6 +494,7 @@ def construct_retrieval_results(
         retrieval_payload = orjson.loads(filter_columns_in_tables["replies"][0])
         columns_and_tables_needed = retrieval_payload.get("results", [])
         semantic_analysis = retrieval_payload.get("semantic_analysis") or {}
+        _log_semantic_retrieval_decision(semantic_analysis)
 
         # we need to change the below code to match the new schema of structured output
         # the objective of this loop is to change the structure of JSON to match the needed format
@@ -531,6 +572,51 @@ def construct_retrieval_results(
         }
 
 
+def _semantic_log_items(semantic_analysis: dict[str, Any], key: str) -> list[str]:
+    value = semantic_analysis.get(key)
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    if isinstance(value, list):
+        return [
+            str(item).strip()
+            for item in value
+            if item is not None and str(item).strip()
+        ]
+    return []
+
+
+def _log_semantic_retrieval_decision(semantic_analysis: dict[str, Any]) -> None:
+    if not isinstance(semantic_analysis, dict) or not semantic_analysis:
+        logger.info("semantic_retrieval_decision=no_semantic_analysis")
+        return
+
+    concepts = {
+        "intent": semantic_analysis.get("analytical_intent"),
+        "entities": _semantic_log_items(semantic_analysis, "entities"),
+        "identifiers": _semantic_log_items(semantic_analysis, "identifiers"),
+        "metrics": _semantic_log_items(semantic_analysis, "metrics"),
+        "dimensions": _semantic_log_items(semantic_analysis, "dimensions"),
+        "filters": _semantic_log_items(semantic_analysis, "filters"),
+        "time_constraints": _semantic_log_items(
+            semantic_analysis, "time_constraints"
+        ),
+        "aggregations": _semantic_log_items(semantic_analysis, "aggregations"),
+        "ranking": _semantic_log_items(semantic_analysis, "ranking"),
+    }
+    candidate_scores = semantic_analysis.get("candidate_schema_scores") or []
+    selected_contract = {
+        "supported_schema_objects": semantic_analysis.get(
+            "supported_schema_objects", []
+        ),
+        "concept_mappings": semantic_analysis.get("concept_mappings", []),
+        "is_fully_supported": semantic_analysis.get("is_fully_supported"),
+        "support_reasoning": semantic_analysis.get("support_reasoning"),
+    }
+    logger.info("semantic_retrieval_concepts=%s", concepts)
+    logger.info("semantic_retrieval_candidate_scores=%s", candidate_scores)
+    logger.info("semantic_retrieval_selected_contract=%s", selected_contract)
+
+
 ## End of Pipeline
 class MatchingTableContents(BaseModel):
     chain_of_thought_reasoning: list[str]
@@ -559,6 +645,16 @@ class SemanticInterpretation(BaseModel):
     is_selected: bool = False
 
 
+class SemanticCandidateSchemaScore(BaseModel):
+    candidate_id: str = ""
+    schema_objects: list[str] = Field(default_factory=list)
+    covered_concepts: list[str] = Field(default_factory=list)
+    missing_concepts: list[str] = Field(default_factory=list)
+    confidence: float | None = None
+    is_complete: bool = False
+    selection_reason: str = ""
+
+
 class SemanticAnalysis(BaseModel):
     analytical_intent: str = ""
     entities: list[str] = Field(default_factory=list)
@@ -571,6 +667,9 @@ class SemanticAnalysis(BaseModel):
     time_constraints: list[str] = Field(default_factory=list)
     ranking: list[str] = Field(default_factory=list)
     supported_schema_objects: list[str] = Field(default_factory=list)
+    candidate_schema_scores: list[SemanticCandidateSchemaScore] = Field(
+        default_factory=list
+    )
     concept_mappings: list[SemanticConceptMapping] = Field(default_factory=list)
     interpretations: list[SemanticInterpretation] = Field(default_factory=list)
     missing_requirements: list[str] = Field(default_factory=list)
@@ -649,8 +748,11 @@ class DbSchemaRetrieval(BasicPipeline):
         project_id: Optional[str] = None,
         histories: Optional[list[AskHistory]] = None,
         enable_column_pruning: bool = False,
+        semantic_retry_context: Optional[dict[str, Any]] = None,
     ):
         logger.info("Ask Retrieval pipeline is running...")
+        if semantic_retry_context:
+            logger.info("semantic_retrieval_retry_context=%s", semantic_retry_context)
         return await self._pipe.execute(
             ["construct_retrieval_results"],
             inputs={
@@ -659,6 +761,7 @@ class DbSchemaRetrieval(BasicPipeline):
                 "project_id": project_id or "",
                 "histories": histories or [],
                 "enable_column_pruning": enable_column_pruning,
+                "semantic_retry_context": semantic_retry_context or {},
                 **self._components,
                 **self._configs,
             },

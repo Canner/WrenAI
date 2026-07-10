@@ -4452,6 +4452,66 @@ class AskService:
         ]
         return table_names, table_ddls
 
+    @staticmethod
+    def _semantic_schema_objects(semantic_analysis: dict[str, Any] | None) -> list[str]:
+        if not isinstance(semantic_analysis, dict):
+            return []
+
+        schema_objects: list[str] = []
+        supported_schema_objects = semantic_analysis.get("supported_schema_objects")
+        if isinstance(supported_schema_objects, list):
+            schema_objects.extend(
+                str(schema_object).strip()
+                for schema_object in supported_schema_objects
+                if schema_object is not None and str(schema_object).strip()
+            )
+
+        concept_mappings = semantic_analysis.get("concept_mappings")
+        if isinstance(concept_mappings, list):
+            for mapping in concept_mappings:
+                if not isinstance(mapping, dict):
+                    continue
+                mapping_schema_objects = mapping.get("schema_objects")
+                if isinstance(mapping_schema_objects, list):
+                    schema_objects.extend(
+                        str(schema_object).strip()
+                        for schema_object in mapping_schema_objects
+                        if schema_object is not None and str(schema_object).strip()
+                    )
+
+        interpretations = semantic_analysis.get("interpretations")
+        if isinstance(interpretations, list):
+            for interpretation in interpretations:
+                if not isinstance(interpretation, dict):
+                    continue
+                if interpretation.get("is_selected") is not True:
+                    continue
+                interpretation_schema_objects = interpretation.get("schema_objects")
+                if isinstance(interpretation_schema_objects, list):
+                    schema_objects.extend(
+                        str(schema_object).strip()
+                        for schema_object in interpretation_schema_objects
+                        if schema_object is not None and str(schema_object).strip()
+                    )
+
+        return sorted(set(schema_objects))
+
+    @staticmethod
+    def _semantic_retry_context(
+        semantic_analysis: dict[str, Any] | None,
+        validation_error: str,
+        retry_attempt: int,
+        rejected_schema_objects: set[str],
+    ) -> dict[str, Any]:
+        rejected_schema_objects.update(
+            AskService._semantic_schema_objects(semantic_analysis)
+        )
+        return {
+            "validation_error": validation_error,
+            "retry_attempt": retry_attempt,
+            "rejected_schema_objects": sorted(rejected_schema_objects),
+        }
+
     async def _complete_sql_generation_context(
         self,
         *,
@@ -6673,21 +6733,36 @@ class AskService:
                 elif failed_dry_run_result := text_to_sql_generation_results[
                     "post_process"
                 ]["invalid_generation_result"]:
-                    if failed_dry_run_result["type"] == "SCHEMA_INTENT_VALIDATION":
+                    rejected_schema_objects: set[str] = set()
+                    semantic_retry_attempt = 0
+                    while (
+                        failed_dry_run_result
+                        and failed_dry_run_result["type"] == "SCHEMA_INTENT_VALIDATION"
+                        and semantic_retry_attempt < 3
+                        and not api_results
+                    ):
+                        semantic_retry_attempt += 1
                         semantic_retry_error = failed_dry_run_result.get("error", "")
+                        retry_context = self._semantic_retry_context(
+                            schema_intent_analysis,
+                            semantic_retry_error,
+                            semantic_retry_attempt,
+                            rejected_schema_objects,
+                        )
                         semantic_retry_query = (
                             f"{sql_user_query}\n\n"
                             "The previous generated SQL failed semantic validation: "
                             f"{semantic_retry_error}\n"
-                            "Re-run semantic schema retrieval and choose the next "
-                            "highest-confidence concept-to-schema mapping that "
-                            "directly supports the user's requested entities, "
-                            "metrics, dimensions, filters, time constraints, "
-                            "aggregations, relationships, and ranking."
+                            "Perform a fresh semantic retrieval. Select the next "
+                            "highest-confidence complete concept-to-schema mapping. "
+                            "Do not reuse rejected schema objects from RETRY CONTEXT."
                         )
                         logger.info(
-                            "Retrying semantic schema retrieval after intent validation failure for query_id %s",
+                            "semantic_retry_attempt=%s query_id=%s validation_failure=%s rejected_schema_objects=%s",
+                            semantic_retry_attempt,
                             query_id,
+                            semantic_retry_error,
+                            sorted(rejected_schema_objects),
                         )
                         try:
                             retry_retrieval_result = await self._run_with_timeout(
@@ -6696,7 +6771,8 @@ class AskService:
                                     query=semantic_retry_query,
                                     histories=histories,
                                     project_id=ask_request.project_id,
-                                    enable_column_pruning=enable_column_pruning,
+                                    enable_column_pruning=True,
+                                    semantic_retry_context=retry_context,
                                 ),
                                 timeout_seconds=self._schema_retrieval_timeout_seconds,
                             )
@@ -6706,6 +6782,25 @@ class AskService:
                             retry_schema_intent_analysis = retry_construct_result.get(
                                 "semantic_analysis", {}
                             )
+                            retry_selected_objects = set(
+                                self._semantic_schema_objects(
+                                    retry_schema_intent_analysis
+                                )
+                            )
+                            if retry_selected_objects and retry_selected_objects.issubset(
+                                rejected_schema_objects
+                            ):
+                                error_message = (
+                                    "Semantic schema retrieval retry selected only previously rejected schema objects."
+                                )
+                                logger.info(
+                                    "semantic_retry_rejected_repeated_contract query_id=%s attempt=%s schema_objects=%s",
+                                    query_id,
+                                    semantic_retry_attempt,
+                                    sorted(retry_selected_objects),
+                                )
+                                break
+
                             retry_documents, retry_table_names, retry_table_ddls = (
                                 self._extract_retrieval_metadata(
                                     retry_retrieval_result
@@ -6714,109 +6809,140 @@ class AskService:
                             retry_support_error = get_schema_intent_analysis_error(
                                 retry_schema_intent_analysis
                             )
-                            if retry_documents and not retry_support_error:
-                                _retrieval_result = retry_construct_result
-                                schema_intent_analysis = retry_schema_intent_analysis
-                                documents = retry_documents
-                                table_names = retry_table_names
-                                table_ddls = retry_table_ddls
-                                has_calculated_field = _retrieval_result.get(
-                                    "has_calculated_field", False
-                                )
-                                has_metric = _retrieval_result.get("has_metric", False)
-                                has_json_field = _retrieval_result.get(
-                                    "has_json_field", False
-                                )
-
-                                if histories:
-                                    text_to_sql_generation_results = (
-                                        await self._run_with_timeout(
-                                            "Follow-up SQL generation after semantic retry",
-                                            self._pipelines[
-                                                "followup_sql_generation"
-                                            ].run(
-                                                query=sql_user_query,
-                                                contexts=table_ddls,
-                                                sql_generation_reasoning=sql_generation_reasoning,
-                                                histories=histories,
-                                                project_id=ask_request.project_id,
-                                                sql_samples=sql_samples,
-                                                instructions=instructions,
-                                                has_calculated_field=has_calculated_field,
-                                                has_metric=has_metric,
-                                                has_json_field=has_json_field,
-                                                sql_functions=sql_functions,
-                                                use_dry_plan=use_dry_plan,
-                                                allow_dry_plan_fallback=allow_dry_plan_fallback,
-                                                sql_knowledge=sql_knowledge,
-                                                schema_intent_analysis=schema_intent_analysis,
-                                            ),
-                                        )
-                                    )
-                                else:
-                                    text_to_sql_generation_results = (
-                                        await self._run_with_timeout(
-                                            "SQL generation after semantic retry",
-                                            self._pipelines["sql_generation"].run(
-                                                query=sql_user_query,
-                                                contexts=table_ddls,
-                                                sql_generation_reasoning=sql_generation_reasoning,
-                                                project_id=ask_request.project_id,
-                                                sql_samples=sql_samples,
-                                                instructions=instructions,
-                                                has_calculated_field=has_calculated_field,
-                                                has_metric=has_metric,
-                                                has_json_field=has_json_field,
-                                                sql_functions=sql_functions,
-                                                use_dry_plan=use_dry_plan,
-                                                allow_dry_plan_fallback=allow_dry_plan_fallback,
-                                                sql_knowledge=sql_knowledge,
-                                                schema_intent_analysis=schema_intent_analysis,
-                                            ),
-                                        )
-                                    )
-
-                                if sql_valid_result := text_to_sql_generation_results[
-                                    "post_process"
-                                ]["valid_generation_result"]:
-                                    if ask_result := self._build_validated_ask_result_from_sql(
-                                        sql_valid_result.get("sql"),
-                                        table_ddls,
-                                        sql_user_query,
-                                    ):
-                                        api_results = [ask_result]
-                                    else:
-                                        invalid_sql = sql_valid_result.get("sql")
-                                        error_message = (
-                                            "SQL generation after semantic retrieval retry did not produce SQL that matches the active datasource schema and question intent."
-                                        )
-                                else:
-                                    failed_dry_run_result = (
-                                        text_to_sql_generation_results["post_process"][
-                                            "invalid_generation_result"
-                                        ]
-                                    )
-                                    invalid_sql = failed_dry_run_result.get(
-                                        "sql", invalid_sql
-                                    )
-                                    error_message = failed_dry_run_result.get(
-                                        "error", error_message
-                                    )
-                            elif retry_support_error:
-                                error_message = retry_support_error
-                            else:
-                                error_message = (
+                            if not retry_documents or retry_support_error:
+                                error_message = retry_support_error or (
                                     "Semantic schema retrieval retry did not find a supported mapping for the request."
                                 )
+                                logger.info(
+                                    "semantic_retry_candidate_rejected query_id=%s attempt=%s reason=%s selected_objects=%s",
+                                    query_id,
+                                    semantic_retry_attempt,
+                                    error_message,
+                                    sorted(retry_selected_objects),
+                                )
+                                rejected_schema_objects.update(retry_selected_objects)
+                                break
+
+                            _retrieval_result = retry_construct_result
+                            schema_intent_analysis = retry_schema_intent_analysis
+                            rejected_schema_objects.update(retry_selected_objects)
+                            documents = retry_documents
+                            table_names = retry_table_names
+                            table_ddls = retry_table_ddls
+                            has_calculated_field = _retrieval_result.get(
+                                "has_calculated_field", False
+                            )
+                            has_metric = _retrieval_result.get("has_metric", False)
+                            has_json_field = _retrieval_result.get(
+                                "has_json_field", False
+                            )
+                            logger.info(
+                                "semantic_retry_candidate_selected query_id=%s attempt=%s table_names=%s schema_objects=%s",
+                                query_id,
+                                semantic_retry_attempt,
+                                table_names,
+                                sorted(retry_selected_objects),
+                            )
+
+                            if sql_generation_histories:
+                                text_to_sql_generation_results = (
+                                    await self._run_with_timeout(
+                                        "Follow-up SQL generation after semantic retry",
+                                        self._pipelines[
+                                            "followup_sql_generation"
+                                        ].run(
+                                            query=sql_user_query,
+                                            contexts=table_ddls,
+                                            sql_generation_reasoning=sql_generation_reasoning,
+                                            histories=sql_generation_histories,
+                                            project_id=ask_request.project_id,
+                                            sql_samples=sql_samples,
+                                            instructions=instructions,
+                                            has_calculated_field=has_calculated_field,
+                                            has_metric=has_metric,
+                                            has_json_field=has_json_field,
+                                            sql_functions=sql_functions,
+                                            use_dry_plan=use_dry_plan,
+                                            allow_dry_plan_fallback=allow_dry_plan_fallback,
+                                            sql_knowledge=sql_knowledge,
+                                            schema_intent_analysis=schema_intent_analysis,
+                                        ),
+                                    )
+                                )
+                            else:
+                                text_to_sql_generation_results = (
+                                    await self._run_with_timeout(
+                                        "SQL generation after semantic retry",
+                                        self._pipelines["sql_generation"].run(
+                                            query=sql_user_query,
+                                            contexts=table_ddls,
+                                            sql_generation_reasoning=sql_generation_reasoning,
+                                            project_id=ask_request.project_id,
+                                            sql_samples=sql_samples,
+                                            instructions=instructions,
+                                            has_calculated_field=has_calculated_field,
+                                            has_metric=has_metric,
+                                            has_json_field=has_json_field,
+                                            sql_functions=sql_functions,
+                                            use_dry_plan=use_dry_plan,
+                                            allow_dry_plan_fallback=allow_dry_plan_fallback,
+                                            sql_knowledge=sql_knowledge,
+                                            schema_intent_analysis=schema_intent_analysis,
+                                        ),
+                                    )
+                                )
+
+                            if sql_valid_result := text_to_sql_generation_results[
+                                "post_process"
+                            ]["valid_generation_result"]:
+                                if ask_result := self._build_validated_ask_result_from_sql(
+                                    sql_valid_result.get("sql"),
+                                    table_ddls,
+                                    sql_user_query,
+                                ):
+                                    api_results = [ask_result]
+                                    logger.info(
+                                        "semantic_retry_candidate_accepted query_id=%s attempt=%s",
+                                        query_id,
+                                        semantic_retry_attempt,
+                                    )
+                                    break
+                                invalid_sql = sql_valid_result.get("sql")
+                                error_message = (
+                                    "SQL generation after semantic retrieval retry did not produce SQL that matches the active datasource schema and question intent."
+                                )
+                                break
+
+                            failed_dry_run_result = (
+                                text_to_sql_generation_results["post_process"][
+                                    "invalid_generation_result"
+                                ]
+                            )
+                            invalid_sql = failed_dry_run_result.get(
+                                "sql", invalid_sql
+                            )
+                            error_message = failed_dry_run_result.get(
+                                "error", error_message
+                            )
+                            logger.info(
+                                "semantic_retry_candidate_failed_validation query_id=%s attempt=%s error=%s",
+                                query_id,
+                                semantic_retry_attempt,
+                                error_message,
+                            )
                         except Exception as retry_error:
                             logger.warning(
-                                "Semantic schema retrieval retry failed for query_id %s: %s",
+                                "Semantic schema retrieval retry failed for query_id %s attempt %s: %s",
                                 query_id,
+                                semantic_retry_attempt,
                                 retry_error,
                             )
+                            break
 
                     while current_sql_correction_retries < max_sql_correction_retries:
                         if api_results:
+                            break
+                        if not failed_dry_run_result:
                             break
                         if failed_dry_run_result["type"] in {
                             "TIME_OUT",

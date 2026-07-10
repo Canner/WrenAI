@@ -6,6 +6,7 @@ from src.pipelines.retrieval.db_schema_retrieval import (
     construct_retrieval_results,
     dbschema_retrieval,
     expand_business_terms_for_retrieval,
+    prompt,
 )
 
 
@@ -102,6 +103,17 @@ def test_construct_retrieval_results_preserves_semantic_analysis():
                     "entities": ["invoice"],
                     "metrics": ["invoice amount"],
                     "dimensions": ["customer"],
+                    "candidate_schema_scores": [
+                      {
+                        "candidate_id": "candidate-1",
+                        "schema_objects": ["invoices.customer_id", "invoices.invoice_amount"],
+                        "covered_concepts": ["invoice amount", "customer"],
+                        "missing_concepts": [],
+                        "confidence": 0.95,
+                        "is_complete": true,
+                        "selection_reason": "Complete invoice amount by customer mapping."
+                      }
+                    ],
                     "concept_mappings": [
                       {
                         "request_concept": "invoice amount",
@@ -176,7 +188,53 @@ def test_construct_retrieval_results_preserves_semantic_analysis():
     assert result["semantic_analysis"]["concept_mappings"][0]["schema_objects"] == [
         "invoices.invoice_amount"
     ]
+    assert result["semantic_analysis"]["candidate_schema_scores"][0]["is_complete"]
     assert result["semantic_analysis"]["interpretations"][0]["is_selected"] is True
     assert result["retrieval_results"][0]["table_name"] == "invoices"
     assert "invoice_amount" in result["retrieval_results"][0]["table_ddl"]
     assert "internal_note" not in result["retrieval_results"][0]["table_ddl"]
+
+
+def test_prompt_includes_semantic_retry_context():
+    class PromptBuilder:
+        def run(self, **kwargs):
+            retry_context = kwargs["semantic_retry_context"]
+            return {
+                "prompt": (
+                    f"retry={retry_context['retry_attempt']} "
+                    f"error={retry_context['validation_error']} "
+                    f"rejected={','.join(retry_context['rejected_schema_objects'])}"
+                )
+            }
+
+    result = prompt(
+        query="Top customers by invoice amount",
+        construct_db_schemas=[
+            {
+                "type": "TABLE",
+                "name": "invoices",
+                "comment": "",
+                "columns": [
+                    {
+                        "type": "COLUMN",
+                        "name": "invoice_amount",
+                        "data_type": "double",
+                        "comment": "",
+                        "is_primary_key": False,
+                    }
+                ],
+            }
+        ],
+        prompt_builder=PromptBuilder(),
+        check_using_db_schemas_without_pruning={"db_schemas": []},
+        histories=[],
+        semantic_retry_context={
+            "validation_error": "Generic count did not answer invoice amount",
+            "retry_attempt": 2,
+            "rejected_schema_objects": ["dbo_ytblES002_1.Name_of_Reported_Received"],
+        },
+    )
+
+    assert "retry=2" in result["prompt"]
+    assert "Generic count" in result["prompt"]
+    assert "dbo_ytblES002_1.Name_of_Reported_Received" in result["prompt"]
