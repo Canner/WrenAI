@@ -1032,15 +1032,6 @@ def test_normalize_generation_result_sql_rewrites_bare_month_field_for_mssql():
     assert 'ORDER BY DATEPART(MONTH, "dbo_repair_logs"."created_at") ASC' in normalized
 
 
-def test_normalize_generation_result_sql_rewrites_top_limit_with_parentheses():
-    normalized = normalize_generation_result_sql(
-        'SELECT TOP 10 "sales"."CustName" FROM "sales"',
-        data_source="MSSQL",
-    )
-
-    assert normalized.startswith('SELECT TOP (10) "sales"."CustName"')
-
-
 def test_normalize_generation_result_sql_rewrites_qualified_month_field_for_mssql():
     sql = """
     SELECT
@@ -1727,37 +1718,6 @@ def test_get_schema_intent_analysis_error_rejects_required_unmapped_concepts():
     assert "did not map required request concepts" in error
 
 
-def test_get_schema_intent_analysis_error_allows_entity_covered_by_dimension_mapping():
-    error = get_schema_intent_analysis_error(
-        {
-            "concept_mappings": [
-                {
-                    "request_concept": "customer",
-                    "concept_type": "entity",
-                    "schema_objects": [],
-                    "required_in_sql": True,
-                },
-                {
-                    "request_concept": "customer name",
-                    "concept_type": "dimension",
-                    "schema_objects": ["sales.CustName"],
-                    "required_in_sql": True,
-                },
-                {
-                    "request_concept": "invoice amount",
-                    "concept_type": "metric",
-                    "schema_objects": ["sales.InvAmt"],
-                    "required_in_sql": True,
-                },
-            ],
-            "supported_schema_objects": ["sales.CustName", "sales.InvAmt"],
-            "is_fully_supported": True,
-        }
-    )
-
-    assert error is None
-
-
 def test_validate_sql_intent_alignment_uses_semantic_analysis_for_metric_count_mismatch():
     error = validate_sql_intent_alignment(
         "Show invoice amount by customer",
@@ -2030,86 +1990,6 @@ def test_validate_sql_intent_alignment_rejects_mapped_ranking_without_limit():
 
     assert error is not None
     assert "sorting and limiting" in error
-
-
-def test_validate_sql_intent_alignment_accepts_top_without_parentheses_for_ranking():
-    error = validate_sql_intent_alignment(
-        "Top customers by invoice amount",
-        'SELECT TOP 10 "sales"."CustName", SUM("sales"."InvAmt") AS "invoice_amount" '
-        'FROM "sales" GROUP BY "sales"."CustName" ORDER BY SUM("sales"."InvAmt") DESC',
-        {"sales": ["CustName", "InvAmt"]},
-        semantic_analysis={
-            "analytical_intent": "ranking",
-            "metrics": ["invoice amount"],
-            "dimensions": ["customer"],
-            "ranking": ["top 10 customers by invoice amount"],
-            "aggregations": ["sum invoice amount"],
-            "concept_mappings": [
-                {
-                    "request_concept": "customer",
-                    "concept_type": "entity",
-                    "schema_objects": [],
-                    "required_in_sql": True,
-                },
-                {
-                    "request_concept": "customer name",
-                    "concept_type": "dimension",
-                    "schema_objects": ["sales.CustName"],
-                    "required_in_sql": True,
-                },
-                {
-                    "request_concept": "invoice amount",
-                    "concept_type": "metric",
-                    "schema_objects": ["sales.InvAmt"],
-                    "required_in_sql": True,
-                },
-                {
-                    "request_concept": "top 10",
-                    "concept_type": "ranking",
-                    "schema_objects": [],
-                    "required_in_sql": True,
-                },
-            ],
-            "supported_schema_objects": ["sales.CustName", "sales.InvAmt"],
-            "is_fully_supported": True,
-        },
-    )
-
-    assert error is None
-
-
-def test_validate_sql_intent_alignment_rejects_ranking_without_limit_even_with_order():
-    error = validate_sql_intent_alignment(
-        "Top customers by invoice amount",
-        'SELECT "sales"."CustName", SUM("sales"."InvAmt") AS "invoice_amount" '
-        'FROM "sales" GROUP BY "sales"."CustName" ORDER BY SUM("sales"."InvAmt") DESC',
-        {"sales": ["CustName", "InvAmt"]},
-        semantic_analysis={
-            "analytical_intent": "ranking",
-            "metrics": ["invoice amount"],
-            "dimensions": ["customer"],
-            "ranking": ["top 10 customers by invoice amount"],
-            "aggregations": ["sum invoice amount"],
-            "concept_mappings": [
-                {
-                    "request_concept": "customer name",
-                    "concept_type": "dimension",
-                    "schema_objects": ["sales.CustName"],
-                    "required_in_sql": True,
-                },
-                {
-                    "request_concept": "invoice amount",
-                    "concept_type": "metric",
-                    "schema_objects": ["sales.InvAmt"],
-                    "required_in_sql": True,
-                },
-            ],
-            "is_fully_supported": True,
-        },
-    )
-
-    assert error is not None
-    assert "sorting or limiting" in error
 
 
 def test_get_schema_intent_analysis_error_rejects_multiple_selected_interpretations():

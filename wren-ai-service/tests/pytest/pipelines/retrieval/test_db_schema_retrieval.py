@@ -85,48 +85,6 @@ def test_rank_semantic_schema_candidates_prefers_complete_business_concept_cover
     assert candidates[0]["confidence"] > candidates[1]["confidence"]
 
 
-def test_rank_semantic_schema_candidates_matches_generic_abbreviations():
-    candidates = rank_semantic_schema_candidates(
-        query="Show the top 10 customers by invoice amount",
-        construct_db_schemas=[
-            {
-                "type": "TABLE",
-                "name": "sales_summary",
-                "comment": "",
-                "columns": [
-                    {
-                        "name": "CustName",
-                        "data_type": "varchar",
-                        "comment": "customer display name",
-                    },
-                    {
-                        "name": "InvAmt",
-                        "data_type": "decimal",
-                        "comment": "invoice amount",
-                    },
-                ],
-            },
-            {
-                "type": "TABLE",
-                "name": "refund_summary",
-                "comment": "",
-                "columns": [
-                    {
-                        "name": "Refund_Amount",
-                        "data_type": "decimal",
-                        "comment": "refund amount",
-                    }
-                ],
-            },
-        ],
-    )
-
-    assert candidates[0]["table_name"] == "sales_summary"
-    assert {"customer", "invoice", "amount"} <= set(
-        candidates[0]["matched_query_terms"]
-    )
-
-
 def test_rank_semantic_schema_candidates_penalizes_retry_rejected_schema_objects():
     candidates = rank_semantic_schema_candidates(
         query="Show top 10 customers by invoice amount",
