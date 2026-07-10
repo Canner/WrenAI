@@ -1,5 +1,6 @@
 import ast
 import logging
+import re
 import sys
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -157,6 +158,29 @@ table_columns_selection_user_prompt_template = """
     {{ db_schema }}
 {% endfor %}
 
+{% if semantic_candidate_context %}
+### PRE-RANKED SEMANTIC SCHEMA CANDIDATES ###
+These candidates were scored generically from the active datasource schema metadata and the user's full request.
+Use them as retrieval evidence, but still verify complete concept coverage before selecting a contract.
+Prefer candidates that cover all requested entities, identifiers, metrics, dimensions, filters, time constraints, aggregations, and ranking requirements.
+Do not select a high lexical match when it misses a required business concept.
+
+{% for candidate in semantic_candidate_context %}
+- candidate_id: {{ candidate.candidate_id }}
+  table_name: {{ candidate.table_name }}
+  confidence: {{ candidate.confidence }}
+  coverage_score: {{ candidate.coverage_score }}
+  matched_query_terms: {{ candidate.matched_query_terms }}
+  missing_query_terms: {{ candidate.missing_query_terms }}
+  rejected_by_retry: {{ candidate.rejected_by_retry }}
+  selection_reason: {{ candidate.selection_reason }}
+  matched_columns:
+{% for column in candidate.matched_columns %}
+    - {{ column.column_name }} (score={{ column.score }}, data_type={{ column.data_type }}, matched_terms={{ column.matched_terms }})
+{% endfor %}
+{% endfor %}
+{% endif %}
+
 ### INPUT ###
 {{ question }}
 
@@ -257,6 +281,361 @@ def _dedupe_documents(documents: list[Document]) -> list[Document]:
         seen.add(key)
         deduped.append(document)
     return deduped
+
+
+_SEMANTIC_TOKEN_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "by",
+    "for",
+    "from",
+    "give",
+    "have",
+    "how",
+    "in",
+    "is",
+    "me",
+    "of",
+    "on",
+    "or",
+    "show",
+    "that",
+    "the",
+    "to",
+    "with",
+    "dbo",
+    "tbl",
+    "table",
+    "view",
+    "dim",
+    "fact",
+    "stage",
+    "stg",
+}
+
+_NUMERIC_SCHEMA_TERMS = {
+    "amount",
+    "avg",
+    "average",
+    "balance",
+    "cost",
+    "count",
+    "gross",
+    "margin",
+    "measure",
+    "metric",
+    "net",
+    "price",
+    "profit",
+    "quantity",
+    "rate",
+    "revenue",
+    "sales",
+    "sum",
+    "total",
+    "value",
+}
+
+_TEMPORAL_SCHEMA_TERMS = {
+    "date",
+    "day",
+    "month",
+    "monthly",
+    "quarter",
+    "time",
+    "week",
+    "year",
+}
+
+_RANKING_SCHEMA_TERMS = {
+    "bottom",
+    "highest",
+    "least",
+    "lowest",
+    "most",
+    "rank",
+    "ranking",
+    "top",
+}
+
+
+def _semantic_tokens(value: Any) -> set[str]:
+    text = str(value or "")
+    if not text:
+        return set()
+
+    text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text)
+    text = re.sub(r"[^A-Za-z0-9]+", " ", text)
+    tokens = {
+        token.lower()
+        for token in text.split()
+        if len(token) > 1 and token.lower() not in _SEMANTIC_TOKEN_STOPWORDS
+    }
+    for token in list(tokens):
+        if token.endswith("ies") and len(token) > 4:
+            tokens.add(f"{token[:-3]}y")
+        elif token.endswith("s") and len(token) > 3:
+            tokens.add(token[:-1])
+    return tokens
+
+
+def _schema_comment_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return " ".join(_schema_comment_text(item) for item in value)
+    if isinstance(value, dict):
+        return " ".join(_schema_comment_text(item) for item in value.values())
+    return str(value)
+
+
+def _column_tokens(column: dict[str, Any]) -> set[str]:
+    tokens = set()
+    for key in ("name", "display_name", "alias", "comment", "description", "data_type"):
+        tokens.update(_semantic_tokens(column.get(key)))
+    tokens.update(_semantic_tokens(_schema_comment_text(column.get("properties"))))
+    return tokens
+
+
+def _table_tokens(table_schema: dict[str, Any]) -> set[str]:
+    tokens = set()
+    for key in ("name", "display_name", "alias", "comment", "description"):
+        tokens.update(_semantic_tokens(table_schema.get(key)))
+    for column in table_schema.get("columns", []) or []:
+        if isinstance(column, dict):
+            tokens.update(_column_tokens(column))
+    return tokens
+
+
+def _query_semantic_terms(query: str) -> dict[str, set[str]]:
+    tokens = _semantic_tokens(query)
+    return {
+        "all": tokens,
+        "metric": tokens & _NUMERIC_SCHEMA_TERMS,
+        "time": tokens & _TEMPORAL_SCHEMA_TERMS,
+        "ranking": tokens & _RANKING_SCHEMA_TERMS,
+    }
+
+
+def _is_numeric_column(column: dict[str, Any]) -> bool:
+    data_type = str(column.get("data_type") or "").lower()
+    return bool(
+        re.search(
+            r"\b(?:int|integer|bigint|smallint|tinyint|decimal|numeric|number|double|float|real|money)\b",
+            data_type,
+        )
+    )
+
+
+def _is_identifier_column(column: dict[str, Any]) -> bool:
+    tokens = _column_tokens(column)
+    return bool(tokens & {"code", "id", "identifier", "key", "no", "number"})
+
+
+def _is_temporal_column(column: dict[str, Any]) -> bool:
+    data_type = str(column.get("data_type") or "").lower()
+    return bool(re.search(r"\b(?:date|time|timestamp|datetime)\b", data_type))
+
+
+def _normalized_schema_object(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
+
+
+def _rejected_schema_objects(semantic_retry_context: dict[str, Any] | None) -> set[str]:
+    if not isinstance(semantic_retry_context, dict):
+        return set()
+
+    rejected = semantic_retry_context.get("rejected_schema_objects")
+    if not isinstance(rejected, list):
+        return set()
+
+    return {
+        _normalized_schema_object(item)
+        for item in rejected
+        if item is not None and str(item).strip()
+    }
+
+
+def _schema_object_was_rejected(
+    table_name: str,
+    column_name: str | None,
+    rejected_schema_objects: set[str],
+) -> bool:
+    if not rejected_schema_objects:
+        return False
+
+    table_key = _normalized_schema_object(table_name)
+    object_key = _normalized_schema_object(
+        f"{table_name}.{column_name}" if column_name else table_name
+    )
+    return any(
+        rejected_key
+        and (
+            rejected_key == table_key
+            or rejected_key == object_key
+            or rejected_key.endswith(object_key)
+            or object_key.endswith(rejected_key)
+        )
+        for rejected_key in rejected_schema_objects
+    )
+
+
+def rank_semantic_schema_candidates(
+    query: str,
+    construct_db_schemas: list[dict],
+    semantic_retry_context: dict[str, Any] | None = None,
+    max_candidates: int = 15,
+    max_columns_per_candidate: int = 8,
+) -> list[dict[str, Any]]:
+    query_terms = _query_semantic_terms(query)
+    all_query_terms = query_terms["all"]
+    if not all_query_terms:
+        return []
+
+    rejected_schema_objects = _rejected_schema_objects(semantic_retry_context)
+    candidates: list[dict[str, Any]] = []
+
+    for table_schema in construct_db_schemas:
+        if table_schema.get("type") != "TABLE":
+            continue
+
+        table_name = str(table_schema.get("name") or "").strip()
+        if not table_name:
+            continue
+
+        table_term_matches = _table_tokens(table_schema) & all_query_terms
+        matched_columns = []
+        table_rejected = _schema_object_was_rejected(
+            table_name, None, rejected_schema_objects
+        )
+
+        for column in table_schema.get("columns", []) or []:
+            if not isinstance(column, dict):
+                continue
+
+            column_name = str(column.get("name") or "").strip()
+            if not column_name:
+                continue
+
+            tokens = _column_tokens(column)
+            matched_terms = sorted(tokens & all_query_terms)
+            score = float(len(matched_terms) * 3)
+
+            if query_terms["metric"] and _is_numeric_column(column):
+                score += 0.3 if _is_identifier_column(column) else 1.5
+                if tokens & query_terms["metric"]:
+                    score += 2.0
+            if query_terms["time"] and _is_temporal_column(column):
+                score += 1.5
+                if tokens & query_terms["time"]:
+                    score += 2.0
+            if query_terms["ranking"] and matched_terms:
+                score += 0.5
+
+            rejected = _schema_object_was_rejected(
+                table_name, column_name, rejected_schema_objects
+            )
+            if rejected:
+                score -= 5.0
+
+            if score > 0 or matched_terms:
+                matched_columns.append(
+                    {
+                        "column_name": column_name,
+                        "score": round(max(score, 0.0), 3),
+                        "matched_terms": matched_terms,
+                        "data_type": str(column.get("data_type") or ""),
+                        "rejected_by_retry": rejected,
+                    }
+                )
+
+        matched_columns.sort(
+            key=lambda item: (item["score"], len(item["matched_terms"])),
+            reverse=True,
+        )
+        matched_columns = matched_columns[:max_columns_per_candidate]
+
+        covered_terms = set(table_term_matches)
+        for column in matched_columns:
+            covered_terms.update(column["matched_terms"])
+
+        if not covered_terms and not table_rejected:
+            continue
+
+        coverage_score = len(covered_terms) / max(len(all_query_terms), 1)
+        raw_score = (
+            len(table_term_matches) * 2.0
+            + sum(column["score"] for column in matched_columns)
+            + coverage_score * 4.0
+        )
+        if table_rejected:
+            raw_score -= 6.0
+        column_lookup = {
+            str(column.get("name") or ""): column
+            for column in table_schema.get("columns", []) or []
+            if isinstance(column, dict)
+        }
+        has_metric_support = any(
+            query_terms["metric"] & set(column["matched_terms"])
+            or (
+                _is_numeric_column(column_lookup.get(column["column_name"], {}))
+                and not _is_identifier_column(
+                    column_lookup.get(column["column_name"], {})
+                )
+            )
+            for column in matched_columns
+        )
+        if query_terms["metric"] and not has_metric_support:
+            raw_score -= 2.0
+
+        confidence = min(max(raw_score / 20.0, 0.0), 0.99)
+        selection_reason = (
+            "Covers "
+            f"{len(covered_terms)} of {len(all_query_terms)} significant request terms"
+        )
+        if table_rejected:
+            selection_reason += "; penalized because it was rejected by semantic validation"
+        if query_terms["metric"] and not any(
+            set(column["matched_terms"]) & query_terms["metric"]
+            for column in matched_columns
+        ):
+            selection_reason += "; metric term coverage is weak"
+
+        candidates.append(
+            {
+                "candidate_id": f"candidate-{len(candidates) + 1}",
+                "table_name": table_name,
+                "confidence": round(confidence, 3),
+                "coverage_score": round(coverage_score, 3),
+                "matched_query_terms": sorted(covered_terms),
+                "missing_query_terms": sorted(all_query_terms - covered_terms),
+                "matched_columns": matched_columns,
+                "rejected_by_retry": table_rejected
+                or any(column["rejected_by_retry"] for column in matched_columns),
+                "selection_reason": selection_reason,
+            }
+        )
+
+    candidates.sort(
+        key=lambda item: (
+            item["rejected_by_retry"] is False,
+            item["confidence"],
+            item["coverage_score"],
+        ),
+        reverse=True,
+    )
+
+    for index, candidate in enumerate(candidates[:max_candidates], start=1):
+        candidate["candidate_id"] = f"candidate-{index}"
+
+    return candidates[:max_candidates]
 
 
 @observe(capture_input=False, capture_output=False)
@@ -459,10 +838,20 @@ def prompt(
         )
 
         query = "\n".join(previous_query_summaries) + "\n" + query
+        semantic_candidate_context = rank_semantic_schema_candidates(
+            query=query,
+            construct_db_schemas=construct_db_schemas,
+            semantic_retry_context=semantic_retry_context,
+        )
+        logger.info(
+            "semantic_retrieval_pre_ranked_candidates=%s",
+            semantic_candidate_context,
+        )
 
         _prompt = prompt_builder.run(
             question=query,
             db_schemas=db_schemas,
+            semantic_candidate_context=semantic_candidate_context,
             semantic_retry_context=semantic_retry_context or {},
         )
         return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}

@@ -3647,6 +3647,7 @@ def _has_semantic_analysis(semantic_analysis: dict[str, Any] | None) -> bool:
         "time_constraints",
         "ranking",
         "supported_schema_objects",
+        "candidate_schema_scores",
         "concept_mappings",
         "interpretations",
         "missing_requirements",
@@ -3692,6 +3693,87 @@ def _schema_interpretation_clarification_error(
     return None
 
 
+def _semantic_candidate_scores(
+    semantic_analysis: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    return _semantic_analysis_dict_items(semantic_analysis, "candidate_schema_scores")
+
+
+def _semantic_candidate_support_error(
+    semantic_analysis: dict[str, Any],
+) -> str | None:
+    candidate_scores = _semantic_candidate_scores(semantic_analysis)
+    if not candidate_scores:
+        return None
+
+    complete_candidates = [
+        candidate
+        for candidate in candidate_scores
+        if candidate.get("is_complete") is True
+    ]
+    if complete_candidates:
+        return None
+
+    incomplete_with_missing = [
+        candidate
+        for candidate in candidate_scores
+        if candidate.get("missing_concepts")
+    ]
+    if not incomplete_with_missing:
+        return None
+
+    missing_concepts = []
+    for candidate in incomplete_with_missing[:3]:
+        candidate_id = str(candidate.get("candidate_id") or "candidate").strip()
+        missing = candidate.get("missing_concepts")
+        if isinstance(missing, list):
+            missing_text = ", ".join(
+                str(item).strip()
+                for item in missing
+                if item is not None and str(item).strip()
+            )
+        else:
+            missing_text = str(missing or "").strip()
+        if missing_text:
+            missing_concepts.append(f"{candidate_id}: {missing_text}")
+
+    if not missing_concepts:
+        return None
+
+    return (
+        "Semantic schema retrieval did not find a complete schema mapping for "
+        "the request. Missing concepts: "
+        f"{'; '.join(missing_concepts)}. I cannot generate unrelated SQL."
+    )
+
+
+def _required_concept_mapping_support_error(
+    semantic_analysis: dict[str, Any],
+) -> str | None:
+    unsupported_required_concepts = []
+    for mapping in _semantic_concept_mappings(semantic_analysis):
+        if mapping.get("required_in_sql") is False:
+            continue
+        if _mapping_schema_objects(mapping):
+            continue
+
+        request_concept = _mapping_request_concept(mapping)
+        concept_type = _mapping_concept_type(mapping)
+        if request_concept:
+            unsupported_required_concepts.append(
+                f"{request_concept} ({concept_type or 'concept'})"
+            )
+
+    if not unsupported_required_concepts:
+        return None
+
+    return (
+        "The semantic contract did not map required request concepts to active "
+        "schema objects: "
+        f"{', '.join(unsupported_required_concepts)}. I cannot generate unrelated SQL."
+    )
+
+
 def get_schema_intent_analysis_error(
     semantic_analysis: dict[str, Any] | None,
 ) -> str | None:
@@ -3721,6 +3803,16 @@ def get_schema_intent_analysis_error(
         semantic_analysis
     ):
         return interpretation_error
+
+    if candidate_support_error := _semantic_candidate_support_error(
+        semantic_analysis
+    ):
+        return candidate_support_error
+
+    if required_mapping_error := _required_concept_mapping_support_error(
+        semantic_analysis
+    ):
+        return required_mapping_error
 
     if semantic_analysis.get("is_fully_supported") is False:
         support_reasoning = str(semantic_analysis.get("support_reasoning") or "").strip()

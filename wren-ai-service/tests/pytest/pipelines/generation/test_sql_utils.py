@@ -1675,6 +1675,49 @@ def test_get_schema_intent_analysis_error_reports_unsupported_analysis():
     assert "No relationship connects invoices to products" in error
 
 
+def test_get_schema_intent_analysis_error_rejects_incomplete_semantic_candidates():
+    error = get_schema_intent_analysis_error(
+        {
+            "candidate_schema_scores": [
+                {
+                    "candidate_id": "candidate-1",
+                    "schema_objects": ["refunds.refund_amount"],
+                    "covered_concepts": ["amount"],
+                    "missing_concepts": ["customer", "invoice amount"],
+                    "confidence": 0.62,
+                    "is_complete": False,
+                    "selection_reason": "Only amount matched.",
+                }
+            ],
+            "is_fully_supported": True,
+        }
+    )
+
+    assert error is not None
+    assert "complete schema mapping" in error
+    assert "invoice amount" in error
+
+
+def test_get_schema_intent_analysis_error_rejects_required_unmapped_concepts():
+    error = get_schema_intent_analysis_error(
+        {
+            "concept_mappings": [
+                {
+                    "request_concept": "invoice amount",
+                    "concept_type": "metric",
+                    "schema_objects": [],
+                    "required_in_sql": True,
+                }
+            ],
+            "is_fully_supported": True,
+        }
+    )
+
+    assert error is not None
+    assert "invoice amount" in error
+    assert "did not map required request concepts" in error
+
+
 def test_validate_sql_intent_alignment_uses_semantic_analysis_for_metric_count_mismatch():
     error = validate_sql_intent_alignment(
         "Show invoice amount by customer",
