@@ -1,0 +1,72 @@
+name: Publish Rust core crates to crates.io
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version number (e.g. 0.2.0)"
+        required: true
+        type: string
+      tag_name:
+        description: "Git tag to checkout (e.g. wren-semantic-core-v0.2.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    name: Build + publish crates to crates.io
+    runs-on: ubuntu-latest
+    # Required by the crates.io Trusted Publisher config (Environment name:
+    # crates-io). The 'crates-io' environment must exist under repo
+    # Settings → Environments.
+    environment: crates-io
+    permissions:
+      contents: read
+      # Needed for the OIDC token exchange with crates.io (Trusted Publishing).
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag_name }}
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            core/wren-core/target/
+          key: crates-cargo-${{ hashFiles('core/wren-core/Cargo.toml', 'core/wren-core-base/Cargo.toml') }}
+          restore-keys: crates-cargo-
+
+      # Mints a short-lived crates.io token via OIDC — no stored secret.
+      - name: Authenticate to crates.io (Trusted Publishing)
+        uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+
+      # Publish bottom-up: each downstream crate pins the exact version of its
+      # in-repo dependency, so the upstream crate must be live on the index
+      # first. `cargo publish` (cargo >= 1.66) blocks until the just-published
+      # crate is available before returning, so the chain resolves in order.
+      - name: Publish wren-manifest-macro
+        run: cargo publish --manifest-path core/wren-core-base/manifest-macro/Cargo.toml
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+      - name: Publish wren-core-base
+        run: cargo publish --manifest-path core/wren-core-base/Cargo.toml
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+      - name: Publish wren-semantic-core
+        run: cargo publish --manifest-path core/wren-core/core/Cargo.toml
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}

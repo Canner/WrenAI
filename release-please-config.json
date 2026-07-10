@@ -51,6 +51,51 @@
       "extra-files": [
         "src/wren_pydantic/__init__.py"
       ]
+    },
+    "core/wren-core-base/manifest-macro": {
+      "component": "wren-manifest-macro",
+      "release-type": "rust",
+      "bump-minor-pre-major": true
+    },
+    "core/wren-core-base": {
+      "component": "wren-core-base",
+      "release-type": "rust",
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        {
+          "path": "Cargo.toml",
+          "type": "toml",
+          "jsonpath": "$.dependencies.wren-manifest-macro.version"
+        }
+      ]
+    },
+    "core/wren-core": {
+      "component": "wren-semantic-core",
+      "release-type": "simple",
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        {
+          "path": "Cargo.toml",
+          "type": "toml",
+          "jsonpath": "$.workspace.package.version"
+        },
+        {
+          "path": "Cargo.toml",
+          "type": "toml",
+          "jsonpath": "$.workspace.dependencies.wren-core-base.version"
+        }
+      ]
     }
-  }
+  },
+  "plugins": [
+    {
+      "type": "linked-versions",
+      "groupName": "wren-rust-core",
+      "components": [
+        "wren-manifest-macro",
+        "wren-core-base",
+        "wren-semantic-core"
+      ]
+    }
+  ]
 }
