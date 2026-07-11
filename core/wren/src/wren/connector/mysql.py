@@ -10,6 +10,8 @@ only differs in how the connection is opened.
 
 from __future__ import annotations
 
+import re
+
 import json
 from contextlib import closing
 from decimal import Decimal as PyDecimal
@@ -22,20 +24,34 @@ from wren.connector.base import ConnectorABC
 from wren.model.data_source import DataSource
 from wren.model.error import ErrorCode, WrenError
 
+_TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
+
+
+def _strip_trailing_semicolon(sql: str) -> str:
+    """Strip the terminating run of ``;`` / whitespace.
+
+    ``EXPLAIN`` and ``LIMIT`` appends break when user SQL ends in one or more
+    semicolons, and ``str.rstrip().rstrip(";")`` fails when whitespace appears
+    *between* trailing semicolons (``SELECT 1; ;`` → still ends with ``;``).
+    """
+    return _TRAILING_SEMICOLONS_RE.sub("", sql)
+
+
 
 def _apply_limit(sql: str, limit: int) -> str:
     """Append ``LIMIT n`` to a user-supplied SQL string.
 
-    Strips any trailing semicolon and whitespace, then appends ``LIMIT n``.
-    ``limit`` MUST already be validated as a non-negative ``int`` by the caller
-    — this helper does not re-validate to keep the call site explicit.
+    Strips the terminating run of semicolons/whitespace, then appends
+    ``LIMIT n``. ``limit`` MUST already be validated as a non-negative ``int``
+    by the caller — this helper does not re-validate to keep the call site
+    explicit.
 
     Wrapping the user SQL in ``SELECT * FROM (...) AS _sub LIMIT n`` was
     rejected because it fails with ``ER_DUP_FIELDNAME`` whenever the inner
     SELECT projects two columns with the same name (e.g. a join that selects
     ``a.id`` and ``b.id``).
     """
-    return f"{sql.rstrip().rstrip(';').rstrip()}\nLIMIT {limit}"
+    return f"{_strip_trailing_semicolon(sql)}\nLIMIT {limit}"
 
 
 def _coerce_limit(limit: int | None) -> int | None:
@@ -99,7 +115,7 @@ class MySqlConnector(ConnectorABC):
         # subquery-wrapping side-steps ``ER_DUP_FIELDNAME`` for queries that
         # surface duplicate column names. We strip a trailing semicolon to
         # match the same compose-ability we use for ``query``'s LIMIT path.
-        explain_sql = f"EXPLAIN {sql.rstrip().rstrip(';').rstrip()}"
+        explain_sql = f"EXPLAIN {_strip_trailing_semicolon(sql)}"
         with closing(self.connection.cursor()) as cursor:
             cursor.execute(explain_sql)
             cursor.fetchall()
