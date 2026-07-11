@@ -145,8 +145,10 @@ def test_build_trino_column_struct_tuple_to_dict() -> None:
         ("SELECT 1;", "SELECT 1"),
         ("SELECT 1  ;  ", "SELECT 1"),
         ("SELECT 1\n;\n", "SELECT 1"),
+        ("SELECT 1;;", "SELECT 1"),
+        ("SELECT 1; ;\n", "SELECT 1"),
         ("SELECT 1; -- trailing", "SELECT 1; -- trailing"),
-        # Only the final semicolon is stripped — internal ones stay.
+        # Terminating run only — internal statement separators stay.
         ("SELECT 1; SELECT 2;", "SELECT 1; SELECT 2"),
     ],
 )

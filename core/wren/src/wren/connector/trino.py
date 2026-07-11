@@ -8,6 +8,7 @@ lex with sqlglot to build an equivalent PyArrow schema.
 from __future__ import annotations
 
 import contextlib
+import re
 import datetime as dtlib
 import json
 from decimal import Decimal as PyDecimal
@@ -359,13 +360,19 @@ def _import_trino():
         ) from e
 
 
-def _strip_trailing_semicolon(sql: str) -> str:
-    """Strip trailing whitespace and an optional final semicolon.
+_TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
 
-    Wrapping ``SELECT * FROM ({sql}) AS _sub LIMIT N`` breaks if ``sql`` ends
-    with ``;`` because the parser sees ``...; ) AS _sub...``.
+
+def _strip_trailing_semicolon(sql: str) -> str:
+    """Strip the terminating run of ``;`` characters and surrounding whitespace.
+
+    Wrapping ``SELECT * FROM ({sql}) AS _sub LIMIT N`` breaks when ``sql`` ends
+    with one or more semicolons (``SELECT 1;`` / ``SELECT 1;;``) because the
+    parser sees ``...; ) AS _sub...``. Only the *terminating* run is stripped so
+    semicolons inside string literals are preserved. Mirrors postgres/canner/
+    clickhouse.
     """
-    return sql.rstrip().removesuffix(";").rstrip()
+    return _TRAILING_SEMICOLONS_RE.sub("", sql)
 
 
 class TrinoConnector(ConnectorABC):
