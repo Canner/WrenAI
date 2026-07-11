@@ -19,3 +19,8 @@ def test_helper_preserves_semicolon_in_string_literal():
 
 def test_helper_double_semicolon():
     assert _strip_trailing_semicolon("SELECT 1;;") == "SELECT 1"
+
+
+def test_helper_strips_trailing_whitespace_without_semicolons():
+    # Trailing whitespace is removed even when no semicolon is present.
+    assert _strip_trailing_semicolon("SELECT 1   \n") == "SELECT 1"
