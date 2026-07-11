@@ -44,3 +44,19 @@ def test_helper_preserves_semicolon_inside_string_literal() -> None:
 
 def test_helper_no_trailing_semicolon_unchanged() -> None:
     assert _strip_trailing_semicolon("SELECT 1") == "SELECT 1"
+
+
+def test_query_strips_trailing_semicolon_before_execute() -> None:
+    connector, cursor = _make_mock_connector()
+    cursor.fetchall_arrow.return_value = None
+    cursor.fetchmany_arrow.return_value = None
+    # Anything truthy so limit branch not needed
+    mconn_cursor = cursor
+    # execute should observe stripped SQL - fetchall path when limit None
+    try:
+        connector.query("SELECT 1;;")
+    except Exception:
+        # mock may return None from fetchall_arrow — only care about execute SQL
+        pass
+    (sent,), _ = cursor.execute.call_args
+    assert sent == "SELECT 1"
