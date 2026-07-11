@@ -10,9 +10,8 @@ only differs in how the connection is opened.
 
 from __future__ import annotations
 
-import re
-
 import json
+import re
 from contextlib import closing
 from decimal import Decimal as PyDecimal
 from functools import cache
@@ -35,7 +34,6 @@ def _strip_trailing_semicolon(sql: str) -> str:
     *between* trailing semicolons (``SELECT 1; ;`` → still ends with ``;``).
     """
     return _TRAILING_SEMICOLONS_RE.sub("", sql)
-
 
 
 def _apply_limit(sql: str, limit: int) -> str:
