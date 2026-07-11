@@ -150,6 +150,8 @@ def test_build_trino_column_struct_tuple_to_dict() -> None:
         ("SELECT 1; -- trailing", "SELECT 1; -- trailing"),
         # Terminating run only — internal statement separators stay.
         ("SELECT 1; SELECT 2;", "SELECT 1; SELECT 2"),
+        # Semicolons inside string literals are preserved.
+        ("SELECT 'hello;';", "SELECT 'hello;'"),
     ],
 )
 def test_strip_trailing_semicolon(raw: str, expected: str) -> None:

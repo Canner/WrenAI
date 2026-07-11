@@ -8,9 +8,9 @@ lex with sqlglot to build an equivalent PyArrow schema.
 from __future__ import annotations
 
 import contextlib
-import re
 import datetime as dtlib
 import json
+import re
 from decimal import Decimal as PyDecimal
 from urllib.parse import parse_qsl, unquote, urlparse
 
