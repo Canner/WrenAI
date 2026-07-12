@@ -5,8 +5,10 @@ from src.pipelines.retrieval.db_schema_retrieval import (
     _is_project_wide_analysis_query,
     _rerank_table_documents,
     _select_relevant_table_documents,
+    check_using_db_schemas_without_pruning,
     dbschema_retrieval,
     expand_business_terms_for_retrieval,
+    table_retrieval,
 )
 
 
@@ -109,6 +111,36 @@ def test_select_relevant_table_documents_limits_weak_extra_candidates():
 
 
 @pytest.mark.asyncio
+async def test_table_retrieval_fetches_explicit_table_descriptions():
+    class Retriever:
+        def __init__(self):
+            self.filters = None
+
+        async def run(self, query_embedding, filters):
+            self.filters = filters
+            return {"documents": []}
+
+    retriever = Retriever()
+
+    await table_retrieval(
+        query="show rows",
+        embedding={},
+        project_id="project-1",
+        tables=["orders"],
+        table_retriever=retriever,
+    )
+
+    assert retriever.filters == {
+        "operator": "AND",
+        "conditions": [
+            {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
+            {"field": "project_id", "operator": "==", "value": "project-1"},
+            {"field": "name", "operator": "in", "value": ["orders"]},
+        ],
+    }
+
+
+@pytest.mark.asyncio
 async def test_dbschema_retrieval_loads_selected_active_project_schema():
     class Retriever:
         def __init__(self):
@@ -166,6 +198,63 @@ async def test_dbschema_retrieval_loads_selected_active_project_schema():
             {"field": "name", "operator": "in", "value": ["orders"]},
         ],
     }
+
+
+@pytest.mark.asyncio
+async def test_dbschema_retrieval_does_not_load_full_schema_for_unmatched_question():
+    class Retriever:
+        def __init__(self):
+            self.called = False
+
+        async def run(self, query_embedding, filters):
+            self.called = True
+            return {"documents": []}
+
+    retriever = Retriever()
+
+    documents = await dbschema_retrieval(
+        query="show top customers by invoice amount",
+        table_retrieval={"documents": []},
+        project_id="project-1",
+        dbschema_retriever=retriever,
+    )
+
+    assert documents == []
+    assert not retriever.called
+
+
+def test_check_using_db_schemas_without_pruning_triggers_legacy_column_pruning():
+    class Encoding:
+        def encode(self, value):
+            return value.split()
+
+    result = check_using_db_schemas_without_pruning(
+        construct_db_schemas=[
+                {
+                    "type": "TABLE",
+                    "name": "orders",
+                    "comment": "",
+                    "columns": [
+                        {
+                            "type": "COLUMN",
+                            "name": "amount",
+                            "data_type": "DOUBLE",
+                            "comment": "",
+                            "is_primary_key": False,
+                        }
+                    ],
+                    "properties": {},
+                "primaryKey": "",
+            }
+        ],
+        dbschema_retrieval=[],
+        encoding=Encoding(),
+        enable_column_pruning=True,
+        context_window_size=1000,
+    )
+
+    assert result["db_schemas"] == []
+    assert result["tokens"] > 0
 
 
 @pytest.mark.asyncio

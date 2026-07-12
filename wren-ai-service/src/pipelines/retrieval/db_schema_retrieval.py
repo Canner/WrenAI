@@ -410,6 +410,12 @@ def _extract_table_names_from_table_retrieval(
         if not isinstance(document, Document):
             continue
         table_name = document.meta.get("name")
+        if not isinstance(table_name, str):
+            try:
+                content = ast.literal_eval(document.content)
+            except (SyntaxError, ValueError):
+                content = {}
+            table_name = content.get("name") if isinstance(content, dict) else None
         if isinstance(table_name, str):
             table_name = table_name.strip()
             if table_name and table_name not in table_names:
@@ -435,7 +441,6 @@ async def embedding(
             previous_query_summaries = []
 
         query = "\n".join(previous_query_summaries) + "\n" + query
-        query = expand_business_terms_for_retrieval(query)
 
         return await embedder.run(query)
     else:
@@ -463,19 +468,21 @@ async def table_retrieval(
         )
 
     if embedding:
-        result = await table_retriever.run(
+        return await table_retriever.run(
             query_embedding=embedding.get("embedding"),
             filters=base_filters,
         )
-        result["documents"] = _select_relevant_table_documents(
-            query,
-            _rerank_table_documents(query, result.get("documents") or []),
-        )
-        return result
 
     if tables:
-        logger.info("Skipping table-description retrieval for explicit tables: %s", tables)
-        return {"documents": []}
+        logger.info("Loading explicit table descriptions: %s", tables)
+        explicit_filters = {
+            **base_filters,
+            "conditions": [
+                *base_filters["conditions"],
+                {"field": "name", "operator": "in", "value": tables},
+            ],
+        }
+        return await table_retriever.run(query_embedding=[], filters=explicit_filters)
 
     return {"documents": []}
 
@@ -512,11 +519,19 @@ async def dbschema_retrieval(
             project_id,
             selected_table_names,
         )
-    else:
+    elif not query:
         logger.info(
             "Loading complete deployed schema metadata for active project_id %s",
             project_id,
         )
+    else:
+        logger.info(
+            "No relevant table-description candidates found for active project_id %s; "
+            "skipping full schema loading for query=%s",
+            project_id,
+            query,
+        )
+        return []
 
     results = await dbschema_retriever.run(query_embedding=[], filters=filters)
     return results.get("documents", [])
@@ -600,6 +615,15 @@ def check_using_db_schemas_without_pruning(
         retrieval_result["table_ddl"] for retrieval_result in retrieval_results
     ]
     _token_count = len(encoding.encode(" ".join(table_ddls)))
+    if _token_count > context_window_size or enable_column_pruning:
+        return {
+            "db_schemas": [],
+            "tokens": _token_count,
+            "has_calculated_field": has_calculated_field,
+            "has_metric": has_metric,
+            "has_json_field": has_json_field,
+        }
+
     return {
         "db_schemas": retrieval_results,
         "tokens": _token_count,
