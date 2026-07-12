@@ -49,3 +49,11 @@ def test_helper_preserves_semicolon_inside_string_literal() -> None:
 
 def test_helper_no_trailing_semicolon_unchanged() -> None:
     assert _strip_trailing_semicolon("SELECT 1") == "SELECT 1"
+
+
+def test_query_without_limit_strips_trailing_semicolon() -> None:
+    connector, cursor = _make_mock_connector()
+    connector.query("SELECT 1;")
+    (sent,), _ = cursor.execute.call_args
+    assert sent == "SELECT 1"
+    assert not sent.endswith(";")
