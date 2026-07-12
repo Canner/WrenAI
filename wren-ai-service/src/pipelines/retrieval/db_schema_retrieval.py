@@ -29,6 +29,8 @@ else:
 
 logger = logging.getLogger("wren-ai-service")
 
+MAX_RELEVANT_TABLE_CANDIDATES = 5
+
 
 table_columns_selection_system_prompt = """
 ### TASK ###
@@ -251,13 +253,18 @@ def _semantic_score(document: Document) -> float:
     return 0.0
 
 
-def _rerank_table_documents(query: str, documents: list[Document]) -> list[Document]:
+def _score_table_documents(
+    query: str, documents: list[Document]
+) -> list[tuple[float, int, Document, int, float]]:
     if not documents:
-        return documents
+        return []
 
     query_terms = _retrieval_terms(expand_business_terms_for_retrieval(query))
     if not query_terms:
-        return documents
+        return [
+            (_semantic_score(document), -index, document, 0, _semantic_score(document))
+            for index, document in enumerate(documents)
+        ]
 
     scored_documents: list[tuple[float, int, Document, int, float]] = []
     for index, document in enumerate(documents):
@@ -268,7 +275,17 @@ def _rerank_table_documents(query: str, documents: list[Document]) -> list[Docum
             (combined_score, -index, document, lexical_score, semantic_score)
         )
 
-    reranked = sorted(scored_documents, key=lambda item: (item[0], item[1]), reverse=True)
+    return sorted(scored_documents, key=lambda item: (item[0], item[1]), reverse=True)
+
+
+def _rerank_table_documents(query: str, documents: list[Document]) -> list[Document]:
+    if not documents:
+        return documents
+
+    reranked = _score_table_documents(query, documents)
+    if not reranked:
+        return documents
+
     logger.info(
         "Top table candidates after retrieval rerank: %s",
         [
@@ -284,6 +301,34 @@ def _rerank_table_documents(query: str, documents: list[Document]) -> list[Docum
         ],
     )
     return [document for _score, _index, document, _lexical, _semantic in reranked]
+
+
+def _select_relevant_table_documents(
+    query: str,
+    documents: list[Document],
+    *,
+    max_tables: int = MAX_RELEVANT_TABLE_CANDIDATES,
+) -> list[Document]:
+    if not documents or max_tables <= 0:
+        return []
+
+    reranked = _score_table_documents(query, documents)
+    if not reranked:
+        return documents[:max_tables]
+
+    candidate_pool = [item for item in reranked if item[3] > 0] or reranked
+    selected = [
+        document
+        for _score, _index, document, _lexical, _semantic in candidate_pool[:max_tables]
+    ]
+    if len(selected) < len(documents):
+        logger.info(
+            "Scoped table candidates for schema loading from %s to %s tables: %s",
+            len(documents),
+            len(selected),
+            [document.meta.get("name") for document in selected],
+        )
+    return selected
 
 
 def _is_project_wide_analysis_query(query: str) -> bool:
@@ -422,9 +467,9 @@ async def table_retrieval(
             query_embedding=embedding.get("embedding"),
             filters=base_filters,
         )
-        result["documents"] = _rerank_table_documents(
+        result["documents"] = _select_relevant_table_documents(
             query,
-            result.get("documents") or [],
+            _rerank_table_documents(query, result.get("documents") or []),
         )
         return result
 

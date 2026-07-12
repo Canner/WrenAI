@@ -4,6 +4,7 @@ from haystack import Document
 from src.pipelines.retrieval.db_schema_retrieval import (
     _is_project_wide_analysis_query,
     _rerank_table_documents,
+    _select_relevant_table_documents,
     dbschema_retrieval,
     expand_business_terms_for_retrieval,
 )
@@ -62,6 +63,49 @@ def test_rerank_table_documents_prefers_question_relevant_table_text():
     )
 
     assert documents[0].meta["name"] == "business_transactions"
+
+
+def test_select_relevant_table_documents_limits_weak_extra_candidates():
+    documents = [
+        Document(
+            content="Invoice transactions with product, customer, currency, and amount.",
+            meta={"type": "TABLE_DESCRIPTION", "name": "invoices"},
+            score=0.92,
+        ),
+        Document(
+            content="Product catalog with product names and categories.",
+            meta={"type": "TABLE_DESCRIPTION", "name": "products"},
+            score=0.86,
+        ),
+        Document(
+            content="Customer account master data.",
+            meta={"type": "TABLE_DESCRIPTION", "name": "customers"},
+            score=0.82,
+        ),
+        Document(
+            content="Exchange rate lookup by currency.",
+            meta={"type": "TABLE_DESCRIPTION", "name": "currency_rates"},
+            score=0.78,
+        ),
+        Document(
+            content="Sales regions and market hierarchy.",
+            meta={"type": "TABLE_DESCRIPTION", "name": "regions"},
+            score=0.74,
+        ),
+        Document(
+            content="Raw staging audit rows with load metadata.",
+            meta={"type": "TABLE_DESCRIPTION", "name": "staging_audit"},
+            score=0.99,
+        ),
+    ]
+
+    selected = _select_relevant_table_documents(
+        "Show invoice distribution by currency across markets",
+        documents,
+    )
+
+    assert 1 <= len(selected) <= 5
+    assert "staging_audit" not in [document.meta["name"] for document in selected]
 
 
 @pytest.mark.asyncio
