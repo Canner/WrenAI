@@ -284,10 +284,13 @@ class AskService:
             "cost",
             "claim",
             "claims",
+            "currency",
+            "currencies",
             "customer",
             "customers",
             "dashboard",
             "debug",
+            "distribution",
             "failure",
             "fastest growing",
             "growth",
@@ -296,6 +299,8 @@ class AskService:
             "invoice",
             "invoices",
             "margin",
+            "market",
+            "markets",
             "monthly",
             "order",
             "orders",
@@ -391,6 +396,19 @@ class AskService:
         ):
             guidance.append(
                 "Use a real timestamp column from the schema and aggregate results by calendar month when a monthly trend is requested."
+            )
+
+        if re.search(
+            r"\b(?:by|across|per|each|grouped by|group by)\s+[a-z][a-z0-9 _-]*",
+            normalized,
+        ) or "over time" in normalized:
+            guidance.append(
+                "Preserve explicit grouping dimensions requested by the question, such as market, region, currency, product, customer, status, type, or category, using only matching columns exposed in the provided schema."
+            )
+
+        if any(term in normalized for term in ("currency", "currencies", "fx")):
+            guidance.append(
+                "For currency questions, use an exposed currency, money, exchange, or FX code/name column from the schema and group by it."
             )
 
         if not guidance:
@@ -644,6 +662,12 @@ class AskService:
             concept_groups.append({"critical", "severity", "priority"})
         if "cost" in normalized:
             concept_groups.append({"cost", "amount", "expense", "impact"})
+        if "currency" in normalized or "currencies" in normalized:
+            concept_groups.append({"currency", "curr", "money", "fx", "exchange"})
+        if "market" in normalized or "markets" in normalized:
+            concept_groups.append({"market", "region", "country", "territory"})
+        if "region" in normalized or "regions" in normalized:
+            concept_groups.append({"region", "market", "area", "territory", "country"})
         if "quarterly" in normalized or "quarter" in normalized:
             concept_groups.append({"quarter", "quarterly"})
         if "recurring" in normalized or "recurrence" in normalized:
@@ -803,6 +827,7 @@ class AskService:
             "category",
             "count",
             "current",
+            "currency",
             "customer",
             "date",
             "failure",
@@ -909,7 +934,8 @@ class AskService:
         expects_dimension = bool(
             re.search(
                 r"\b(?:by|per|each|which|different|type|types|category|"
-                r"categories|status|source)\b",
+                r"categories|status|source|market|markets|region|regions|"
+                r"currency|currencies)\b",
                 normalized_query,
             )
         )
@@ -2011,6 +2037,11 @@ class AskService:
                 "new order",
                 "order",
                 "orders",
+                "currency",
+                "currencies",
+                "market",
+                "markets",
+                "performance",
                 "revenue",
                 "sale",
                 "sales",
@@ -2042,7 +2073,8 @@ class AskService:
                 return categorical_count_sql
 
         wants_count_metric = any(
-            term in normalized_query for term in ("count", "counts", "volume", "how many")
+            term in normalized_query
+            for term in ("count", "counts", "volume", "how many", "distribution")
         ) and not any(
             term in normalized_query
             for term in ("revenue", "sales value", "amount", "value", "quantity", "qty")
@@ -2120,6 +2152,19 @@ class AskService:
             dimension_candidates.append(("Market", "MarketType", "MarketName", "Region", "Country"))
         if "region" in normalized_query:
             dimension_candidates.append(("Region", "Market", "Area", "Territory"))
+        if "currency" in normalized_query or "currencies" in normalized_query:
+            dimension_candidates.append(
+                (
+                    "Currency",
+                    "CurrencyCode",
+                    "Currency Code",
+                    "Curr",
+                    "CurrCode",
+                    "MoneyCurrency",
+                    "PaymentCurrency",
+                    "FXCurrency",
+                )
+            )
         if "country" in normalized_query or "countries" in normalized_query:
             dimension_candidates.append(("Country", "CountryName", "Nation", "Market"))
         if "division" in normalized_query:
@@ -2399,12 +2444,17 @@ class AskService:
         if not dimension_candidates:
             return None
 
+        allow_count_metric = (
+            wants_order_count_metric
+            or wants_count_metric
+            or ("performance" in normalized_query and wants_time_bucket)
+        )
         selected = self._select_best_analytics_table(
             tables,
             dimension_candidates,
             measure_candidates,
             wants_date=wants_date,
-            allow_count_metric=wants_order_count_metric or wants_count_metric,
+            allow_count_metric=allow_count_metric,
             query=query,
         )
         if not selected:
@@ -5150,6 +5200,17 @@ class AskService:
             return None
         return AskResult(sql=sql.strip(), type="llm")
 
+    def _normalize_sql_direction_keywords(self, sql: str) -> str:
+        parts = re.split(r'("(?:[^"]|"")*"|\'(?:\'\'|[^\'])*\')', sql)
+        for index in range(0, len(parts), 2):
+            parts[index] = re.sub(
+                r"\b(asc|desc)\b",
+                lambda match: match.group(1).upper(),
+                parts[index],
+                flags=re.IGNORECASE,
+            )
+        return "".join(parts)
+
     def _build_validated_ask_result_from_sql(
         self,
         sql: Optional[str],
@@ -5157,6 +5218,7 @@ class AskService:
         query: str | None = None,
     ) -> Optional[AskResult]:
         if isinstance(sql, str):
+            sql = self._normalize_sql_direction_keywords(sql)
             sql = normalize_sql_table_references_to_schema(
                 sql,
                 construct_valid_table_names(table_ddls),

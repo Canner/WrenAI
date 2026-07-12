@@ -134,10 +134,14 @@ def expand_business_terms_for_retrieval(query: str) -> str:
         term in normalized
         for term in (
             "amount",
+            "currency",
+            "currencies",
             "customer",
             "customers",
             "invoice",
             "invoices",
+            "market",
+            "markets",
             "order",
             "orders",
             "region",
@@ -149,7 +153,7 @@ def expand_business_terms_for_retrieval(query: str) -> str:
         )
     ):
         expansions.append(
-            "transaction purchase billing account geography area representative amount value total metric"
+            "transaction purchase billing account geography area representative amount value total metric money exchange currency"
         )
 
     if any(

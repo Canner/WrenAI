@@ -26,6 +26,16 @@ def test_expand_business_terms_for_retrieval_adds_generic_sales_order_terms():
 
     assert query in expanded_query
     assert "transaction purchase billing account geography" in expanded_query
+    assert "money exchange currency" in expanded_query
+
+
+def test_expand_business_terms_for_retrieval_adds_generic_currency_market_terms():
+    query = "Show invoice distribution by currency across markets"
+
+    expanded_query = expand_business_terms_for_retrieval(query)
+
+    assert query in expanded_query
+    assert "money exchange currency" in expanded_query
 
 
 def test_expand_business_terms_for_retrieval_leaves_query_unchanged():

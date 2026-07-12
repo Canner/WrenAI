@@ -411,6 +411,85 @@ def test_build_schema_grounded_sales_sql_for_top_markets():
     assert "dbo_tblStageNewOrders" not in sql
 
 
+def test_build_schema_grounded_sales_sql_for_market_performance_over_time_with_count_fallback():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "Compare market performance over time.",
+        [
+            """
+            CREATE TABLE dbo_OrderEvents (
+              Market VARCHAR,
+              OrdDate TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT DATEPART(YEAR, "dbo_OrderEvents"."OrdDate") AS "year", '
+        'DATEPART(MONTH, "dbo_OrderEvents"."OrdDate") AS "month", '
+        '"dbo_OrderEvents"."Market" AS "Market", '
+        'COUNT(*) AS "RecordCount" '
+        'FROM "dbo_OrderEvents" '
+        'WHERE "dbo_OrderEvents"."Market" IS NOT NULL '
+        'GROUP BY DATEPART(YEAR, "dbo_OrderEvents"."OrdDate"), '
+        'DATEPART(MONTH, "dbo_OrderEvents"."OrdDate"), "dbo_OrderEvents"."Market" '
+        'ORDER BY DATEPART(YEAR, "dbo_OrderEvents"."OrdDate"), '
+        'DATEPART(MONTH, "dbo_OrderEvents"."OrdDate")'
+    )
+
+
+def test_build_schema_grounded_sales_sql_for_invoice_distribution_by_currency():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "Show invoice distribution by currency.",
+        [
+            """
+            CREATE TABLE dbo_Invoices (
+              InvoiceNo VARCHAR,
+              Currency VARCHAR,
+              InvoiceAmount DOUBLE,
+              InvoiceDate TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_Invoices"."Currency" AS "Currency", '
+        'COUNT(DISTINCT "dbo_Invoices"."InvoiceNo") AS "OrderCount" '
+        'FROM "dbo_Invoices" '
+        'WHERE "dbo_Invoices"."Currency" IS NOT NULL '
+        'GROUP BY "dbo_Invoices"."Currency" '
+        'ORDER BY COUNT(DISTINCT "dbo_Invoices"."InvoiceNo") DESC'
+    )
+
+
+def test_validated_sql_normalizes_direction_keywords_before_parser_execution():
+    service = AskService.__new__(AskService)
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT "dbo_tblSales"."ProdName" AS "ProdName", '
+            'SUM("dbo_tblSales"."SalesValue") AS "TotalSalesValue" '
+            'FROM "dbo_tblSales" '
+            'GROUP BY "dbo_tblSales"."ProdName" '
+            'ORDER BY SUM("dbo_tblSales"."SalesValue") Desc'
+        ),
+        [
+            """
+            CREATE TABLE dbo_tblSales (
+              ProdName VARCHAR,
+              SalesValue DOUBLE
+            );
+            """
+        ],
+        "Show top-selling products.",
+    )
+
+    assert result is not None
+    assert result.sql.endswith('ORDER BY SUM("dbo_tblSales"."SalesValue") DESC')
+
+
 def test_build_schema_grounded_sales_sql_for_division_revenue_trend():
     service = AskService.__new__(AskService)
     sql = service._build_schema_grounded_sales_sql(
