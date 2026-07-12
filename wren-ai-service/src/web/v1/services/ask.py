@@ -23,6 +23,7 @@ logger = logging.getLogger("wren-ai-service")
 NO_RELEVANT_ACTIVE_DATASOURCE_MESSAGE = (
     "No relevant data found in the active datasource for this question."
 )
+MAX_FORCED_EXPLICIT_TABLES = 5
 
 
 async def _return_value(value):
@@ -2185,11 +2186,16 @@ class AskService:
                 "market",
                 "markets",
                 "performance",
+                "product",
+                "products",
+                "quantity",
+                "qty",
                 "revenue",
                 "sale",
                 "sales",
                 "salesperson",
                 "sales person",
+                "sold",
             )
         )
         if not is_sales_or_order_query:
@@ -2220,7 +2226,20 @@ class AskService:
             for term in ("count", "counts", "volume", "how many", "distribution")
         ) and not any(
             term in normalized_query
-            for term in ("revenue", "sales value", "amount", "value", "quantity", "qty")
+            for term in (
+                "amount",
+                "cost",
+                "expense",
+                "quantity",
+                "qty",
+                "revenue",
+                "sale",
+                "sales",
+                "sold",
+                "sum",
+                "total",
+                "value",
+            )
         )
         wants_average_metric = any(
             term in normalized_query for term in ("average", "avg", "mean")
@@ -2313,6 +2332,32 @@ class AskService:
         if "division" in normalized_query:
             dimension_candidates.append(("Division",))
         if (
+            (
+                "category" in normalized_query
+                or "categories" in normalized_query
+                or "prodcategory" in compact_query
+                or "productcategory" in compact_query
+            )
+            and "product" in normalized_query
+            and "product type" not in normalized_query
+            and "prodtype" not in compact_query
+            and "producttype" not in compact_query
+        ):
+            dimension_candidates.append(
+                (
+                    "ProductCategory",
+                    "Product Category",
+                    "ProdCategory",
+                    "Category",
+                    "ProductType",
+                    "Product Type",
+                    "ProdType",
+                    "ProdName",
+                    "Product",
+                    "ProductName",
+                )
+            )
+        elif (
             "product type" in normalized_query
             or "prodtype" in normalized_query
             or "producttype" in compact_query
@@ -2357,15 +2402,25 @@ class AskService:
         measure_candidates = (
             "Qty",
             "Quantity",
+            "QtySold",
+            "SoldQty",
+            "QuantitySold",
+            "UnitsSold",
+            "ItemQty",
             "SalesQty",
             "OrderQty",
+            "OrderQuantity",
             "InvoiceQty",
+            "InvoiceQuantity",
         ) if any(term in normalized_query for term in ("quantity", "qty")) else (
+            "Sales",
             "SalesValue",
             "FXSalesValue",
             "Revenue",
             "NetSales",
+            "TotalSales",
             "SalesAmount",
+            "SaleAmount",
             "NewOrderValue",
             "NewOrdersValue",
             "InvoiceValue",
@@ -4661,6 +4716,21 @@ class AskService:
     ) -> bool:
         return bool(retrieval_table_names)
 
+    def _forced_explicit_table_names(
+        self, table_names: list[str], *, source: str = "request"
+    ) -> list[str]:
+        if not table_names:
+            return []
+        if len(table_names) <= MAX_FORCED_EXPLICIT_TABLES:
+            return table_names
+
+        logger.info(
+            "Treating broad %s explicit_tables list as retrieval candidates, not a forced schema scope: %s",
+            source,
+            table_names,
+        )
+        return []
+
     def _build_greeting_response(self, query: str) -> str:
         return (
             f"Hi. I can help with questions about your active datasource and Wren AI.\n\n"
@@ -5614,8 +5684,12 @@ class AskService:
         query_explicit_table_names = self._normalize_explicit_table_names(
             self._extract_explicit_table_names_from_query(user_query)
         )
+        forced_request_explicit_table_names = self._forced_explicit_table_names(
+            request_explicit_table_names,
+            source="request",
+        )
         explicit_table_names = (
-            request_explicit_table_names or query_explicit_table_names
+            forced_request_explicit_table_names or query_explicit_table_names
         )
         retrieval_table_names = explicit_table_names or None
 

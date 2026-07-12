@@ -110,6 +110,58 @@ def test_select_relevant_table_documents_limits_weak_extra_candidates():
     assert "staging_audit" not in [document.meta["name"] for document in selected]
 
 
+@pytest.mark.asyncio
+async def test_table_retrieval_caps_embedding_results_before_schema_loading():
+    documents = [
+        Document(
+            content="Raw staging audit rows with load metadata.",
+            meta={"type": "TABLE_DESCRIPTION", "name": "staging_audit"},
+            score=0.99,
+        ),
+        Document(
+            content="Invoice sales transactions with product categories and sales value.",
+            meta={"type": "TABLE_DESCRIPTION", "name": "sales_invoices"},
+            score=0.8,
+        ),
+        Document(
+            content="Product catalog with product names and categories.",
+            meta={"type": "TABLE_DESCRIPTION", "name": "products"},
+            score=0.7,
+        ),
+        Document(
+            content="Customer account master data.",
+            meta={"type": "TABLE_DESCRIPTION", "name": "customers"},
+            score=0.6,
+        ),
+        Document(
+            content="Sales regions and market hierarchy.",
+            meta={"type": "TABLE_DESCRIPTION", "name": "regions"},
+            score=0.5,
+        ),
+        Document(
+            content="Exchange rate lookup by currency.",
+            meta={"type": "TABLE_DESCRIPTION", "name": "currency_rates"},
+            score=0.4,
+        ),
+    ]
+
+    class Retriever:
+        async def run(self, query_embedding, filters):
+            return {"documents": documents}
+
+    result = await table_retrieval(
+        query="What is the distribution of sales across product categories?",
+        embedding={"embedding": [0.1, 0.2]},
+        project_id="project-1",
+        tables=[],
+        table_retriever=Retriever(),
+    )
+
+    selected_names = [document.meta["name"] for document in result["documents"]]
+    assert 1 <= len(selected_names) <= 5
+    assert "staging_audit" not in selected_names
+
+
 def test_rerank_table_documents_prefers_reference_source_for_entity_listing():
     transaction_source = Document(
         content="Invoice transaction fact rows with customer id and invoice amount.",

@@ -30,6 +30,67 @@ def test_build_schema_grounded_sales_sql_for_salesperson_performance():
     assert "CustID" not in sql
 
 
+def test_build_schema_grounded_sales_sql_for_sales_by_product_category():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "What is the distribution of sales across product categories?",
+        [
+            """
+            CREATE TABLE dbo_qSalesMargin (
+              ProductCategory VARCHAR,
+              ProdName VARCHAR,
+              SalesValue DOUBLE,
+              OrdNo VARCHAR
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_qSalesMargin"."ProductCategory" AS "ProductCategory", '
+        'SUM("dbo_qSalesMargin"."SalesValue") AS "TotalSalesValue" '
+        'FROM "dbo_qSalesMargin" '
+        'WHERE "dbo_qSalesMargin"."ProductCategory" IS NOT NULL '
+        'GROUP BY "dbo_qSalesMargin"."ProductCategory" '
+        'ORDER BY SUM("dbo_qSalesMargin"."SalesValue") DESC'
+    )
+    assert "COUNT" not in sql
+
+
+def test_build_schema_grounded_sales_sql_for_total_quantity_sold_by_product():
+    service = AskService.__new__(AskService)
+    sql = service._build_schema_grounded_sales_sql(
+        "Show total quantity sold by product.",
+        [
+            """
+            CREATE TABLE dbo_tblOrderLines (
+              ProductName VARCHAR,
+              Quantity DOUBLE,
+              OrderNo VARCHAR
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_tblOrderLines"."ProductName" AS "ProductName", '
+        'SUM("dbo_tblOrderLines"."Quantity") AS "TotalQuantity" '
+        'FROM "dbo_tblOrderLines" '
+        'WHERE "dbo_tblOrderLines"."ProductName" IS NOT NULL '
+        'GROUP BY "dbo_tblOrderLines"."ProductName" '
+        'ORDER BY SUM("dbo_tblOrderLines"."Quantity") DESC'
+    )
+    assert "COUNT" not in sql
+
+
+def test_broad_request_explicit_tables_are_not_forced_schema_scope():
+    service = AskService.__new__(AskService)
+    table_names = [f"table_{index}" for index in range(6)]
+
+    assert service._forced_explicit_table_names(table_names) == []
+    assert service._forced_explicit_table_names(table_names[:5]) == table_names[:5]
+
+
 def test_build_direct_orders_sales_sql_for_salesperson_order_count():
     service = AskService.__new__(AskService)
     sql = service._build_direct_orders_sales_sql(
