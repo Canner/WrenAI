@@ -126,7 +126,39 @@ def _build_view_ddl(content: dict) -> str:
 
 ## Start of Pipeline
 def expand_business_terms_for_retrieval(query: str) -> str:
-    return query
+    normalized = (query or "").lower()
+    expansions: list[str] = []
+
+    if any(
+        term in normalized
+        for term in (
+            "invoice",
+            "invoices",
+            "order",
+            "orders",
+            "sales",
+            "salesperson",
+            "sales person",
+        )
+    ):
+        expansions.append(
+            "sales order invoice customer market region division salesperson amount value revenue"
+        )
+
+    if any(term in normalized for term in ("pcb", "repair", "failure")):
+        expansions.append(
+            "repair pcb failure board debug status category created date timestamp"
+        )
+
+    if "throughput" in normalized:
+        expansions.append(
+            "throughput manufacturing unit units production repair completed timestamp date"
+        )
+
+    if not expansions:
+        return query
+
+    return f"{query}\n" + "\n".join(expansions)
 
 
 def _is_project_wide_analysis_query(query: str) -> bool:

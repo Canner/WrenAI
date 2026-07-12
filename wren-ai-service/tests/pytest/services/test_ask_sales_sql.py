@@ -46,6 +46,17 @@ def test_build_direct_orders_sales_sql_for_salesperson_order_count():
     )
 
 
+def test_direct_heuristic_gate_includes_sales_and_pcb_operational_questions():
+    service = AskService.__new__(AskService)
+
+    assert service._is_direct_heuristic_sql_query(
+        "Show top 10 customers by invoice amount."
+    )
+    assert service._is_direct_heuristic_sql_query(
+        "Show throughput trends across different manufacturing units."
+    )
+
+
 def test_build_direct_orders_sales_sql_for_top_new_orders_q1():
     service = AskService.__new__(AskService)
     sql = service._build_direct_orders_sales_sql(

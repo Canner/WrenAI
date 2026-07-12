@@ -3499,12 +3499,36 @@ class AskService:
         )
 
     def _is_direct_heuristic_sql_query(self, query: str) -> bool:
-        return False
-
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized:
             return False
 
+        asks_order_or_sales_analysis = any(
+            term in normalized
+            for term in (
+                "invoice",
+                "invoices",
+                "order",
+                "orders",
+                "sales",
+                "salesperson",
+                "sales person",
+            )
+        ) and any(
+            term in normalized
+            for term in (
+                "amount",
+                "chart",
+                "count",
+                "distribution",
+                "highest",
+                "ranking",
+                "region",
+                "regions",
+                "top",
+                "value",
+            )
+        )
         asks_manufacturing_throughput = (
             "throughput" in normalized
             and any(term in normalized for term in ("manufacturing", "unit", "units"))
@@ -3532,7 +3556,8 @@ class AskService:
             )
         )
         return (
-            asks_manufacturing_throughput
+            asks_order_or_sales_analysis
+            or asks_manufacturing_throughput
             or asks_failure_counts
             or asks_sla_compliance
             or asks_monthly_repairs
@@ -6184,7 +6209,7 @@ class AskService:
                         )
                 if (
                     not documents
-                    and self._is_data_analysis_query(user_query)
+                    and self._get_metadata_question_kind(user_query)
                     and not request_explicit_table_names
                 ):
                     logger.info(
@@ -6373,7 +6398,7 @@ class AskService:
 
                 should_retry_full_schema = (
                     not api_results
-                    and self._is_data_analysis_query(user_query)
+                    and self._get_metadata_question_kind(user_query)
                     and "db_schema_retrieval" in self._pipelines
                     and not request_explicit_table_names
                     and not table_names

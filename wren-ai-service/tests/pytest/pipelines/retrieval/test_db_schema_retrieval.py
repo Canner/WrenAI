@@ -18,10 +18,13 @@ def test_project_wide_analysis_query_ignores_empty_query():
     assert not _is_project_wide_analysis_query("")
 
 
-def test_expand_business_terms_for_retrieval_does_not_add_datasource_specific_aliases():
+def test_expand_business_terms_for_retrieval_adds_generic_sales_order_terms():
     query = "Create a SalesPerson performance ranking chart"
 
-    assert expand_business_terms_for_retrieval(query) == query
+    expanded_query = expand_business_terms_for_retrieval(query)
+
+    assert query in expanded_query
+    assert "market region division salesperson" in expanded_query
 
 
 def test_expand_business_terms_for_retrieval_leaves_query_unchanged():
