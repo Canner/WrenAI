@@ -381,8 +381,6 @@ def _build_clickhouse_client_kwargs(connection_info: Any) -> dict:
 # --------------------------------------------------------------------------
 
 
-
-
 class ClickHouseConnector(ConnectorABC):
     """Native ``clickhouse-connect`` connector that bypasses ``ibis-project``."""
 

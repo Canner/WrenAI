@@ -12,7 +12,6 @@ from wren.model import DataFusionConnectionInfo
 from wren.model.error import ErrorCode, WrenError
 
 
-
 class DataFusionConnector(ConnectorABC):
     """DataFusion-native connector for local file analysis.
 

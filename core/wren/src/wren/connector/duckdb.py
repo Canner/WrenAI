@@ -13,7 +13,6 @@ from wren.model import (
 from wren.model.error import ErrorCode, WrenError
 
 
-
 def _escape_sql(value: str) -> str:
     return value.replace("'", "''")
 

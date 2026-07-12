@@ -18,7 +18,11 @@ from functools import cache
 import pyarrow as pa
 from loguru import logger
 
-from wren.connector.base import ConnectorABC, strip_trailing_semicolon, strip_trailing_semicolon
+from wren.connector.base import (
+    ConnectorABC,
+    strip_trailing_semicolon,
+    strip_trailing_semicolon,
+)
 from wren.model.data_source import DataSource
 from wren.model.error import ErrorCode, WrenError
 

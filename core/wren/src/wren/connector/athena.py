@@ -20,7 +20,6 @@ from wren.connector.base import ConnectorABC, strip_trailing_semicolon
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 
 
-
 # Athena's DB-API cursor returns Trino-style type names. We delegate the
 # lexing to sqlglot so we get nested type support (array<row<a int, b varchar>>,
 # decimal(p, s), map<K, V>, etc.) for free.

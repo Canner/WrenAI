@@ -359,7 +359,6 @@ def _import_trino():
         ) from e
 
 
-
 class TrinoConnector(ConnectorABC):
     """Native trino DB-API connector that bypasses ibis-project."""
 
@@ -389,7 +388,9 @@ class TrinoConnector(ConnectorABC):
         trino = _import_trino()
 
         if limit is not None:
-            sql = f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS _sub LIMIT {limit}"
+            sql = (
+                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS _sub LIMIT {limit}"
+            )
         try:
             with contextlib.closing(self.connection.cursor()) as cursor:
                 cursor.execute(sql)

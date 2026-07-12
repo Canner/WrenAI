@@ -52,7 +52,6 @@ def _parse_oracle_connection_url(url: str):
     return urlparse(sanitized_url)
 
 
-
 def _ora_number_type(precision, scale) -> pa.DataType:
     if scale is not None and scale > 0:
         p = min(int(precision), 38) if precision else 38

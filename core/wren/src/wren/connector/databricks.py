@@ -11,7 +11,6 @@ from wren.model import (
 )
 
 
-
 def _connection_kwargs(connection_info: DatabricksConnectionUnion) -> dict[str, str]:
     kwargs = {
         "server_hostname": connection_info.server_hostname,

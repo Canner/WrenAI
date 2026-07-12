@@ -117,8 +117,6 @@ def _arrow_type(column) -> pa.DataType:
     return _PG_OID_TO_ARROW.get(column.type_code, pa.string())
 
 
-
-
 def _coerce_decimal(value, target_type: pa.DataType):
     if value is None or not isinstance(value, PyDecimal):
         return value
@@ -247,9 +245,7 @@ class CannerConnector(ConnectorABC):
         import psycopg  # noqa: PLC0415
 
         if limit is not None:
-            sql = (
-                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS _t LIMIT {limit}"
-            )
+            sql = f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS _t LIMIT {limit}"
 
         try:
             with self.connection.cursor() as cursor:

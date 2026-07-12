@@ -13,7 +13,6 @@ from wren.model import (
 from wren.model.error import ErrorCode, WrenError
 
 
-
 class RedshiftConnector(ConnectorABC):
     def __init__(self, connection_info: RedshiftConnectionUnion):
         import redshift_connector  # noqa: PLC0415
