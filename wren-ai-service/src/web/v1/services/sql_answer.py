@@ -66,14 +66,14 @@ class SqlAnswerService:
         )
 
     async def _load_active_schema_contexts(
-        self, project_id: Optional[str]
+        self, project_id: Optional[str], query: str
     ) -> list[str]:
         retrieval_pipeline = self._pipelines.get("db_schema_retrieval")
-        if not retrieval_pipeline:
+        if not retrieval_pipeline or not (query or "").strip():
             return []
 
         retrieval_result = await retrieval_pipeline.run(
-            query="",
+            query=query,
             histories=[],
             project_id=project_id,
             enable_column_pruning=False,
@@ -134,6 +134,7 @@ class SqlAnswerService:
 
             schema_contexts = await self._load_active_schema_contexts(
                 sql_answer_request.project_id,
+                sql_answer_request.query,
             )
             normalized_sql = self._normalize_and_validate_sql(
                 sql_answer_request.sql,

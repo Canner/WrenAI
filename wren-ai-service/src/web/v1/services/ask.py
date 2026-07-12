@@ -3986,6 +3986,18 @@ class AskService:
 
         return None
 
+    def _can_use_schema_grounded_sql_fallback(
+        self,
+        documents: list[dict],
+        table_ddls: list[str],
+        query: str | None,
+    ) -> bool:
+        return bool(
+            documents
+            and table_ddls
+            and not self._should_load_full_schema_for_question(query)
+        )
+
     def _is_schema_grounded_query(
         self, query: str, db_schemas: Optional[list[str]] = None
     ) -> bool:
@@ -6783,54 +6795,6 @@ class AskService:
                     return results
 
                 if not documents:
-                    if heuristic_sql := self._build_heuristic_text_to_sql_fallback(
-                        user_query, table_ddls, table_names=table_names
-                    ):
-                        logger.info(
-                            "Using heuristic text-to-sql fallback before retrieval failure for query_id %s: %s",
-                            query_id,
-                            user_query,
-                        )
-                        ask_result = self._build_validated_ask_result_from_sql(
-                            heuristic_sql,
-                            table_ddls,
-                            user_query,
-                        )
-                        if not ask_result:
-                            invalid_sql = heuristic_sql
-                            error_message = "Heuristic SQL fallback was not valid for the active datasource schema."
-                            if not self._is_stopped(query_id, self._ask_results):
-                                self._ask_results[query_id] = (
-                                    self._build_no_relevant_active_datasource_response(
-                                        trace_id,
-                                        rephrased_question=rephrased_question,
-                                        intent_reasoning=intent_reasoning,
-                                        retrieved_tables=table_names,
-                                        is_followup=True if histories else False,
-                                    )
-                                )
-                            results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
-                            results["metadata"]["error_message"] = (
-                                NO_RELEVANT_ACTIVE_DATASOURCE_MESSAGE
-                            )
-                            results["metadata"]["type"] = "TEXT_TO_SQL"
-                            return results
-                        api_results = [ask_result]
-                        if not self._is_stopped(query_id, self._ask_results):
-                            self._ask_results[query_id] = AskResultResponse(
-                                status="finished",
-                                type="TEXT_TO_SQL",
-                                response=api_results,
-                                rephrased_question=rephrased_question,
-                                intent_reasoning=intent_reasoning,
-                                retrieved_tables=table_names,
-                                trace_id=trace_id,
-                                is_followup=True if histories else False,
-                            )
-                        results["ask_result"] = api_results
-                        results["metadata"]["type"] = "TEXT_TO_SQL"
-                        return results
-
                     logger.exception(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
                     if not self._is_stopped(query_id, self._ask_results):
                         self._ask_results[query_id] = (
@@ -7183,8 +7147,14 @@ class AskService:
                 results["ask_result"] = api_results
                 results["metadata"]["type"] = "TEXT_TO_SQL"
             else:
-                if heuristic_sql := self._build_heuristic_text_to_sql_fallback(
-                    user_query, table_ddls, table_names=table_names
+                if self._can_use_schema_grounded_sql_fallback(
+                    documents,
+                    table_ddls,
+                    user_query,
+                ) and (
+                    heuristic_sql := self._build_heuristic_text_to_sql_fallback(
+                        user_query, table_ddls, table_names=table_names
+                    )
                 ):
                     logger.info(
                         "Using heuristic text-to-sql fallback for query_id %s: %s",

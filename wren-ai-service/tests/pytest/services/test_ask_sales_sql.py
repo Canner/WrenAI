@@ -115,6 +115,40 @@ def test_full_schema_loading_gate_allows_only_metadata_questions():
     )
 
 
+def test_schema_grounded_sql_fallback_requires_retrieved_documents():
+    service = AskService.__new__(AskService)
+
+    assert not service._can_use_schema_grounded_sql_fallback(
+        [],
+        [
+            """
+            CREATE TABLE dbo_orders (
+              CustomerName VARCHAR,
+              OrderId VARCHAR
+            );
+            """
+        ],
+        "Show top customers by order count.",
+    )
+    assert not service._can_use_schema_grounded_sql_fallback(
+        [{"table_name": "dbo_orders"}],
+        [],
+        "Show top customers by order count.",
+    )
+    assert service._can_use_schema_grounded_sql_fallback(
+        [{"table_name": "dbo_orders"}],
+        [
+            """
+            CREATE TABLE dbo_orders (
+              CustomerName VARCHAR,
+              OrderId VARCHAR
+            );
+            """
+        ],
+        "Show top customers by order count.",
+    )
+
+
 def test_build_direct_orders_sales_sql_for_salesperson_order_count():
     service = AskService.__new__(AskService)
     sql = service._build_direct_orders_sales_sql(
