@@ -57,6 +57,14 @@ def test_direct_heuristic_gate_is_disabled_for_generic_schema_selection():
     )
 
 
+def test_data_query_timeout_retry_does_not_allow_full_project_schema():
+    service = AskService.__new__(AskService)
+
+    assert not service._should_retry_selected_schema_after_retrieval_timeout(None)
+    assert not service._should_retry_selected_schema_after_retrieval_timeout([])
+    assert service._should_retry_selected_schema_after_retrieval_timeout(["orders"])
+
+
 def test_rewrite_query_for_text_to_sql_guides_total_amount_to_sum():
     service = AskService.__new__(AskService)
 

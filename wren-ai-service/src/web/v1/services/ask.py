@@ -4656,6 +4656,11 @@ class AskService:
         except TimeoutError as exc:
             raise TimeoutError(f"{label} timed out after {timeout} seconds") from exc
 
+    def _should_retry_selected_schema_after_retrieval_timeout(
+        self, retrieval_table_names: Optional[list[str]]
+    ) -> bool:
+        return bool(retrieval_table_names)
+
     def _build_greeting_response(self, query: str) -> str:
         return (
             f"Hi. I can help with questions about your active datasource and Wren AI.\n\n"
@@ -6271,26 +6276,40 @@ class AskService:
                         timeout_seconds=self._schema_retrieval_timeout_seconds,
                     )
                 except TimeoutError as error:
-                    logger.warning(
-                        "Schema retrieval timed out; falling back to deployed schemas. query_id=%s project_id=%s error=%s",
-                        query_id,
-                        ask_request.project_id,
-                        error,
-                    )
-                    retrieval_result = await self._run_with_timeout(
-                        "Deployed schema fallback retrieval",
-                        self._pipelines["db_schema_retrieval"].run(
-                            query="" if not retrieval_table_names else sql_user_query,
-                            tables=retrieval_table_names,
-                            histories=[],
-                            project_id=ask_request.project_id,
-                            enable_column_pruning=False,
-                        ),
-                        timeout_seconds=min(
-                            self._schema_retrieval_timeout_seconds,
-                            30,
-                        ),
-                    )
+                    if not self._should_retry_selected_schema_after_retrieval_timeout(
+                        retrieval_table_names
+                    ):
+                        logger.warning(
+                            "Schema retrieval timed out for data query; not loading full project schema. "
+                            "query_id=%s project_id=%s error=%s",
+                            query_id,
+                            ask_request.project_id,
+                            error,
+                        )
+                        retrieval_result = {"construct_retrieval_results": {}}
+                    else:
+                        logger.warning(
+                            "Schema retrieval timed out; retrying only explicit selected schemas. "
+                            "query_id=%s project_id=%s tables=%s error=%s",
+                            query_id,
+                            ask_request.project_id,
+                            retrieval_table_names,
+                            error,
+                        )
+                        retrieval_result = await self._run_with_timeout(
+                            "Selected schema fallback retrieval",
+                            self._pipelines["db_schema_retrieval"].run(
+                                query=sql_user_query,
+                                tables=retrieval_table_names,
+                                histories=[],
+                                project_id=ask_request.project_id,
+                                enable_column_pruning=False,
+                            ),
+                            timeout_seconds=min(
+                                self._schema_retrieval_timeout_seconds,
+                                30,
+                            ),
+                        )
                 _retrieval_result = retrieval_result.get(
                     "construct_retrieval_results", {}
                 )
