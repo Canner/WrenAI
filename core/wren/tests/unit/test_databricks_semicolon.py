@@ -8,7 +8,8 @@ and assert on the executed SQL, so no Databricks connection is required.
 
 from unittest.mock import MagicMock
 
-from wren.connector.databricks import DatabricksConnector, _strip_trailing_semicolon
+from wren.connector.databricks import DatabricksConnector
+from wren.connector.base import strip_trailing_semicolon as _strip_trailing_semicolon
 
 
 def _make_mock_connector() -> tuple[DatabricksConnector, MagicMock]:

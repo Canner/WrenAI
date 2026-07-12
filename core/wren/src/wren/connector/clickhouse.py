@@ -21,7 +21,7 @@ import sqlglot.errors
 from loguru import logger
 from sqlglot.expressions import DataType
 
-from wren.connector.base import ConnectorABC
+from wren.connector.base import ConnectorABC, strip_trailing_semicolon
 from wren.model.error import (
     DIALECT_SQL,
     DatabaseTimeoutError,
@@ -381,19 +381,6 @@ def _build_clickhouse_client_kwargs(connection_info: Any) -> dict:
 # --------------------------------------------------------------------------
 
 
-_TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
-
-
-def _strip_trailing_semicolon(sql: str) -> str:
-    """Strip the terminating run of ``;`` characters and surrounding whitespace.
-
-    Matches the canner helper of the same name. Wrapping user SQL as
-    ``SELECT * FROM ({sql}) AS _wren_sub LIMIT N`` breaks when ``sql`` ends
-    in a semicolon — ClickHouse rejects ``SELECT 1;`` inside a subquery. Only
-    the terminating run is removed so semicolons inside string literals
-    (e.g. ``SELECT 'a;b'``) are preserved.
-    """
-    return _TRAILING_SEMICOLONS_RE.sub("", sql)
 
 
 class ClickHouseConnector(ConnectorABC):
@@ -408,7 +395,7 @@ class ClickHouseConnector(ConnectorABC):
         # Strip the terminating run of ``;`` / whitespace before wrapping —
         # ``SELECT * FROM (SELECT 1;) AS _wren_sub LIMIT N`` is invalid SQL.
         # Semicolons inside string literals are preserved.
-        stripped = _strip_trailing_semicolon(sql)
+        stripped = strip_trailing_semicolon(sql)
         statement = stripped
         if limit is not None:
             statement = f"SELECT * FROM ({stripped}) AS _wren_sub LIMIT {limit}"
@@ -426,7 +413,7 @@ class ClickHouseConnector(ConnectorABC):
         return _build_clickhouse_arrow_table(result)
 
     def dry_run(self, sql: str) -> None:
-        stripped = _strip_trailing_semicolon(sql)
+        stripped = strip_trailing_semicolon(sql)
         try:
             self.connection.query(f"SELECT * FROM ({stripped}) AS _wren_sub LIMIT 0")
         except _ClickHouseDbError as e:

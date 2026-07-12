@@ -1,29 +1,15 @@
-import re
 from contextlib import closing
 
 import pyarrow as pa
 from loguru import logger
 
-from wren.connector.base import ConnectorABC
+from wren.connector.base import ConnectorABC, strip_trailing_semicolon
 from wren.model import (
     DatabricksConnectionUnion,
     DatabricksServicePrincipalConnectionInfo,
     DatabricksTokenConnectionInfo,
 )
 
-_TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
-
-
-def _strip_trailing_semicolon(sql: str) -> str:
-    """Strip any trailing ``;`` characters and surrounding whitespace.
-
-    ``dry_run`` wraps user SQL as ``SELECT * FROM ({sql}) AS sub LIMIT 0``; a
-    trailing semicolon (``SELECT 1;``) becomes a syntax error inside the
-    subquery. Only the terminating run of semicolons/whitespace is stripped,
-    so semicolons inside string literals (e.g. ``SELECT 'a;b'``) are preserved.
-    Mirrors the postgres/canner/trino/clickhouse connectors.
-    """
-    return _TRAILING_SEMICOLONS_RE.sub("", sql)
 
 
 def _connection_kwargs(connection_info: DatabricksConnectionUnion) -> dict[str, str]:
@@ -74,7 +60,7 @@ class DatabricksConnector(ConnectorABC):
     def dry_run(self, sql: str) -> None:
         with closing(self.connection.cursor()) as cursor:
             cursor.execute(
-                f"SELECT * FROM ({_strip_trailing_semicolon(sql)}) AS sub LIMIT 0"
+                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS sub LIMIT 0"
             )
 
     def close(self) -> None:

@@ -8,7 +8,8 @@ assert on the executed SQL, so no AWS connection is required.
 
 from unittest.mock import MagicMock
 
-from wren.connector.athena import AthenaConnector, _strip_trailing_semicolon
+from wren.connector.athena import AthenaConnector
+from wren.connector.base import strip_trailing_semicolon as _strip_trailing_semicolon
 
 
 def _make_mock_connector() -> tuple[AthenaConnector, MagicMock]:

@@ -11,29 +11,14 @@ from __future__ import annotations
 import contextlib
 import datetime as dtlib
 import json
-import re
 from decimal import Decimal as PyDecimal
 from typing import Any
 
 import pyarrow as pa
 
-from wren.connector.base import ConnectorABC
+from wren.connector.base import ConnectorABC, strip_trailing_semicolon
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 
-_TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
-
-
-def _strip_trailing_semicolon(sql: str) -> str:
-    """Strip any trailing ``;`` characters and surrounding whitespace.
-
-    ``dry_run`` runs ``EXPLAIN {sql}``; Athena (Trino-flavoured) rejects a
-    trailing semicolon there (``EXPLAIN SELECT 1;`` → syntax error). Only the
-    terminating run of semicolons/whitespace is stripped, so semicolons inside
-    string literals (e.g. ``SELECT 'a;b'``) are preserved. Mirrors the
-    trino/postgres/mysql connectors, which already strip before EXPLAIN or
-    subquery-wrapping.
-    """
-    return _TRAILING_SEMICOLONS_RE.sub("", sql)
 
 
 # Athena's DB-API cursor returns Trino-style type names. We delegate the
@@ -347,7 +332,7 @@ class AthenaConnector(ConnectorABC):
     def dry_run(self, sql: str) -> None:
         try:
             with contextlib.closing(self.connection.cursor()) as cursor:
-                cursor.execute(f"EXPLAIN {_strip_trailing_semicolon(sql)}")
+                cursor.execute(f"EXPLAIN {strip_trailing_semicolon(sql)}")
         except (WrenError, TimeoutError):
             raise
         except Exception as e:

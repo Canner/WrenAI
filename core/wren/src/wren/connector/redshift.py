@@ -1,11 +1,10 @@
-import re
 from contextlib import closing
 
 import pandas as pd
 import pyarrow as pa
 from loguru import logger
 
-from wren.connector.base import ConnectorABC
+from wren.connector.base import ConnectorABC, strip_trailing_semicolon
 from wren.model import (
     RedshiftConnectionInfo,
     RedshiftConnectionUnion,
@@ -13,20 +12,6 @@ from wren.model import (
 )
 from wren.model.error import ErrorCode, WrenError
 
-_TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
-
-
-def _strip_trailing_semicolon(sql: str) -> str:
-    """Strip any trailing ``;`` characters and surrounding whitespace.
-
-    Wrapping user SQL as ``SELECT * FROM ({sql}) AS _q LIMIT N`` breaks when
-    ``sql`` ends in a semicolon — Redshift rejects ``SELECT 1;`` inside a
-    subquery (``syntax error at or near ";"``). Only the *terminating* run of
-    semicolons/whitespace is stripped, so semicolons inside string literals
-    (e.g. ``SELECT 'a;b' FROM t``) are preserved. Mirrors the postgres/canner/
-    trino/clickhouse connectors, which already strip before subquery-wrapping.
-    """
-    return _TRAILING_SEMICOLONS_RE.sub("", sql)
 
 
 class RedshiftConnector(ConnectorABC):
@@ -62,7 +47,7 @@ class RedshiftConnector(ConnectorABC):
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         if limit is not None:
             sql = (
-                f"SELECT * FROM ({_strip_trailing_semicolon(sql)}) "
+                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) "
                 f"AS _q LIMIT {int(limit)}"
             )
         with closing(self.connection.cursor()) as cursor:
@@ -75,7 +60,7 @@ class RedshiftConnector(ConnectorABC):
     def dry_run(self, sql: str) -> None:
         with closing(self.connection.cursor()) as cursor:
             cursor.execute(
-                f"SELECT * FROM ({_strip_trailing_semicolon(sql)}) AS sub LIMIT 0"
+                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS sub LIMIT 0"
             )
 
     def close(self) -> None:

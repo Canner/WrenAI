@@ -18,7 +18,7 @@ from functools import cache
 import pyarrow as pa
 from loguru import logger
 
-from wren.connector.base import ConnectorABC
+from wren.connector.base import ConnectorABC, strip_trailing_semicolon, strip_trailing_semicolon
 from wren.model.data_source import DataSource
 from wren.model.error import ErrorCode, WrenError
 
@@ -35,7 +35,7 @@ def _apply_limit(sql: str, limit: int) -> str:
     SELECT projects two columns with the same name (e.g. a join that selects
     ``a.id`` and ``b.id``).
     """
-    return f"{sql.rstrip().rstrip(';').rstrip()}\nLIMIT {limit}"
+    return f"{strip_trailing_semicolon(sql)}\nLIMIT {limit}"
 
 
 def _coerce_limit(limit: int | None) -> int | None:
@@ -99,7 +99,7 @@ class MySqlConnector(ConnectorABC):
         # subquery-wrapping side-steps ``ER_DUP_FIELDNAME`` for queries that
         # surface duplicate column names. We strip a trailing semicolon to
         # match the same compose-ability we use for ``query``'s LIMIT path.
-        explain_sql = f"EXPLAIN {sql.rstrip().rstrip(';').rstrip()}"
+        explain_sql = f"EXPLAIN {strip_trailing_semicolon(sql)}"
         with closing(self.connection.cursor()) as cursor:
             cursor.execute(explain_sql)
             cursor.fetchall()

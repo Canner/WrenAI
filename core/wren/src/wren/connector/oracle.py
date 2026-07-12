@@ -1,6 +1,5 @@
 """Native oracledb connector — bypasses ibis oracle backend."""
 
-import re
 from decimal import Decimal as PyDecimal
 from urllib.parse import unquote, urlparse
 
@@ -15,11 +14,11 @@ try:
 except ImportError:  # pragma: no cover
     oracledb = None
 
-from wren.connector.base import ConnectorABC
+from wren.connector.base import ConnectorABC, strip_trailing_semicolon
+
+# Back-compat private alias used by unit tests.
+_strip_trailing_semicolon = strip_trailing_semicolon
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
-
-_TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
-
 
 def _parse_oracle_connection_url(url: str):
     """Parse an Oracle URL after escaping raw brackets in userinfo only.
@@ -52,19 +51,6 @@ def _parse_oracle_connection_url(url: str):
     sanitized_url = f"{prefix}{sanitized_userinfo}@{hostinfo}{rest[authority_end:]}"
     return urlparse(sanitized_url)
 
-
-def _strip_trailing_semicolon(sql: str) -> str:
-    """Strip any trailing ``;`` characters and surrounding whitespace.
-
-    Both ``query`` (with a limit) and ``dry_run`` wrap user SQL as
-    ``SELECT * FROM ({sql}) t WHERE ROWNUM <= N``. Oracle rejects a trailing
-    semicolon inside a subquery (``ORA-00911: invalid character``), so a query
-    that ends in ``;`` fails even though it runs fine standalone. Only the
-    terminating run of semicolons/whitespace is stripped, so semicolons inside
-    string literals (e.g. ``SELECT 'a;b'``) are preserved. Mirrors the
-    postgres/canner/trino/clickhouse connectors.
-    """
-    return _TRAILING_SEMICOLONS_RE.sub("", sql)
 
 
 def _ora_number_type(precision, scale) -> pa.DataType:
@@ -197,7 +183,7 @@ class OracleConnector(ConnectorABC):
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         if limit is not None:
             sql = (
-                f"SELECT * FROM ({_strip_trailing_semicolon(sql)}) t "
+                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) t "
                 f"WHERE ROWNUM <= {limit}"
             )
         try:
@@ -217,7 +203,7 @@ class OracleConnector(ConnectorABC):
             try:
                 with self.connection.cursor() as cursor:
                     cursor.execute(
-                        f"SELECT * FROM ({_strip_trailing_semicolon(sql)}) t "
+                        f"SELECT * FROM ({strip_trailing_semicolon(sql)}) t "
                         f"WHERE ROWNUM <= 0"
                     )
             except oracledb.DatabaseError as e:

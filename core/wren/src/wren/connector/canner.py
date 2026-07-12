@@ -10,7 +10,6 @@ postgres wire).
 from __future__ import annotations
 
 import json
-import re
 from decimal import ROUND_HALF_EVEN
 from decimal import Decimal as PyDecimal
 from typing import Any
@@ -18,7 +17,7 @@ from typing import Any
 import pyarrow as pa
 from loguru import logger
 
-from wren.connector.base import ConnectorABC
+from wren.connector.base import ConnectorABC, strip_trailing_semicolon
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 
 # Postgres OID → Arrow type. Canner publishes Trino-style values over the
@@ -118,19 +117,6 @@ def _arrow_type(column) -> pa.DataType:
     return _PG_OID_TO_ARROW.get(column.type_code, pa.string())
 
 
-_TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
-
-
-def _strip_trailing_semicolon(sql: str) -> str:
-    """Strip any trailing ``;`` characters and surrounding whitespace.
-
-    Wrapping user SQL as ``SELECT * FROM ({sql}) AS _t LIMIT N`` breaks when
-    ``sql`` ends in a semicolon — Postgres/Canner reject ``SELECT 1;`` inside
-    a subquery. We only strip the *terminating* run of semicolons/whitespace,
-    so semicolons inside string literals (e.g. ``SELECT 'a;b' FROM t``) are
-    preserved.
-    """
-    return _TRAILING_SEMICOLONS_RE.sub("", sql)
 
 
 def _coerce_decimal(value, target_type: pa.DataType):
@@ -262,7 +248,7 @@ class CannerConnector(ConnectorABC):
 
         if limit is not None:
             sql = (
-                f"SELECT * FROM ({_strip_trailing_semicolon(sql)}) AS _t LIMIT {limit}"
+                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS _t LIMIT {limit}"
             )
 
         try:
@@ -284,7 +270,7 @@ class CannerConnector(ConnectorABC):
     def dry_run(self, sql: str) -> None:
         import psycopg  # noqa: PLC0415
 
-        wrapped = f"SELECT * FROM ({_strip_trailing_semicolon(sql)}) AS _t LIMIT 0"
+        wrapped = f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS _t LIMIT 0"
         try:
             with self.connection.cursor() as cursor:
                 cursor.execute(wrapped)
