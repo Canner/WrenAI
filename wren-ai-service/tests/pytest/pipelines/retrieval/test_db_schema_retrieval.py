@@ -31,7 +31,7 @@ def test_expand_business_terms_for_retrieval_leaves_query_unchanged():
 
 
 @pytest.mark.asyncio
-async def test_dbschema_retrieval_loads_complete_active_project_schema():
+async def test_dbschema_retrieval_loads_selected_active_project_schema():
     class Retriever:
         def __init__(self):
             self.filters = None
@@ -85,5 +85,40 @@ async def test_dbschema_retrieval_loads_complete_active_project_schema():
         "conditions": [
             {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
             {"field": "project_id", "operator": "==", "value": "project-1"},
+            {"field": "name", "operator": "in", "value": ["orders"]},
+        ],
+    }
+
+
+@pytest.mark.asyncio
+async def test_dbschema_retrieval_uses_explicit_tables_as_scope():
+    class Retriever:
+        def __init__(self):
+            self.filters = None
+
+        async def run(self, query_embedding, filters):
+            self.filters = filters
+            return {"documents": []}
+
+    retriever = Retriever()
+
+    await dbschema_retrieval(
+        query="show failed repairs",
+        table_retrieval={"documents": []},
+        project_id="project-1",
+        dbschema_retriever=retriever,
+        tables=["dbo.failure_patterns", "dbo_failure_patterns"],
+    )
+
+    assert retriever.filters == {
+        "operator": "AND",
+        "conditions": [
+            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+            {"field": "project_id", "operator": "==", "value": "project-1"},
+            {
+                "field": "name",
+                "operator": "in",
+                "value": ["dbo.failure_patterns", "dbo_failure_patterns"],
+            },
         ],
     }

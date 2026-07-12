@@ -21,7 +21,7 @@ import { getLogger } from '@server/utils';
 const logger = getLogger('TextBasedAnswerBackgroundTracker');
 logger.level = 'debug';
 
-const ANSWER_PREVIEW_LIMIT = 50;
+const ANSWER_PREVIEW_LIMIT = 500;
 
 const formatValue = (value: unknown) => {
   if (value === null || value === undefined || value === '') {

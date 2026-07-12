@@ -189,6 +189,32 @@ def _dedupe_documents(documents: list[Document]) -> list[Document]:
     return deduped
 
 
+def _normalize_table_names(table_names: Optional[list[str]]) -> list[str]:
+    normalized: list[str] = []
+    for table_name in table_names or []:
+        if not isinstance(table_name, str):
+            continue
+        table_name = table_name.strip()
+        if table_name and table_name not in normalized:
+            normalized.append(table_name)
+    return normalized
+
+
+def _extract_table_names_from_table_retrieval(
+    table_retrieval: dict, explicit_tables: Optional[list[str]] = None
+) -> list[str]:
+    table_names = _normalize_table_names(explicit_tables)
+    for document in table_retrieval.get("documents") or []:
+        if not isinstance(document, Document):
+            continue
+        table_name = document.meta.get("name")
+        if isinstance(table_name, str):
+            table_name = table_name.strip()
+            if table_name and table_name not in table_names:
+                table_names.append(table_name)
+    return table_names
+
+
 @observe(capture_input=False, capture_output=False)
 async def embedding(
     query: str,
@@ -252,6 +278,10 @@ async def dbschema_retrieval(
     dbschema_retriever: Any,
     tables: Optional[list[str]] = None,
 ) -> list[Document]:
+    selected_table_names = _extract_table_names_from_table_retrieval(
+        table_retrieval, tables
+    )
+
     filters = {
         "operator": "AND",
         "conditions": [
@@ -263,10 +293,21 @@ async def dbschema_retrieval(
             {"field": "project_id", "operator": "==", "value": project_id}
         )
 
-    logger.info(
-        "Loading complete deployed schema metadata for active project_id %s",
-        project_id,
-    )
+    if selected_table_names:
+        filters["conditions"].append(
+            {"field": "name", "operator": "in", "value": selected_table_names}
+        )
+        logger.info(
+            "Loading selected deployed schema metadata for active project_id %s tables=%s",
+            project_id,
+            selected_table_names,
+        )
+    else:
+        logger.info(
+            "Loading complete deployed schema metadata for active project_id %s",
+            project_id,
+        )
+
     results = await dbschema_retriever.run(query_embedding=[], filters=filters)
     return results.get("documents", [])
 
