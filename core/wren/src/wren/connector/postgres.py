@@ -23,7 +23,6 @@ from loguru import logger
 from wren.connector.base import ConnectorABC, strip_trailing_semicolon
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 
-
 # Map of well-known PostgreSQL OIDs to Arrow types. OIDs that we have not
 # explicitly mapped fall back to ``pa.string()`` (see ``_get_pg_arrow_type``).
 _PG_OID_TO_ARROW: dict[int, pa.DataType] = {

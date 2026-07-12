@@ -10,7 +10,6 @@ column-by-column to that schema.
 from __future__ import annotations
 
 import json
-import re
 from decimal import Decimal as PyDecimal
 from typing import Any
 from urllib.parse import parse_qsl, unquote, urlparse
