@@ -46,13 +46,13 @@ def test_build_direct_orders_sales_sql_for_salesperson_order_count():
     )
 
 
-def test_direct_heuristic_gate_includes_sales_and_pcb_operational_questions():
+def test_direct_heuristic_gate_is_disabled_for_generic_schema_selection():
     service = AskService.__new__(AskService)
 
-    assert service._is_direct_heuristic_sql_query(
+    assert not service._is_direct_heuristic_sql_query(
         "Show top 10 customers by invoice amount."
     )
-    assert service._is_direct_heuristic_sql_query(
+    assert not service._is_direct_heuristic_sql_query(
         "Show throughput trends across different manufacturing units."
     )
 

@@ -20,12 +20,12 @@ def test_project_wide_analysis_query_ignores_empty_query():
 
 
 def test_expand_business_terms_for_retrieval_adds_generic_sales_order_terms():
-    query = "Create a SalesPerson performance ranking chart"
+    query = "Show top customers by invoice amount"
 
     expanded_query = expand_business_terms_for_retrieval(query)
 
     assert query in expanded_query
-    assert "market region division salesperson" in expanded_query
+    assert "transaction purchase billing account geography" in expanded_query
 
 
 def test_expand_business_terms_for_retrieval_leaves_query_unchanged():
@@ -36,13 +36,13 @@ def test_expand_business_terms_for_retrieval_leaves_query_unchanged():
 
 def test_rerank_table_documents_prefers_question_relevant_table_text():
     generic_stage = Document(
-        content="CREATE TABLE dbo_xStageLoad8_Test (Prod_Name VARCHAR);",
-        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_xStageLoad8_Test"},
+        content="Generic imported staging records with product labels.",
+        meta={"type": "TABLE_DESCRIPTION", "name": "generic_stage_load"},
         score=0.99,
     )
     order_region_table = Document(
-        content="CREATE TABLE dbo_tblSales (Market VARCHAR, SalesValue DOUBLE);",
-        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_tblSales"},
+        content="Business transactions grouped by customer geography and amount.",
+        meta={"type": "TABLE_DESCRIPTION", "name": "business_transactions"},
         score=0.01,
     )
 
@@ -51,7 +51,7 @@ def test_rerank_table_documents_prefers_question_relevant_table_text():
         [generic_stage, order_region_table],
     )
 
-    assert documents[0].meta["name"] == "dbo_tblSales"
+    assert documents[0].meta["name"] == "business_transactions"
 
 
 @pytest.mark.asyncio

@@ -3499,69 +3499,7 @@ class AskService:
         )
 
     def _is_direct_heuristic_sql_query(self, query: str) -> bool:
-        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
-        if not normalized:
-            return False
-
-        asks_order_or_sales_analysis = any(
-            term in normalized
-            for term in (
-                "invoice",
-                "invoices",
-                "order",
-                "orders",
-                "sales",
-                "salesperson",
-                "sales person",
-            )
-        ) and any(
-            term in normalized
-            for term in (
-                "amount",
-                "chart",
-                "count",
-                "distribution",
-                "highest",
-                "ranking",
-                "region",
-                "regions",
-                "top",
-                "value",
-            )
-        )
-        asks_manufacturing_throughput = (
-            "throughput" in normalized
-            and any(term in normalized for term in ("manufacturing", "unit", "units"))
-        )
-        asks_failure_counts = (
-            "failure" in normalized
-            and any(
-                term in normalized
-                for term in ("count", "counts", "common", "most common", "top")
-            )
-            and any(
-                term in normalized
-                for term in ("pcb", "repair", "bar chart", "chart", "category")
-            )
-        )
-        asks_sla_compliance = "sla" in normalized and any(
-            term in normalized
-            for term in ("compliance", "dashboard", "chart", "repair", "repairs")
-        )
-        asks_monthly_repairs = (
-            "repair" in normalized
-            and any(
-                term in normalized
-                for term in ("monthly", "last 12 months", "trend", "volume")
-            )
-        )
-        return (
-            asks_order_or_sales_analysis
-            or asks_manufacturing_throughput
-            or asks_failure_counts
-            or asks_sla_compliance
-            or asks_monthly_repairs
-        )
+        return False
 
     def _build_heuristic_text_to_sql_fallback(
         self,

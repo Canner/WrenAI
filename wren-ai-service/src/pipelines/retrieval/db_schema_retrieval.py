@@ -133,27 +133,36 @@ def expand_business_terms_for_retrieval(query: str) -> str:
     if any(
         term in normalized
         for term in (
+            "amount",
+            "customer",
+            "customers",
             "invoice",
             "invoices",
             "order",
             "orders",
+            "region",
+            "regions",
             "sales",
             "salesperson",
             "sales person",
+            "value",
         )
     ):
         expansions.append(
-            "sales order invoice customer market region division salesperson amount value revenue"
+            "transaction purchase billing account geography area representative amount value total metric"
         )
 
-    if any(term in normalized for term in ("pcb", "repair", "failure")):
+    if any(
+        term in normalized
+        for term in ("defect", "failure", "issue", "repair", "resolved", "status")
+    ):
         expansions.append(
-            "repair pcb failure board debug status category created date timestamp"
+            "issue defect category status resolved created updated date timestamp event"
         )
 
-    if "throughput" in normalized:
+    if any(term in normalized for term in ("throughput", "production", "manufacturing")):
         expansions.append(
-            "throughput manufacturing unit units production repair completed timestamp date"
+            "rate volume output capacity process unit group completed timestamp date"
         )
 
     if not expansions:
