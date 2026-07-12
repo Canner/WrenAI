@@ -1,5 +1,6 @@
 import ast
 import logging
+import re
 import sys
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -161,6 +162,117 @@ def expand_business_terms_for_retrieval(query: str) -> str:
     return f"{query}\n" + "\n".join(expansions)
 
 
+def _normalize_retrieval_token(value: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
+
+
+def _retrieval_terms(value: str) -> set[str]:
+    stop_words = {
+        "about",
+        "across",
+        "and",
+        "are",
+        "ask",
+        "bar",
+        "chart",
+        "create",
+        "different",
+        "for",
+        "from",
+        "how",
+        "in",
+        "is",
+        "of",
+        "show",
+        "the",
+        "to",
+        "top",
+        "what",
+        "which",
+        "with",
+    }
+    terms = {
+        _normalize_retrieval_token(token)
+        for token in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", value or "")
+        if len(token) > 2 and token.lower() not in stop_words
+    }
+    return {term for term in terms if term}
+
+
+def _document_relevance_score(document: Document, query_terms: set[str]) -> int:
+    if not query_terms:
+        return 0
+
+    document_terms = _retrieval_terms(
+        " ".join(
+            str(part or "")
+            for part in (
+                document.meta.get("name"),
+                document.meta.get("description"),
+                document.content,
+            )
+        )
+    )
+    if not document_terms:
+        return 0
+
+    score = 0
+    for query_term in query_terms:
+        if query_term in document_terms:
+            score += 20
+            continue
+        for document_term in document_terms:
+            if query_term in document_term or document_term in query_term:
+                score += 8
+                break
+    return score
+
+
+def _semantic_score(document: Document) -> float:
+    score = getattr(document, "score", None)
+    if isinstance(score, (int, float)):
+        return float(score)
+    score = document.meta.get("score")
+    if isinstance(score, (int, float)):
+        return float(score)
+    return 0.0
+
+
+def _rerank_table_documents(query: str, documents: list[Document]) -> list[Document]:
+    if not documents:
+        return documents
+
+    query_terms = _retrieval_terms(expand_business_terms_for_retrieval(query))
+    if not query_terms:
+        return documents
+
+    scored_documents: list[tuple[float, int, Document, int, float]] = []
+    for index, document in enumerate(documents):
+        lexical_score = _document_relevance_score(document, query_terms)
+        semantic_score = _semantic_score(document)
+        combined_score = semantic_score + lexical_score
+        scored_documents.append(
+            (combined_score, -index, document, lexical_score, semantic_score)
+        )
+
+    reranked = sorted(scored_documents, key=lambda item: (item[0], item[1]), reverse=True)
+    logger.info(
+        "Top table candidates after retrieval rerank: %s",
+        [
+            {
+                "name": document.meta.get("name"),
+                "semantic_score": round(semantic_score, 4),
+                "lexical_score": lexical_score,
+                "combined_score": round(combined_score, 4),
+            }
+            for combined_score, _index, document, lexical_score, semantic_score in reranked[
+                :5
+            ]
+        ],
+    )
+    return [document for _score, _index, document, _lexical, _semantic in reranked]
+
+
 def _is_project_wide_analysis_query(query: str) -> bool:
     normalized = (query or "").lower()
     if not normalized:
@@ -274,7 +386,11 @@ async def embedding(
 
 @observe(capture_input=False)
 async def table_retrieval(
-    embedding: dict, project_id: str, tables: list[str], table_retriever: Any
+    query: str,
+    embedding: dict,
+    project_id: str,
+    tables: list[str],
+    table_retriever: Any,
 ) -> dict:
     base_filters = {
         "operator": "AND",
@@ -292,6 +408,10 @@ async def table_retrieval(
         result = await table_retriever.run(
             query_embedding=embedding.get("embedding"),
             filters=base_filters,
+        )
+        result["documents"] = _rerank_table_documents(
+            query,
+            result.get("documents") or [],
         )
         return result
 

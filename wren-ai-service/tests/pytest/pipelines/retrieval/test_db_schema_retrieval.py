@@ -3,6 +3,7 @@ from haystack import Document
 
 from src.pipelines.retrieval.db_schema_retrieval import (
     _is_project_wide_analysis_query,
+    _rerank_table_documents,
     dbschema_retrieval,
     expand_business_terms_for_retrieval,
 )
@@ -31,6 +32,26 @@ def test_expand_business_terms_for_retrieval_leaves_query_unchanged():
     query = "Explain what this workspace does"
 
     assert expand_business_terms_for_retrieval(query) == query
+
+
+def test_rerank_table_documents_prefers_question_relevant_table_text():
+    generic_stage = Document(
+        content="CREATE TABLE dbo_xStageLoad8_Test (Prod_Name VARCHAR);",
+        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_xStageLoad8_Test"},
+        score=0.99,
+    )
+    order_region_table = Document(
+        content="CREATE TABLE dbo_tblSales (Market VARCHAR, SalesValue DOUBLE);",
+        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_tblSales"},
+        score=0.01,
+    )
+
+    documents = _rerank_table_documents(
+        "Show order distribution across regions.",
+        [generic_stage, order_region_table],
+    )
+
+    assert documents[0].meta["name"] == "dbo_tblSales"
 
 
 @pytest.mark.asyncio
