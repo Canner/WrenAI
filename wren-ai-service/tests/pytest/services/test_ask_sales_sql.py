@@ -91,6 +91,30 @@ def test_broad_request_explicit_tables_are_not_forced_schema_scope():
     assert service._forced_explicit_table_names(table_names[:5]) == table_names[:5]
 
 
+def test_full_schema_loading_gate_allows_only_metadata_questions():
+    service = AskService.__new__(AskService)
+
+    assert service._should_load_full_schema_for_question(
+        "List all tables in this datasource."
+    )
+    assert service._should_load_full_schema_for_question(
+        "How many deployed models are available?"
+    )
+    assert service._should_load_full_schema_for_question(
+        "Show the schema metadata."
+    )
+
+    assert not service._should_load_full_schema_for_question(
+        "Show top 5 customers by order count."
+    )
+    assert not service._should_load_full_schema_for_question(
+        "From dbo_tblNewOrders, show the top 5 customers by order count using CustName."
+    )
+    assert not service._should_load_full_schema_for_question(
+        "What is the distribution of sales across product categories?"
+    )
+
+
 def test_build_direct_orders_sales_sql_for_salesperson_order_count():
     service = AskService.__new__(AskService)
     sql = service._build_direct_orders_sales_sql(

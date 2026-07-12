@@ -4986,6 +4986,9 @@ class AskService:
 
         return None
 
+    def _should_load_full_schema_for_question(self, query: str | None) -> bool:
+        return bool(self._get_metadata_question_kind(query or ""))
+
     def _find_metadata_table_matches(
         self, query: str, tables: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
@@ -5877,35 +5880,11 @@ class AskService:
                             explicit_table_names,
                         )
                     )
-                    if not documents and not request_explicit_table_names:
+                    if not documents:
                         logger.info(
                             "Explicit table retrieval did not return requested active-schema table; "
-                            "loading full active schema. query_id=%s",
+                            "not loading full active schema for data question. query_id=%s",
                             query_id,
-                        )
-                        retrieval_result = await self._run_with_timeout(
-                            "Full active schema retrieval for explicit table",
-                            self._pipelines["db_schema_retrieval"].run(
-                                query="",
-                                project_id=ask_request.project_id,
-                                histories=[],
-                                enable_column_pruning=False,
-                            ),
-                            timeout_seconds=min(
-                                self._schema_retrieval_timeout_seconds,
-                                self._pipeline_timeout_seconds,
-                                20,
-                            ),
-                        )
-                        all_documents, _, _ = self._extract_retrieval_metadata(
-                            retrieval_result
-                        )
-                        documents, table_names, table_ddls = (
-                            self._filter_retrieval_metadata_for_explicit_query(
-                                user_query,
-                                all_documents,
-                                explicit_table_names,
-                            )
                         )
                     _retrieval_result = retrieval_result.get(
                         "construct_retrieval_results", {}
@@ -6502,7 +6481,7 @@ class AskService:
                         )
                 if (
                     not documents
-                    and self._get_metadata_question_kind(user_query)
+                    and self._should_load_full_schema_for_question(user_query)
                     and not request_explicit_table_names
                 ):
                     logger.info(
@@ -6691,7 +6670,7 @@ class AskService:
 
                 should_retry_full_schema = (
                     not api_results
-                    and self._get_metadata_question_kind(user_query)
+                    and self._should_load_full_schema_for_question(user_query)
                     and "db_schema_retrieval" in self._pipelines
                     and not request_explicit_table_names
                     and not table_names
