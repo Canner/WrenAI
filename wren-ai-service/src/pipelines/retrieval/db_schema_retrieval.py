@@ -214,6 +214,110 @@ def _retrieval_terms(value: str) -> set[str]:
     return {term for term in terms if term}
 
 
+def _query_mentions_any(query: str, terms: tuple[str, ...]) -> bool:
+    normalized = (query or "").lower()
+    return any(re.search(rf"\b{re.escape(term)}\b", normalized) for term in terms)
+
+
+def _source_text(document: Document) -> str:
+    return " ".join(
+        str(part or "")
+        for part in (
+            document.meta.get("name"),
+            document.meta.get("description"),
+            document.content,
+        )
+    ).lower()
+
+
+def _source_shape_score(query: str, document: Document) -> int:
+    normalized_query = (query or "").lower()
+    source_text = _source_text(document)
+    source_terms = _retrieval_terms(source_text)
+
+    score = 0
+    non_production_terms = (
+        "archive",
+        "backup",
+        "copy",
+        "dev",
+        "development",
+        "duplicate",
+        "sample",
+        "stage",
+        "staging",
+        "temp",
+        "test",
+        "tmp",
+    )
+    if any(term in source_terms for term in non_production_terms) and not _query_mentions_any(
+        normalized_query,
+        non_production_terms,
+    ):
+        score -= 60
+
+    aggregation_terms = (
+        "amount",
+        "average",
+        "avg",
+        "count",
+        "distribution",
+        "metric",
+        "revenue",
+        "sum",
+        "total",
+        "trend",
+        "value",
+        "volume",
+    )
+    transaction_source_terms = (
+        "activity",
+        "detail",
+        "event",
+        "fact",
+        "history",
+        "invoice",
+        "line",
+        "order",
+        "sale",
+        "sales",
+        "transaction",
+    )
+    reference_source_terms = (
+        "account",
+        "catalog",
+        "dimension",
+        "directory",
+        "entity",
+        "lookup",
+        "master",
+        "profile",
+        "reference",
+    )
+    entity_listing_pattern = re.search(
+        r"\b(?:list|show|display|get|find)\b.*\b(?:accounts?|customers?|"
+        r"employees?|entities|items?|names?|products?|suppliers?|users?|vendors?)\b",
+        normalized_query,
+    )
+    asks_for_aggregation = _query_mentions_any(normalized_query, aggregation_terms) or bool(
+        re.search(r"\b(?:by|per|each|top|bottom|rank|ranking)\b", normalized_query)
+    )
+    asks_for_entity_listing = bool(entity_listing_pattern) and not asks_for_aggregation
+
+    if asks_for_entity_listing:
+        if source_terms & set(reference_source_terms):
+            score += 35
+        if source_terms & set(transaction_source_terms):
+            score -= 12
+    elif asks_for_aggregation:
+        if source_terms & set(transaction_source_terms):
+            score += 25
+        if source_terms & set(reference_source_terms):
+            score += 5
+
+    return score
+
+
 def _document_relevance_score(document: Document, query_terms: set[str]) -> int:
     if not query_terms:
         return 0
@@ -270,7 +374,8 @@ def _score_table_documents(
     for index, document in enumerate(documents):
         lexical_score = _document_relevance_score(document, query_terms)
         semantic_score = _semantic_score(document)
-        combined_score = semantic_score + lexical_score
+        source_shape_score = _source_shape_score(query, document)
+        combined_score = semantic_score + lexical_score + source_shape_score
         scored_documents.append(
             (combined_score, -index, document, lexical_score, semantic_score)
         )

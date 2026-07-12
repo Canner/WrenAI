@@ -57,6 +57,88 @@ def test_direct_heuristic_gate_is_disabled_for_generic_schema_selection():
     )
 
 
+def test_rewrite_query_for_text_to_sql_guides_total_amount_to_sum():
+    service = AskService.__new__(AskService)
+
+    rewritten = service._rewrite_query_for_text_to_sql(
+        "Show total invoice amount by currency."
+    )
+
+    assert "aggregate an exposed numeric measure with SUM" in rewritten
+    assert "use COUNT only for record-count questions" in rewritten
+
+
+def test_validated_sql_rejects_count_for_total_amount_question():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT "dbo_Invoices"."Currency" AS "Currency", '
+            'COUNT(*) AS "RecordCount" '
+            'FROM "dbo_Invoices" '
+            'GROUP BY "dbo_Invoices"."Currency"'
+        ),
+        [
+            """
+            CREATE TABLE dbo_Invoices (
+              Currency VARCHAR,
+              InvoiceAmount DOUBLE
+            );
+            """
+        ],
+        "Show total invoice amount by currency.",
+    )
+
+    assert result is None
+
+
+def test_validated_sql_rejects_distinct_with_extra_entity_columns_for_no_duplicates():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT DISTINCT "dbo_Customers"."CustomerName" AS "CustomerName", '
+            '"dbo_Customers"."CustomerId" AS "CustomerId" '
+            'FROM "dbo_Customers"'
+        ),
+        [
+            """
+            CREATE TABLE dbo_Customers (
+              CustomerName VARCHAR,
+              CustomerId VARCHAR
+            );
+            """
+        ],
+        "List customer names with no duplicates.",
+    )
+
+    assert result is None
+
+
+def test_validated_sql_rejects_grouped_extra_columns_for_no_duplicates():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT "dbo_Customers"."CustomerName" AS "CustomerName", '
+            '"dbo_Customers"."CustomerId" AS "CustomerId" '
+            'FROM "dbo_Customers" '
+            'GROUP BY "dbo_Customers"."CustomerName", "dbo_Customers"."CustomerId"'
+        ),
+        [
+            """
+            CREATE TABLE dbo_Customers (
+              CustomerName VARCHAR,
+              CustomerId VARCHAR
+            );
+            """
+        ],
+        "List customer names with no duplicates.",
+    )
+
+    assert result is None
+
+
 def test_build_direct_orders_sales_sql_for_top_new_orders_q1():
     service = AskService.__new__(AskService)
     sql = service._build_direct_orders_sales_sql(

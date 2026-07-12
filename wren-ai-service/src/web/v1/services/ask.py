@@ -412,6 +412,25 @@ class AskService:
                 "For currency questions, use an exposed currency, money, exchange, or FX code/name column from the schema and group by it."
             )
 
+        if any(
+            term in normalized
+            for term in (
+                "amount",
+                "cost",
+                "revenue",
+                "sales value",
+                "sum",
+                "total",
+                "value",
+            )
+        ) and not any(
+            term in normalized
+            for term in ("count", "how many", "number of records", "record count")
+        ):
+            guidance.append(
+                "When the question asks for total, sum, amount, value, revenue, or cost, aggregate an exposed numeric measure with SUM; use COUNT only for record-count questions."
+            )
+
         if not guidance:
             return query
 
@@ -699,6 +718,125 @@ class AskService:
                 sorted(concept_group),
                 sorted(referenced_column_tokens),
                 sorted(referenced_table_tokens),
+                sql,
+            )
+            return False
+        return True
+
+    def _sql_uses_required_measure_aggregation(self, sql: str, query: str | None) -> bool:
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized_query:
+            return True
+        asks_for_measure_sum = any(
+            term in normalized_query
+            for term in (
+                "amount",
+                "cost",
+                "revenue",
+                "sales value",
+                "sum",
+                "total",
+                "value",
+            )
+        )
+        asks_for_count = any(
+            term in normalized_query
+            for term in (
+                "count",
+                "counts",
+                "how many",
+                "number of",
+                "record count",
+                "records",
+                "rows",
+            )
+        )
+        if not asks_for_measure_sum or asks_for_count:
+            return True
+
+        normalized_sql = re.sub(r"\s+", " ", sql or "").lower()
+        if re.search(r"\b(sum|avg|min|max)\s*\(", normalized_sql):
+            return True
+        if re.search(r"\bcount\s*\(", normalized_sql):
+            logger.warning(
+                "Ignoring SQL because a measure-total question was answered with row counting. "
+                "query=%s sql=%s",
+                query,
+                sql,
+            )
+            return False
+        return True
+
+    def _sql_satisfies_unique_entity_request(self, sql: str, query: str | None) -> bool:
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not re.search(
+            r"\b(?:distinct|unique|no duplicate|no duplicates|without duplicates)\b",
+            normalized_query,
+        ):
+            return True
+
+        normalized_sql = re.sub(r"\s+", " ", sql or "").strip()
+        if re.search(r"\bcount\s*\(\s*distinct\b", normalized_sql, flags=re.IGNORECASE):
+            return True
+        if re.search(r"\bGROUP\s+BY\b", normalized_sql, flags=re.IGNORECASE):
+            group_match = re.search(
+                r"\bGROUP\s+BY\b(?P<group>.*?)(?:\bORDER\s+BY\b|\bHAVING\b|$)",
+                normalized_sql,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            if group_match:
+                group_items = [
+                    item.strip()
+                    for item in re.split(r",(?![^()]*\))", group_match.group("group"))
+                    if item.strip()
+                ]
+                if len(group_items) > 1:
+                    logger.warning(
+                        "Ignoring SQL because GROUP BY covers multiple columns and can still duplicate the requested entity. "
+                        "query=%s sql=%s",
+                        query,
+                        sql,
+                    )
+                    return False
+            return True
+        select_match = re.search(
+            r"\bSELECT\b(?P<select>.*?)\bFROM\b",
+            normalized_sql,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if not select_match:
+            return True
+        select_clause = select_match.group("select").strip()
+        if not re.match(r"\b(?:TOP\s+\d+\s+)?DISTINCT\b", select_clause, flags=re.IGNORECASE):
+            logger.warning(
+                "Ignoring SQL because a unique/no-duplicate request lacks DISTINCT or GROUP BY. "
+                "query=%s sql=%s",
+                query,
+                sql,
+            )
+            return False
+
+        distinct_clause = re.sub(
+            r"^(?:TOP\s+\d+\s+)?DISTINCT\s+",
+            "",
+            select_clause,
+            flags=re.IGNORECASE,
+        )
+        projected_items = [
+            item.strip()
+            for item in re.split(r",(?![^()]*\))", distinct_clause)
+            if item.strip()
+        ]
+        non_aggregate_items = [
+            item
+            for item in projected_items
+            if not re.search(r"\b(?:count|sum|avg|min|max)\s*\(", item, flags=re.IGNORECASE)
+        ]
+        if len(non_aggregate_items) > 1:
+            logger.warning(
+                "Ignoring SQL because DISTINCT covers multiple non-aggregate columns and can still duplicate the requested entity. "
+                "query=%s sql=%s",
+                query,
                 sql,
             )
             return False
@@ -1010,6 +1148,10 @@ class AskService:
             all_referenced_column_tokens,
             referenced_table_tokens,
         ):
+            return False
+        if not self._sql_uses_required_measure_aggregation(sql, query):
+            return False
+        if not self._sql_satisfies_unique_entity_request(sql, query):
             return False
 
         if not expects_dimension:

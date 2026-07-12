@@ -110,6 +110,46 @@ def test_select_relevant_table_documents_limits_weak_extra_candidates():
     assert "staging_audit" not in [document.meta["name"] for document in selected]
 
 
+def test_rerank_table_documents_prefers_reference_source_for_entity_listing():
+    transaction_source = Document(
+        content="Invoice transaction fact rows with customer id and invoice amount.",
+        meta={"type": "TABLE_DESCRIPTION", "name": "invoice_fact"},
+        score=0.95,
+    )
+    reference_source = Document(
+        content="Customer master reference directory with customer names and accounts.",
+        meta={"type": "TABLE_DESCRIPTION", "name": "customer_master"},
+        score=0.7,
+    )
+
+    documents = _rerank_table_documents(
+        "List customer names without duplicates.",
+        [transaction_source, reference_source],
+    )
+
+    assert documents[0].meta["name"] == "customer_master"
+
+
+def test_rerank_table_documents_prefers_transaction_source_for_metric_question():
+    reference_source = Document(
+        content="Product catalog reference table with names and categories.",
+        meta={"type": "TABLE_DESCRIPTION", "name": "product_master"},
+        score=0.95,
+    )
+    transaction_source = Document(
+        content="Sales transaction fact table with product, amount, and revenue.",
+        meta={"type": "TABLE_DESCRIPTION", "name": "sales_fact"},
+        score=0.7,
+    )
+
+    documents = _rerank_table_documents(
+        "Show total sales amount by product.",
+        [reference_source, transaction_source],
+    )
+
+    assert documents[0].meta["name"] == "sales_fact"
+
+
 @pytest.mark.asyncio
 async def test_table_retrieval_fetches_explicit_table_descriptions():
     class Retriever:
