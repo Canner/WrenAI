@@ -4004,7 +4004,7 @@ dependencies = [
 
 [[package]]
 name = "wren-core-base"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -4043,7 +4043,7 @@ dependencies = [
 
 [[package]]
 name = "wren-manifest-macro"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "quote",
  "syn",
@@ -4051,7 +4051,7 @@ dependencies = [
 
 [[package]]
 name = "wren-semantic-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "csv",
