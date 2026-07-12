@@ -768,6 +768,72 @@ class AskService:
             return False
         return True
 
+    def _sql_satisfies_count_ranking_request(
+        self, sql: str, query: str | None
+    ) -> bool:
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized_query:
+            return True
+
+        asks_for_count_metric = any(
+            term in normalized_query
+            for term in (
+                "count",
+                "counts",
+                "how many",
+                "number of",
+                "record count",
+            )
+        ) or (
+            any(term in normalized_query for term in ("top", "most", "highest"))
+            and any(
+                term in normalized_query
+                for term in ("order", "orders", "record", "records", "row", "rows")
+            )
+        )
+        if not asks_for_count_metric:
+            return True
+
+        asks_for_grouped_entity = any(
+            term in normalized_query
+            for term in (
+                "category",
+                "customer",
+                "customers",
+                "currency",
+                "market",
+                "product",
+                "products",
+                "region",
+                "sales person",
+                "salesperson",
+                "source",
+                "status",
+                "type",
+            )
+        )
+        if not asks_for_grouped_entity:
+            return True
+
+        normalized_sql = re.sub(r"\s+", " ", sql or "").lower()
+        if not re.search(r"\bcount\s*\(", normalized_sql):
+            logger.warning(
+                "Ignoring SQL because a count/ranking question was answered with detail rows. "
+                "query=%s sql=%s",
+                query,
+                sql,
+            )
+            return False
+        if not re.search(r"\bgroup\s+by\b", normalized_sql):
+            logger.warning(
+                "Ignoring SQL because a grouped count/ranking question has no GROUP BY. "
+                "query=%s sql=%s",
+                query,
+                sql,
+            )
+            return False
+        return True
+
     def _sql_satisfies_unique_entity_request(self, sql: str, query: str | None) -> bool:
         normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not re.search(
@@ -1151,6 +1217,8 @@ class AskService:
         ):
             return False
         if not self._sql_uses_required_measure_aggregation(sql, query):
+            return False
+        if not self._sql_satisfies_count_ranking_request(sql, query):
             return False
         if not self._sql_satisfies_unique_entity_request(sql, query):
             return False

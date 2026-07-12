@@ -161,6 +161,56 @@ def test_validated_sql_rejects_count_for_total_amount_question():
     assert result is None
 
 
+def test_validated_sql_rejects_detail_rows_for_customer_order_count_question():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT TOP 5 "dbo_tblNewOrders"."CustName" AS "CustName", '
+            '"dbo_tblNewOrders"."OrdNo" AS "OrdNo" '
+            'FROM "dbo_tblNewOrders" '
+            'WHERE "dbo_tblNewOrders"."CustName" IS NOT NULL'
+        ),
+        [
+            """
+            CREATE TABLE dbo_tblNewOrders (
+              CustName VARCHAR,
+              OrdNo VARCHAR
+            );
+            """
+        ],
+        "From dbo_tblNewOrders, show the top 5 customers by order count using CustName.",
+    )
+
+    assert result is None
+
+
+def test_schema_grounded_table_question_groups_top_customers_by_order_count():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_table_question_sql(
+        "From dbo_tblNewOrders, show the top 5 customers by order count using CustName.",
+        [
+            """
+            CREATE TABLE dbo_tblNewOrders (
+              CustName VARCHAR,
+              OrdNo VARCHAR
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT TOP 5 "dbo_tblNewOrders"."CustName" AS "CustName", '
+        'COUNT(DISTINCT "dbo_tblNewOrders"."OrdNo") AS "RecordCount" '
+        'FROM "dbo_tblNewOrders" '
+        'WHERE "dbo_tblNewOrders"."CustName" IS NOT NULL '
+        'AND LTRIM(RTRIM("dbo_tblNewOrders"."CustName")) <> \'\' '
+        'GROUP BY "dbo_tblNewOrders"."CustName" '
+        'ORDER BY COUNT(DISTINCT "dbo_tblNewOrders"."OrdNo") DESC'
+    )
+
+
 def test_validated_sql_rejects_distinct_with_extra_entity_columns_for_no_duplicates():
     service = AskService.__new__(AskService)
 
