@@ -51,12 +51,14 @@ class DataFusionConnector(ConnectorABC):
                 f"SELECT * FROM ({_strip_trailing_semicolon(sql)}) "
                 f"AS _q LIMIT {int(limit)}"
             )
+        else:
+            sql = _strip_trailing_semicolon(sql)
         ipc_bytes = self.ctx.query(sql)
         reader = ipc.open_stream(io.BytesIO(bytes(ipc_bytes)))
         return reader.read_all()
 
     def dry_run(self, sql: str) -> None:
-        self.ctx.dry_run(sql)
+        self.ctx.dry_run(_strip_trailing_semicolon(sql))
 
     def close(self) -> None:
         pass

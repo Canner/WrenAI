@@ -49,7 +49,7 @@ def test_query_without_limit_is_unwrapped() -> None:
     connector.query("SELECT 1;")
     (sent,), _ = ctx.query.call_args
     # No limit -> no subquery wrapping; passed through verbatim.
-    assert sent == "SELECT 1;"
+    assert sent == "SELECT 1"
 
 
 def test_helper_preserves_semicolon_inside_string_literal() -> None:
@@ -59,3 +59,19 @@ def test_helper_preserves_semicolon_inside_string_literal() -> None:
 
 def test_helper_no_trailing_semicolon_unchanged() -> None:
     assert _strip_trailing_semicolon("SELECT 1") == "SELECT 1"
+
+
+def test_query_without_limit_strips_trailing_semicolon() -> None:
+    connector, ctx = _make_mock_connector()
+    connector.query("SELECT 1;")
+    (sent,), _ = ctx.query.call_args
+    assert sent == "SELECT 1"
+
+
+def test_dry_run_strips_trailing_semicolon() -> None:
+    connector, ctx = _make_mock_connector()
+    if not hasattr(ctx, "dry_run"):
+        ctx.dry_run = MagicMock()
+    connector.dry_run("SELECT 1;")
+    (sent,), _ = ctx.dry_run.call_args
+    assert sent == "SELECT 1"
