@@ -11,6 +11,7 @@ from src.core.pipeline import BasicPipeline
 from src.pipelines.generation.utils.sql import (
     construct_valid_table_columns,
     construct_valid_table_names,
+    normalize_sql_direction_keywords,
     normalize_sql_column_references_to_schema,
     normalize_sql_table_references_to_schema,
 )
@@ -5200,17 +5201,6 @@ class AskService:
             return None
         return AskResult(sql=sql.strip(), type="llm")
 
-    def _normalize_sql_direction_keywords(self, sql: str) -> str:
-        parts = re.split(r'("(?:[^"]|"")*"|\'(?:\'\'|[^\'])*\')', sql)
-        for index in range(0, len(parts), 2):
-            parts[index] = re.sub(
-                r"\b(asc|desc)\b",
-                lambda match: match.group(1).upper(),
-                parts[index],
-                flags=re.IGNORECASE,
-            )
-        return "".join(parts)
-
     def _build_validated_ask_result_from_sql(
         self,
         sql: Optional[str],
@@ -5218,7 +5208,7 @@ class AskService:
         query: str | None = None,
     ) -> Optional[AskResult]:
         if isinstance(sql, str):
-            sql = self._normalize_sql_direction_keywords(sql)
+            sql = normalize_sql_direction_keywords(sql)
             sql = normalize_sql_table_references_to_schema(
                 sql,
                 construct_valid_table_names(table_ddls),

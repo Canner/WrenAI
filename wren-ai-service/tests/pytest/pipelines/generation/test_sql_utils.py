@@ -9,6 +9,7 @@ from src.pipelines.generation.utils.sql import (
     get_metric_instructions,
     normalize_data_source,
     normalize_generation_result_sql,
+    normalize_sql_direction_keywords,
     normalize_sql_column_references_to_schema,
     normalize_sql_table_references_to_schema,
     get_sql_generation_system_prompt,
@@ -251,6 +252,30 @@ def test_normalize_generation_result_sql_standardizes_identifier_quotes():
     assert '"num_tags"' in normalized
     assert '"tokenCost"' in normalized
     assert '"category" = \'Ticket Sourcing\'' in normalized
+
+
+def test_normalize_sql_direction_keywords_preserves_quoted_text():
+    sql = (
+        'SELECT "Description" AS "Desc", \'asc desc\' AS "label" '
+        'FROM "dbo_tblSales" ORDER BY SUM("SalesValue") Desc'
+    )
+
+    assert normalize_sql_direction_keywords(sql) == (
+        'SELECT "Description" AS "Desc", \'asc desc\' AS "label" '
+        'FROM "dbo_tblSales" ORDER BY SUM("SalesValue") DESC'
+    )
+
+
+def test_normalize_generation_result_sql_uppercases_direction_keywords_before_execution():
+    sql = (
+        'SELECT "ProdName", SUM("SalesValue") AS "TotalSalesValue" '
+        'FROM "dbo_tblSales" GROUP BY "ProdName" '
+        'ORDER BY SUM("SalesValue") Desc'
+    )
+
+    assert normalize_generation_result_sql(sql).endswith(
+        'ORDER BY SUM("SalesValue") DESC'
+    )
 
 
 def test_schema_validation_ignores_null_table_metadata():

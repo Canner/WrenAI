@@ -1484,8 +1484,22 @@ def _normalize_identifier_quote_syntax(sql: str) -> str:
     return normalized
 
 
+def normalize_sql_direction_keywords(sql: str) -> str:
+    parts = re.split(r'("(?:[^"]|"")*"|\'(?:\'\'|[^\'])*\')', sql or "")
+    for index in range(0, len(parts), 2):
+        parts[index] = re.sub(
+            r"\b(asc|desc)\b",
+            lambda match: match.group(1).upper(),
+            parts[index],
+            flags=re.IGNORECASE,
+        )
+    return "".join(parts)
+
+
 def normalize_generation_result_sql(sql: str, data_source: str | None = None) -> str:
-    normalized = _normalize_identifier_quote_syntax(sql)
+    normalized = _normalize_identifier_quote_syntax(
+        normalize_sql_direction_keywords(sql)
+    )
     normalized_data_source = normalize_data_source(data_source)
 
     if normalized_data_source == "MSSQL":
