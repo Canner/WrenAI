@@ -87,7 +87,7 @@ async fn main() -> datafusion::common::Result<()> {
     println!("#####################");
     println!(
         "session_tenant_id: {}",
-        &properties
+        properties
             .get("session_tenant_id")
             .unwrap()
             .clone()
@@ -95,7 +95,7 @@ async fn main() -> datafusion::common::Result<()> {
     );
     println!(
         "session_department: {}",
-        &properties
+        properties
             .get("session_department")
             .unwrap()
             .clone()
@@ -103,11 +103,11 @@ async fn main() -> datafusion::common::Result<()> {
     );
     println!(
         "session_user_id: {}",
-        &properties.get("session_user_id").unwrap().clone().unwrap()
+        properties.get("session_user_id").unwrap().clone().unwrap()
     );
     println!(
         "session_role: {}",
-        &properties.get("session_role").unwrap().clone().unwrap()
+        properties.get("session_role").unwrap().clone().unwrap()
     );
 
     let sql = "select * from wren.test.documents";

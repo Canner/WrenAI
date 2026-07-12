@@ -43,7 +43,7 @@ pub(crate) fn convert_batches(batches: Vec<RecordBatch>) -> Result<Vec<Vec<Strin
                 return Err(DFSqlLogicTestError::DataFusion(DataFusionError::Internal(
                     format!(
                         "Schema mismatch. Previously had\n{:#?}\n\nGot:\n{:#?}",
-                        &schema,
+                        schema,
                         batch.schema()
                     ),
                 )));

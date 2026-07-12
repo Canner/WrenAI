@@ -1054,7 +1054,7 @@ mod test {
                 Err(_) => {}
                 _ => panic!(
                     "should be error: {}",
-                    &headers.get("session_id").unwrap().as_ref().unwrap()
+                    headers.get("session_id").unwrap().as_ref().unwrap()
                 ),
             }
         }

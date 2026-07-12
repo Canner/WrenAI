@@ -787,7 +787,7 @@ fn collect_model_required_fields(
                 return plan_err!("Only support calculated field with expression");
             }
             .alias(column.name.clone());
-            debug!("Required Calculated field: {}", &expr_plan);
+            debug!("Required Calculated field: {}", expr_plan);
             required_fields
                 .entry(relation_ref.clone())
                 .or_default()
@@ -800,7 +800,7 @@ fn collect_model_required_fields(
                 Arc::clone(&session_state_ref),
                 Arc::clone(&session_properties),
             )?;
-            debug!("Required field: {}", &expr_plan);
+            debug!("Required field: {}", expr_plan);
             required_fields
                 .entry(relation_ref.clone())
                 .or_default()

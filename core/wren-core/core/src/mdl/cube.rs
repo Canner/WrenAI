@@ -271,7 +271,7 @@ fn resolve_measures(
                 let mut sorted_deps = deps.clone();
                 sorted_deps.sort_by_key(|d| std::cmp::Reverse(d.len()));
                 for dep in sorted_deps {
-                    let replacement = format!("({})", &resolved[dep]);
+                    let replacement = format!("({})", resolved[dep]);
                     // NoExpand keeps `$1`, `$$tag$$` etc. literal — without it
                     // Regex::replace_all would treat them as capture-group templates
                     // and corrupt SQL expressions that contain `$`.

@@ -215,7 +215,7 @@ impl WrenMDL {
             });
         });
         WrenMDL {
-            catalog_schema_prefix: format!("{}.{}.", &manifest.catalog, &manifest.schema),
+            catalog_schema_prefix: format!("{}.{}.", manifest.catalog, manifest.schema),
             manifest,
             qualified_references: qualifed_references,
             register_tables: HashMap::new(),
