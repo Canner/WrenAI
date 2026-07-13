@@ -10,9 +10,12 @@ def test_helper_strips_multi_semicolon():
 
 def test_raw_cursor_sql_injects_limit_after_multi_semicolon():
     out = MSSqlConnector._raw_cursor_sql("SELECT 1;;", 5)
-    # MSSQL paginates via OFFSET 0 ROWS FETCH NEXT n ROWS ONLY — assert the
-    # limit-injection marker directly rather than a weak catch-all.
-    assert "FETCH NEXT" in out.upper()
+    # sqlglot tsql may emit TOP n for simple Select (e.g. "SELECT TOP 5 1")
+    # or OFFSET/FETCH for paginated shapes. Either limits correctly after
+    # multi-semicolon strip (without TOP/FETCH, LIMIT injection failed).
+    upper = out.upper()
+    assert "TOP" in upper or "FETCH NEXT" in upper, upper
+    assert "5" in out
     # Must not leave the double terminator which becomes a Block parse
     assert ";;" not in out
 
