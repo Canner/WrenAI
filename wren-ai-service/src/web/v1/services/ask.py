@@ -7096,15 +7096,6 @@ class AskService:
                                 explicit_table_names,
                             )
                         )
-                if documents and not explicit_table_names:
-                    documents, table_names, table_ddls = (
-                        self._scope_retrieval_to_semantic_contract(
-                            sql_user_query,
-                            documents,
-                            table_names,
-                            table_ddls,
-                        )
-                    )
                 logger.info(
                     "Retrieved tables for query_id %s: %s", query_id, table_names
                 )
@@ -7157,21 +7148,6 @@ class AskService:
                     return results
 
             if documents and not api_results:
-                documents, table_names, table_ddls = self._prune_sql_generation_context(
-                    sql_user_query,
-                    documents,
-                    table_names,
-                    table_ddls,
-                )
-                if not explicit_table_names:
-                    documents, table_names, table_ddls = (
-                        self._scope_retrieval_to_semantic_contract(
-                            sql_user_query,
-                            documents,
-                            table_names,
-                            table_ddls,
-                        )
-                    )
                 (
                     documents,
                     table_names,
@@ -7188,17 +7164,6 @@ class AskService:
                     _retrieval_result = completed_retrieval_result
 
             sql_generation_histories = histories
-            if self._is_data_analysis_query(
-                sql_user_query
-            ) and not self._needs_conversation_context(sql_user_query):
-                sql_generation_histories = []
-                allow_sql_generation_reasoning = False
-                allow_sql_knowledge_retrieval = False
-                max_sql_correction_retries = min(max_sql_correction_retries, 1)
-                logger.info(
-                    "Using fast standalone SQL generation path for query_id %s",
-                    query_id,
-                )
 
             if (
                 not self._is_stopped(query_id, self._ask_results)

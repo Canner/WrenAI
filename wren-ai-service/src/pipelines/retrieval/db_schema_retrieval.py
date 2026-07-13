@@ -29,7 +29,7 @@ else:
 
 logger = logging.getLogger("wren-ai-service")
 
-MAX_RELEVANT_TABLE_CANDIDATES = 5
+MAX_RELEVANT_TABLE_CANDIDATES = 10
 MIN_TABLE_DESCRIPTION_CANDIDATE_WINDOW = 100
 WEAK_NON_PRODUCTION_TERMS = (
     "stage",
@@ -146,68 +146,13 @@ def _build_view_ddl(content: dict) -> str:
 
 ## Start of Pipeline
 def expand_business_terms_for_retrieval(query: str) -> str:
-    normalized = (query or "").lower()
-    expansions: list[str] = []
+    """Keep retrieval grounded in the user's wording and indexed metadata.
 
-    if any(
-        term in normalized
-        for term in (
-            "amount",
-            "currency",
-            "currencies",
-            "customer",
-            "customers",
-            "invoice",
-            "invoices",
-            "market",
-            "markets",
-            "order",
-            "orders",
-            "product",
-            "products",
-            "category",
-            "categories",
-            "quantity",
-            "qty",
-            "region",
-            "regions",
-            "sales",
-            "salesperson",
-            "sales person",
-            "sold",
-            "value",
-        )
-    ):
-        expansions.append(
-            "transaction purchase billing account geography customer client company name area representative product item category sku quantity units sold amount value total metric money exchange currency"
-        )
-
-    if re.search(
-        r"\b(?:show|list|find|get|display)\b.*\b(?:orders?|records?|rows?|transactions?)\b\s+"
-        r"(?:for|where|with)\s+\S+",
-        normalized,
-    ):
-        expansions.append(
-            "customer client account company name entity lookup identifier transaction order record"
-        )
-
-    if any(
-        term in normalized
-        for term in ("defect", "failure", "issue", "repair", "resolved", "status")
-    ):
-        expansions.append(
-            "issue defect category status resolved created updated date timestamp event"
-        )
-
-    if any(term in normalized for term in ("throughput", "production", "manufacturing")):
-        expansions.append(
-            "rate volume output capacity process unit group completed timestamp date"
-        )
-
-    if not expansions:
-        return query
-
-    return f"{query}\n" + "\n".join(expansions)
+    Broad, global synonym expansion makes unrelated business questions share
+    the same embedding and lexical terms. Synonyms belong in deployed model
+    and column metadata, where their meaning is datasource-specific.
+    """
+    return query
 
 
 def _normalize_retrieval_token(value: str) -> str:
@@ -497,7 +442,7 @@ def _score_table_documents(
     if not documents:
         return []
 
-    query_terms = _retrieval_terms(expand_business_terms_for_retrieval(query))
+    query_terms = _retrieval_terms(query)
     if not query_terms:
         return [
             (_semantic_score(document), -index, document, 0, _semantic_score(document))
@@ -508,8 +453,10 @@ def _score_table_documents(
     for index, document in enumerate(documents):
         lexical_score = _document_relevance_score(document, query_terms)
         semantic_score = _semantic_score(document)
-        source_shape_score = _source_shape_score(query, document)
-        combined_score = semantic_score + lexical_score + source_shape_score
+        # Qdrant similarity is the primary ranking signal. Lexical overlap is
+        # intentionally a small tie-breaker so physical names cannot overpower
+        # semantically relevant descriptions.
+        combined_score = semantic_score + min(lexical_score / 1000, 0.05)
         scored_documents.append(
             (combined_score, -index, document, lexical_score, semantic_score)
         )
@@ -555,59 +502,9 @@ def _select_relevant_table_documents(
     if not reranked:
         return documents[:max_tables]
 
-    candidate_pool = [item for item in reranked if item[3] > 0] or reranked
-    concept_groups = _retrieval_concept_groups(query)
-    if concept_groups:
-        all_concepts = set(range(len(concept_groups)))
-        coverage_by_index = {
-            index: _retrieval_concept_coverage(query, item[2])
-            for index, item in enumerate(candidate_pool)
-        }
-        full_coverage_pool = [
-            item
-            for index, item in enumerate(candidate_pool)
-            if coverage_by_index[index] == all_concepts
-        ]
-        if full_coverage_pool:
-            candidate_pool = full_coverage_pool
-            coverage_by_index = {
-                index: _retrieval_concept_coverage(query, item[2])
-                for index, item in enumerate(candidate_pool)
-            }
-
-        grounded_production_coverage: set[int] = set()
-        for index, item in enumerate(candidate_pool):
-            coverage = coverage_by_index[index]
-            if coverage and not _is_unrequested_strong_non_production_source(
-                query, item[2]
-            ):
-                grounded_production_coverage.update(coverage)
-
-        if grounded_production_coverage:
-            filtered_pool = []
-            excluded_names = []
-            for index, item in enumerate(candidate_pool):
-                document = item[2]
-                coverage = coverage_by_index[index]
-                if (
-                    _is_unrequested_strong_non_production_source(query, document)
-                    and coverage <= grounded_production_coverage
-                ):
-                    excluded_names.append(document.meta.get("name"))
-                    continue
-                filtered_pool.append(item)
-            if filtered_pool:
-                candidate_pool = filtered_pool
-                if excluded_names:
-                    logger.info(
-                        "Excluded unrequested non-production table candidates for query=%s names=%s",
-                        query,
-                        excluded_names,
-                    )
-
     selected = [
         document
-        for _score, _index, document, _lexical, _semantic in candidate_pool[:max_tables]
+        for _score, _index, document, _lexical, _semantic in reranked[:max_tables]
     ]
     if len(selected) < len(documents):
         logger.info(
@@ -763,6 +660,7 @@ async def table_retrieval(
     project_id: str,
     tables: list[str],
     table_retriever: Any,
+    max_tables: int = MAX_RELEVANT_TABLE_CANDIDATES,
 ) -> dict:
     base_filters = {
         "operator": "AND",
@@ -782,7 +680,7 @@ async def table_retrieval(
             filters=base_filters,
         )
         results["documents"] = _select_relevant_table_documents(
-            query, results.get("documents") or []
+            query, results.get("documents") or [], max_tables=max_tables
         )
         return results
 
@@ -1115,6 +1013,7 @@ class DbSchemaRetrieval(BasicPipeline):
                 document_store_provider.get_store(dataset_name="table_descriptions"),
                 top_k=table_description_candidate_window,
             ),
+            "max_tables": max(table_retrieval_size, MAX_RELEVANT_TABLE_CANDIDATES),
             "dbschema_retriever": document_store_provider.get_retriever(
                 document_store_provider.get_store(),
                 top_k=table_column_retrieval_size,

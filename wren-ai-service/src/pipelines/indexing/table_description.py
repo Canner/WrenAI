@@ -70,10 +70,26 @@ class TableDescriptionChunker:
 
     def _get_table_descriptions(self, mdl: Dict[str, Any]) -> List[str]:
         def _structure_data(mdl_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+            def _column_description(column: Dict[str, Any]) -> str:
+                name = str(column.get("name") or "")
+                properties = column.get("properties") or {}
+                description = str(properties.get("description") or "").strip()
+                data_type = str(column.get("type") or "").strip()
+                parts = [name]
+                if data_type:
+                    parts.append(f"type: {data_type}")
+                if description:
+                    parts.append(description)
+                return " — ".join(parts)
+
             return {
                 "mdl_type": mdl_type,
                 "name": payload.get("name"),
-                "columns": [column["name"] for column in payload.get("columns", [])],
+                "columns": [
+                    _column_description(column)
+                    for column in payload.get("columns", [])
+                    if column.get("name")
+                ],
                 "properties": payload.get("properties", {}),
             }
 
