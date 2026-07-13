@@ -1370,6 +1370,64 @@ class AskService:
 
         return True
 
+    def _sql_satisfies_named_entity_request(
+        self,
+        sql: str,
+        query: str | None,
+        referenced_tables: list[str],
+        valid_tables: dict[str, dict[str, Any]],
+    ) -> bool:
+        """Require a name field when the question explicitly asks for names.
+
+        An account number, customer code, or generic ``Customer`` field may be a
+        useful identifier, but it is not evidence that the datasource exposes a
+        customer name. Returning such an identifier for a name request produces
+        plausible but incorrect answers.
+        """
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        requests_customer_name = bool(
+            re.search(
+                r"\b(?:customer|customers|client|clients|account|accounts|company|companies)\s+names?\b"
+                r"|\bnames?\s+(?:of|for)\s+(?:customers|clients|accounts|companies)\b",
+                normalized_query,
+            )
+        )
+        if not requests_customer_name:
+            return True
+
+        name_columns = (
+            "CustomerName",
+            "CustName",
+            "ClientName",
+            "AccountName",
+            "CompanyName",
+            "Name",
+        )
+        available_name_columns: set[str] = set()
+        for table_reference in referenced_tables:
+            table = self._table_for_sql_reference(table_reference, valid_tables)
+            if not table:
+                continue
+            if column := self._find_schema_column(table, name_columns):
+                available_name_columns.add(column)
+
+        for column in available_name_columns:
+            escaped_column = re.escape(column)
+            if re.search(
+                rf'(?i)(?:"{escaped_column}"|\[{escaped_column}\]|\b{escaped_column}\b)',
+                sql,
+            ):
+                return True
+
+        logger.warning(
+            "Ignoring SQL because a customer-name request was mapped to an identifier or "
+            "a datasource without a customer-name column. query=%s available_name_columns=%s sql=%s",
+            query,
+            sorted(available_name_columns),
+            sql,
+        )
+        return False
+
     def _invalid_unqualified_sql_identifiers(
         self, sql: str, schema_tables: list[dict[str, Any]]
     ) -> list[str]:
@@ -1688,6 +1746,13 @@ class AskService:
             query,
             referenced_tables,
             referenced_columns_by_table,
+            valid_tables,
+        ):
+            return False
+        if not self._sql_satisfies_named_entity_request(
+            sql,
+            query,
+            referenced_tables,
             valid_tables,
         ):
             return False
@@ -2142,9 +2207,18 @@ class AskService:
                 else "COUNT(*)"
             )
             top_clause = f"TOP {limit} " if wants_ranked_count else ""
+            dimension_type = next(
+                (
+                    str(column.get("type") or "")
+                    for column in table.get("columns", [])
+                    if self._normalize_schema_identifier_key(column.get("name"))
+                    == self._normalize_schema_identifier_key(dimension_column)
+                ),
+                "",
+            )
             nonblank_filter = (
                 f"AND LTRIM(RTRIM({dimension_ref})) <> '' "
-                if wants_ranked_count
+                if self._is_text_schema_type(dimension_type)
                 else ""
             )
             return (
