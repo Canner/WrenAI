@@ -7158,21 +7158,11 @@ class AskService:
                     results["metadata"]["type"] = "TEXT_TO_SQL"
                     return results
 
-            if documents and not api_results:
-                (
-                    documents,
-                    table_names,
-                    table_ddls,
-                    completed_retrieval_result,
-                ) = await self._complete_sql_generation_context(
-                    query=sql_user_query,
-                    project_id=ask_request.project_id,
-                    documents=documents,
-                    table_names=table_names,
-                    table_ddls=table_ddls,
-                )
-                if completed_retrieval_result:
-                    _retrieval_result = completed_retrieval_result
+            # The retrieval pipeline has already selected tables and, when enabled,
+            # pruned their columns.  Do not reload those names as explicit tables:
+            # that turns the selected context back into full schemas and can send
+            # many unrelated tables to SQL generation.  Legacy/v1 passes the
+            # filtered DDL produced above directly to reasoning and generation.
 
             sql_generation_histories = histories
 
