@@ -128,6 +128,26 @@ def test_select_relevant_table_documents_keeps_explicit_dev_request():
     assert documents[0].meta["name"] == "dbo_qSalesCubeDev"
 
 
+def test_select_relevant_table_documents_prefers_full_business_unit_order_coverage():
+    weak_sales_margin = Document(
+        content="Sales margin facts with sales value, margin, order date, and product.",
+        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_qSalesMargin"},
+        score=500,
+    )
+    new_orders = Document(
+        content="New order records with BU, business unit, order number, order date, and customer.",
+        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_tblNewOrders"},
+        score=0.2,
+    )
+
+    documents = _select_relevant_table_documents(
+        "Which business unit has the top 20 new orders this period?",
+        [weak_sales_margin, new_orders],
+    )
+
+    assert [document.meta["name"] for document in documents] == ["dbo_tblNewOrders"]
+
+
 def test_rerank_table_documents_prefers_customer_capable_source_for_entity_lookup():
     generic_order_table = Document(
         content="New order rows by division and market.",
@@ -348,7 +368,7 @@ def test_db_schema_retrieval_fetches_wider_table_description_window():
         table_retrieval_size=10,
     )
 
-    assert document_store_provider.retriever_top_k[0] == ("table_descriptions", 50)
+    assert document_store_provider.retriever_top_k[0] == ("table_descriptions", 100)
 
 
 @pytest.mark.asyncio

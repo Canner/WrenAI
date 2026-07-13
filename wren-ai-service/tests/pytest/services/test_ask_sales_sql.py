@@ -269,6 +269,24 @@ def test_schema_grounded_table_question_groups_top_customers_by_order_count():
     )
 
 
+def test_explicit_table_preview_does_not_handle_grouped_count_request():
+    service = AskService.__new__(AskService)
+
+    preview_sql = service._build_explicit_table_preview_sql(
+        "From dbo_tblNewOrders, show the top 5 customers by order count using CustName.",
+        [
+            """
+            CREATE TABLE dbo_tblNewOrders (
+              CustName VARCHAR,
+              OrdNo VARCHAR
+            );
+            """
+        ],
+    )
+
+    assert preview_sql is None
+
+
 def test_validated_sql_rejects_country_question_without_country_column():
     service = AskService.__new__(AskService)
 
@@ -486,6 +504,32 @@ def test_schema_grounded_analytics_counts_top_new_orders_by_business_unit():
         'GROUP BY "dbo_tblNewOrders"."BU" '
         'ORDER BY COUNT(DISTINCT "dbo_tblNewOrders"."OrdNo") DESC'
     )
+
+
+def test_validated_sql_rejects_business_unit_question_without_business_unit_column():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT TOP 20 "dbo_qSalesMargin"."ProductCategory" AS "ProductCategory", '
+            'COUNT(DISTINCT "dbo_qSalesMargin"."OrdNo") AS "OrderCount" '
+            'FROM "dbo_qSalesMargin" '
+            'GROUP BY "dbo_qSalesMargin"."ProductCategory" '
+            'ORDER BY COUNT(DISTINCT "dbo_qSalesMargin"."OrdNo") DESC'
+        ),
+        [
+            """
+            CREATE TABLE dbo_qSalesMargin (
+              ProductCategory VARCHAR,
+              OrdNo VARCHAR,
+              OrderDate TIMESTAMP
+            );
+            """
+        ],
+        "Which business unit has the top 20 new orders this period?",
+    )
+
+    assert result is None
 
 
 def test_validated_sql_rejects_entity_lookup_using_non_customer_column():

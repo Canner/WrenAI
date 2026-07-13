@@ -30,7 +30,7 @@ else:
 logger = logging.getLogger("wren-ai-service")
 
 MAX_RELEVANT_TABLE_CANDIDATES = 5
-MIN_TABLE_DESCRIPTION_CANDIDATE_WINDOW = 50
+MIN_TABLE_DESCRIPTION_CANDIDATE_WINDOW = 100
 WEAK_NON_PRODUCTION_TERMS = (
     "stage",
     "staging",
@@ -243,7 +243,9 @@ def _retrieval_terms(value: str) -> set[str]:
     for raw_token in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", value or ""):
         split_token = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", raw_token)
         for token in re.findall(r"[A-Za-z0-9]+", split_token):
-            if len(token) <= 2 or token.lower() in stop_words:
+            if len(token) <= 2 and token.lower() not in {"bu"}:
+                continue
+            if token.lower() in stop_words:
                 continue
             normalized_token = _normalize_retrieval_token(token)
             if normalized_token:
@@ -277,6 +279,10 @@ def _retrieval_concept_groups(query: str) -> list[set[str]]:
         (
             {"market", "markets", "region", "regions"},
             {"market", "markets", "region", "regions", "area", "territory", "country"},
+        ),
+        (
+            {"business", "unit", "units", "division"},
+            {"business", "businessunit", "unit", "units", "bu", "division"},
         ),
         (
             {"country", "countries", "destination"},
@@ -552,10 +558,23 @@ def _select_relevant_table_documents(
     candidate_pool = [item for item in reranked if item[3] > 0] or reranked
     concept_groups = _retrieval_concept_groups(query)
     if concept_groups:
+        all_concepts = set(range(len(concept_groups)))
         coverage_by_index = {
             index: _retrieval_concept_coverage(query, item[2])
             for index, item in enumerate(candidate_pool)
         }
+        full_coverage_pool = [
+            item
+            for index, item in enumerate(candidate_pool)
+            if coverage_by_index[index] == all_concepts
+        ]
+        if full_coverage_pool:
+            candidate_pool = full_coverage_pool
+            coverage_by_index = {
+                index: _retrieval_concept_coverage(query, item[2])
+                for index, item in enumerate(candidate_pool)
+            }
+
         grounded_production_coverage: set[int] = set()
         for index, item in enumerate(candidate_pool):
             coverage = coverage_by_index[index]

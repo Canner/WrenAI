@@ -790,6 +790,10 @@ class AskService:
                 {"market", "markets", "region", "regions", "area", "territory", "country"},
             ),
             (
+                {"business", "unit", "units", "division"},
+                {"business", "businessunit", "unit", "units", "bu", "division"},
+            ),
+            (
                 {"country", "countries", "destination"},
                 {"country", "countries", "destination", "nation", "market", "region"},
             ),
@@ -950,6 +954,12 @@ class AskService:
             concept_groups.append({"currency", "curr", "money", "fx", "exchange"})
         if "market" in normalized or "markets" in normalized:
             concept_groups.append({"market", "region", "country", "territory"})
+        if (
+            "business unit" in normalized
+            or "business units" in normalized
+            or re.search(r"\bbu\b", normalized)
+        ):
+            concept_groups.append({"business", "businessunit", "unit", "units", "bu", "division"})
         if "region" in normalized or "regions" in normalized:
             concept_groups.append({"region", "market", "area", "territory", "country"})
         if "country" in normalized or "countries" in normalized:
@@ -1038,6 +1048,65 @@ class AskService:
             return False
         return True
 
+    def _is_grouped_metric_or_ranking_query(self, query: str | None) -> bool:
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized_query:
+            return False
+
+        has_metric_word = any(
+            term in normalized_query
+            for term in (
+                "amount",
+                "average",
+                "avg",
+                "count",
+                "counts",
+                "distribution",
+                "how many",
+                "number of",
+                "record count",
+                "revenue",
+                "sum",
+                "total",
+                "value",
+            )
+        )
+        has_ranked_order_metric = any(
+            term in normalized_query
+            for term in ("top", "most", "highest", "largest", "rank", "ranking")
+        ) and any(
+            term in normalized_query
+            for term in ("order", "orders", "new order", "new orders")
+        )
+        has_dimension_word = any(
+            term in normalized_query
+            for term in (
+                "business unit",
+                "business units",
+                "category",
+                "categories",
+                "customer",
+                "customers",
+                "custname",
+                "currency",
+                "currencies",
+                "division",
+                "market",
+                "markets",
+                "product",
+                "products",
+                "region",
+                "regions",
+                "sales person",
+                "salesperson",
+                "source",
+                "status",
+                "type",
+            )
+        ) or bool(re.search(r"\bbu\b", normalized_query))
+
+        return (has_metric_word or has_ranked_order_metric) and has_dimension_word
+
     def _sql_satisfies_count_ranking_request(
         self, sql: str, query: str | None
     ) -> bool:
@@ -1061,16 +1130,21 @@ class AskService:
                 for term in ("order", "orders", "record", "records", "row", "rows")
             )
         )
-        if not asks_for_count_metric:
+        asks_for_grouped_metric = self._is_grouped_metric_or_ranking_query(query)
+        if not asks_for_count_metric and not asks_for_grouped_metric:
             return True
 
-        asks_for_grouped_entity = any(
+        asks_for_grouped_entity = asks_for_grouped_metric or any(
             term in normalized_query
             for term in (
+                "business unit",
+                "business units",
                 "category",
                 "customer",
                 "customers",
+                "custname",
                 "currency",
+                "division",
                 "market",
                 "product",
                 "products",
@@ -1081,7 +1155,7 @@ class AskService:
                 "status",
                 "type",
             )
-        )
+        ) or bool(re.search(r"\bbu\b", normalized_query))
         if not asks_for_grouped_entity:
             return True
 
@@ -2138,6 +2212,8 @@ class AskService:
     ) -> tuple[str, str] | None:
         normalized_query = re.sub(r"\s+", " ", (query or "").strip())
         if not normalized_query:
+            return None
+        if self._is_grouped_metric_or_ranking_query(query):
             return None
 
         if not re.search(
