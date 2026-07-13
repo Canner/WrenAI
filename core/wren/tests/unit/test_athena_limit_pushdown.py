@@ -33,7 +33,7 @@ def test_query_pushes_limit_into_sql():
             connector.query("SELECT 1;", limit=3)
 
     cursor.execute.assert_called_once_with(
-        "SELECT * FROM (SELECT 1) AS _wren_sub LIMIT 3"
+        "SELECT * FROM (\nSELECT 1\n) AS _wren_sub LIMIT 3"
     )
     builder.assert_called_once()
 
@@ -60,3 +60,19 @@ def test_query_without_limit_runs_original_sql():
         connector.connection.cursor.return_value = cursor
         connector.query("SELECT 1")
     cursor.execute.assert_called_once_with("SELECT 1")
+
+
+def test_query_limit_survives_trailing_line_comment():
+    """Trailing `--` must not eat the wrap (goldmedal #2457)."""
+    connector = AthenaConnector.__new__(AthenaConnector)
+    connector.connection = MagicMock()
+    cursor = MagicMock()
+    cursor.close = MagicMock()
+    with patch(
+        "wren.connector.athena._build_athena_arrow_table", return_value=MagicMock()
+    ), patch("wren.connector.athena.contextlib.closing", side_effect=lambda c: _CM(c)):
+        connector.connection.cursor.return_value = cursor
+        connector.query("SELECT 1 -- pick", limit=3)
+    cursor.execute.assert_called_once_with(
+        "SELECT * FROM (\nSELECT 1 -- pick\n) AS _wren_sub LIMIT 3"
+    )

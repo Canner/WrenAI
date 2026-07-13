@@ -237,7 +237,7 @@ def test_connector_query_returns_arrow_table_and_respects_limit():
     assert table.num_rows == 2
     assert table.column("id").to_pylist() == [1, 2]
     cursor.execute.assert_called_once_with(
-        "SELECT * FROM (SELECT id, name FROM t) AS _wren_sub LIMIT 2"
+        "SELECT * FROM (\nSELECT id, name FROM t\n) AS _wren_sub LIMIT 2"
     )
 
 

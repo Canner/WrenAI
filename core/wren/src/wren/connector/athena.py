@@ -321,9 +321,13 @@ class AthenaConnector(ConnectorABC):
         # composition valid for client SQL terminated with ``;``.
         executed = sql
         if limit is not None:
+            # Multiline wrap: trailing `--` line comments must not eat the
+            # closing `) AS _wren_sub LIMIT n` (goldmedal review on #2457;
+            # same guard as Snowflake #2456).
             executed = (
-                f"SELECT * FROM ({_strip_trailing_semicolon(sql)}) "
-                f"AS _wren_sub LIMIT {int(limit)}"
+                "SELECT * FROM (\n"
+                f"{_strip_trailing_semicolon(sql)}\n"
+                f") AS _wren_sub LIMIT {int(limit)}"
             )
         try:
             with contextlib.closing(self.connection.cursor()) as cursor:
