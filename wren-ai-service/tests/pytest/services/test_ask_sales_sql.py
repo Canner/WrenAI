@@ -398,20 +398,21 @@ def test_schema_grounded_analytics_prefers_full_concept_coverage_for_order_marke
     )
 
 
-def test_schema_grounded_analytics_compares_sales_by_domestic_international_market():
+def test_sql_validation_rejects_unresolved_domestic_international_market_comparison():
     service = AskService.__new__(AskService)
 
+    table_ddls = [
+        """
+        CREATE TABLE dbo_qSalesMargin (
+          EndMarket VARCHAR,
+          SalesValue DOUBLE,
+          OrdNo VARCHAR
+        );
+        """
+    ]
     sql = service._build_schema_grounded_analytics_sql(
         "Compare sales between domestic and international markets.",
-        [
-            """
-            CREATE TABLE dbo_qSalesMargin (
-              EndMarket VARCHAR,
-              SalesValue DOUBLE,
-              OrdNo VARCHAR
-            );
-            """
-        ],
+        table_ddls,
     )
 
     assert sql == (
@@ -421,6 +422,47 @@ def test_schema_grounded_analytics_compares_sales_by_domestic_international_mark
         'WHERE "dbo_qSalesMargin"."EndMarket" IS NOT NULL '
         'GROUP BY "dbo_qSalesMargin"."EndMarket" '
         'ORDER BY SUM("dbo_qSalesMargin"."SalesValue") DESC'
+    )
+    assert (
+        service._build_validated_ask_result_from_sql(
+            sql,
+            table_ddls,
+            "Compare sales between domestic and international markets.",
+        )
+        is None
+    )
+
+
+def test_sql_validation_accepts_grounded_domestic_international_market_mapping():
+    service = AskService.__new__(AskService)
+
+    table_ddls = [
+        """
+        CREATE TABLE dbo_qSalesMargin (
+          EndMarket VARCHAR,
+          SalesValue DOUBLE
+        );
+        """
+    ]
+    sql = (
+        'SELECT CASE WHEN "dbo_qSalesMargin"."EndMarket" LIKE \'%Domestic%\' '
+        "THEN 'Domestic' "
+        'WHEN "dbo_qSalesMargin"."EndMarket" LIKE \'%Intl%\' '
+        "THEN 'International' END AS \"MarketScope\", "
+        'SUM("dbo_qSalesMargin"."SalesValue") AS "TotalSalesValue" '
+        'FROM "dbo_qSalesMargin" '
+        'WHERE "dbo_qSalesMargin"."EndMarket" LIKE \'%Domestic%\' '
+        'OR "dbo_qSalesMargin"."EndMarket" LIKE \'%Intl%\' '
+        'GROUP BY CASE WHEN "dbo_qSalesMargin"."EndMarket" LIKE \'%Domestic%\' '
+        "THEN 'Domestic' "
+        'WHEN "dbo_qSalesMargin"."EndMarket" LIKE \'%Intl%\' '
+        "THEN 'International' END"
+    )
+
+    assert service._build_validated_ask_result_from_sql(
+        sql,
+        table_ddls,
+        "Compare sales between domestic and international markets.",
     )
 
 
@@ -448,6 +490,59 @@ def test_schema_grounded_analytics_counts_customers_distribution_by_market():
         'AND "dbo_tblNewOrders"."CustName" IS NOT NULL '
         'GROUP BY "dbo_tblNewOrders"."Market" '
         'ORDER BY COUNT(DISTINCT "dbo_tblNewOrders"."CustName") DESC'
+    )
+
+
+def test_schema_grounded_analytics_counts_consolidated_customers_by_end_market():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_analytics_sql(
+        "Show customers distribution by market.",
+        [
+            """
+            CREATE TABLE dbo_qMarginSales (
+              EndMarket VARCHAR,
+              ConsolidatedCustomer VARCHAR,
+              FXSales DOUBLE
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_qMarginSales"."EndMarket" AS "EndMarket", '
+        'COUNT(DISTINCT "dbo_qMarginSales"."ConsolidatedCustomer") '
+        'AS "CustomerCount" '
+        'FROM "dbo_qMarginSales" '
+        'WHERE "dbo_qMarginSales"."EndMarket" IS NOT NULL '
+        'AND "dbo_qMarginSales"."ConsolidatedCustomer" IS NOT NULL '
+        'GROUP BY "dbo_qMarginSales"."EndMarket" '
+        'ORDER BY COUNT(DISTINCT "dbo_qMarginSales"."ConsolidatedCustomer") DESC'
+    )
+
+
+def test_entity_lookup_uses_customer_like_match_for_company_phrase():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_analytics_sql(
+        "Show me orders for Lockheed Martin.",
+        [
+            """
+            CREATE TABLE dbo_tblNewOrders (
+              ConsolidatedCustomer VARCHAR,
+              OrdNo VARCHAR,
+              OrdDate DATETIME,
+              Market VARCHAR
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT TOP 500 * FROM "dbo_tblNewOrders" '
+        'WHERE "dbo_tblNewOrders"."ConsolidatedCustomer" LIKE '
+        "'%Lockheed Martin%' "
+        'ORDER BY "dbo_tblNewOrders"."OrdDate" DESC'
     )
 
 
@@ -634,8 +729,8 @@ def test_schema_grounded_sales_sql_filters_entity_lookup_by_customer_name():
 
     assert sql == (
         'SELECT TOP 500 * FROM "dbo_tblNewOrders" '
-        'WHERE "dbo_tblNewOrders"."CustName" = '
-        "'Daimler Trucks North America' "
+        'WHERE "dbo_tblNewOrders"."CustName" LIKE '
+        "'%Daimler Trucks North America%' "
         'ORDER BY "dbo_tblNewOrders"."OrdDate" DESC'
     )
 
