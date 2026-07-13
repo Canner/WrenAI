@@ -2048,6 +2048,10 @@ class AskService:
     def _build_schema_grounded_table_question_sql(
         self, query: str, table_ddls: list[str]
     ) -> str | None:
+        # Heuristic SQL skips semantic schema selection and can select a merely
+        # keyword-matching table. Let the scoped SQL-generation pipeline handle it.
+        return None
+
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized:
             return None
@@ -2210,6 +2214,10 @@ class AskService:
     def _build_explicit_table_preview_sql(
         self, query: str, table_ddls: list[str]
     ) -> tuple[str, str] | None:
+        # A preview cannot safely infer which fields the user needs. The scoped
+        # generator must choose the required columns instead of emitting SELECT *.
+        return None
+
         normalized_query = re.sub(r"\s+", " ", (query or "").strip())
         if not normalized_query:
             return None
