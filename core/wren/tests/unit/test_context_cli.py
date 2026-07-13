@@ -478,14 +478,17 @@ def test_validate_tolerates_null_relationship_models(tmp_path):
     _make_valid_project(tmp_path)
     _write_null_models_relationship(tmp_path)
     result = runner.invoke(app, ["context", "validate", "--path", str(tmp_path)])
-    assert not isinstance(result.exception, TypeError), result.output
+    # The engine still rejects the null-models manifest, but it must surface as a
+    # reported semantic error (typer.Exit) — not an unhandled TypeError.
+    assert isinstance(result.exception, SystemExit), result.output
+    assert result.exit_code == 1, result.output
 
 
 def test_show_tolerates_null_relationship_models(tmp_path):
     _make_valid_project(tmp_path)
     _write_null_models_relationship(tmp_path)
     result = runner.invoke(app, ["context", "show", "--path", str(tmp_path)])
-    assert not isinstance(result.exception, TypeError), result.output
+    assert result.exit_code == 0, result.output
 
 
 # ── wren context build ────────────────────────────────────────────────────
