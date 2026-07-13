@@ -751,7 +751,14 @@ async def dbschema_retrieval(
 def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[dict]:
     db_schemas = {}
     for document in dbschema_retrieval:
-        content = ast.literal_eval(document.content)
+        try:
+            content = ast.literal_eval(document.content)
+        except (SyntaxError, ValueError):
+            logger.warning("Ignoring malformed schema index document: %s", document.meta)
+            continue
+        if not isinstance(content, dict) or not isinstance(content.get("type"), str):
+            logger.warning("Ignoring schema index document without a type: %s", document.meta)
+            continue
         if content["type"] == "TABLE":
             if document.meta["name"] not in db_schemas:
                 db_schemas[document.meta["name"]] = content
@@ -803,7 +810,14 @@ def check_using_db_schemas_without_pruning(
                 has_json_field = True
 
     for document in dbschema_retrieval:
-        content = ast.literal_eval(document.content)
+        try:
+            content = ast.literal_eval(document.content)
+        except (SyntaxError, ValueError):
+            logger.warning("Ignoring malformed schema index document: %s", document.meta)
+            continue
+        if not isinstance(content, dict) or not isinstance(content.get("type"), str):
+            logger.warning("Ignoring schema index document without a type: %s", document.meta)
+            continue
 
         if content["type"] == "METRIC":
             retrieval_results.append(
@@ -929,7 +943,14 @@ def construct_retrieval_results(
 
         for document in dbschema_retrieval:
             if document.meta["name"] in columns_and_tables_needed:
-                content = ast.literal_eval(document.content)
+                try:
+                    content = ast.literal_eval(document.content)
+                except (SyntaxError, ValueError):
+                    logger.warning("Ignoring malformed schema index document: %s", document.meta)
+                    continue
+                if not isinstance(content, dict) or not isinstance(content.get("type"), str):
+                    logger.warning("Ignoring schema index document without a type: %s", document.meta)
+                    continue
 
                 if content["type"] == "METRIC":
                     retrieval_results.append(
@@ -1013,7 +1034,11 @@ class DbSchemaRetrieval(BasicPipeline):
                 document_store_provider.get_store(dataset_name="table_descriptions"),
                 top_k=table_description_candidate_window,
             ),
-            "max_tables": max(table_retrieval_size, MAX_RELEVANT_TABLE_CANDIDATES),
+            # `top_k` above is intentionally a broad candidate window for reranking.
+            # The final schema context must, however, honour the configured limit.
+            # Otherwise every query can send ten complete table schemas to the LLM
+            # even when an installation configured a smaller retrieval size.
+            "max_tables": max(1, table_retrieval_size),
             "dbschema_retriever": document_store_provider.get_retriever(
                 document_store_provider.get_store(),
                 top_k=table_column_retrieval_size,

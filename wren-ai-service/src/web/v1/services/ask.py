@@ -7017,10 +7017,10 @@ class AskService:
                             tables=retrieval_table_names,
                             histories=[],
                             project_id=ask_request.project_id,
-                            enable_column_pruning=(
-                                enable_column_pruning
-                                and not self._is_data_analysis_query(user_query)
-                            ),
+                            # Keep the SQL prompt bounded for every data question.
+                            # This is the legacy behavior: select the relevant columns
+                            # before SQL generation rather than sending full schemas.
+                            enable_column_pruning=enable_column_pruning,
                         ),
                         timeout_seconds=self._schema_retrieval_timeout_seconds,
                     )
