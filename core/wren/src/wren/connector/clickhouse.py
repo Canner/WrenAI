@@ -245,6 +245,38 @@ def _parse_secure_flag(value: Any) -> bool:
     return bool(value)
 
 
+def _parse_clickhouse_connection_url(url: str):
+    """Parse a ClickHouse URL after escaping raw brackets in userinfo only.
+
+    ``urllib.parse.urlparse`` treats ``[`` / ``]`` anywhere in the netloc as
+    IPv6 host delimiters. That is correct for hosts like
+    ``clickhouse://[::1]/db`` but it breaks on raw credentials such as
+    ``clickhouse://user:p[a]ss@host/db``. Sanitise only the userinfo segment so
+    valid IPv6 hosts still parse. Mirrors the MySQL connector helper.
+    """
+    scheme_idx = url.find("://")
+    if scheme_idx == -1:
+        return urlparse(url)
+
+    prefix = url[: scheme_idx + 3]
+    rest = url[scheme_idx + 3 :]
+
+    authority_end = len(rest)
+    for separator in "/?#":
+        idx = rest.find(separator)
+        if idx != -1:
+            authority_end = min(authority_end, idx)
+
+    authority = rest[:authority_end]
+    if "@" not in authority:
+        return urlparse(url)
+
+    userinfo, hostinfo = authority.rsplit("@", 1)
+    sanitized_userinfo = userinfo.replace("[", "%5B").replace("]", "%5D")
+    sanitized_url = f"{prefix}{sanitized_userinfo}@{hostinfo}{rest[authority_end:]}"
+    return urlparse(sanitized_url)
+
+
 def _build_clickhouse_client_kwargs(connection_info: Any) -> dict:
     """Translate ``ClickHouseConnectionInfo`` / ``ConnectionUrl`` into
     ``clickhouse_connect.get_client`` kwargs."""
@@ -252,7 +284,7 @@ def _build_clickhouse_client_kwargs(connection_info: Any) -> dict:
     # URL-based connection (``ConnectionUrl``).
     if hasattr(connection_info, "connection_url"):
         url = connection_info.connection_url.get_secret_value()
-        parsed = urlparse(url)
+        parsed = _parse_clickhouse_connection_url(url)
         if parsed.scheme not in {"clickhouse", "clickhouse+http", "clickhouse+https"}:
             raise WrenError(
                 ErrorCode.INVALID_CONNECTION_INFO,
