@@ -460,6 +460,34 @@ def test_validate_strict_warns(tmp_path):
     assert result.exit_code == 1
 
 
+def _write_null_models_relationship(tmp_path: Path) -> None:
+    # A relationship whose `models:` is an explicit YAML null. `.get("models", [])`
+    # returns None (not the default) for a present-but-null key, so iterating /
+    # joining it raises TypeError. Same shape guarded in the memory package by
+    # #2424 (seed_queries) and its schema_indexer siblings.
+    (tmp_path / "relationships.yml").write_text(
+        "relationships:\n"
+        "  - name: rel1\n"
+        "    models:\n"
+        "    join_type: MANY_TO_ONE\n"
+        "    condition: orders.id = summary.id\n"
+    )
+
+
+def test_validate_tolerates_null_relationship_models(tmp_path):
+    _make_valid_project(tmp_path)
+    _write_null_models_relationship(tmp_path)
+    result = runner.invoke(app, ["context", "validate", "--path", str(tmp_path)])
+    assert not isinstance(result.exception, TypeError), result.output
+
+
+def test_show_tolerates_null_relationship_models(tmp_path):
+    _make_valid_project(tmp_path)
+    _write_null_models_relationship(tmp_path)
+    result = runner.invoke(app, ["context", "show", "--path", str(tmp_path)])
+    assert not isinstance(result.exception, TypeError), result.output
+
+
 # ── wren context build ────────────────────────────────────────────────────
 
 
