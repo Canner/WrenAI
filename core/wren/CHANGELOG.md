@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.13.0](https://github.com/Canner/WrenAI/compare/wren-v0.12.0...wren-v0.13.0) (2026-07-13)
+
+
+### Features
+
+* **wren:** serve project capabilities over MCP ([#2438](https://github.com/Canner/WrenAI/issues/2438)) ([a38bfd7](https://github.com/Canner/WrenAI/commit/a38bfd7fb1deb7df675816cea97ebaec75890dd9))
+
+
+### Bug Fixes
+
+* **clickhouse:** sanitize brackets in connection-URL userinfo before parse ([#2454](https://github.com/Canner/WrenAI/issues/2454)) ([ef0a824](https://github.com/Canner/WrenAI/commit/ef0a824d3d39bc689d0aaec71949d4faf1228fcc))
+* **clickhouse:** use unquote (not unquote_plus) for URL credentials; decode database ([#2436](https://github.com/Canner/WrenAI/issues/2436)) ([d9ba1a1](https://github.com/Canner/WrenAI/commit/d9ba1a13087b2438217623f3d6832189877cd401))
+* **deps:** patch idna, cryptography, and pytest security advisories ([#2458](https://github.com/Canner/WrenAI/issues/2458)) ([8c72492](https://github.com/Canner/WrenAI/commit/8c724925aae679281e30a872469ecf20d85a854c))
+* **mssql:** sanitize brackets in connection-URL userinfo before parse ([#2447](https://github.com/Canner/WrenAI/issues/2447)) ([5d94aaa](https://github.com/Canner/WrenAI/commit/5d94aaa4fbdfd64e626fbba14c9de55310563202))
+* **oracle:** sanitize brackets in connection-URL userinfo before parse ([#2448](https://github.com/Canner/WrenAI/issues/2448)) ([89b1ec7](https://github.com/Canner/WrenAI/commit/89b1ec7f039451bffe4e384d9a4e9e5ff1a8c6d9))
+* **oracle:** URL-decode credentials from connection_url ([#2434](https://github.com/Canner/WrenAI/issues/2434)) ([7db2651](https://github.com/Canner/WrenAI/commit/7db2651726efaeda4a38e05cae3a4c4b8a7b06ff))
+* **sdk:** URL-decode ClickHouse connection-URL credentials and database ([#2444](https://github.com/Canner/WrenAI/issues/2444)) ([f178cfe](https://github.com/Canner/WrenAI/commit/f178cfefded33e3de60407f81940258ddb1ea1f0))
+* **snowflake:** push LIMIT into SQL and strip trailing semicolon on wrap ([#2456](https://github.com/Canner/WrenAI/issues/2456)) ([4348f7a](https://github.com/Canner/WrenAI/commit/4348f7a0a91762e4e9386f845478ad9b29e45890))
+* **trino:** URL-decode credentials and identifiers from connection URL ([#2435](https://github.com/Canner/WrenAI/issues/2435)) ([51ed348](https://github.com/Canner/WrenAI/commit/51ed34885e1946cd3f20d38e60c36c3add3e614a))
+* **type-mapping:** fall back on sqlglot TokenError, not just ParseError ([#2433](https://github.com/Canner/WrenAI/issues/2433)) ([b7cecc7](https://github.com/Canner/WrenAI/commit/b7cecc77643b7c30a084802c9057a99c0aae26e8))
+
 ## [0.12.0](https://github.com/Canner/WrenAI/compare/wren-v0.11.0...wren-v0.12.0) (2026-07-06)
 
 
