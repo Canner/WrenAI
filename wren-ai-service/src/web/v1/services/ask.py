@@ -672,6 +672,100 @@ class AskService:
                 terms.update(self._schema_name_tokens(column_name))
         return terms
 
+    def _schema_source_shape_score(
+        self, query: str | None, table: dict[str, Any]
+    ) -> int:
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        table_terms = self._schema_terms_for_table(table)
+
+        score = 0
+        weak_non_production_terms = {"stage", "staging"}
+        strong_non_production_terms = {
+            "archive",
+            "backup",
+            "copy",
+            "dev",
+            "development",
+            "duplicate",
+            "sample",
+            "temp",
+            "test",
+            "tmp",
+        }
+        if table_terms & strong_non_production_terms and not any(
+            re.search(rf"\b{re.escape(term)}\b", normalized_query)
+            for term in strong_non_production_terms
+        ):
+            score -= 80
+        if table_terms & weak_non_production_terms and not any(
+            re.search(rf"\b{re.escape(term)}\b", normalized_query)
+            for term in weak_non_production_terms
+        ):
+            score -= 20
+
+        transaction_terms = {
+            "activity",
+            "detail",
+            "event",
+            "fact",
+            "history",
+            "invoice",
+            "line",
+            "order",
+            "orders",
+            "sale",
+            "sales",
+            "transaction",
+        }
+        reference_terms = {
+            "account",
+            "catalog",
+            "dimension",
+            "directory",
+            "entity",
+            "lookup",
+            "master",
+            "profile",
+            "reference",
+        }
+        if any(
+            term in normalized_query
+            for term in (
+                "amount",
+                "average",
+                "count",
+                "distribution",
+                "rank",
+                "ranking",
+                "sum",
+                "top",
+                "total",
+                "trend",
+                "value",
+            )
+        ):
+            if table_terms & transaction_terms:
+                score += 25
+            if table_terms & reference_terms:
+                score += 5
+
+        if self._extract_entity_lookup_phrase(query):
+            if table_terms & transaction_terms:
+                score += 20
+            if table_terms & {
+                "account",
+                "buyer",
+                "client",
+                "company",
+                "cust",
+                "customer",
+                "custname",
+                "name",
+            }:
+                score += 35
+
+        return score
+
     def _semantic_concept_groups_for_query(self, query: str | None) -> list[set[str]]:
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
         query_tokens = self._intent_tokens(query or "")
@@ -728,6 +822,93 @@ class AskService:
             )
 
         return groups
+
+    def _semantic_contract_score_table(
+        self, query: str | None, table: dict[str, Any]
+    ) -> tuple[int, set[int]]:
+        concept_groups = self._semantic_concept_groups_for_query(query)
+        table_terms = self._schema_terms_for_table(table)
+        covered_groups = {
+            index
+            for index, concept_group in enumerate(concept_groups)
+            if concept_group & table_terms
+        }
+        score = 100 * len(covered_groups)
+        if concept_groups and len(covered_groups) == len(concept_groups):
+            score += 80
+        elif concept_groups and not covered_groups:
+            score -= 50
+        score += self._schema_source_shape_score(query, table)
+        return score, covered_groups
+
+    def _scope_retrieval_to_semantic_contract(
+        self,
+        query: str,
+        documents: list[dict],
+        table_names: list[str],
+        table_ddls: list[str],
+        *,
+        max_tables: int = 4,
+    ) -> tuple[list[dict], list[str], list[str]]:
+        concept_groups = self._semantic_concept_groups_for_query(query)
+        if not concept_groups or len(table_ddls) <= 1:
+            return documents, table_names, table_ddls
+
+        parsed_tables = self._parse_schema_tables(table_ddls)
+        if not parsed_tables:
+            return documents, table_names, table_ddls
+
+        scored: list[tuple[int, int, set[int]]] = []
+        for index, table in enumerate(parsed_tables):
+            score, covered_groups = self._semantic_contract_score_table(query, table)
+            if covered_groups:
+                scored.append((score, index, covered_groups))
+
+        if not scored:
+            logger.warning(
+                "No retrieved schema tables cover the semantic contract; keeping original scoped retrieval. query=%s tables=%s",
+                query,
+                table_names,
+            )
+            return documents, table_names, table_ddls
+
+        scored = sorted(scored, key=lambda item: (item[0], len(item[2])), reverse=True)
+        best_score, best_index, best_coverage = scored[0]
+        all_group_indexes = set(range(len(concept_groups)))
+
+        selected_indexes: list[int] = []
+        selected_coverage: set[int] = set()
+        if best_coverage == all_group_indexes:
+            selected_indexes.append(best_index)
+            selected_coverage.update(best_coverage)
+        else:
+            for _score, index, coverage in scored:
+                new_coverage = coverage - selected_coverage
+                if not new_coverage and selected_indexes:
+                    continue
+                selected_indexes.append(index)
+                selected_coverage.update(coverage)
+                if selected_coverage == all_group_indexes or len(selected_indexes) >= max_tables:
+                    break
+
+        if not selected_indexes:
+            selected_indexes = [best_index]
+
+        selected_indexes = sorted(dict.fromkeys(selected_indexes))
+        if len(selected_indexes) == len(table_ddls):
+            return documents, table_names, table_ddls
+
+        logger.info(
+            "Scoped retrieved schema to semantic contract. query=%s before=%s after=%s",
+            query,
+            table_names,
+            [table_names[index] for index in selected_indexes if index < len(table_names)],
+        )
+        return (
+            [documents[index] for index in selected_indexes if index < len(documents)],
+            [table_names[index] for index in selected_indexes if index < len(table_names)],
+            [table_ddls[index] for index in selected_indexes if index < len(table_ddls)],
+        )
 
     def _table_for_sql_reference(
         self, table_reference: str, valid_tables: dict[str, dict[str, Any]]
@@ -2377,6 +2558,7 @@ class AskService:
                     score += 25
                 elif covered_groups == 0:
                     score -= 20
+            score += self._schema_source_shape_score(query, table)
             if "sales" in table_name:
                 score += 5
             if "tblsales" in self._normalize_schema_token(table_name):
@@ -2866,6 +3048,9 @@ class AskService:
                     "volume",
                     "how many",
                     "number of",
+                    "top",
+                    "highest",
+                    "most",
                     "monthly",
                     "over time",
                     "last 12 months",
@@ -6852,6 +7037,15 @@ class AskService:
                                 explicit_table_names,
                             )
                         )
+                if documents and not explicit_table_names:
+                    documents, table_names, table_ddls = (
+                        self._scope_retrieval_to_semantic_contract(
+                            sql_user_query,
+                            documents,
+                            table_names,
+                            table_ddls,
+                        )
+                    )
                 logger.info(
                     "Retrieved tables for query_id %s: %s", query_id, table_names
                 )
@@ -7143,6 +7337,15 @@ class AskService:
                     table_names,
                     table_ddls,
                 )
+                if not explicit_table_names:
+                    documents, table_names, table_ddls = (
+                        self._scope_retrieval_to_semantic_contract(
+                            sql_user_query,
+                            documents,
+                            table_names,
+                            table_ddls,
+                        )
+                    )
                 (
                     documents,
                     table_names,

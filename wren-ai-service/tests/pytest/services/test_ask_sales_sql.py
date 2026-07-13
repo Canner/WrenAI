@@ -380,6 +380,114 @@ def test_schema_grounded_analytics_prefers_full_concept_coverage_for_order_marke
     )
 
 
+def test_scope_retrieval_to_semantic_contract_prefers_production_full_coverage_table():
+    service = AskService.__new__(AskService)
+    documents = [
+        {
+            "table_name": "dbo_qSalesCubeDev",
+            "table_ddl": """
+            CREATE TABLE dbo_qSalesCubeDev (
+              Market VARCHAR,
+              OrdNo VARCHAR
+            );
+            """,
+        },
+        {
+            "table_name": "dbo_tblNewOrders",
+            "table_ddl": """
+            CREATE TABLE dbo_tblNewOrders (
+              Market VARCHAR,
+              OrdNo VARCHAR
+            );
+            """,
+        },
+    ]
+
+    scoped_documents, scoped_table_names, scoped_table_ddls = (
+        service._scope_retrieval_to_semantic_contract(
+            "Show order distribution across markets.",
+            documents,
+            ["dbo_qSalesCubeDev", "dbo_tblNewOrders"],
+            [document["table_ddl"] for document in documents],
+        )
+    )
+
+    assert scoped_documents == [documents[1]]
+    assert scoped_table_names == ["dbo_tblNewOrders"]
+    assert scoped_table_ddls == [documents[1]["table_ddl"]]
+
+
+def test_scope_retrieval_to_semantic_contract_keeps_multiple_tables_when_needed():
+    service = AskService.__new__(AskService)
+    documents = [
+        {
+            "table_name": "dbo_OrderFacts",
+            "table_ddl": """
+            CREATE TABLE dbo_OrderFacts (
+              Market VARCHAR,
+              OrdNo VARCHAR
+            );
+            """,
+        },
+        {
+            "table_name": "dbo_Customers",
+            "table_ddl": """
+            CREATE TABLE dbo_Customers (
+              CustNo VARCHAR,
+              CustName VARCHAR
+            );
+            """,
+        },
+        {
+            "table_name": "dbo_LoadAudit",
+            "table_ddl": """
+            CREATE TABLE dbo_LoadAudit (
+              LoadId VARCHAR,
+              Status VARCHAR
+            );
+            """,
+        },
+    ]
+
+    scoped_documents, scoped_table_names, _scoped_table_ddls = (
+        service._scope_retrieval_to_semantic_contract(
+            "Show order distribution by market and customer.",
+            documents,
+            ["dbo_OrderFacts", "dbo_Customers", "dbo_LoadAudit"],
+            [document["table_ddl"] for document in documents],
+        )
+    )
+
+    assert scoped_documents == documents[:2]
+    assert scoped_table_names == ["dbo_OrderFacts", "dbo_Customers"]
+
+
+def test_schema_grounded_analytics_counts_top_new_orders_by_business_unit():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_analytics_sql(
+        "Which business unit has the top 20 new orders this period?",
+        [
+            """
+            CREATE TABLE dbo_tblNewOrders (
+              BU VARCHAR,
+              OrdNo VARCHAR,
+              OrdDate TIMESTAMP
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT TOP 20 "dbo_tblNewOrders"."BU" AS "BU", '
+        'COUNT(DISTINCT "dbo_tblNewOrders"."OrdNo") AS "OrderCount" '
+        'FROM "dbo_tblNewOrders" '
+        'WHERE "dbo_tblNewOrders"."BU" IS NOT NULL '
+        'GROUP BY "dbo_tblNewOrders"."BU" '
+        'ORDER BY COUNT(DISTINCT "dbo_tblNewOrders"."OrdNo") DESC'
+    )
+
+
 def test_validated_sql_rejects_entity_lookup_using_non_customer_column():
     service = AskService.__new__(AskService)
 
