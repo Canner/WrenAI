@@ -22,24 +22,18 @@ def _strip_trailing_semicolon(sql: str) -> str:
     return _TRAILING_SEMICOLONS_RE.sub("", sql)
 
 
-def _has_outer_limit(sql: str) -> bool:
-    """True when *sql* already ends with a top-level LIMIT clause."""
-    cleaned = _strip_trailing_semicolon(sql).rstrip()
-    return bool(re.search(r"(?i)\bLIMIT\s+\d+(\s+OFFSET\s+\d+)?\s*\Z", cleaned))
-
-
 def _apply_limit(sql: str, limit: int) -> str:
-    """Push LIMIT into SQL rather than relying solely on API max_results.
+    """Push LIMIT into SQL via outer subquery wrap.
 
     ``max_results`` only caps the page size of job results-reading; it does
-    not rewrite the query plan and still fetches a full result set stage that
-    can be expensive. Append ``LIMIT n`` after stripping a trailing semicolon
-    (mirrors Athena/MySQL pushdown helpers) so the engine short-circuits.
+    not rewrite the query plan. Wrapping as ``SELECT * FROM (sql) LIMIT n``
+    (after stripping a trailing semicolon) short-circuits the engine and
+    correctly enforces the caller's limit even when *sql* already contains an
+    inner ``LIMIT`` (the outer limit always wins / can only reduce rows).
+    Avoids comment-sensitive outer-LIMIT detection heuristics.
     """
     cleaned = _strip_trailing_semicolon(sql)
-    if _has_outer_limit(cleaned):
-        return cleaned
-    return f"{cleaned}\nLIMIT {int(limit)}"
+    return f"SELECT * FROM ({cleaned}) AS _sub LIMIT {int(limit)}"
 
 
 class BigQueryConnector(ConnectorABC):
@@ -74,6 +68,8 @@ class BigQueryConnector(ConnectorABC):
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         if limit is not None:
             sql = _apply_limit(sql, limit)
+        else:
+            sql = _strip_trailing_semicolon(sql)
         return self.connection.query(sql).result().to_arrow()
 
     def dry_run(self, sql: str) -> None:
