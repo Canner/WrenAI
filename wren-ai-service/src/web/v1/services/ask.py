@@ -5505,8 +5505,19 @@ class AskService:
             if not isinstance(document, dict):
                 logger.warning("Ignoring malformed retrieval document: %s", document)
                 continue
-            if not document.get("table_name") and not document.get("table_ddl"):
-                logger.warning("Ignoring retrieval document without table metadata")
+            table_name = document.get("table_name")
+            table_ddl = document.get("table_ddl")
+            if not isinstance(table_name, str) or not table_name.strip():
+                logger.warning("Ignoring retrieval document without a table name")
+                continue
+            if not isinstance(table_ddl, str) or not table_ddl.strip():
+                # A table name alone is not safe SQL-generation context.  Treat this
+                # exactly like an unsuccessful schema retrieval rather than allowing
+                # the generator to infer columns from the rest of the project.
+                logger.warning(
+                    "Ignoring retrieval document without filtered DDL for table %s",
+                    table_name,
+                )
                 continue
             valid_documents.append(document)
 
