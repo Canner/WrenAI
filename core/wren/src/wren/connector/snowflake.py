@@ -2,11 +2,24 @@
 
 from __future__ import annotations
 
+import re
+
 import pyarrow as pa
-import snowflake.connector
 
 from wren.connector.base import ConnectorABC
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
+
+_TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
+
+
+def _strip_trailing_semicolon(sql: str) -> str:
+    """Strip terminating ``;`` / whitespace so we can wrap SQL as a subquery.
+
+    Snowflake rejects ``SELECT 1;`` inside a subquery. Only the trailing run is
+    removed so semicolons inside string literals stay intact. Mirrors
+    postgres/redshift connectors.
+    """
+    return _TRAILING_SEMICOLONS_RE.sub("", sql)
 
 
 def _build_connection_params(connection_info) -> dict:
@@ -40,7 +53,15 @@ def _build_connection_params(connection_info) -> dict:
 
 
 def make_snowflake_connection(connection_info):
+    import snowflake.connector  # noqa: PLC0415
+
     return snowflake.connector.connect(**_build_connection_params(connection_info))
+
+
+def _programming_error():
+    import snowflake.connector  # noqa: PLC0415
+
+    return snowflake.connector.errors.ProgrammingError
 
 
 class SnowflakeConnector(ConnectorABC):
@@ -48,29 +69,41 @@ class SnowflakeConnector(ConnectorABC):
         self.connection = make_snowflake_connection(connection_info)
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
+        # Push LIMIT into Snowflake when requested so we do not download a
+        # full result set only to slice it in Python. Wrap as a subquery so a
+        # trailing semicolon in the user SQL cannot break composition, and so
+        # statements that already contain an ORDER BY keep their ordering
+        # under the outer LIMIT.
+        executed = sql
+        if limit is not None:
+            # Place the user SQL on its own line so a trailing line comment
+            # (`-- ...`) cannot swallow the closing paren, alias, or LIMIT.
+            executed = (
+                "SELECT * FROM (\n"
+                f"{_strip_trailing_semicolon(sql)}\n"
+                f") AS _wren_sub LIMIT {int(limit)}"
+            )
         try:
             with self.connection.cursor() as cursor:
-                cursor.execute(sql)
+                cursor.execute(executed)
                 arrow_table = cursor.fetch_arrow_all()
-        except snowflake.connector.errors.ProgrammingError as e:
+        except _programming_error() as e:
             raise WrenError(
                 ErrorCode.INVALID_SQL,
                 str(e),
                 phase=ErrorPhase.SQL_EXECUTION,
-                metadata={DIALECT_SQL: sql},
+                metadata={DIALECT_SQL: executed},
             ) from e
 
         if arrow_table is None:
             return pa.table({})
-        if limit is not None:
-            return arrow_table.slice(0, limit)
         return arrow_table
 
     def dry_run(self, sql: str) -> None:
         try:
             with self.connection.cursor() as cursor:
                 cursor.describe(sql)
-        except snowflake.connector.errors.ProgrammingError as e:
+        except _programming_error() as e:
             raise WrenError(
                 ErrorCode.INVALID_SQL,
                 str(e),
