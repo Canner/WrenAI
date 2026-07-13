@@ -77,14 +77,16 @@ class DuckDBConnector(ConnectorABC):
 
         When ``limit`` is provided the query is wrapped in a ``LIMIT`` clause
         so only that many rows are fetched.
+
+        Trailing statement terminators are always stripped so client-pasted
+        ``SELECT …;`` behaves the same on limited and unlimited paths.
         """
+        stripped = strip_trailing_semicolon(sql)
         if limit is not None:
-            # Strip the terminating run of ``;`` / whitespace before wrapping so
-            # the subquery stays valid SQL (e.g. ``SELECT 1;`` must not become
-            # ``SELECT * FROM (SELECT 1;) AS _q LIMIT ...``). Semicolons inside
-            # string literals are preserved.
-            stripped = strip_trailing_semicolon(sql)
+            # Subquery wrap rejects an interior terminator after strip.
             sql = f"SELECT * FROM ({stripped}) AS _q LIMIT {int(limit)}"
+        else:
+            sql = stripped
         return self.connection.execute(sql).fetch_arrow_table()
 
     def dry_run(self, sql: str) -> None:
