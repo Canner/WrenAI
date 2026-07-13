@@ -295,6 +295,32 @@ def test_validated_sql_rejects_country_question_without_country_column():
     assert result is None
 
 
+def test_validated_sql_rejects_unrequested_test_table_for_market_distribution():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT TOP 10 "dbo_xStageLoad8_Test"."Market" AS "Market", '
+            'COUNT(*) AS "RecordCount" '
+            'FROM "dbo_xStageLoad8_Test" '
+            'WHERE "dbo_xStageLoad8_Test"."Market" IS NOT NULL '
+            'GROUP BY "dbo_xStageLoad8_Test"."Market" '
+            'ORDER BY COUNT(*) DESC'
+        ),
+        [
+            """
+            CREATE TABLE dbo_xStageLoad8_Test (
+              Market VARCHAR,
+              OrdNo VARCHAR
+            );
+            """
+        ],
+        "Show order distribution across markets.",
+    )
+
+    assert result is None
+
+
 def test_schema_grounded_sales_sql_groups_commodity_value_by_country():
     service = AskService.__new__(AskService)
 
