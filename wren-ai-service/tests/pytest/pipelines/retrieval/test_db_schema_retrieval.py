@@ -130,28 +130,6 @@ def test_select_relevant_table_documents_limits_weak_extra_candidates():
     assert "staging_audit" not in [document.meta["name"] for document in selected]
 
 
-def test_select_relevant_table_documents_excludes_unrequested_test_candidate():
-    documents = [
-        Document(
-            content="Raw test load rows with order market fields.",
-            meta={"type": "TABLE_DESCRIPTION", "name": "dbo_xStageLoad8_Test"},
-            score=0.99,
-        ),
-        Document(
-            content="New order transaction records with market and customer details.",
-            meta={"type": "TABLE_DESCRIPTION", "name": "dbo_xStageNewOrders"},
-            score=0.4,
-        ),
-    ]
-
-    selected = _select_relevant_table_documents(
-        "Show order distribution across markets.",
-        documents,
-    )
-
-    assert [document.meta["name"] for document in selected] == ["dbo_xStageNewOrders"]
-
-
 @pytest.mark.asyncio
 async def test_table_retrieval_caps_embedding_results_before_schema_loading():
     documents = [

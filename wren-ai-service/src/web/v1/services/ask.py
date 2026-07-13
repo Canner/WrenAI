@@ -1028,50 +1028,6 @@ class AskService:
 
         return True
 
-    def _is_unrequested_non_production_table_reference(
-        self, table_name: str, query: str | None
-    ) -> bool:
-        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
-        normalized_table = self._normalize_schema_token(table_name)
-        strong_non_production_terms = (
-            "archive",
-            "backup",
-            "copy",
-            "dev",
-            "development",
-            "duplicate",
-            "sample",
-            "temp",
-            "test",
-            "tmp",
-        )
-        if not any(term in normalized_table for term in strong_non_production_terms):
-            return False
-        return not any(
-            re.search(rf"\b{re.escape(term)}\b", normalized_query)
-            for term in strong_non_production_terms
-        )
-
-    def _sql_avoids_unrequested_non_production_tables(
-        self, sql: str, query: str | None, referenced_tables: list[str]
-    ) -> bool:
-        invalid_tables = [
-            table
-            for table in referenced_tables
-            if self._is_unrequested_non_production_table_reference(table, query)
-        ]
-        if not invalid_tables:
-            return True
-
-        logger.warning(
-            "Ignoring SQL because it references unrequested non-production tables. "
-            "query=%s invalid_tables=%s sql=%s",
-            query,
-            invalid_tables,
-            sql,
-        )
-        return False
-
     def _invalid_unqualified_sql_identifiers(
         self, sql: str, schema_tables: list[dict[str, Any]]
     ) -> list[str]:
@@ -1391,12 +1347,6 @@ class AskService:
             referenced_tables,
             referenced_columns_by_table,
             valid_tables,
-        ):
-            return False
-        if not self._sql_avoids_unrequested_non_production_tables(
-            sql,
-            query,
-            referenced_tables,
         ):
             return False
 
