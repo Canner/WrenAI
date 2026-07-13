@@ -333,6 +333,44 @@ async def test_table_retrieval_fetches_explicit_table_descriptions():
     }
 
 
+@pytest.mark.asyncio
+async def test_table_retrieval_expands_explicit_table_name_forms_for_descriptions():
+    class Retriever:
+        def __init__(self):
+            self.filters = None
+
+        async def run(self, query_embedding, filters):
+            self.filters = filters
+            return {"documents": []}
+
+    retriever = Retriever()
+
+    await table_retrieval(
+        query="show failed repairs",
+        embedding={},
+        project_id="project-1",
+        tables=["dbo.failure_patterns"],
+        table_retriever=retriever,
+    )
+
+    assert retriever.filters == {
+        "operator": "AND",
+        "conditions": [
+            {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
+            {"field": "project_id", "operator": "==", "value": "project-1"},
+            {
+                "field": "name",
+                "operator": "in",
+                "value": [
+                    "dbo.failure_patterns",
+                    "dbo_failure_patterns",
+                    "failure_patterns",
+                ],
+            },
+        ],
+    }
+
+
 def test_db_schema_retrieval_fetches_wider_table_description_window():
     class LLMProvider:
         def get_generator(self, **kwargs):
@@ -489,18 +527,18 @@ def test_check_using_db_schemas_without_pruning_triggers_legacy_column_pruning()
 
 
 @pytest.mark.asyncio
-async def test_dbschema_retrieval_uses_explicit_tables_as_scope():
+async def test_dbschema_retrieval_does_not_use_explicit_tables_without_description():
     class Retriever:
         def __init__(self):
-            self.filters = None
+            self.called = False
 
         async def run(self, query_embedding, filters):
-            self.filters = filters
+            self.called = True
             return {"documents": []}
 
     retriever = Retriever()
 
-    await dbschema_retrieval(
+    documents = await dbschema_retrieval(
         query="show failed repairs",
         table_retrieval={"documents": []},
         project_id="project-1",
@@ -508,15 +546,5 @@ async def test_dbschema_retrieval_uses_explicit_tables_as_scope():
         tables=["dbo.failure_patterns", "dbo_failure_patterns"],
     )
 
-    assert retriever.filters == {
-        "operator": "AND",
-        "conditions": [
-            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-            {"field": "project_id", "operator": "==", "value": "project-1"},
-            {
-                "field": "name",
-                "operator": "in",
-                "value": ["dbo.failure_patterns", "dbo_failure_patterns"],
-            },
-        ],
-    }
+    assert documents == []
+    assert not retriever.called

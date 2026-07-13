@@ -690,10 +690,30 @@ def _normalize_table_names(table_names: Optional[list[str]]) -> list[str]:
     return normalized
 
 
+def _table_description_name_candidates(table_names: Optional[list[str]]) -> list[str]:
+    candidates: list[str] = []
+    for table_name in _normalize_table_names(table_names):
+        raw_candidates = [table_name]
+        separator_normalized = re.sub(r"[.$]", "_", table_name)
+        raw_candidates.append(separator_normalized)
+        if "_" in table_name:
+            raw_candidates.append(
+                re.sub(r"^([A-Za-z_][A-Za-z0-9]*)_", r"\1.", table_name, count=1)
+            )
+        if "." in table_name or "$" in table_name:
+            raw_candidates.append(re.split(r"[.$]", table_name)[-1])
+
+        for candidate in raw_candidates:
+            candidate = candidate.strip()
+            if candidate and candidate not in candidates:
+                candidates.append(candidate)
+    return candidates
+
+
 def _extract_table_names_from_table_retrieval(
-    table_retrieval: dict, explicit_tables: Optional[list[str]] = None
+    table_retrieval: dict,
 ) -> list[str]:
-    table_names = _normalize_table_names(explicit_tables)
+    table_names: list[str] = []
     for document in table_retrieval.get("documents") or []:
         if not isinstance(document, Document):
             continue
@@ -767,12 +787,13 @@ async def table_retrieval(
         return results
 
     if tables:
-        logger.info("Loading explicit table descriptions: %s", tables)
+        table_candidates = _table_description_name_candidates(tables)
+        logger.info("Loading explicit table descriptions: %s", table_candidates)
         explicit_filters = {
             **base_filters,
             "conditions": [
                 *base_filters["conditions"],
-                {"field": "name", "operator": "in", "value": tables},
+                {"field": "name", "operator": "in", "value": table_candidates},
             ],
         }
         return await table_retriever.run(query_embedding=[], filters=explicit_filters)
@@ -788,9 +809,7 @@ async def dbschema_retrieval(
     dbschema_retriever: Any,
     tables: Optional[list[str]] = None,
 ) -> list[Document]:
-    selected_table_names = _extract_table_names_from_table_retrieval(
-        table_retrieval, tables
-    )
+    selected_table_names = _extract_table_names_from_table_retrieval(table_retrieval)
 
     filters = {
         "operator": "AND",
