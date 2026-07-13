@@ -265,7 +265,6 @@ def _build_trino_arrow_table(cursor) -> pa.Table:
     )
 
 
-
 def _coerce_trino_verify(value):
     """Normalize a ``verify`` SSL override for ``trino.dbapi.connect``.
 
