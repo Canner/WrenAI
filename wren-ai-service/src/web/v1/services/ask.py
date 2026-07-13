@@ -2977,16 +2977,100 @@ class AskService:
             ("OrdDate", "OrderDate", "NewOrderDate", "InvDate", "InvoiceDate", "Date"),
             temporal=True,
         )
+        projected_columns = self._entity_lookup_projection_columns(
+            query,
+            table,
+            filter_column=filter_column,
+            date_column=date_column,
+        )
+        select_sql = ", ".join(
+            f"{table_ref}.{self._quote_sql_identifier(column)} AS {self._quote_sql_identifier(column)}"
+            for column in projected_columns
+        )
         order_clause = (
             f" ORDER BY {table_ref}.{self._quote_sql_identifier(date_column)} DESC"
             if date_column
             else ""
         )
         return (
-            f"SELECT TOP 500 * FROM {table_ref} "
+            f"SELECT TOP 500 {select_sql} FROM {table_ref} "
             f"WHERE {filter_ref} LIKE '%{escaped_phrase}%'"
             f"{order_clause}"
         )
+
+    def _entity_lookup_projection_columns(
+        self,
+        query: str,
+        table: dict[str, Any],
+        *,
+        filter_column: str,
+        date_column: str | None,
+    ) -> list[str]:
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        selected: list[str] = []
+        selected_keys: set[str] = set()
+
+        def add_column(column: str | None) -> None:
+            if not column:
+                return
+            key = self._normalize_schema_identifier_key(column)
+            if not key or key in selected_keys:
+                return
+            selected.append(column)
+            selected_keys.add(key)
+
+        def add_first(candidates: tuple[str, ...]) -> None:
+            add_column(self._find_schema_column(table, candidates))
+
+        asks_for_orders = any(
+            term in normalized_query
+            for term in ("order", "orders", "new order", "new orders")
+        )
+        if asks_for_orders:
+            add_first(("OrdNo", "OrderNo", "OrderId", "NewOrderId", "OrderNumber"))
+        add_column(filter_column)
+        add_column(date_column)
+        add_first(
+            (
+                "CustNo",
+                "CustomerNo",
+                "CustomerCode",
+                "AccountNo",
+                "AccountId",
+                "ClientNo",
+            )
+        )
+        add_first(("CustPO", "CustomerPO", "PONo", "PurchaseOrder"))
+        add_first(("Market", "MarketType", "MarketName", "EndMarket", "Region", "Country"))
+        add_first(("Division", "BusinessUnit", "Business Unit", "BU"))
+        add_first(
+            (
+                "Product",
+                "ProductName",
+                "ProdName",
+                "ProdCode",
+                "ProductCode",
+                "Item",
+                "ItemName",
+                "ItemProductCode",
+                "SKU",
+            )
+        )
+        add_first(
+            (
+                "SalesValue",
+                "OrderValue",
+                "NewOrderValue",
+                "Amount",
+                "Revenue",
+                "Cost",
+                "Value",
+            )
+        )
+
+        if not selected:
+            add_column(filter_column)
+        return selected[:10]
 
     def _build_entity_distribution_sql(
         self, query: str, tables: list[dict[str, Any]]
@@ -6384,6 +6468,242 @@ class AskService:
 
         return bool(re.match(r"^(?:WITH|SELECT)\b", normalized, flags=re.IGNORECASE))
 
+    def _query_explicitly_requests_all_fields(self, query: str | None) -> bool:
+        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized:
+            return False
+
+        patterns = (
+            r"\bselect\s+\*",
+            r"\ball\s+(?:columns|fields)\b",
+            r"\bevery\s+(?:column|field)\b",
+            r"\b(?:whole|entire|complete)\s+(?:row|rows|record|records|table)\b",
+            r"\braw\s+(?:rows|records|data)\b",
+            r"\bpreview\s+(?:rows|records|data)\b",
+            r"\bsample\s+(?:rows|records|data)\b",
+            r"\bfirst\s+\d*\s*(?:rows|records)\b",
+            r"\btop\s+\d+\s+(?:rows|records)\b",
+        )
+        return any(re.search(pattern, normalized) for pattern in patterns)
+
+    def _sql_uses_select_star(self, sql: str) -> bool:
+        sql_without_strings = re.sub(r"'(?:''|[^'])*'", "''", sql or "")
+        return bool(
+            re.search(
+                r"\bSELECT\s+(?:TOP\s+\d+\s+)?\*",
+                sql_without_strings,
+                flags=re.IGNORECASE,
+            )
+            or re.search(
+                r"(?:^|,)\s*(?:\"[^\"]+\"|\[[^\]]+\]|`[^`]+`|"
+                r"[A-Za-z_][A-Za-z0-9_.$]*)\s*\.\s*\*",
+                sql_without_strings,
+                flags=re.IGNORECASE,
+            )
+        )
+
+    def _sql_contains_placeholder_values(self, sql: str) -> bool:
+        normalized_sql = re.sub(r"\s+", " ", sql or "").lower()
+        placeholder_patterns = (
+            r"\bdesired(?:_[a-z0-9]+)*\b",
+            r"\bspecified(?:_[a-z0-9]+)*\b",
+            r"\bplaceholder\b",
+            r"\byour_[a-z0-9_]+\b",
+            r"\bexample_[a-z0-9_]+\b",
+            r"<\s*[a-z0-9_ -]+\s*>",
+            r"\{\s*[a-z0-9_ -]+\s*\}",
+            r"\byyyy[-_/]?mm[-_/]?dd\b",
+        )
+        return any(
+            re.search(pattern, normalized_sql, flags=re.IGNORECASE)
+            for pattern in placeholder_patterns
+        )
+
+    def _extract_schema_relationship_edges(
+        self, table_ddls: list[str]
+    ) -> set[tuple[tuple[str, str], tuple[str, str]]]:
+        edges: set[tuple[tuple[str, str], tuple[str, str]]] = set()
+
+        def clean_identifier(value: str) -> str:
+            return str(value or "").strip().strip('"[]` ')
+
+        def split_columns(value: str) -> list[str]:
+            return [
+                clean_identifier(part)
+                for part in (value or "").split(",")
+                if clean_identifier(part)
+            ]
+
+        for ddl in table_ddls or []:
+            if not isinstance(ddl, str):
+                continue
+            table_match = re.search(
+                r'\bCREATE\s+TABLE\s+(?:"(?P<quoted>[^"]+)"|'
+                r"\[(?P<bracketed>[^\]]+)\]|`(?P<backticked>[^`]+)`|"
+                r"(?P<bare>[A-Za-z_][A-Za-z0-9_.$]*))\s*\(",
+                ddl,
+                flags=re.IGNORECASE,
+            )
+            if not table_match:
+                continue
+            source_table = clean_identifier(
+                next(
+                    (value for value in table_match.groupdict().values() if value),
+                    "",
+                )
+            )
+            if not source_table:
+                continue
+
+            for relationship_match in re.finditer(
+                r"FOREIGN\s+KEY\s*\((?P<source_columns>[^)]+)\)\s+REFERENCES\s+"
+                r'(?:"(?P<quoted>[^"]+)"|\[(?P<bracketed>[^\]]+)\]|'
+                r"`(?P<backticked>[^`]+)`|(?P<bare>[A-Za-z_][A-Za-z0-9_.$]*))"
+                r"\s*\((?P<target_columns>[^)]+)\)",
+                ddl,
+                flags=re.IGNORECASE,
+            ):
+                target_table = clean_identifier(
+                    next(
+                        (
+                            value
+                            for key, value in relationship_match.groupdict().items()
+                            if key
+                            in {
+                                "quoted",
+                                "bracketed",
+                                "backticked",
+                                "bare",
+                            }
+                            and value
+                        ),
+                        "",
+                    )
+                )
+                if not target_table:
+                    continue
+
+                source_columns = split_columns(
+                    relationship_match.group("source_columns")
+                )
+                target_columns = split_columns(
+                    relationship_match.group("target_columns")
+                )
+                for source_column, target_column in zip(source_columns, target_columns):
+                    source_edge = (
+                        self._normalize_schema_token(source_table),
+                        self._normalize_schema_token(source_column),
+                    )
+                    target_edge = (
+                        self._normalize_schema_token(target_table),
+                        self._normalize_schema_token(target_column),
+                    )
+                    edges.add((source_edge, target_edge))
+                    edges.add((target_edge, source_edge))
+
+        return edges
+
+    def _sql_joins_match_selected_relationships(
+        self,
+        sql: str,
+        table_ddls: list[str],
+        valid_tables: dict[str, dict[str, Any]],
+    ) -> bool:
+        sql_without_strings = re.sub(r"'(?:''|[^'])*'", "''", sql or "")
+        if not re.search(r"\bJOIN\b", sql_without_strings, flags=re.IGNORECASE):
+            return True
+
+        equality_pattern = re.compile(
+            r'(?:"(?P<ltq>[^"]+)"|\[(?P<ltb>[^\]]+)\]|`(?P<ltk>[^`]+)`|'
+            r"(?P<lt>[A-Za-z_][A-Za-z0-9_.$]*))\s*\.\s*"
+            r'(?:"(?P<lcq>[^"]+)"|\[(?P<lcb>[^\]]+)\]|`(?P<lck>[^`]+)`|'
+            r"(?P<lc>[A-Za-z_][A-Za-z0-9_$]*))\s*=\s*"
+            r'(?:"(?P<rtq>[^"]+)"|\[(?P<rtb>[^\]]+)\]|`(?P<rtk>[^`]+)`|'
+            r"(?P<rt>[A-Za-z_][A-Za-z0-9_.$]*))\s*\.\s*"
+            r'(?:"(?P<rcq>[^"]+)"|\[(?P<rcb>[^\]]+)\]|`(?P<rck>[^`]+)`|'
+            r"(?P<rc>[A-Za-z_][A-Za-z0-9_$]*))",
+            flags=re.IGNORECASE,
+        )
+        equality_matches = list(equality_pattern.finditer(sql_without_strings))
+        if not equality_matches:
+            logger.warning(
+                "Ignoring SQL because JOIN has no qualified equality condition. sql=%s",
+                sql,
+            )
+            return False
+
+        relationship_edges = self._extract_schema_relationship_edges(table_ddls)
+        if not relationship_edges:
+            return True
+
+        invalid_edges: list[str] = []
+        checked_edges = 0
+        for match in equality_matches:
+            left_table_reference = (
+                match.group("ltq")
+                or match.group("ltb")
+                or match.group("ltk")
+                or match.group("lt")
+                or ""
+            )
+            left_column = (
+                match.group("lcq")
+                or match.group("lcb")
+                or match.group("lck")
+                or match.group("lc")
+                or ""
+            )
+            right_table_reference = (
+                match.group("rtq")
+                or match.group("rtb")
+                or match.group("rtk")
+                or match.group("rt")
+                or ""
+            )
+            right_column = (
+                match.group("rcq")
+                or match.group("rcb")
+                or match.group("rck")
+                or match.group("rc")
+                or ""
+            )
+            left_table = self._table_for_sql_reference(
+                left_table_reference, valid_tables
+            )
+            right_table = self._table_for_sql_reference(
+                right_table_reference, valid_tables
+            )
+            if not left_table or not right_table:
+                continue
+
+            left_key = (
+                self._normalize_schema_token(str(left_table.get("name") or "")),
+                self._normalize_schema_token(left_column),
+            )
+            right_key = (
+                self._normalize_schema_token(str(right_table.get("name") or "")),
+                self._normalize_schema_token(right_column),
+            )
+            if left_key[0] == right_key[0]:
+                continue
+
+            checked_edges += 1
+            if (left_key, right_key) not in relationship_edges:
+                invalid_edges.append(
+                    f"{left_table_reference}.{left_column} = "
+                    f"{right_table_reference}.{right_column}"
+                )
+
+        if checked_edges and invalid_edges:
+            logger.warning(
+                "Ignoring SQL because JOIN condition is not grounded in selected schema relationships. "
+                "invalid_edges=%s sql=%s",
+                invalid_edges,
+                sql,
+            )
+            return False
+        return True
+
     def _build_ask_result_from_sql(self, sql: Optional[str]) -> Optional[AskResult]:
         if not self._is_valid_select_sql(sql):
             return None
@@ -6407,6 +6727,22 @@ class AskService:
             )
         ask_result = self._build_ask_result_from_sql(sql)
         if not ask_result:
+            return None
+        if self._sql_contains_placeholder_values(ask_result.sql):
+            logger.warning(
+                "Ignoring SQL because it contains placeholder filter values. sql=%s",
+                ask_result.sql,
+            )
+            return None
+        if self._sql_uses_select_star(
+            ask_result.sql
+        ) and not self._query_explicitly_requests_all_fields(query):
+            logger.warning(
+                "Ignoring SQL because it uses SELECT * without an explicit all-fields request. "
+                "query=%s sql=%s",
+                query,
+                ask_result.sql,
+            )
             return None
 
         schema_tables = self._parse_schema_tables(table_ddls)
@@ -6488,6 +6824,13 @@ class AskService:
                 invalid_columns,
                 ask_result.sql,
             )
+            return None
+
+        if not self._sql_joins_match_selected_relationships(
+            ask_result.sql,
+            table_ddls,
+            valid_tables,
+        ):
             return None
 
         invalid_unqualified_identifiers = self._invalid_unqualified_sql_identifiers(

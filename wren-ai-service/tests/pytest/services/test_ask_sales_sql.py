@@ -539,7 +539,11 @@ def test_entity_lookup_uses_customer_like_match_for_company_phrase():
     )
 
     assert sql == (
-        'SELECT TOP 500 * FROM "dbo_tblNewOrders" '
+        'SELECT TOP 500 "dbo_tblNewOrders"."OrdNo" AS "OrdNo", '
+        '"dbo_tblNewOrders"."ConsolidatedCustomer" AS "ConsolidatedCustomer", '
+        '"dbo_tblNewOrders"."OrdDate" AS "OrdDate", '
+        '"dbo_tblNewOrders"."Market" AS "Market" '
+        'FROM "dbo_tblNewOrders" '
         'WHERE "dbo_tblNewOrders"."ConsolidatedCustomer" LIKE '
         "'%Lockheed Martin%' "
         'ORDER BY "dbo_tblNewOrders"."OrdDate" DESC'
@@ -728,11 +732,146 @@ def test_schema_grounded_sales_sql_filters_entity_lookup_by_customer_name():
     )
 
     assert sql == (
-        'SELECT TOP 500 * FROM "dbo_tblNewOrders" '
+        'SELECT TOP 500 "dbo_tblNewOrders"."OrdNo" AS "OrdNo", '
+        '"dbo_tblNewOrders"."CustName" AS "CustName", '
+        '"dbo_tblNewOrders"."OrdDate" AS "OrdDate" '
+        'FROM "dbo_tblNewOrders" '
         'WHERE "dbo_tblNewOrders"."CustName" LIKE '
         "'%Daimler Trucks North America%' "
         'ORDER BY "dbo_tblNewOrders"."OrdDate" DESC'
     )
+
+
+def test_validated_sql_rejects_select_star_without_explicit_all_fields_request():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT TOP 500 * FROM "dbo_tblNewOrders" '
+            'WHERE "dbo_tblNewOrders"."CustName" LIKE \'%Lockheed Martin%\''
+        ),
+        [
+            """
+            CREATE TABLE dbo_tblNewOrders (
+              CustName VARCHAR,
+              OrdNo VARCHAR,
+              OrdDate TIMESTAMP
+            );
+            """
+        ],
+        "Show me orders for Lockheed Martin.",
+    )
+
+    assert result is None
+
+
+def test_validated_sql_allows_select_star_for_explicit_all_fields_request():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        'SELECT TOP 10 * FROM "dbo_tblNewOrders"',
+        [
+            """
+            CREATE TABLE dbo_tblNewOrders (
+              CustName VARCHAR,
+              OrdNo VARCHAR,
+              OrdDate TIMESTAMP
+            );
+            """
+        ],
+        "Show all columns from dbo_tblNewOrders.",
+    )
+
+    assert result is not None
+
+
+def test_validated_sql_rejects_placeholder_filter_values():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT "dbo_tblNewOrders"."OrdNo" AS "OrdNo" '
+            'FROM "dbo_tblNewOrders" '
+            'WHERE "dbo_tblNewOrders"."OrdDate" = \'desired_date\''
+        ),
+        [
+            """
+            CREATE TABLE dbo_tblNewOrders (
+              OrdNo VARCHAR,
+              OrdDate TIMESTAMP
+            );
+            """
+        ],
+        "Show orders for the requested date.",
+    )
+
+    assert result is None
+
+
+def test_validated_sql_rejects_join_not_grounded_in_selected_relationships():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT "dbo_Orders"."OrdNo" AS "OrdNo", '
+            '"dbo_Customers"."CustomerName" AS "CustomerName" '
+            'FROM "dbo_Orders" '
+            'JOIN "dbo_Customers" '
+            'ON "dbo_Orders"."ProductId" = "dbo_Customers"."CustomerId"'
+        ),
+        [
+            """
+            CREATE TABLE dbo_Orders (
+              OrdNo VARCHAR,
+              CustomerId VARCHAR,
+              ProductId VARCHAR,
+              FOREIGN KEY (CustomerId) REFERENCES dbo_Customers(CustomerId)
+            );
+            """,
+            """
+            CREATE TABLE dbo_Customers (
+              CustomerId VARCHAR,
+              CustomerName VARCHAR
+            );
+            """,
+        ],
+        "Show customer names for orders.",
+    )
+
+    assert result is None
+
+
+def test_validated_sql_accepts_join_grounded_in_selected_relationships():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT "dbo_Orders"."OrdNo" AS "OrdNo", '
+            '"dbo_Customers"."CustomerName" AS "CustomerName" '
+            'FROM "dbo_Orders" '
+            'JOIN "dbo_Customers" '
+            'ON "dbo_Orders"."CustomerId" = "dbo_Customers"."CustomerId"'
+        ),
+        [
+            """
+            CREATE TABLE dbo_Orders (
+              OrdNo VARCHAR,
+              CustomerId VARCHAR,
+              ProductId VARCHAR,
+              FOREIGN KEY (CustomerId) REFERENCES dbo_Customers(CustomerId)
+            );
+            """,
+            """
+            CREATE TABLE dbo_Customers (
+              CustomerId VARCHAR,
+              CustomerName VARCHAR
+            );
+            """,
+        ],
+        "Show customer names for orders.",
+    )
+
+    assert result is not None
 
 
 def test_validated_sql_rejects_distinct_with_extra_entity_columns_for_no_duplicates():
