@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import sys
+import types
 from unittest.mock import MagicMock
 
+import pyarrow as pa
 import pytest
 
 from wren.connector.canner import CannerConnector, _strip_trailing_semicolon
@@ -16,51 +19,52 @@ def test_strip_helper():
     assert _strip_trailing_semicolon("SELECT 'a;b'") == "SELECT 'a;b'"
 
 
-def test_query_unlimited_strips_trailing_semicolon():
+@pytest.fixture
+def fake_psycopg(monkeypatch):
+    """CannerConnector.query() does ``import psycopg`` at call time.
+
+    The unit-test image doesn't install psycopg, so provide a stub with the
+    ``errors.QueryCanceled`` attribute the except-clause references.
+    """
+    mod = types.ModuleType("psycopg")
+    errors = types.ModuleType("psycopg.errors")
+
+    class QueryCanceled(Exception):
+        pass
+
+    errors.QueryCanceled = QueryCanceled
+    mod.errors = errors
+    monkeypatch.setitem(sys.modules, "psycopg", mod)
+    monkeypatch.setitem(sys.modules, "psycopg.errors", errors)
+    return mod
+
+
+def _make_connector():
     connector = CannerConnector.__new__(CannerConnector)
     connector.connection = MagicMock()
     cursor = MagicMock()
     connector.connection.cursor.return_value.__enter__.return_value = cursor
-    # Build arrow path may need description - mock _build if used
-    # Patch cursor execute only and short-circuit table build via side effect
-    import wren.connector.canner as canner_mod
+    return connector, cursor
 
-    def _fake_table(cur):
-        import pyarrow as pa
 
-        return pa.table({"x": [1]})
-
-    # Find helper name used
-    # Use elev: make fetch via execute and intercept
-    # Simpler: mock _build_arrow_table if exists
-    if hasattr(canner_mod, "_build_arrow_table"):
-        canner_mod._build_arrow_table = _fake_table  # type: ignore
-    elif hasattr(canner_mod, "_build_pg_arrow_table"):
-        canner_mod._build_pg_arrow_table = _fake_table  # type: ignore
-    else:
-        # last resort: fail loudly with attrs
-        raise AssertionError(dir(canner_mod)[:50])
+def test_query_unlimited_strips_trailing_semicolon(monkeypatch, fake_psycopg):
+    connector, cursor = _make_connector()
+    monkeypatch.setattr(
+        "wren.connector.canner._build_arrow_table",
+        lambda cur: pa.table({"x": [1]}),
+    )
 
     connector.query("SELECT 1 AS x;")
 
     cursor.execute.assert_called_once_with("SELECT 1 AS x")
 
 
-def test_query_limited_strips_before_wrap():
-    connector = CannerConnector.__new__(CannerConnector)
-    connector.connection = MagicMock()
-    cursor = MagicMock()
-    connector.connection.cursor.return_value.__enter__.return_value = cursor
-    import wren.connector.canner as canner_mod
-    import pyarrow as pa
-
-    def _fake_table(cur):
-        return pa.table({"x": [1]})
-
-    if hasattr(canner_mod, "_build_arrow_table"):
-        canner_mod._build_arrow_table = _fake_table  # type: ignore
-    else:
-        canner_mod._build_pg_arrow_table = _fake_table  # type: ignore
+def test_query_limited_strips_before_wrap(monkeypatch, fake_psycopg):
+    connector, cursor = _make_connector()
+    monkeypatch.setattr(
+        "wren.connector.canner._build_arrow_table",
+        lambda cur: pa.table({"x": [1]}),
+    )
 
     connector.query("SELECT 1 AS x;", limit=3)
 
