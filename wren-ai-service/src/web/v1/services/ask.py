@@ -787,7 +787,7 @@ class AskService:
             ),
             (
                 {"market", "markets", "region", "regions"},
-                {"market", "markets", "region", "regions", "area", "territory", "country"},
+                {"market", "markets", "region", "regions", "area", "territory", "country", "domestic", "international"},
             ),
             (
                 {"business", "unit", "units", "division"},
@@ -953,7 +953,7 @@ class AskService:
         if "currency" in normalized or "currencies" in normalized:
             concept_groups.append({"currency", "curr", "money", "fx", "exchange"})
         if "market" in normalized or "markets" in normalized:
-            concept_groups.append({"market", "region", "country", "territory"})
+            concept_groups.append({"market", "region", "country", "territory", "domestic", "international"})
         if (
             "business unit" in normalized
             or "business units" in normalized
@@ -2791,6 +2791,94 @@ class AskService:
             f"{order_clause}"
         )
 
+    def _build_entity_distribution_sql(
+        self, query: str, tables: list[dict[str, Any]]
+    ) -> str | None:
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized_query or "distribution" not in normalized_query:
+            return None
+
+        entity_candidates: tuple[str, ...] | None = None
+        entity_alias = "EntityCount"
+        if "customer" in normalized_query or "customers" in normalized_query:
+            entity_candidates = (
+                "Customer",
+                "CustomerName",
+                "CustName",
+                "CustNo",
+                "CustomerNo",
+                "CustomerCode",
+                "Account",
+                "AccountName",
+                "Client",
+                "ClientName",
+            )
+            entity_alias = "CustomerCount"
+        elif "product" in normalized_query or "products" in normalized_query:
+            entity_candidates = (
+                "Product",
+                "ProductName",
+                "ProdName",
+                "ProdCode",
+                "ProductCode",
+                "Item",
+                "ItemName",
+                "SKU",
+            )
+            entity_alias = "ProductCount"
+
+        dimension_candidates: tuple[str, ...] | None = None
+        if "market" in normalized_query or "markets" in normalized_query:
+            dimension_candidates = ("Market", "MarketType", "MarketName", "EndMarket", "Region", "Country")
+        elif "region" in normalized_query or "regions" in normalized_query:
+            dimension_candidates = ("Region", "Market", "Area", "Territory", "Country")
+        elif "country" in normalized_query or "countries" in normalized_query:
+            dimension_candidates = ("Country", "CountryName", "Nation", "Destination")
+        elif "division" in normalized_query:
+            dimension_candidates = ("Division",)
+        elif "business unit" in normalized_query or re.search(r"\bbu\b", normalized_query):
+            dimension_candidates = ("BusinessUnit", "Business Unit", "BU", "Division")
+
+        if not entity_candidates or not dimension_candidates:
+            return None
+
+        scored: list[tuple[int, dict[str, Any], str, str]] = []
+        for table in tables:
+            dimension = self._find_schema_column(table, dimension_candidates)
+            entity = self._find_schema_column(table, entity_candidates)
+            if not dimension or not entity:
+                continue
+
+            table_name = str(table.get("name") or "")
+            score = 20 + self._schema_source_shape_score(query, table)
+            if "order" in self._normalize_schema_token(table_name):
+                score += 15
+            if "sales" in self._normalize_schema_token(table_name):
+                score += 10
+            scored.append((score, table, dimension, entity))
+
+        if not scored:
+            return None
+
+        _score, table, dimension, entity = sorted(
+            scored,
+            key=lambda item: item[0],
+            reverse=True,
+        )[0]
+        table_name = str(table.get("name") or "")
+        table_ref = self._quote_sql_identifier(table_name)
+        dimension_ref = f"{table_ref}.{self._quote_sql_identifier(dimension)}"
+        entity_ref = f"{table_ref}.{self._quote_sql_identifier(entity)}"
+        where_clause = self._append_not_null_filters("", [dimension_ref, entity_ref])
+        return (
+            f"SELECT {dimension_ref} AS {self._quote_sql_identifier(dimension)}, "
+            f"COUNT(DISTINCT {entity_ref}) AS {self._quote_sql_identifier(entity_alias)} "
+            f"FROM {table_ref}"
+            f"{where_clause} "
+            f"GROUP BY {dimension_ref} "
+            f"ORDER BY COUNT(DISTINCT {entity_ref}) DESC"
+        )
+
     def _build_schema_grounded_analytics_sql(
         self, query: str, table_ddls: list[str]
     ) -> str | None:
@@ -2806,6 +2894,9 @@ class AskService:
 
         if entity_lookup_sql := self._build_entity_lookup_sql(query, tables):
             return entity_lookup_sql
+
+        if entity_distribution_sql := self._build_entity_distribution_sql(query, tables):
+            return entity_distribution_sql
 
         if pcb_direct_sql := self._build_pcb_direct_question_sql(query, table_ddls):
             return pcb_direct_sql
@@ -2960,7 +3051,7 @@ class AskService:
         if "business unit" in normalized_query or re.search(r"\bbu\b", normalized_query):
             dimension_candidates.append(("BusinessUnit", "Business Unit", "BU"))
         if "market" in normalized_query:
-            dimension_candidates.append(("Market", "MarketType", "MarketName", "Region", "Country"))
+            dimension_candidates.append(("Market", "MarketType", "MarketName", "EndMarket", "Region", "Country"))
         if "region" in normalized_query:
             dimension_candidates.append(("Region", "Market", "Area", "Territory"))
         if "currency" in normalized_query or "currencies" in normalized_query:
@@ -3395,7 +3486,7 @@ class AskService:
             rank_dimension = None
             if "market" in normalized_query:
                 partition_dimension = self._find_schema_column(
-                    table, ("Market", "MarketType", "Region")
+                    table, ("Market", "MarketType", "MarketName", "EndMarket", "Region")
                 )
             if "region" in normalized_query and not partition_dimension:
                 partition_dimension = self._find_schema_column(
