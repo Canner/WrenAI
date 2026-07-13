@@ -20,6 +20,7 @@ from wren.connector.base import ConnectorABC, strip_trailing_semicolon
 _strip_trailing_semicolon = strip_trailing_semicolon
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 
+
 def _parse_oracle_connection_url(url: str):
     """Parse an Oracle URL after escaping raw brackets in userinfo only.
 
