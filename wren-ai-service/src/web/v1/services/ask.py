@@ -1004,167 +1004,6 @@ class AskService:
             return False
         return True
 
-    def _comparison_value_tokens_from_phrase(self, phrase: str) -> set[str]:
-        phrase = re.sub(r"\s+", " ", (phrase or "").strip().lower())
-        if not phrase:
-            return set()
-
-        dimension_words = {
-            "area",
-            "areas",
-            "business",
-            "categories",
-            "category",
-            "channels",
-            "channel",
-            "classes",
-            "class",
-            "countries",
-            "country",
-            "customer",
-            "customers",
-            "division",
-            "divisions",
-            "market",
-            "markets",
-            "product",
-            "products",
-            "region",
-            "regions",
-            "segment",
-            "segments",
-            "status",
-            "territories",
-            "territory",
-            "type",
-            "types",
-            "unit",
-            "units",
-        }
-        ignored_value_words = dimension_words | {
-            "amount",
-            "average",
-            "compare",
-            "comparison",
-            "count",
-            "counts",
-            "current",
-            "distribution",
-            "each",
-            "how",
-            "many",
-            "metric",
-            "metrics",
-            "number",
-            "order",
-            "orders",
-            "period",
-            "records",
-            "revenue",
-            "row",
-            "rows",
-            "sale",
-            "sales",
-            "sum",
-            "this",
-            "top",
-            "total",
-            "value",
-            "values",
-        }
-
-        tokens = self._intent_tokens(phrase) - ignored_value_words
-        if not tokens:
-            return set()
-
-        expanded = set(tokens)
-        if {"international", "intl"} & tokens:
-            expanded.update({"foreign", "global", "international", "intl", "overseas"})
-        if {"domestic", "dom"} & tokens:
-            expanded.update({"domestic", "dom", "home", "local", "national"})
-        return expanded
-
-    def _requested_comparison_value_groups(self, query: str | None) -> list[set[str]]:
-        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
-        if not normalized_query:
-            return []
-
-        groups: list[set[str]] = []
-
-        for match in re.finditer(
-            r"\bbetween\s+(?P<left>[a-z0-9][a-z0-9 _/\-]{0,80}?)\s+"
-            r"(?:and|vs|versus)\s+"
-            r"(?P<right>[a-z0-9][a-z0-9 _/\-]{0,80}?)"
-            r"(?=$|[.?!,;]|\s+(?:by|for|from|in|over|during)\b)",
-            normalized_query,
-        ):
-            for phrase in (match.group("left"), match.group("right")):
-                tokens = self._comparison_value_tokens_from_phrase(phrase)
-                if tokens:
-                    groups.append(tokens)
-
-        if " between " not in normalized_query:
-            for match in re.finditer(
-                r"\bcompare\s+(?P<left>[a-z0-9][a-z0-9 _/\-]{0,80}?)\s+"
-                r"(?:and|with|to|vs|versus)\s+"
-                r"(?P<right>[a-z0-9][a-z0-9 _/\-]{0,80}?)"
-                r"(?=$|[.?!,;]|\s+(?:by|for|from|in|over|during)\b)",
-                normalized_query,
-            ):
-                for phrase in (match.group("left"), match.group("right")):
-                    tokens = self._comparison_value_tokens_from_phrase(phrase)
-                    if tokens:
-                        groups.append(tokens)
-
-        for match in re.finditer(
-            r"\b(?P<left>[a-z0-9][a-z0-9 _/\-]{0,50}?)\s+"
-            r"(?:vs|versus)\s+"
-            r"(?P<right>[a-z0-9][a-z0-9 _/\-]{0,50}?)"
-            r"(?=$|[.?!,;]|\s+(?:by|for|from|in|over|during)\b)",
-            normalized_query,
-        ):
-            for phrase in (match.group("left"), match.group("right")):
-                tokens = self._comparison_value_tokens_from_phrase(phrase)
-                if tokens:
-                    groups.append(tokens)
-
-        deduped: list[set[str]] = []
-        seen: set[frozenset[str]] = set()
-        for group in groups:
-            key = frozenset(group)
-            if key in seen:
-                continue
-            seen.add(key)
-            deduped.append(group)
-        return deduped
-
-    def _sql_satisfies_requested_comparison_values(
-        self,
-        sql: str,
-        query: str | None,
-        referenced_column_tokens: set[str],
-    ) -> bool:
-        comparison_groups = self._requested_comparison_value_groups(query)
-        if not comparison_groups:
-            return True
-
-        sql_tokens = self._intent_tokens(sql or "")
-        grounded_tokens = sql_tokens | referenced_column_tokens
-        for comparison_group in comparison_groups:
-            if comparison_group & grounded_tokens:
-                continue
-            logger.warning(
-                "Ignoring SQL because a requested comparison value is not grounded "
-                "in the selected schema or generated SQL. query=%s required=%s "
-                "referenced_column_tokens=%s sql=%s",
-                query,
-                sorted(comparison_group),
-                sorted(referenced_column_tokens),
-                sql,
-            )
-            return False
-        return True
-
     def _sql_uses_required_measure_aggregation(self, sql: str, query: str | None) -> bool:
         normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized_query:
@@ -1449,20 +1288,7 @@ class AskService:
         if "account" in normalized_query:
             candidate_groups.append(("Account", "AccountName", "AcctName", "AcctNo"))
         if "company" in normalized_query:
-            candidate_groups.append(
-                (
-                    "Company",
-                    "CompanyName",
-                    "CustName",
-                    "CustomerName",
-                    "ConsolidatedCustomer",
-                    "SoldToCustomer",
-                    "BillToCustomer",
-                    "ShipToCustomer",
-                    "EndCustomer",
-                    "UltimateCustomer",
-                )
-            )
+            candidate_groups.append(("Company", "CompanyName", "CustName", "CustomerName"))
         candidate_groups.extend(
             [
                 (
@@ -1472,14 +1298,8 @@ class AskService:
                     "CustNo",
                     "CustomerNo",
                     "CustomerCode",
-                    "ConsolidatedCustomer",
-                    "SoldToCustomer",
-                    "BillToCustomer",
-                    "ShipToCustomer",
-                    "EndCustomer",
-                    "UltimateCustomer",
                 ),
-                ("Client", "ClientName", "Buyer", "BuyerName"),
+                ("Client", "ClientName"),
                 ("Account", "AccountName"),
                 ("Company", "CompanyName"),
                 ("Name",),
@@ -1587,7 +1407,6 @@ class AskService:
             "is",
             "join",
             "limit",
-            "like",
             "month",
             "not",
             "null",
@@ -1856,12 +1675,6 @@ class AskService:
             query,
             all_referenced_column_tokens,
             referenced_table_tokens,
-        ):
-            return False
-        if not self._sql_satisfies_requested_comparison_values(
-            sql,
-            query,
-            all_referenced_column_tokens,
         ):
             return False
         if not self._sql_uses_required_measure_aggregation(sql, query):
@@ -2924,17 +2737,7 @@ class AskService:
                 key=lambda column: (
                     0
                     if self._normalize_schema_identifier_key(column)
-                    in {
-                        "billtocustomer",
-                        "consolidatedcustomer",
-                        "custname",
-                        "customer",
-                        "customername",
-                        "endcustomer",
-                        "shiptocustomer",
-                        "soldtocustomer",
-                        "ultimatecustomer",
-                    }
+                    in {"custname", "customername", "customer"}
                     else 1,
                     column.lower(),
                 ),
@@ -2984,7 +2787,7 @@ class AskService:
         )
         return (
             f"SELECT TOP 500 * FROM {table_ref} "
-            f"WHERE {filter_ref} LIKE '%{escaped_phrase}%'"
+            f"WHERE {filter_ref} = '{escaped_phrase}'"
             f"{order_clause}"
         )
 
@@ -3005,18 +2808,10 @@ class AskService:
                 "CustNo",
                 "CustomerNo",
                 "CustomerCode",
-                "ConsolidatedCustomer",
-                "SoldToCustomer",
-                "BillToCustomer",
-                "ShipToCustomer",
-                "EndCustomer",
-                "UltimateCustomer",
                 "Account",
                 "AccountName",
                 "Client",
                 "ClientName",
-                "Buyer",
-                "BuyerName",
             )
             entity_alias = "CustomerCount"
         elif "product" in normalized_query or "products" in normalized_query:
@@ -3337,18 +3132,10 @@ class AskService:
                     "CustNo",
                     "CustomerNo",
                     "CustomerCode",
-                    "ConsolidatedCustomer",
-                    "SoldToCustomer",
-                    "BillToCustomer",
-                    "ShipToCustomer",
-                    "EndCustomer",
-                    "UltimateCustomer",
                     "Account",
                     "AccountName",
                     "Client",
                     "ClientName",
-                    "Buyer",
-                    "BuyerName",
                 )
             )
 
