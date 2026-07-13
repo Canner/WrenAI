@@ -5292,12 +5292,11 @@ mod test {
         }
 
         /// Two-layer contract test — Layer 1: top-level catalog-list
-        /// membership is a snapshot at apply time. A brand-new top-level
-        /// catalog registered on the base ctx *after* `apply_wren_on_ctx`
-        /// must not appear in the already-derived ctx (its list is a
-        /// private copy).
+        /// membership and replacement are fixed at apply time. Replacing an
+        /// existing catalog or registering a new catalog on the base ctx must
+        /// not change the already-derived ctx's private snapshot.
         #[tokio::test]
-        async fn new_top_level_catalog_after_apply_is_absent_from_derived_ctx(
+        async fn top_level_catalog_snapshot_isolated_from_later_base_changes(
         ) -> Result<()> {
             let manifest = single_model_manifest("wren_layer1", "marker_col");
             let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
@@ -5306,6 +5305,11 @@ mod test {
                 Mode::Unparse,
             )?);
             let base_ctx = create_wren_ctx(None, None);
+            let existing_catalog_name = "existing_before_apply";
+            let original_catalog: Arc<dyn CatalogProvider> =
+                Arc::new(MemoryCatalogProvider::new());
+            base_ctx
+                .register_catalog(existing_catalog_name, Arc::clone(&original_catalog));
 
             let derived_ctx = apply_wren_on_ctx(
                 &base_ctx,
@@ -5314,6 +5318,28 @@ mod test {
                 Mode::Unparse,
             )
             .await?;
+
+            let replacement_catalog: Arc<dyn CatalogProvider> =
+                Arc::new(MemoryCatalogProvider::new());
+            base_ctx.register_catalog(
+                existing_catalog_name,
+                Arc::clone(&replacement_catalog),
+            );
+
+            let base_catalog = base_ctx
+                .catalog(existing_catalog_name)
+                .expect("replacement catalog missing from base ctx");
+            let derived_catalog = derived_ctx
+                .catalog(existing_catalog_name)
+                .expect("snapshot catalog missing from derived ctx");
+            assert!(
+                Arc::ptr_eq(&base_catalog, &replacement_catalog),
+                "the base ctx must expose the replacement catalog"
+            );
+            assert!(
+                Arc::ptr_eq(&derived_catalog, &original_catalog),
+                "the derived ctx must retain the catalog captured at apply time"
+            );
 
             // A catalog registered on the base ctx after apply is a
             // top-level addition that postdates the private-list snapshot.

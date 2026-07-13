@@ -73,6 +73,11 @@ fn clone_catalog_list(
 }
 
 /// Apply Wren Rules to the context for sql generation.
+///
+/// Callers must complete top-level physical-catalog registration before
+/// starting a transform. Catalog enumeration produces a best-effort,
+/// non-atomic snapshot, so concurrent top-level registrations may or may not
+/// be observed by the derived context.
 pub async fn apply_wren_on_ctx(
     ctx: &SessionContext,
     analyzed_mdl: Arc<AnalyzedWrenMDL>,
