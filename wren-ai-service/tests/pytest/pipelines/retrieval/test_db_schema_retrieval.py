@@ -2,6 +2,7 @@ import pytest
 from haystack import Document
 
 from src.pipelines.retrieval.db_schema_retrieval import (
+    DbSchemaRetrieval,
     _is_project_wide_analysis_query,
     _rerank_table_documents,
     _select_relevant_table_documents,
@@ -85,6 +86,46 @@ def test_rerank_table_documents_penalizes_test_sources_even_when_name_uses_under
     )
 
     assert documents[0].meta["name"] == "dbo_xStageNewOrders"
+
+
+def test_select_relevant_table_documents_excludes_unrequested_dev_equivalent():
+    dev_cube = Document(
+        content="Development sales cube with order number and market fields.",
+        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_qSalesCubeDev"},
+        score=500,
+    )
+    production_orders = Document(
+        content="New order transaction records with order number and market fields.",
+        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_tblNewOrders"},
+        score=0.2,
+    )
+
+    documents = _select_relevant_table_documents(
+        "Show order distribution across markets.",
+        [dev_cube, production_orders],
+    )
+
+    assert [document.meta["name"] for document in documents] == ["dbo_tblNewOrders"]
+
+
+def test_select_relevant_table_documents_keeps_explicit_dev_request():
+    dev_cube = Document(
+        content="Development sales cube with order number and market fields.",
+        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_qSalesCubeDev"},
+        score=500,
+    )
+    production_orders = Document(
+        content="New order transaction records with order number and market fields.",
+        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_tblNewOrders"},
+        score=0.2,
+    )
+
+    documents = _select_relevant_table_documents(
+        "Show order distribution across markets in dev.",
+        [dev_cube, production_orders],
+    )
+
+    assert documents[0].meta["name"] == "dbo_qSalesCubeDev"
 
 
 def test_rerank_table_documents_prefers_customer_capable_source_for_entity_lookup():
@@ -270,6 +311,44 @@ async def test_table_retrieval_fetches_explicit_table_descriptions():
             {"field": "name", "operator": "in", "value": ["orders"]},
         ],
     }
+
+
+def test_db_schema_retrieval_fetches_wider_table_description_window():
+    class LLMProvider:
+        def get_generator(self, **kwargs):
+            return object()
+
+        def get_model(self):
+            return "gpt-4o-mini"
+
+        def get_context_window_size(self):
+            return 1000
+
+    class EmbedderProvider:
+        def get_text_embedder(self):
+            return object()
+
+    class DocumentStoreProvider:
+        def __init__(self):
+            self.retriever_top_k = []
+
+        def get_store(self, dataset_name=None):
+            return dataset_name or "default"
+
+        def get_retriever(self, store, top_k):
+            self.retriever_top_k.append((store, top_k))
+            return object()
+
+    document_store_provider = DocumentStoreProvider()
+
+    DbSchemaRetrieval(
+        llm_provider=LLMProvider(),
+        embedder_provider=EmbedderProvider(),
+        document_store_provider=document_store_provider,
+        table_retrieval_size=10,
+    )
+
+    assert document_store_provider.retriever_top_k[0] == ("table_descriptions", 50)
 
 
 @pytest.mark.asyncio

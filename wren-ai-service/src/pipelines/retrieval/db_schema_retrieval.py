@@ -30,6 +30,23 @@ else:
 logger = logging.getLogger("wren-ai-service")
 
 MAX_RELEVANT_TABLE_CANDIDATES = 5
+MIN_TABLE_DESCRIPTION_CANDIDATE_WINDOW = 50
+WEAK_NON_PRODUCTION_TERMS = (
+    "stage",
+    "staging",
+)
+STRONG_NON_PRODUCTION_TERMS = (
+    "archive",
+    "backup",
+    "copy",
+    "dev",
+    "development",
+    "duplicate",
+    "sample",
+    "temp",
+    "test",
+    "tmp",
+)
 
 
 table_columns_selection_system_prompt = """
@@ -327,28 +344,12 @@ def _source_shape_score(query: str, document: Document) -> int:
         elif covered_groups == 0:
             score -= 25
 
-    weak_non_production_terms = (
-        "stage",
-        "staging",
-    )
-    strong_non_production_terms = (
-        "archive",
-        "backup",
-        "copy",
-        "dev",
-        "development",
-        "duplicate",
-        "sample",
-        "temp",
-        "test",
-        "tmp",
-    )
-    if source_terms & set(strong_non_production_terms) and not _query_mentions_any(
-        normalized_query, strong_non_production_terms
+    if source_terms & set(STRONG_NON_PRODUCTION_TERMS) and not _query_mentions_any(
+        normalized_query, STRONG_NON_PRODUCTION_TERMS
     ):
         score -= 240
-    if source_terms & set(weak_non_production_terms) and not _query_mentions_any(
-        normalized_query, weak_non_production_terms
+    if source_terms & set(WEAK_NON_PRODUCTION_TERMS) and not _query_mentions_any(
+        normalized_query, WEAK_NON_PRODUCTION_TERMS
     ):
         score -= 40
 
@@ -463,6 +464,27 @@ def _semantic_score(document: Document) -> float:
     return 0.0
 
 
+def _retrieval_concept_coverage(query: str, document: Document) -> set[int]:
+    source_terms = _retrieval_terms(_source_text(document))
+    return {
+        index
+        for index, concept_group in enumerate(_retrieval_concept_groups(query))
+        if concept_group & source_terms
+    }
+
+
+def _is_unrequested_strong_non_production_source(
+    query: str, document: Document
+) -> bool:
+    source_terms = _retrieval_terms(_source_text(document))
+    return bool(source_terms & set(STRONG_NON_PRODUCTION_TERMS)) and not (
+        _query_mentions_any(
+            query or "",
+            STRONG_NON_PRODUCTION_TERMS,
+        )
+    )
+
+
 def _score_table_documents(
     query: str, documents: list[Document]
 ) -> list[tuple[float, int, Document, int, float]]:
@@ -528,6 +550,42 @@ def _select_relevant_table_documents(
         return documents[:max_tables]
 
     candidate_pool = [item for item in reranked if item[3] > 0] or reranked
+    concept_groups = _retrieval_concept_groups(query)
+    if concept_groups:
+        coverage_by_index = {
+            index: _retrieval_concept_coverage(query, item[2])
+            for index, item in enumerate(candidate_pool)
+        }
+        grounded_production_coverage: set[int] = set()
+        for index, item in enumerate(candidate_pool):
+            coverage = coverage_by_index[index]
+            if coverage and not _is_unrequested_strong_non_production_source(
+                query, item[2]
+            ):
+                grounded_production_coverage.update(coverage)
+
+        if grounded_production_coverage:
+            filtered_pool = []
+            excluded_names = []
+            for index, item in enumerate(candidate_pool):
+                document = item[2]
+                coverage = coverage_by_index[index]
+                if (
+                    _is_unrequested_strong_non_production_source(query, document)
+                    and coverage <= grounded_production_coverage
+                ):
+                    excluded_names.append(document.meta.get("name"))
+                    continue
+                filtered_pool.append(item)
+            if filtered_pool:
+                candidate_pool = filtered_pool
+                if excluded_names:
+                    logger.info(
+                        "Excluded unrequested non-production table candidates for query=%s names=%s",
+                        query,
+                        excluded_names,
+                    )
+
     selected = [
         document
         for _score, _index, document, _lexical, _semantic in candidate_pool[:max_tables]
@@ -1009,11 +1067,15 @@ class DbSchemaRetrieval(BasicPipeline):
         table_column_retrieval_size: int = 100,
         **kwargs,
     ):
+        table_description_candidate_window = max(
+            table_retrieval_size,
+            MIN_TABLE_DESCRIPTION_CANDIDATE_WINDOW,
+        )
         self._components = {
             "embedder": embedder_provider.get_text_embedder(),
             "table_retriever": document_store_provider.get_retriever(
                 document_store_provider.get_store(dataset_name="table_descriptions"),
-                top_k=table_retrieval_size,
+                top_k=table_description_candidate_window,
             ),
             "dbschema_retriever": document_store_provider.get_retriever(
                 document_store_provider.get_store(),
