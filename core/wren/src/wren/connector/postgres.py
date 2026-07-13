@@ -249,10 +249,11 @@ class PostgresConnector(ConnectorABC):
         self._closed = False
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
+        # Strip terminating ``;`` even when no LIMIT wrapper is applied so
+        # client-pasted statements match dry_run / limited composition rules.
+        sql = strip_trailing_semicolon(sql)
         if limit is not None:
-            sql = (
-                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS _sub LIMIT {limit}"
-            )
+            sql = f"SELECT * FROM ({sql}) AS _sub LIMIT {limit}"
 
         try:
             with self.connection.cursor() as cursor:
