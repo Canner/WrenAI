@@ -6600,61 +6600,6 @@ class AskService:
                     )
                     sql_user_query = self._rewrite_query_for_text_to_sql(user_query)
 
-                if not explicit_table_names and self._is_direct_heuristic_sql_query(user_query):
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="searching",
-                        type="TEXT_TO_SQL",
-                        trace_id=trace_id,
-                        is_followup=True if histories else False,
-                    )
-                    retrieval_result = await self._run_with_timeout(
-                        "Schema retrieval",
-                        self._pipelines["db_schema_retrieval"].run(
-                            query=user_query,
-                            histories=[],
-                            project_id=ask_request.project_id,
-                            enable_column_pruning=False,
-                        ),
-                    )
-                    documents, table_names, table_ddls = (
-                        self._extract_retrieval_metadata(retrieval_result)
-                    )
-                    logger.info(
-                        "Retrieved tables for direct heuristic query_id %s: %s",
-                        query_id,
-                        table_names,
-                    )
-
-                    if heuristic_sql := self._build_heuristic_text_to_sql_fallback(
-                        user_query, table_ddls, table_names=table_names
-                    ):
-                        logger.info(
-                            "Using direct heuristic text-to-sql fallback for query_id %s: %s",
-                            query_id,
-                            user_query,
-                        )
-                        if ask_result := self._build_validated_ask_result_from_sql(
-                            heuristic_sql,
-                            table_ddls,
-                            user_query,
-                        ):
-                            api_results = [ask_result]
-                            if not self._is_stopped(query_id, self._ask_results):
-                                self._ask_results[query_id] = AskResultResponse(
-                                    status="finished",
-                                    type="TEXT_TO_SQL",
-                                    response=api_results,
-                                    rephrased_question=user_query,
-                                    retrieved_tables=table_names,
-                                    trace_id=trace_id,
-                                    is_followup=True if histories else False,
-                                )
-                            results["ask_result"] = api_results
-                            results["metadata"]["type"] = "TEXT_TO_SQL"
-                            return results
-                        invalid_sql = heuristic_sql
-                        error_message = "Heuristic SQL fallback was not valid for the active datasource schema."
-
                 if explicit_group_count_sql := self._build_explicit_group_count_sql(
                     user_query
                 ):
@@ -7075,44 +7020,6 @@ class AskService:
                                 explicit_table_names,
                             )
                         )
-                if (
-                    not documents
-                    and self._should_load_full_schema_for_question(user_query)
-                    and not request_explicit_table_names
-                ):
-                    logger.info(
-                        "Query-based schema retrieval returned no tables for data question; "
-                        "retrying full active deployed schema for query_id %s",
-                        query_id,
-                    )
-                    retrieval_result = await self._run_with_timeout(
-                        "Full active schema retrieval",
-                        self._pipelines["db_schema_retrieval"].run(
-                            query="",
-                            histories=[],
-                            project_id=ask_request.project_id,
-                            enable_column_pruning=False,
-                        ),
-                        timeout_seconds=min(
-                            self._schema_retrieval_timeout_seconds,
-                            self._pipeline_timeout_seconds,
-                            20,
-                        ),
-                    )
-                    _retrieval_result = retrieval_result.get(
-                        "construct_retrieval_results", {}
-                    )
-                    documents, table_names, table_ddls = (
-                        self._extract_retrieval_metadata(retrieval_result)
-                    )
-                    if explicit_table_names:
-                        documents, table_names, table_ddls = (
-                            self._filter_retrieval_metadata_for_explicit_query(
-                                user_query,
-                                documents,
-                                explicit_table_names,
-                            )
-                        )
                 if documents and not explicit_table_names:
                     documents, table_names, table_ddls = (
                         self._scope_retrieval_to_semantic_contract(
@@ -7272,92 +7179,6 @@ class AskService:
                         error_message = (
                             "Schema-grounded SQL was not valid for the active datasource schema and question intent."
                         )
-
-                should_retry_full_schema = (
-                    not api_results
-                    and self._should_load_full_schema_for_question(user_query)
-                    and "db_schema_retrieval" in self._pipelines
-                    and not request_explicit_table_names
-                    and not table_names
-                )
-                if should_retry_full_schema:
-                    logger.info(
-                        "No grounded SQL from retrieved schema; retrying with full active deployed schema for query_id %s",
-                        query_id,
-                    )
-                    retrieval_result = await self._run_with_timeout(
-                        "Full active schema retry",
-                        self._pipelines["db_schema_retrieval"].run(
-                            query="",
-                            histories=[],
-                            project_id=ask_request.project_id,
-                            enable_column_pruning=False,
-                        ),
-                        timeout_seconds=min(
-                            self._schema_retrieval_timeout_seconds,
-                            self._pipeline_timeout_seconds,
-                            30,
-                        ),
-                    )
-                    _retrieval_result = retrieval_result.get(
-                        "construct_retrieval_results", {}
-                    )
-                    full_documents, full_table_names, full_table_ddls = (
-                        self._extract_retrieval_metadata(retrieval_result)
-                    )
-                    if explicit_table_names:
-                        full_documents, full_table_names, full_table_ddls = (
-                            self._filter_retrieval_metadata_for_explicit_query(
-                                user_query,
-                                full_documents,
-                                explicit_table_names,
-                            )
-                        )
-                    if full_documents:
-                        documents, table_names, table_ddls = (
-                            full_documents,
-                            full_table_names,
-                            full_table_ddls,
-                        )
-                        logger.info(
-                            "Using full active deployed schema retry for query_id %s: %s",
-                            query_id,
-                            table_names,
-                        )
-
-                        full_schema_preview = self._build_explicit_table_preview_sql(
-                            user_query, table_ddls
-                        )
-                        full_schema_sql_candidates = (
-                            self._build_schema_grounded_table_question_sql(
-                                user_query, table_ddls
-                            ),
-                            full_schema_preview[0] if full_schema_preview else None,
-                            self._build_audit_log_activity_sql(
-                                user_query, table_ddls, table_names=table_names
-                            ),
-                            self._build_schema_grounded_analytics_sql(
-                                user_query, table_ddls
-                            ),
-                            self._build_schema_grounded_sales_sql(
-                                user_query, table_ddls
-                            ),
-                        )
-                        for full_schema_sql in full_schema_sql_candidates:
-                            if not full_schema_sql:
-                                continue
-                            ask_result = self._build_validated_ask_result_from_sql(
-                                full_schema_sql,
-                                table_ddls,
-                                user_query,
-                            )
-                            if ask_result:
-                                api_results = [ask_result]
-                                break
-                            invalid_sql = full_schema_sql
-                            error_message = (
-                                "Full-schema grounded SQL was not valid for the active datasource schema and question intent."
-                            )
 
                 if not api_results and (
                     unqueryable_metric_message := self._get_unqueryable_metric_message(
@@ -7749,46 +7570,6 @@ class AskService:
                 results["ask_result"] = api_results
                 results["metadata"]["type"] = "TEXT_TO_SQL"
             else:
-                if self._can_use_schema_grounded_sql_fallback(
-                    documents,
-                    table_ddls,
-                    user_query,
-                ) and (
-                    heuristic_sql := self._build_heuristic_text_to_sql_fallback(
-                        user_query, table_ddls, table_names=table_names
-                    )
-                ):
-                    logger.info(
-                        "Using heuristic text-to-sql fallback for query_id %s: %s",
-                        query_id,
-                        user_query,
-                    )
-                    ask_result = self._build_validated_ask_result_from_sql(
-                        heuristic_sql,
-                        table_ddls,
-                        user_query,
-                    )
-                    if not ask_result:
-                        invalid_sql = heuristic_sql
-                        error_message = "Heuristic SQL fallback was not valid for the active datasource schema."
-                    else:
-                        api_results = [ask_result]
-                        if not self._is_stopped(query_id, self._ask_results):
-                            self._ask_results[query_id] = AskResultResponse(
-                                status="finished",
-                                type="TEXT_TO_SQL",
-                                response=api_results,
-                                rephrased_question=rephrased_question,
-                                intent_reasoning=intent_reasoning,
-                                retrieved_tables=table_names,
-                                sql_generation_reasoning=sql_generation_reasoning,
-                                trace_id=trace_id,
-                                is_followup=True if histories else False,
-                            )
-                        results["ask_result"] = api_results
-                        results["metadata"]["type"] = "TEXT_TO_SQL"
-                        return results
-
                 logger.exception(f"ask pipeline - NO_RELEVANT_SQL: {user_query}")
                 if not self._is_stopped(query_id, self._ask_results):
                     self._ask_results[query_id] = (
