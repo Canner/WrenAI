@@ -321,10 +321,45 @@ def resolve_connection(
     return None, {}
 
 
+def _registry_sensitive_keys() -> set[str]:
+    """Lower-cased connection-field names and aliases the field registry marks
+    sensitive (``SecretStr``) in **any** datasource model.
+
+    The registry (``model/field_registry.py``) is the single source of truth for
+    field sensitivity; consulting it keeps ``debug`` from drifting out of sync
+    with the models. The name heuristic below covers only common substrings and
+    misses SecretStr fields like ``pat``, ``connection_url``, ``dsn`` and
+    ``ssl_ca``. The set spans all datasources because a profile may carry a
+    cross-datasource secret (e.g. ``connection_url``); over-masking a benign key
+    in a diagnostic dump is harmless, under-masking a secret is not.
+    """
+    from wren.model.field_registry import (  # noqa: PLC0415
+        get_datasource_options,
+        get_fields,
+        get_variants,
+    )
+
+    keys: set[str] = set()
+    for datasource in get_datasource_options():
+        for variant in get_variants(datasource) or [None]:
+            try:
+                fields = get_fields(datasource, variant=variant)
+            except ValueError:
+                continue
+            for field in fields:
+                if field.sensitive:
+                    keys.add(field.name.lower())
+                    if field.alias:
+                        keys.add(field.alias.lower())
+    return keys
+
+
 def debug_profile(name: str | None = None) -> dict[str, Any]:
     """Return diagnostic info for a profile (or the active one).
 
-    Masks sensitive fields (password, credentials, secret, token).
+    Masks fields the connection-field registry marks sensitive (``SecretStr``),
+    plus a name heuristic (password, credentials, secret, token, ...) for keys
+    the registry does not know about.
     """
     if name is None:
         name = get_active_name()
@@ -351,9 +386,15 @@ def debug_profile(name: str | None = None) -> dict[str, Any]:
         "http_path",
         "role_arn",
     }
+    registry_sensitive = _registry_sensitive_keys()
     masked = {}
     for k, v in profile.items():
-        if k.lower() in _SENSITIVE or any(s in k.lower() for s in _SENSITIVE):
+        kl = k.lower()
+        if (
+            kl in registry_sensitive
+            or kl in _SENSITIVE
+            or any(s in kl for s in _SENSITIVE)
+        ):
             masked[k] = "***"
         else:
             masked[k] = v
