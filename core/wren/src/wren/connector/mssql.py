@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import re
-
 import datetime as dtlib
 import json
+import re
 import urllib.parse
 import uuid
 from contextlib import closing
@@ -41,8 +40,6 @@ def _strip_trailing_semicolon(sql: str) -> str:
     strip matches postgres/canner/mysql helpers.
     """
     return _TRAILING_SEMICOLONS_RE.sub("", sql)
-
-
 
 
 class MSSqlConnector(ConnectorABC):
