@@ -87,6 +87,26 @@ def test_rerank_table_documents_penalizes_test_sources_even_when_name_uses_under
     assert documents[0].meta["name"] == "dbo_xStageNewOrders"
 
 
+def test_rerank_table_documents_prefers_customer_capable_source_for_entity_lookup():
+    generic_order_table = Document(
+        content="New order rows by division and market.",
+        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_tnoStageNewOrders"},
+        score=0.95,
+    )
+    customer_order_table = Document(
+        content="New order transactions with customer name, order number, market, and customer purchase order.",
+        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_tblNewOrders"},
+        score=0.45,
+    )
+
+    documents = _rerank_table_documents(
+        "Show me orders for Lockheed Martin.",
+        [generic_order_table, customer_order_table],
+    )
+
+    assert documents[0].meta["name"] == "dbo_tblNewOrders"
+
+
 def test_select_relevant_table_documents_limits_weak_extra_candidates():
     documents = [
         Document(

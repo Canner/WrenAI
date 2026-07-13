@@ -641,11 +641,93 @@ class AskService:
 
     def _schema_name_tokens(self, name: str) -> set[str]:
         spaced = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", str(name or ""))
-        return {
+        tokens = {
             token
             for token in re.findall(r"[A-Za-z0-9]+", spaced.lower())
             if len(token) > 1
         }
+        normalized = self._normalize_schema_identifier_key(name)
+        if normalized:
+            tokens.add(normalized)
+        if (
+            "date" in tokens
+            or "time" in tokens
+            or normalized
+            in {
+                "createdat",
+                "updatedat",
+                "createdon",
+                "updatedon",
+                "timestamp",
+            }
+        ):
+            tokens.update({"date", "time", "timestamp"})
+        return tokens
+
+    def _schema_terms_for_table(self, table: dict[str, Any]) -> set[str]:
+        terms = self._schema_name_tokens(str(table.get("name") or ""))
+        for column in table.get("columns", []):
+            column_name = str(column.get("name") or "")
+            if column_name:
+                terms.update(self._schema_name_tokens(column_name))
+        return terms
+
+    def _semantic_concept_groups_for_query(self, query: str | None) -> list[set[str]]:
+        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
+        query_tokens = self._intent_tokens(query or "")
+        if not normalized and not query_tokens:
+            return []
+
+        concept_specs: list[tuple[set[str], set[str]]] = [
+            (
+                {"order", "orders", "neworder", "purchase", "transaction"},
+                {"order", "orders", "ord", "ordno", "orderid", "orderdate", "neworder", "purchase", "transaction"},
+            ),
+            (
+                {"customer", "customers", "client", "account", "company"},
+                {"customer", "customers", "cust", "custname", "client", "account", "company", "buyer", "name"},
+            ),
+            (
+                {"product", "products", "item", "sku", "category", "categories"},
+                {"product", "products", "prod", "prodname", "item", "sku", "category", "categories", "type", "name"},
+            ),
+            (
+                {"market", "markets", "region", "regions"},
+                {"market", "markets", "region", "regions", "area", "territory", "country"},
+            ),
+            (
+                {"country", "countries", "destination"},
+                {"country", "countries", "destination", "nation", "market", "region"},
+            ),
+            (
+                {"invoice", "invoices", "billing"},
+                {"invoice", "invoices", "inv", "billing", "bill", "amount", "value"},
+            ),
+            (
+                {"amount", "value", "total", "sum", "revenue", "sales", "sale", "cost"},
+                {"amount", "value", "total", "sum", "revenue", "sales", "sale", "cost", "price", "money"},
+            ),
+            (
+                {"quantity", "qty", "sold", "units"},
+                {"quantity", "qty", "sold", "unit", "units", "volume"},
+            ),
+            (
+                {"date", "month", "monthly", "year", "quarter", "trend", "period"},
+                {"date", "month", "year", "quarter", "time", "timestamp", "orddate", "invdate", "period"},
+            ),
+        ]
+
+        groups: list[set[str]] = []
+        for triggers, aliases in concept_specs:
+            if query_tokens & triggers:
+                groups.append(aliases)
+
+        if self._extract_entity_lookup_phrase(query):
+            groups.append(
+                {"customer", "customers", "cust", "custname", "client", "account", "company", "buyer", "name"}
+            )
+
+        return groups
 
     def _table_for_sql_reference(
         self, table_reference: str, valid_tables: dict[str, dict[str, Any]]
@@ -664,7 +746,7 @@ class AskService:
         if not normalized:
             return []
 
-        concept_groups: list[set[str]] = []
+        concept_groups: list[set[str]] = self._semantic_concept_groups_for_query(query)
         if "product line" in normalized or "productline" in normalized:
             concept_groups.append({"product", "prod", "line", "productline"})
         if "pcb" in normalized:
@@ -707,12 +789,17 @@ class AskService:
         referenced_column_tokens: set[str],
         referenced_table_tokens: set[str],
     ) -> bool:
-        sql_text = (sql or "").lower()
+        sql_text = re.sub(
+            r"\b(?:order|group)\s+by\b|\bselect\b|\bfrom\b|\bwhere\b",
+            " ",
+            (sql or "").lower(),
+        )
+        sql_text_tokens = self._intent_tokens(sql_text)
         available_tokens = referenced_column_tokens | referenced_table_tokens
         for concept_group in self._required_sql_concept_groups(query):
             if concept_group & available_tokens:
                 continue
-            if any(token in sql_text for token in concept_group):
+            if concept_group & sql_text_tokens:
                 continue
             logger.warning(
                 "Ignoring SQL because it does not cover required question concept. "
@@ -2237,6 +2324,7 @@ class AskService:
         query: str = "",
     ) -> tuple[dict[str, Any], list[str], str | None, str | None] | None:
         normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        concept_groups = self._semantic_concept_groups_for_query(query)
         scored: list[
             tuple[int, dict[str, Any], list[str], str | None, str | None]
         ] = []
@@ -2279,6 +2367,16 @@ class AskService:
             table_name = str(table.get("name") or "").lower()
             if not table_name:
                 continue
+            schema_terms = self._schema_terms_for_table(table)
+            if concept_groups:
+                covered_groups = sum(
+                    1 for concept_group in concept_groups if concept_group & schema_terms
+                )
+                score += 14 * covered_groups
+                if covered_groups == len(concept_groups):
+                    score += 25
+                elif covered_groups == 0:
+                    score -= 20
             if "sales" in table_name:
                 score += 5
             if "tblsales" in self._normalize_schema_token(table_name):

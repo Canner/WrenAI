@@ -295,6 +295,32 @@ def test_validated_sql_rejects_country_question_without_country_column():
     assert result is None
 
 
+def test_validated_sql_rejects_order_distribution_without_order_concept():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT TOP 10 "dbo_xStageLoad8_Test"."Market" AS "Market", '
+            'COUNT(*) AS "RecordCount" '
+            'FROM "dbo_xStageLoad8_Test" '
+            'WHERE "dbo_xStageLoad8_Test"."Market" IS NOT NULL '
+            'GROUP BY "dbo_xStageLoad8_Test"."Market" '
+            'ORDER BY COUNT(*) DESC'
+        ),
+        [
+            """
+            CREATE TABLE dbo_xStageLoad8_Test (
+              Market VARCHAR,
+              LoadId VARCHAR
+            );
+            """
+        ],
+        "Show order distribution across markets.",
+    )
+
+    assert result is None
+
+
 def test_schema_grounded_sales_sql_groups_commodity_value_by_country():
     service = AskService.__new__(AskService)
 
@@ -320,6 +346,37 @@ def test_schema_grounded_sales_sql_groups_commodity_value_by_country():
         'IS NOT NULL '
         'GROUP BY "dbo_ytblTarrifsExportsA"."Country_of_Ultimate_Destination_Code" '
         'ORDER BY SUM("dbo_ytblTarrifsExportsA"."Commodity_Line_Value") DESC'
+    )
+
+
+def test_schema_grounded_analytics_prefers_full_concept_coverage_for_order_market_distribution():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_analytics_sql(
+        "Show order distribution across markets.",
+        [
+            """
+            CREATE TABLE dbo_xStageLoad8_Test (
+              Market VARCHAR,
+              LoadId VARCHAR
+            );
+            """,
+            """
+            CREATE TABLE dbo_tblNewOrders (
+              Market VARCHAR,
+              OrdNo VARCHAR
+            );
+            """,
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_tblNewOrders"."Market" AS "Market", '
+        'COUNT(DISTINCT "dbo_tblNewOrders"."OrdNo") AS "OrderCount" '
+        'FROM "dbo_tblNewOrders" '
+        'WHERE "dbo_tblNewOrders"."Market" IS NOT NULL '
+        'GROUP BY "dbo_tblNewOrders"."Market" '
+        'ORDER BY COUNT(DISTINCT "dbo_tblNewOrders"."OrdNo") DESC'
     )
 
 

@@ -162,7 +162,16 @@ def expand_business_terms_for_retrieval(query: str) -> str:
         )
     ):
         expansions.append(
-            "transaction purchase billing account geography area representative product item category sku quantity units sold amount value total metric money exchange currency"
+            "transaction purchase billing account geography customer client company name area representative product item category sku quantity units sold amount value total metric money exchange currency"
+        )
+
+    if re.search(
+        r"\b(?:show|list|find|get|display)\b.*\b(?:orders?|records?|rows?|transactions?)\b\s+"
+        r"(?:for|where|with)\s+\S+",
+        normalized,
+    ):
+        expansions.append(
+            "customer client account company name entity lookup identifier transaction order record"
         )
 
     if any(
@@ -230,6 +239,68 @@ def _query_mentions_any(query: str, terms: tuple[str, ...]) -> bool:
     return any(re.search(rf"\b{re.escape(term)}\b", normalized) for term in terms)
 
 
+def _retrieval_concept_groups(query: str) -> list[set[str]]:
+    query_terms = _retrieval_terms(query)
+    if not query_terms:
+        return []
+
+    concept_specs: list[tuple[set[str], set[str]]] = [
+        (
+            {"order", "orders", "neworder", "purchase", "transaction"},
+            {"order", "orders", "ord", "ordno", "orderid", "orderdate", "neworder", "purchase", "transaction"},
+        ),
+        (
+            {"customer", "customers", "client", "account", "company"},
+            {"customer", "customers", "cust", "custname", "client", "account", "company", "buyer", "name"},
+        ),
+        (
+            {"product", "products", "item", "sku", "category", "categories"},
+            {"product", "products", "prod", "item", "sku", "category", "categories", "type", "name"},
+        ),
+        (
+            {"market", "markets", "region", "regions"},
+            {"market", "markets", "region", "regions", "area", "territory", "country"},
+        ),
+        (
+            {"country", "countries", "destination"},
+            {"country", "countries", "destination", "nation", "market", "region"},
+        ),
+        (
+            {"invoice", "invoices", "billing"},
+            {"invoice", "invoices", "inv", "billing", "bill", "amount", "value"},
+        ),
+        (
+            {"amount", "value", "total", "sum", "revenue", "sales", "cost"},
+            {"amount", "value", "total", "sum", "revenue", "sales", "sale", "cost", "price", "money"},
+        ),
+        (
+            {"quantity", "qty", "sold", "units"},
+            {"quantity", "qty", "sold", "unit", "units", "volume"},
+        ),
+        (
+            {"date", "month", "monthly", "year", "quarter", "trend", "period"},
+            {"date", "month", "year", "quarter", "time", "timestamp", "orddate", "invdate", "period"},
+        ),
+    ]
+
+    groups: list[set[str]] = []
+    for triggers, aliases in concept_specs:
+        if query_terms & triggers:
+            groups.append(aliases)
+
+    if re.search(
+        r"\b(?:show|list|find|get|display)\b.*\b(?:orders?|records?|rows?|transactions?)\b\s+"
+        r"(?:for|where|with)\s+\S+",
+        query or "",
+        flags=re.IGNORECASE,
+    ):
+        groups.append(
+            {"customer", "customers", "cust", "custname", "client", "account", "company", "buyer", "name"}
+        )
+
+    return groups
+
+
 def _source_text(document: Document) -> str:
     return " ".join(
         str(part or "")
@@ -247,6 +318,15 @@ def _source_shape_score(query: str, document: Document) -> int:
     source_terms = _retrieval_terms(source_text)
 
     score = 0
+    concept_groups = _retrieval_concept_groups(query)
+    if concept_groups:
+        covered_groups = sum(1 for group in concept_groups if group & source_terms)
+        score += 18 * covered_groups
+        if covered_groups == len(concept_groups):
+            score += 30
+        elif covered_groups == 0:
+            score -= 25
+
     weak_non_production_terms = (
         "stage",
         "staging",
@@ -315,6 +395,11 @@ def _source_shape_score(query: str, document: Document) -> int:
         r"employees?|entities|items?|names?|products?|suppliers?|users?|vendors?)\b",
         normalized_query,
     )
+    entity_lookup_pattern = re.search(
+        r"\b(?:list|show|display|get|find)\b.*\b(?:orders?|records?|rows?|transactions?)\b\s+"
+        r"(?:for|where|with)\s+\S+",
+        normalized_query,
+    )
     asks_for_aggregation = _query_mentions_any(normalized_query, aggregation_terms) or bool(
         re.search(r"\b(?:by|per|each|top|bottom|rank|ranking)\b", normalized_query)
     )
@@ -325,6 +410,11 @@ def _source_shape_score(query: str, document: Document) -> int:
             score += 35
         if source_terms & set(transaction_source_terms):
             score -= 12
+    elif entity_lookup_pattern:
+        if source_terms & {"customer", "cust", "custname", "client", "account", "company", "name"}:
+            score += 45
+        if source_terms & set(transaction_source_terms):
+            score += 20
     elif asks_for_aggregation:
         if source_terms & set(transaction_source_terms):
             score += 25
