@@ -95,6 +95,35 @@ def test_mssql_url_preserves_literal_plus_in_user_and_password() -> None:
     assert parts["PWD"] == "p+wd"
 
 
+def test_mssql_url_with_brackets_in_credentials() -> None:
+    """Raw ``[`` / ``]`` in userinfo must not be treated as IPv6 host
+    delimiters. Plain ``urlparse`` raises ValueError on such a URL; the
+    connector sanitises the userinfo segment first (mirrors MySQL).
+    """
+    fake = _FakePyodbc()
+    with patch("wren.connector.mssql.pyodbc", fake):
+        _connect_mssql_from_url("mssql://user:p[a]ss@host:1433/db")
+
+    parts = _parse_conn_str(fake.connect.call_args)
+    assert parts["UID"] == "user"
+    assert parts["PWD"] == "p[a]ss"
+    assert parts["SERVER"] == "host,1433"
+    assert parts["DATABASE"] == "db"
+
+
+def test_mssql_url_preserves_ipv6_host() -> None:
+    """A legitimate bracketed IPv6 host must still parse correctly; only
+    the userinfo segment is sanitised."""
+    fake = _FakePyodbc()
+    with patch("wren.connector.mssql.pyodbc", fake):
+        _connect_mssql_from_url("mssql://user:pass@[::1]:1433/db")
+
+    parts = _parse_conn_str(fake.connect.call_args)
+    assert parts["SERVER"] == "::1,1433"
+    assert parts["UID"] == "user"
+    assert parts["PWD"] == "pass"
+
+
 def test_mssql_url_without_credentials_uses_trusted_connection() -> None:
     """A URL with no userinfo should route through Trusted_Connection=yes
     rather than failing the URL validator."""
