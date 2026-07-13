@@ -377,6 +377,100 @@ validation rules.
 
 ---
 
+## `wren serve` — MCP Server
+
+Serve the project's query, schema, and knowledge tools to MCP clients (Claude
+Desktop/Code, Cursor, any MCP-capable IDE) as a local MCP server. The server
+embeds the engine in-process — no ibis-server, no separate backend — so it
+runs from a bare project checkout as long as `wren context build` has run.
+
+### `wren serve mcp`
+
+```bash
+wren serve mcp                                  # stdio (default) — client spawns this as a child process
+wren serve mcp --transport http --port 8080     # local Streamable HTTP for multiple / remote clients
+```
+
+Requires the `mcp` extra: `pip install 'wrenai[mcp]'`.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--transport` | `stdio` | `stdio` or `http` |
+| `--host` | `127.0.0.1` | Bind host, `--transport http` only |
+| `--port` | `8080` | Bind port, `--transport http` only |
+| `--project` | discovered | Override project root |
+| `--profile` | active profile | Connection profile name |
+| `--allow-write` | off | Enable the `store_query` write tool |
+| `--no-connect` | off | Transpile-only mode: disable `run_sql`, `dry_run`, `query_cube` |
+| `--quiet` / `-q` | off | Suppress the client-registration help banner |
+
+On startup the server prints (to stderr) ready-to-copy registration commands for
+the running invocation — a `claude mcp add` / `codex mcp add` command for
+`--transport http`, and those plus a JSON `mcpServers` config block for stdio
+(reflecting `--project`, `--profile`, `--allow-write`, and `WREN_HOME`). Pass
+`--quiet` to suppress it.
+
+Requires `target/mdl.json` to exist (`wren context build` first) — errors with
+a hint otherwise. If project source files (`models/`, `views/`, `cubes/`,
+`relationships.yml`, `wren_project.yml`) are newer than `target/mdl.json`, it
+warns that the MDL may be stale but still serves it — it never auto-builds.
+
+### Client wiring (stdio)
+
+```json
+{
+  "command": "wren",
+  "args": ["serve", "mcp"],
+  "cwd": "/path/to/project"
+}
+```
+
+For `--transport http`, connect the client to the Streamable HTTP endpoint at
+`http://<host>:<port>` instead of spawning a process. Binds to `127.0.0.1` by
+default; there is no bearer-token auth in this version — treat it as local-only.
+
+### Tools
+
+| Group | Tools |
+|---|---|
+| Query | `run_sql`, `dry_run`, `dry_plan`, `query_cube` |
+| Schema | `get_mdl`, `list_models`, `describe_model`, `get_data_source`, `list_cubes`, `describe_cube`, `list_functions` |
+| Knowledge | `get_instructions`, `recall_queries`, `get_context`, `describe_schema`, `list_stored_queries`, `list_knowledge` |
+| Write (`--allow-write`) | `store_query` |
+
+`run_sql`, `dry_run`, and `query_cube` are disabled under `--no-connect`.
+`store_query` is only registered when `--allow-write` is passed.
+
+The knowledge tools degrade gracefully without the `memory` extra:
+`get_context` (semantic schema retrieval, the schema-axis twin of
+`recall_queries`) falls back to the full plain-text schema description;
+`describe_schema` (the human-readable counterpart to `get_mdl`) needs no
+optional dependency at all; `list_stored_queries` enumerates every NL→SQL
+pair (not just a semantic top-k) from `knowledge/sql/*.md`; `list_knowledge`
+lists every file readable via the `wren://knowledge/{path}` resource below.
+
+### Resources & prompt
+
+- `wren://mdl` — compiled MDL JSON
+- `wren://instructions` — business rules from `knowledge/rules/*.md`
+- `wren://project` — project name / catalog / schema / data source / schema_version / knowledge_schema_version
+- `wren://agents` — the project's `AGENTS.md`, if present
+- `wren://knowledge/{path}` — read any file under `knowledge/` (e.g.
+  `wren://knowledge/knowledge.yml`, `wren://knowledge/rules/general.md`);
+  rejects any path that escapes the project's `knowledge/` directory
+- `wren_workflow` prompt — packages the schema → instructions → recall →
+  dry-run → run_sql → query_cube → store SOP for a connecting agent
+
+### Security
+
+Connection secrets are resolved from the profile once at server startup and
+never cross the MCP boundary — only SQL text, query results, and metadata are
+exposed to the client.
+
+See the [MCP guide](../guides/mcp.md) for a walkthrough of wiring a client.
+
+---
+
 ## `wren skills` — Agent Workflow Guides
 
 The CLI ships its own agent skill content. Use this on any AI client (the
