@@ -1862,7 +1862,18 @@ class AskService:
         separator_normalized = re.sub(r"[.$]", "_", table_name)
         if separator_normalized not in candidates:
             candidates.append(separator_normalized)
+        if "_" in table_name:
+            dotted_schema_name = re.sub(
+                r"^([A-Za-z_][A-Za-z0-9]*)_",
+                r"\1.",
+                table_name,
+                count=1,
+            )
+            if dotted_schema_name not in candidates:
+                candidates.append(dotted_schema_name)
         short_name = re.split(r"[.$]", table_name)[-1]
+        if short_name == table_name and "_" in table_name:
+            short_name = table_name.split("_", 1)[-1]
         if short_name and short_name not in candidates:
             candidates.append(short_name)
         return candidates

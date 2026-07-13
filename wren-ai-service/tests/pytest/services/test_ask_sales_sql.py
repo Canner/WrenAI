@@ -446,6 +446,21 @@ def test_extract_explicit_table_names_from_pcb_repair_phrases():
     ) == ["ticket_labels", "dbo_ticket_labels"]
 
 
+def test_explicit_table_name_candidates_include_dotted_and_short_forms():
+    service = AskService.__new__(AskService)
+
+    assert service._explicit_table_name_candidates("dbo_tblNewOrders") == [
+        "dbo_tblNewOrders",
+        "dbo.tblNewOrders",
+        "tblNewOrders",
+    ]
+    assert service._explicit_table_name_candidates("dbo.tblNewOrders") == [
+        "dbo.tblNewOrders",
+        "dbo_tblNewOrders",
+        "tblNewOrders",
+    ]
+
+
 def test_filter_retrieval_metadata_for_explicit_query_keeps_only_named_table():
     service = AskService.__new__(AskService)
     documents = [
@@ -480,6 +495,42 @@ def test_filter_retrieval_metadata_for_explicit_query_keeps_only_named_table():
     assert filtered_documents == [documents[1]]
     assert table_names == ["dbo_failure_patterns"]
     assert table_ddls == [documents[1]["table_ddl"]]
+
+
+def test_filter_retrieval_metadata_for_explicit_query_matches_dotted_table_name():
+    service = AskService.__new__(AskService)
+    documents = [
+        {
+            "table_name": "dbo.tblNewOrders",
+            "table_ddl": """
+            CREATE TABLE "dbo.tblNewOrders" (
+              CustName VARCHAR,
+              OrdNo VARCHAR
+            );
+            """,
+        },
+        {
+            "table_name": "dbo_other",
+            "table_ddl": """
+            CREATE TABLE dbo_other (
+              CustName VARCHAR,
+              OrdNo VARCHAR
+            );
+            """,
+        },
+    ]
+
+    filtered_documents, table_names, table_ddls = (
+        service._filter_retrieval_metadata_for_explicit_query(
+            "Show the top 5 CustName values from dbo_tblNewOrders by number of orders.",
+            documents,
+            ["dbo_tblNewOrders"],
+        )
+    )
+
+    assert filtered_documents == [documents[0]]
+    assert table_names == ["dbo.tblNewOrders"]
+    assert table_ddls == [documents[0]["table_ddl"]]
 
 
 def test_build_validated_ask_result_rejects_sql_for_different_explicit_table():
