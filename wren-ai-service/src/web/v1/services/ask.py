@@ -3051,7 +3051,9 @@ class AskService:
                 )
             )
         if "country" in normalized_query or "countries" in normalized_query:
-            dimension_candidates.append(("Country", "CountryName", "Nation", "Market"))
+            dimension_candidates.append(
+                ("Country", "CountryName", "Nation", "Destination")
+            )
         if "division" in normalized_query:
             dimension_candidates.append(("Division",))
         if (
