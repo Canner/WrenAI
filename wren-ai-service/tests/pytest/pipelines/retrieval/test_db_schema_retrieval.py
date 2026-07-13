@@ -42,15 +42,6 @@ def test_expand_business_terms_for_retrieval_adds_generic_currency_market_terms(
     assert "money exchange currency" in expanded_query
 
 
-def test_expand_business_terms_for_retrieval_adds_domestic_international_market_terms():
-    query = "Compare sales between domestic and international markets"
-
-    expanded_query = expand_business_terms_for_retrieval(query)
-
-    assert query in expanded_query
-    assert "domestic international" in expanded_query
-
-
 def test_expand_business_terms_for_retrieval_leaves_query_unchanged():
     query = "Explain what this workspace does"
 

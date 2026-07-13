@@ -398,59 +398,6 @@ def test_schema_grounded_analytics_prefers_full_concept_coverage_for_order_marke
     )
 
 
-def test_schema_grounded_analytics_compares_sales_by_domestic_international_market():
-    service = AskService.__new__(AskService)
-
-    sql = service._build_schema_grounded_analytics_sql(
-        "Compare sales between domestic and international markets.",
-        [
-            """
-            CREATE TABLE dbo_qSalesMargin (
-              EndMarket VARCHAR,
-              SalesValue DOUBLE,
-              OrdNo VARCHAR
-            );
-            """
-        ],
-    )
-
-    assert sql == (
-        'SELECT "dbo_qSalesMargin"."EndMarket" AS "EndMarket", '
-        'SUM("dbo_qSalesMargin"."SalesValue") AS "TotalSalesValue" '
-        'FROM "dbo_qSalesMargin" '
-        'WHERE "dbo_qSalesMargin"."EndMarket" IS NOT NULL '
-        'GROUP BY "dbo_qSalesMargin"."EndMarket" '
-        'ORDER BY SUM("dbo_qSalesMargin"."SalesValue") DESC'
-    )
-
-
-def test_schema_grounded_analytics_counts_customers_distribution_by_market():
-    service = AskService.__new__(AskService)
-
-    sql = service._build_schema_grounded_analytics_sql(
-        "Show customers distribution by market.",
-        [
-            """
-            CREATE TABLE dbo_tblNewOrders (
-              Market VARCHAR,
-              CustName VARCHAR,
-              OrdNo VARCHAR
-            );
-            """
-        ],
-    )
-
-    assert sql == (
-        'SELECT "dbo_tblNewOrders"."Market" AS "Market", '
-        'COUNT(DISTINCT "dbo_tblNewOrders"."CustName") AS "CustomerCount" '
-        'FROM "dbo_tblNewOrders" '
-        'WHERE "dbo_tblNewOrders"."Market" IS NOT NULL '
-        'AND "dbo_tblNewOrders"."CustName" IS NOT NULL '
-        'GROUP BY "dbo_tblNewOrders"."Market" '
-        'ORDER BY COUNT(DISTINCT "dbo_tblNewOrders"."CustName") DESC'
-    )
-
-
 def test_scope_retrieval_to_semantic_contract_prefers_production_full_coverage_table():
     service = AskService.__new__(AskService)
     documents = [

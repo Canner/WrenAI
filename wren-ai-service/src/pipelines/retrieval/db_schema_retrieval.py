@@ -161,8 +161,6 @@ def expand_business_terms_for_retrieval(query: str) -> str:
             "invoices",
             "market",
             "markets",
-            "domestic",
-            "international",
             "order",
             "orders",
             "product",
@@ -181,7 +179,7 @@ def expand_business_terms_for_retrieval(query: str) -> str:
         )
     ):
         expansions.append(
-            "transaction purchase billing account geography customer client company name area representative market domestic international product item category sku quantity units sold amount value total metric money exchange currency"
+            "transaction purchase billing account geography customer client company name area representative product item category sku quantity units sold amount value total metric money exchange currency"
         )
 
     if re.search(
@@ -280,7 +278,7 @@ def _retrieval_concept_groups(query: str) -> list[set[str]]:
         ),
         (
             {"market", "markets", "region", "regions"},
-            {"market", "markets", "region", "regions", "area", "territory", "country", "domestic", "international"},
+            {"market", "markets", "region", "regions", "area", "territory", "country"},
         ),
         (
             {"business", "unit", "units", "division"},
