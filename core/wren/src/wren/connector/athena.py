@@ -310,7 +310,7 @@ class AthenaConnector(ConnectorABC):
             # guard this.)
             executed = (
                 "SELECT * FROM (\n"
-                f"{_strip_trailing_semicolon(sql)}\n"
+                f"{strip_trailing_semicolon(sql)}\n"
                 f") AS _wren_sub LIMIT {int(limit)}"
             )
         try:
