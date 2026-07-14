@@ -223,33 +223,23 @@ def test_rerank_table_documents_prefers_transaction_source_for_metric_question()
 
 
 @pytest.mark.asyncio
-async def test_table_retrieval_fetches_explicit_table_descriptions():
+async def test_table_retrieval_uses_explicit_table_names_without_vector_lookup():
     class Retriever:
-        def __init__(self):
-            self.filters = None
-
         async def run(self, query_embedding, filters):
-            self.filters = filters
-            return {"documents": []}
+            raise AssertionError("explicit table names should not use vector lookup")
 
-    retriever = Retriever()
-
-    await table_retrieval(
+    result = await table_retrieval(
         query="show rows",
         embedding={},
         project_id="project-1",
-        tables=["orders"],
-        table_retriever=retriever,
+        tables=["orders", "orders", "customers"],
+        table_retriever=Retriever(),
     )
 
-    assert retriever.filters == {
-        "operator": "AND",
-        "conditions": [
-            {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
-            {"field": "project_id", "operator": "==", "value": "project-1"},
-            {"field": "name", "operator": "in", "value": ["orders"]},
-        ],
-    }
+    assert [document.meta["name"] for document in result["documents"]] == [
+        "orders",
+        "customers",
+    ]
 
 
 @pytest.mark.asyncio
@@ -333,6 +323,88 @@ async def test_dbschema_retrieval_does_not_load_full_schema_for_unmatched_questi
 
     assert documents == []
     assert not retriever.called
+
+
+@pytest.mark.asyncio
+async def test_dbschema_retrieval_falls_back_to_deployed_schema_vector_search():
+    class Retriever:
+        def __init__(self):
+            self.calls = []
+
+        async def run(self, query_embedding, filters):
+            self.calls.append((query_embedding, filters))
+            if query_embedding:
+                return {
+                    "documents": [
+                        Document(
+                            content=str(
+                                {
+                                    "type": "TABLE",
+                                    "name": "sales_orders",
+                                    "columns": [],
+                                }
+                            ),
+                            meta={"type": "TABLE_SCHEMA", "name": "sales_orders"},
+                            score=0.9,
+                        )
+                    ]
+                }
+            return {
+                "documents": [
+                    Document(
+                        content=str(
+                            {
+                                "type": "TABLE",
+                                "name": "sales_orders",
+                                "columns": [],
+                            }
+                        ),
+                        meta={"type": "TABLE_SCHEMA", "name": "sales_orders"},
+                    ),
+                    Document(
+                        content=str(
+                            {
+                                "type": "TABLE_COLUMNS",
+                                "name": "sales_orders",
+                                "columns": [{"name": "amount"}],
+                            }
+                        ),
+                        meta={"type": "TABLE_SCHEMA", "name": "sales_orders"},
+                    ),
+                ]
+            }
+
+    retriever = Retriever()
+
+    documents = await dbschema_retrieval(
+        query="compare sales between countries",
+        table_retrieval={"documents": []},
+        project_id="project-1",
+        dbschema_retriever=retriever,
+        embedding={"embedding": [0.1, 0.2]},
+    )
+
+    assert [document.meta["name"] for document in documents] == [
+        "sales_orders",
+        "sales_orders",
+    ]
+    assert retriever.calls[0][0] == [0.1, 0.2]
+    assert retriever.calls[0][1] == {
+        "operator": "AND",
+        "conditions": [
+            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+            {"field": "project_id", "operator": "==", "value": "project-1"},
+        ],
+    }
+    assert retriever.calls[1][0] == []
+    assert retriever.calls[1][1] == {
+        "operator": "AND",
+        "conditions": [
+            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+            {"field": "project_id", "operator": "==", "value": "project-1"},
+            {"field": "name", "operator": "in", "value": ["sales_orders"]},
+        ],
+    }
 
 
 def test_check_using_db_schemas_without_pruning_triggers_legacy_column_pruning():

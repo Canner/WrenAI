@@ -600,15 +600,20 @@ async def table_retrieval(
         return results
 
     if tables:
-        logger.info("Loading explicit table descriptions: %s", tables)
-        explicit_filters = {
-            **base_filters,
-            "conditions": [
-                *base_filters["conditions"],
-                {"field": "name", "operator": "in", "value": tables},
-            ],
+        normalized_tables = _normalize_table_names(tables)
+        logger.info(
+            "Using explicit table names without table-description lookup: %s",
+            normalized_tables,
+        )
+        return {
+            "documents": [
+                Document(
+                    content=str({"name": table_name}),
+                    meta={"type": "TABLE_DESCRIPTION", "name": table_name},
+                )
+                for table_name in normalized_tables
+            ]
         }
-        return await table_retriever.run(query_embedding=[], filters=explicit_filters)
 
     return {"documents": []}
 
@@ -620,6 +625,7 @@ async def dbschema_retrieval(
     project_id: str,
     dbschema_retriever: Any,
     tables: Optional[list[str]] = None,
+    embedding: Optional[dict] = None,
 ) -> list[Document]:
     selected_table_names = _extract_table_names_from_table_retrieval(
         table_retrieval, tables
@@ -651,13 +657,50 @@ async def dbschema_retrieval(
             project_id,
         )
     else:
-        logger.info(
-            "No relevant table-description candidates found for active project_id %s; "
-            "skipping full schema loading for query=%s",
-            project_id,
-            query,
+        query_embedding = (
+            embedding.get("embedding") if isinstance(embedding, dict) else None
         )
-        return []
+        if query_embedding:
+            logger.info(
+                "No table-description candidates found for active project_id %s; "
+                "falling back to deployed schema vector retrieval for query=%s",
+                project_id,
+                query,
+            )
+            candidate_results = await dbschema_retriever.run(
+                query_embedding=query_embedding,
+                filters=filters,
+            )
+            selected_table_names = _extract_table_names_from_table_retrieval(
+                candidate_results
+            )[:MAX_RELEVANT_TABLE_CANDIDATES]
+            if selected_table_names:
+                filters["conditions"].append(
+                    {"field": "name", "operator": "in", "value": selected_table_names}
+                )
+                logger.info(
+                    "Loading deployed schema metadata from fallback candidates for "
+                    "active project_id %s tables=%s",
+                    project_id,
+                    selected_table_names,
+                )
+            else:
+                documents = candidate_results.get("documents") or []
+                logger.info(
+                    "No deployed schema fallback candidates found for active "
+                    "project_id %s query=%s",
+                    project_id,
+                    query,
+                )
+                return documents
+        else:
+            logger.info(
+                "No relevant table-description candidates found for active project_id %s; "
+                "skipping full schema loading for query=%s",
+                project_id,
+                query,
+            )
+            return []
 
     results = await dbschema_retriever.run(query_embedding=[], filters=filters)
     return results.get("documents", [])
