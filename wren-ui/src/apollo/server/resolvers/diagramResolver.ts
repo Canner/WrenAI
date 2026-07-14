@@ -287,12 +287,9 @@ export class DiagramResolver {
     };
   }
 
-  private parseProperties(properties?: string | Record<string, any> | null): Record<string, any> {
+  private parseProperties(properties?: string | null): Record<string, any> {
     if (!properties) {
       return {};
-    }
-    if (typeof properties === 'object') {
-      return properties;
     }
     try {
       const parsed = JSON.parse(properties);
