@@ -94,7 +94,7 @@
           "description": "the customize properties of the column",
           "type": "object",
           "additionalProperties": {
-            "type": "string"
+            "type": ["string", "number", "boolean", "object", "array", "null"]
           }
         }
       },
@@ -139,6 +139,17 @@
           "description": "the data type of the measure result",
           "type": "string",
           "minLength": 1
+        },
+        "description": {
+          "description": "human-readable description of the measure (indexed for agent comprehension)",
+          "type": "string"
+        },
+        "properties": {
+          "description": "the customize properties of the measure",
+          "type": "object",
+          "additionalProperties": {
+            "type": ["string", "number", "boolean", "object", "array", "null"]
+          }
         }
       },
       "required": ["name", "expression", "type"],
@@ -162,6 +173,17 @@
           "description": "the data type of the dimension",
           "type": "string",
           "minLength": 1
+        },
+        "description": {
+          "description": "human-readable description of the dimension (indexed for agent comprehension)",
+          "type": "string"
+        },
+        "properties": {
+          "description": "the customize properties of the dimension",
+          "type": "object",
+          "additionalProperties": {
+            "type": ["string", "number", "boolean", "object", "array", "null"]
+          }
         }
       },
       "required": ["name", "expression", "type"],
@@ -185,6 +207,17 @@
           "description": "the data type of the time dimension (DATE, TIMESTAMP, …)",
           "type": "string",
           "minLength": 1
+        },
+        "description": {
+          "description": "human-readable description of the time dimension (indexed for agent comprehension)",
+          "type": "string"
+        },
+        "properties": {
+          "description": "the customize properties of the time dimension",
+          "type": "object",
+          "additionalProperties": {
+            "type": ["string", "number", "boolean", "object", "array", "null"]
+          }
         }
       },
       "required": ["name", "expression", "type"],
@@ -212,6 +245,17 @@
       "description": "the schema name of WrenMDL",
       "type": "string",
       "minLength": 1
+    },
+    "description": {
+      "description": "human-readable description of the manifest / semantic model",
+      "type": "string"
+    },
+    "properties": {
+      "description": "the customize properties of the manifest / semantic model",
+      "type": "object",
+      "additionalProperties": {
+        "type": ["string", "number", "boolean", "object", "array", "null"]
+      }
     },
     "sampleDataFolder": {
       "description": "the folder path for sample data",
@@ -326,6 +370,16 @@
                 "minItems": 1
               }
             ]
+          },
+          "uniqueKeys": {
+            "description": "alternative unique identifiers; each entry is a column name or an ordered list of columns that is unique",
+            "type": "array",
+            "items": {
+              "oneOf": [
+                { "type": "string", "minLength": 1 },
+                { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 }
+              ]
+            }
           },
           "cached": {
             "description": "(WIP) whether the model is cached or not",
