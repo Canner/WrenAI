@@ -31,8 +31,6 @@ DEFAULT_VALIDATION_SQL_FUNCTION_ITEMS = 12
 DEFAULT_VALIDATION_SQL_FUNCTION_CHARS = 2500
 STRICT_VALIDATION_SQL_FUNCTION_ITEMS = 0
 STRICT_VALIDATION_SQL_FUNCTION_CHARS = 0
-DEFAULT_RECOMMENDATION_RETRIEVAL_TIMEOUT_SECONDS = 20
-DEFAULT_RECOMMENDATION_VALIDATION_TIMEOUT_SECONDS = 20
 DEFAULT_QUESTION_CATEGORIES = [
     "Descriptive Questions",
     "Segmentation Questions",
@@ -174,42 +172,6 @@ class QuestionRecommendation:
             for category in target_categories
             if len(response_questions.get(category, [])) < max_questions
         ]
-
-    def _add_recommended_questions(
-        self,
-        event_id: str,
-        candidates: list[dict],
-        *,
-        max_questions: int,
-        max_categories: int,
-    ) -> None:
-        current = self._cache[event_id]
-        questions = current.response.setdefault("questions", {})
-
-        for candidate in candidates:
-            category = candidate.get("category")
-            question = candidate.get("question")
-            if not isinstance(category, str) or not isinstance(question, str):
-                continue
-            if category not in questions and len(questions) >= max_categories:
-                continue
-
-            category_questions = questions.setdefault(category, [])
-            existing = next(
-                (
-                    item
-                    for item in category_questions
-                    if item.get("question") == question
-                ),
-                None,
-            )
-            if existing is not None:
-                existing.update(candidate)
-                continue
-
-            if len(category_questions) >= max_questions:
-                continue
-            category_questions.append(candidate)
 
     def _handle_exception(
         self,
@@ -388,11 +350,6 @@ class QuestionRecommendation:
 
             currnet_category = questions.setdefault(candidate["category"], [])
 
-            for existing_question in currnet_category:
-                if existing_question.get("question") == candidate["question"]:
-                    existing_question.update({**candidate, "sql": valid_sql})
-                    return post_process
-
             if len(currnet_category) >= max_questions:
                 # Skip to update the questions for the category if it is already full
                 return post_process
@@ -416,12 +373,6 @@ class QuestionRecommendation:
     async def _recommend(self, request: dict):
         resp = await self._pipelines["question_recommendation"].run(**request)
         questions = resp.get("normalized", {}).get("questions", [])
-        self._add_recommended_questions(
-            request["event_id"],
-            questions,
-            max_questions=request["max_questions"],
-            max_categories=request["max_categories"],
-        )
         validation_tasks = [
             self._validate_question(
                 question,
@@ -434,19 +385,7 @@ class QuestionRecommendation:
             for question in questions
         ]
 
-        if not validation_tasks:
-            return
-
-        try:
-            await asyncio.wait_for(
-                asyncio.gather(*validation_tasks, return_exceptions=True),
-                timeout=DEFAULT_RECOMMENDATION_VALIDATION_TIMEOUT_SECONDS,
-            )
-        except TimeoutError:
-            logger.warning(
-                "Request %s: Question recommendation validation timed out; returning generated recommendations without full SQL validation",
-                request["event_id"],
-            )
+        await asyncio.gather(*validation_tasks, return_exceptions=True)
 
     @observe(name="Generate Question Recommendation")
     @trace_metadata
@@ -458,26 +397,14 @@ class QuestionRecommendation:
 
         try:
             orjson.loads(input.mdl)
-            try:
-                retrieval_result = await asyncio.wait_for(
-                    self._pipelines["db_schema_retrieval"].run(
-                        query="",
-                        histories=[],
-                        project_id=input.project_id,
-                        enable_column_pruning=False,
-                    ),
-                    timeout=DEFAULT_RECOMMENDATION_RETRIEVAL_TIMEOUT_SECONDS,
-                )
-                _retrieval_result = retrieval_result.get(
-                    "construct_retrieval_results", {}
-                )
-                documents = _retrieval_result.get("retrieval_results", [])
-            except TimeoutError:
-                logger.warning(
-                    "Request %s: Question recommendation schema retrieval timed out; continuing with generated recommendations from limited context",
-                    input.event_id,
-                )
-                documents = []
+            retrieval_result = await self._pipelines["db_schema_retrieval"].run(
+                query="",
+                histories=[],
+                project_id=input.project_id,
+                enable_column_pruning=False,
+            )
+            _retrieval_result = retrieval_result.get("construct_retrieval_results", {})
+            documents = _retrieval_result.get("retrieval_results", [])
             table_ddls = self._limit_text_items(
                 [document.get("table_ddl") for document in documents],
                 max_items=DEFAULT_RECOMMENDATION_CONTEXT_ITEMS,

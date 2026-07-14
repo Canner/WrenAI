@@ -689,8 +689,6 @@ class AskService:
             concept_groups.append({"market", "region", "country", "territory"})
         if "region" in normalized or "regions" in normalized:
             concept_groups.append({"region", "market", "area", "territory", "country"})
-        if "country" in normalized or "countries" in normalized:
-            concept_groups.append({"country", "countries", "nation", "destination"})
         if "quarterly" in normalized or "quarter" in normalized:
             concept_groups.append({"quarter", "quarterly"})
         if "recurring" in normalized or "recurrence" in normalized:
@@ -909,123 +907,6 @@ class AskService:
                 sql,
             )
             return False
-        return True
-
-    def _extract_entity_lookup_phrase(self, query: str | None) -> str | None:
-        normalized_query = re.sub(r"\s+", " ", (query or "").strip())
-        if not normalized_query:
-            return None
-
-        match = re.search(
-            r"\b(?:show|list|find|get|display)\b.*?\b(?:orders?|records?|rows?)\b\s+"
-            r"(?:for|where|with)\s+(?P<phrase>.+?)(?:[?.!]|$)",
-            normalized_query,
-            flags=re.IGNORECASE,
-        )
-        if not match:
-            return None
-
-        phrase = match.group("phrase").strip(" .,;:()[]{}'\"")
-        phrase = re.sub(r"^(?:customer|client|account|company|name)\s+", "", phrase, flags=re.IGNORECASE)
-        if not phrase or len(phrase) < 3:
-            return None
-        if re.search(
-            r"\b(?:table|model|schema|column|columns|market|region|country|division|"
-            r"date|month|year|quarter|top|count|number|amount|value)\b",
-            phrase,
-            flags=re.IGNORECASE,
-        ):
-            return None
-        return phrase
-
-    def _preferred_entity_lookup_columns(
-        self, query: str | None, table: dict[str, Any]
-    ) -> set[str]:
-        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
-        candidate_groups: list[tuple[str, ...]] = []
-        if "account" in normalized_query:
-            candidate_groups.append(("Account", "AccountName", "AcctName", "AcctNo"))
-        if "company" in normalized_query:
-            candidate_groups.append(("Company", "CompanyName", "CustName", "CustomerName"))
-        candidate_groups.extend(
-            [
-                (
-                    "Customer",
-                    "CustomerName",
-                    "CustName",
-                    "CustNo",
-                    "CustomerNo",
-                    "CustomerCode",
-                ),
-                ("Client", "ClientName"),
-                ("Account", "AccountName"),
-                ("Company", "CompanyName"),
-                ("Name",),
-            ]
-        )
-
-        columns: set[str] = set()
-        for candidates in candidate_groups:
-            column = self._find_schema_column(table, candidates)
-            if column:
-                columns.add(column)
-        return columns
-
-    def _sql_satisfies_entity_lookup_request(
-        self,
-        sql: str,
-        query: str | None,
-        referenced_tables: list[str],
-        referenced_columns_by_table: dict[str, set[str]],
-        valid_tables: dict[str, dict[str, Any]],
-    ) -> bool:
-        if not self._extract_entity_lookup_phrase(query):
-            return True
-
-        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
-        if any(
-            term in normalized_query
-            for term in (" by ", " per ", " each ", "distribution", "top", "count")
-        ):
-            return True
-
-        for table_reference in referenced_tables:
-            table = self._table_for_sql_reference(table_reference, valid_tables)
-            if not table:
-                continue
-            preferred_columns = self._preferred_entity_lookup_columns(query, table)
-            if not preferred_columns:
-                continue
-
-            table_key = str(table_reference or "").lower()
-            referenced_columns = referenced_columns_by_table.get(
-                table_key
-            ) or referenced_columns_by_table.get(
-                table_key.split(".")[-1],
-                set(),
-            )
-            referenced_column_keys = {
-                self._normalize_schema_identifier_key(column)
-                for column in referenced_columns
-            }
-            preferred_column_keys = {
-                self._normalize_schema_identifier_key(column)
-                for column in preferred_columns
-            }
-            if referenced_column_keys & preferred_column_keys:
-                return True
-
-            logger.warning(
-                "Ignoring SQL because entity lookup did not use available customer/name columns. "
-                "query=%s table=%s preferred_columns=%s referenced_columns=%s sql=%s",
-                query,
-                table.get("name"),
-                sorted(preferred_columns),
-                sorted(referenced_columns),
-                sql,
-            )
-            return False
-
         return True
 
     def _invalid_unqualified_sql_identifiers(
@@ -1340,14 +1221,6 @@ class AskService:
         if not self._sql_satisfies_count_ranking_request(sql, query):
             return False
         if not self._sql_satisfies_unique_entity_request(sql, query):
-            return False
-        if not self._sql_satisfies_entity_lookup_request(
-            sql,
-            query,
-            referenced_tables,
-            referenced_columns_by_table,
-            valid_tables,
-        ):
             return False
 
         if not expects_dimension:
@@ -1989,18 +1862,7 @@ class AskService:
         separator_normalized = re.sub(r"[.$]", "_", table_name)
         if separator_normalized not in candidates:
             candidates.append(separator_normalized)
-        if "_" in table_name:
-            dotted_schema_name = re.sub(
-                r"^([A-Za-z_][A-Za-z0-9]*)_",
-                r"\1.",
-                table_name,
-                count=1,
-            )
-            if dotted_schema_name not in candidates:
-                candidates.append(dotted_schema_name)
         short_name = re.split(r"[.$]", table_name)[-1]
-        if short_name == table_name and "_" in table_name:
-            short_name = table_name.split("_", 1)[-1]
         if short_name and short_name not in candidates:
             candidates.append(short_name)
         return candidates
@@ -2014,127 +1876,6 @@ class AskService:
                 if candidate not in normalized:
                     normalized.append(candidate)
         return normalized
-
-    def _select_direct_explicit_sql_table_name(self, table_names: list[str]) -> str | None:
-        normalized_names = self._normalize_explicit_table_names(table_names)
-        if not normalized_names:
-            return None
-
-        original_name = normalized_names[0]
-        if "." in original_name:
-            for table_name in normalized_names:
-                if "." not in table_name and "_" in table_name:
-                    return table_name
-        return original_name
-
-    def _build_direct_explicit_table_count_sql(
-        self, query: str, table_names: list[str]
-    ) -> tuple[str, str] | None:
-        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
-        if not normalized or not table_names:
-            return None
-
-        wants_total_count = (
-            re.search(r"\bhow many\b", normalized)
-            or "record count" in normalized
-            or "count of records" in normalized
-            or "number of records" in normalized
-            or "number of rows" in normalized
-            or "count rows" in normalized
-        )
-        if not wants_total_count or re.search(
-            r"\b(?:by|per|each|distribution|highest|top|monthly|daily|weekly)\b",
-            normalized,
-        ):
-            return None
-
-        table_name = self._select_direct_explicit_sql_table_name(table_names)
-        if not table_name:
-            return None
-
-        return (
-            f'SELECT COUNT(*) AS "RecordCount" FROM '
-            f"{self._quote_sql_identifier(table_name)}",
-            table_name,
-        )
-
-    def _extract_direct_explicit_projection_columns(self, query: str) -> list[str]:
-        columns: list[str] = []
-        match = re.search(
-            r"\b(?:including|include|with)\s+(.+?)(?:\.|$)",
-            query or "",
-            flags=re.IGNORECASE,
-        )
-        if not match:
-            return columns
-
-        raw_columns = re.sub(r"\band\b", ",", match.group(1), flags=re.IGNORECASE)
-        stop_words = {
-            "columns",
-            "fields",
-            "including",
-            "include",
-            "with",
-            "and",
-        }
-        for raw_column in re.split(r",", raw_columns):
-            column = raw_column.strip().strip("`\"[] ")
-            if not column:
-                continue
-            if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", column):
-                continue
-            if column.lower() in stop_words:
-                continue
-            if column not in columns:
-                columns.append(column)
-        return columns
-
-    def _build_direct_explicit_table_projection_sql(
-        self, query: str, table_names: list[str]
-    ) -> tuple[str, str] | None:
-        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
-        if not normalized or not table_names:
-            return None
-
-        table_name = self._select_direct_explicit_sql_table_name(table_names)
-        if not table_name:
-            return None
-
-        columns = self._extract_direct_explicit_projection_columns(query)
-        asks_for_preview = bool(
-            re.search(r"\b(?:preview|sample|first)\b", normalized)
-            or re.search(r"\b(?:rows?|records?|data)\b", normalized)
-        )
-        if not columns and not asks_for_preview:
-            return None
-
-        limit = self._extract_requested_top_n(query, default_value=500)
-        table_ref = self._quote_sql_identifier(table_name)
-        select_clause = (
-            ", ".join(self._quote_sql_identifier(column) for column in columns)
-            if columns
-            else "*"
-        )
-
-        where_parts: list[str] = []
-        for column in columns:
-            if re.search(
-                rf"\b{re.escape(column.lower())}\b\s+is\s+not\s+empty",
-                normalized,
-            ):
-                column_ref = self._quote_sql_identifier(column)
-                where_parts.append(f"{column_ref} IS NOT NULL AND {column_ref} <> ''")
-            elif re.search(
-                rf"\b{re.escape(column.lower())}\b\s+is\s+not\s+null",
-                normalized,
-            ):
-                where_parts.append(f"{self._quote_sql_identifier(column)} IS NOT NULL")
-
-        where_clause = f" WHERE {' AND '.join(where_parts)}" if where_parts else ""
-        return (
-            f"SELECT TOP {limit} {select_clause} FROM {table_ref}{where_clause}",
-            table_name,
-        )
 
     def _build_direct_orders_sales_sql(self, query: str) -> str | None:
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
@@ -2474,88 +2215,6 @@ class AskService:
             date_column,
         )
 
-    def _build_entity_lookup_sql(
-        self, query: str, tables: list[dict[str, Any]]
-    ) -> str | None:
-        lookup_phrase = self._extract_entity_lookup_phrase(query)
-        if not lookup_phrase:
-            return None
-
-        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
-        asks_for_orders = any(
-            term in normalized_query
-            for term in ("order", "orders", "new order", "new orders")
-        )
-
-        scored: list[tuple[int, dict[str, Any], str]] = []
-        for table in tables:
-            table_name = str(table.get("name") or "")
-            if not table_name:
-                continue
-
-            preferred_columns = self._preferred_entity_lookup_columns(query, table)
-            if not preferred_columns:
-                continue
-
-            preferred_column = sorted(
-                preferred_columns,
-                key=lambda column: (
-                    0
-                    if self._normalize_schema_identifier_key(column)
-                    in {"custname", "customername", "customer"}
-                    else 1,
-                    column.lower(),
-                ),
-            )[0]
-
-            score = 20
-            normalized_table = self._normalize_schema_token(table_name)
-            if asks_for_orders:
-                if "order" in normalized_table:
-                    score += 40
-                if "neworder" in normalized_table:
-                    score += 20
-                if self._find_schema_column(
-                    table, ("OrdNo", "OrderNo", "OrderId", "NewOrderId")
-                ):
-                    score += 25
-            if "test" in normalized_table or "tmp" in normalized_table:
-                score -= 80
-            if "dev" in normalized_table or "backup" in normalized_table:
-                score -= 60
-            if "stage" in normalized_table:
-                score -= 10
-            scored.append((score, table, preferred_column))
-
-        if not scored:
-            return None
-
-        _score, table, filter_column = sorted(
-            scored, key=lambda item: item[0], reverse=True
-        )[0]
-        table_name = str(table.get("name") or "")
-        if not table_name:
-            return None
-
-        table_ref = self._quote_sql_identifier(table_name)
-        filter_ref = f"{table_ref}.{self._quote_sql_identifier(filter_column)}"
-        escaped_phrase = lookup_phrase.replace("'", "''")
-        date_column = self._find_schema_column(
-            table,
-            ("OrdDate", "OrderDate", "NewOrderDate", "InvDate", "InvoiceDate", "Date"),
-            temporal=True,
-        )
-        order_clause = (
-            f" ORDER BY {table_ref}.{self._quote_sql_identifier(date_column)} DESC"
-            if date_column
-            else ""
-        )
-        return (
-            f"SELECT TOP 500 * FROM {table_ref} "
-            f"WHERE {filter_ref} = '{escaped_phrase}'"
-            f"{order_clause}"
-        )
-
     def _build_schema_grounded_analytics_sql(
         self, query: str, table_ddls: list[str]
     ) -> str | None:
@@ -2568,9 +2227,6 @@ class AskService:
             return None
 
         compact_query = re.sub(r"[^a-z0-9]", "", normalized_query)
-
-        if entity_lookup_sql := self._build_entity_lookup_sql(query, tables):
-            return entity_lookup_sql
 
         if pcb_direct_sql := self._build_pcb_direct_question_sql(query, table_ddls):
             return pcb_direct_sql
@@ -2627,7 +2283,16 @@ class AskService:
         if contribution_sql := self._build_contribution_sql(query, tables):
             return contribution_sql
 
-        asks_for_measure_value = any(
+        if not is_sales_or_order_query:
+            if categorical_count_sql := self._build_generic_categorical_count_sql(
+                query, tables
+            ):
+                return categorical_count_sql
+
+        wants_count_metric = any(
+            term in normalized_query
+            for term in ("count", "counts", "volume", "how many", "distribution")
+        ) and not any(
             term in normalized_query
             for term in (
                 "amount",
@@ -2644,17 +2309,6 @@ class AskService:
                 "value",
             )
         )
-
-        if not is_sales_or_order_query and not asks_for_measure_value:
-            if categorical_count_sql := self._build_generic_categorical_count_sql(
-                query, tables
-            ):
-                return categorical_count_sql
-
-        wants_count_metric = any(
-            term in normalized_query
-            for term in ("count", "counts", "volume", "how many", "distribution")
-        ) and not asks_for_measure_value
         wants_average_metric = any(
             term in normalized_query for term in ("average", "avg", "mean")
         )
@@ -6205,54 +5859,6 @@ class AskService:
                     return results
 
                 if explicit_table_names:
-                    if direct_count_sql := self._build_direct_explicit_table_count_sql(
-                        user_query,
-                        explicit_table_names,
-                    ):
-                        explicit_sql, explicit_table_name = direct_count_sql
-                        ask_result = self._build_ask_result_from_sql(explicit_sql)
-                        if ask_result:
-                            api_results = [ask_result]
-                            self._ask_results[query_id] = AskResultResponse(
-                                status="finished",
-                                type="TEXT_TO_SQL",
-                                response=api_results,
-                                rephrased_question=user_query,
-                                intent_reasoning=(
-                                    "Explicit table count request generated SQL directly."
-                                ),
-                                retrieved_tables=[explicit_table_name],
-                                trace_id=trace_id,
-                                is_followup=True if histories else False,
-                            )
-                            results["ask_result"] = api_results
-                            results["metadata"]["type"] = "TEXT_TO_SQL"
-                            return results
-
-                    if direct_projection_sql := self._build_direct_explicit_table_projection_sql(
-                        user_query,
-                        explicit_table_names,
-                    ):
-                        explicit_sql, explicit_table_name = direct_projection_sql
-                        ask_result = self._build_ask_result_from_sql(explicit_sql)
-                        if ask_result:
-                            api_results = [ask_result]
-                            self._ask_results[query_id] = AskResultResponse(
-                                status="finished",
-                                type="TEXT_TO_SQL",
-                                response=api_results,
-                                rephrased_question=user_query,
-                                intent_reasoning=(
-                                    "Explicit table request generated SQL directly."
-                                ),
-                                retrieved_tables=[explicit_table_name],
-                                trace_id=trace_id,
-                                is_followup=True if histories else False,
-                            )
-                            results["ask_result"] = api_results
-                            results["metadata"]["type"] = "TEXT_TO_SQL"
-                            return results
-
                     self._ask_results[query_id] = AskResultResponse(
                         status="searching",
                         type="TEXT_TO_SQL",
@@ -6273,7 +5879,7 @@ class AskService:
                         timeout_seconds=min(
                             self._schema_retrieval_timeout_seconds,
                             self._pipeline_timeout_seconds,
-                            60,
+                            20,
                         ),
                     )
                     documents, table_names, table_ddls = (
@@ -6869,8 +6475,7 @@ class AskService:
                             ),
                             timeout_seconds=min(
                                 self._schema_retrieval_timeout_seconds,
-                                self._pipeline_timeout_seconds,
-                                60,
+                                20,
                             ),
                         )
                         _retrieval_result = retrieval_result.get(
@@ -6907,7 +6512,7 @@ class AskService:
                         timeout_seconds=min(
                             self._schema_retrieval_timeout_seconds,
                             self._pipeline_timeout_seconds,
-                            45,
+                            20,
                         ),
                     )
                     _retrieval_result = retrieval_result.get(

@@ -2,7 +2,6 @@ import pytest
 from haystack import Document
 
 from src.pipelines.retrieval.db_schema_retrieval import (
-    _extract_explicit_table_names_from_query,
     _is_project_wide_analysis_query,
     _rerank_table_documents,
     _select_relevant_table_documents,
@@ -48,20 +47,6 @@ def test_expand_business_terms_for_retrieval_leaves_query_unchanged():
     assert expand_business_terms_for_retrieval(query) == query
 
 
-def test_extract_explicit_table_names_from_query_handles_schema_dot_reference():
-    table_names = _extract_explicit_table_names_from_query(
-        "How many records are in dbo.xStageLoad8?"
-    )
-
-    assert table_names[:3] == ["dbo.xStageLoad8", "dbo_xStageLoad8", "xStageLoad8"]
-
-
-def test_extract_explicit_table_names_from_query_ignores_plain_business_terms():
-    assert _extract_explicit_table_names_from_query(
-        "Compare sales in countries by month"
-    ) == []
-
-
 def test_rerank_table_documents_prefers_question_relevant_table_text():
     generic_stage = Document(
         content="Generic imported staging records with product labels.",
@@ -80,26 +65,6 @@ def test_rerank_table_documents_prefers_question_relevant_table_text():
     )
 
     assert documents[0].meta["name"] == "business_transactions"
-
-
-def test_rerank_table_documents_penalizes_test_sources_even_when_name_uses_underscores():
-    test_load = Document(
-        content="Raw test load rows for order market fields.",
-        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_xStageLoad8_Test"},
-        score=0.99,
-    )
-    order_market_table = Document(
-        content="New order transaction records with market and customer fields.",
-        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_xStageNewOrders"},
-        score=0.45,
-    )
-
-    documents = _rerank_table_documents(
-        "Show order distribution across markets.",
-        [test_load, order_market_table],
-    )
-
-    assert documents[0].meta["name"] == "dbo_xStageNewOrders"
 
 
 def test_select_relevant_table_documents_limits_weak_extra_candidates():
@@ -238,44 +203,33 @@ def test_rerank_table_documents_prefers_transaction_source_for_metric_question()
 
 
 @pytest.mark.asyncio
-async def test_table_retrieval_uses_explicit_table_names_without_vector_lookup():
+async def test_table_retrieval_fetches_explicit_table_descriptions():
     class Retriever:
-        async def run(self, query_embedding, filters):
-            raise AssertionError("explicit table names should not use vector lookup")
+        def __init__(self):
+            self.filters = None
 
-    result = await table_retrieval(
+        async def run(self, query_embedding, filters):
+            self.filters = filters
+            return {"documents": []}
+
+    retriever = Retriever()
+
+    await table_retrieval(
         query="show rows",
         embedding={},
         project_id="project-1",
-        tables=["orders", "orders", "customers"],
-        table_retriever=Retriever(),
+        tables=["orders"],
+        table_retriever=retriever,
     )
 
-    assert [document.meta["name"] for document in result["documents"]] == [
-        "orders",
-        "customers",
-    ]
-
-
-@pytest.mark.asyncio
-async def test_table_retrieval_uses_query_table_names_before_embedding_lookup():
-    class Retriever:
-        async def run(self, query_embedding, filters):
-            raise AssertionError("explicit query table name should not use vector lookup")
-
-    result = await table_retrieval(
-        query="How many records are in dbo.xStageLoad8?",
-        embedding={"embedding": [0.1, 0.2]},
-        project_id="project-1",
-        tables=[],
-        table_retriever=Retriever(),
-    )
-
-    assert [document.meta["name"] for document in result["documents"]] == [
-        "dbo.xStageLoad8",
-        "dbo_xStageLoad8",
-        "xStageLoad8",
-    ]
+    assert retriever.filters == {
+        "operator": "AND",
+        "conditions": [
+            {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
+            {"field": "project_id", "operator": "==", "value": "project-1"},
+            {"field": "name", "operator": "in", "value": ["orders"]},
+        ],
+    }
 
 
 @pytest.mark.asyncio
@@ -359,188 +313,6 @@ async def test_dbschema_retrieval_does_not_load_full_schema_for_unmatched_questi
 
     assert documents == []
     assert not retriever.called
-
-
-@pytest.mark.asyncio
-async def test_dbschema_retrieval_uses_query_table_names_as_scope():
-    class Retriever:
-        def __init__(self):
-            self.filters = None
-
-        async def run(self, query_embedding, filters):
-            self.filters = filters
-            return {"documents": []}
-
-    retriever = Retriever()
-
-    await dbschema_retrieval(
-        query="How many records are in dbo.xStageLoad8?",
-        table_retrieval={"documents": []},
-        project_id="project-1",
-        dbschema_retriever=retriever,
-    )
-
-    assert retriever.filters == {
-        "operator": "AND",
-        "conditions": [
-            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-            {"field": "project_id", "operator": "==", "value": "project-1"},
-            {
-                "field": "name",
-                "operator": "in",
-                "value": ["dbo.xStageLoad8", "dbo_xStageLoad8", "xStageLoad8"],
-            },
-        ],
-    }
-
-
-@pytest.mark.asyncio
-async def test_dbschema_retrieval_falls_back_to_deployed_schema_vector_search():
-    class Retriever:
-        def __init__(self):
-            self.calls = []
-
-        async def run(self, query_embedding, filters):
-            self.calls.append((query_embedding, filters))
-            if query_embedding:
-                return {
-                    "documents": [
-                        Document(
-                            content=str(
-                                {
-                                    "type": "TABLE",
-                                    "name": "sales_orders",
-                                    "columns": [],
-                                }
-                            ),
-                            meta={"type": "TABLE_SCHEMA", "name": "sales_orders"},
-                            score=0.9,
-                        )
-                    ]
-                }
-            return {
-                "documents": [
-                    Document(
-                        content=str(
-                            {
-                                "type": "TABLE",
-                                "name": "sales_orders",
-                                "columns": [],
-                            }
-                        ),
-                        meta={"type": "TABLE_SCHEMA", "name": "sales_orders"},
-                    ),
-                    Document(
-                        content=str(
-                            {
-                                "type": "TABLE_COLUMNS",
-                                "name": "sales_orders",
-                                "columns": [{"name": "amount"}],
-                            }
-                        ),
-                        meta={"type": "TABLE_SCHEMA", "name": "sales_orders"},
-                    ),
-                ]
-            }
-
-    retriever = Retriever()
-
-    documents = await dbschema_retrieval(
-        query="compare sales between countries",
-        table_retrieval={"documents": []},
-        project_id="project-1",
-        dbschema_retriever=retriever,
-        embedding={"embedding": [0.1, 0.2]},
-    )
-
-    assert [document.meta["name"] for document in documents] == [
-        "sales_orders",
-        "sales_orders",
-    ]
-    assert retriever.calls[0][0] == [0.1, 0.2]
-    assert retriever.calls[0][1] == {
-        "operator": "AND",
-        "conditions": [
-            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-            {"field": "project_id", "operator": "==", "value": "project-1"},
-        ],
-    }
-    assert retriever.calls[1][0] == []
-    assert retriever.calls[1][1] == {
-        "operator": "AND",
-        "conditions": [
-            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-            {"field": "project_id", "operator": "==", "value": "project-1"},
-            {"field": "name", "operator": "in", "value": ["sales_orders"]},
-        ],
-    }
-
-
-@pytest.mark.asyncio
-async def test_dbschema_retrieval_falls_back_when_selected_schema_lookup_is_empty():
-    class Retriever:
-        def __init__(self):
-            self.calls = []
-
-        async def run(self, query_embedding, filters):
-            self.calls.append((query_embedding, filters))
-            if query_embedding:
-                return {
-                    "documents": [
-                        Document(
-                            content=str(
-                                {
-                                    "type": "TABLE",
-                                    "name": "dbo_xStageLoad8",
-                                    "columns": [],
-                                }
-                            ),
-                            meta={"type": "TABLE_SCHEMA", "name": "dbo_xStageLoad8"},
-                        )
-                    ]
-                }
-            if len(self.calls) == 1:
-                return {"documents": []}
-            return {
-                "documents": [
-                    Document(
-                        content=str(
-                            {
-                                "type": "TABLE",
-                                "name": "dbo_xStageLoad8",
-                                "columns": [],
-                            }
-                        ),
-                        meta={"type": "TABLE_SCHEMA", "name": "dbo_xStageLoad8"},
-                    )
-                ]
-            }
-
-    retriever = Retriever()
-
-    documents = await dbschema_retrieval(
-        query="How many records are in dbo.xStageLoad8?",
-        table_retrieval={
-            "documents": [
-                Document(
-                    content=str({"name": "dbo.xStageLoad8"}),
-                    meta={"type": "TABLE_DESCRIPTION", "name": "dbo.xStageLoad8"},
-                )
-            ]
-        },
-        project_id="project-1",
-        dbschema_retriever=retriever,
-        embedding={"embedding": [0.1, 0.2]},
-    )
-
-    assert [document.meta["name"] for document in documents] == ["dbo_xStageLoad8"]
-    assert retriever.calls[0][0] == []
-    assert retriever.calls[1][0] == [0.1, 0.2]
-    assert retriever.calls[2][1]["conditions"][-1] == {
-        "field": "name",
-        "operator": "in",
-        "value": ["dbo_xStageLoad8"],
-    }
 
 
 def test_check_using_db_schemas_without_pruning_triggers_legacy_column_pruning():
