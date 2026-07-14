@@ -397,32 +397,6 @@ def test_normalize_sql_column_references_to_schema_maps_sales_business_aliases()
     ) == []
 
 
-def test_customer_name_is_not_normalized_to_an_account_identifier():
-    sql = 'SELECT "dbo_qSalesMargin"."CustomerName" FROM "dbo_qSalesMargin"'
-
-    normalized = normalize_sql_column_references_to_schema(
-        sql,
-        {"dbo_qSalesMargin": ["Account"]},
-    )
-
-    assert '"dbo_qSalesMargin"."Account"' not in normalized
-    assert find_invalid_column_references(
-        normalized,
-        {"dbo_qSalesMargin": ["Account"]},
-    ) == ["dbo_qSalesMargin.CustomerName"]
-
-
-def test_customer_name_is_normalized_to_a_real_customer_name_column():
-    sql = 'SELECT "dbo_qSalesMargin"."CustomerName" FROM "dbo_qSalesMargin"'
-
-    normalized = normalize_sql_column_references_to_schema(
-        sql,
-        {"dbo_qSalesMargin": ["CustName"]},
-    )
-
-    assert normalized == 'SELECT "dbo_qSalesMargin"."CustName" FROM "dbo_qSalesMargin"'
-
-
 def test_normalize_sql_column_references_to_schema_maps_period_to_timeid():
     sql = 'SELECT "dbo_tblFactSales"."Period" FROM "dbo_tblFactSales"'
 

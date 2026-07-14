@@ -2,7 +2,6 @@ import pytest
 from haystack import Document
 
 from src.pipelines.retrieval.db_schema_retrieval import (
-    DbSchemaRetrieval,
     _is_project_wide_analysis_query,
     _rerank_table_documents,
     _select_relevant_table_documents,
@@ -66,106 +65,6 @@ def test_rerank_table_documents_prefers_question_relevant_table_text():
     )
 
     assert documents[0].meta["name"] == "business_transactions"
-
-
-def test_rerank_table_documents_penalizes_test_sources_even_when_name_uses_underscores():
-    test_load = Document(
-        content="Raw test load rows for order market fields.",
-        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_xStageLoad8_Test"},
-        score=0.99,
-    )
-    order_market_table = Document(
-        content="New order transaction records with market and customer fields.",
-        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_xStageNewOrders"},
-        score=0.45,
-    )
-
-    documents = _rerank_table_documents(
-        "Show order distribution across markets.",
-        [test_load, order_market_table],
-    )
-
-    assert documents[0].meta["name"] == "dbo_xStageNewOrders"
-
-
-def test_select_relevant_table_documents_excludes_unrequested_dev_equivalent():
-    dev_cube = Document(
-        content="Development sales cube with order number and market fields.",
-        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_qSalesCubeDev"},
-        score=500,
-    )
-    production_orders = Document(
-        content="New order transaction records with order number and market fields.",
-        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_tblNewOrders"},
-        score=0.2,
-    )
-
-    documents = _select_relevant_table_documents(
-        "Show order distribution across markets.",
-        [dev_cube, production_orders],
-    )
-
-    assert [document.meta["name"] for document in documents] == ["dbo_tblNewOrders"]
-
-
-def test_select_relevant_table_documents_keeps_explicit_dev_request():
-    dev_cube = Document(
-        content="Development sales cube with order number and market fields.",
-        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_qSalesCubeDev"},
-        score=500,
-    )
-    production_orders = Document(
-        content="New order transaction records with order number and market fields.",
-        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_tblNewOrders"},
-        score=0.2,
-    )
-
-    documents = _select_relevant_table_documents(
-        "Show order distribution across markets in dev.",
-        [dev_cube, production_orders],
-    )
-
-    assert documents[0].meta["name"] == "dbo_qSalesCubeDev"
-
-
-def test_select_relevant_table_documents_prefers_full_business_unit_order_coverage():
-    weak_sales_margin = Document(
-        content="Sales margin facts with sales value, margin, order date, and product.",
-        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_qSalesMargin"},
-        score=500,
-    )
-    new_orders = Document(
-        content="New order records with BU, business unit, order number, order date, and customer.",
-        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_tblNewOrders"},
-        score=0.2,
-    )
-
-    documents = _select_relevant_table_documents(
-        "Which business unit has the top 20 new orders this period?",
-        [weak_sales_margin, new_orders],
-    )
-
-    assert [document.meta["name"] for document in documents] == ["dbo_tblNewOrders"]
-
-
-def test_rerank_table_documents_prefers_customer_capable_source_for_entity_lookup():
-    generic_order_table = Document(
-        content="New order rows by division and market.",
-        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_tnoStageNewOrders"},
-        score=0.95,
-    )
-    customer_order_table = Document(
-        content="New order transactions with customer name, order number, market, and customer purchase order.",
-        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_tblNewOrders"},
-        score=0.45,
-    )
-
-    documents = _rerank_table_documents(
-        "Show me orders for Lockheed Martin.",
-        [generic_order_table, customer_order_table],
-    )
-
-    assert documents[0].meta["name"] == "dbo_tblNewOrders"
 
 
 def test_select_relevant_table_documents_limits_weak_extra_candidates():
@@ -334,82 +233,6 @@ async def test_table_retrieval_fetches_explicit_table_descriptions():
 
 
 @pytest.mark.asyncio
-async def test_table_retrieval_expands_explicit_table_name_forms_for_descriptions():
-    class Retriever:
-        def __init__(self):
-            self.filters = None
-
-        async def run(self, query_embedding, filters):
-            self.filters = filters
-            return {"documents": []}
-
-    retriever = Retriever()
-
-    await table_retrieval(
-        query="show failed repairs",
-        embedding={},
-        project_id="project-1",
-        tables=["dbo.failure_patterns"],
-        table_retriever=retriever,
-    )
-
-    assert retriever.filters == {
-        "operator": "AND",
-        "conditions": [
-            {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
-            {"field": "project_id", "operator": "==", "value": "project-1"},
-            {
-                "field": "name",
-                "operator": "in",
-                "value": [
-                    "dbo.failure_patterns",
-                    "dbo_failure_patterns",
-                    "failure_patterns",
-                ],
-            },
-        ],
-    }
-
-
-def test_db_schema_retrieval_fetches_wider_table_description_window():
-    class LLMProvider:
-        def get_generator(self, **kwargs):
-            return object()
-
-        def get_model(self):
-            return "gpt-4o-mini"
-
-        def get_context_window_size(self):
-            return 1000
-
-    class EmbedderProvider:
-        def get_text_embedder(self):
-            return object()
-
-    class DocumentStoreProvider:
-        def __init__(self):
-            self.retriever_top_k = []
-
-        def get_store(self, dataset_name=None):
-            return dataset_name or "default"
-
-        def get_retriever(self, store, top_k):
-            self.retriever_top_k.append((store, top_k))
-            return object()
-
-    document_store_provider = DocumentStoreProvider()
-
-    DbSchemaRetrieval(
-        llm_provider=LLMProvider(),
-        embedder_provider=EmbedderProvider(),
-        document_store_provider=document_store_provider,
-        table_retrieval_size=10,
-    )
-
-    assert document_store_provider.retriever_top_k[0] == ("table_descriptions", 100)
-
-
-@pytest.mark.asyncio
 async def test_dbschema_retrieval_loads_selected_active_project_schema():
     class Retriever:
         def __init__(self):
@@ -527,18 +350,18 @@ def test_check_using_db_schemas_without_pruning_triggers_legacy_column_pruning()
 
 
 @pytest.mark.asyncio
-async def test_dbschema_retrieval_does_not_use_explicit_tables_without_description():
+async def test_dbschema_retrieval_uses_explicit_tables_as_scope():
     class Retriever:
         def __init__(self):
-            self.called = False
+            self.filters = None
 
         async def run(self, query_embedding, filters):
-            self.called = True
+            self.filters = filters
             return {"documents": []}
 
     retriever = Retriever()
 
-    documents = await dbschema_retrieval(
+    await dbschema_retrieval(
         query="show failed repairs",
         table_retrieval={"documents": []},
         project_id="project-1",
@@ -546,5 +369,15 @@ async def test_dbschema_retrieval_does_not_use_explicit_tables_without_descripti
         tables=["dbo.failure_patterns", "dbo_failure_patterns"],
     )
 
-    assert documents == []
-    assert not retriever.called
+    assert retriever.filters == {
+        "operator": "AND",
+        "conditions": [
+            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+            {"field": "project_id", "operator": "==", "value": "project-1"},
+            {
+                "field": "name",
+                "operator": "in",
+                "value": ["dbo.failure_patterns", "dbo_failure_patterns"],
+            },
+        ],
+    }

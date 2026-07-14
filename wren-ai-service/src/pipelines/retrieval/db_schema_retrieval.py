@@ -29,24 +29,7 @@ else:
 
 logger = logging.getLogger("wren-ai-service")
 
-MAX_RELEVANT_TABLE_CANDIDATES = 10
-MIN_TABLE_DESCRIPTION_CANDIDATE_WINDOW = 100
-WEAK_NON_PRODUCTION_TERMS = (
-    "stage",
-    "staging",
-)
-STRONG_NON_PRODUCTION_TERMS = (
-    "archive",
-    "backup",
-    "copy",
-    "dev",
-    "development",
-    "duplicate",
-    "sample",
-    "temp",
-    "test",
-    "tmp",
-)
+MAX_RELEVANT_TABLE_CANDIDATES = 5
 
 
 table_columns_selection_system_prompt = """
@@ -146,13 +129,59 @@ def _build_view_ddl(content: dict) -> str:
 
 ## Start of Pipeline
 def expand_business_terms_for_retrieval(query: str) -> str:
-    """Keep retrieval grounded in the user's wording and indexed metadata.
+    normalized = (query or "").lower()
+    expansions: list[str] = []
 
-    Broad, global synonym expansion makes unrelated business questions share
-    the same embedding and lexical terms. Synonyms belong in deployed model
-    and column metadata, where their meaning is datasource-specific.
-    """
-    return query
+    if any(
+        term in normalized
+        for term in (
+            "amount",
+            "currency",
+            "currencies",
+            "customer",
+            "customers",
+            "invoice",
+            "invoices",
+            "market",
+            "markets",
+            "order",
+            "orders",
+            "product",
+            "products",
+            "category",
+            "categories",
+            "quantity",
+            "qty",
+            "region",
+            "regions",
+            "sales",
+            "salesperson",
+            "sales person",
+            "sold",
+            "value",
+        )
+    ):
+        expansions.append(
+            "transaction purchase billing account geography area representative product item category sku quantity units sold amount value total metric money exchange currency"
+        )
+
+    if any(
+        term in normalized
+        for term in ("defect", "failure", "issue", "repair", "resolved", "status")
+    ):
+        expansions.append(
+            "issue defect category status resolved created updated date timestamp event"
+        )
+
+    if any(term in normalized for term in ("throughput", "production", "manufacturing")):
+        expansions.append(
+            "rate volume output capacity process unit group completed timestamp date"
+        )
+
+    if not expansions:
+        return query
+
+    return f"{query}\n" + "\n".join(expansions)
 
 
 def _normalize_retrieval_token(value: str) -> str:
@@ -184,89 +213,17 @@ def _retrieval_terms(value: str) -> set[str]:
         "which",
         "with",
     }
-    terms: set[str] = set()
-    for raw_token in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", value or ""):
-        split_token = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", raw_token)
-        for token in re.findall(r"[A-Za-z0-9]+", split_token):
-            if len(token) <= 2 and token.lower() not in {"bu"}:
-                continue
-            if token.lower() in stop_words:
-                continue
-            normalized_token = _normalize_retrieval_token(token)
-            if normalized_token:
-                terms.add(normalized_token)
+    terms = {
+        _normalize_retrieval_token(token)
+        for token in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", value or "")
+        if len(token) > 2 and token.lower() not in stop_words
+    }
     return {term for term in terms if term}
 
 
 def _query_mentions_any(query: str, terms: tuple[str, ...]) -> bool:
     normalized = (query or "").lower()
     return any(re.search(rf"\b{re.escape(term)}\b", normalized) for term in terms)
-
-
-def _retrieval_concept_groups(query: str) -> list[set[str]]:
-    query_terms = _retrieval_terms(query)
-    if not query_terms:
-        return []
-
-    concept_specs: list[tuple[set[str], set[str]]] = [
-        (
-            {"order", "orders", "neworder", "purchase", "transaction"},
-            {"order", "orders", "ord", "ordno", "orderid", "orderdate", "neworder", "purchase", "transaction"},
-        ),
-        (
-            {"customer", "customers", "client", "account", "company"},
-            {"customer", "customers", "cust", "custname", "client", "account", "company", "buyer", "name"},
-        ),
-        (
-            {"product", "products", "item", "sku", "category", "categories"},
-            {"product", "products", "prod", "item", "sku", "category", "categories", "type", "name"},
-        ),
-        (
-            {"market", "markets", "region", "regions"},
-            {"market", "markets", "region", "regions", "area", "territory", "country"},
-        ),
-        (
-            {"business", "unit", "units", "division"},
-            {"business", "businessunit", "unit", "units", "bu", "division"},
-        ),
-        (
-            {"country", "countries", "destination"},
-            {"country", "countries", "destination", "nation", "market", "region"},
-        ),
-        (
-            {"invoice", "invoices", "billing"},
-            {"invoice", "invoices", "inv", "billing", "bill", "amount", "value"},
-        ),
-        (
-            {"amount", "value", "total", "sum", "revenue", "sales", "cost"},
-            {"amount", "value", "total", "sum", "revenue", "sales", "sale", "cost", "price", "money"},
-        ),
-        (
-            {"quantity", "qty", "sold", "units"},
-            {"quantity", "qty", "sold", "unit", "units", "volume"},
-        ),
-        (
-            {"date", "month", "monthly", "year", "quarter", "trend", "period"},
-            {"date", "month", "year", "quarter", "time", "timestamp", "orddate", "invdate", "period"},
-        ),
-    ]
-
-    groups: list[set[str]] = []
-    for triggers, aliases in concept_specs:
-        if query_terms & triggers:
-            groups.append(aliases)
-
-    if re.search(
-        r"\b(?:show|list|find|get|display)\b.*\b(?:orders?|records?|rows?|transactions?)\b\s+"
-        r"(?:for|where|with)\s+\S+",
-        query or "",
-        flags=re.IGNORECASE,
-    ):
-        groups.append(
-            {"customer", "customers", "cust", "custname", "client", "account", "company", "buyer", "name"}
-        )
-
-    return groups
 
 
 def _source_text(document: Document) -> str:
@@ -286,23 +243,25 @@ def _source_shape_score(query: str, document: Document) -> int:
     source_terms = _retrieval_terms(source_text)
 
     score = 0
-    concept_groups = _retrieval_concept_groups(query)
-    if concept_groups:
-        covered_groups = sum(1 for group in concept_groups if group & source_terms)
-        score += 18 * covered_groups
-        if covered_groups == len(concept_groups):
-            score += 30
-        elif covered_groups == 0:
-            score -= 25
-
-    if source_terms & set(STRONG_NON_PRODUCTION_TERMS) and not _query_mentions_any(
-        normalized_query, STRONG_NON_PRODUCTION_TERMS
+    non_production_terms = (
+        "archive",
+        "backup",
+        "copy",
+        "dev",
+        "development",
+        "duplicate",
+        "sample",
+        "stage",
+        "staging",
+        "temp",
+        "test",
+        "tmp",
+    )
+    if any(term in source_terms for term in non_production_terms) and not _query_mentions_any(
+        normalized_query,
+        non_production_terms,
     ):
-        score -= 240
-    if source_terms & set(WEAK_NON_PRODUCTION_TERMS) and not _query_mentions_any(
-        normalized_query, WEAK_NON_PRODUCTION_TERMS
-    ):
-        score -= 40
+        score -= 60
 
     aggregation_terms = (
         "amount",
@@ -347,11 +306,6 @@ def _source_shape_score(query: str, document: Document) -> int:
         r"employees?|entities|items?|names?|products?|suppliers?|users?|vendors?)\b",
         normalized_query,
     )
-    entity_lookup_pattern = re.search(
-        r"\b(?:list|show|display|get|find)\b.*\b(?:orders?|records?|rows?|transactions?)\b\s+"
-        r"(?:for|where|with)\s+\S+",
-        normalized_query,
-    )
     asks_for_aggregation = _query_mentions_any(normalized_query, aggregation_terms) or bool(
         re.search(r"\b(?:by|per|each|top|bottom|rank|ranking)\b", normalized_query)
     )
@@ -362,11 +316,6 @@ def _source_shape_score(query: str, document: Document) -> int:
             score += 35
         if source_terms & set(transaction_source_terms):
             score -= 12
-    elif entity_lookup_pattern:
-        if source_terms & {"customer", "cust", "custname", "client", "account", "company", "name"}:
-            score += 45
-        if source_terms & set(transaction_source_terms):
-            score += 20
     elif asks_for_aggregation:
         if source_terms & set(transaction_source_terms):
             score += 25
@@ -415,34 +364,13 @@ def _semantic_score(document: Document) -> float:
     return 0.0
 
 
-def _retrieval_concept_coverage(query: str, document: Document) -> set[int]:
-    source_terms = _retrieval_terms(_source_text(document))
-    return {
-        index
-        for index, concept_group in enumerate(_retrieval_concept_groups(query))
-        if concept_group & source_terms
-    }
-
-
-def _is_unrequested_strong_non_production_source(
-    query: str, document: Document
-) -> bool:
-    source_terms = _retrieval_terms(_source_text(document))
-    return bool(source_terms & set(STRONG_NON_PRODUCTION_TERMS)) and not (
-        _query_mentions_any(
-            query or "",
-            STRONG_NON_PRODUCTION_TERMS,
-        )
-    )
-
-
 def _score_table_documents(
     query: str, documents: list[Document]
 ) -> list[tuple[float, int, Document, int, float]]:
     if not documents:
         return []
 
-    query_terms = _retrieval_terms(query)
+    query_terms = _retrieval_terms(expand_business_terms_for_retrieval(query))
     if not query_terms:
         return [
             (_semantic_score(document), -index, document, 0, _semantic_score(document))
@@ -453,10 +381,8 @@ def _score_table_documents(
     for index, document in enumerate(documents):
         lexical_score = _document_relevance_score(document, query_terms)
         semantic_score = _semantic_score(document)
-        # Qdrant similarity is the primary ranking signal. Lexical overlap is
-        # intentionally a small tie-breaker so physical names cannot overpower
-        # semantically relevant descriptions.
-        combined_score = semantic_score + min(lexical_score / 1000, 0.05)
+        source_shape_score = _source_shape_score(query, document)
+        combined_score = semantic_score + lexical_score + source_shape_score
         scored_documents.append(
             (combined_score, -index, document, lexical_score, semantic_score)
         )
@@ -502,9 +428,10 @@ def _select_relevant_table_documents(
     if not reranked:
         return documents[:max_tables]
 
+    candidate_pool = [item for item in reranked if item[3] > 0] or reranked
     selected = [
         document
-        for _score, _index, document, _lexical, _semantic in reranked[:max_tables]
+        for _score, _index, document, _lexical, _semantic in candidate_pool[:max_tables]
     ]
     if len(selected) < len(documents):
         logger.info(
@@ -587,30 +514,10 @@ def _normalize_table_names(table_names: Optional[list[str]]) -> list[str]:
     return normalized
 
 
-def _table_description_name_candidates(table_names: Optional[list[str]]) -> list[str]:
-    candidates: list[str] = []
-    for table_name in _normalize_table_names(table_names):
-        raw_candidates = [table_name]
-        separator_normalized = re.sub(r"[.$]", "_", table_name)
-        raw_candidates.append(separator_normalized)
-        if "_" in table_name:
-            raw_candidates.append(
-                re.sub(r"^([A-Za-z_][A-Za-z0-9]*)_", r"\1.", table_name, count=1)
-            )
-        if "." in table_name or "$" in table_name:
-            raw_candidates.append(re.split(r"[.$]", table_name)[-1])
-
-        for candidate in raw_candidates:
-            candidate = candidate.strip()
-            if candidate and candidate not in candidates:
-                candidates.append(candidate)
-    return candidates
-
-
 def _extract_table_names_from_table_retrieval(
-    table_retrieval: dict,
+    table_retrieval: dict, explicit_tables: Optional[list[str]] = None
 ) -> list[str]:
-    table_names: list[str] = []
+    table_names = _normalize_table_names(explicit_tables)
     for document in table_retrieval.get("documents") or []:
         if not isinstance(document, Document):
             continue
@@ -660,7 +567,6 @@ async def table_retrieval(
     project_id: str,
     tables: list[str],
     table_retriever: Any,
-    max_tables: int = MAX_RELEVANT_TABLE_CANDIDATES,
 ) -> dict:
     base_filters = {
         "operator": "AND",
@@ -680,18 +586,17 @@ async def table_retrieval(
             filters=base_filters,
         )
         results["documents"] = _select_relevant_table_documents(
-            query, results.get("documents") or [], max_tables=max_tables
+            query, results.get("documents") or []
         )
         return results
 
     if tables:
-        table_candidates = _table_description_name_candidates(tables)
-        logger.info("Loading explicit table descriptions: %s", table_candidates)
+        logger.info("Loading explicit table descriptions: %s", tables)
         explicit_filters = {
             **base_filters,
             "conditions": [
                 *base_filters["conditions"],
-                {"field": "name", "operator": "in", "value": table_candidates},
+                {"field": "name", "operator": "in", "value": tables},
             ],
         }
         return await table_retriever.run(query_embedding=[], filters=explicit_filters)
@@ -707,7 +612,9 @@ async def dbschema_retrieval(
     dbschema_retriever: Any,
     tables: Optional[list[str]] = None,
 ) -> list[Document]:
-    selected_table_names = _extract_table_names_from_table_retrieval(table_retrieval)
+    selected_table_names = _extract_table_names_from_table_retrieval(
+        table_retrieval, tables
+    )
 
     filters = {
         "operator": "AND",
@@ -751,14 +658,7 @@ async def dbschema_retrieval(
 def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[dict]:
     db_schemas = {}
     for document in dbschema_retrieval:
-        try:
-            content = ast.literal_eval(document.content)
-        except (SyntaxError, ValueError):
-            logger.warning("Ignoring malformed schema index document: %s", document.meta)
-            continue
-        if not isinstance(content, dict) or not isinstance(content.get("type"), str):
-            logger.warning("Ignoring schema index document without a type: %s", document.meta)
-            continue
+        content = ast.literal_eval(document.content)
         if content["type"] == "TABLE":
             if document.meta["name"] not in db_schemas:
                 db_schemas[document.meta["name"]] = content
@@ -810,14 +710,7 @@ def check_using_db_schemas_without_pruning(
                 has_json_field = True
 
     for document in dbschema_retrieval:
-        try:
-            content = ast.literal_eval(document.content)
-        except (SyntaxError, ValueError):
-            logger.warning("Ignoring malformed schema index document: %s", document.meta)
-            continue
-        if not isinstance(content, dict) or not isinstance(content.get("type"), str):
-            logger.warning("Ignoring schema index document without a type: %s", document.meta)
-            continue
+        content = ast.literal_eval(document.content)
 
         if content["type"] == "METRIC":
             retrieval_results.append(
@@ -943,14 +836,7 @@ def construct_retrieval_results(
 
         for document in dbschema_retrieval:
             if document.meta["name"] in columns_and_tables_needed:
-                try:
-                    content = ast.literal_eval(document.content)
-                except (SyntaxError, ValueError):
-                    logger.warning("Ignoring malformed schema index document: %s", document.meta)
-                    continue
-                if not isinstance(content, dict) or not isinstance(content.get("type"), str):
-                    logger.warning("Ignoring schema index document without a type: %s", document.meta)
-                    continue
+                content = ast.literal_eval(document.content)
 
                 if content["type"] == "METRIC":
                     retrieval_results.append(
@@ -1024,21 +910,12 @@ class DbSchemaRetrieval(BasicPipeline):
         table_column_retrieval_size: int = 100,
         **kwargs,
     ):
-        table_description_candidate_window = max(
-            table_retrieval_size,
-            MIN_TABLE_DESCRIPTION_CANDIDATE_WINDOW,
-        )
         self._components = {
             "embedder": embedder_provider.get_text_embedder(),
             "table_retriever": document_store_provider.get_retriever(
                 document_store_provider.get_store(dataset_name="table_descriptions"),
-                top_k=table_description_candidate_window,
+                top_k=table_retrieval_size,
             ),
-            # `top_k` above is intentionally a broad candidate window for reranking.
-            # The final schema context must, however, honour the configured limit.
-            # Otherwise every query can send ten complete table schemas to the LLM
-            # even when an installation configured a smaller retrieval size.
-            "max_tables": max(1, table_retrieval_size),
             "dbschema_retriever": document_store_provider.get_retriever(
                 document_store_provider.get_store(),
                 top_k=table_column_retrieval_size,
