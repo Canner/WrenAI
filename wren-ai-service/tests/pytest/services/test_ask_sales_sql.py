@@ -269,6 +269,115 @@ def test_schema_grounded_table_question_groups_top_customers_by_order_count():
     )
 
 
+def test_validated_sql_rejects_country_question_without_country_column():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT "dbo_ytblTarrifsExportsA"."Commodity_Line_Value" AS '
+            '"Commodity_Line_Value", COUNT(*) AS "RecordCount" '
+            'FROM "dbo_ytblTarrifsExportsA" '
+            'WHERE "dbo_ytblTarrifsExportsA"."Commodity_Line_Value" IS NOT NULL '
+            'GROUP BY "dbo_ytblTarrifsExportsA"."Commodity_Line_Value" '
+            'ORDER BY COUNT(*) DESC'
+        ),
+        [
+            """
+            CREATE TABLE dbo_ytblTarrifsExportsA (
+              Country_of_Ultimate_Destination_Code VARCHAR,
+              Commodity_Line_Value DOUBLE
+            );
+            """
+        ],
+        "Show the total commodity line value by country.",
+    )
+
+    assert result is None
+
+
+def test_schema_grounded_sales_sql_groups_commodity_value_by_country():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_sales_sql(
+        "Show the total commodity line value by country.",
+        [
+            """
+            CREATE TABLE dbo_ytblTarrifsExportsA (
+              Country_of_Ultimate_Destination_Code VARCHAR,
+              Commodity_Line_Value DOUBLE
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_ytblTarrifsExportsA"."Country_of_Ultimate_Destination_Code" '
+        'AS "Country_of_Ultimate_Destination_Code", '
+        'SUM("dbo_ytblTarrifsExportsA"."Commodity_Line_Value") '
+        'AS "TotalCommodity_Line_Value" '
+        'FROM "dbo_ytblTarrifsExportsA" '
+        'WHERE "dbo_ytblTarrifsExportsA"."Country_of_Ultimate_Destination_Code" '
+        'IS NOT NULL '
+        'GROUP BY "dbo_ytblTarrifsExportsA"."Country_of_Ultimate_Destination_Code" '
+        'ORDER BY SUM("dbo_ytblTarrifsExportsA"."Commodity_Line_Value") DESC'
+    )
+
+
+def test_validated_sql_rejects_entity_lookup_using_non_customer_column():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT * FROM "dbo_tnoStageNewOrders" '
+            'WHERE "dbo_tnoStageNewOrders"."Division" = '
+            "'Daimler Trucks North America'"
+        ),
+        [
+            """
+            CREATE TABLE dbo_tnoStageNewOrders (
+              Division VARCHAR,
+              CustName VARCHAR,
+              OrdNo VARCHAR
+            );
+            """
+        ],
+        "List orders for Daimler Trucks North America.",
+    )
+
+    assert result is None
+
+
+def test_schema_grounded_sales_sql_filters_entity_lookup_by_customer_name():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_sales_sql(
+        "List orders for Daimler Trucks North America.",
+        [
+            """
+            CREATE TABLE dbo_tnoStageNewOrders (
+              Division VARCHAR,
+              CustName VARCHAR,
+              OrdNo VARCHAR
+            );
+            """,
+            """
+            CREATE TABLE dbo_tblNewOrders (
+              CustName VARCHAR,
+              OrdNo VARCHAR,
+              OrdDate TIMESTAMP
+            );
+            """,
+        ],
+    )
+
+    assert sql == (
+        'SELECT TOP 500 * FROM "dbo_tblNewOrders" '
+        'WHERE "dbo_tblNewOrders"."CustName" = '
+        "'Daimler Trucks North America' "
+        'ORDER BY "dbo_tblNewOrders"."OrdDate" DESC'
+    )
+
+
 def test_validated_sql_rejects_distinct_with_extra_entity_columns_for_no_duplicates():
     service = AskService.__new__(AskService)
 
@@ -446,6 +555,21 @@ def test_extract_explicit_table_names_from_pcb_repair_phrases():
     ) == ["ticket_labels", "dbo_ticket_labels"]
 
 
+def test_explicit_table_name_candidates_include_dotted_and_short_forms():
+    service = AskService.__new__(AskService)
+
+    assert service._explicit_table_name_candidates("dbo_tblNewOrders") == [
+        "dbo_tblNewOrders",
+        "dbo.tblNewOrders",
+        "tblNewOrders",
+    ]
+    assert service._explicit_table_name_candidates("dbo.tblNewOrders") == [
+        "dbo.tblNewOrders",
+        "dbo_tblNewOrders",
+        "tblNewOrders",
+    ]
+
+
 def test_filter_retrieval_metadata_for_explicit_query_keeps_only_named_table():
     service = AskService.__new__(AskService)
     documents = [
@@ -480,6 +604,42 @@ def test_filter_retrieval_metadata_for_explicit_query_keeps_only_named_table():
     assert filtered_documents == [documents[1]]
     assert table_names == ["dbo_failure_patterns"]
     assert table_ddls == [documents[1]["table_ddl"]]
+
+
+def test_filter_retrieval_metadata_for_explicit_query_matches_dotted_table_name():
+    service = AskService.__new__(AskService)
+    documents = [
+        {
+            "table_name": "dbo.tblNewOrders",
+            "table_ddl": """
+            CREATE TABLE "dbo.tblNewOrders" (
+              CustName VARCHAR,
+              OrdNo VARCHAR
+            );
+            """,
+        },
+        {
+            "table_name": "dbo_other",
+            "table_ddl": """
+            CREATE TABLE dbo_other (
+              CustName VARCHAR,
+              OrdNo VARCHAR
+            );
+            """,
+        },
+    ]
+
+    filtered_documents, table_names, table_ddls = (
+        service._filter_retrieval_metadata_for_explicit_query(
+            "Show the top 5 CustName values from dbo_tblNewOrders by number of orders.",
+            documents,
+            ["dbo_tblNewOrders"],
+        )
+    )
+
+    assert filtered_documents == [documents[0]]
+    assert table_names == ["dbo.tblNewOrders"]
+    assert table_ddls == [documents[0]["table_ddl"]]
 
 
 def test_build_validated_ask_result_rejects_sql_for_different_explicit_table():
