@@ -2058,6 +2058,84 @@ class AskService:
             table_name,
         )
 
+    def _extract_direct_explicit_projection_columns(self, query: str) -> list[str]:
+        columns: list[str] = []
+        match = re.search(
+            r"\b(?:including|include|with)\s+(.+?)(?:\.|$)",
+            query or "",
+            flags=re.IGNORECASE,
+        )
+        if not match:
+            return columns
+
+        raw_columns = re.sub(r"\band\b", ",", match.group(1), flags=re.IGNORECASE)
+        stop_words = {
+            "columns",
+            "fields",
+            "including",
+            "include",
+            "with",
+            "and",
+        }
+        for raw_column in re.split(r",", raw_columns):
+            column = raw_column.strip().strip("`\"[] ")
+            if not column:
+                continue
+            if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", column):
+                continue
+            if column.lower() in stop_words:
+                continue
+            if column not in columns:
+                columns.append(column)
+        return columns
+
+    def _build_direct_explicit_table_projection_sql(
+        self, query: str, table_names: list[str]
+    ) -> tuple[str, str] | None:
+        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized or not table_names:
+            return None
+
+        table_name = self._select_direct_explicit_sql_table_name(table_names)
+        if not table_name:
+            return None
+
+        columns = self._extract_direct_explicit_projection_columns(query)
+        asks_for_preview = bool(
+            re.search(r"\b(?:preview|sample|first)\b", normalized)
+            or re.search(r"\b(?:rows?|records?|data)\b", normalized)
+        )
+        if not columns and not asks_for_preview:
+            return None
+
+        limit = self._extract_requested_top_n(query, default_value=500)
+        table_ref = self._quote_sql_identifier(table_name)
+        select_clause = (
+            ", ".join(self._quote_sql_identifier(column) for column in columns)
+            if columns
+            else "*"
+        )
+
+        where_parts: list[str] = []
+        for column in columns:
+            if re.search(
+                rf"\b{re.escape(column.lower())}\b\s+is\s+not\s+empty",
+                normalized,
+            ):
+                column_ref = self._quote_sql_identifier(column)
+                where_parts.append(f"{column_ref} IS NOT NULL AND {column_ref} <> ''")
+            elif re.search(
+                rf"\b{re.escape(column.lower())}\b\s+is\s+not\s+null",
+                normalized,
+            ):
+                where_parts.append(f"{self._quote_sql_identifier(column)} IS NOT NULL")
+
+        where_clause = f" WHERE {' AND '.join(where_parts)}" if where_parts else ""
+        return (
+            f"SELECT TOP {limit} {select_clause} FROM {table_ref}{where_clause}",
+            table_name,
+        )
+
     def _build_direct_orders_sales_sql(self, query: str) -> str | None:
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized:
@@ -6142,6 +6220,30 @@ class AskService:
                                 rephrased_question=user_query,
                                 intent_reasoning=(
                                     "Explicit table count request generated SQL directly."
+                                ),
+                                retrieved_tables=[explicit_table_name],
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                            )
+                            results["ask_result"] = api_results
+                            results["metadata"]["type"] = "TEXT_TO_SQL"
+                            return results
+
+                    if direct_projection_sql := self._build_direct_explicit_table_projection_sql(
+                        user_query,
+                        explicit_table_names,
+                    ):
+                        explicit_sql, explicit_table_name = direct_projection_sql
+                        ask_result = self._build_ask_result_from_sql(explicit_sql)
+                        if ask_result:
+                            api_results = [ask_result]
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="TEXT_TO_SQL",
+                                response=api_results,
+                                rephrased_question=user_query,
+                                intent_reasoning=(
+                                    "Explicit table request generated SQL directly."
                                 ),
                                 retrieved_tables=[explicit_table_name],
                                 trace_id=trace_id,
