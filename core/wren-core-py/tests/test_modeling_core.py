@@ -1,5 +1,7 @@
 import base64
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext as does_not_raise
 
 import pytest
@@ -316,7 +318,7 @@ def test_rlac():
     rewritten_sql = session_context.transform_sql(sql)
     assert (
         rewritten_sql
-        == 'SELECT customer.c_custkey, customer.c_name FROM (SELECT customer.c_custkey, customer.c_name FROM (SELECT customer.c_custkey, customer.c_name FROM (SELECT __source.c_custkey AS c_custkey, __source.c_name AS c_name FROM "main".customer AS __source) AS customer) AS customer WHERE customer.c_name = \'test_user\') AS customer'
+        == "SELECT customer.c_custkey, customer.c_name FROM (SELECT customer.c_custkey, customer.c_name FROM (SELECT customer.c_custkey, customer.c_name FROM (SELECT __source.c_custkey AS c_custkey, __source.c_name AS c_name FROM \"main\".customer AS __source) AS customer) AS customer WHERE customer.c_name = 'test_user') AS customer"
     )
 
 
@@ -588,3 +590,43 @@ def test_case_sensitive_without_quote():
         actual
         == 'SELECT "Orders"."O_orderkey", "Orders"."O_custkey", "Orders"."O_orderdate" FROM (SELECT "Orders"."O_custkey", "Orders"."O_orderdate", "Orders"."O_orderkey" FROM (SELECT __source."O_custkey" AS "O_custkey", __source."O_orderdate" AS "O_orderdate", __source."O_orderkey" AS "O_orderkey" FROM "main".orders AS __source) AS "Orders") AS "Orders"'
     )
+
+
+def test_concurrent_calls_from_threads():
+    """Concurrent calls must not deadlock/crash and must stay correct.
+
+    Guards the GIL-release path (block_on wrapped in Python::detach);
+    performance claims live in the PR benchmark, not here.
+    """
+    sql = "SELECT o_orderkey FROM my_catalog.my_schema.orders"
+    expected = SessionContext(manifest_str, None).transform_sql(sql)
+    barrier = threading.Barrier(4)
+
+    # mode 1: separate contexts per thread
+    contexts = [SessionContext(manifest_str, None) for _ in range(4)]
+
+    def worker(ctx):
+        barrier.wait()  # force all threads to overlap
+        return [ctx.transform_sql(sql) for _ in range(20)]
+
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        results = list(ex.map(worker, contexts))
+    assert all(r == expected for batch in results for r in batch)
+
+    # mode 2: one shared context, mixed methods. This is the mode that
+    # catches the same-context catalog race if the per-context call lock
+    # is ever removed while the GIL is released.
+    shared = SessionContext(manifest_str, None)
+    expected_functions = len(shared.get_available_functions())
+    barrier = threading.Barrier(4)
+
+    def mixed_worker(_i):
+        barrier.wait()
+        out = [shared.transform_sql(sql) for _ in range(25)]
+        assert len(shared.get_available_functions()) == expected_functions
+        out.extend(shared.transform_sql(sql) for _ in range(25))
+        return out
+
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        results = list(ex.map(mixed_worker, range(4)))
+    assert all(r == expected for batch in results for r in batch)
