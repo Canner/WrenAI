@@ -5907,6 +5907,46 @@ class AskService:
                         table_names,
                     )
 
+                    for direct_sql_candidate in (
+                        self._build_direct_explicit_table_count_sql(
+                            user_query,
+                            table_names or explicit_table_names,
+                        ),
+                        self._build_direct_explicit_table_projection_sql(
+                            user_query,
+                            table_names or explicit_table_names,
+                        ),
+                    ):
+                        if not direct_sql_candidate:
+                            continue
+                        explicit_sql, explicit_table_name = direct_sql_candidate
+                        ask_result = self._build_validated_ask_result_from_sql(
+                            explicit_sql,
+                            table_ddls,
+                            user_query,
+                        )
+                        if ask_result:
+                            if explicit_table_name not in table_names:
+                                table_names.append(explicit_table_name)
+                            api_results = [ask_result]
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="TEXT_TO_SQL",
+                                response=api_results,
+                                rephrased_question=user_query,
+                                intent_reasoning=(
+                                    "Explicit table request matched deployed schema "
+                                    "and generated SQL directly."
+                                ),
+                                retrieved_tables=table_names,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                            )
+                            results["ask_result"] = api_results
+                            results["metadata"]["type"] = "TEXT_TO_SQL"
+                            return results
+                        invalid_sql = explicit_sql
+
                     if table_question_sql := self._build_schema_grounded_table_question_sql(
                         user_query, table_ddls
                     ):
