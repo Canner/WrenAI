@@ -76,8 +76,7 @@ time_dimensions:
     expression: <ts_column>   # e.g. "created_at"
     type: TIMESTAMP           # granularity (day/week/month/…) is set at query time via --time-dimension
 hierarchies:
-  - name: time
-    levels: [year, quarter, month]   # only if multiple time grains are declared
+  time: [<td_name>]                 # map to declared dimension/time-dimension names
 properties:
   description: |
     <one-line summary from raw — e.g. "Annual Recurring Revenue, defined as MRR × 12 per the finance handbook §2.">
