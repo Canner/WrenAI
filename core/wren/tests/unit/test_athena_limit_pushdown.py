@@ -6,7 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from wren.connector.athena import AthenaConnector, _strip_trailing_semicolon
+from wren.connector.athena import AthenaConnector
+from wren.connector.base import strip_trailing_semicolon as _strip_trailing_semicolon
 
 pytestmark = pytest.mark.unit
 
@@ -29,7 +30,9 @@ def test_query_pushes_limit_into_sql():
         # contextlib.closing expects .close()
         cursor.close = MagicMock()
         # wrap closing: connection.cursor() is used as CM via closing()
-        with patch("wren.connector.athena.contextlib.closing", side_effect=lambda c: _CM(c)):
+        with patch(
+            "wren.connector.athena.contextlib.closing", side_effect=lambda c: _CM(c)
+        ):
             connector.query("SELECT 1;", limit=3)
 
     cursor.execute.assert_called_once_with(
@@ -54,9 +57,12 @@ def test_query_without_limit_runs_original_sql():
     connector.connection = MagicMock()
     cursor = MagicMock()
     cursor.close = MagicMock()
-    with patch(
-        "wren.connector.athena._build_athena_arrow_table", return_value=MagicMock()
-    ), patch("wren.connector.athena.contextlib.closing", side_effect=lambda c: _CM(c)):
+    with (
+        patch(
+            "wren.connector.athena._build_athena_arrow_table", return_value=MagicMock()
+        ),
+        patch("wren.connector.athena.contextlib.closing", side_effect=lambda c: _CM(c)),
+    ):
         connector.connection.cursor.return_value = cursor
         connector.query("SELECT 1")
     cursor.execute.assert_called_once_with("SELECT 1")
@@ -68,9 +74,12 @@ def test_query_limit_survives_trailing_line_comment():
     connector.connection = MagicMock()
     cursor = MagicMock()
     cursor.close = MagicMock()
-    with patch(
-        "wren.connector.athena._build_athena_arrow_table", return_value=MagicMock()
-    ), patch("wren.connector.athena.contextlib.closing", side_effect=lambda c: _CM(c)):
+    with (
+        patch(
+            "wren.connector.athena._build_athena_arrow_table", return_value=MagicMock()
+        ),
+        patch("wren.connector.athena.contextlib.closing", side_effect=lambda c: _CM(c)),
+    ):
         connector.connection.cursor.return_value = cursor
         connector.query("SELECT 1 -- pick", limit=3)
     cursor.execute.assert_called_once_with(
