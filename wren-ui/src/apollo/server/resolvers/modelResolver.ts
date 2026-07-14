@@ -37,6 +37,9 @@ logger.level = 'debug';
 
 const dirtyProjectIds = new Set<number>();
 
+const isSameId = (left: string | number, right: string | number) =>
+  String(left) === String(right);
+
 export enum SyncStatusEnum {
   IN_PROGRESS = 'IN_PROGRESS',
   SYNCRONIZED = 'SYNCRONIZED',
@@ -861,7 +864,10 @@ export class ModelResolver {
     const relationships =
       await ctx.relationRepository.findRelationsByIds(relationshipIds);
     for (const rel of relationships) {
-      const requestedMetadata = data.relationships.find((r) => r.id === rel.id);
+      const requestedMetadata = data.relationships.find((r) =>
+        isSameId(r.id, rel.id),
+      );
+      if (!requestedMetadata) continue;
 
       const relationMetadata: any = {};
 
@@ -888,8 +894,9 @@ export class ModelResolver {
       await ctx.modelColumnRepository.findColumnsByIds(calculatedFieldIds);
     for (const col of modelColumns) {
       const requestedMetadata = data.calculatedFields.find(
-        (c) => c.id === col.id,
+        (c) => isSameId(c.id, col.id),
       );
+      if (!requestedMetadata) continue;
 
       const columnMetadata: any = {};
       // check if description is empty
@@ -917,7 +924,10 @@ export class ModelResolver {
     const modelColumns =
       await ctx.modelColumnRepository.findColumnsByIds(columnIds);
     for (const col of modelColumns) {
-      const requestedMetadata = data.columns.find((c) => c.id === col.id);
+      const requestedMetadata = data.columns.find((c) =>
+        isSameId(c.id, col.id),
+      );
+      if (!requestedMetadata) continue;
 
       // update metadata
       const columnMetadata: any = {};
@@ -952,7 +962,10 @@ export class ModelResolver {
         nestedColumnIds,
       );
     for (const col of modelNestedColumns) {
-      const requestedMetadata = data.nestedColumns.find((c) => c.id === col.id);
+      const requestedMetadata = data.nestedColumns.find((c) =>
+        isSameId(c.id, col.id),
+      );
+      if (!requestedMetadata) continue;
 
       const nestedColumnMetadata: any = {};
 

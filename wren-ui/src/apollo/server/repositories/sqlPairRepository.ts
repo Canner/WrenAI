@@ -1,5 +1,9 @@
 import { Knex } from 'knex';
-import { BaseRepository, IBasicRepository } from './baseRepository';
+import {
+  BaseRepository,
+  IBasicRepository,
+  IQueryOptions,
+} from './baseRepository';
 
 export interface SqlPair {
   id: number; // ID
@@ -19,4 +23,35 @@ export class SqlPairRepository
   constructor(knexPg: Knex) {
     super({ knexPg, tableName: 'sql_pair' });
   }
+
+  public override async createOne(
+    data: Partial<SqlPair>,
+    queryOptions?: IQueryOptions,
+  ): Promise<SqlPair> {
+    return super.createOne(this.withTimestamps(data), queryOptions);
+  }
+
+  public override async updateOne(
+    id: string | number,
+    data: Partial<SqlPair>,
+    queryOptions?: IQueryOptions,
+  ): Promise<SqlPair> {
+    return super.updateOne(
+      id,
+      {
+        ...data,
+        updatedAt: data.updatedAt ?? new Date().toISOString(),
+      },
+      queryOptions,
+    );
+  }
+
+  private withTimestamps = (data: Partial<SqlPair>): Partial<SqlPair> => {
+    const now = new Date().toISOString();
+    return {
+      ...data,
+      createdAt: data.createdAt ?? now,
+      updatedAt: data.updatedAt ?? now,
+    };
+  };
 }
