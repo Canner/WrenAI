@@ -689,6 +689,8 @@ class AskService:
             concept_groups.append({"market", "region", "country", "territory"})
         if "region" in normalized or "regions" in normalized:
             concept_groups.append({"region", "market", "area", "territory", "country"})
+        if "country" in normalized or "countries" in normalized:
+            concept_groups.append({"country", "countries", "nation", "destination"})
         if "quarterly" in normalized or "quarter" in normalized:
             concept_groups.append({"quarter", "quarterly"})
         if "recurring" in normalized or "recurrence" in normalized:
@@ -741,14 +743,15 @@ class AskService:
             )
         )
         asks_for_count = any(
-            re.search(pattern, normalized_query)
-            for pattern in (
-                r"\bcounts?\b",
-                r"\bhow many\b",
-                r"\bnumber of\b",
-                r"\brecord count\b",
-                r"\brecords?\b",
-                r"\brows?\b",
+            term in normalized_query
+            for term in (
+                "count",
+                "counts",
+                "how many",
+                "number of",
+                "record count",
+                "records",
+                "rows",
             )
         )
         if not asks_for_measure_sum or asks_for_count:
@@ -907,6 +910,167 @@ class AskService:
             )
             return False
         return True
+
+    def _extract_entity_lookup_phrase(self, query: str | None) -> str | None:
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip())
+        if not normalized_query:
+            return None
+
+        match = re.search(
+            r"\b(?:show|list|find|get|display)\b.*?\b(?:orders?|records?|rows?)\b\s+"
+            r"(?:for|where|with)\s+(?P<phrase>.+?)(?:[?.!]|$)",
+            normalized_query,
+            flags=re.IGNORECASE,
+        )
+        if not match:
+            return None
+
+        phrase = match.group("phrase").strip(" .,;:()[]{}'\"")
+        phrase = re.sub(r"^(?:customer|client|account|company|name)\s+", "", phrase, flags=re.IGNORECASE)
+        if not phrase or len(phrase) < 3:
+            return None
+        if re.search(
+            r"\b(?:table|model|schema|column|columns|market|region|country|division|"
+            r"date|month|year|quarter|top|count|number|amount|value)\b",
+            phrase,
+            flags=re.IGNORECASE,
+        ):
+            return None
+        return phrase
+
+    def _preferred_entity_lookup_columns(
+        self, query: str | None, table: dict[str, Any]
+    ) -> set[str]:
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        candidate_groups: list[tuple[str, ...]] = []
+        if "account" in normalized_query:
+            candidate_groups.append(("Account", "AccountName", "AcctName", "AcctNo"))
+        if "company" in normalized_query:
+            candidate_groups.append(("Company", "CompanyName", "CustName", "CustomerName"))
+        candidate_groups.extend(
+            [
+                (
+                    "Customer",
+                    "CustomerName",
+                    "CustName",
+                    "CustNo",
+                    "CustomerNo",
+                    "CustomerCode",
+                ),
+                ("Client", "ClientName"),
+                ("Account", "AccountName"),
+                ("Company", "CompanyName"),
+                ("Name",),
+            ]
+        )
+
+        columns: set[str] = set()
+        for candidates in candidate_groups:
+            column = self._find_schema_column(table, candidates)
+            if column:
+                columns.add(column)
+        return columns
+
+    def _sql_satisfies_entity_lookup_request(
+        self,
+        sql: str,
+        query: str | None,
+        referenced_tables: list[str],
+        referenced_columns_by_table: dict[str, set[str]],
+        valid_tables: dict[str, dict[str, Any]],
+    ) -> bool:
+        if not self._extract_entity_lookup_phrase(query):
+            return True
+
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if any(
+            term in normalized_query
+            for term in (" by ", " per ", " each ", "distribution", "top", "count")
+        ):
+            return True
+
+        for table_reference in referenced_tables:
+            table = self._table_for_sql_reference(table_reference, valid_tables)
+            if not table:
+                continue
+            preferred_columns = self._preferred_entity_lookup_columns(query, table)
+            if not preferred_columns:
+                continue
+
+            table_key = str(table_reference or "").lower()
+            referenced_columns = referenced_columns_by_table.get(
+                table_key
+            ) or referenced_columns_by_table.get(
+                table_key.split(".")[-1],
+                set(),
+            )
+            referenced_column_keys = {
+                self._normalize_schema_identifier_key(column)
+                for column in referenced_columns
+            }
+            preferred_column_keys = {
+                self._normalize_schema_identifier_key(column)
+                for column in preferred_columns
+            }
+            if referenced_column_keys & preferred_column_keys:
+                return True
+
+            logger.warning(
+                "Ignoring SQL because entity lookup did not use available customer/name columns. "
+                "query=%s table=%s preferred_columns=%s referenced_columns=%s sql=%s",
+                query,
+                table.get("name"),
+                sorted(preferred_columns),
+                sorted(referenced_columns),
+                sql,
+            )
+            return False
+
+        return True
+
+    def _is_unrequested_non_production_table_reference(
+        self, table_name: str, query: str | None
+    ) -> bool:
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        normalized_table = self._normalize_schema_token(table_name)
+        strong_non_production_terms = (
+            "archive",
+            "backup",
+            "copy",
+            "dev",
+            "development",
+            "duplicate",
+            "sample",
+            "temp",
+            "test",
+            "tmp",
+        )
+        if not any(term in normalized_table for term in strong_non_production_terms):
+            return False
+        return not any(
+            re.search(rf"\b{re.escape(term)}\b", normalized_query)
+            for term in strong_non_production_terms
+        )
+
+    def _sql_avoids_unrequested_non_production_tables(
+        self, sql: str, query: str | None, referenced_tables: list[str]
+    ) -> bool:
+        invalid_tables = [
+            table
+            for table in referenced_tables
+            if self._is_unrequested_non_production_table_reference(table, query)
+        ]
+        if not invalid_tables:
+            return True
+
+        logger.warning(
+            "Ignoring SQL because it references unrequested non-production tables. "
+            "query=%s invalid_tables=%s sql=%s",
+            query,
+            invalid_tables,
+            sql,
+        )
+        return False
 
     def _invalid_unqualified_sql_identifiers(
         self, sql: str, schema_tables: list[dict[str, Any]]
@@ -1221,6 +1385,20 @@ class AskService:
             return False
         if not self._sql_satisfies_unique_entity_request(sql, query):
             return False
+        if not self._sql_satisfies_entity_lookup_request(
+            sql,
+            query,
+            referenced_tables,
+            referenced_columns_by_table,
+            valid_tables,
+        ):
+            return False
+        if not self._sql_avoids_unrequested_non_production_tables(
+            sql,
+            query,
+            referenced_tables,
+        ):
+            return False
 
         if not expects_dimension:
             return True
@@ -1371,145 +1549,6 @@ class AskService:
     def _normalize_schema_identifier_key(self, value: str) -> str:
         return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
 
-    def _schema_identifier_words(self, value: str | None) -> list[str]:
-        raw_value = str(value or "")
-        normalized_parts = re.sub(
-            r"([a-z0-9])([A-Z])",
-            r"\1 \2",
-            raw_value.replace(".", " ").replace("$", " "),
-        )
-        return [
-            token.lower()
-            for token in re.split(r"[^A-Za-z0-9]+", normalized_parts)
-            if token
-        ]
-
-    def _is_non_business_table_name(self, table_name: str | None) -> bool:
-        words = self._schema_identifier_words(table_name)
-        if words and words[0] in {"dbo", "public"}:
-            words = words[1:]
-        if not words:
-            return False
-
-        normalized = "".join(words)
-        non_business_words = {
-            "archive",
-            "backup",
-            "bak",
-            "copy",
-            "dev",
-            "etl",
-            "import",
-            "landing",
-            "load",
-            "raw",
-            "scratch",
-            "snapshot",
-            "stage",
-            "staging",
-            "temp",
-            "test",
-            "tmp",
-            "work",
-            "wrk",
-        }
-        if any(word in non_business_words for word in words):
-            return True
-
-        non_business_prefixes = (
-            "tmp",
-            "temp",
-            "stage",
-            "staging",
-            "stg",
-            "load",
-            "raw",
-            "wrk",
-            "work",
-            "test",
-        )
-        if any(normalized.startswith(prefix) for prefix in non_business_prefixes):
-            return True
-
-        return any(
-            normalized.endswith(suffix)
-            for suffix in ("backup", "bak", "copy", "test", "tmp", "temp")
-        )
-
-    def _is_hygiene_excluded_table_name(
-        self,
-        table_name: str | None,
-        query: str | None = None,
-    ) -> bool:
-        return self._is_non_business_table_name(table_name)
-
-    def _filter_schema_tables_for_query(
-        self,
-        query: str | None,
-        tables: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
-        return [
-            table
-            for table in tables
-            if not self._is_hygiene_excluded_table_name(
-                str(table.get("name") or ""),
-                query,
-            )
-        ]
-
-    def _filter_sql_generation_context_by_hygiene(
-        self,
-        query: str | None,
-        documents: list[dict],
-        table_names: list[str],
-        table_ddls: list[str],
-    ) -> tuple[list[dict], list[str], list[str]]:
-        kept_documents: list[dict] = []
-        kept_table_names: list[str] = []
-        kept_table_ddls: list[str] = []
-
-        for index, document in enumerate(documents):
-            document_table_names: list[str] = []
-            if isinstance(table_name := document.get("table_name"), str):
-                document_table_names.append(table_name)
-            if isinstance(table_ddl := document.get("table_ddl"), str):
-                document_table_names.extend(
-                    str(table.get("name") or "")
-                    for table in self._parse_schema_tables([table_ddl])
-                    if table.get("name")
-                )
-
-            if any(
-                self._is_hygiene_excluded_table_name(candidate, query)
-                for candidate in document_table_names
-            ):
-                continue
-
-            kept_documents.append(document)
-            if index < len(table_names):
-                kept_table_names.append(table_names[index])
-            if index < len(table_ddls):
-                kept_table_ddls.append(table_ddls[index])
-
-        if documents:
-            return kept_documents, kept_table_names, kept_table_ddls
-
-        for table_name, table_ddl in zip(table_names, table_ddls):
-            parsed_names = [
-                str(table.get("name") or "")
-                for table in self._parse_schema_tables([table_ddl])
-                if table.get("name")
-            ] or [table_name]
-            if any(
-                self._is_hygiene_excluded_table_name(candidate, query)
-                for candidate in parsed_names
-            ):
-                continue
-            kept_table_names.append(table_name)
-            kept_table_ddls.append(table_ddl)
-
-        return kept_documents, kept_table_names, kept_table_ddls
-
     def _schema_identifier_alias_keys(self, value: str) -> set[str]:
         raw_value = str(value or "").strip()
         base_key = self._normalize_schema_identifier_key(raw_value)
@@ -1630,7 +1669,6 @@ class AskService:
     def _find_best_schema_table_for_query(
         self, query: str, tables: list[dict[str, Any]]
     ) -> dict[str, Any] | None:
-        tables = self._filter_schema_tables_for_query(query, tables)
         if not tables:
             return None
 
@@ -1896,7 +1934,6 @@ class AskService:
             return None
 
         tables = self._parse_schema_tables(table_ddls)
-        tables = self._filter_schema_tables_for_query(query, tables)
         if not tables:
             return None
 
@@ -2002,7 +2039,18 @@ class AskService:
         separator_normalized = re.sub(r"[.$]", "_", table_name)
         if separator_normalized not in candidates:
             candidates.append(separator_normalized)
+        if "_" in table_name:
+            dotted_schema_name = re.sub(
+                r"^([A-Za-z_][A-Za-z0-9]*)_",
+                r"\1.",
+                table_name,
+                count=1,
+            )
+            if dotted_schema_name not in candidates:
+                candidates.append(dotted_schema_name)
         short_name = re.split(r"[.$]", table_name)[-1]
+        if short_name == table_name and "_" in table_name:
+            short_name = table_name.split("_", 1)[-1]
         if short_name and short_name not in candidates:
             candidates.append(short_name)
         return candidates
@@ -2229,53 +2277,6 @@ class AskService:
 
         return conditions
 
-    def _build_entity_lookup_sql(
-        self, query: str, tables: list[dict[str, Any]]
-    ) -> str | None:
-        phrase = self._extract_entity_lookup_phrase(query)
-        if not phrase:
-            return None
-
-        scored: list[tuple[int, dict[str, Any], str, str | None]] = []
-        for table in self._filter_schema_tables_for_query(query, tables):
-            preferred_columns = self._preferred_entity_lookup_columns(query, table)
-            if not preferred_columns:
-                continue
-            lookup_column = sorted(preferred_columns)[0]
-            date_column = self._find_temporal_column_for_query(query, table)
-            table_name = str(table.get("name") or "")
-            if not table_name:
-                continue
-
-            score = 10
-            normalized_table = self._normalize_schema_token(table_name)
-            if any(term in normalized_table for term in ("order", "record", "event")):
-                score += 10
-            if date_column:
-                score += 5
-            scored.append((score, table, lookup_column, date_column))
-
-        if not scored:
-            return None
-
-        _, table, lookup_column, date_column = sorted(
-            scored,
-            key=lambda item: item[0],
-            reverse=True,
-        )[0]
-        table_name = str(table.get("name") or "")
-        table_ref = self._quote_sql_identifier(table_name)
-        lookup_ref = f"{table_ref}.{self._quote_sql_identifier(lookup_column)}"
-        escaped_phrase = phrase.replace("'", "''")
-        sql = (
-            f"SELECT TOP 500 * FROM {table_ref} "
-            f"WHERE {lookup_ref} = '{escaped_phrase}'"
-        )
-        if date_column:
-            date_ref = f"{table_ref}.{self._quote_sql_identifier(date_column)}"
-            sql += f" ORDER BY {date_ref} DESC"
-        return sql
-
     def _select_best_analytics_table(
         self,
         tables: list[dict[str, Any]],
@@ -2286,7 +2287,6 @@ class AskService:
         query: str = "",
     ) -> tuple[dict[str, Any], list[str], str | None, str | None] | None:
         normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
-        tables = self._filter_schema_tables_for_query(query, tables)
         scored: list[
             tuple[int, dict[str, Any], list[str], str | None, str | None]
         ] = []
@@ -2337,8 +2337,8 @@ class AskService:
                 score += 4
             if "invoice" in table_name or "inv" in table_name:
                 score += 3
-            if self._is_non_business_table_name(table_name):
-                score -= 25
+            if "stage" in table_name:
+                score -= 8
             if any(
                 term in normalized_query
                 for term in ("order", "orders", "new order", "new orders")
@@ -2403,6 +2403,88 @@ class AskService:
             date_column,
         )
 
+    def _build_entity_lookup_sql(
+        self, query: str, tables: list[dict[str, Any]]
+    ) -> str | None:
+        lookup_phrase = self._extract_entity_lookup_phrase(query)
+        if not lookup_phrase:
+            return None
+
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        asks_for_orders = any(
+            term in normalized_query
+            for term in ("order", "orders", "new order", "new orders")
+        )
+
+        scored: list[tuple[int, dict[str, Any], str]] = []
+        for table in tables:
+            table_name = str(table.get("name") or "")
+            if not table_name:
+                continue
+
+            preferred_columns = self._preferred_entity_lookup_columns(query, table)
+            if not preferred_columns:
+                continue
+
+            preferred_column = sorted(
+                preferred_columns,
+                key=lambda column: (
+                    0
+                    if self._normalize_schema_identifier_key(column)
+                    in {"custname", "customername", "customer"}
+                    else 1,
+                    column.lower(),
+                ),
+            )[0]
+
+            score = 20
+            normalized_table = self._normalize_schema_token(table_name)
+            if asks_for_orders:
+                if "order" in normalized_table:
+                    score += 40
+                if "neworder" in normalized_table:
+                    score += 20
+                if self._find_schema_column(
+                    table, ("OrdNo", "OrderNo", "OrderId", "NewOrderId")
+                ):
+                    score += 25
+            if "test" in normalized_table or "tmp" in normalized_table:
+                score -= 80
+            if "dev" in normalized_table or "backup" in normalized_table:
+                score -= 60
+            if "stage" in normalized_table:
+                score -= 10
+            scored.append((score, table, preferred_column))
+
+        if not scored:
+            return None
+
+        _score, table, filter_column = sorted(
+            scored, key=lambda item: item[0], reverse=True
+        )[0]
+        table_name = str(table.get("name") or "")
+        if not table_name:
+            return None
+
+        table_ref = self._quote_sql_identifier(table_name)
+        filter_ref = f"{table_ref}.{self._quote_sql_identifier(filter_column)}"
+        escaped_phrase = lookup_phrase.replace("'", "''")
+        date_column = self._find_schema_column(
+            table,
+            ("OrdDate", "OrderDate", "NewOrderDate", "InvDate", "InvoiceDate", "Date"),
+            temporal=True,
+        )
+        order_clause = (
+            f" ORDER BY {table_ref}.{self._quote_sql_identifier(date_column)} DESC"
+            if date_column
+            else ""
+        )
+        return (
+            f"SELECT TOP 500 * FROM {table_ref} "
+            f"WHERE {filter_ref} = '{escaped_phrase}'"
+            f"{order_clause}"
+        )
+
     def _build_schema_grounded_analytics_sql(
         self, query: str, table_ddls: list[str]
     ) -> str | None:
@@ -2411,11 +2493,13 @@ class AskService:
             return None
 
         tables = self._parse_schema_tables(table_ddls)
-        tables = self._filter_schema_tables_for_query(query, tables)
         if not tables:
             return None
 
         compact_query = re.sub(r"[^a-z0-9]", "", normalized_query)
+
+        if entity_lookup_sql := self._build_entity_lookup_sql(query, tables):
+            return entity_lookup_sql
 
         if pcb_direct_sql := self._build_pcb_direct_question_sql(query, table_ddls):
             return pcb_direct_sql
@@ -2472,7 +2556,7 @@ class AskService:
         if contribution_sql := self._build_contribution_sql(query, tables):
             return contribution_sql
 
-        wants_measure_query = any(
+        asks_for_measure_value = any(
             term in normalized_query
             for term in (
                 "amount",
@@ -2489,21 +2573,17 @@ class AskService:
                 "value",
             )
         )
-        if not is_sales_or_order_query and not wants_measure_query:
+
+        if not is_sales_or_order_query and not asks_for_measure_value:
             if categorical_count_sql := self._build_generic_categorical_count_sql(
                 query, tables
             ):
                 return categorical_count_sql
 
         wants_count_metric = any(
-            re.search(pattern, normalized_query)
-            for pattern in (
-                r"\bcounts?\b",
-                r"\bvolume\b",
-                r"\bhow many\b",
-                r"\bdistribution\b",
-            )
-        ) and not wants_measure_query
+            term in normalized_query
+            for term in ("count", "counts", "volume", "how many", "distribution")
+        ) and not asks_for_measure_value
         wants_average_metric = any(
             term in normalized_query for term in ("average", "avg", "mean")
         )
@@ -5511,15 +5591,6 @@ class AskService:
         *,
         max_tables: int = 8,
     ) -> tuple[list[dict], list[str], list[str]]:
-        documents, table_names, table_ddls = (
-            self._filter_sql_generation_context_by_hygiene(
-                query,
-                documents,
-                table_names,
-                table_ddls,
-            )
-        )
-
         if len(table_ddls) <= max_tables:
             return documents, table_names, table_ddls
 

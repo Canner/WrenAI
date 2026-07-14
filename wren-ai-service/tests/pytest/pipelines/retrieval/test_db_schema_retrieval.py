@@ -67,6 +67,26 @@ def test_rerank_table_documents_prefers_question_relevant_table_text():
     assert documents[0].meta["name"] == "business_transactions"
 
 
+def test_rerank_table_documents_penalizes_test_sources_even_when_name_uses_underscores():
+    test_load = Document(
+        content="Raw test load rows for order market fields.",
+        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_xStageLoad8_Test"},
+        score=0.99,
+    )
+    order_market_table = Document(
+        content="New order transaction records with market and customer fields.",
+        meta={"type": "TABLE_DESCRIPTION", "name": "dbo_xStageNewOrders"},
+        score=0.45,
+    )
+
+    documents = _rerank_table_documents(
+        "Show order distribution across markets.",
+        [test_load, order_market_table],
+    )
+
+    assert documents[0].meta["name"] == "dbo_xStageNewOrders"
+
+
 def test_select_relevant_table_documents_limits_weak_extra_candidates():
     documents = [
         Document(
@@ -108,6 +128,28 @@ def test_select_relevant_table_documents_limits_weak_extra_candidates():
 
     assert 1 <= len(selected) <= 5
     assert "staging_audit" not in [document.meta["name"] for document in selected]
+
+
+def test_select_relevant_table_documents_excludes_unrequested_test_candidate():
+    documents = [
+        Document(
+            content="Raw test load rows with order market fields.",
+            meta={"type": "TABLE_DESCRIPTION", "name": "dbo_xStageLoad8_Test"},
+            score=0.99,
+        ),
+        Document(
+            content="New order transaction records with market and customer details.",
+            meta={"type": "TABLE_DESCRIPTION", "name": "dbo_xStageNewOrders"},
+            score=0.4,
+        ),
+    ]
+
+    selected = _select_relevant_table_documents(
+        "Show order distribution across markets.",
+        documents,
+    )
+
+    assert [document.meta["name"] for document in selected] == ["dbo_xStageNewOrders"]
 
 
 @pytest.mark.asyncio
