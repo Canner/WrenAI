@@ -321,9 +321,10 @@ class AthenaConnector(ConnectorABC):
         # composition valid for client SQL terminated with ``;``.
         executed = sql
         if limit is not None:
-            # Multiline wrap: trailing `--` line comments must not eat the
-            # closing `) AS _wren_sub LIMIT n` (goldmedal review on #2457;
-            # same guard as Snowflake #2456).
+            # Multiline wrap so a trailing `-- line comment` in the inner SQL
+            # is terminated by the newline instead of swallowing the closing
+            # `) AS _wren_sub LIMIT n`. (Single-line sibling connectors don't
+            # guard this.)
             executed = (
                 "SELECT * FROM (\n"
                 f"{_strip_trailing_semicolon(sql)}\n"
