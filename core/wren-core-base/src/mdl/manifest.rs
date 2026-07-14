@@ -116,7 +116,7 @@ impl PrimaryKey {
     }
 }
 
-pub const MAX_SUPPORTED_LAYOUT_VERSION: u32 = 3;
+pub const MAX_SUPPORTED_LAYOUT_VERSION: u32 = 4;
 
 impl Manifest {
     pub fn validate_layout_version(&self) -> Result<(), LayoutVersionError> {

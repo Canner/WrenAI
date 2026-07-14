@@ -83,6 +83,7 @@ pub fn migrate_manifest(
         match version {
             1 => migrate_v1_to_v2(&mut value),
             2 => migrate_v2_to_v3(&mut value),
+            3 => migrate_v3_to_v4(&mut value),
             _ => {
                 return Err(MigrationError::UnsupportedTargetVersion {
                     target: target_version,
@@ -111,6 +112,16 @@ fn migrate_v2_to_v3(_value: &mut Value) {
     // single-column manifests deserialize correctly without changes.
 }
 
+/// v3→v4: No data transformation needed.
+/// Adds optional annotation fields (manifest-level `description` + `properties`,
+/// `model.uniqueKeys`, and `description` + `properties` on cube
+/// measure/cubeDimension/timeDimension) and widens `column.properties` value
+/// types to match model/relationship/view.
+fn migrate_v3_to_v4(_value: &mut Value) {
+    // No-op: every v4 change is an additive optional field (or a validation
+    // widening), so existing manifests deserialize and validate unchanged.
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,6 +140,14 @@ mod tests {
         let result = migrate_manifest(v2_json, 3).unwrap();
         let value: Value = serde_json::from_str(&result).unwrap();
         assert_eq!(value["layoutVersion"], 3);
+    }
+
+    #[test]
+    fn test_migrate_v3_to_v4() {
+        let v3_json = r#"{"layoutVersion":3,"catalog":"wren","schema":"public","models":[]}"#;
+        let result = migrate_manifest(v3_json, 4).unwrap();
+        let value: Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(value["layoutVersion"], 4);
     }
 
     #[test]
