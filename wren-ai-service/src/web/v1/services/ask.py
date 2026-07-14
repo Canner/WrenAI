@@ -908,123 +908,6 @@ class AskService:
             return False
         return True
 
-    def _extract_entity_lookup_phrase(self, query: str | None) -> str | None:
-        normalized_query = re.sub(r"\s+", " ", (query or "").strip())
-        if not normalized_query:
-            return None
-
-        match = re.search(
-            r"\b(?:show|list|find|get|display)\b.*?\b(?:orders?|records?|rows?)\b\s+"
-            r"(?:for|where|with)\s+(?P<phrase>.+?)(?:[?.!]|$)",
-            normalized_query,
-            flags=re.IGNORECASE,
-        )
-        if not match:
-            return None
-
-        phrase = match.group("phrase").strip(" .,;:()[]{}'\"")
-        phrase = re.sub(r"^(?:customer|client|account|company|name)\s+", "", phrase, flags=re.IGNORECASE)
-        if not phrase or len(phrase) < 3:
-            return None
-        if re.search(
-            r"\b(?:table|model|schema|column|columns|market|region|country|division|"
-            r"date|month|year|quarter|top|count|number|amount|value)\b",
-            phrase,
-            flags=re.IGNORECASE,
-        ):
-            return None
-        return phrase
-
-    def _preferred_entity_lookup_columns(
-        self, query: str | None, table: dict[str, Any]
-    ) -> set[str]:
-        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
-        candidate_groups: list[tuple[str, ...]] = []
-        if "account" in normalized_query:
-            candidate_groups.append(("Account", "AccountName", "AcctName", "AcctNo"))
-        if "company" in normalized_query:
-            candidate_groups.append(("Company", "CompanyName", "CustName", "CustomerName"))
-        candidate_groups.extend(
-            [
-                (
-                    "Customer",
-                    "CustomerName",
-                    "CustName",
-                    "CustNo",
-                    "CustomerNo",
-                    "CustomerCode",
-                ),
-                ("Client", "ClientName"),
-                ("Account", "AccountName"),
-                ("Company", "CompanyName"),
-                ("Name",),
-            ]
-        )
-
-        columns: set[str] = set()
-        for candidates in candidate_groups:
-            column = self._find_schema_column(table, candidates)
-            if column:
-                columns.add(column)
-        return columns
-
-    def _sql_satisfies_entity_lookup_request(
-        self,
-        sql: str,
-        query: str | None,
-        referenced_tables: list[str],
-        referenced_columns_by_table: dict[str, set[str]],
-        valid_tables: dict[str, dict[str, Any]],
-    ) -> bool:
-        if not self._extract_entity_lookup_phrase(query):
-            return True
-
-        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
-        if any(
-            term in normalized_query
-            for term in (" by ", " per ", " each ", "distribution", "top", "count")
-        ):
-            return True
-
-        for table_reference in referenced_tables:
-            table = self._table_for_sql_reference(table_reference, valid_tables)
-            if not table:
-                continue
-            preferred_columns = self._preferred_entity_lookup_columns(query, table)
-            if not preferred_columns:
-                continue
-
-            table_key = str(table_reference or "").lower()
-            referenced_columns = referenced_columns_by_table.get(
-                table_key
-            ) or referenced_columns_by_table.get(
-                table_key.split(".")[-1],
-                set(),
-            )
-            referenced_column_keys = {
-                self._normalize_schema_identifier_key(column)
-                for column in referenced_columns
-            }
-            preferred_column_keys = {
-                self._normalize_schema_identifier_key(column)
-                for column in preferred_columns
-            }
-            if referenced_column_keys & preferred_column_keys:
-                return True
-
-            logger.warning(
-                "Ignoring SQL because entity lookup did not use available customer/name columns. "
-                "query=%s table=%s preferred_columns=%s referenced_columns=%s sql=%s",
-                query,
-                table.get("name"),
-                sorted(preferred_columns),
-                sorted(referenced_columns),
-                sql,
-            )
-            return False
-
-        return True
-
     def _invalid_unqualified_sql_identifiers(
         self, sql: str, schema_tables: list[dict[str, Any]]
     ) -> list[str]:
@@ -1337,14 +1220,6 @@ class AskService:
         if not self._sql_satisfies_count_ranking_request(sql, query):
             return False
         if not self._sql_satisfies_unique_entity_request(sql, query):
-            return False
-        if not self._sql_satisfies_entity_lookup_request(
-            sql,
-            query,
-            referenced_tables,
-            referenced_columns_by_table,
-            valid_tables,
-        ):
             return False
 
         if not expects_dimension:
@@ -2541,9 +2416,6 @@ class AskService:
             return None
 
         compact_query = re.sub(r"[^a-z0-9]", "", normalized_query)
-
-        if entity_lookup_sql := self._build_entity_lookup_sql(query, tables):
-            return entity_lookup_sql
 
         if pcb_direct_sql := self._build_pcb_direct_question_sql(query, table_ddls):
             return pcb_direct_sql

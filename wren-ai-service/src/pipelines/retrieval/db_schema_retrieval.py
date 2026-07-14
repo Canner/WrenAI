@@ -213,15 +213,11 @@ def _retrieval_terms(value: str) -> set[str]:
         "which",
         "with",
     }
-    terms: set[str] = set()
-    for raw_token in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", value or ""):
-        split_token = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", raw_token)
-        for token in re.findall(r"[A-Za-z0-9]+", split_token):
-            if len(token) <= 2 or token.lower() in stop_words:
-                continue
-            normalized_token = _normalize_retrieval_token(token)
-            if normalized_token:
-                terms.add(normalized_token)
+    terms = {
+        _normalize_retrieval_token(token)
+        for token in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", value or "")
+        if len(token) > 2 and token.lower() not in stop_words
+    }
     return {term for term in terms if term}
 
 
@@ -247,11 +243,7 @@ def _source_shape_score(query: str, document: Document) -> int:
     source_terms = _retrieval_terms(source_text)
 
     score = 0
-    weak_non_production_terms = (
-        "stage",
-        "staging",
-    )
-    strong_non_production_terms = (
+    non_production_terms = (
         "archive",
         "backup",
         "copy",
@@ -259,18 +251,17 @@ def _source_shape_score(query: str, document: Document) -> int:
         "development",
         "duplicate",
         "sample",
+        "stage",
+        "staging",
         "temp",
         "test",
         "tmp",
     )
-    if source_terms & set(strong_non_production_terms) and not _query_mentions_any(
-        normalized_query, strong_non_production_terms
+    if any(term in source_terms for term in non_production_terms) and not _query_mentions_any(
+        normalized_query,
+        non_production_terms,
     ):
-        score -= 240
-    if source_terms & set(weak_non_production_terms) and not _query_mentions_any(
-        normalized_query, weak_non_production_terms
-    ):
-        score -= 40
+        score -= 60
 
     aggregation_terms = (
         "amount",
