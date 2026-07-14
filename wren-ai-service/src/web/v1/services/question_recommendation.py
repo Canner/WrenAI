@@ -67,6 +67,65 @@ class QuestionRecommendation:
         self._allow_sql_functions_retrieval = allow_sql_functions_retrieval
         self._allow_sql_knowledge_retrieval = allow_sql_knowledge_retrieval
 
+    async def _run_schema_retrieval(
+        self,
+        *,
+        query: str,
+        project_id: Optional[str],
+        histories: Optional[list] = None,
+        tables: Optional[list[str]] = None,
+        enable_column_pruning: bool = False,
+        timeout_seconds: int = 60,
+    ) -> dict:
+        try:
+            return await asyncio.wait_for(
+                self._pipelines["db_schema_retrieval"].run(
+                    query=query,
+                    tables=tables,
+                    project_id=project_id,
+                    histories=histories or [],
+                    enable_column_pruning=enable_column_pruning,
+                ),
+                timeout=timeout_seconds,
+            )
+        except TimeoutError as exc:
+            logger.warning(
+                "Question recommendation schema retrieval timed out; continuing with fallback context. "
+                "project_id=%s tables=%s error=%s",
+                project_id,
+                tables,
+                exc,
+            )
+            return {"construct_retrieval_results": {"retrieval_results": []}}
+
+    def _build_mdl_contexts(self, mdl: dict) -> list[str]:
+        contexts: list[str] = []
+        for model in mdl.get("models", []):
+            name = model.get("name")
+            if not name:
+                continue
+
+            columns = model.get("columns") or []
+            column_lines = []
+            for column in columns:
+                column_name = column.get("name")
+                if not column_name:
+                    continue
+                column_type = (
+                    column.get("type")
+                    or column.get("dataType")
+                    or column.get("data_type")
+                    or "TEXT"
+                )
+                column_lines.append(f"  {column_name} {column_type}")
+
+            if column_lines:
+                contexts.append(
+                    f"CREATE TABLE {name} (\n" + ",\n".join(column_lines) + "\n);"
+                )
+
+        return contexts
+
     def _truncate_text(self, value: str, max_chars: int) -> str:
         if max_chars <= 0:
             return ""
@@ -201,9 +260,10 @@ class QuestionRecommendation:
         allow_data_preview: bool = True,
     ):
         async def _document_retrieval() -> tuple[list[str], bool, bool, bool]:
-            retrieval_result = await self._pipelines["db_schema_retrieval"].run(
+            retrieval_result = await self._run_schema_retrieval(
                 query=candidate["question"],
                 project_id=project_id,
+                timeout_seconds=60,
             )
             _retrieval_result = retrieval_result.get("construct_retrieval_results", {})
             documents = _retrieval_result.get("retrieval_results", [])
@@ -396,12 +456,13 @@ class QuestionRecommendation:
         trace_id = kwargs.get("trace_id")
 
         try:
-            orjson.loads(input.mdl)
-            retrieval_result = await self._pipelines["db_schema_retrieval"].run(
+            mdl = orjson.loads(input.mdl)
+            retrieval_result = await self._run_schema_retrieval(
                 query="",
                 histories=[],
                 project_id=input.project_id,
                 enable_column_pruning=False,
+                timeout_seconds=60,
             )
             _retrieval_result = retrieval_result.get("construct_retrieval_results", {})
             documents = _retrieval_result.get("retrieval_results", [])
@@ -410,6 +471,12 @@ class QuestionRecommendation:
                 max_items=DEFAULT_RECOMMENDATION_CONTEXT_ITEMS,
                 max_chars=DEFAULT_RECOMMENDATION_CONTEXT_CHARS,
             )
+            if not table_ddls:
+                table_ddls = self._limit_text_items(
+                    self._build_mdl_contexts(mdl),
+                    max_items=DEFAULT_RECOMMENDATION_CONTEXT_ITEMS,
+                    max_chars=DEFAULT_RECOMMENDATION_CONTEXT_CHARS,
+                )
 
             request = {
                 "contexts": table_ddls,
