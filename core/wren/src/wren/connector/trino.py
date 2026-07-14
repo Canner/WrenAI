@@ -19,7 +19,7 @@ import sqlglot.errors
 from loguru import logger
 from sqlglot.expressions import ColumnDef, DataType
 
-from wren.connector.base import ConnectorABC
+from wren.connector.base import ConnectorABC, strip_trailing_semicolon
 from wren.model.error import (
     DIALECT_SQL,
     ErrorCode,
@@ -359,15 +359,6 @@ def _import_trino():
         ) from e
 
 
-def _strip_trailing_semicolon(sql: str) -> str:
-    """Strip trailing whitespace and an optional final semicolon.
-
-    Wrapping ``SELECT * FROM ({sql}) AS _sub LIMIT N`` breaks if ``sql`` ends
-    with ``;`` because the parser sees ``...; ) AS _sub...``.
-    """
-    return sql.rstrip().removesuffix(";").rstrip()
-
-
 class TrinoConnector(ConnectorABC):
     """Native trino DB-API connector that bypasses ibis-project."""
 
@@ -397,7 +388,9 @@ class TrinoConnector(ConnectorABC):
         trino = _import_trino()
 
         if limit is not None:
-            sql = f"SELECT * FROM ({_strip_trailing_semicolon(sql)}) AS _sub LIMIT {limit}"
+            sql = (
+                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS _sub LIMIT {limit}"
+            )
         try:
             with contextlib.closing(self.connection.cursor()) as cursor:
                 cursor.execute(sql)
@@ -417,7 +410,7 @@ class TrinoConnector(ConnectorABC):
     def dry_run(self, sql: str) -> None:
         trino = _import_trino()
 
-        wrapped = f"SELECT * FROM ({_strip_trailing_semicolon(sql)}) AS _sub LIMIT 0"
+        wrapped = f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS _sub LIMIT 0"
         try:
             with contextlib.closing(self.connection.cursor()) as cursor:
                 cursor.execute(wrapped)

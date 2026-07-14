@@ -13,7 +13,6 @@ It avoids the ibis-framework dependency entirely, which gives us:
 from __future__ import annotations
 
 import json
-import re
 from decimal import ROUND_HALF_EVEN
 from decimal import Decimal as PyDecimal
 
@@ -21,24 +20,8 @@ import psycopg
 import pyarrow as pa
 from loguru import logger
 
-from wren.connector.base import ConnectorABC
+from wren.connector.base import ConnectorABC, strip_trailing_semicolon
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
-
-_TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
-
-
-def _strip_trailing_semicolon(sql: str) -> str:
-    """Strip any trailing ``;`` characters and surrounding whitespace.
-
-    Wrapping user SQL as ``SELECT * FROM ({sql}) AS _sub LIMIT N`` breaks when
-    ``sql`` ends in a semicolon — Postgres rejects ``SELECT 1;`` inside a
-    subquery (``syntax error at or near ";"``). Only the *terminating* run of
-    semicolons/whitespace is stripped, so semicolons inside string literals
-    (e.g. ``SELECT 'a;b' FROM t``) are preserved. Mirrors the canner/trino/
-    clickhouse connectors, which already strip before subquery-wrapping.
-    """
-    return _TRAILING_SEMICOLONS_RE.sub("", sql)
-
 
 # Map of well-known PostgreSQL OIDs to Arrow types. OIDs that we have not
 # explicitly mapped fall back to ``pa.string()`` (see ``_get_pg_arrow_type``).
@@ -267,7 +250,9 @@ class PostgresConnector(ConnectorABC):
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         if limit is not None:
-            sql = f"SELECT * FROM ({_strip_trailing_semicolon(sql)}) AS _sub LIMIT {limit}"
+            sql = (
+                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS _sub LIMIT {limit}"
+            )
 
         try:
             with self.connection.cursor() as cursor:
@@ -286,7 +271,7 @@ class PostgresConnector(ConnectorABC):
             ) from e
 
     def dry_run(self, sql: str) -> None:
-        wrapped = f"SELECT * FROM ({_strip_trailing_semicolon(sql)}) AS _sub LIMIT 0"
+        wrapped = f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS _sub LIMIT 0"
         try:
             with self.connection.cursor() as cursor:
                 cursor.execute(wrapped)

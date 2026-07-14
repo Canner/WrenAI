@@ -16,8 +16,9 @@ import pyarrow.ipc as ipc
 
 from wren.connector.datafusion import (
     DataFusionConnector,
-    _strip_trailing_semicolon,
+    
 )
+from wren.connector.base import strip_trailing_semicolon as _strip_trailing_semicolon
 
 
 def _make_mock_connector() -> tuple[DataFusionConnector, MagicMock]:

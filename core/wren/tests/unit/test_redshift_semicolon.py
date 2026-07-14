@@ -10,7 +10,8 @@ required. Mirrors the postgres connector's semicolon tests.
 from contextlib import closing  # noqa: F401  (kept for parity / import safety)
 from unittest.mock import MagicMock
 
-from wren.connector.redshift import RedshiftConnector, _strip_trailing_semicolon
+from wren.connector.redshift import RedshiftConnector
+from wren.connector.base import strip_trailing_semicolon as _strip_trailing_semicolon
 
 
 def _make_mock_connector() -> tuple[RedshiftConnector, MagicMock]:

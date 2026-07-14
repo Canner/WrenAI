@@ -17,9 +17,9 @@ import pytest
 from wren.connector.trino import (
     _build_trino_column,
     _parse_trino_data_type,
-    _parse_trino_url,
-    _strip_trailing_semicolon,
+    _parse_trino_url
 )
+from wren.connector.base import strip_trailing_semicolon as _strip_trailing_semicolon
 from wren.model.error import ErrorCode, WrenError
 
 # ---------------------------------------------------------------------------

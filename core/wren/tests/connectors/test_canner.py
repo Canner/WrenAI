@@ -18,9 +18,9 @@ import pytest
 from wren.connector.canner import (
     CannerConnector,
     _arrow_type,
-    _build_column,
-    _strip_trailing_semicolon,
+    _build_column
 )
+from wren.connector.base import strip_trailing_semicolon as _strip_trailing_semicolon
 from wren.model import CannerConnectionInfo
 
 psycopg = pytest.importorskip("psycopg")

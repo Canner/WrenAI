@@ -1,31 +1,16 @@
 import os
-import re
 
 import opendal
 import pyarrow as pa
 from loguru import logger
 
-from wren.connector.base import ConnectorABC
+from wren.connector.base import ConnectorABC, strip_trailing_semicolon
 from wren.model import (
     GcsFileConnectionInfo,
     MinioFileConnectionInfo,
     S3FileConnectionInfo,
 )
 from wren.model.error import ErrorCode, WrenError
-
-_TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
-
-
-def _strip_trailing_semicolon(sql: str) -> str:
-    """Strip the terminating run of ``;`` characters and surrounding whitespace.
-
-    Matches the canner/clickhouse/trino helpers of the same name. Wrapping
-    user SQL as ``SELECT * FROM ({sql}) AS _q LIMIT N`` breaks when ``sql``
-    ends in a semicolon — ``SELECT 1;`` is invalid inside a subquery. Only the
-    terminating run is removed so semicolons inside string literals
-    (e.g. ``SELECT ';' AS x``) are preserved.
-    """
-    return _TRAILING_SEMICOLONS_RE.sub("", sql)
 
 
 def _escape_sql(value: str) -> str:
@@ -98,7 +83,7 @@ class DuckDBConnector(ConnectorABC):
             # the subquery stays valid SQL (e.g. ``SELECT 1;`` must not become
             # ``SELECT * FROM (SELECT 1;) AS _q LIMIT ...``). Semicolons inside
             # string literals are preserved.
-            stripped = _strip_trailing_semicolon(sql)
+            stripped = strip_trailing_semicolon(sql)
             sql = f"SELECT * FROM ({stripped}) AS _q LIMIT {int(limit)}"
         return self.connection.execute(sql).fetch_arrow_table()
 
@@ -113,7 +98,7 @@ class DuckDBConnector(ConnectorABC):
         statement then becomes a natural syntax error inside the subquery, and
         no rows are materialized.
         """
-        stripped = _strip_trailing_semicolon(sql)
+        stripped = strip_trailing_semicolon(sql)
         self.connection.execute(f"SELECT * FROM ({stripped}) AS _q LIMIT 0")
 
     def _attach_database(self, connection_info) -> None:

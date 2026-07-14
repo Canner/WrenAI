@@ -2,24 +2,10 @@
 
 from __future__ import annotations
 
-import re
-
 import pyarrow as pa
 
-from wren.connector.base import ConnectorABC
+from wren.connector.base import ConnectorABC, strip_trailing_semicolon
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
-
-_TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
-
-
-def _strip_trailing_semicolon(sql: str) -> str:
-    """Strip terminating ``;`` / whitespace so we can wrap SQL as a subquery.
-
-    Snowflake rejects ``SELECT 1;`` inside a subquery. Only the trailing run is
-    removed so semicolons inside string literals stay intact. Mirrors
-    postgres/redshift connectors.
-    """
-    return _TRAILING_SEMICOLONS_RE.sub("", sql)
 
 
 def _build_connection_params(connection_info) -> dict:
@@ -80,7 +66,7 @@ class SnowflakeConnector(ConnectorABC):
             # (`-- ...`) cannot swallow the closing paren, alias, or LIMIT.
             executed = (
                 "SELECT * FROM (\n"
-                f"{_strip_trailing_semicolon(sql)}\n"
+                f"{strip_trailing_semicolon(sql)}\n"
                 f") AS _wren_sub LIMIT {int(limit)}"
             )
         try:

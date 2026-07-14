@@ -18,8 +18,9 @@ pytest.importorskip("oracledb")
 from wren.connector import oracle as oracle_mod  # noqa: E402
 from wren.connector.oracle import (  # noqa: E402
     OracleConnector,
-    _strip_trailing_semicolon,
+    
 )
+from wren.connector.base import strip_trailing_semicolon as _strip_trailing_semicolon
 
 
 def _make_mock_connector() -> tuple[OracleConnector, MagicMock]:
