@@ -36,6 +36,12 @@ const CalculatedFieldEditableTable =
   makeEditableBaseTable(CalculatedFieldTable);
 const RelationshipEditableTable = makeEditableBaseTable(RelationTable);
 
+const getMetadataId = (item: any) =>
+  item?.relationId || item?.columnId || item?.nestedColumnId;
+
+const getFieldDisplayName = (item: any) =>
+  item?.displayName ?? item?.referenceName ?? item?.sourceColumnName ?? '';
+
 export default function EditModelMetadata(props: Props) {
   const {
     formNamespace,
@@ -61,17 +67,26 @@ export default function EditModelMetadata(props: Props) {
     });
   };
 
-  const handleMetadataChange = (fieldsName: string) => (value: any[]) => {
+  const handleMetadataChange = (fieldsName: string) => (value: any[] = []) => {
     // bind changeable metadata values
     onChange({
-      [fieldsName]: value.map((item) => ({
-        id: item.relationId || item.columnId || item.nestedColumnId,
-        description: item.description,
-        // Only models & fields, nested fields have alias
-        ...([FIELDS_NAME.FIELDS, FIELDS_NAME.NESTED_FIELDS].includes(fieldsName)
-          ? { displayName: item.displayName }
-          : {}),
-      })),
+      [fieldsName]: value
+        .map((item) => {
+          const id = getMetadataId(item);
+          if (!id) return null;
+
+          return {
+            id,
+            description: item?.description,
+            // Only models & fields, nested fields have alias
+            ...([FIELDS_NAME.FIELDS, FIELDS_NAME.NESTED_FIELDS].includes(
+              fieldsName,
+            )
+              ? { displayName: getFieldDisplayName(item) }
+              : {}),
+          };
+        })
+        .filter(Boolean),
     });
   };
 

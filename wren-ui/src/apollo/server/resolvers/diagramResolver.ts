@@ -243,21 +243,23 @@ export class DiagramResolver {
       id: uuidv4(),
       relationId: relation.id,
       nodeType: NodeType.RELATION,
-      displayName,
+      displayName: displayName || referenceName,
       referenceName,
       type: relation.joinType as RelationType,
       fromModelId: relation.fromModelId,
       fromModelName: relation.fromModelName,
-      fromModelDisplayName: relation.fromModelDisplayName,
+      fromModelDisplayName:
+        relation.fromModelDisplayName || relation.fromModelName,
       fromColumnId: relation.fromColumnId,
       fromColumnName: relation.fromColumnName,
-      fromColumnDisplayName: relation.fromColumnDisplayName,
+      fromColumnDisplayName:
+        relation.fromColumnDisplayName || relation.fromColumnName,
       toModelId: relation.toModelId,
       toModelName: relation.toModelName,
-      toModelDisplayName: relation.toModelDisplayName,
+      toModelDisplayName: relation.toModelDisplayName || relation.toModelName,
       toColumnId: relation.toColumnId,
       toColumnName: relation.toColumnName,
-      toColumnDisplayName: relation.toColumnDisplayName,
+      toColumnDisplayName: relation.toColumnDisplayName || relation.toColumnName,
       description: properties?.description,
     };
   }
