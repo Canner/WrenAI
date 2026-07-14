@@ -24,7 +24,10 @@ MAX_TABLE_DESCRIPTION_DESCRIPTION_LENGTH = 4000
 
 @component
 class TableDescriptionChunker:
-    def _truncate_description(self, description: str) -> str:
+    def _truncate_description(self, description: str | None) -> str:
+        if description is None:
+            return ""
+
         if len(description) <= MAX_TABLE_DESCRIPTION_DESCRIPTION_LENGTH:
             return description
 
