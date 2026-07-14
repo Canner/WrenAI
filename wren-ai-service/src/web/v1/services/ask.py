@@ -2015,6 +2015,49 @@ class AskService:
                     normalized.append(candidate)
         return normalized
 
+    def _select_direct_explicit_sql_table_name(self, table_names: list[str]) -> str | None:
+        normalized_names = self._normalize_explicit_table_names(table_names)
+        if not normalized_names:
+            return None
+
+        original_name = normalized_names[0]
+        if "." in original_name:
+            for table_name in normalized_names:
+                if "." not in table_name and "_" in table_name:
+                    return table_name
+        return original_name
+
+    def _build_direct_explicit_table_count_sql(
+        self, query: str, table_names: list[str]
+    ) -> tuple[str, str] | None:
+        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized or not table_names:
+            return None
+
+        wants_total_count = (
+            re.search(r"\bhow many\b", normalized)
+            or "record count" in normalized
+            or "count of records" in normalized
+            or "number of records" in normalized
+            or "number of rows" in normalized
+            or "count rows" in normalized
+        )
+        if not wants_total_count or re.search(
+            r"\b(?:by|per|each|distribution|highest|top|monthly|daily|weekly)\b",
+            normalized,
+        ):
+            return None
+
+        table_name = self._select_direct_explicit_sql_table_name(table_names)
+        if not table_name:
+            return None
+
+        return (
+            f'SELECT COUNT(*) AS "RecordCount" FROM '
+            f"{self._quote_sql_identifier(table_name)}",
+            table_name,
+        )
+
     def _build_direct_orders_sales_sql(self, query: str) -> str | None:
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized:
@@ -6084,6 +6127,30 @@ class AskService:
                     return results
 
                 if explicit_table_names:
+                    if direct_count_sql := self._build_direct_explicit_table_count_sql(
+                        user_query,
+                        explicit_table_names,
+                    ):
+                        explicit_sql, explicit_table_name = direct_count_sql
+                        ask_result = self._build_ask_result_from_sql(explicit_sql)
+                        if ask_result:
+                            api_results = [ask_result]
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="TEXT_TO_SQL",
+                                response=api_results,
+                                rephrased_question=user_query,
+                                intent_reasoning=(
+                                    "Explicit table count request generated SQL directly."
+                                ),
+                                retrieved_tables=[explicit_table_name],
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                            )
+                            results["ask_result"] = api_results
+                            results["metadata"]["type"] = "TEXT_TO_SQL"
+                            return results
+
                     self._ask_results[query_id] = AskResultResponse(
                         status="searching",
                         type="TEXT_TO_SQL",
@@ -6104,7 +6171,7 @@ class AskService:
                         timeout_seconds=min(
                             self._schema_retrieval_timeout_seconds,
                             self._pipeline_timeout_seconds,
-                            20,
+                            60,
                         ),
                     )
                     documents, table_names, table_ddls = (
@@ -6700,7 +6767,8 @@ class AskService:
                             ),
                             timeout_seconds=min(
                                 self._schema_retrieval_timeout_seconds,
-                                20,
+                                self._pipeline_timeout_seconds,
+                                60,
                             ),
                         )
                         _retrieval_result = retrieval_result.get(
@@ -6737,7 +6805,7 @@ class AskService:
                         timeout_seconds=min(
                             self._schema_retrieval_timeout_seconds,
                             self._pipeline_timeout_seconds,
-                            20,
+                            45,
                         ),
                     )
                     _retrieval_result = retrieval_result.get(
