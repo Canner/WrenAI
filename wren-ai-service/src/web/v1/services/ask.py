@@ -1877,6 +1877,129 @@ class AskService:
                     normalized.append(candidate)
         return normalized
 
+    def _select_direct_explicit_sql_table_name(
+        self, table_names: list[str]
+    ) -> str | None:
+        normalized_names = self._normalize_explicit_table_names(table_names)
+        if not normalized_names:
+            return None
+
+        original_name = normalized_names[0]
+        if "." in original_name:
+            for table_name in normalized_names:
+                if "." not in table_name and "_" in table_name:
+                    return table_name
+        return original_name
+
+    def _build_direct_explicit_table_count_sql(
+        self, query: str, table_names: list[str]
+    ) -> tuple[str, str] | None:
+        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized or not table_names:
+            return None
+
+        wants_total_count = (
+            re.search(r"\bhow many\b", normalized)
+            or "record count" in normalized
+            or "count of records" in normalized
+            or "number of records" in normalized
+            or "number of rows" in normalized
+            or "count rows" in normalized
+        )
+        if not wants_total_count or re.search(
+            r"\b(?:by|per|each|distribution|highest|top|monthly|daily|weekly)\b",
+            normalized,
+        ):
+            return None
+
+        table_name = self._select_direct_explicit_sql_table_name(table_names)
+        if not table_name:
+            return None
+
+        return (
+            f'SELECT COUNT(*) AS "RecordCount" FROM '
+            f"{self._quote_sql_identifier(table_name)}",
+            table_name,
+        )
+
+    def _extract_direct_explicit_projection_columns(self, query: str) -> list[str]:
+        columns: list[str] = []
+        match = re.search(
+            r"\b(?:including|include|with)\s+(.+?)(?:\.|$)",
+            query or "",
+            flags=re.IGNORECASE,
+        )
+        if not match:
+            return columns
+
+        raw_columns = re.sub(r"\band\b", ",", match.group(1), flags=re.IGNORECASE)
+        stop_words = {
+            "columns",
+            "fields",
+            "including",
+            "include",
+            "with",
+            "and",
+        }
+        for raw_column in re.split(r",", raw_columns):
+            column = raw_column.strip().strip("`\"[] ")
+            if not column:
+                continue
+            if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", column):
+                continue
+            if column.lower() in stop_words:
+                continue
+            if column not in columns:
+                columns.append(column)
+        return columns
+
+    def _build_direct_explicit_table_projection_sql(
+        self, query: str, table_names: list[str]
+    ) -> tuple[str, str] | None:
+        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized or not table_names:
+            return None
+
+        table_name = self._select_direct_explicit_sql_table_name(table_names)
+        if not table_name:
+            return None
+
+        columns = self._extract_direct_explicit_projection_columns(query)
+        asks_for_preview = bool(
+            re.search(r"\b(?:preview|sample|first)\b", normalized)
+            or re.search(r"\b(?:rows?|records?|data)\b", normalized)
+        )
+        if not columns and not asks_for_preview:
+            return None
+
+        limit = self._extract_requested_top_n(query, default_value=500)
+        table_ref = self._quote_sql_identifier(table_name)
+        select_clause = (
+            ", ".join(self._quote_sql_identifier(column) for column in columns)
+            if columns
+            else "*"
+        )
+
+        where_parts: list[str] = []
+        for column in columns:
+            if re.search(
+                rf"\b{re.escape(column.lower())}\b\s+is\s+not\s+empty",
+                normalized,
+            ):
+                column_ref = self._quote_sql_identifier(column)
+                where_parts.append(f"{column_ref} IS NOT NULL AND {column_ref} <> ''")
+            elif re.search(
+                rf"\b{re.escape(column.lower())}\b\s+is\s+not\s+null",
+                normalized,
+            ):
+                where_parts.append(f"{self._quote_sql_identifier(column)} IS NOT NULL")
+
+        where_clause = f" WHERE {' AND '.join(where_parts)}" if where_parts else ""
+        return (
+            f"SELECT TOP {limit} {select_clause} FROM {table_ref}{where_clause}",
+            table_name,
+        )
+
     def _build_direct_orders_sales_sql(self, query: str) -> str | None:
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized:
