@@ -269,6 +269,115 @@ def test_schema_grounded_table_question_groups_top_customers_by_order_count():
     )
 
 
+def test_validated_sql_rejects_country_question_without_country_column():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT "dbo_ytblTarrifsExportsA"."Commodity_Line_Value" AS '
+            '"Commodity_Line_Value", COUNT(*) AS "RecordCount" '
+            'FROM "dbo_ytblTarrifsExportsA" '
+            'WHERE "dbo_ytblTarrifsExportsA"."Commodity_Line_Value" IS NOT NULL '
+            'GROUP BY "dbo_ytblTarrifsExportsA"."Commodity_Line_Value" '
+            'ORDER BY COUNT(*) DESC'
+        ),
+        [
+            """
+            CREATE TABLE dbo_ytblTarrifsExportsA (
+              Country_of_Ultimate_Destination_Code VARCHAR,
+              Commodity_Line_Value DOUBLE
+            );
+            """
+        ],
+        "Show the total commodity line value by country.",
+    )
+
+    assert result is None
+
+
+def test_schema_grounded_sales_sql_groups_commodity_value_by_country():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_sales_sql(
+        "Show the total commodity line value by country.",
+        [
+            """
+            CREATE TABLE dbo_ytblTarrifsExportsA (
+              Country_of_Ultimate_Destination_Code VARCHAR,
+              Commodity_Line_Value DOUBLE
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT "dbo_ytblTarrifsExportsA"."Country_of_Ultimate_Destination_Code" '
+        'AS "Country_of_Ultimate_Destination_Code", '
+        'SUM("dbo_ytblTarrifsExportsA"."Commodity_Line_Value") '
+        'AS "TotalCommodity_Line_Value" '
+        'FROM "dbo_ytblTarrifsExportsA" '
+        'WHERE "dbo_ytblTarrifsExportsA"."Country_of_Ultimate_Destination_Code" '
+        'IS NOT NULL '
+        'GROUP BY "dbo_ytblTarrifsExportsA"."Country_of_Ultimate_Destination_Code" '
+        'ORDER BY SUM("dbo_ytblTarrifsExportsA"."Commodity_Line_Value") DESC'
+    )
+
+
+def test_validated_sql_rejects_entity_lookup_using_non_customer_column():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT * FROM "dbo_tnoStageNewOrders" '
+            'WHERE "dbo_tnoStageNewOrders"."Division" = '
+            "'Daimler Trucks North America'"
+        ),
+        [
+            """
+            CREATE TABLE dbo_tnoStageNewOrders (
+              Division VARCHAR,
+              CustName VARCHAR,
+              OrdNo VARCHAR
+            );
+            """
+        ],
+        "List orders for Daimler Trucks North America.",
+    )
+
+    assert result is None
+
+
+def test_schema_grounded_sales_sql_filters_entity_lookup_by_customer_name():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_grounded_sales_sql(
+        "List orders for Daimler Trucks North America.",
+        [
+            """
+            CREATE TABLE dbo_tnoStageNewOrders (
+              Division VARCHAR,
+              CustName VARCHAR,
+              OrdNo VARCHAR
+            );
+            """,
+            """
+            CREATE TABLE dbo_tblNewOrders (
+              CustName VARCHAR,
+              OrdNo VARCHAR,
+              OrdDate TIMESTAMP
+            );
+            """,
+        ],
+    )
+
+    assert sql == (
+        'SELECT TOP 500 * FROM "dbo_tblNewOrders" '
+        'WHERE "dbo_tblNewOrders"."CustName" = '
+        "'Daimler Trucks North America' "
+        'ORDER BY "dbo_tblNewOrders"."OrdDate" DESC'
+    )
+
+
 def test_validated_sql_rejects_distinct_with_extra_entity_columns_for_no_duplicates():
     service = AskService.__new__(AskService)
 
@@ -1058,7 +1167,7 @@ def test_build_schema_grounded_sales_sql_for_highest_order_revenue_by_country():
     )
 
 
-def test_build_schema_grounded_sales_sql_for_highest_order_revenue_by_prefixed_country():
+def test_build_schema_grounded_sales_sql_ignores_load_table_for_revenue_question():
     service = AskService.__new__(AskService)
     sql = service._build_schema_grounded_sales_sql(
         "Which countries have the highest order revenue?",
@@ -1073,17 +1182,10 @@ def test_build_schema_grounded_sales_sql_for_highest_order_revenue_by_prefixed_c
         ],
     )
 
-    assert sql == (
-        'SELECT "dbo_xStageLoad8"."col_07_Country" AS "col_07_Country", '
-        'SUM("dbo_xStageLoad8"."TotalOrderValue") AS "TotalTotalOrderValue" '
-        'FROM "dbo_xStageLoad8" '
-        'WHERE "dbo_xStageLoad8"."col_07_Country" IS NOT NULL '
-        'GROUP BY "dbo_xStageLoad8"."col_07_Country" '
-        'ORDER BY SUM("dbo_xStageLoad8"."TotalOrderValue") DESC'
-    )
+    assert sql is None
 
 
-def test_build_schema_grounded_sales_sql_for_losing_order_value_by_market():
+def test_build_schema_grounded_sales_sql_ignores_staging_table_for_market_question():
     service = AskService.__new__(AskService)
     sql = service._build_schema_grounded_sales_sql(
         "Which markets are losing order value?",
@@ -1098,14 +1200,7 @@ def test_build_schema_grounded_sales_sql_for_losing_order_value_by_market():
         ],
     )
 
-    assert sql == (
-        'SELECT "dbo_tblStageNewOrders"."Market" AS "Market", '
-        'SUM("dbo_tblStageNewOrders"."TotalOrderValue") AS "TotalTotalOrderValue" '
-        'FROM "dbo_tblStageNewOrders" '
-        'WHERE "dbo_tblStageNewOrders"."Market" IS NOT NULL '
-        'GROUP BY "dbo_tblStageNewOrders"."Market" '
-        'ORDER BY SUM("dbo_tblStageNewOrders"."TotalOrderValue") ASC'
-    )
+    assert sql is None
 
 
 def test_build_schema_grounded_sales_sql_for_highest_customers_each_market():
