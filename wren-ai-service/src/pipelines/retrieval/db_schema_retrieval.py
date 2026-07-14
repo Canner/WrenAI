@@ -523,6 +523,84 @@ def _normalize_table_names(table_names: Optional[list[str]]) -> list[str]:
     return normalized
 
 
+def _add_table_name_variants(table_names: list[str], candidate: str) -> None:
+    cleaned_candidate = str(candidate or "").strip().strip(".,;:()")
+    cleaned_candidate = (
+        cleaned_candidate.replace("[", "")
+        .replace("]", "")
+        .replace('"', "")
+        .replace("`", "")
+    )
+    if not cleaned_candidate:
+        return
+
+    variants = [cleaned_candidate]
+    if "." in cleaned_candidate:
+        parts = [part for part in cleaned_candidate.split(".") if part]
+        if len(parts) >= 2:
+            qualified_name = ".".join(parts[-2:])
+            underscored_name = "_".join(parts[-2:])
+            bare_name = parts[-1]
+            variants.extend([qualified_name, underscored_name, bare_name])
+    elif "_" in cleaned_candidate:
+        parts = [part for part in cleaned_candidate.split("_") if part]
+        if len(parts) >= 2:
+            variants.append(".".join(parts[-2:]))
+            variants.append(parts[-1])
+
+    for variant in variants:
+        if variant and variant not in table_names:
+            table_names.append(variant)
+
+
+def _looks_like_explicit_table_reference(candidate: str) -> bool:
+    cleaned_candidate = str(candidate or "").strip()
+    if not cleaned_candidate:
+        return False
+
+    if any(character in cleaned_candidate for character in (".", "_", "[", "]", "`")):
+        return True
+
+    if re.match(r"(?i)^(dbo|tbl|xStage|ytbl)[A-Za-z0-9_]*$", cleaned_candidate):
+        return True
+
+    return any(character.isupper() for character in cleaned_candidate[1:])
+
+
+def _extract_explicit_table_names_from_query(query: str) -> list[str]:
+    table_names: list[str] = []
+    normalized_query = query or ""
+
+    for match in re.finditer(
+        r"(?<![A-Za-z0-9_])(?:\[?[A-Za-z_][A-Za-z0-9_]*\]?\.)"
+        r"+\[?[A-Za-z_][A-Za-z0-9_]*\]?(?![A-Za-z0-9_])",
+        normalized_query,
+    ):
+        _add_table_name_variants(table_names, match.group(0))
+
+    for match in re.finditer(
+        r"\b(?:from|in|inside|table|using)\s+"
+        r"([`\"\[]?[A-Za-z_][A-Za-z0-9_]*(?:[`\"\]]?\.[`\"\[]?[A-Za-z_][A-Za-z0-9_]*)*"
+        r"[`\"\]]?)",
+        normalized_query,
+        flags=re.IGNORECASE,
+    ):
+        candidate = match.group(1)
+        if _looks_like_explicit_table_reference(candidate):
+            _add_table_name_variants(table_names, candidate)
+
+    for match in re.finditer(
+        r"\b(?:dbo|tbl|xStage|ytbl)[A-Za-z0-9_]*\b",
+        normalized_query,
+        flags=re.IGNORECASE,
+    ):
+        candidate = match.group(0)
+        if "_" in candidate or any(character.isupper() for character in candidate[1:]):
+            _add_table_name_variants(table_names, candidate)
+
+    return _normalize_table_names(table_names)
+
+
 def _extract_table_names_from_table_retrieval(
     table_retrieval: dict, explicit_tables: Optional[list[str]] = None
 ) -> list[str]:
@@ -577,6 +655,24 @@ async def table_retrieval(
     tables: list[str],
     table_retriever: Any,
 ) -> dict:
+    explicit_tables = _normalize_table_names(
+        [*(tables or []), *_extract_explicit_table_names_from_query(query)]
+    )
+    if explicit_tables:
+        logger.info(
+            "Using explicit table names without table-description lookup: %s",
+            explicit_tables,
+        )
+        return {
+            "documents": [
+                Document(
+                    content=str({"name": table_name}),
+                    meta={"type": "TABLE_DESCRIPTION", "name": table_name},
+                )
+                for table_name in explicit_tables
+            ]
+        }
+
     base_filters = {
         "operator": "AND",
         "conditions": [
@@ -599,22 +695,6 @@ async def table_retrieval(
         )
         return results
 
-    if tables:
-        normalized_tables = _normalize_table_names(tables)
-        logger.info(
-            "Using explicit table names without table-description lookup: %s",
-            normalized_tables,
-        )
-        return {
-            "documents": [
-                Document(
-                    content=str({"name": table_name}),
-                    meta={"type": "TABLE_DESCRIPTION", "name": table_name},
-                )
-                for table_name in normalized_tables
-            ]
-        }
-
     return {"documents": []}
 
 
@@ -628,7 +708,8 @@ async def dbschema_retrieval(
     embedding: Optional[dict] = None,
 ) -> list[Document]:
     selected_table_names = _extract_table_names_from_table_retrieval(
-        table_retrieval, tables
+        table_retrieval,
+        [*(tables or []), *_extract_explicit_table_names_from_query(query)],
     )
 
     filters = {
@@ -703,7 +784,49 @@ async def dbschema_retrieval(
             return []
 
     results = await dbschema_retriever.run(query_embedding=[], filters=filters)
-    return results.get("documents", [])
+    documents = results.get("documents", [])
+    if documents or not selected_table_names:
+        return documents
+
+    query_embedding = embedding.get("embedding") if isinstance(embedding, dict) else None
+    if not query_embedding:
+        return documents
+
+    fallback_filters = {
+        "operator": "AND",
+        "conditions": [
+            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+        ],
+    }
+    if project_id:
+        fallback_filters["conditions"].append(
+            {"field": "project_id", "operator": "==", "value": project_id}
+        )
+    logger.info(
+        "Selected schema names returned no deployed metadata for active project_id %s; "
+        "falling back to deployed schema vector retrieval for query=%s tables=%s",
+        project_id,
+        query,
+        selected_table_names,
+    )
+    candidate_results = await dbschema_retriever.run(
+        query_embedding=query_embedding,
+        filters=fallback_filters,
+    )
+    fallback_table_names = _extract_table_names_from_table_retrieval(
+        candidate_results
+    )[:MAX_RELEVANT_TABLE_CANDIDATES]
+    if not fallback_table_names:
+        return candidate_results.get("documents", [])
+
+    fallback_filters["conditions"].append(
+        {"field": "name", "operator": "in", "value": fallback_table_names}
+    )
+    fallback_results = await dbschema_retriever.run(
+        query_embedding=[],
+        filters=fallback_filters,
+    )
+    return fallback_results.get("documents", [])
 
 
 @observe()
