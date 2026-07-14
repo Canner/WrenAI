@@ -180,3 +180,28 @@ def test_debug_profile_returns_literal_placeholder(tmp_path, monkeypatch):
     # The raw stored value should also still be the placeholder
     raw = profile_mod._load_raw()["profiles"]["pg"]
     assert raw["password"] == "${PG_PW}"
+
+
+def test_debug_masks_registry_sensitive_fields(tmp_path, monkeypatch):
+    """Fields the connection-field registry marks SecretStr, but whose names match
+    no substring in the local heuristic (``pat``, ``connection_url``, ``dsn``,
+    ``ssl_ca``, and the camelCase alias ``clientId``), must still be masked when a
+    literal value is stored. ``debug`` must not diverge from the field registry —
+    the single source of truth for field sensitivity."""
+    monkeypatch.setattr(profile_mod, "_WREN_HOME", tmp_path)
+    monkeypatch.setattr(profile_mod, "_PROFILES_FILE", tmp_path / "profiles.yml")
+
+    cases = [
+        ("canner_p", {"datasource": "canner", "host": "h", "pat": "SECRET"}, "pat"),
+        (
+            "url_p",
+            {"datasource": "postgres", "connection_url": "postgresql://u:PW@h/db"},
+            "connection_url",
+        ),
+        ("oracle_p", {"datasource": "oracle", "dsn": "admin/PW@h:1521/db"}, "dsn"),
+        ("mysql_p", {"datasource": "mysql", "ssl_ca": "CERT"}, "ssl_ca"),
+        ("dbx_p", {"datasource": "databricks", "clientId": "abc"}, "clientId"),
+    ]
+    for name, prof, key in cases:
+        profile_mod.add_profile(name, prof)
+        assert profile_mod.debug_profile(name)["config"][key] == "***", key
