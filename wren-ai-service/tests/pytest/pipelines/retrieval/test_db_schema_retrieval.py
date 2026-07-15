@@ -152,6 +152,28 @@ def test_select_relevant_table_documents_excludes_unrequested_test_candidate():
     assert [document.meta["name"] for document in selected] == ["dbo_xStageNewOrders"]
 
 
+def test_select_relevant_table_documents_keeps_requested_test_candidate():
+    documents = [
+        Document(
+            content="Raw test load rows with order market fields.",
+            meta={"type": "TABLE_DESCRIPTION", "name": "dbo_xStageLoad8_Test"},
+            score=0.99,
+        ),
+        Document(
+            content="New order transaction records with market and customer details.",
+            meta={"type": "TABLE_DESCRIPTION", "name": "dbo_xStageNewOrders"},
+            score=0.4,
+        ),
+    ]
+
+    selected = _select_relevant_table_documents(
+        "Show test load order distribution across markets.",
+        documents,
+    )
+
+    assert "dbo_xStageLoad8_Test" in [document.meta["name"] for document in selected]
+
+
 @pytest.mark.asyncio
 async def test_table_retrieval_caps_embedding_results_before_schema_loading():
     documents = [
@@ -332,6 +354,45 @@ async def test_dbschema_retrieval_loads_selected_active_project_schema():
             {"field": "name", "operator": "in", "value": ["orders"]},
         ],
     }
+
+
+@pytest.mark.asyncio
+async def test_dbschema_retrieval_filters_unrequested_noisy_full_schema():
+    class Retriever:
+        async def run(self, query_embedding, filters):
+            return {
+                "documents": [
+                    Document(
+                        content=str(
+                            {
+                                "type": "TABLE",
+                                "name": "orders",
+                                "columns": [],
+                            }
+                        ),
+                        meta={"type": "TABLE_SCHEMA", "name": "orders"},
+                    ),
+                    Document(
+                        content=str(
+                            {
+                                "type": "TABLE",
+                                "name": "orders_test_duplicate",
+                                "columns": [],
+                            }
+                        ),
+                        meta={"type": "TABLE_SCHEMA", "name": "orders_test_duplicate"},
+                    ),
+                ]
+            }
+
+    documents = await dbschema_retrieval(
+        query="",
+        table_retrieval={"documents": []},
+        project_id="project-1",
+        dbschema_retriever=Retriever(),
+    )
+
+    assert [document.meta["name"] for document in documents] == ["orders"]
 
 
 @pytest.mark.asyncio

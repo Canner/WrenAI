@@ -17,6 +17,7 @@ from src.pipelines.generation.utils.sql import (
     construct_instructions,
     sql_generation_reasoning_system_prompt,
 )
+from src.pipelines.metadata_hygiene import filter_business_schema_contexts
 from src.utils import trace_cost
 from src.web.v1.services import Configuration
 
@@ -82,6 +83,7 @@ def prompt(
     prompt_builder: PromptBuilder,
     configuration: Configuration | None = Configuration(),
 ) -> dict:
+    documents = filter_business_schema_contexts(query, documents or [])
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,

@@ -25,6 +25,7 @@ from src.pipelines.generation.utils.sql import (
     get_sql_generation_model_kwargs,
     get_sql_generation_system_prompt,
 )
+from src.pipelines.metadata_hygiene import filter_business_schema_contexts
 from src.pipelines.retrieval.sql_functions import SqlFunction
 from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 from src.utils import trace_cost
@@ -130,6 +131,7 @@ def prompt(
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
+    documents = filter_business_schema_contexts(query, documents or [])
     _prompt = prompt_builder.run(
         query=query,
         data_source=data_source,
@@ -185,11 +187,13 @@ async def post_process(
     generate_sql_in_followup: dict,
     post_processor: SQLGenPostProcessor,
     documents: list[str],
+    query: str,
     data_source: str,
     project_id: str | None = None,
     use_dry_plan: bool = False,
     allow_dry_plan_fallback: bool = True,
 ) -> dict:
+    documents = filter_business_schema_contexts(query, documents or [])
     return await post_processor.run(
         generate_sql_in_followup.get("replies"),
         project_id=project_id,
