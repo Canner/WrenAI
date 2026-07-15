@@ -83,6 +83,19 @@ export interface IWrenAIAdaptor {
     queryId: string,
   ): Promise<RecommendationQuestionsResult>;
 
+  generateSemanticsDescription(input: {
+    manifest: any;
+    selectedModels: string[];
+    userPrompt: string;
+    projectId: number;
+  }): Promise<AsyncQueryResponse>;
+  getSemanticsDescriptionResult(queryId: string): Promise<any>;
+  generateRelationshipRecommendations(input: {
+    manifest: any;
+    projectId: number;
+  }): Promise<AsyncQueryResponse>;
+  getRelationshipRecommendationResult(queryId: string): Promise<any>;
+
   /**
    * Get text-based answer from SQL
    */
@@ -409,6 +422,80 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     } catch (err: any) {
       logger.debug(
         `Got error when getting recommendation questions result: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  public async generateSemanticsDescription(input: {
+    manifest: any;
+    selectedModels: string[];
+    userPrompt: string;
+    projectId: number;
+  }): Promise<AsyncQueryResponse> {
+    try {
+      const res = await axios.post(
+        `${this.wrenAIBaseEndpoint}/v1/semantics-descriptions`,
+        {
+          mdl: JSON.stringify(input.manifest),
+          selected_models: input.selectedModels,
+          user_prompt: input.userPrompt,
+          project_id: String(input.projectId),
+        },
+      );
+      return { queryId: res.data.id };
+    } catch (err: any) {
+      logger.debug(
+        `Got error when generating semantics descriptions: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  public async getSemanticsDescriptionResult(queryId: string): Promise<any> {
+    try {
+      const res = await axios.get(
+        `${this.wrenAIBaseEndpoint}/v1/semantics-descriptions/${queryId}`,
+      );
+      return res.data;
+    } catch (err: any) {
+      logger.debug(
+        `Got error when getting semantics descriptions: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  public async generateRelationshipRecommendations(input: {
+    manifest: any;
+    projectId: number;
+  }): Promise<AsyncQueryResponse> {
+    try {
+      const res = await axios.post(
+        `${this.wrenAIBaseEndpoint}/v1/relationship-recommendations`,
+        {
+          mdl: JSON.stringify(input.manifest),
+          project_id: String(input.projectId),
+        },
+      );
+      return { queryId: res.data.id };
+    } catch (err: any) {
+      logger.debug(
+        `Got error when generating relationship recommendations: ${getAIServiceError(err)}`,
+      );
+      throw err;
+    }
+  }
+
+  public async getRelationshipRecommendationResult(queryId: string): Promise<any> {
+    try {
+      const res = await axios.get(
+        `${this.wrenAIBaseEndpoint}/v1/relationship-recommendations/${queryId}`,
+      );
+      return res.data;
+    } catch (err: any) {
+      logger.debug(
+        `Got error when getting relationship recommendations: ${getAIServiceError(err)}`,
       );
       throw err;
     }

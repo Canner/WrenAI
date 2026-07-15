@@ -368,6 +368,11 @@ export const typeDefs = gql`
     columns: [UpdateViewColumnMetadataInput!]
   }
 
+  input GenerateModelingSemanticsInput {
+    selectedModels: [String!]!
+    userPrompt: String!
+  }
+
   type NestedFieldInfo {
     id: Int!
     displayName: String!
@@ -1269,6 +1274,8 @@ export const typeDefs = gql`
 
     # System
     getMDL(hash: String!): GetMDLResult!
+    modelingSemanticsResult(queryId: String!): JSON!
+    modelingRelationshipsResult(queryId: String!): JSON!
 
     # Learning
     learningRecord: LearningRecord!
@@ -1324,6 +1331,8 @@ export const typeDefs = gql`
       where: ViewWhereUniqueInput!
       data: UpdateViewMetadataInput!
     ): Boolean!
+    generateModelingSemantics(data: GenerateModelingSemanticsInput!): JSON!
+    generateModelingRelationships: JSON!
 
     # Relation
     createRelation(data: RelationInput!): JSON!

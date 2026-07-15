@@ -57,6 +57,8 @@ const resolvers = {
     // Settings
     settings: projectResolver.getSettings,
     getMDL: modelResolver.getMDL,
+    modelingSemanticsResult: modelResolver.getModelingSemanticsResult,
+    modelingRelationshipsResult: modelResolver.getModelingRelationshipsResult,
 
     // Learning
     learningRecord: learningResolver.getLearningRecord,
@@ -149,6 +151,8 @@ const resolvers = {
     previewViewData: modelResolver.previewViewData,
     validateView: modelResolver.validateView,
     updateViewMetadata: modelResolver.updateViewMetadata,
+    generateModelingSemantics: modelResolver.generateModelingSemantics,
+    generateModelingRelationships: modelResolver.generateModelingRelationships,
 
     // Settings
     resetCurrentProject: projectResolver.resetCurrentProject,

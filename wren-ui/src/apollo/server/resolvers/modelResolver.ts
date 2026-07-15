@@ -57,6 +57,13 @@ export class ModelResolver {
     this.updateModelMetadata = this.updateModelMetadata.bind(this);
     this.deploy = this.deploy.bind(this);
     this.getMDL = this.getMDL.bind(this);
+    this.generateModelingSemantics = this.generateModelingSemantics.bind(this);
+    this.getModelingSemanticsResult =
+      this.getModelingSemanticsResult.bind(this);
+    this.generateModelingRelationships =
+      this.generateModelingRelationships.bind(this);
+    this.getModelingRelationshipsResult =
+      this.getModelingRelationshipsResult.bind(this);
     this.checkModelSync = this.checkModelSync.bind(this);
 
     // view
@@ -445,6 +452,52 @@ export class ModelResolver {
       hash: args.hash,
       mdl,
     };
+  }
+
+  public async generateModelingSemantics(
+    _root: any,
+    args: { data: { selectedModels: string[]; userPrompt: string } },
+    ctx: IContext,
+  ) {
+    const project = await ctx.projectService.getCurrentProject();
+    const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
+    return await ctx.wrenAIAdaptor.generateSemanticsDescription({
+      manifest,
+      selectedModels: args.data.selectedModels,
+      userPrompt: args.data.userPrompt,
+      projectId: project.id,
+    });
+  }
+
+  public async getModelingSemanticsResult(
+    _root: any,
+    args: { queryId: string },
+    ctx: IContext,
+  ) {
+    return await ctx.wrenAIAdaptor.getSemanticsDescriptionResult(args.queryId);
+  }
+
+  public async generateModelingRelationships(
+    _root: any,
+    _args: any,
+    ctx: IContext,
+  ) {
+    const project = await ctx.projectService.getCurrentProject();
+    const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
+    return await ctx.wrenAIAdaptor.generateRelationshipRecommendations({
+      manifest,
+      projectId: project.id,
+    });
+  }
+
+  public async getModelingRelationshipsResult(
+    _root: any,
+    args: { queryId: string },
+    ctx: IContext,
+  ) {
+    return await ctx.wrenAIAdaptor.getRelationshipRecommendationResult(
+      args.queryId,
+    );
   }
 
   public async listModels(_root: any, _args: any, ctx: IContext) {

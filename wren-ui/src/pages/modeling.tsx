@@ -1,8 +1,10 @@
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/router';
 import { useSearchParams } from 'next/navigation';
-import { forwardRef, useEffect, useMemo, useRef } from 'react';
-import { message } from 'antd';
+import { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
+import { Button, Checkbox, Dropdown, Input, Modal, Table, message } from 'antd';
+import { RobotOutlined } from '@ant-design/icons';
+import { gql, useApolloClient, useMutation } from '@apollo/client';
 import styled from 'styled-components';
 import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
 import { editCalculatedField } from '@/utils/modelingHelper';
@@ -46,6 +48,30 @@ import {
 } from '@/apollo/client/graphql/relationship.generated';
 import * as events from '@/utils/events';
 
+const GENERATE_MODELING_SEMANTICS = gql`
+  mutation GenerateModelingSemantics($data: GenerateModelingSemanticsInput!) {
+    generateModelingSemantics(data: $data)
+  }
+`;
+
+const MODELING_SEMANTICS_RESULT = gql`
+  query ModelingSemanticsResult($queryId: String!) {
+    modelingSemanticsResult(queryId: $queryId)
+  }
+`;
+
+const GENERATE_MODELING_RELATIONSHIPS = gql`
+  mutation GenerateModelingRelationships {
+    generateModelingRelationships
+  }
+`;
+
+const MODELING_RELATIONSHIPS_RESULT = gql`
+  query ModelingRelationshipsResult($queryId: String!) {
+    modelingRelationshipsResult(queryId: $queryId)
+  }
+`;
+
 const Diagram = dynamic(() => import('@/components/diagram'), { ssr: false });
 // https://github.com/vercel/next.js/issues/4957#issuecomment-413841689
 const ForwardDiagram = forwardRef(function ForwardDiagram(props: any, ref) {
@@ -57,10 +83,26 @@ const DiagramWrapper = styled.div`
   height: 100%;
 `;
 
+const AssistantAction = styled.div`
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+`;
+
 export default function Modeling() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const apolloClient = useApolloClient();
   const diagramRef = useRef(null);
+  const [assistantMode, setAssistantMode] = useState<
+    'semantics' | 'relationships' | null
+  >(null);
+  const [assistantLoading, setAssistantLoading] = useState(false);
+  const [selectedModels, setSelectedModels] = useState<string[]>([]);
+  const [semanticPrompt, setSemanticPrompt] = useState('');
+  const [semanticResult, setSemanticResult] = useState<any[]>([]);
+  const [relationshipResult, setRelationshipResult] = useState<any[]>([]);
 
   const { data } = useDiagramQuery({
     fetchPolicy: 'cache-and-network',
@@ -200,6 +242,10 @@ export default function Modeling() {
         },
       }),
     );
+  const [generateModelingSemantics] = useMutation(GENERATE_MODELING_SEMANTICS);
+  const [generateModelingRelationships] = useMutation(
+    GENERATE_MODELING_RELATIONSHIPS,
+  );
 
   const diagramData = useMemo(() => {
     if (!data) return null;
@@ -378,6 +424,158 @@ export default function Modeling() {
   const modelLoading = modelCreating || modelUpdating;
   const relationshipLoading = relationshipUpdating || relationshipCreating;
 
+  const waitForAssistantResult = async (
+    queryId: string,
+    query: any,
+    fieldName: string,
+  ) => {
+    for (let attempt = 0; attempt < 90; attempt += 1) {
+      const res = await apolloClient.query({
+        query,
+        variables: { queryId },
+        fetchPolicy: 'network-only',
+      });
+      const payload = res.data?.[fieldName];
+      if (payload?.status === 'finished') return payload.response || [];
+      if (payload?.status === 'failed') {
+        throw new Error(payload.error?.message || 'AI assistant failed.');
+      }
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+    throw new Error('AI assistant timed out.');
+  };
+
+  const openAssistant = (mode: 'semantics' | 'relationships') => {
+    setAssistantMode(mode);
+    setSelectedModels(diagramData?.models?.map((model) => model.referenceName) || []);
+    setSemanticResult([]);
+    setRelationshipResult([]);
+  };
+
+  const runAssistant = async () => {
+    try {
+      setAssistantLoading(true);
+      if (assistantMode === 'semantics') {
+        const res = await generateModelingSemantics({
+          variables: {
+            data: {
+              selectedModels,
+              userPrompt: semanticPrompt || 'Describe this dataset for analytics.',
+            },
+          },
+        });
+        const queryId = res.data?.generateModelingSemantics?.queryId;
+        const result = await waitForAssistantResult(
+          queryId,
+          MODELING_SEMANTICS_RESULT,
+          'modelingSemanticsResult',
+        );
+        setSemanticResult(result);
+      }
+      if (assistantMode === 'relationships') {
+        const res = await generateModelingRelationships();
+        const queryId = res.data?.generateModelingRelationships?.queryId;
+        const result = await waitForAssistantResult(
+          queryId,
+          MODELING_RELATIONSHIPS_RESULT,
+          'modelingRelationshipsResult',
+        );
+        setRelationshipResult(result?.relationships || []);
+      }
+    } catch (error: any) {
+      message.error(error.message || 'Failed to run Modeling AI Assistant.');
+    } finally {
+      setAssistantLoading(false);
+    }
+  };
+
+  const saveAssistantResult = async () => {
+    try {
+      if (!diagramData) return;
+      setAssistantLoading(true);
+      if (assistantMode === 'semantics') {
+        for (const model of semanticResult) {
+          const diagramModel = diagramData.models.find(
+            (item) => item.referenceName === model.name,
+          );
+          if (!diagramModel) continue;
+          await updateModelMetadata({
+            variables: {
+              where: { id: diagramModel.modelId },
+              data: {
+                description: model.description,
+                columns: (model.columns || [])
+                  .map((column) => {
+                    const field = diagramModel.fields.find(
+                      (item) => item.referenceName === column.name,
+                    );
+                    return field
+                      ? {
+                          id: field.columnId,
+                          displayName: field.displayName,
+                          description: column.description,
+                        }
+                      : null;
+                  })
+                  .filter(Boolean),
+              },
+            },
+          });
+        }
+      }
+      if (assistantMode === 'relationships') {
+        for (const relationship of relationshipResult) {
+          const fromModel = diagramData.models.find(
+            (model) => model.referenceName === relationship.fromModel,
+          );
+          const toModel = diagramData.models.find(
+            (model) => model.referenceName === relationship.toModel,
+          );
+          const fromField = fromModel?.fields.find(
+            (field) => field.referenceName === relationship.fromColumn,
+          );
+          const toField = toModel?.fields.find(
+            (field) => field.referenceName === relationship.toColumn,
+          );
+          if (!fromModel || !toModel || !fromField || !toField) continue;
+          const alreadyExists = diagramData.models.some((model) =>
+            model.relationFields.some((field) => {
+              const forward =
+                field.fromModelName === relationship.fromModel &&
+                field.fromColumnName === relationship.fromColumn &&
+                field.toModelName === relationship.toModel &&
+                field.toColumnName === relationship.toColumn;
+              const reverse =
+                field.fromModelName === relationship.toModel &&
+                field.fromColumnName === relationship.toColumn &&
+                field.toModelName === relationship.fromModel &&
+                field.toColumnName === relationship.fromColumn;
+              return forward || reverse;
+            }),
+          );
+          if (alreadyExists) continue;
+          await createRelationshipMutation({
+            variables: {
+              data: {
+                fromModelId: fromModel.modelId,
+                fromColumnId: fromField.columnId,
+                toModelId: toModel.modelId,
+                toColumnId: toField.columnId,
+                type: relationship.type,
+              },
+            },
+          });
+        }
+      }
+      setAssistantMode(null);
+      message.success('Saved Modeling AI Assistant suggestions.');
+    } catch (error: any) {
+      message.error(error.message || 'Failed to save assistant suggestions.');
+    } finally {
+      setAssistantLoading(false);
+    }
+  };
+
   return (
     <DeployStatusContext.Provider value={{ ...deployStatusQueryResult }}>
       <SiderLayout
@@ -389,6 +587,21 @@ export default function Modeling() {
         }}
       >
         <DiagramWrapper>
+          <AssistantAction>
+            <Dropdown
+              trigger={['hover', 'click']}
+              menu={{
+                items: [
+                  { key: 'semantics', label: 'Generate semantics' },
+                  { key: 'relationships', label: 'Generate relationships' },
+                ],
+                onClick: ({ key }) =>
+                  openAssistant(key as 'semantics' | 'relationships'),
+              }}
+            >
+              <Button icon={<RobotOutlined />}>Modeling AI Assistant</Button>
+            </Dropdown>
+          </AssistantAction>
           <ForwardDiagram
             ref={diagramRef}
             data={diagramData}
@@ -485,6 +698,93 @@ export default function Modeling() {
             }
           }}
         />
+        <Modal
+          title="Modeling AI Assistant"
+          visible={!!assistantMode}
+          width={900}
+          confirmLoading={assistantLoading}
+          okText={
+            semanticResult.length || relationshipResult.length ? 'Save' : 'Generate'
+          }
+          onOk={
+            semanticResult.length || relationshipResult.length
+              ? saveAssistantResult
+              : runAssistant
+          }
+          onCancel={() => setAssistantMode(null)}
+        >
+          {assistantMode === 'semantics' && (
+            <>
+              <Checkbox.Group
+                className="mb-4"
+                style={{ display: 'grid', gap: 8 }}
+                value={selectedModels}
+                options={(diagramData?.models || []).map((model) => ({
+                  label: model.displayName || model.referenceName,
+                  value: model.referenceName,
+                }))}
+                onChange={(values) => setSelectedModels(values as string[])}
+              />
+              <Input.TextArea
+                rows={3}
+                className="mb-4"
+                placeholder="Describe what this dataset represents and how it is used."
+                value={semanticPrompt}
+                onChange={(event) => setSemanticPrompt(event.target.value)}
+              />
+              {!!semanticResult.length && (
+                <Table
+                  size="small"
+                  rowKey="name"
+                  pagination={false}
+                  dataSource={semanticResult}
+                  columns={[
+                    { title: 'Model', dataIndex: 'name', width: 180 },
+                    { title: 'Description', dataIndex: 'description' },
+                  ]}
+                  expandable={{
+                    expandedRowRender: (model) => (
+                      <Table
+                        size="small"
+                        rowKey="name"
+                        pagination={false}
+                        dataSource={model.columns || []}
+                        columns={[
+                          { title: 'Column', dataIndex: 'name', width: 180 },
+                          { title: 'Description', dataIndex: 'description' },
+                        ]}
+                      />
+                    ),
+                  }}
+                />
+              )}
+            </>
+          )}
+          {assistantMode === 'relationships' && (
+            <Table
+              size="small"
+              rowKey={(record) =>
+                `${record.fromModel}.${record.fromColumn}-${record.toModel}.${record.toColumn}`
+              }
+              pagination={false}
+              dataSource={relationshipResult}
+              columns={[
+                {
+                  title: 'From',
+                  render: (_value, record) =>
+                    `${record.fromModel}.${record.fromColumn}`,
+                },
+                {
+                  title: 'To',
+                  render: (_value, record) =>
+                    `${record.toModel}.${record.toColumn}`,
+                },
+                { title: 'Type', dataIndex: 'type', width: 150 },
+                { title: 'Description', dataIndex: 'reason' },
+              ]}
+            />
+          )}
+        </Modal>
       </SiderLayout>
     </DeployStatusContext.Provider>
   );
