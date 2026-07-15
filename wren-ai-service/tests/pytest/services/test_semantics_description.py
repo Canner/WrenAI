@@ -47,7 +47,7 @@ async def test_generate_semantics_description(
                     "name": "column1",
                     "type": "varchar",
                     "properties": {
-                        "description": "Stores the column1 value used to describe or analyze model1 records."
+                        "description": "Business attribute used to categorize, filter, and explain records in analytical questions."
                     },
                 }
             ],
@@ -329,6 +329,78 @@ async def test_partial_llm_output_is_completed_for_all_selected_columns(
     assert len(response.response["orders"]["columns"]) == 2
     assert len(response.response["customers"]["columns"]) == 1
     assert response.response["customers"]["properties"]["description"]
+
+
+@pytest.mark.asyncio
+async def test_generic_llm_descriptions_are_replaced_with_business_descriptions(
+    service: SemanticsDescription,
+):
+    service["test_id"] = SemanticsDescription.Resource(id="test_id")
+    request = SemanticsDescription.GenerateRequest(
+        id="test_id",
+        user_prompt="Sales and operations reporting dataset",
+        selected_models=["dbo_xStageLoad2"],
+        mdl=orjson.dumps(
+            {
+                "models": [
+                    {
+                        "name": "dbo_xStageLoad2",
+                        "columns": [
+                            {"name": "Division", "type": "varchar"},
+                            {"name": "SalesPerson", "type": "varchar"},
+                            {"name": "SalesAmount", "type": "float"},
+                        ],
+                    }
+                ]
+            }
+        ).decode(),
+    )
+    service._pipelines["semantics_description"].run.return_value = {
+        "output": {
+            "dbo_xStageLoad2": {
+                "name": "dbo_xStageLoad2",
+                "columns": [
+                    {
+                        "name": "Division",
+                        "properties": {
+                            "description": "Stores the Division value used to describe or analyze xStage records."
+                        },
+                    },
+                    {
+                        "name": "SalesPerson",
+                        "properties": {"description": "SalesPerson"},
+                    },
+                    {
+                        "name": "SalesAmount",
+                        "properties": {
+                            "description": "Stores the SalesAmount value."
+                        },
+                    },
+                ],
+                "properties": {
+                    "description": "Contains business records for xStageLoad2."
+                },
+            }
+        }
+    }
+
+    await service.generate(request)
+    response = service[request.id]
+
+    assert response.status == "finished"
+    descriptions = [
+        column["properties"]["description"]
+        for column in response.response["dbo_xStageLoad2"]["columns"]
+    ]
+    assert response.response["dbo_xStageLoad2"]["properties"]["description"].startswith(
+        "Captures commercial activity"
+    )
+    assert descriptions == [
+        "Organizational segment used to group records for ownership, reporting, and performance comparison.",
+        "Responsible person or role associated with the record for ownership and performance analysis.",
+        "Monetary measure used to calculate financial results, compare performance, and summarize business activity.",
+    ]
+    assert all("Stores the" not in description for description in descriptions)
 
 
 @pytest.mark.asyncio

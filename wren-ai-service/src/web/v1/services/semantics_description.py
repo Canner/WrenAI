@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from typing import Any, Dict, Literal, Optional
 
 import orjson
@@ -85,9 +86,109 @@ class SemanticsDescription:
     def _humanize_name(self, name: str) -> str:
         return " ".join(
             token
-            for token in name.replace(".", " ").replace("_", " ").split()
+            for token in re.sub(
+                r"(?<=[a-z0-9])(?=[A-Z])",
+                " ",
+                name.replace(".", " ").replace("_", " "),
+            ).split()
             if token.lower() not in {"dbo", "public"}
         ) or name
+
+    def _name_tokens(self, name: str) -> set[str]:
+        return {
+            token.lower()
+            for token in self._humanize_name(name).split()
+            if token and token.lower() not in {"x", "stage", "load", "tbl", "table"}
+        }
+
+    def _table_context(self, model: dict[str, Any]) -> set[str]:
+        tokens = self._name_tokens(self._text(model.get("name", "")))
+        for column in model.get("columns", []) or []:
+            tokens.update(self._name_tokens(self._text(column.get("name", ""))))
+        return tokens
+
+    def _fallback_model_description(self, model: dict[str, Any]) -> str:
+        context = self._table_context(model)
+        if context & {"sales", "revenue", "order", "orders", "customer", "product"}:
+            return (
+                "Captures commercial activity and related business dimensions for "
+                "sales reporting, performance analysis, and customer or product insights."
+            )
+        if context & {"invoice", "payment", "price", "cost", "amount", "finance"}:
+            return (
+                "Captures financial transactions and monetary measures used for "
+                "reconciliation, reporting, and performance analysis."
+            )
+        if context & {"employee", "user", "person", "salesperson", "owner", "manager"}:
+            return (
+                "Captures people and ownership attributes used to assign responsibility, "
+                "segment activity, and analyze performance."
+            )
+        return (
+            "Captures operational business records used for reporting, filtering, "
+            "trend analysis, and answering analytical questions."
+        )
+
+    def _fallback_column_description(
+        self,
+        model: dict[str, Any],
+        column: dict[str, Any],
+    ) -> str:
+        column_name = self._text(column.get("name", ""))
+        data_type = self._text(column.get("type", "")).lower()
+        tokens = self._name_tokens(column_name)
+        context = self._table_context(model)
+
+        if tokens & {"division", "bu", "business", "unit", "department"}:
+            return "Organizational segment used to group records for ownership, reporting, and performance comparison."
+        if tokens & {"company", "entity", "organization", "org"}:
+            return "Legal or business entity associated with the record for company-level reporting and filtering."
+        if tokens & {"market", "region", "territory", "country", "state", "city", "location"}:
+            return "Geographic or market segment used to analyze activity by area and compare regional performance."
+        if tokens & {"product", "prod", "sku", "item", "material"}:
+            return "Product or item classification used to analyze sales, demand, and business activity by offering."
+        if tokens & {"type", "category", "class", "segment", "group"}:
+            return "Business classification used to segment records into meaningful reporting categories."
+        if tokens & {"customer", "client", "account"}:
+            return "Customer or account reference used to connect activity to the buyer or business relationship."
+        if tokens & {"salesperson", "seller", "rep", "owner", "manager", "person"}:
+            return "Responsible person or role associated with the record for ownership and performance analysis."
+        if tokens & {"status", "stage", "state"}:
+            return "Current business state used to track workflow progress, completion, or operational condition."
+        if tokens & {"date", "time", "day", "month", "year", "period", "created", "updated"}:
+            return "Time period used to sequence records, filter activity, and analyze trends over time."
+        if tokens & {"amount", "sales", "revenue", "cost", "price", "value", "total", "net", "gross"}:
+            return "Monetary measure used to calculate financial results, compare performance, and summarize business activity."
+        if tokens & {"quantity", "qty", "count", "units", "volume"}:
+            return "Quantity measure used to count activity, summarize volume, and compare operational scale."
+        if tokens & {"rate", "ratio", "percent", "percentage", "margin"}:
+            return "Calculated rate or percentage used to compare efficiency, contribution, or relative performance."
+        if tokens & {"id", "key", "code", "number", "no"}:
+            return "Identifier used to distinguish records and join this data with related business information."
+        if "date" in data_type or "time" in data_type:
+            return "Timestamp or calendar value used for time-based filtering, sequencing, and trend analysis."
+        if any(type_name in data_type for type_name in ("int", "float", "double", "decimal", "numeric", "number")):
+            return "Numeric business measure used for aggregation, comparison, and analytical calculations."
+        if context & {"sales", "order", "customer", "product"}:
+            return "Business attribute used to filter and explain commercial activity in reporting and analysis."
+        return "Business attribute used to categorize, filter, and explain records in analytical questions."
+
+    def _is_low_quality_description(self, description: str, name: str) -> bool:
+        normalized = " ".join(description.lower().split())
+        if not normalized:
+            return True
+
+        name_text = self._humanize_name(name).lower()
+        low_quality_patterns = (
+            "stores the",
+            "value used to describe or analyze",
+            "contains business records for",
+            "represents ",
+            "field from",
+        )
+        if any(pattern in normalized for pattern in low_quality_patterns):
+            return True
+        return normalized in {name.lower(), name_text}
 
     def _fallback_output(self, chunk: dict[str, Any]) -> dict[str, Any]:
         output: dict[str, Any] = {}
@@ -96,13 +197,10 @@ class SemanticsDescription:
             if not model_name:
                 continue
 
-            model_label = self._humanize_name(model_name)
             model_properties = self._properties(model)
             model_description = self._text(model_properties.get("description", ""))
-            if not model_description:
-                model_description = (
-                    f"Contains business records for {model_label}, used for reporting, analysis, and operational questions."
-                )
+            if self._is_low_quality_description(model_description, model_name):
+                model_description = self._fallback_model_description(model)
 
             columns = []
             for column in model.get("columns", []) or []:
@@ -115,10 +213,10 @@ class SemanticsDescription:
                 column_description = self._text(
                     column_properties.get("description", "")
                 )
-                if not column_description:
-                    column_label = self._humanize_name(column_name)
-                    column_description = (
-                        f"Stores the {column_label} value used to describe or analyze {model_label} records."
+                if self._is_low_quality_description(column_description, column_name):
+                    column_description = self._fallback_column_description(
+                        model,
+                        column,
                     )
                 columns.append(
                     {
@@ -153,10 +251,20 @@ class SemanticsDescription:
             if not isinstance(properties, dict):
                 properties = {}
                 model_output["properties"] = properties
-            if not properties.get("description"):
+            if self._is_low_quality_description(
+                self._text(properties.get("description", "")),
+                model_name,
+            ):
                 properties["description"] = self._text(
                     model_output.get("description")
                 ) or fallback_model["properties"]["description"]
+                if self._is_low_quality_description(
+                    properties["description"],
+                    model_name,
+                ):
+                    properties["description"] = fallback_model["properties"][
+                        "description"
+                    ]
 
             output_columns = {
                 column.get("name"): column
@@ -174,10 +282,20 @@ class SemanticsDescription:
                 if not isinstance(column_properties, dict):
                     column_properties = {}
                     output_column["properties"] = column_properties
-                if not column_properties.get("description"):
+                if self._is_low_quality_description(
+                    self._text(column_properties.get("description", "")),
+                    column_name,
+                ):
                     column_properties["description"] = self._text(
                         output_column.get("description")
                     ) or fallback_column["properties"]["description"]
+                    if self._is_low_quality_description(
+                        column_properties["description"],
+                        column_name,
+                    ):
+                        column_properties["description"] = fallback_column[
+                            "properties"
+                        ]["description"]
 
         return completed
 
