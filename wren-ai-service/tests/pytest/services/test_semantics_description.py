@@ -139,12 +139,13 @@ async def test_batch_processing_with_multiple_models(
         mdl='{"models": [{"name": "model1", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model2", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model3", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}]}',
     )
 
-    # Mock pipeline responses for each chunk
-    service._pipelines["semantics_description"].run.side_effect = [
-        {"output": {"model1": {"description": "Description 1"}}},
-        {"output": {"model2": {"description": "Description 2"}}},
-        {"output": {"model3": {"description": "Description 3"}}},
-    ]
+    service._pipelines["semantics_description"].run.return_value = {
+        "output": {
+            "model1": {"description": "Description 1"},
+            "model2": {"description": "Description 2"},
+            "model3": {"description": "Description 3"},
+        }
+    }
 
     await service.generate(request)
     response = service[request.id]
@@ -158,10 +159,10 @@ async def test_batch_processing_with_multiple_models(
     }
 
     chunks = service._chunking(orjson.loads(request.mdl), request)
-    assert len(chunks) == 3  # Default chunk_size=1
+    assert len(chunks) == 1
     assert all("user_prompt" in chunk for chunk in chunks)
     assert all("mdl" in chunk for chunk in chunks)
-    assert [len(chunk["selected_models"]) for chunk in chunks] == [1, 1, 1]
+    assert [len(chunk["selected_models"]) for chunk in chunks] == [3]
 
 
 def test_batch_processing_with_custom_chunk_size(
@@ -178,12 +179,10 @@ def test_batch_processing_with_custom_chunk_size(
     # Test chunking with custom chunk size
     chunks = service._chunking(orjson.loads(request.mdl), request, chunk_size=2)
 
-    assert len(chunks) == 4
-    assert [len(chunk["selected_models"]) for chunk in chunks] == [1, 1, 1, 1]
-    assert chunks[0]["selected_models"] == ["model1"]
-    assert chunks[1]["selected_models"] == ["model2"]
-    assert chunks[2]["selected_models"] == ["model3"]
-    assert chunks[3]["selected_models"] == ["model4"]
+    assert len(chunks) == 2
+    assert [len(chunk["selected_models"]) for chunk in chunks] == [2, 2]
+    assert chunks[0]["selected_models"] == ["model1", "model2"]
+    assert chunks[1]["selected_models"] == ["model3", "model4"]
 
 
 @pytest.mark.asyncio
@@ -198,11 +197,9 @@ async def test_batch_processing_partial_failure(
         mdl='{"models": [{"name": "model1", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model2", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}]}',
     )
 
-    # Mock first chunk succeeds, second chunk fails
-    service._pipelines["semantics_description"].run.side_effect = [
-        {"output": {"model1": {"description": "Description 1"}}},
-        Exception("Failed processing model2"),
-    ]
+    service._pipelines["semantics_description"].run.side_effect = Exception(
+        "Failed processing selected models"
+    )
 
     await service.generate(request)
     response = service[request.id]
@@ -210,7 +207,7 @@ async def test_batch_processing_partial_failure(
     assert response.id == "test_id"
     assert response.status == "failed"
     assert response.error.code == "OTHERS"
-    assert "Failed processing model2" in response.error.message
+    assert "Failed processing selected models" in response.error.message
 
 
 @pytest.mark.asyncio
@@ -227,22 +224,13 @@ async def test_concurrent_updates_no_race_condition(
         mdl='{"models": [{"name": "model1", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model2", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model3", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model4", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model5", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}]}',
     )
 
-    # Mock pipeline responses with delays to simulate concurrent execution
-    async def delayed_response(model_num, delay=0.1):
-        await asyncio.sleep(delay)  # Add delay to increase chance of race condition
-        return {
-            "output": {f"model{model_num}": {"description": f"Description {model_num}"}}
+    service._pipelines["semantics_description"].run.return_value = {
+        "output": {
+            f"model{i}": {"description": f"Description {i}"}
+            for i in range(1, 6)
         }
+    }
 
-    service._pipelines["semantics_description"].run.side_effect = [
-        await delayed_response(1),
-        await delayed_response(2),
-        await delayed_response(3),
-        await delayed_response(4),
-        await delayed_response(5),
-    ]
-
-    # Generate response which will process chunks concurrently
     await service.generate(request)
     response = service[request.id]
 

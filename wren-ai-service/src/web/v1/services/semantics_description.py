@@ -71,6 +71,25 @@ class SemanticsDescription:
 
         chunks: list[dict[str, Any]] = []
         selected_models = set(request.selected_models)
+        current_models: list[dict[str, Any]] = []
+        current_column_count = 0
+
+        def _flush_current_models():
+            nonlocal current_models, current_column_count
+            if not current_models:
+                return
+            chunks.append({"models": current_models})
+            current_models = []
+            current_column_count = 0
+
+        def _append_model(model: dict[str, Any]):
+            nonlocal current_models, current_column_count
+            column_count = len(model.get("columns") or [])
+            if current_models and current_column_count + column_count > chunk_size:
+                _flush_current_models()
+            current_models.append(model)
+            current_column_count += column_count
+
         for model in mdl_dict.get("models", []):
             model_name = model.get("name")
             if model_name not in selected_models:
@@ -78,22 +97,19 @@ class SemanticsDescription:
 
             columns = model.get("columns") or []
             if not columns:
-                chunks.append({**model, "columns": []})
+                _append_model({**model, "columns": []})
                 continue
 
-            chunks.extend(
-                {
-                    **model,
-                    "columns": columns[i : i + chunk_size],
-                }
-                for i in range(0, len(columns), chunk_size)
-            )
+            for i in range(0, len(columns), chunk_size):
+                _append_model({**model, "columns": columns[i : i + chunk_size]})
+
+        _flush_current_models()
 
         return [
             {
                 **template,
-                "mdl": {"models": [chunk]},
-                "selected_models": [chunk["name"]],
+                "mdl": chunk,
+                "selected_models": [model["name"] for model in chunk["models"]],
             }
             for chunk in chunks
         ]
@@ -132,9 +148,8 @@ class SemanticsDescription:
                 raise ValueError(
                     "No selected models matched the current semantic model metadata"
                 )
-            tasks = [self._generate_task(request.id, chunk) for chunk in chunks]
-
-            await asyncio.gather(*tasks)
+            for chunk in chunks:
+                await self._generate_task(request.id, chunk)
 
             self[request.id].status = "finished"
             self[request.id].trace_id = trace_id
