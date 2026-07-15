@@ -132,7 +132,7 @@ export class DiagramResolver {
       return transformedModel;
     });
 
-    const diagramViews = views.map(this.transformView);
+    const diagramViews = views.map((view) => this.transformView(view));
     return { models: diagramModels, views: diagramViews };
   }
 
