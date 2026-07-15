@@ -1,18 +1,25 @@
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/router';
 import { useSearchParams } from 'next/navigation';
-import { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
+import React, { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
   Dropdown,
   Input,
   Menu,
-  Modal,
   Select,
+  Space,
+  Spin,
   Table,
   message,
 } from 'antd';
-import { RobotOutlined } from '@ant-design/icons';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  RobotOutlined,
+  SaveOutlined,
+  TableOutlined,
+} from '@ant-design/icons';
 import { gql, useApolloClient, useMutation } from '@apollo/client';
 import styled from 'styled-components';
 import { MORE_ACTION, NODE_TYPE } from '@/utils/enum';
@@ -153,6 +160,70 @@ const SemanticReviewCard = styled.div`
   }
 `;
 
+const RelationshipGroup = styled.div`
+  margin-top: 24px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+`;
+
+const RelationshipGroupTitle = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e5e7eb;
+`;
+
+const AssistantCenter = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 170px;
+  color: #0f3bff;
+`;
+
+type AssistantRelationship = {
+  clientId: string;
+  fromModel: string;
+  fromColumn: string;
+  toModel: string;
+  toColumn: string;
+  type: string;
+  reason: string;
+};
+
+const RELATIONSHIP_TYPES = [
+  { label: 'Many-to-one', value: 'MANY_TO_ONE' },
+  { label: 'One-to-many', value: 'ONE_TO_MANY' },
+  { label: 'One-to-one', value: 'ONE_TO_ONE' },
+];
+
+const relationshipTypeLabel = (type: string) =>
+  RELATIONSHIP_TYPES.find((item) => item.value === type)?.label || type;
+
+const normalizeRelationshipType = (type: string) => {
+  const normalized = String(type || '')
+    .trim()
+    .replace(/[\s-]+/g, '_')
+    .toUpperCase();
+  if (normalized === 'MANY_TO_ONE') return 'MANY_TO_ONE';
+  if (normalized === 'ONE_TO_MANY') return 'ONE_TO_MANY';
+  if (normalized === 'ONE_TO_ONE') return 'ONE_TO_ONE';
+  return type;
+};
+
+const parseQualifiedField = (value = '') => {
+  const [model, ...columnParts] = String(value).split('.');
+  return {
+    model: model || '',
+    column: columnParts.join('.') || '',
+  };
+};
+
+const renderIcon = (IconComponent) => React.createElement(IconComponent as any);
+
 export default function Modeling() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -164,12 +235,21 @@ export default function Modeling() {
   const [assistantLoading, setAssistantLoading] = useState(false);
   const [selectedModels, setSelectedModels] = useState<string[]>([]);
   const [semanticPrompt, setSemanticPrompt] = useState('');
-  const [semanticStep, setSemanticStep] = useState<'pick' | 'generate' | 'review'>(
-    'pick',
-  );
+  const [semanticStep, setSemanticStep] = useState<
+    'pick' | 'generate' | 'review'
+  >('pick');
   const [semanticSearch, setSemanticSearch] = useState('');
   const [semanticResult, setSemanticResult] = useState<any[]>([]);
-  const [relationshipResult, setRelationshipResult] = useState<any[]>([]);
+  const [relationshipResult, setRelationshipResult] = useState<
+    AssistantRelationship[]
+  >([]);
+  const [originalRelationshipResult, setOriginalRelationshipResult] = useState<
+    AssistantRelationship[]
+  >([]);
+  const [relationshipAutoStarted, setRelationshipAutoStarted] = useState(false);
+  const [editingRelationshipKey, setEditingRelationshipKey] = useState<
+    string | null
+  >(null);
 
   const { data } = useDiagramQuery({
     fetchPolicy: 'cache-and-network',
@@ -531,7 +611,9 @@ export default function Modeling() {
       return result.map((model) => normalizeSemanticModel(model?.name, model));
     }
     if (Array.isArray(result?.models)) {
-      return result.models.map((model) => normalizeSemanticModel(model?.name, model));
+      return result.models.map((model) =>
+        normalizeSemanticModel(model?.name, model),
+      );
     }
     if (Array.isArray(result?.semantics)) {
       return result.semantics.map((model) =>
@@ -551,22 +633,62 @@ export default function Modeling() {
     return [];
   };
 
-  const normalizeRelationshipResult = (result: any): any[] => {
-    if (Array.isArray(result)) return result;
-    if (Array.isArray(result?.relationships)) return result.relationships;
-    if (Array.isArray(result?.response?.relationships)) {
-      return result.response.relationships;
-    }
-    return [];
+  const normalizeRelationshipResult = (
+    result: any,
+  ): AssistantRelationship[] => {
+    const relationships = Array.isArray(result)
+      ? result
+      : Array.isArray(result?.relationships)
+        ? result.relationships
+        : Array.isArray(result?.response?.relationships)
+          ? result.response.relationships
+          : [];
+
+    return relationships.map((relationship, index) => {
+      const from = parseQualifiedField(
+        relationship.from || relationship.fromField || '',
+      );
+      const to = parseQualifiedField(
+        relationship.to || relationship.toField || '',
+      );
+      const fromModel = relationship.fromModel || from.model;
+      const fromColumn = relationship.fromColumn || from.column;
+      const toModel = relationship.toModel || to.model;
+      const toColumn = relationship.toColumn || to.column;
+
+      return {
+        clientId:
+          relationship.clientId ||
+          [
+            fromModel,
+            fromColumn,
+            toModel,
+            toColumn,
+            relationship.type,
+            index,
+          ].join(':'),
+        fromModel,
+        fromColumn,
+        toModel,
+        toColumn,
+        type: normalizeRelationshipType(relationship.type),
+        reason: relationship.reason || relationship.description || '',
+      };
+    });
   };
 
   const openAssistant = (mode: 'semantics' | 'relationships') => {
     setAssistantMode(mode);
     setSemanticStep('pick');
     setSemanticSearch('');
-    setSelectedModels(diagramData?.models?.map((model) => model.referenceName) || []);
+    setSelectedModels(
+      diagramData?.models?.map((model) => model.referenceName) || [],
+    );
     setSemanticResult([]);
     setRelationshipResult([]);
+    setOriginalRelationshipResult([]);
+    setRelationshipAutoStarted(false);
+    setEditingRelationshipKey(null);
   };
 
   const runAssistant = async () => {
@@ -580,7 +702,8 @@ export default function Modeling() {
           variables: {
             data: {
               selectedModels,
-              userPrompt: semanticPrompt || 'Describe this dataset for analytics.',
+              userPrompt:
+                semanticPrompt || 'Describe this dataset for analytics.',
             },
           },
         });
@@ -608,7 +731,9 @@ export default function Modeling() {
           MODELING_RELATIONSHIPS_RESULT,
           'modelingRelationshipsResult',
         );
-        setRelationshipResult(normalizeRelationshipResult(result));
+        const normalizedResult = normalizeRelationshipResult(result);
+        setRelationshipResult(normalizedResult);
+        setOriginalRelationshipResult(normalizedResult);
       }
     } catch (error: any) {
       message.error(error.message || 'Failed to run Modeling AI Assistant.');
@@ -639,7 +764,9 @@ export default function Modeling() {
           ? {
               ...model,
               columns: (model.columns || []).map((column) =>
-                column.name === columnName ? { ...column, description } : column,
+                column.name === columnName
+                  ? { ...column, description }
+                  : column,
               ),
             }
           : model,
@@ -647,10 +774,50 @@ export default function Modeling() {
     );
   };
 
+  const updateRelationship = (
+    clientId: string,
+    changes: Partial<AssistantRelationship>,
+  ) => {
+    setRelationshipResult((relationships) =>
+      relationships.map((relationship) =>
+        relationship.clientId === clientId
+          ? { ...relationship, ...changes }
+          : relationship,
+      ),
+    );
+  };
+
+  const updateRelationshipField = (
+    clientId: string,
+    side: 'from' | 'to',
+    value: string,
+  ) => {
+    const field = parseQualifiedField(value);
+    updateRelationship(
+      clientId,
+      side === 'from'
+        ? { fromModel: field.model, fromColumn: field.column }
+        : { toModel: field.model, toColumn: field.column },
+    );
+  };
+
+  const deleteSuggestedRelationship = (clientId: string) => {
+    setRelationshipResult((relationships) =>
+      relationships.filter(
+        (relationship) => relationship.clientId !== clientId,
+      ),
+    );
+    if (editingRelationshipKey === clientId) {
+      setEditingRelationshipKey(null);
+    }
+  };
+
   const closeAssistant = () => {
     setAssistantMode(null);
     setSemanticStep('pick');
     setSemanticSearch('');
+    setRelationshipAutoStarted(false);
+    setEditingRelationshipKey(null);
   };
 
   const saveAssistantResult = async () => {
@@ -748,6 +915,34 @@ export default function Modeling() {
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(keyword));
   });
+
+  const relationshipFieldOptions = (diagramData?.models || []).flatMap(
+    (model) =>
+      (model.fields || []).map((field) => ({
+        label: `${model.referenceName}.${field.referenceName}`,
+        value: `${model.referenceName}.${field.referenceName}`,
+      })),
+  );
+
+  const relationshipGroups = relationshipResult.reduce<
+    Record<string, AssistantRelationship[]>
+  >((groups, relationship) => {
+    const key = relationship.fromModel || 'Unknown model';
+    groups[key] = [...(groups[key] || []), relationship];
+    return groups;
+  }, {});
+
+  const isRelationshipGenerating =
+    assistantMode === 'relationships' &&
+    (!relationshipAutoStarted || assistantLoading) &&
+    !relationshipResult.length;
+
+  useEffect(() => {
+    if (assistantMode !== 'relationships') return;
+    if (relationshipAutoStarted) return;
+    setRelationshipAutoStarted(true);
+    runAssistant();
+  }, [assistantMode, relationshipAutoStarted]);
 
   if (assistantMode === 'semantics') {
     return (
@@ -946,11 +1141,211 @@ export default function Modeling() {
                   ))}
                 </div>
                 <AssistantFooter>
-                  <Button onClick={() => setSemanticStep('generate')}>Back</Button>
+                  <Button onClick={() => setSemanticStep('generate')}>
+                    Back
+                  </Button>
                   <Button
                     type="primary"
                     loading={assistantLoading}
                     disabled={!semanticResult.length}
+                    onClick={saveAssistantResult}
+                  >
+                    Save
+                  </Button>
+                </AssistantFooter>
+              </>
+            )}
+          </AssistantCard>
+        </AssistantPage>
+      </DeployStatusContext.Provider>
+    );
+  }
+
+  if (assistantMode === 'relationships') {
+    return (
+      <DeployStatusContext.Provider value={{ ...deployStatusQueryResult }}>
+        <AssistantPage>
+          <AssistantBack onClick={closeAssistant}>
+            &larr; Back to modeling
+          </AssistantBack>
+          <AssistantCard>
+            <AssistantTitle>Generate relationships</AssistantTitle>
+            <AssistantDescription>
+              Modeling AI Assistant will use AI to discover potential
+              connections between your models.
+              <br />
+              Review the suggested relationships and adjust them before saving
+              to your data models.
+              <br />
+              Learn more:{' '}
+              <a
+                href="https://docs.getwren.ai/oss/guide/modeling/ai-assistant#generate-relationships"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Modeling AI Assistant / Generate relationships
+              </a>
+            </AssistantDescription>
+
+            {isRelationshipGenerating ? (
+              <AssistantCenter>
+                <Spin />
+                <div style={{ marginTop: 10 }}>Generating...</div>
+              </AssistantCenter>
+            ) : (
+              <>
+                {!relationshipResult.length && (
+                  <AssistantCenter>
+                    <div style={{ color: '#5f6368' }}>
+                      No relationship suggestions were generated.
+                    </div>
+                  </AssistantCenter>
+                )}
+
+                {Object.entries(relationshipGroups).map(
+                  ([modelName, relationships]) => (
+                    <RelationshipGroup key={modelName}>
+                      <RelationshipGroupTitle>
+                        {renderIcon(TableOutlined)}
+                        <span>{modelName}</span>
+                      </RelationshipGroupTitle>
+                      <Table
+                        size="small"
+                        rowKey="clientId"
+                        pagination={false}
+                        dataSource={relationships}
+                        columns={[
+                          {
+                            title: 'From',
+                            width: 210,
+                            render: (_value, record) =>
+                              editingRelationshipKey === record.clientId ? (
+                                <Select
+                                  showSearch
+                                  style={{ width: '100%' }}
+                                  value={`${record.fromModel}.${record.fromColumn}`}
+                                  options={relationshipFieldOptions}
+                                  optionFilterProp="label"
+                                  onChange={(value) =>
+                                    updateRelationshipField(
+                                      record.clientId,
+                                      'from',
+                                      value,
+                                    )
+                                  }
+                                />
+                              ) : (
+                                `${record.fromModel}.${record.fromColumn}`
+                              ),
+                          },
+                          {
+                            title: 'To',
+                            width: 210,
+                            render: (_value, record) =>
+                              editingRelationshipKey === record.clientId ? (
+                                <Select
+                                  showSearch
+                                  style={{ width: '100%' }}
+                                  value={`${record.toModel}.${record.toColumn}`}
+                                  options={relationshipFieldOptions}
+                                  optionFilterProp="label"
+                                  onChange={(value) =>
+                                    updateRelationshipField(
+                                      record.clientId,
+                                      'to',
+                                      value,
+                                    )
+                                  }
+                                />
+                              ) : (
+                                `${record.toModel}.${record.toColumn}`
+                              ),
+                          },
+                          {
+                            title: 'Type',
+                            width: 170,
+                            render: (_value, record) =>
+                              editingRelationshipKey === record.clientId ? (
+                                <Select
+                                  style={{ width: '100%' }}
+                                  value={record.type}
+                                  options={RELATIONSHIP_TYPES}
+                                  onChange={(type) =>
+                                    updateRelationship(record.clientId, {
+                                      type,
+                                    })
+                                  }
+                                />
+                              ) : (
+                                relationshipTypeLabel(record.type)
+                              ),
+                          },
+                          {
+                            title: 'Description',
+                            render: (_value, record) =>
+                              editingRelationshipKey === record.clientId ? (
+                                <Input.TextArea
+                                  autoSize={{ minRows: 2, maxRows: 4 }}
+                                  value={record.reason}
+                                  onChange={(event) =>
+                                    updateRelationship(record.clientId, {
+                                      reason: event.target.value,
+                                    })
+                                  }
+                                />
+                              ) : (
+                                record.reason
+                              ),
+                          },
+                          {
+                            title: '',
+                            width: 92,
+                            render: (_value, record) => (
+                              <Space>
+                                <Button
+                                  type="text"
+                                  icon={
+                                    editingRelationshipKey === record.clientId
+                                      ? renderIcon(SaveOutlined)
+                                      : renderIcon(EditOutlined)
+                                  }
+                                  onClick={() =>
+                                    setEditingRelationshipKey(
+                                      editingRelationshipKey === record.clientId
+                                        ? null
+                                        : record.clientId,
+                                    )
+                                  }
+                                />
+                                <Button
+                                  type="text"
+                                  icon={renderIcon(DeleteOutlined)}
+                                  onClick={() =>
+                                    deleteSuggestedRelationship(record.clientId)
+                                  }
+                                />
+                              </Space>
+                            ),
+                          },
+                        ]}
+                      />
+                    </RelationshipGroup>
+                  ),
+                )}
+
+                <AssistantFooter>
+                  <Button
+                    onClick={() => {
+                      setRelationshipResult(originalRelationshipResult);
+                      setEditingRelationshipKey(null);
+                    }}
+                  >
+                    Discard
+                  </Button>
+                  <Button
+                    type="primary"
+                    loading={assistantLoading}
+                    disabled={!relationshipResult.length}
                     onClick={saveAssistantResult}
                   >
                     Save
@@ -991,7 +1386,9 @@ export default function Modeling() {
                 </Menu>
               }
             >
-              <Button icon={<RobotOutlined />}>Modeling AI Assistant</Button>
+              <Button icon={renderIcon(RobotOutlined)}>
+                Modeling AI Assistant
+              </Button>
             </Dropdown>
           </AssistantAction>
           <ForwardDiagram
@@ -1090,94 +1487,6 @@ export default function Modeling() {
             }
           }}
         />
-        <Modal
-          title="Modeling AI Assistant"
-          visible={!!assistantMode}
-          width={900}
-          confirmLoading={assistantLoading}
-          okText={
-            semanticResult.length || relationshipResult.length ? 'Save' : 'Generate'
-          }
-          onOk={
-            semanticResult.length || relationshipResult.length
-              ? saveAssistantResult
-              : runAssistant
-          }
-          onCancel={() => setAssistantMode(null)}
-        >
-          {assistantMode === 'semantics' && (
-            <>
-              <Select
-                mode="multiple"
-                className="mb-4"
-                style={{ width: '100%' }}
-                value={selectedModels}
-                options={(diagramData?.models || []).map((model) => ({
-                  label: model.displayName || model.referenceName,
-                  value: model.referenceName,
-                }))}
-                onChange={(values) => setSelectedModels(values)}
-              />
-              <Input.TextArea
-                rows={3}
-                className="mb-4"
-                placeholder="Describe what this dataset represents and how it is used."
-                value={semanticPrompt}
-                onChange={(event) => setSemanticPrompt(event.target.value)}
-              />
-              {!!semanticResult.length && (
-                <Table
-                  size="small"
-                  rowKey="name"
-                  pagination={false}
-                  dataSource={semanticResult}
-                  columns={[
-                    { title: 'Model', dataIndex: 'name', width: 180 },
-                    { title: 'Description', dataIndex: 'description' },
-                  ]}
-                  expandable={{
-                    expandedRowRender: (model) => (
-                      <Table
-                        size="small"
-                        rowKey="name"
-                        pagination={false}
-                        dataSource={model.columns || []}
-                        columns={[
-                          { title: 'Column', dataIndex: 'name', width: 180 },
-                          { title: 'Description', dataIndex: 'description' },
-                        ]}
-                      />
-                    ),
-                  }}
-                />
-              )}
-            </>
-          )}
-          {assistantMode === 'relationships' && (
-            <Table
-              size="small"
-              rowKey={(record) =>
-                `${record.fromModel}.${record.fromColumn}-${record.toModel}.${record.toColumn}`
-              }
-              pagination={false}
-              dataSource={relationshipResult}
-              columns={[
-                {
-                  title: 'From',
-                  render: (_value, record) =>
-                    `${record.fromModel}.${record.fromColumn}`,
-                },
-                {
-                  title: 'To',
-                  render: (_value, record) =>
-                    `${record.toModel}.${record.toColumn}`,
-                },
-                { title: 'Type', dataIndex: 'type', width: 150 },
-                { title: 'Description', dataIndex: 'reason' },
-              ]}
-            />
-          )}
-        </Modal>
       </SiderLayout>
     </DeployStatusContext.Provider>
   );
