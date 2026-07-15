@@ -199,6 +199,26 @@ class TestExtractSchemaItems:
         assert len(items) == 1
         assert items[0]["item_type"] == "model"
 
+    def test_relationship_null_models_tolerated(self):
+        # A relationship with an explicit JSON null for "models" must not crash
+        # the indexer. `.get("models", [])` returns None (not the default) when
+        # the key is present with a null value, so `len(None)` blows up. Mirrors
+        # the seed-query guard from #2424 (test_relationship_null_models_skipped)
+        # — the same dirty-manifest shape must be tolerated on the schema
+        # indexing/describe path, which never runs the seed step.
+        manifest = {
+            "models": [{"name": "orders", "columns": []}],
+            "relationships": [
+                {"name": "rel1", "models": None, "condition": "orders.c = x.c"}
+            ],
+        }
+        items = extract_schema_items(manifest)
+        rels = [i for i in items if i["item_type"] == "relationship"]
+        assert len(rels) == 1
+        assert rels[0]["item_name"] == "rel1"
+        # describe_schema reads the same field via a sibling helper.
+        describe_schema(manifest)
+
 
 # ── Cube fixture ──────────────────────────────────────────────────────────
 
