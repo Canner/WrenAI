@@ -348,4 +348,6 @@ def test_translate_types_skips_non_dict_rows() -> None:
     ]
     out = translate_types(columns, "postgres", "bigquery")
     assert len(out) == 2
+    assert [r["column"] for r in out] == ["id", "name"]
     assert out[0]["type"] == "INT64"
+    assert out[1]["type"] == "STRING"
