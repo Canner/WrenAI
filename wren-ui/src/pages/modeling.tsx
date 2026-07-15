@@ -365,6 +365,12 @@ export default function Modeling() {
         },
       }),
     );
+  const [createAssistantRelationshipMutation] = useCreateRelationshipMutation(
+    getBaseOptions({
+      onError: null,
+      onCompleted: () => {},
+    }),
+  );
 
   const [deleteRelationshipMutation] = useDeleteRelationshipMutation(
     getBaseOptions({
@@ -878,6 +884,8 @@ export default function Modeling() {
         }
       }
       if (assistantMode === 'relationships') {
+        let createdCount = 0;
+        let skippedCount = 0;
         const latestDiagramResult = await apolloClient.query({
           query: DIAGRAM,
           fetchPolicy: 'network-only',
@@ -898,7 +906,10 @@ export default function Modeling() {
           const toField = toModel?.fields.find(
             (field) => field.referenceName === relationship.toColumn,
           );
-          if (!fromModel || !toModel || !fromField || !toField) continue;
+          if (!fromModel || !toModel || !fromField || !toField) {
+            skippedCount += 1;
+            continue;
+          }
           const alreadyExists = latestDiagramData.models.some((model) =>
             (model.relationFields || []).some((field) => {
               if (!field) return false;
@@ -915,22 +926,48 @@ export default function Modeling() {
               return forward || reverse;
             }),
           );
-          if (alreadyExists) continue;
-          await createRelationshipMutation({
-            variables: {
-              data: {
-                fromModelId: fromModel.modelId,
-                fromColumnId: fromField.columnId,
-                toModelId: toModel.modelId,
-                toColumnId: toField.columnId,
-                type: relationship.type,
+          if (alreadyExists) {
+            skippedCount += 1;
+            continue;
+          }
+          try {
+            await createAssistantRelationshipMutation({
+              variables: {
+                data: {
+                  fromModelId: fromModel.modelId,
+                  fromColumnId: fromField.columnId,
+                  toModelId: toModel.modelId,
+                  toColumnId: toField.columnId,
+                  type: relationship.type,
+                },
               },
-            },
-          });
+            });
+            createdCount += 1;
+          } catch (_error) {
+            skippedCount += 1;
+          }
+        }
+
+        if (!createdCount) {
+          throw new Error(
+            skippedCount
+              ? 'No valid new relationships could be saved for the current models.'
+              : 'No relationship suggestions to save.',
+          );
+        }
+
+        if (skippedCount) {
+          message.warning(
+            `${createdCount} relationship(s) saved. ${skippedCount} invalid or duplicate suggestion(s) skipped.`,
+          );
+        } else {
+          message.success('Saved Modeling AI Assistant suggestions.');
         }
       }
       closeAssistant();
-      message.success('Saved Modeling AI Assistant suggestions.');
+      if (assistantMode !== 'relationships') {
+        message.success('Saved Modeling AI Assistant suggestions.');
+      }
     } catch (error: any) {
       message.error(error.message || 'Failed to save assistant suggestions.');
     } finally {
