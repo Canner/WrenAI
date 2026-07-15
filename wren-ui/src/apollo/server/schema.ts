@@ -110,13 +110,11 @@ export const typeDefs = gql`
     ABS
     AVG
     COUNT
-    COUNT_IF
     MAX
     MIN
     SUM
     CBRT
     CEIL
-    CEILING
     EXP
     FLOOR
     LN

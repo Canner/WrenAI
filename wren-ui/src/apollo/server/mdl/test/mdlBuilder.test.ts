@@ -852,7 +852,7 @@ describe('MDLBuilder', () => {
         displayName: 'total_payment',
         referenceName: 'total_payment',
         sourceColumnName: 'total_payment',
-        aggregation: 'sum',
+        aggregation: 'SUM',
         lineage: JSON.stringify([1, 2, 8]),
         customExpression: null,
         type: 'FLOAT',
@@ -991,6 +991,74 @@ describe('MDLBuilder', () => {
     expect(totalPaymentColumn.expression).toEqual(
       'sum(order.payment."amount")',
     );
+  });
+
+  it('should skip calculated fields with expressions outside the documented function list.', () => {
+    const models = [
+      {
+        id: 1,
+        projectId: 1,
+        displayName: 'orders',
+        sourceTableName: 'orders',
+        referenceName: 'orders',
+        refSql: 'SELECT * FROM orders',
+        cached: false,
+        refreshTime: null,
+        properties: null,
+      },
+    ] as Model[];
+    const columns = [
+      {
+        id: 1,
+        modelId: 1,
+        isCalculated: false,
+        displayName: 'id',
+        referenceName: 'id',
+        sourceColumnName: 'id',
+        aggregation: null,
+        lineage: null,
+        customExpression: null,
+        type: 'INTEGER',
+        notNull: true,
+        isPk: true,
+        properties: null,
+      },
+      {
+        id: 2,
+        modelId: 1,
+        isCalculated: true,
+        displayName: 'unsupported_count_if',
+        referenceName: 'unsupported_count_if',
+        sourceColumnName: 'unsupported_count_if',
+        aggregation: 'COUNT_IF',
+        lineage: JSON.stringify([1]),
+        customExpression: null,
+        type: 'BIGINT',
+        notNull: false,
+        isPk: false,
+        properties: null,
+      },
+    ] as ModelColumn[];
+    const builderOptions = {
+      project: {
+        schema: 'public',
+        catalog: 'wrenai',
+      },
+      models,
+      columns,
+      relations: [],
+      relatedModels: models,
+      relatedColumns: columns,
+      relatedRelations: [],
+    } as MDLBuilderBuildFromOptions;
+    mdlBuilder = new MDLBuilder(builderOptions);
+
+    const manifest = mdlBuilder.build();
+
+    const ordersModel = manifest.models.find((m) => m.name === 'orders');
+    expect(
+      ordersModel.columns.find((c) => c.name === 'unsupported_count_if'),
+    ).toBeUndefined();
   });
 
   it.each(Object.values(DataSourceName))(

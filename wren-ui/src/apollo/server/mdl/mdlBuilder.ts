@@ -23,6 +23,24 @@ const logger = getLogger('MDLBuilder');
 logger.level = 'debug';
 
 const config = getConfig();
+const DOCUMENTED_CALCULATED_FIELD_FUNCTIONS = new Map<string, string>([
+  ['ABS', 'abs'],
+  ['AVG', 'avg'],
+  ['COUNT', 'count'],
+  ['MAX', 'max'],
+  ['MIN', 'min'],
+  ['SUM', 'sum'],
+  ['CBRT', 'cbrt'],
+  ['CEIL', 'ceil'],
+  ['EXP', 'exp'],
+  ['FLOOR', 'floor'],
+  ['LN', 'ln'],
+  ['LOG10', 'log10'],
+  ['ROUND', 'round'],
+  ['SIGN', 'sign'],
+  ['LENGTH', 'length'],
+  ['REVERSE', 'reverse'],
+]);
 
 export interface MDLBuilderBuildFromOptions {
   project: Project;
@@ -534,7 +552,13 @@ export class MDLBuilder implements IMDLBuilder {
     if (fieldExpression.length !== lineage.length) {
       return null;
     }
-    return `${column.aggregation}(${fieldExpression.join('.')})`;
+    const functionName = DOCUMENTED_CALCULATED_FIELD_FUNCTIONS.get(
+      String(column.aggregation).toUpperCase(),
+    );
+    if (!functionName) {
+      return null;
+    }
+    return `${functionName}(${fieldExpression.join('.')})`;
   }
 
   protected getRelationCondition(relation: RelationInfo): string {
