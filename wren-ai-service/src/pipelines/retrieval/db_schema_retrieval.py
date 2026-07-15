@@ -213,134 +213,12 @@ def _retrieval_terms(value: str) -> set[str]:
         "which",
         "with",
     }
-    terms: set[str] = set()
-    for raw_token in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", value or ""):
-        split_token = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", raw_token)
-        for token in re.findall(r"[A-Za-z0-9]+", split_token):
-            if len(token) <= 2 or token.lower() in stop_words:
-                continue
-            normalized_token = _normalize_retrieval_token(token)
-            if normalized_token:
-                terms.add(normalized_token)
+    terms = {
+        _normalize_retrieval_token(token)
+        for token in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", value or "")
+        if len(token) > 2 and token.lower() not in stop_words
+    }
     return {term for term in terms if term}
-
-
-_BUSINESS_CONCEPT_TERMS: dict[str, set[str]] = {
-    "customer": {
-        "account",
-        "accounts",
-        "client",
-        "clients",
-        "cust",
-        "customer",
-        "customers",
-    },
-    "order": {
-        "booking",
-        "bookings",
-        "ord",
-        "order",
-        "orders",
-        "purchase",
-        "transaction",
-        "transactions",
-    },
-    "invoice": {"bill", "billing", "invoice", "invoices", "inv"},
-    "sales": {
-        "amount",
-        "fxsales",
-        "margin",
-        "revenue",
-        "sale",
-        "sales",
-        "total",
-        "value",
-    },
-    "product": {
-        "item",
-        "items",
-        "part",
-        "parts",
-        "product",
-        "products",
-        "sku",
-    },
-    "quantity": {"qty", "quantity", "quantities", "unit", "units", "volume"},
-    "market": {
-        "area",
-        "country",
-        "countries",
-        "domestic",
-        "international",
-        "intl",
-        "market",
-        "markets",
-        "mkt",
-        "region",
-        "territory",
-    },
-    "time": {
-        "date",
-        "day",
-        "month",
-        "monthly",
-        "quarter",
-        "quarterly",
-        "time",
-        "week",
-        "year",
-    },
-    "failure": {
-        "defect",
-        "failure",
-        "failures",
-        "issue",
-        "issues",
-        "pattern",
-        "patterns",
-        "problem",
-        "repair",
-        "status",
-    },
-}
-
-
-def _business_concepts(value: str) -> set[str]:
-    terms = _retrieval_terms(value)
-    concepts: set[str] = set()
-    for concept, synonyms in _BUSINESS_CONCEPT_TERMS.items():
-        if terms & {_normalize_retrieval_token(term) for term in synonyms}:
-            concepts.add(concept)
-    return concepts
-
-
-def _concept_coverage_score(
-    query: str, document: Document
-) -> tuple[int, set[str], set[str]]:
-    query_concepts = _business_concepts(query)
-    if not query_concepts:
-        return 0, set(), set()
-
-    document_concepts = _business_concepts(_source_text(document))
-    covered = query_concepts & document_concepts
-    missing = query_concepts - covered
-    score = 70 * len(covered) - 55 * len(missing)
-
-    # Ranking/count questions are usually fact-style requests. Penalize reference
-    # tables that only contain a display name/id when the requested event concept
-    # is absent; this prevents unrelated tables from winning on generic columns.
-    normalized_query = (query or "").lower()
-    asks_for_ranked_count = bool(
-        re.search(
-            r"\b(?:top|highest|most|rank|ranking|number of|count)\b",
-            normalized_query,
-        )
-    )
-    if asks_for_ranked_count and {"order", "invoice", "sales"} & query_concepts:
-        if not ({"order", "invoice", "sales"} & document_concepts):
-            score -= 120
-
-    return score, covered, missing
 
 
 def _query_mentions_any(query: str, terms: tuple[str, ...]) -> bool:
@@ -365,11 +243,7 @@ def _source_shape_score(query: str, document: Document) -> int:
     source_terms = _retrieval_terms(source_text)
 
     score = 0
-    weak_non_production_terms = (
-        "stage",
-        "staging",
-    )
-    strong_non_production_terms = (
+    non_production_terms = (
         "archive",
         "backup",
         "copy",
@@ -377,18 +251,17 @@ def _source_shape_score(query: str, document: Document) -> int:
         "development",
         "duplicate",
         "sample",
+        "stage",
+        "staging",
         "temp",
         "test",
         "tmp",
     )
-    if source_terms & set(strong_non_production_terms) and not _query_mentions_any(
-        normalized_query, strong_non_production_terms
+    if any(term in source_terms for term in non_production_terms) and not _query_mentions_any(
+        normalized_query,
+        non_production_terms,
     ):
-        score -= 240
-    if source_terms & set(weak_non_production_terms) and not _query_mentions_any(
-        normalized_query, weak_non_production_terms
-    ):
-        score -= 40
+        score -= 60
 
     aggregation_terms = (
         "amount",
@@ -452,26 +325,6 @@ def _source_shape_score(query: str, document: Document) -> int:
     return score
 
 
-def _is_unrequested_strong_non_production_source(query: str, document: Document) -> bool:
-    strong_non_production_terms = (
-        "archive",
-        "backup",
-        "copy",
-        "dev",
-        "development",
-        "duplicate",
-        "sample",
-        "temp",
-        "test",
-        "tmp",
-    )
-    source_terms = _retrieval_terms(_source_text(document))
-    return bool(
-        source_terms & set(strong_non_production_terms)
-        and not _query_mentions_any(query or "", strong_non_production_terms)
-    )
-
-
 def _document_relevance_score(document: Document, query_terms: set[str]) -> int:
     if not query_terms:
         return 0
@@ -529,20 +382,7 @@ def _score_table_documents(
         lexical_score = _document_relevance_score(document, query_terms)
         semantic_score = _semantic_score(document)
         source_shape_score = _source_shape_score(query, document)
-        concept_score, covered_concepts, missing_concepts = _concept_coverage_score(
-            query, document
-        )
-        combined_score = (
-            semantic_score + lexical_score + source_shape_score + concept_score
-        )
-        if covered_concepts or missing_concepts:
-            logger.debug(
-                "Table candidate concept coverage name=%s covered=%s missing=%s concept_score=%s",
-                document.meta.get("name"),
-                sorted(covered_concepts),
-                sorted(missing_concepts),
-                concept_score,
-            )
+        combined_score = semantic_score + lexical_score + source_shape_score
         scored_documents.append(
             (combined_score, -index, document, lexical_score, semantic_score)
         )
@@ -588,29 +428,7 @@ def _select_relevant_table_documents(
     if not reranked:
         return documents[:max_tables]
 
-    query_concepts = _business_concepts(query)
-    concept_pool = [
-        item
-        for item in reranked
-        if not query_concepts
-        or (_business_concepts(_source_text(item[2])) & query_concepts)
-    ]
-    if query_concepts and not concept_pool:
-        logger.info(
-            "No table candidates covered requested business concepts; query=%s concepts=%s",
-            query,
-            sorted(query_concepts),
-        )
-        return []
-
-    candidate_pool = concept_pool or [item for item in reranked if item[3] > 0] or reranked
-    production_pool = [
-        item
-        for item in candidate_pool
-        if not _is_unrequested_strong_non_production_source(query, item[2])
-    ]
-    if production_pool:
-        candidate_pool = production_pool
+    candidate_pool = [item for item in reranked if item[3] > 0] or reranked
     selected = [
         document
         for _score, _index, document, _lexical, _semantic in candidate_pool[:max_tables]
@@ -696,42 +514,10 @@ def _normalize_table_names(table_names: Optional[list[str]]) -> list[str]:
     return normalized
 
 
-def _table_name_lookup_variants(table_name: str) -> list[str]:
-    raw_name = str(table_name or "").strip().strip('"`[]')
-    if not raw_name:
-        return []
-
-    variants = [
-        raw_name,
-        raw_name.replace(".", "_"),
-        raw_name.replace("$", "_"),
-    ]
-    parts = [part for part in re.split(r"[.$_\[\]`\"]+", raw_name) if part]
-    if len(parts) > 1:
-        variants.append(parts[-1])
-        variants.append("_".join(parts[-2:]))
-
-    deduped: list[str] = []
-    for variant in variants:
-        variant = variant.strip()
-        if variant and variant not in deduped:
-            deduped.append(variant)
-    return deduped
-
-
-def _expand_table_name_lookup_variants(table_names: Optional[list[str]]) -> list[str]:
-    expanded: list[str] = []
-    for table_name in _normalize_table_names(table_names):
-        for variant in _table_name_lookup_variants(table_name):
-            if variant not in expanded:
-                expanded.append(variant)
-    return expanded
-
-
 def _extract_table_names_from_table_retrieval(
     table_retrieval: dict, explicit_tables: Optional[list[str]] = None
 ) -> list[str]:
-    table_names = _expand_table_name_lookup_variants(explicit_tables)
+    table_names = _normalize_table_names(explicit_tables)
     for document in table_retrieval.get("documents") or []:
         if not isinstance(document, Document):
             continue
@@ -805,13 +591,12 @@ async def table_retrieval(
         return results
 
     if tables:
-        explicit_table_names = _expand_table_name_lookup_variants(tables)
-        logger.info("Loading explicit table descriptions: %s", explicit_table_names)
+        logger.info("Loading explicit table descriptions: %s", tables)
         explicit_filters = {
             **base_filters,
             "conditions": [
                 *base_filters["conditions"],
-                {"field": "name", "operator": "in", "value": explicit_table_names},
+                {"field": "name", "operator": "in", "value": tables},
             ],
         }
         return await table_retriever.run(query_embedding=[], filters=explicit_filters)
