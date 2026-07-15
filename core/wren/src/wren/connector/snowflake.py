@@ -86,15 +86,18 @@ class SnowflakeConnector(ConnectorABC):
         return arrow_table
 
     def dry_run(self, sql: str) -> None:
+        # cursor.describe is sensitive to a trailing terminator on many
+        # client-generated statements; strip only the total-line tail.
+        cleaned = strip_trailing_semicolon(sql)
         try:
             with self.connection.cursor() as cursor:
-                cursor.describe(sql)
+                cursor.describe(cleaned)
         except _programming_error() as e:
             raise WrenError(
                 ErrorCode.INVALID_SQL,
                 str(e),
                 phase=ErrorPhase.SQL_DRY_RUN,
-                metadata={DIALECT_SQL: sql},
+                metadata={DIALECT_SQL: cleaned},
             ) from e
 
     def close(self) -> None:
