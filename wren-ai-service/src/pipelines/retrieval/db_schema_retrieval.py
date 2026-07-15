@@ -553,7 +553,6 @@ async def embedding(
             previous_query_summaries = []
 
         query = "\n".join(previous_query_summaries) + "\n" + query
-        query = expand_business_terms_for_retrieval(query)
 
         return await embedder.run(query)
     else:
@@ -581,14 +580,10 @@ async def table_retrieval(
         )
 
     if embedding:
-        results = await table_retriever.run(
+        return await table_retriever.run(
             query_embedding=embedding.get("embedding"),
             filters=base_filters,
         )
-        results["documents"] = _select_relevant_table_documents(
-            query, results.get("documents") or []
-        )
-        return results
 
     if tables:
         logger.info("Loading explicit table descriptions: %s", tables)
