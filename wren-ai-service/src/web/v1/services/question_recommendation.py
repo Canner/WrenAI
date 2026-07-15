@@ -8,7 +8,6 @@ from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
-from src.pipelines.metadata_hygiene import filter_business_schema_contexts
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest, MetadataTraceable
 
@@ -406,13 +405,8 @@ class QuestionRecommendation:
             )
             _retrieval_result = retrieval_result.get("construct_retrieval_results", {})
             documents = _retrieval_result.get("retrieval_results", [])
-            raw_table_ddls = [document.get("table_ddl") for document in documents]
-            table_ddls_for_recommendation = filter_business_schema_contexts(
-                "\n".join(input.previous_questions or []),
-                raw_table_ddls,
-            )
             table_ddls = self._limit_text_items(
-                table_ddls_for_recommendation,
+                [document.get("table_ddl") for document in documents],
                 max_items=DEFAULT_RECOMMENDATION_CONTEXT_ITEMS,
                 max_chars=DEFAULT_RECOMMENDATION_CONTEXT_CHARS,
             )

@@ -21,12 +21,6 @@ from src.pipelines.common import (
     get_engine_supported_data_type,
     normalize_data_type,
 )
-from src.pipelines.metadata_hygiene import (
-    NOISY_METADATA_TERMS,
-    filter_business_documents,
-    metadata_terms,
-    query_requests_noisy_metadata,
-)
 from src.utils import trace_cost
 if TYPE_CHECKING:
     from src.web.v1.services.ask import AskHistory
@@ -190,6 +184,10 @@ def expand_business_terms_for_retrieval(query: str) -> str:
     return f"{query}\n" + "\n".join(expansions)
 
 
+def _normalize_retrieval_token(value: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
+
+
 def _retrieval_terms(value: str) -> set[str]:
     stop_words = {
         "about",
@@ -216,9 +214,9 @@ def _retrieval_terms(value: str) -> set[str]:
         "with",
     }
     terms = {
-        term
-        for term in metadata_terms(value)
-        if len(term) > 2 and term.lower() not in stop_words
+        _normalize_retrieval_token(token)
+        for token in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", value or "")
+        if len(token) > 2 and token.lower() not in stop_words
     }
     return {term for term in terms if term}
 
@@ -245,8 +243,23 @@ def _source_shape_score(query: str, document: Document) -> int:
     source_terms = _retrieval_terms(source_text)
 
     score = 0
-    if source_terms.intersection(NOISY_METADATA_TERMS) and not query_requests_noisy_metadata(
-        normalized_query
+    non_production_terms = (
+        "archive",
+        "backup",
+        "copy",
+        "dev",
+        "development",
+        "duplicate",
+        "sample",
+        "stage",
+        "staging",
+        "temp",
+        "test",
+        "tmp",
+    )
+    if any(term in source_terms for term in non_production_terms) and not _query_mentions_any(
+        normalized_query,
+        non_production_terms,
     ):
         score -= 60
 
@@ -381,7 +394,6 @@ def _rerank_table_documents(query: str, documents: list[Document]) -> list[Docum
     if not documents:
         return documents
 
-    documents = filter_business_documents(query, documents)
     reranked = _score_table_documents(query, documents)
     if not reranked:
         return documents
@@ -412,7 +424,6 @@ def _select_relevant_table_documents(
     if not documents or max_tables <= 0:
         return []
 
-    documents = filter_business_documents(query, documents)
     reranked = _score_table_documents(query, documents)
     if not reranked:
         return documents[:max_tables]
@@ -574,9 +585,6 @@ async def table_retrieval(
             query_embedding=embedding.get("embedding"),
             filters=base_filters,
         )
-        results["documents"] = filter_business_documents(
-            query, results.get("documents") or []
-        )
         results["documents"] = _select_relevant_table_documents(
             query, results.get("documents") or []
         )
@@ -643,10 +651,7 @@ async def dbschema_retrieval(
         return []
 
     results = await dbschema_retriever.run(query_embedding=[], filters=filters)
-    documents = results.get("documents", [])
-    if not tables:
-        documents = filter_business_documents(query, documents)
-    return documents
+    return results.get("documents", [])
 
 
 @observe()

@@ -12,7 +12,6 @@ from pydantic import BaseModel
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.common import clean_up_new_lines
-from src.pipelines.metadata_hygiene import filter_business_schema_contexts
 from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
@@ -184,8 +183,6 @@ def prompt(
     max_categories: int,
     prompt_builder: PromptBuilder,
 ) -> dict:
-    query_context = "\n".join(previous_questions or [])
-    documents = filter_business_schema_contexts(query_context, documents or [])
     _prompt = prompt_builder.run(
         documents=documents,
         previous_questions=previous_questions,
