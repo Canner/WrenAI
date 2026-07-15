@@ -74,19 +74,26 @@ async def get(
         if response is None:
             return None
 
+        def _properties(payload: dict) -> dict:
+            properties = payload.get("properties")
+            return properties if isinstance(properties, dict) else {}
+
         return [
             {
                 "name": model_name,
                 "columns": [
                     {
-                        "name": column["name"],
-                        "description": column["properties"].get("description", ""),
+                        "name": column.get("name", ""),
+                        "type": column.get("type", ""),
+                        "description": _properties(column).get("description", ""),
                     }
-                    for column in model_data["columns"]
+                    for column in model_data.get("columns", [])
+                    if isinstance(column, dict)
                 ],
-                "description": model_data["properties"].get("description", ""),
+                "description": _properties(model_data).get("description", ""),
             }
             for model_name, model_data in response.items()
+            if isinstance(model_data, dict)
         ]
 
     return GetResponse(

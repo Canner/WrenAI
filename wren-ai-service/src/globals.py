@@ -90,6 +90,7 @@ def create_service_container(
                     **pipe_components["semantics_description"],
                 )
             },
+            generation_timeout_seconds=settings.pipeline_timeout_seconds,
             **query_cache,
         ),
         semantics_preparation_service=services.SemanticsPreparationService(

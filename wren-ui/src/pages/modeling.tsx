@@ -591,6 +591,9 @@ export default function Modeling() {
           'modelingSemanticsResult',
         );
         const normalizedResult = normalizeSemanticResult(result);
+        if (!normalizedResult.length) {
+          throw new Error('AI assistant returned no semantic descriptions.');
+        }
         setSemanticResult(normalizedResult);
         setSemanticStep('review');
       }

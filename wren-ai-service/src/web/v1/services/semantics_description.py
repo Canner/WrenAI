@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Dict, Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
 import orjson
 from cachetools import TTLCache
@@ -32,9 +32,11 @@ class SemanticsDescription:
         pipelines: Dict[str, BasicPipeline],
         maxsize: int = 1_000_000,
         ttl: int = 120,
+        generation_timeout_seconds: int = 90,
     ):
         self._pipelines = pipelines
         self._cache: Dict[str, self.Resource] = TTLCache(maxsize=maxsize, ttl=ttl)
+        self._generation_timeout_seconds = generation_timeout_seconds
 
     def _handle_exception(
         self,
@@ -67,15 +69,25 @@ class SemanticsDescription:
             "language": request.configurations.language,
         }
 
-        chunks = [
-            {
-                **model,
-                "columns": model["columns"][i : i + chunk_size],
-            }
-            for model in mdl_dict["models"]
-            if model["name"] in request.selected_models
-            for i in range(0, len(model["columns"]), chunk_size)
-        ]
+        chunks: list[dict[str, Any]] = []
+        selected_models = set(request.selected_models)
+        for model in mdl_dict.get("models", []):
+            model_name = model.get("name")
+            if model_name not in selected_models:
+                continue
+
+            columns = model.get("columns") or []
+            if not columns:
+                chunks.append({**model, "columns": []})
+                continue
+
+            chunks.extend(
+                {
+                    **model,
+                    "columns": columns[i : i + chunk_size],
+                }
+                for i in range(0, len(columns), chunk_size)
+            )
 
         return [
             {
@@ -87,8 +99,13 @@ class SemanticsDescription:
         ]
 
     async def _generate_task(self, request_id: str, chunk: dict):
-        resp = await self._pipelines["semantics_description"].run(**chunk)
+        resp = await asyncio.wait_for(
+            self._pipelines["semantics_description"].run(**chunk),
+            timeout=self._generation_timeout_seconds,
+        )
         output = resp.get("output")
+        if not isinstance(output, dict):
+            raise ValueError("Semantics description pipeline returned no output")
 
         current = self[request_id]
         current.response = current.response or {}
@@ -98,7 +115,8 @@ class SemanticsDescription:
                 current.response[key] = output[key]
                 continue
 
-            current.response[key]["columns"].extend(output[key]["columns"])
+            current.response[key].setdefault("columns", [])
+            current.response[key]["columns"].extend(output[key].get("columns", []))
 
     @observe(name="Generate Semantics Description")
     @trace_metadata
@@ -110,6 +128,10 @@ class SemanticsDescription:
             mdl_dict = orjson.loads(request.mdl)
 
             chunks = self._chunking(mdl_dict, request)
+            if not chunks:
+                raise ValueError(
+                    "No selected models matched the current semantic model metadata"
+                )
             tasks = [self._generate_task(request.id, chunk) for chunk in chunks]
 
             await asyncio.gather(*tasks)

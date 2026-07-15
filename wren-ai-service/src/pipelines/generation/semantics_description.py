@@ -96,29 +96,40 @@ def picked_models(mdl: dict, selected_models: list[str]) -> list[dict]:
     def relation_filter(column: dict) -> bool:
         return "relationship" not in column
 
+    def _properties(payload: dict) -> dict:
+        properties = payload.get("properties")
+        return properties if isinstance(properties, dict) else {}
+
+    def _text(value) -> str:
+        return "" if value is None else str(value)
+
     def column_formatter(columns: list[dict]) -> list[dict]:
         return [
             {
-                "name": column["name"],
-                "type": column["type"],
+                "name": column.get("name", ""),
+                "type": column.get("type", ""),
                 "properties": {
-                    "description": column["properties"].get("description", ""),
+                    "description": _text(
+                        _properties(column).get("description", "")
+                    ),
                     "alias": clean_display_name(
-                        column["properties"].get("displayName", "")
+                        _text(_properties(column).get("displayName", ""))
                     ),
                 },
             }
-            for column in columns
+            for column in columns or []
             if relation_filter(column)
         ]
 
     def extract(model: dict) -> dict:
         return {
-            "name": model["name"],
-            "columns": column_formatter(model["columns"]),
+            "name": model.get("name", ""),
+            "columns": column_formatter(model.get("columns", [])),
             "properties": {
-                "description": model["properties"].get("description", ""),
-                "alias": clean_display_name(model["properties"].get("displayName", "")),
+                "description": _text(_properties(model).get("description", "")),
+                "alias": clean_display_name(
+                    _text(_properties(model).get("displayName", ""))
+                ),
             },
         }
 
@@ -163,10 +174,18 @@ def normalize(generate: dict) -> dict:
             logger.error(f"Error decoding JSON: {e}")
             return {"models": []}  # Return an empty list if JSON decoding fails
 
-    reply = generate.get("replies")[0]  # Expecting only one reply
+    replies = generate.get("replies") or []
+    if not replies:
+        return {}
+
+    reply = replies[0]  # Expecting only one reply
     normalized = wrapper(reply)
 
-    return {model["name"]: model for model in normalized["models"]}
+    return {
+        model["name"]: model
+        for model in normalized.get("models", [])
+        if isinstance(model, dict) and model.get("name")
+    }
 
 
 @observe(capture_input=False)
@@ -179,7 +198,10 @@ def output(normalize: dict, picked_models: list[dict]) -> dict:
     models = {model["name"]: model for model in picked_models}
 
     return {
-        name: {**data, "columns": _filter(data["columns"], models[name]["columns"])}
+        name: {
+            **data,
+            "columns": _filter(data.get("columns", []), models[name]["columns"]),
+        }
         for name, data in normalize.items()
         if name in models
     }
