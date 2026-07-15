@@ -223,12 +223,14 @@ const parseQualifiedField = (value = '') => {
 };
 
 const renderIcon = (IconComponent) => React.createElement(IconComponent as any);
+const ASSISTANT_CANCELLED = 'ASSISTANT_CANCELLED';
 
 export default function Modeling() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const apolloClient = useApolloClient();
   const diagramRef = useRef(null);
+  const assistantRunIdRef = useRef(0);
   const [assistantMode, setAssistantMode] = useState<
     'semantics' | 'relationships' | null
   >(null);
@@ -575,20 +577,28 @@ export default function Modeling() {
     queryId: string,
     query: any,
     fieldName: string,
+    runId: number,
   ) => {
     if (!queryId) {
       throw new Error('AI assistant did not return a task id.');
     }
 
     for (let attempt = 0; attempt < 90; attempt += 1) {
+      if (assistantRunIdRef.current !== runId) {
+        throw new Error(ASSISTANT_CANCELLED);
+      }
       const res = await apolloClient.query({
         query,
         variables: { queryId },
         fetchPolicy: 'network-only',
       });
+      if (assistantRunIdRef.current !== runId) {
+        throw new Error(ASSISTANT_CANCELLED);
+      }
       const payload = res.data?.[fieldName];
-      if (payload?.status === 'finished') return payload.response || [];
-      if (payload?.status === 'failed') {
+      const status = String(payload?.status || '').toLowerCase();
+      if (status === 'finished') return payload.response || [];
+      if (status === 'failed') {
         throw new Error(payload.error?.message || 'AI assistant failed.');
       }
       await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -678,6 +688,7 @@ export default function Modeling() {
   };
 
   const openAssistant = (mode: 'semantics' | 'relationships') => {
+    assistantRunIdRef.current += 1;
     setAssistantMode(mode);
     setSemanticStep('pick');
     setSemanticSearch('');
@@ -692,6 +703,8 @@ export default function Modeling() {
   };
 
   const runAssistant = async () => {
+    const runId = assistantRunIdRef.current + 1;
+    assistantRunIdRef.current = runId;
     try {
       setAssistantLoading(true);
       if (assistantMode === 'semantics') {
@@ -712,7 +725,9 @@ export default function Modeling() {
           queryId,
           MODELING_SEMANTICS_RESULT,
           'modelingSemanticsResult',
+          runId,
         );
+        if (assistantRunIdRef.current !== runId) return;
         const normalizedResult = normalizeSemanticResult(result);
         if (!normalizedResult.length) {
           throw new Error('AI assistant returned no semantic descriptions.');
@@ -730,15 +745,21 @@ export default function Modeling() {
           queryId,
           MODELING_RELATIONSHIPS_RESULT,
           'modelingRelationshipsResult',
+          runId,
         );
+        if (assistantRunIdRef.current !== runId) return;
         const normalizedResult = normalizeRelationshipResult(result);
         setRelationshipResult(normalizedResult);
         setOriginalRelationshipResult(normalizedResult);
       }
     } catch (error: any) {
-      message.error(error.message || 'Failed to run Modeling AI Assistant.');
+      if (error.message !== ASSISTANT_CANCELLED) {
+        message.error(error.message || 'Failed to run Modeling AI Assistant.');
+      }
     } finally {
-      setAssistantLoading(false);
+      if (assistantRunIdRef.current === runId) {
+        setAssistantLoading(false);
+      }
     }
   };
 
@@ -813,7 +834,9 @@ export default function Modeling() {
   };
 
   const closeAssistant = () => {
+    assistantRunIdRef.current += 1;
     setAssistantMode(null);
+    setAssistantLoading(false);
     setSemanticStep('pick');
     setSemanticSearch('');
     setRelationshipAutoStarted(false);
@@ -943,6 +966,13 @@ export default function Modeling() {
     setRelationshipAutoStarted(true);
     runAssistant();
   }, [assistantMode, relationshipAutoStarted]);
+
+  useEffect(
+    () => () => {
+      assistantRunIdRef.current += 1;
+    },
+    [],
+  );
 
   if (assistantMode === 'semantics') {
     return (
