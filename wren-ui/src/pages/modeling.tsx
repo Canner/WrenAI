@@ -878,11 +878,18 @@ export default function Modeling() {
         }
       }
       if (assistantMode === 'relationships') {
+        const latestDiagramResult = await apolloClient.query({
+          query: DIAGRAM,
+          fetchPolicy: 'network-only',
+        });
+        const latestDiagramData =
+          latestDiagramResult.data?.diagram || diagramData;
+
         for (const relationship of relationshipResult) {
-          const fromModel = diagramData.models.find(
+          const fromModel = latestDiagramData.models.find(
             (model) => model.referenceName === relationship.fromModel,
           );
-          const toModel = diagramData.models.find(
+          const toModel = latestDiagramData.models.find(
             (model) => model.referenceName === relationship.toModel,
           );
           const fromField = fromModel?.fields.find(
@@ -892,7 +899,7 @@ export default function Modeling() {
             (field) => field.referenceName === relationship.toColumn,
           );
           if (!fromModel || !toModel || !fromField || !toField) continue;
-          const alreadyExists = diagramData.models.some((model) =>
+          const alreadyExists = latestDiagramData.models.some((model) =>
             (model.relationFields || []).some((field) => {
               if (!field) return false;
               const forward =
