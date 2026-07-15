@@ -4,11 +4,11 @@ import { useSearchParams } from 'next/navigation';
 import { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
-  Checkbox,
   Dropdown,
   Input,
   Menu,
   Modal,
+  Select,
   Table,
   message,
 } from 'antd';
@@ -458,6 +458,23 @@ export default function Modeling() {
     throw new Error('AI assistant timed out.');
   };
 
+  const normalizeSemanticResult = (result: any): any[] => {
+    if (Array.isArray(result)) return result;
+    if (Array.isArray(result?.models)) return result.models;
+    if (Array.isArray(result?.semantics)) return result.semantics;
+    if (Array.isArray(result?.descriptions)) return result.descriptions;
+    return [];
+  };
+
+  const normalizeRelationshipResult = (result: any): any[] => {
+    if (Array.isArray(result)) return result;
+    if (Array.isArray(result?.relationships)) return result.relationships;
+    if (Array.isArray(result?.response?.relationships)) {
+      return result.response.relationships;
+    }
+    return [];
+  };
+
   const openAssistant = (mode: 'semantics' | 'relationships') => {
     setAssistantMode(mode);
     setSelectedModels(diagramData?.models?.map((model) => model.referenceName) || []);
@@ -486,7 +503,7 @@ export default function Modeling() {
           MODELING_SEMANTICS_RESULT,
           'modelingSemanticsResult',
         );
-        setSemanticResult(result);
+        setSemanticResult(normalizeSemanticResult(result));
       }
       if (assistantMode === 'relationships') {
         if (!diagramData?.models || diagramData.models.length < 2) {
@@ -499,7 +516,7 @@ export default function Modeling() {
           MODELING_RELATIONSHIPS_RESULT,
           'modelingRelationshipsResult',
         );
-        setRelationshipResult(result?.relationships || []);
+        setRelationshipResult(normalizeRelationshipResult(result));
       }
     } catch (error: any) {
       message.error(error.message || 'Failed to run Modeling AI Assistant.');
@@ -739,15 +756,16 @@ export default function Modeling() {
         >
           {assistantMode === 'semantics' && (
             <>
-              <Checkbox.Group
+              <Select
+                mode="multiple"
                 className="mb-4"
-                style={{ display: 'grid', gap: 8 }}
+                style={{ width: '100%' }}
                 value={selectedModels}
                 options={(diagramData?.models || []).map((model) => ({
                   label: model.displayName || model.referenceName,
                   value: model.referenceName,
                 }))}
-                onChange={(values) => setSelectedModels(values as string[])}
+                onChange={(values) => setSelectedModels(values)}
               />
               <Input.TextArea
                 rows={3}
