@@ -79,6 +79,19 @@ class RelationshipRecommendation:
 
         return aliases
 
+    def _column_is_primary_key(self, model: dict, column_name: str) -> bool:
+        primary_key = model.get("primaryKey")
+        if primary_key and column_name == primary_key:
+            return True
+
+        normalized_column = self._normalize_identifier(column_name)
+        return normalized_column == "id"
+
+    def _fallback_relationship_type(self, from_model: dict, from_column: str) -> str:
+        if self._column_is_primary_key(from_model, from_column):
+            return "ONE_TO_ONE"
+        return "MANY_TO_ONE"
+
     def _fallback_relationships(self, mdl: dict) -> dict:
         models = mdl.get("models", []) or []
         existing = {
@@ -140,10 +153,13 @@ class RelationshipRecommendation:
                 if not to_column:
                     continue
 
+                relationship_type = self._fallback_relationship_type(
+                    from_model, from_column
+                )
                 signature = (
                     from_model_name,
                     f"{from_model_name}.{from_column} = {to_model_name}.{to_column}",
-                    "MANY_TO_ONE",
+                    relationship_type,
                 )
                 if signature in existing:
                     continue
@@ -153,7 +169,7 @@ class RelationshipRecommendation:
                         "name": f"{from_model_name}_{to_model_name}",
                         "fromModel": from_model_name,
                         "fromColumn": from_column,
-                        "type": "MANY_TO_ONE",
+                        "type": relationship_type,
                         "toModel": to_model_name,
                         "toColumn": to_column,
                         "reason": (
