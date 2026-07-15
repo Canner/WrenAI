@@ -36,7 +36,7 @@ class SemanticsDescription:
     ):
         self._pipelines = pipelines
         self._cache: Dict[str, self.Resource] = TTLCache(maxsize=maxsize, ttl=ttl)
-        self._generation_timeout_seconds = min(generation_timeout_seconds, 30)
+        self._generation_timeout_seconds = generation_timeout_seconds
 
     def _handle_exception(
         self,
@@ -167,11 +167,23 @@ class SemanticsDescription:
 
     async def _generate_task(self, request_id: str, chunk: dict):
         try:
+            logger.info(
+                "Calling configured LLM for semantics descriptions. "
+                "models=%s timeout_seconds=%s",
+                chunk.get("selected_models", []),
+                self._generation_timeout_seconds,
+            )
             resp = await asyncio.wait_for(
                 self._pipelines["semantics_description"].run(**chunk),
                 timeout=self._generation_timeout_seconds,
             )
             output = resp.get("output")
+            if not output:
+                logger.warning(
+                    "Configured LLM returned empty semantics output; "
+                    "returning metadata-based fallback descriptions."
+                )
+                output = self._fallback_output(chunk)
         except TimeoutError:
             logger.warning(
                 "Semantics description LLM call timed out after %s seconds; "

@@ -155,6 +155,15 @@ def test_get_non_existent_semantics_description_result(
     assert "not found" in result.error.message
 
 
+def test_semantics_description_uses_configured_timeout():
+    service = SemanticsDescription(
+        pipelines={"semantics_description": AsyncMock()},
+        generation_timeout_seconds=123,
+    )
+
+    assert service._generation_timeout_seconds == 123
+
+
 @pytest.mark.asyncio
 async def test_batch_processing_with_multiple_models(
     service: SemanticsDescription,
