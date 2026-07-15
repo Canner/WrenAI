@@ -538,6 +538,12 @@ def test_extract_explicit_table_names_from_query():
     assert service._extract_explicit_table_names_from_query(
         "Show the first 10 rows from tblNewOrders"
     ) == ["tblNewOrders"]
+    assert service._extract_explicit_table_names_from_query(
+        "Show the latest records from last month"
+    ) == []
+    assert service._extract_explicit_table_names_from_query(
+        "Show all customers names"
+    ) == []
 
 
 def test_extract_explicit_table_names_from_using_clause():
@@ -560,6 +566,37 @@ def test_extract_explicit_table_names_from_in_clause():
     assert service._extract_explicit_table_names_from_query(
         "Which customers have the highest number of orders in market?"
     ) == []
+    assert service._extract_explicit_table_names_from_query(
+        "Show top 10 customers by invoice amount in the current year"
+    ) == []
+
+
+def test_build_schema_ranked_measure_sql_uses_matching_dimension_and_measure():
+    service = AskService.__new__(AskService)
+
+    sql = service._build_schema_ranked_measure_sql(
+        "Show top 10 customers by invoice amount",
+        [
+            """
+            CREATE TABLE sales_fact (
+              Customer_Name VARCHAR,
+              Product_Name VARCHAR,
+              Transaction_Amount FLOAT,
+              Invoice_ID VARCHAR
+            );
+            """
+        ],
+    )
+
+    assert sql == (
+        'SELECT TOP 10 "sales_fact"."Customer_Name" AS "Customer_Name", '
+        'SUM("sales_fact"."Transaction_Amount") AS "TotalTransaction_Amount" '
+        'FROM "sales_fact" '
+        'WHERE "sales_fact"."Customer_Name" IS NOT NULL '
+        'AND "sales_fact"."Transaction_Amount" IS NOT NULL '
+        'GROUP BY "sales_fact"."Customer_Name" '
+        'ORDER BY SUM("sales_fact"."Transaction_Amount") DESC'
+    )
 
 
 def test_extract_explicit_table_names_from_repair_logs_phrase():

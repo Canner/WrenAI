@@ -1298,6 +1298,26 @@ class AskService:
                 return column_name
         return None
 
+    def _is_probable_explicit_table_token(self, token: str) -> bool:
+        normalized = re.sub(r"\s+", " ", str(token or "").strip().lower())
+        if not normalized:
+            return False
+        if normalized in self._INTENT_STOPWORDS or normalized in {
+            "last",
+            "latest",
+            "recent",
+            "current",
+            "previous",
+            "next",
+            "month",
+            "year",
+            "quarter",
+            "week",
+            "day",
+        }:
+            return False
+        return True
+
     def _quote_sql_identifier(self, identifier: str) -> str:
         return f'"{identifier.replace(chr(34), chr(34) + chr(34))}"'
 
@@ -1492,6 +1512,103 @@ class AskService:
             if column in candidate_columns:
                 return column
         return candidate_columns[0] if candidate_columns else None
+
+    def _build_schema_ranked_measure_sql(
+        self,
+        query: str,
+        table_ddls: list[str],
+    ) -> str | None:
+        normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
+        if not normalized_query:
+            return None
+        if not re.search(
+            r"\b(?:top|highest|largest|biggest|best|lowest|smallest|bottom)\b",
+            normalized_query,
+        ):
+            return None
+
+        tables = self._parse_schema_tables(table_ddls)
+        if not tables:
+            return None
+
+        query_tokens = self._intent_tokens(query)
+        if not query_tokens:
+            return None
+
+        scored: list[tuple[int, dict[str, Any], str, str]] = []
+        for table in tables:
+            text_columns: list[tuple[int, str]] = []
+            numeric_columns: list[tuple[int, str]] = []
+            for column in table.get("columns", []):
+                column_name = str(column.get("name") or "")
+                column_type = str(column.get("type") or "")
+                if not column_name:
+                    continue
+
+                column_tokens = self._schema_name_tokens(column_name)
+                query_overlap = column_tokens & query_tokens
+
+                if self._is_numeric_schema_type(column_type):
+                    if query_overlap:
+                        numeric_columns.append(
+                            (80 + 5 * len(query_overlap), column_name)
+                        )
+                    continue
+
+                if self._is_temporal_schema_type(column_type):
+                    continue
+
+                if query_overlap:
+                    text_columns.append((60 + 5 * len(query_overlap), column_name))
+
+            if not text_columns or not numeric_columns:
+                continue
+
+            dimension_score, dimension = sorted(
+                text_columns,
+                key=lambda item: item[0],
+                reverse=True,
+            )[0]
+            measure_score, measure = sorted(
+                numeric_columns,
+                key=lambda item: item[0],
+                reverse=True,
+            )[0]
+            table_score = dimension_score + measure_score
+            table_tokens = self._schema_name_tokens(str(table.get("name") or ""))
+            table_score += 5 * len(table_tokens & query_tokens)
+            scored.append((table_score, table, dimension, measure))
+
+        if not scored:
+            return None
+
+        _, table, dimension, measure = sorted(
+            scored,
+            key=lambda item: item[0],
+            reverse=True,
+        )[0]
+        table_name = str(table.get("name") or "")
+        if not table_name:
+            return None
+
+        limit = self._extract_requested_top_n(query, default_value=10)
+        table_ref = self._quote_sql_identifier(table_name)
+        dimension_ref = f"{table_ref}.{self._quote_sql_identifier(dimension)}"
+        measure_ref = f"{table_ref}.{self._quote_sql_identifier(measure)}"
+        metric_expr = f"SUM({measure_ref})"
+        direction = (
+            "ASC"
+            if re.search(r"\b(?:lowest|smallest|least|bottom)\b", normalized_query)
+            else "DESC"
+        )
+        return (
+            f"SELECT TOP {limit} {dimension_ref} AS {self._quote_sql_identifier(dimension)}, "
+            f"{metric_expr} AS {self._quote_sql_identifier('Total' + measure)} "
+            f"FROM {table_ref} "
+            f"WHERE {dimension_ref} IS NOT NULL AND {measure_ref} IS NOT NULL "
+            f"GROUP BY {dimension_ref} "
+            f"ORDER BY {metric_expr} {direction}"
+        )
 
     def _find_temporal_column_for_query(
         self, query: str, table: dict[str, Any]
@@ -1737,7 +1854,11 @@ class AskService:
             flags=re.IGNORECASE,
         ):
             table_name = match.group(1).strip(".,;:()[]{}")
-            if table_name and table_name not in table_names:
+            if (
+                table_name
+                and self._is_probable_explicit_table_token(table_name)
+                and table_name not in table_names
+            ):
                 table_names.append(table_name)
         for match in re.finditer(
             r"\bin\s+(?:the\s+)?([A-Za-z_][A-Za-z0-9_.$]*)\s+table\b",
@@ -1745,7 +1866,11 @@ class AskService:
             flags=re.IGNORECASE,
         ):
             table_name = match.group(1).strip(".,;:()[]{}")
-            if table_name and table_name not in table_names:
+            if (
+                table_name
+                and self._is_probable_explicit_table_token(table_name)
+                and table_name not in table_names
+            ):
                 table_names.append(table_name)
         for match in re.finditer(
             r"\bin\s+([A-Za-z_][A-Za-z0-9_.$]*)",
@@ -1756,6 +1881,7 @@ class AskService:
             if (
                 table_name
                 and ("." in table_name or "_" in table_name)
+                and self._is_probable_explicit_table_token(table_name)
                 and table_name not in table_names
             ):
                 table_names.append(table_name)
@@ -1768,6 +1894,7 @@ class AskService:
             if (
                 table_name
                 and ("." in table_name or "_" in table_name)
+                and self._is_probable_explicit_table_token(table_name)
                 and table_name not in table_names
             ):
                 table_names.append(table_name)
@@ -1794,7 +1921,13 @@ class AskService:
         separator_normalized = re.sub(r"[.$]", "_", table_name)
         if separator_normalized not in candidates:
             candidates.append(separator_normalized)
+        if "_" in table_name and "." not in table_name:
+            dotted = table_name.replace("_", ".", 1)
+            if dotted not in candidates:
+                candidates.append(dotted)
         short_name = re.split(r"[.$]", table_name)[-1]
+        if "." not in table_name and "_" in table_name:
+            short_name = table_name.split("_", 1)[-1]
         if short_name and short_name not in candidates:
             candidates.append(short_name)
         return candidates
@@ -5848,6 +5981,32 @@ class AskService:
                         table_names,
                     )
 
+                    if ranked_measure_sql := self._build_schema_ranked_measure_sql(
+                        user_query,
+                        table_ddls,
+                    ):
+                        ask_result = self._build_validated_ask_result_from_sql(
+                            ranked_measure_sql,
+                            table_ddls,
+                            user_query,
+                        )
+                        if ask_result:
+                            api_results = [ask_result]
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="TEXT_TO_SQL",
+                                response=api_results,
+                                rephrased_question=user_query,
+                                intent_reasoning="Explicit table request matched deployed schema and generated ranked measure SQL locally.",
+                                retrieved_tables=table_names,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                            )
+                            results["ask_result"] = api_results
+                            results["metadata"]["type"] = "TEXT_TO_SQL"
+                            return results
+                        invalid_sql = ranked_measure_sql
+
                     if table_question_sql := self._build_schema_grounded_table_question_sql(
                         user_query, table_ddls
                     ):
@@ -6473,6 +6632,27 @@ class AskService:
                 logger.info(
                     "Retrieved tables for query_id %s: %s", query_id, table_names
                 )
+
+                if not api_results and (
+                    ranked_measure_sql := self._build_schema_ranked_measure_sql(
+                        user_query,
+                        table_ddls,
+                    )
+                ):
+                    logger.info(
+                        "Using schema-grounded ranked measure SQL for query_id %s",
+                        query_id,
+                    )
+                    ask_result = self._build_validated_ask_result_from_sql(
+                        ranked_measure_sql,
+                        table_ddls,
+                        user_query,
+                    )
+                    if ask_result:
+                        api_results = [ask_result]
+                    else:
+                        invalid_sql = ranked_measure_sql
+                        error_message = "Schema-grounded ranked measure SQL was not valid for the active datasource schema."
 
                 if not api_results and (
                     table_question_sql := self._build_schema_grounded_table_question_sql(
