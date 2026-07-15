@@ -1,5 +1,7 @@
+import asyncio
 import logging
-from typing import Dict, Literal, Optional
+import re
+from typing import Any, Dict, Literal, Optional
 
 import orjson
 from cachetools import TTLCache
@@ -35,11 +37,103 @@ class RelationshipRecommendation:
         pipelines: Dict[str, BasicPipeline],
         maxsize: int = 1_000_000,
         ttl: int = 120,
+        generation_timeout_seconds: int = 45,
     ):
         self._pipelines = pipelines
         self._cache: Dict[str, RelationshipRecommendation.Resource] = TTLCache(
             maxsize=maxsize, ttl=ttl
         )
+        self._generation_timeout_seconds = generation_timeout_seconds
+
+    def _normalize_identifier(self, value: Any) -> str:
+        text = "" if value is None else str(value)
+        text = re.sub(r"[^a-zA-Z0-9]", "", text).lower()
+        return text[:-1] if text.endswith("s") else text
+
+    def _fallback_relationships(self, mdl: dict) -> dict:
+        models = mdl.get("models", []) or []
+        existing = {
+            (
+                relationship.get("models", [None, None])[0],
+                relationship.get("condition", ""),
+                relationship.get("joinType", ""),
+            )
+            for relationship in mdl.get("relationships", []) or []
+        }
+        candidates = []
+
+        model_lookup = {
+            self._normalize_identifier(model.get("name")): model for model in models
+        }
+
+        for from_model in models:
+            from_model_name = from_model.get("name")
+            if not from_model_name:
+                continue
+
+            for column in from_model.get("columns", []) or []:
+                if column.get("relationship"):
+                    continue
+
+                from_column = column.get("name")
+                if not from_column:
+                    continue
+
+                normalized_column = self._normalize_identifier(from_column)
+                if not normalized_column.endswith("id") or normalized_column == "id":
+                    continue
+
+                target_key = normalized_column[:-2]
+                to_model = model_lookup.get(target_key)
+                if not to_model or to_model.get("name") == from_model_name:
+                    continue
+
+                to_model_name = to_model.get("name")
+                to_columns = to_model.get("columns", []) or []
+                primary_key = to_model.get("primaryKey")
+                to_column = next(
+                    (
+                        item.get("name")
+                        for item in to_columns
+                        if item.get("name") == primary_key
+                    ),
+                    None,
+                )
+                to_column = to_column or next(
+                    (
+                        item.get("name")
+                        for item in to_columns
+                        if self._normalize_identifier(item.get("name")) == "id"
+                    ),
+                    None,
+                )
+                if not to_column:
+                    continue
+
+                signature = (
+                    from_model_name,
+                    f"{from_model_name}.{from_column} = {to_model_name}.{to_column}",
+                    "MANY_TO_ONE",
+                )
+                if signature in existing:
+                    continue
+
+                candidates.append(
+                    {
+                        "name": f"{from_model_name}_{to_model_name}",
+                        "fromModel": from_model_name,
+                        "fromColumn": from_column,
+                        "type": "MANY_TO_ONE",
+                        "toModel": to_model_name,
+                        "toColumn": to_column,
+                        "reason": (
+                            f"{from_model_name}.{from_column} appears to reference "
+                            f"{to_model_name}.{to_column}."
+                        ),
+                    }
+                )
+
+        return {"relationships": candidates}
 
     def _handle_exception(
         self,
@@ -72,12 +166,37 @@ class RelationshipRecommendation:
                 "language": request.configurations.language,
             }
 
-            resp = await self._pipelines["relationship_recommendation"].run(**input)
+            try:
+                logger.info(
+                    "Calling configured LLM for relationship recommendations. "
+                    "timeout_seconds=%s",
+                    self._generation_timeout_seconds,
+                )
+                resp = await asyncio.wait_for(
+                    self._pipelines["relationship_recommendation"].run(**input),
+                    timeout=self._generation_timeout_seconds,
+                )
+                response = resp.get("validated")
+                if not response or (
+                    "relationships" in response and not response.get("relationships")
+                ):
+                    logger.warning(
+                        "Configured LLM returned empty relationship recommendations; "
+                        "returning metadata-based fallback relationships."
+                    )
+                    response = self._fallback_relationships(mdl_dict)
+            except TimeoutError:
+                logger.warning(
+                    "Relationship recommendation LLM call timed out after %s seconds; "
+                    "returning metadata-based fallback relationships.",
+                    self._generation_timeout_seconds,
+                )
+                response = self._fallback_relationships(mdl_dict)
 
             self._cache[request.id] = self.Resource(
                 id=request.id,
                 status="finished",
-                response=resp.get("validated"),
+                response=response,
                 trace_id=trace_id,
                 request_from=request.request_from,
             )

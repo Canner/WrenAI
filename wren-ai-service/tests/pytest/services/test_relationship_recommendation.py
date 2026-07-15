@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
@@ -14,6 +15,26 @@ def mock_pipeline():
 def relationship_recommendation_service(mock_pipeline):
     pipelines = {"relationship_recommendation": mock_pipeline}
     return RelationshipRecommendation(pipelines)
+
+
+@pytest.fixture
+def mdl_with_project_relationship_candidate():
+    return """
+    {
+      "models": [
+        {
+          "name": "project",
+          "primaryKey": "id",
+          "columns": [{"name": "id"}, {"name": "name"}]
+        },
+        {
+          "name": "view",
+          "columns": [{"name": "id"}, {"name": "project_id"}]
+        }
+      ],
+      "relationships": []
+    }
+    """
 
 
 @pytest.mark.asyncio
@@ -85,6 +106,61 @@ def test_getitem_not_found(relationship_recommendation_service):
     assert response.status == "failed"
     assert response.error.code == "RESOURCE_NOT_FOUND"
     assert "not found" in response.error.message
+
+
+@pytest.mark.asyncio
+async def test_recommend_timeout_returns_fallback_relationships(
+    mock_pipeline, mdl_with_project_relationship_candidate
+):
+    service = RelationshipRecommendation(
+        {"relationship_recommendation": mock_pipeline},
+        generation_timeout_seconds=0.01,
+    )
+    request = RelationshipRecommendation.Input(
+        id="test_id", mdl=mdl_with_project_relationship_candidate
+    )
+
+    async def never_finishes(**_kwargs):
+        await asyncio.sleep(1)
+
+    mock_pipeline.run.side_effect = never_finishes
+
+    await service.recommend(request)
+    response = service[request.id]
+
+    assert response.status == "finished"
+    assert response.response == {
+        "relationships": [
+            {
+                "name": "view_project",
+                "fromModel": "view",
+                "fromColumn": "project_id",
+                "type": "MANY_TO_ONE",
+                "toModel": "project",
+                "toColumn": "id",
+                "reason": "view.project_id appears to reference project.id.",
+            }
+        ]
+    }
+
+
+@pytest.mark.asyncio
+async def test_recommend_empty_llm_result_returns_fallback_relationships(
+    relationship_recommendation_service,
+    mock_pipeline,
+    mdl_with_project_relationship_candidate,
+):
+    request = RelationshipRecommendation.Input(
+        id="test_id", mdl=mdl_with_project_relationship_candidate
+    )
+    mock_pipeline.run.return_value = {"validated": {"relationships": []}}
+
+    await relationship_recommendation_service.recommend(request)
+    response = relationship_recommendation_service[request.id]
+
+    assert response.status == "finished"
+    assert response.response["relationships"][0]["fromModel"] == "view"
+    assert response.response["relationships"][0]["toModel"] == "project"
 
 
 def test_setitem(relationship_recommendation_service):
