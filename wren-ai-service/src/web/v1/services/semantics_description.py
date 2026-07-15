@@ -15,8 +15,8 @@ logger = logging.getLogger("wren-ai-service")
 
 MAX_UI_WAIT_SECONDS = 180
 SEMANTICS_STATUS_TTL_BUFFER_SECONDS = 300
-SEMANTICS_MODEL_CHUNK_SIZE = 200
-SEMANTICS_MAX_CONCURRENT_LLM_CALLS = 3
+SEMANTICS_MODEL_CHUNK_SIZE = 1000
+SEMANTICS_MAX_CONCURRENT_LLM_CALLS = 6
 
 
 class SemanticsDescription:
@@ -82,6 +82,13 @@ class SemanticsDescription:
     def _text(self, value: Any) -> str:
         return "" if value is None else str(value)
 
+    def _humanize_name(self, name: str) -> str:
+        return " ".join(
+            token
+            for token in name.replace(".", " ").replace("_", " ").split()
+            if token.lower() not in {"dbo", "public"}
+        ) or name
+
     def _fallback_output(self, chunk: dict[str, Any]) -> dict[str, Any]:
         output: dict[str, Any] = {}
         for model in chunk.get("mdl", {}).get("models", []):
@@ -89,11 +96,12 @@ class SemanticsDescription:
             if not model_name:
                 continue
 
+            model_label = self._humanize_name(model_name)
             model_properties = self._properties(model)
             model_description = self._text(model_properties.get("description", ""))
             if not model_description:
                 model_description = (
-                    f"Represents {model_name.replace('_', ' ')} records in this dataset."
+                    f"Contains business records for {model_label}, used for reporting, analysis, and operational questions."
                 )
 
             columns = []
@@ -108,8 +116,9 @@ class SemanticsDescription:
                     column_properties.get("description", "")
                 )
                 if not column_description:
+                    column_label = self._humanize_name(column_name)
                     column_description = (
-                        f"{column_name.replace('_', ' ')} field from {model_name}."
+                        f"Stores the {column_label} value used to describe or analyze {model_label} records."
                     )
                 columns.append(
                     {
@@ -125,6 +134,52 @@ class SemanticsDescription:
                 "properties": {"description": model_description},
             }
         return output
+
+    def _complete_output_with_fallback(
+        self,
+        output: dict[str, Any],
+        chunk: dict[str, Any],
+    ) -> dict[str, Any]:
+        fallback = self._fallback_output(chunk)
+        completed = dict(output)
+
+        for model_name, fallback_model in fallback.items():
+            model_output = completed.get(model_name)
+            if not isinstance(model_output, dict):
+                completed[model_name] = fallback_model
+                continue
+
+            properties = model_output.get("properties")
+            if not isinstance(properties, dict):
+                properties = {}
+                model_output["properties"] = properties
+            if not properties.get("description"):
+                properties["description"] = self._text(
+                    model_output.get("description")
+                ) or fallback_model["properties"]["description"]
+
+            output_columns = {
+                column.get("name"): column
+                for column in model_output.get("columns", [])
+                if isinstance(column, dict) and column.get("name")
+            }
+            for fallback_column in fallback_model.get("columns", []):
+                column_name = fallback_column.get("name")
+                output_column = output_columns.get(column_name)
+                if not output_column:
+                    model_output.setdefault("columns", []).append(fallback_column)
+                    continue
+
+                column_properties = output_column.get("properties")
+                if not isinstance(column_properties, dict):
+                    column_properties = {}
+                    output_column["properties"] = column_properties
+                if not column_properties.get("description"):
+                    column_properties["description"] = self._text(
+                        output_column.get("description")
+                    ) or fallback_column["properties"]["description"]
+
+        return completed
 
     def _chunking(
         self,
@@ -201,6 +256,8 @@ class SemanticsDescription:
                     "returning metadata-based fallback descriptions."
                 )
                 output = self._fallback_output(chunk)
+            else:
+                output = self._complete_output_with_fallback(output, chunk)
         except TimeoutError:
             logger.warning(
                 "Semantics description LLM call timed out after %s seconds; "

@@ -42,7 +42,15 @@ async def test_generate_semantics_description(
     assert response.status == "finished"
     assert response.response == {
         "model1": {
-            "columns": [],
+            "columns": [
+                {
+                    "name": "column1",
+                    "type": "varchar",
+                    "properties": {
+                        "description": "Stores the column1 value used to describe or analyze model1 records."
+                    },
+                }
+            ],
             "properties": {"description": "Test description"},
         }
     }
@@ -200,11 +208,12 @@ async def test_batch_processing_with_multiple_models(
 
     assert response.id == "test_id"
     assert response.status == "finished"
-    assert response.response == {
-        "model1": {"description": "Description 1"},
-        "model2": {"description": "Description 2"},
-        "model3": {"description": "Description 3"},
-    }
+    assert response.response["model1"]["properties"]["description"] == "Description 1"
+    assert response.response["model2"]["properties"]["description"] == "Description 2"
+    assert response.response["model3"]["properties"]["description"] == "Description 3"
+    assert len(response.response["model1"]["columns"]) == 1
+    assert len(response.response["model2"]["columns"]) == 1
+    assert len(response.response["model3"]["columns"]) == 1
 
     chunks = service._chunking(orjson.loads(request.mdl), request)
     assert len(chunks) == 1
@@ -231,6 +240,95 @@ def test_batch_processing_with_custom_chunk_size(
     assert [len(chunk["selected_models"]) for chunk in chunks] == [2, 2]
     assert chunks[0]["selected_models"] == ["model1", "model2"]
     assert chunks[1]["selected_models"] == ["model3", "model4"]
+
+
+def test_default_batch_allows_large_column_groups(
+    service: SemanticsDescription,
+):
+    request = SemanticsDescription.GenerateRequest(
+        id="test_id",
+        user_prompt="Describe the models",
+        selected_models=["model1", "model2"],
+        mdl=orjson.dumps(
+            {
+                "models": [
+                    {
+                        "name": "model1",
+                        "columns": [
+                            {"name": f"column_{index}", "type": "varchar"}
+                            for index in range(500)
+                        ],
+                    },
+                    {
+                        "name": "model2",
+                        "columns": [
+                            {"name": f"field_{index}", "type": "varchar"}
+                            for index in range(400)
+                        ],
+                    },
+                ]
+            }
+        ).decode(),
+    )
+
+    chunks = service._chunking(orjson.loads(request.mdl), request)
+
+    assert len(chunks) == 1
+    assert chunks[0]["selected_models"] == ["model1", "model2"]
+
+
+@pytest.mark.asyncio
+async def test_partial_llm_output_is_completed_for_all_selected_columns(
+    service: SemanticsDescription,
+):
+    service["test_id"] = SemanticsDescription.Resource(id="test_id")
+    request = SemanticsDescription.GenerateRequest(
+        id="test_id",
+        user_prompt="Describe the models",
+        selected_models=["orders", "customers"],
+        mdl=orjson.dumps(
+            {
+                "models": [
+                    {
+                        "name": "orders",
+                        "columns": [
+                            {"name": "order_id", "type": "varchar"},
+                            {"name": "order_date", "type": "date"},
+                        ],
+                    },
+                    {
+                        "name": "customers",
+                        "columns": [
+                            {"name": "customer_id", "type": "varchar"},
+                        ],
+                    },
+                ]
+            }
+        ).decode(),
+    )
+    service._pipelines["semantics_description"].run.return_value = {
+        "output": {
+            "orders": {
+                "name": "orders",
+                "columns": [
+                    {
+                        "name": "order_id",
+                        "properties": {"description": "Unique order identifier."},
+                    }
+                ],
+                "properties": {"description": "Customer purchase transactions."},
+            }
+        }
+    }
+
+    await service.generate(request)
+    response = service[request.id]
+
+    assert response.status == "finished"
+    assert set(response.response.keys()) == {"orders", "customers"}
+    assert len(response.response["orders"]["columns"]) == 2
+    assert len(response.response["customers"]["columns"]) == 1
+    assert response.response["customers"]["properties"]["description"]
 
 
 @pytest.mark.asyncio

@@ -36,11 +36,13 @@ I have a data model represented in JSON format, with the following structure:
 ```
 
 Your task is to update this JSON structure by adding a `description` field inside both the `properties` attribute of each `column` and the `model` itself.
-Each `description` should be derived from a user-provided input that explains the purpose or context of the `model` and its respective columns.
+Each `description` should be derived from the user-provided dataset context, the model name, column names, data types, aliases, and any existing descriptions.
 Follow these steps:
-1. **For the `model`**: Prompt the user to provide a brief description of the model's overall purpose or its context. Insert this description in the `properties` field of the `model`.
-2. **For each `column`**: Ask the user to describe each column's role or significance. Each column's description should be added under its respective `properties` field in the format: `'description': 'user-provided text'`.
+1. **For the `model`**: Write a clear natural language business description of the model's purpose and what real-world records it represents. Insert this description in the `properties` field of the `model`.
+2. **For each `column`**: Write a clear natural language business description of the column's meaning, not just its technical name. Each column's description should be added under its respective `properties` field in the format: `'description': 'business description'`.
 3. Ensure that the output is a well-formatted JSON structure, preserving the input's original format and adding the appropriate `description` fields.
+4. Avoid repeating technical table or column names as the whole description. Prefer business meaning such as identifiers, dates, amounts, statuses, dimensions, ownership, and operational usage.
+5. Keep descriptions concise, factual, and useful for text-to-SQL retrieval.
 
 ### Output Format:
 
@@ -77,7 +79,7 @@ Follow these steps:
 }
 ```
 
-Make sure that the descriptions are concise, informative, and contextually appropriate based on the input provided by the user.
+Make sure that the descriptions are concise, informative, business-friendly, and contextually appropriate based on the input provided by the user.
 """
 
 user_prompt_template = """
@@ -86,7 +88,7 @@ User's prompt: {{ user_prompt }}
 Picked models: {{ picked_models }}
 Localization Language: {{ language }}
 
-Please provide a brief description for the model and each column based on the user's prompt.
+Please provide business-friendly semantic descriptions for every picked model and every column based on the user's prompt. Do not omit selected models or columns.
 """
 
 
