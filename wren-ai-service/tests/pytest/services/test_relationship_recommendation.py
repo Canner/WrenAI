@@ -79,6 +79,35 @@ def mdl_with_one_to_one_profile_candidate():
     """
 
 
+@pytest.fixture
+def mdl_with_shared_key_candidates():
+    return """
+    {
+      "models": [
+        {
+          "name": "employees",
+          "primaryKey": "emp_no",
+          "columns": [{"name": "emp_no"}, {"name": "first_name"}]
+        },
+        {
+          "name": "titles",
+          "columns": [{"name": "emp_no"}, {"name": "title"}]
+        },
+        {
+          "name": "departments",
+          "primaryKey": "dept_no",
+          "columns": [{"name": "dept_no"}, {"name": "dept_name"}]
+        },
+        {
+          "name": "dept_emp",
+          "columns": [{"name": "emp_no"}, {"name": "dept_no"}]
+        }
+      ],
+      "relationships": []
+    }
+    """
+
+
 @pytest.mark.asyncio
 async def test_recommend_success(relationship_recommendation_service, mock_pipeline):
     request = RelationshipRecommendation.Input(id="test_id", mdl='{"key": "value"}')
@@ -259,6 +288,52 @@ async def test_recommend_fallback_identifies_one_to_one_relationships(
             "toColumn": "id",
             "reason": "profile.user_id appears to reference user.id.",
         }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_recommend_fallback_scans_all_models_and_identifies_one_to_many(
+    relationship_recommendation_service,
+    mock_pipeline,
+    mdl_with_shared_key_candidates,
+):
+    request = RelationshipRecommendation.Input(
+        id="test_id", mdl=mdl_with_shared_key_candidates
+    )
+    mock_pipeline.run.return_value = {"validated": {"relationships": []}}
+
+    await relationship_recommendation_service.recommend(request)
+    response = relationship_recommendation_service[request.id]
+
+    assert response.status == "finished"
+    assert response.response["relationships"] == [
+        {
+            "name": "employees_titles",
+            "fromModel": "employees",
+            "fromColumn": "emp_no",
+            "type": "ONE_TO_MANY",
+            "toModel": "titles",
+            "toColumn": "emp_no",
+            "reason": "employees.emp_no appears to be referenced by titles.emp_no.",
+        },
+        {
+            "name": "employees_dept_emp",
+            "fromModel": "employees",
+            "fromColumn": "emp_no",
+            "type": "ONE_TO_MANY",
+            "toModel": "dept_emp",
+            "toColumn": "emp_no",
+            "reason": "employees.emp_no appears to be referenced by dept_emp.emp_no.",
+        },
+        {
+            "name": "departments_dept_emp",
+            "fromModel": "departments",
+            "fromColumn": "dept_no",
+            "type": "ONE_TO_MANY",
+            "toModel": "dept_emp",
+            "toColumn": "dept_no",
+            "reason": "departments.dept_no appears to be referenced by dept_emp.dept_no.",
+        },
     ]
 
 

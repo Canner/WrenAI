@@ -79,105 +79,217 @@ class RelationshipRecommendation:
 
         return aliases
 
-    def _column_is_primary_key(self, model: dict, column_name: str) -> bool:
+    def _model_columns(self, model: dict) -> list[dict]:
+        return [
+            column
+            for column in model.get("columns", []) or []
+            if column.get("name") and not column.get("relationship")
+        ]
+
+    def _primary_key(self, model: dict) -> Optional[str]:
         primary_key = model.get("primaryKey")
+        columns = self._model_columns(model)
+        if primary_key and any(column.get("name") == primary_key for column in columns):
+            return primary_key
+
+        model_aliases = self._model_aliases(model)
+        for column in columns:
+            normalized_column = self._normalize_identifier(column.get("name"))
+            if normalized_column == "id" or normalized_column in {
+                f"{alias}id" for alias in model_aliases
+            }:
+                return column.get("name")
+
+        return None
+
+    def _column_is_primary_key(self, model: dict, column_name: str) -> bool:
+        primary_key = self._primary_key(model)
         if primary_key and column_name == primary_key:
             return True
 
-        normalized_column = self._normalize_identifier(column_name)
-        return normalized_column == "id"
+        return False
 
-    def _fallback_relationship_type(self, from_model: dict, from_column: str) -> str:
-        if self._column_is_primary_key(from_model, from_column):
+    def _fallback_relationship_type(
+        self, from_model: dict, from_column: str, to_model: dict, to_column: str
+    ) -> str:
+        from_is_pk = self._column_is_primary_key(from_model, from_column)
+        to_is_pk = self._column_is_primary_key(to_model, to_column)
+        if from_is_pk and to_is_pk:
             return "ONE_TO_ONE"
+        if from_is_pk and not to_is_pk:
+            return "ONE_TO_MANY"
         return "MANY_TO_ONE"
+
+    def _relationship_signature(
+        self,
+        from_model_name: str,
+        from_column: str,
+        to_model_name: str,
+        to_column: str,
+    ) -> tuple[str, str, str, str]:
+        return (from_model_name, from_column, to_model_name, to_column)
+
+    def _relationship_pair_signature(
+        self,
+        from_model_name: str,
+        from_column: str,
+        to_model_name: str,
+        to_column: str,
+    ) -> tuple[tuple[str, str], tuple[str, str]]:
+        left = (from_model_name, from_column)
+        right = (to_model_name, to_column)
+        return tuple(sorted([left, right]))
+
+    def _existing_relationship_signatures(
+        self, mdl: dict
+    ) -> tuple[
+        set[tuple[str, str, str, str]], set[tuple[tuple[str, str], tuple[str, str]]]
+    ]:
+        direct_signatures = set()
+        pair_signatures = set()
+
+        for relationship in mdl.get("relationships", []) or []:
+            models = relationship.get("models", []) or []
+            condition = relationship.get("condition", "")
+            if len(models) < 2 or not condition:
+                continue
+
+            match = re.match(
+                r"\s*([^.=\s]+)\.([^.=\s]+)\s*=\s*([^.=\s]+)\.([^.=\s]+)\s*",
+                condition,
+            )
+            if not match:
+                continue
+
+            left_model, left_column, right_model, right_column = match.groups()
+            direct_signatures.add(
+                self._relationship_signature(
+                    left_model, left_column, right_model, right_column
+                )
+            )
+            direct_signatures.add(
+                self._relationship_signature(
+                    right_model, right_column, left_model, left_column
+                )
+            )
+            pair_signatures.add(
+                self._relationship_pair_signature(
+                    left_model, left_column, right_model, right_column
+                )
+            )
+
+        return direct_signatures, pair_signatures
 
     def _fallback_relationships(self, mdl: dict) -> dict:
         models = mdl.get("models", []) or []
-        existing = {
-            (
-                relationship.get("models", [None, None])[0],
-                relationship.get("condition", ""),
-                relationship.get("joinType", ""),
-            )
-            for relationship in mdl.get("relationships", []) or []
-        }
+        existing, existing_pairs = self._existing_relationship_signatures(mdl)
+        seen = set(existing)
+        seen_pairs = set(existing_pairs)
         candidates = []
 
         model_lookup = {}
+        primary_keys = {}
         for model in models:
+            primary_keys[model.get("name")] = self._primary_key(model)
             for alias in self._model_aliases(model):
                 model_lookup.setdefault(alias, model)
+
+        def add_candidate(
+            from_model: dict,
+            from_column: str,
+            to_model: dict,
+            to_column: str,
+        ):
+            from_model_name = from_model.get("name")
+            to_model_name = to_model.get("name")
+            if not from_model_name or not to_model_name:
+                return
+            if from_model_name == to_model_name:
+                return
+
+            signature = self._relationship_signature(
+                from_model_name, from_column, to_model_name, to_column
+            )
+            pair_signature = self._relationship_pair_signature(
+                from_model_name, from_column, to_model_name, to_column
+            )
+            if signature in seen or pair_signature in seen_pairs:
+                return
+
+            relationship_type = self._fallback_relationship_type(
+                from_model, from_column, to_model, to_column
+            )
+            reason = (
+                f"{from_model_name}.{from_column} appears to reference "
+                f"{to_model_name}.{to_column}."
+            )
+            if relationship_type == "ONE_TO_MANY":
+                reason = (
+                    f"{from_model_name}.{from_column} appears to be referenced by "
+                    f"{to_model_name}.{to_column}."
+                )
+
+            seen.add(signature)
+            seen_pairs.add(pair_signature)
+            candidates.append(
+                {
+                    "name": f"{from_model_name}_{to_model_name}",
+                    "fromModel": from_model_name,
+                    "fromColumn": from_column,
+                    "type": relationship_type,
+                    "toModel": to_model_name,
+                    "toColumn": to_column,
+                    "reason": reason,
+                }
+            )
 
         for from_model in models:
             from_model_name = from_model.get("name")
             if not from_model_name:
                 continue
 
-            for column in from_model.get("columns", []) or []:
-                if column.get("relationship"):
-                    continue
-
+            for column in self._model_columns(from_model):
                 from_column = column.get("name")
-                if not from_column:
-                    continue
-
                 normalized_column = self._normalize_identifier(from_column)
-                if not normalized_column.endswith("id") or normalized_column == "id":
-                    continue
+                target_keys = set()
+                if normalized_column.endswith("id") and normalized_column != "id":
+                    target_keys.add(normalized_column[:-2])
 
-                target_key = normalized_column[:-2]
-                to_model = model_lookup.get(target_key)
-                if not to_model or to_model.get("name") == from_model_name:
-                    continue
+                for to_model in models:
+                    to_model_name = to_model.get("name")
+                    to_primary_key = primary_keys.get(to_model_name)
+                    if (
+                        to_model_name == from_model_name
+                        or not to_primary_key
+                        or not self._column_is_primary_key(to_model, to_primary_key)
+                    ):
+                        continue
 
-                to_model_name = to_model.get("name")
-                to_columns = to_model.get("columns", []) or []
-                primary_key = to_model.get("primaryKey")
-                to_column = next(
-                    (
-                        item.get("name")
-                        for item in to_columns
-                        if item.get("name") == primary_key
-                    ),
-                    None,
-                )
-                to_column = to_column or next(
-                    (
-                        item.get("name")
-                        for item in to_columns
-                        if self._normalize_identifier(item.get("name")) == "id"
-                    ),
-                    None,
-                )
-                if not to_column:
-                    continue
+                    to_primary_key_normalized = self._normalize_identifier(
+                        to_primary_key
+                    )
+                    if (
+                        normalized_column != "id"
+                        and normalized_column == to_primary_key_normalized
+                    ):
+                        add_candidate(
+                            to_model,
+                            to_primary_key,
+                            from_model,
+                            from_column,
+                        )
 
-                relationship_type = self._fallback_relationship_type(
-                    from_model, from_column
-                )
-                signature = (
-                    from_model_name,
-                    f"{from_model_name}.{from_column} = {to_model_name}.{to_column}",
-                    relationship_type,
-                )
-                if signature in existing:
-                    continue
+                for target_key in target_keys:
+                    to_model = model_lookup.get(target_key)
+                    if not to_model or to_model.get("name") == from_model_name:
+                        continue
 
-                candidates.append(
-                    {
-                        "name": f"{from_model_name}_{to_model_name}",
-                        "fromModel": from_model_name,
-                        "fromColumn": from_column,
-                        "type": relationship_type,
-                        "toModel": to_model_name,
-                        "toColumn": to_column,
-                        "reason": (
-                            f"{from_model_name}.{from_column} appears to reference "
-                            f"{to_model_name}.{to_column}."
-                        ),
-                    }
-                )
+                    to_model_name = to_model.get("name")
+                    to_column = primary_keys.get(to_model_name)
+                    if not to_column:
+                        continue
+
+                    add_candidate(from_model, from_column, to_model, to_column)
 
         return {"relationships": candidates}
 
