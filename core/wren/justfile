@@ -55,7 +55,7 @@ test:
     uv run --no-sync pytest tests/ -v
 
 test-unit:
-    uv run --no-sync pytest tests/unit/ -v -m unit
+    uv run --no-sync pytest tests/unit/ -v -m "unit and not slow"
 
 test-datafusion:
     uv run --no-sync pytest tests/connectors/test_datafusion.py -v -m datafusion
@@ -85,7 +85,12 @@ test-connector marker:
     uv run --no-sync pytest tests/connectors/ -v -m {{ marker }}
 
 test-memory:
-    uv run --no-sync pytest tests/unit/test_memory.py -v
+    uv run --no-sync pytest tests/unit/test_memory.py -v -m "not slow"
+
+# Slow memory tests (real model load / real LanceDB): cross-model vector-
+# compat, real-embedding integration. Not run by test-memory / test-unit.
+test-memory-slow:
+    uv run --no-sync pytest tests/unit/test_memory.py -v -m slow
 
 lint:
     uv run --no-sync ruff format --check src/

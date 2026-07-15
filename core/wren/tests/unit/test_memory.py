@@ -435,6 +435,189 @@ class TestDescribeSchema:
         assert len(text) > 0
 
 
+# ── Local-first embedding adapter tests ────────────────────────────────────
+# These exercise the control flow of LocalFirstSentenceTransformerEmbeddings
+# by mocking sentence_transformers.SentenceTransformer, the constructor used by
+# the adapter, rather than loading a real model.
+
+
+def _make_fake_model_class(calls: list, raise_on=None):
+    """Build a fake SentenceTransformer class recording ctor kwargs in *calls*.
+
+    *raise_on*: optional callable(kwargs) -> Exception | None, raised instead
+    of constructing.
+    """
+    import numpy as np  # noqa: PLC0415
+
+    class _Fake:
+        def __init__(self, *args, **kwargs):
+            calls.append(kwargs)
+            if raise_on is not None:
+                exc = raise_on(kwargs)
+                if exc is not None:
+                    raise exc
+
+        def encode(self, texts, **kwargs):
+            return np.zeros((len(texts), 3), dtype="float32")
+
+    return _Fake
+
+
+@pytest.mark.unit
+class TestLocalFirstEmbeddings:
+    def _adapter(self, name: str):
+        pytest.importorskip(
+            "sentence_transformers", reason="wren[memory] extras not installed"
+        )
+        from wren.memory.embeddings import get_embedding_function  # noqa: PLC0415
+
+        # The adapter class is built function-locally (no top-level lancedb
+        # import); get_embedding_function is the public factory that returns
+        # an instance of it. The constructed model is cached module-wide,
+        # keyed by (name, device, trust_remote_code), so each test must use
+        # a distinct *name* — otherwise two tests would share one cache slot.
+        return get_embedding_function(model_name=name)
+
+    def test_first_construction_is_local_files_only(self, monkeypatch):
+        calls: list[dict] = []
+        monkeypatch.setattr(
+            "sentence_transformers.SentenceTransformer",
+            _make_fake_model_class(calls),
+        )
+        fn = self._adapter("fake-model-local-first")
+        fn.compute_source_embeddings(["hello"])
+        assert len(calls) == 1
+        assert calls[0]["local_files_only"] is True
+
+    def test_oserror_falls_back_to_online_construction(self, monkeypatch):
+        calls: list[dict] = []
+
+        def _raise_once(kwargs):
+            if kwargs.get("local_files_only"):
+                return OSError("cache miss")
+            return None
+
+        monkeypatch.setattr(
+            "sentence_transformers.SentenceTransformer",
+            _make_fake_model_class(calls, raise_on=_raise_once),
+        )
+        fn = self._adapter("fake-model-oserror-fallback")
+        fn.compute_source_embeddings(["hello"])
+        assert len(calls) == 2
+        assert calls[0]["local_files_only"] is True
+        assert "local_files_only" not in calls[1]
+
+    def test_non_oserror_is_not_swallowed(self, monkeypatch):
+        calls: list[dict] = []
+
+        def _raise_value_error(_kwargs):
+            return ValueError("boom")
+
+        monkeypatch.setattr(
+            "sentence_transformers.SentenceTransformer",
+            _make_fake_model_class(calls, raise_on=_raise_value_error),
+        )
+        fn = self._adapter("fake-model-non-oserror")
+        with pytest.raises(ValueError, match="boom"):
+            fn.compute_source_embeddings(["hello"])
+        # Only the local-first attempt was made — no online fallback for a
+        # non-OSError.
+        assert len(calls) == 1
+
+    def test_model_built_once_across_two_embed_calls(self, monkeypatch):
+        calls: list[dict] = []
+        monkeypatch.setattr(
+            "sentence_transformers.SentenceTransformer",
+            _make_fake_model_class(calls),
+        )
+        fn = self._adapter("fake-model-built-once")
+        fn.compute_source_embeddings(["hello"])
+        fn.compute_source_embeddings(["world"])
+        assert len(calls) == 1  # single-flight cache serves the second call
+
+
+@pytest.mark.slow
+@pytest.mark.unit
+class TestLocalFirstEmbeddingsVectorCompat:
+    def test_adapter_output_matches_stock_lancedb(self):
+        """Real cross-model check: adapter output ≈ stock lancedb output.
+
+        Loads the real default model without mocking. Slow lane; not part of
+        the fast unit path.
+        """
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        pytest.importorskip(
+            "sentence_transformers", reason="wren[memory] extras not installed"
+        )
+        import lancedb.embeddings  # noqa: PLC0415
+        import numpy as np  # noqa: PLC0415
+
+        from wren.memory.embeddings import (  # noqa: PLC0415
+            _DEFAULT_MODEL,
+            get_embedding_function,
+        )
+
+        stock = (
+            lancedb.embeddings.get_registry()
+            .get("sentence-transformers")
+            .create(name=_DEFAULT_MODEL)
+        )
+        adapter = get_embedding_function(model_name=_DEFAULT_MODEL)
+
+        text = "revenue by customer"
+        stock_vec = np.array(stock.compute_source_embeddings([text])[0])
+        adapter_vec = np.array(adapter.compute_source_embeddings([text])[0])
+
+        np.testing.assert_allclose(adapter_vec, stock_vec, atol=1e-5)
+
+
+@pytest.mark.unit
+class TestLocalFirstEmbeddingsConcurrency:
+    def test_model_constructed_once_under_concurrent_compute(self, monkeypatch):
+        pytest.importorskip(
+            "sentence_transformers", reason="wren[memory] extras not installed"
+        )
+        import threading  # noqa: PLC0415
+        from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
+
+        import numpy as np  # noqa: PLC0415
+
+        from wren.memory import embeddings as embeddings_module  # noqa: PLC0415
+
+        calls: list[str] = []
+        entered = threading.Event()
+        release = threading.Event()
+        barrier = threading.Barrier(5)
+
+        class _FakeModel:
+            def __init__(self, *_args, **_kwargs):
+                calls.append(threading.current_thread().name)
+                entered.set()
+                release.wait(timeout=2)
+
+            def encode(self, texts, **_kwargs):
+                return np.zeros((len(texts), 3), dtype="float32")
+
+        monkeypatch.setattr("sentence_transformers.SentenceTransformer", _FakeModel)
+        adapters = [
+            embeddings_module.get_embedding_function(model_name="concurrent-model")
+            for _ in range(5)
+        ]
+
+        def _compute(adapter):
+            barrier.wait()
+            return adapter.compute_source_embeddings(["hello"])
+
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            futures = [pool.submit(_compute, adapter) for adapter in adapters]
+            assert entered.wait(timeout=2)
+            release.set()
+            results = [future.result(timeout=5) for future in futures]
+
+        assert len(results) == 5
+        assert len(calls) == 1
+
+
 # ── MemoryStore integration tests ─────────────────────────────────────────
 # These require lancedb + sentence-transformers (wren[memory] extra).
 
@@ -539,6 +722,247 @@ class TestMemoryStore:
         assert result["schema_items"] == 11
         info = memory_store.status()
         assert info["tables"]["schema_items"] == 11
+
+
+# ── Lazy MemoryStore model load tests ──────────────────────────────────────
+# Patch the CONSUMER namespace: store.py binds warm_up / get_embedding_function
+# as local names (`from wren.memory.embeddings import ...`), so tests must
+# patch `wren.memory.store.*`, not `wren.memory.embeddings.*`.
+
+
+def _raise_assertion(*_args, **_kwargs):
+    raise AssertionError("model path should not be entered")
+
+
+class _StubEmbedFn:
+    def __init__(self, dim: int = 8):
+        self.dim = dim
+
+    def compute_source_embeddings(self, texts):
+        return [[0.1] * self.dim for _ in texts]
+
+    def compute_query_embeddings(self, _query):
+        return [[0.1] * self.dim]
+
+
+class _FailingEmbedFn:
+    def compute_source_embeddings(self, _texts):
+        raise RuntimeError("encode boom")
+
+    def compute_query_embeddings(self, _query):
+        raise RuntimeError("encode boom")
+
+
+@pytest.mark.unit
+class TestMemoryStoreLazyModelLoad:
+    def test_status_reset_list_never_touch_model(self, tmp_path, monkeypatch):
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        monkeypatch.setattr("wren.memory.store.warm_up", _raise_assertion)
+        monkeypatch.setattr(
+            "wren.memory.store.get_embedding_function", _raise_assertion
+        )
+
+        from wren.memory.store import MemoryStore  # noqa: PLC0415
+
+        store = MemoryStore(path=tmp_path)  # empty dir — construction alone
+        # must not enter the model path either.
+        store.status()
+        store.reset()
+        store.list_queries()
+
+    def test_full_context_never_touches_model(self, tmp_path, monkeypatch):
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        monkeypatch.setattr("wren.memory.store.warm_up", _raise_assertion)
+        monkeypatch.setattr(
+            "wren.memory.store.get_embedding_function", _raise_assertion
+        )
+
+        from wren.memory.store import MemoryStore  # noqa: PLC0415
+
+        manifest = {
+            "models": [
+                {
+                    "name": "orders",
+                    "columns": [{"name": "id", "type": "integer"}],
+                }
+            ]
+        }
+        result = MemoryStore(path=tmp_path).get_context(manifest, "orders")
+
+        assert result["strategy"] == "full"
+        assert "orders" in result["schema"]
+
+    def test_forget_rebuild_preserves_schema_without_loading_model(
+        self, tmp_path, monkeypatch
+    ):
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        import pyarrow as pa  # noqa: PLC0415
+
+        from wren.memory.store import MemoryStore  # noqa: PLC0415
+
+        monkeypatch.setattr(
+            "wren.memory.store.get_embedding_function", lambda _name: _StubEmbedFn(4)
+        )
+        seed_store = MemoryStore(path=tmp_path)
+        seed_store.store_query(nl_query="q1", sql_query="SELECT 1", datasource="pg")
+        seed_store.store_query(nl_query="q2", sql_query="SELECT 2", datasource="pg")
+
+        monkeypatch.setattr("wren.memory.store.warm_up", _raise_assertion)
+        monkeypatch.setattr(
+            "wren.memory.store.get_embedding_function", _raise_assertion
+        )
+
+        fresh_store = MemoryStore(path=tmp_path)
+        deleted = fresh_store.forget_queries_by_ids([0])
+        assert deleted == 1
+
+        remaining, total = fresh_store.list_queries()
+        assert total == 1
+        assert remaining[0]["nl_query"] == "q2"
+
+        table = fresh_store._db.open_table("query_history")
+        vector_field = table.schema.field("vector")
+        assert isinstance(vector_field.type, pa.FixedSizeListType)
+        assert vector_field.type.list_size == 4
+
+    def test_store_query_uses_actual_embed_dim(self, tmp_path, monkeypatch):
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        from wren.memory.store import MemoryStore  # noqa: PLC0415
+
+        monkeypatch.setattr(
+            "wren.memory.store.get_embedding_function", lambda _name: _StubEmbedFn(8)
+        )
+        monkeypatch.setattr("wren.memory.store.warm_up", _raise_assertion)
+
+        store = MemoryStore(path=tmp_path)
+        store.store_query(nl_query="custom dim q", sql_query="SELECT 1")
+
+        table = store._db.open_table("query_history")
+        vector_field = table.schema.field("vector")
+        assert vector_field.type.list_size == 8
+
+    def test_resolve_dim_rejects_non_fixed_size_list_vector(
+        self, tmp_path, monkeypatch
+    ):
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        import pyarrow as pa  # noqa: PLC0415
+
+        from wren.memory.store import (  # noqa: PLC0415
+            MemoryStore,
+            _query_history_arrow_schema,
+        )
+
+        monkeypatch.setattr("wren.memory.store.warm_up", _raise_assertion)
+        monkeypatch.setattr(
+            "wren.memory.store.get_embedding_function", _raise_assertion
+        )
+
+        store = MemoryStore(path=tmp_path)
+        bad_schema = _query_history_arrow_schema(4).set(
+            1, pa.field("vector", pa.list_(pa.float32()))
+        )
+        store._db.create_table("query_history", schema=bad_schema)
+
+        with pytest.raises(ValueError, match="not a fixed-size list"):
+            _ = store._dim
+
+    def test_resolve_dim_rejects_mixed_dim_across_tables(self, tmp_path, monkeypatch):
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        import pyarrow as pa  # noqa: PLC0415
+
+        from wren.memory.store import MemoryStore  # noqa: PLC0415
+
+        monkeypatch.setattr("wren.memory.store.warm_up", _raise_assertion)
+        monkeypatch.setattr(
+            "wren.memory.store.get_embedding_function", _raise_assertion
+        )
+
+        store = MemoryStore(path=tmp_path)
+        schema_dim_4 = pa.schema([pa.field("vector", pa.list_(pa.float32(), 4))])
+        schema_dim_8 = pa.schema([pa.field("vector", pa.list_(pa.float32(), 8))])
+        store._db.create_table("schema_items", schema=schema_dim_4)
+        store._db.create_table("query_history", schema=schema_dim_8)
+
+        with pytest.raises(ValueError, match="Mixed-dimension"):
+            _ = store._dim
+
+    def test_store_query_rejects_dim_mismatch_against_existing_table(
+        self, tmp_path, monkeypatch
+    ):
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        from wren.memory.store import (  # noqa: PLC0415
+            MemoryStore,
+            _schema_items_arrow_schema,
+            _table_names,
+        )
+
+        store = MemoryStore(path=tmp_path)
+        store._db.create_table("schema_items", schema=_schema_items_arrow_schema(4))
+        monkeypatch.setattr(store, "_embed_fn_cached", _StubEmbedFn(8))
+
+        with pytest.raises(ValueError, match="does not match"):
+            store.store_query(nl_query="q", sql_query="SELECT 1")
+
+        assert "query_history" not in _table_names(store._db)
+
+    def test_index_schema_rejects_dim_mismatch_against_existing_table(
+        self, tmp_path, monkeypatch
+    ):
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        from wren.memory.store import (  # noqa: PLC0415
+            MemoryStore,
+            _query_history_arrow_schema,
+            _table_names,
+        )
+
+        store = MemoryStore(path=tmp_path)
+        store._db.create_table("query_history", schema=_query_history_arrow_schema(4))
+        monkeypatch.setattr(store, "_embed_fn_cached", _StubEmbedFn(8))
+
+        with pytest.raises(ValueError, match="does not match"):
+            store.index_schema(_MANIFEST, replace=True, seed_queries=False)
+
+        assert "schema_items" not in _table_names(store._db)
+        assert store._db.open_table("query_history").count_rows() == 0
+
+    def test_dim_resolved_once_under_concurrent_access(self, tmp_path, monkeypatch):
+        pytest.importorskip("lancedb", reason="wren[memory] extras not installed")
+        import threading  # noqa: PLC0415
+        from concurrent.futures import ThreadPoolExecutor  # noqa: PLC0415
+
+        from wren.memory.store import MemoryStore  # noqa: PLC0415
+
+        store = MemoryStore(path=tmp_path)
+        monkeypatch.setattr(
+            "wren.memory.store.get_embedding_function",
+            lambda _name: _StubEmbedFn(4),
+        )
+
+        calls: list[str] = []
+        entered = threading.Event()
+        release = threading.Event()
+        barrier = threading.Barrier(5)
+
+        def _slow_warm_up(embed_fn):
+            calls.append(threading.current_thread().name)
+            entered.set()
+            release.wait(timeout=2)
+            return len(embed_fn.compute_source_embeddings(["probe"])[0])
+
+        monkeypatch.setattr("wren.memory.store.warm_up", _slow_warm_up)
+
+        def _resolve():
+            barrier.wait()
+            return store._dim
+
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            futures = [pool.submit(_resolve) for _ in range(5)]
+            assert entered.wait(timeout=2)
+            release.set()
+            results = [future.result(timeout=5) for future in futures]
+
+        assert len(calls) == 1
+        assert results == [4] * 5
 
 
 # ── WrenMemory public API tests ───────────────────────────────────────────
@@ -656,6 +1080,34 @@ class TestMemoryStoreSeedLifecycle:
         assert "seed_queries" in result
         assert result["schema_items"] == 11
 
+    def test_upsert_seed_queries_preserves_old_seeds_when_embed_fails(
+        self, memory_store, monkeypatch
+    ):
+        from wren.memory.seed_queries import SEED_TAG  # noqa: PLC0415
+
+        def _seed_snapshot() -> list[dict]:
+            table = memory_store._db.open_table("query_history")
+            rows = table.to_pandas()
+            rows = rows[rows["tags"] == SEED_TAG].copy()
+            rows["vector"] = rows["vector"].map(tuple)
+            return (
+                rows.sort_values(["nl_query", "sql_query", "datasource"])
+                .reset_index(drop=True)
+                .to_dict("records")
+            )
+
+        memory_store.index_schema(_MANIFEST)
+        before = _seed_snapshot()
+        assert before
+
+        monkeypatch.setattr(memory_store, "_embed_fn_cached", _FailingEmbedFn())
+
+        with pytest.raises(RuntimeError, match="encode boom"):
+            memory_store._upsert_seed_queries(_MANIFEST)
+
+        monkeypatch.setattr(memory_store, "_embed_fn_cached", None)
+        assert _seed_snapshot() == before
+
 
 # ── list_queries / forget / dump / load tests ────────────────────────────
 
@@ -759,6 +1211,67 @@ class TestMemoryStoreForget:
         assert memory_store.forget_queries_by_ids([0]) == 0
         assert memory_store.forget_queries_by_source("seed") == 0
 
+    def test_forget_rebuild_no_data_loss_on_conversion_failure(
+        self, memory_store, monkeypatch
+    ):
+        """pa.Table.from_pandas() must run BEFORE any destructive table
+        operation — a conversion failure must leave the original table +
+        all its rows untouched.
+
+        ``pyarrow.Table`` is an immutable Cython extension type — its
+        classmethods can't be monkeypatched on the real module (and lancedb
+        itself uses ``pa.Table.from_batches`` internally, so blanket-
+        replacing the real ``pyarrow.Table`` breaks unrelated lancedb
+        internals too). Instead, only the ``pa`` name bound in
+        ``wren.memory.store`` is swapped for a thin proxy that fails
+        ``Table.from_pandas`` and forwards everything else (``pa.schema``,
+        ``pa.field``, other ``pa.Table`` methods, ...) to the real module.
+        """
+        import pyarrow as real_pa  # noqa: PLC0415
+
+        _seed_pairs(memory_store, 3)
+
+        class _BoomTable:
+            # Only from_pandas is exercised by forget_queries_by_ids — no
+            # other pa.Table.* classmethod is called on this path.
+            @staticmethod
+            def from_pandas(*_args, **_kwargs):
+                raise RuntimeError("conversion boom")
+
+        class _PyarrowProxy:
+            def __getattr__(self, name):
+                if name == "Table":
+                    return _BoomTable
+                return getattr(real_pa, name)
+
+        monkeypatch.setattr("wren.memory.store.pa", _PyarrowProxy())
+        with pytest.raises(RuntimeError, match="conversion boom"):
+            memory_store.forget_queries_by_ids([0])
+        monkeypatch.undo()
+
+        _, total = memory_store.list_queries()
+        assert total == 3
+
+    def test_forget_rebuild_no_data_loss_on_create_table_failure(self, memory_store):
+        """The rebuild must not drop the original table before the
+        replacement table is safely created — a create_table failure must
+        leave the original table + all its rows untouched."""
+        _seed_pairs(memory_store, 3)
+
+        def _boom_create(*_args, **_kwargs):
+            raise RuntimeError("create_table boom")
+
+        real_create_table = memory_store._db.create_table
+        memory_store._db.create_table = _boom_create
+        try:
+            with pytest.raises(RuntimeError, match="create_table boom"):
+                memory_store.forget_queries_by_ids([0])
+        finally:
+            memory_store._db.create_table = real_create_table
+
+        _, total = memory_store.list_queries()
+        assert total == 3
+
 
 @pytest.mark.unit
 class TestMemoryStoreDump:
@@ -836,6 +1349,49 @@ class TestMemoryStoreLoad:
         assert ("b", "SELECT 2") in exact_set
         assert "a" in nl_map
         assert "b" in nl_map
+
+    def test_load_overwrite_preserves_old_rows_when_embed_fails(
+        self, memory_store, monkeypatch
+    ):
+        memory_store.store_query(
+            nl_query="old q1", sql_query="SELECT 1", tags="source:user"
+        )
+        memory_store.store_query(
+            nl_query="old q2", sql_query="SELECT 2", tags="source:user"
+        )
+
+        monkeypatch.setattr(memory_store, "_embed_fn_cached", _FailingEmbedFn())
+
+        new_pairs = [{"nl": "new q1", "sql": "SELECT 9", "source": "user"}]
+        with pytest.raises(RuntimeError, match="encode boom"):
+            memory_store.load_queries(new_pairs, overwrite=True)
+
+        monkeypatch.setattr(memory_store, "_embed_fn_cached", None)
+        rows, total = memory_store.list_queries()
+        assert total == 2
+        assert {r["nl_query"] for r in rows} == {"old q1", "old q2"}
+
+    def test_load_upsert_preserves_old_rows_when_embed_fails(
+        self, memory_store, monkeypatch
+    ):
+        memory_store.store_query(
+            nl_query="dup q", sql_query="SELECT OLD", tags="source:user"
+        )
+        memory_store.store_query(
+            nl_query="other q", sql_query="SELECT OTHER", tags="source:user"
+        )
+
+        monkeypatch.setattr(memory_store, "_embed_fn_cached", _FailingEmbedFn())
+
+        new_pairs = [{"nl": "dup q", "sql": "SELECT NEW", "source": "user"}]
+        with pytest.raises(RuntimeError, match="encode boom"):
+            memory_store.load_queries(new_pairs, upsert=True)
+
+        monkeypatch.setattr(memory_store, "_embed_fn_cached", None)
+        rows, total = memory_store.list_queries()
+        assert total == 2
+        sql_by_nl = {r["nl_query"]: r["sql_query"] for r in rows}
+        assert sql_by_nl["dup q"] == "SELECT OLD"
 
 
 # ── CLI dump/load YAML round-trip tests ──────────────────────────────────
@@ -953,7 +1509,9 @@ class TestMarkdownSourcedIndex:
 
         monkeypatch.setenv("WREN_PROJECT_HOME", str(tmp_path))
         store = MemoryStore(path=str(tmp_path / ".wren" / "memory"))
-        store.store_query("Top revenue", "SELECT SUM(amount) FROM o", tags="source:user")
+        store.store_query(
+            "Top revenue", "SELECT SUM(amount) FROM o", tags="source:user"
+        )
         store.store_query("A seed query", "SELECT 1", tags="source:seed")
 
         result = CliRunner().invoke(app, ["memory", "export"])
@@ -961,7 +1519,9 @@ class TestMarkdownSourcedIndex:
 
         user_md = tmp_path / "knowledge" / "sql" / "top-revenue.md"
         assert user_md.exists()
-        assert not (tmp_path / "knowledge" / "sql" / "a-seed-query.md").exists()  # seed skipped
+        assert not (
+            tmp_path / "knowledge" / "sql" / "a-seed-query.md"
+        ).exists()  # seed skipped
         fm = parse_query_markdown(user_md)
         assert fm["source"] == "user"
         assert "created_at" in fm  # timestamp preserved
