@@ -89,7 +89,7 @@ export class DiagramResolver {
       const allColumns = modelColumns.filter(
         (column) => column.modelId === model.id,
       );
-      const modelMDL = manifest.models.find(
+      const modelMDL = manifest.models?.find(
         (modelMDL) => modelMDL.name === model.referenceName,
       );
       allColumns.forEach((column) => {
