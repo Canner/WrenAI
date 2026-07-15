@@ -10,6 +10,7 @@ import {
 import {
   DataSourceName,
   IContext,
+  ModelingRelationshipData,
   RelationData,
   UpdateRelationData,
 } from '../types';
@@ -64,6 +65,7 @@ export class ModelResolver {
       this.generateModelingRelationships.bind(this);
     this.getModelingRelationshipsResult =
       this.getModelingRelationshipsResult.bind(this);
+    this.saveModelingRelationships = this.saveModelingRelationships.bind(this);
     this.checkModelSync = this.checkModelSync.bind(this);
 
     // view
@@ -498,6 +500,69 @@ export class ModelResolver {
     return await ctx.wrenAIAdaptor.getRelationshipRecommendationResult(
       args.queryId,
     );
+  }
+
+  public async saveModelingRelationships(
+    _root: any,
+    args: { data: ModelingRelationshipData[] },
+    ctx: IContext,
+  ) {
+    const project = await ctx.projectService.getCurrentProject();
+    const models = await ctx.modelRepository.findAllBy({
+      projectId: project.id,
+    });
+    const modelIds = models.map((model) => model.id);
+    const columns =
+      await ctx.modelColumnRepository.findColumnsByModelIds(modelIds);
+    let createdCount = 0;
+    let skippedCount = 0;
+
+    for (const relationship of args.data || []) {
+      const fromModel = models.find(
+        (model) => model.referenceName === relationship.fromModel,
+      );
+      const toModel = models.find(
+        (model) => model.referenceName === relationship.toModel,
+      );
+      const fromColumn = fromModel
+        ? columns.find(
+            (column) =>
+              column.modelId === fromModel.id &&
+              column.referenceName === relationship.fromColumn,
+          )
+        : null;
+      const toColumn = toModel
+        ? columns.find(
+            (column) =>
+              column.modelId === toModel.id &&
+              column.referenceName === relationship.toColumn,
+          )
+        : null;
+
+      if (!fromModel || !toModel || !fromColumn || !toColumn) {
+        skippedCount += 1;
+        continue;
+      }
+
+      try {
+        const savedRelation = await ctx.modelService.createRelation({
+          fromModelId: fromModel.id,
+          fromColumnId: fromColumn.id,
+          toModelId: toModel.id,
+          toColumnId: toColumn.id,
+          type: relationship.type,
+        });
+        this.markProjectDirty(savedRelation.projectId);
+        createdCount += 1;
+      } catch (err: any) {
+        logger.warn(
+          `Skip Modeling AI Assistant relationship ${relationship.fromModel}.${relationship.fromColumn} -> ${relationship.toModel}.${relationship.toColumn}: ${err.message}`,
+        );
+        skippedCount += 1;
+      }
+    }
+
+    return { createdCount, skippedCount };
   }
 
   public async listModels(_root: any, _args: any, ctx: IContext) {

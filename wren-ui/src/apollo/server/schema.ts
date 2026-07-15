@@ -260,6 +260,14 @@ export const typeDefs = gql`
     relations: [RelationInput]!
   }
 
+  input ModelingRelationshipInput {
+    fromModel: String!
+    fromColumn: String!
+    toModel: String!
+    toColumn: String!
+    type: RelationType!
+  }
+
   input SaveTablesInput {
     tables: [String!]!
   }
@@ -1333,6 +1341,7 @@ export const typeDefs = gql`
     ): Boolean!
     generateModelingSemantics(data: GenerateModelingSemanticsInput!): JSON!
     generateModelingRelationships: JSON!
+    saveModelingRelationships(data: [ModelingRelationshipInput!]!): JSON!
 
     # Relation
     createRelation(data: RelationInput!): JSON!

@@ -11,6 +11,14 @@ export interface UpdateRelationData {
   type: RelationType;
 }
 
+export interface ModelingRelationshipData {
+  fromModel: string;
+  fromColumn: string;
+  toModel: string;
+  toColumn: string;
+  type: RelationType;
+}
+
 export interface AnalysisRelationInfo {
   name: string;
   fromModelId: number;

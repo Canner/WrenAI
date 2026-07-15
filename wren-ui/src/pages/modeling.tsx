@@ -88,6 +88,12 @@ const MODELING_RELATIONSHIPS_RESULT = gql`
   }
 `;
 
+const SAVE_MODELING_RELATIONSHIPS = gql`
+  mutation SaveModelingRelationships($data: [ModelingRelationshipInput!]!) {
+    saveModelingRelationships(data: $data)
+  }
+`;
+
 const Diagram = dynamic(() => import('@/components/diagram'), { ssr: false });
 // https://github.com/vercel/next.js/issues/4957#issuecomment-413841689
 const ForwardDiagram = forwardRef(function ForwardDiagram(props: any, ref) {
@@ -365,13 +371,6 @@ export default function Modeling() {
         },
       }),
     );
-  const [createAssistantRelationshipMutation] = useCreateRelationshipMutation(
-    getBaseOptions({
-      onError: null,
-      onCompleted: () => {},
-    }),
-  );
-
   const [deleteRelationshipMutation] = useDeleteRelationshipMutation(
     getBaseOptions({
       onCompleted: () => {
@@ -401,6 +400,7 @@ export default function Modeling() {
   const [generateModelingRelationships] = useMutation(
     GENERATE_MODELING_RELATIONSHIPS,
   );
+  const [saveModelingRelationships] = useMutation(SAVE_MODELING_RELATIONSHIPS);
 
   const diagramData = useMemo(() => {
     if (!data) return null;
@@ -884,69 +884,23 @@ export default function Modeling() {
         }
       }
       if (assistantMode === 'relationships') {
-        let createdCount = 0;
-        let skippedCount = 0;
-        const latestDiagramResult = await apolloClient.query({
-          query: DIAGRAM,
-          fetchPolicy: 'network-only',
+        const res = await saveModelingRelationships({
+          variables: {
+            data: relationshipResult.map((relationship) => ({
+              fromModel: relationship.fromModel,
+              fromColumn: relationship.fromColumn,
+              toModel: relationship.toModel,
+              toColumn: relationship.toColumn,
+              type: relationship.type,
+            })),
+          },
+          refetchQueries,
+          awaitRefetchQueries: true,
         });
-        const latestDiagramData =
-          latestDiagramResult.data?.diagram || diagramData;
-
-        for (const relationship of relationshipResult) {
-          const fromModel = latestDiagramData.models.find(
-            (model) => model.referenceName === relationship.fromModel,
-          );
-          const toModel = latestDiagramData.models.find(
-            (model) => model.referenceName === relationship.toModel,
-          );
-          const fromField = fromModel?.fields.find(
-            (field) => field.referenceName === relationship.fromColumn,
-          );
-          const toField = toModel?.fields.find(
-            (field) => field.referenceName === relationship.toColumn,
-          );
-          if (!fromModel || !toModel || !fromField || !toField) {
-            skippedCount += 1;
-            continue;
-          }
-          const alreadyExists = latestDiagramData.models.some((model) =>
-            (model.relationFields || []).some((field) => {
-              if (!field) return false;
-              const forward =
-                field.fromModelName === relationship.fromModel &&
-                field.fromColumnName === relationship.fromColumn &&
-                field.toModelName === relationship.toModel &&
-                field.toColumnName === relationship.toColumn;
-              const reverse =
-                field.fromModelName === relationship.toModel &&
-                field.fromColumnName === relationship.toColumn &&
-                field.toModelName === relationship.fromModel &&
-                field.toColumnName === relationship.fromColumn;
-              return forward || reverse;
-            }),
-          );
-          if (alreadyExists) {
-            skippedCount += 1;
-            continue;
-          }
-          try {
-            await createAssistantRelationshipMutation({
-              variables: {
-                data: {
-                  fromModelId: fromModel.modelId,
-                  fromColumnId: fromField.columnId,
-                  toModelId: toModel.modelId,
-                  toColumnId: toField.columnId,
-                  type: relationship.type,
-                },
-              },
-            });
-            createdCount += 1;
-          } catch (_error) {
-            skippedCount += 1;
-          }
-        }
+        const createdCount =
+          res.data?.saveModelingRelationships?.createdCount || 0;
+        const skippedCount =
+          res.data?.saveModelingRelationships?.skippedCount || 0;
 
         if (!createdCount) {
           throw new Error(

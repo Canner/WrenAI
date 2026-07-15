@@ -153,6 +153,7 @@ const resolvers = {
     updateViewMetadata: modelResolver.updateViewMetadata,
     generateModelingSemantics: modelResolver.generateModelingSemantics,
     generateModelingRelationships: modelResolver.generateModelingRelationships,
+    saveModelingRelationships: modelResolver.saveModelingRelationships,
 
     // Settings
     resetCurrentProject: projectResolver.resetCurrentProject,
