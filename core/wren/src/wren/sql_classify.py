@@ -4,7 +4,7 @@ import sqlglot
 from sqlglot import exp
 
 
-def is_exploratory(sql: str) -> bool:
+def is_exploratory(sql: object) -> bool:
     """Return True if *sql* looks like an exploratory peek query.
 
     Exploratory = bare SELECT with no WHERE/GROUP BY/HAVING/aggregate.

@@ -50,6 +50,6 @@ def test_empty_string_returns_false():
 
 
 def test_none_and_non_string_sql_return_false():
-    assert is_exploratory(None) is False  # type: ignore[arg-type]
-    assert is_exploratory(123) is False  # type: ignore[arg-type]
-    assert is_exploratory(b"SELECT 1") is False  # type: ignore[arg-type]
+    assert is_exploratory(None) is False
+    assert is_exploratory(123) is False
+    assert is_exploratory(b"SELECT 1") is False
