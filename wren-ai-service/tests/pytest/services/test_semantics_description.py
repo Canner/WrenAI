@@ -100,6 +100,34 @@ async def test_generate_semantics_description_with_exception(
     )
 
 
+@pytest.mark.asyncio
+async def test_generate_semantics_description_with_llm_timeout_returns_fallback():
+    mock_pipeline = AsyncMock()
+
+    async def never_returns(**_):
+        await asyncio.sleep(1)
+
+    mock_pipeline.run.side_effect = never_returns
+    service = SemanticsDescription(
+        pipelines={"semantics_description": mock_pipeline},
+        generation_timeout_seconds=0.01,
+    )
+    service["test_id"] = SemanticsDescription.Resource(id="test_id")
+    request = SemanticsDescription.GenerateRequest(
+        id="test_id",
+        user_prompt="Describe the model",
+        selected_models=["model1"],
+        mdl='{"models": [{"name": "model1", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}]}',
+    )
+
+    await service.generate(request)
+    response = service[request.id]
+
+    assert response.status == "finished"
+    assert response.response["model1"]["properties"]["description"]
+    assert response.response["model1"]["columns"][0]["properties"]["description"]
+
+
 def test_get_semantics_description_result(
     service: SemanticsDescription,
 ):

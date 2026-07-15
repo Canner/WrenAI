@@ -36,7 +36,7 @@ class SemanticsDescription:
     ):
         self._pipelines = pipelines
         self._cache: Dict[str, self.Resource] = TTLCache(maxsize=maxsize, ttl=ttl)
-        self._generation_timeout_seconds = generation_timeout_seconds
+        self._generation_timeout_seconds = min(generation_timeout_seconds, 30)
 
     def _handle_exception(
         self,
@@ -60,6 +60,57 @@ class SemanticsDescription:
         selected_models: list[str]
         user_prompt: str
         mdl: str
+
+    def _properties(self, payload: dict[str, Any]) -> dict[str, Any]:
+        properties = payload.get("properties")
+        return properties if isinstance(properties, dict) else {}
+
+    def _text(self, value: Any) -> str:
+        return "" if value is None else str(value)
+
+    def _fallback_output(self, chunk: dict[str, Any]) -> dict[str, Any]:
+        output: dict[str, Any] = {}
+        for model in chunk.get("mdl", {}).get("models", []):
+            model_name = self._text(model.get("name", ""))
+            if not model_name:
+                continue
+
+            model_properties = self._properties(model)
+            model_description = self._text(model_properties.get("description", ""))
+            if not model_description:
+                model_description = (
+                    f"Represents {model_name.replace('_', ' ')} records in this dataset."
+                )
+
+            columns = []
+            for column in model.get("columns", []) or []:
+                if column.get("relationship"):
+                    continue
+                column_name = self._text(column.get("name", ""))
+                if not column_name:
+                    continue
+                column_properties = self._properties(column)
+                column_description = self._text(
+                    column_properties.get("description", "")
+                )
+                if not column_description:
+                    column_description = (
+                        f"{column_name.replace('_', ' ')} field from {model_name}."
+                    )
+                columns.append(
+                    {
+                        "name": column_name,
+                        "type": self._text(column.get("type", "")),
+                        "properties": {"description": column_description},
+                    }
+                )
+
+            output[model_name] = {
+                "name": model_name,
+                "columns": columns,
+                "properties": {"description": model_description},
+            }
+        return output
 
     def _chunking(
         self, mdl_dict: dict, request: GenerateRequest, chunk_size: int = 50
@@ -115,11 +166,20 @@ class SemanticsDescription:
         ]
 
     async def _generate_task(self, request_id: str, chunk: dict):
-        resp = await asyncio.wait_for(
-            self._pipelines["semantics_description"].run(**chunk),
-            timeout=self._generation_timeout_seconds,
-        )
-        output = resp.get("output")
+        try:
+            resp = await asyncio.wait_for(
+                self._pipelines["semantics_description"].run(**chunk),
+                timeout=self._generation_timeout_seconds,
+            )
+            output = resp.get("output")
+        except TimeoutError:
+            logger.warning(
+                "Semantics description LLM call timed out after %s seconds; "
+                "returning metadata-based fallback descriptions.",
+                self._generation_timeout_seconds,
+            )
+            output = self._fallback_output(chunk)
+
         if not isinstance(output, dict):
             raise ValueError("Semantics description pipeline returned no output")
 
