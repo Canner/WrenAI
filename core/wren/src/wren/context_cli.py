@@ -757,7 +757,7 @@ def show(
         if rels:
             typer.echo(f"\nRelationships ({len(rels)}):")
             for r in rels:
-                models_str = " ↔ ".join(r.get("models", []))
+                models_str = " ↔ ".join(r.get("models") or [])
                 jt = r.get("join_type", "?")
                 typer.echo(f"  {r.get('name', '?')}  ({models_str}, {jt})")
 

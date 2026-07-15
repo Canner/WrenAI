@@ -1155,7 +1155,7 @@ def validate_project(project_path: Path) -> list[ValidationError]:
             )
             continue
         rel_name = rel.get("name", f"relationships[{i}]")
-        ref_models = rel.get("models", [])
+        ref_models = rel.get("models") or []
         for m in ref_models:
             if m not in all_entity_names:
                 errors.append(
