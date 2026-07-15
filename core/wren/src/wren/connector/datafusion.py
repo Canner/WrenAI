@@ -39,7 +39,10 @@ class DataFusionConnector(ConnectorABC):
         return reader.read_all()
 
     def dry_run(self, sql: str) -> None:
-        self.ctx.dry_run(sql)
+        # Same subquery composition hazard as query(limit=...): a trailing
+        # semicolon makes many DataFusion parsers reject the statement when
+        # it is validated through dry_run paths that wrap/EXPLAIN SQL.
+        self.ctx.dry_run(strip_trailing_semicolon(sql))
 
     def close(self) -> None:
         pass
