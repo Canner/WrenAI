@@ -61,6 +61,10 @@ def parse_types(
     """
     results = []
     for col in columns:
+        # Callers occasionally pass sparse / non-mapping rows from dynamic
+        # schemas; skip rather than TypeError on dict(col).
+        if not isinstance(col, dict):
+            continue
         row = dict(col)
         row["type"] = parse_type(row.get(type_field, ""), dialect)
         results.append(row)
@@ -112,6 +116,8 @@ def translate_types(
     """
     results = []
     for col in columns:
+        if not isinstance(col, dict):
+            continue
         row = dict(col)
         row["type"] = translate_type(
             row.get(type_field, ""), source_dialect, target_dialect
