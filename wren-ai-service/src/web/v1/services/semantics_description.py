@@ -15,6 +15,8 @@ logger = logging.getLogger("wren-ai-service")
 
 MAX_UI_WAIT_SECONDS = 180
 SEMANTICS_STATUS_TTL_BUFFER_SECONDS = 300
+SEMANTICS_MODEL_CHUNK_SIZE = 200
+SEMANTICS_MAX_CONCURRENT_LLM_CALLS = 3
 
 
 class SemanticsDescription:
@@ -125,7 +127,10 @@ class SemanticsDescription:
         return output
 
     def _chunking(
-        self, mdl_dict: dict, request: GenerateRequest, chunk_size: int = 50
+        self,
+        mdl_dict: dict,
+        request: GenerateRequest,
+        chunk_size: int = SEMANTICS_MODEL_CHUNK_SIZE,
     ) -> list[dict]:
         template = {
             "user_prompt": request.user_prompt,
@@ -218,6 +223,15 @@ class SemanticsDescription:
             current.response[key].setdefault("columns", [])
             current.response[key]["columns"].extend(output[key].get("columns", []))
 
+    async def _generate_task_with_semaphore(
+        self,
+        semaphore: asyncio.Semaphore,
+        request_id: str,
+        chunk: dict,
+    ):
+        async with semaphore:
+            await self._generate_task(request_id, chunk)
+
     @observe(name="Generate Semantics Description")
     @trace_metadata
     async def generate(self, request: GenerateRequest, **kwargs) -> Resource:
@@ -232,8 +246,17 @@ class SemanticsDescription:
                 raise ValueError(
                     "No selected models matched the current semantic model metadata"
                 )
-            for chunk in chunks:
-                await self._generate_task(request.id, chunk)
+            semaphore = asyncio.Semaphore(SEMANTICS_MAX_CONCURRENT_LLM_CALLS)
+            await asyncio.gather(
+                *[
+                    self._generate_task_with_semaphore(
+                        semaphore,
+                        request.id,
+                        chunk,
+                    )
+                    for chunk in chunks
+                ]
+            )
 
             self[request.id].status = "finished"
             self[request.id].trace_id = trace_id
