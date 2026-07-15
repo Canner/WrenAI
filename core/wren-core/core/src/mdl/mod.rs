@@ -5081,4 +5081,341 @@ mod test {
         );
         Ok(())
     }
+
+    /// Contract tests for `apply_wren_on_ctx`'s catalog isolation: each call
+    /// builds its catalog on a private catalog-list snapshot, so the base
+    /// context and any other concurrent call against the same base context
+    /// are unaffected by it.
+    mod catalog_race {
+        use super::*;
+        use crate::mdl::builder::ViewBuilder;
+        use datafusion::catalog::memory::MemoryCatalogProvider;
+        use datafusion::catalog::CatalogProvider;
+        use datafusion::catalog::SchemaProvider;
+        use datafusion::sql::TableReference;
+        use std::sync::Barrier;
+        use std::thread;
+
+        fn single_model_manifest(catalog: &str, marker_column: &str) -> Manifest {
+            ManifestBuilder::new()
+                .catalog(catalog)
+                .schema("test")
+                .model(
+                    ModelBuilder::new("m")
+                        .table_reference("m")
+                        .column(ColumnBuilder::new(marker_column, "int").build())
+                        .build(),
+                )
+                .build()
+        }
+
+        /// Same as [`single_model_manifest`] but also registers a view `v`
+        /// selecting the marker column from `m`, exercising the async
+        /// `create_logical_plan` path that `register_table_with_mdl` awaits
+        /// when registering views.
+        fn single_model_with_view_manifest(
+            catalog: &str,
+            marker_column: &str,
+        ) -> Manifest {
+            ManifestBuilder::new()
+                .catalog(catalog)
+                .schema("test")
+                .model(
+                    ModelBuilder::new("m")
+                        .table_reference("m")
+                        .column(ColumnBuilder::new(marker_column, "int").build())
+                        .build(),
+                )
+                .view(
+                    ViewBuilder::new("v")
+                        .statement(&format!(
+                            "select {marker_column} from {catalog}.test.m"
+                        ))
+                        .build(),
+                )
+                .build()
+        }
+
+        /// `apply_wren_on_ctx` leaves the base context's sentinel catalog
+        /// unchanged, while the returned derived context contains the model
+        /// and view built from the current MDL.
+        #[tokio::test]
+        async fn apply_does_not_mutate_base_ctx_catalog_list() -> Result<()> {
+            let catalog_name = "wren_race_sentinel";
+            let manifest = single_model_with_view_manifest(catalog_name, "marker_col");
+            let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+                manifest,
+                Arc::new(HashMap::default()),
+                Mode::Unparse,
+            )?);
+
+            let base_ctx = create_wren_ctx(None, None);
+            let sentinel: Arc<dyn CatalogProvider> =
+                Arc::new(MemoryCatalogProvider::new());
+            base_ctx.register_catalog(catalog_name, Arc::clone(&sentinel));
+
+            let derived_ctx = apply_wren_on_ctx(
+                &base_ctx,
+                Arc::clone(&analyzed_mdl),
+                Arc::new(HashMap::default()),
+                Mode::Unparse,
+            )
+            .await?;
+
+            // (1) the base ctx's catalog list still holds the *sentinel*
+            // catalog, unchanged in identity/contents — apply must not
+            // mutate the shared list.
+            let after = base_ctx
+                .catalog(catalog_name)
+                .expect("sentinel catalog vanished from base ctx");
+            assert!(
+                Arc::ptr_eq(&sentinel, &after),
+                "apply_wren_on_ctx replaced/mutated the base ctx's catalog \
+                 for {catalog_name} instead of leaving it untouched"
+            );
+            assert!(
+                sentinel.schema_names().is_empty(),
+                "sentinel catalog should remain empty on the base ctx"
+            );
+
+            // (2) the derived ctx contains the MDL's model.
+            let df = derived_ctx
+                .table(TableReference::full(catalog_name, "test", "m"))
+                .await?;
+            assert!(df.schema().has_column_with_unqualified_name("marker_col"));
+
+            // (3) the derived ctx's view also resolves — view registration
+            // awaits `create_logical_plan`, a longer construction window
+            // than the model loop above.
+            let view_df = derived_ctx
+                .table(TableReference::full(catalog_name, "test", "v"))
+                .await?;
+            assert!(view_df
+                .schema()
+                .has_column_with_unqualified_name("marker_col"));
+
+            Ok(())
+        }
+
+        /// Concurrent calls sharing one base context and catalog key each
+        /// observe the marker belonging to their own derived context.
+        ///
+        /// `N_THREADS` OS threads, each driving its own current-thread tokio
+        /// runtime, call `apply_wren_on_ctx` against one shared base context
+        /// using the same catalog/schema/model/view name; only the marker
+        /// column differs per (thread, iteration) — sharing one name forces
+        /// every thread's call to register/replace the same top-level catalog
+        /// entry, exercising concurrent replacement of one catalog key.
+        /// A `Barrier` synchronizes thread start outside any `.await` point,
+        /// never blended with async awaits.
+        #[test]
+        fn apply_is_isolated_under_concurrent_same_context_calls() -> Result<()> {
+            const N_THREADS: usize = 8;
+            const ITERATIONS: usize = 200;
+            const SHARED_CATALOG: &str = "wren_stress_shared";
+
+            let base_ctx = Arc::new(create_wren_ctx(None, None));
+            let barrier = Arc::new(Barrier::new(N_THREADS));
+
+            let handles: Vec<_> = (0..N_THREADS)
+                .map(|tid| {
+                    let base_ctx = Arc::clone(&base_ctx);
+                    let barrier = Arc::clone(&barrier);
+                    thread::Builder::new()
+                        .stack_size(8 * 1024 * 1024)
+                        .spawn(move || -> Result<()> {
+                            let rt = tokio::runtime::Builder::new_current_thread()
+                                .enable_all()
+                                .build()
+                                .unwrap();
+                            barrier.wait();
+                            rt.block_on(async move {
+                                for iter in 0..ITERATIONS {
+                                    let marker_column = format!("marker_{tid}_{iter}");
+                                    let manifest = single_model_with_view_manifest(
+                                        SHARED_CATALOG,
+                                        &marker_column,
+                                    );
+                                    let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+                                        manifest,
+                                        Arc::new(HashMap::default()),
+                                        Mode::Unparse,
+                                    )?);
+                                    let derived_ctx = apply_wren_on_ctx(
+                                        &base_ctx,
+                                        Arc::clone(&analyzed_mdl),
+                                        Arc::new(HashMap::default()),
+                                        Mode::Unparse,
+                                    )
+                                    .await?;
+                                    let df = derived_ctx
+                                        .table(TableReference::full(
+                                            SHARED_CATALOG,
+                                            "test",
+                                            "m",
+                                        ))
+                                        .await?;
+                                    assert!(
+                                        df.schema()
+                                            .has_column_with_unqualified_name(&marker_column),
+                                        "thread {tid} iter {iter} did not see its own \
+                                         marker column on the shared catalog/schema/model \
+                                         name — cross-thread catalog contamination"
+                                    );
+                                    let view_df = derived_ctx
+                                        .table(TableReference::full(
+                                            SHARED_CATALOG,
+                                            "test",
+                                            "v",
+                                        ))
+                                        .await?;
+                                    assert!(
+                                        view_df
+                                            .schema()
+                                            .has_column_with_unqualified_name(&marker_column),
+                                        "thread {tid} iter {iter} did not see its own \
+                                         marker column via the shared view — cross-thread \
+                                         catalog contamination"
+                                    );
+                                }
+                                Ok(())
+                            })
+                        })
+                        .expect("failed to spawn stress thread")
+                })
+                .collect();
+
+            for handle in handles {
+                handle.join().expect("stress thread panicked")?;
+            }
+            Ok(())
+        }
+
+        /// Two-layer contract test — Layer 1: top-level catalog-list
+        /// membership and replacement are fixed at apply time. Replacing an
+        /// existing catalog or registering a new catalog on the base ctx must
+        /// not change the already-derived ctx's private snapshot.
+        #[tokio::test]
+        async fn top_level_catalog_snapshot_isolated_from_later_base_changes(
+        ) -> Result<()> {
+            let manifest = single_model_manifest("wren_layer1", "marker_col");
+            let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+                manifest,
+                Arc::new(HashMap::default()),
+                Mode::Unparse,
+            )?);
+            let base_ctx = create_wren_ctx(None, None);
+            let existing_catalog_name = "existing_before_apply";
+            let original_catalog: Arc<dyn CatalogProvider> =
+                Arc::new(MemoryCatalogProvider::new());
+            base_ctx
+                .register_catalog(existing_catalog_name, Arc::clone(&original_catalog));
+
+            let derived_ctx = apply_wren_on_ctx(
+                &base_ctx,
+                Arc::clone(&analyzed_mdl),
+                Arc::new(HashMap::default()),
+                Mode::Unparse,
+            )
+            .await?;
+
+            let replacement_catalog: Arc<dyn CatalogProvider> =
+                Arc::new(MemoryCatalogProvider::new());
+            base_ctx.register_catalog(
+                existing_catalog_name,
+                Arc::clone(&replacement_catalog),
+            );
+
+            let base_catalog = base_ctx
+                .catalog(existing_catalog_name)
+                .expect("replacement catalog missing from base ctx");
+            let derived_catalog = derived_ctx
+                .catalog(existing_catalog_name)
+                .expect("snapshot catalog missing from derived ctx");
+            assert!(
+                Arc::ptr_eq(&base_catalog, &replacement_catalog),
+                "the base ctx must expose the replacement catalog"
+            );
+            assert!(
+                Arc::ptr_eq(&derived_catalog, &original_catalog),
+                "the derived ctx must retain the catalog captured at apply time"
+            );
+
+            // A catalog registered on the base ctx after apply is a
+            // top-level addition that postdates the private-list snapshot.
+            base_ctx.register_catalog(
+                "new_after_apply",
+                Arc::new(MemoryCatalogProvider::new()),
+            );
+
+            assert!(base_ctx.catalog("new_after_apply").is_some());
+            assert!(
+                derived_ctx.catalog("new_after_apply").is_none(),
+                "a top-level catalog registered on the base ctx after apply \
+                 must not leak into the already-derived ctx's private list"
+            );
+
+            Ok(())
+        }
+
+        /// Two-layer contract test — Layer 2: internals of a catalog that
+        /// already existed at apply time are live-shared. Registering a new
+        /// table into an *existing* physical catalog/schema after apply
+        /// *is* visible from the derived ctx, because `clone_catalog_list`
+        /// Arc-clones the provider whose inner DashMap is shared.
+        #[tokio::test]
+        async fn table_added_to_pre_existing_catalog_after_apply_is_visible_from_derived_ctx(
+        ) -> Result<()> {
+            use datafusion::arrow::datatypes::{DataType, Field, Schema};
+            use datafusion::catalog::MemorySchemaProvider;
+            use datafusion::datasource::empty::EmptyTable;
+
+            let existing_catalog_name = "existing_at_apply";
+            let existing_schema_name = "s";
+
+            let base_ctx = create_wren_ctx(None, None);
+            let existing_catalog = Arc::new(MemoryCatalogProvider::new());
+            let existing_schema = Arc::new(MemorySchemaProvider::new());
+            existing_catalog.register_schema(
+                existing_schema_name,
+                Arc::clone(&existing_schema)
+                    as Arc<dyn datafusion::catalog::SchemaProvider>,
+            )?;
+            base_ctx.register_catalog(existing_catalog_name, existing_catalog);
+
+            let manifest = single_model_manifest("wren_layer2", "marker_col");
+            let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+                manifest,
+                Arc::new(HashMap::default()),
+                Mode::Unparse,
+            )?);
+            let derived_ctx = apply_wren_on_ctx(
+                &base_ctx,
+                Arc::clone(&analyzed_mdl),
+                Arc::new(HashMap::default()),
+                Mode::Unparse,
+            )
+            .await?;
+
+            // Mutate the pre-existing schema's DashMap *after* apply.
+            let post_apply_table = Arc::new(EmptyTable::new(Arc::new(Schema::new(
+                vec![Field::new("c1", DataType::Int32, true)],
+            ))));
+            existing_schema.register_table("t2".to_string(), post_apply_table)?;
+
+            let derived_schema = derived_ctx
+                .catalog(existing_catalog_name)
+                .expect("pre-existing catalog missing from derived ctx")
+                .schema(existing_schema_name)
+                .expect("pre-existing schema missing from derived ctx");
+            assert!(
+                derived_schema.table_names().contains(&"t2".to_string()),
+                "a table registered into a catalog that existed at apply \
+                 time must be visible from the derived ctx (live-shared \
+                 provider internals)"
+            );
+
+            Ok(())
+        }
+    }
 }

@@ -15,10 +15,11 @@ use crate::mdl::type_planner::WrenTypePlanner;
 use crate::mdl::{AnalyzedWrenMDL, SessionStateRef};
 use async_trait::async_trait;
 use datafusion::arrow::datatypes::SchemaRef;
-use datafusion::catalog::memory::MemoryCatalogProvider;
+use datafusion::catalog::memory::{MemoryCatalogProvider, MemoryCatalogProviderList};
 use datafusion::catalog::CatalogProvider;
+use datafusion::catalog::CatalogProviderList;
 use datafusion::catalog::{MemorySchemaProvider, Session};
-use datafusion::common::Result;
+use datafusion::common::{internal_err, Result};
 use datafusion::datasource::{TableProvider, TableType, ViewTable};
 use datafusion::execution::session_state::SessionStateBuilder;
 use datafusion::logical_expr::Expr;
@@ -40,7 +41,43 @@ use parking_lot::RwLock;
 
 pub type SessionPropertiesRef = Arc<HashMap<String, Option<String>>>;
 
+/// Copies the top-level entries of a `CatalogProviderList` into a fresh,
+/// private `MemoryCatalogProviderList`.
+///
+/// Contract:
+/// 1. Top-level catalog-list membership/replacement is a snapshot at the
+///    time this is called: registering a brand-new top-level catalog on the
+///    original list afterward does not appear in the copy.
+/// 2. The internals of catalogs present at copy time are live-shared: each
+///    entry is the *same* `Arc<dyn CatalogProvider>` as the original, so a
+///    schema/table mutation on a catalog that already existed at copy time
+///    (e.g. registering a new table into an existing physical
+///    catalog/schema) is visible through both lists, because the provider's
+///    inner DashMap is shared (datafusion-catalog `catalog.rs`, `schema.rs`).
+/// 3. The enumeration is best-effort, not an atomic snapshot —
+///    `catalog_names()` and per-name `catalog()` are independent DashMap
+///    reads, so a concurrent `register_catalog` racing this copy may or may
+///    not be observed. Callers must finish top-level physical-catalog
+///    registration before starting a transform; this helper does not (and
+///    cannot) provide atomicity for same-named concurrent registrations.
+fn clone_catalog_list(
+    existing: &Arc<dyn CatalogProviderList>,
+) -> Arc<dyn CatalogProviderList> {
+    let private_list = MemoryCatalogProviderList::new();
+    for name in existing.catalog_names() {
+        if let Some(catalog) = existing.catalog(&name) {
+            private_list.register_catalog(name, catalog);
+        }
+    }
+    Arc::new(private_list)
+}
+
 /// Apply Wren Rules to the context for sql generation.
+///
+/// Callers must complete top-level physical-catalog registration before
+/// starting a transform. Catalog enumeration produces a best-effort,
+/// non-atomic snapshot, so concurrent top-level registrations may or may not
+/// be observed by the derived context.
 pub async fn apply_wren_on_ctx(
     ctx: &SessionContext,
     analyzed_mdl: Arc<AnalyzedWrenMDL>,
@@ -75,10 +112,16 @@ pub async fn apply_wren_on_ctx(
     }
 
     let type_planner = Arc::new(WrenTypePlanner::default());
+    // Each apply call uses a private catalog-list snapshot. Both derived
+    // SessionStates within the call share that snapshot, isolating in-flight
+    // catalog registration from the base context and concurrent calls. See
+    // `clone_catalog_list` for the exact sharing contract.
+    let private_catalog_list = clone_catalog_list(ctx.state().catalog_list());
     let reset_default_catalog_schema = Arc::new(RwLock::new(
         SessionStateBuilder::new_from_existing(ctx.state())
             .with_config(config.clone())
             .with_type_planner(type_planner)
+            .with_catalog_list(Arc::clone(&private_catalog_list))
             .build(),
     ));
 
@@ -109,6 +152,19 @@ pub async fn apply_wren_on_ctx(
     };
 
     let new_state = new_state.with_config(config).build();
+    // Guards the isolation invariant on the production wiring itself: the
+    // final SessionState handed to `SessionContext` must hold the same
+    // private Arc `clone_catalog_list` produced above. A violation here
+    // means silently wrong query output, not just an internal inconsistency,
+    // so this checks in every build, including release; the pointer
+    // comparison is O(1).
+    if !Arc::ptr_eq(new_state.catalog_list(), &private_catalog_list) {
+        return internal_err!(
+            "apply_wren_on_ctx: final SessionState's catalog_list is not the \
+             private Arc from clone_catalog_list — the same-context isolation \
+             invariant has been broken"
+        );
+    }
     let ctx = SessionContext::new_with_state(new_state);
     register_table_with_mdl(&ctx, analyzed_mdl, properties, mode).await?;
     Ok(ctx)
