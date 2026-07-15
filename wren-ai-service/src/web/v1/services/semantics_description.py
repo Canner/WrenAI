@@ -13,6 +13,9 @@ from src.web.v1.services import BaseRequest, MetadataTraceable
 
 logger = logging.getLogger("wren-ai-service")
 
+MAX_UI_WAIT_SECONDS = 180
+SEMANTICS_STATUS_TTL_BUFFER_SECONDS = 300
+
 
 class SemanticsDescription:
     class Resource(BaseModel, MetadataTraceable):
@@ -35,8 +38,17 @@ class SemanticsDescription:
         generation_timeout_seconds: int = 90,
     ):
         self._pipelines = pipelines
-        self._cache: Dict[str, self.Resource] = TTLCache(maxsize=maxsize, ttl=ttl)
-        self._generation_timeout_seconds = generation_timeout_seconds
+        self._generation_timeout_seconds = min(
+            generation_timeout_seconds,
+            MAX_UI_WAIT_SECONDS - 30,
+        )
+        self._cache: Dict[str, self.Resource] = TTLCache(
+            maxsize=maxsize,
+            ttl=max(
+                ttl,
+                self._generation_timeout_seconds + SEMANTICS_STATUS_TTL_BUFFER_SECONDS,
+            ),
+        )
 
     def _handle_exception(
         self,

@@ -164,6 +164,17 @@ def test_semantics_description_uses_configured_timeout():
     assert service._generation_timeout_seconds == 123
 
 
+def test_semantics_description_caps_timeout_inside_ui_polling_window():
+    service = SemanticsDescription(
+        pipelines={"semantics_description": AsyncMock()},
+        ttl=120,
+        generation_timeout_seconds=600,
+    )
+
+    assert service._generation_timeout_seconds == 150
+    assert service._cache.ttl >= 450
+
+
 @pytest.mark.asyncio
 async def test_batch_processing_with_multiple_models(
     service: SemanticsDescription,
