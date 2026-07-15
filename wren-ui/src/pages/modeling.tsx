@@ -99,6 +99,60 @@ const AssistantAction = styled.div`
   z-index: 10;
 `;
 
+const AssistantPage = styled.div`
+  min-height: calc(100vh - 48px);
+  background: #f5f5f5;
+  padding: 72px 24px;
+`;
+
+const AssistantCard = styled.div`
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: 34px 72px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 2px;
+`;
+
+const AssistantBack = styled.button`
+  display: block;
+  max-width: 1060px;
+  margin: 0 auto 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #5f6368;
+  cursor: pointer;
+`;
+
+const AssistantTitle = styled.h1`
+  margin: 0 0 14px;
+  color: #3c4043;
+  font-size: 40px;
+  line-height: 1.2;
+`;
+
+const AssistantDescription = styled.p`
+  margin: 0 0 26px;
+  color: #5f6368;
+  line-height: 1.6;
+`;
+
+const AssistantFooter = styled.div`
+  display: flex;
+  justify-content: space-between;
+  margin-top: 28px;
+`;
+
+const SemanticReviewCard = styled.div`
+  padding: 18px 16px 28px;
+  border-bottom: 1px solid #e5e7eb;
+
+  &:last-child {
+    border-bottom: 0;
+  }
+`;
+
 export default function Modeling() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -110,6 +164,10 @@ export default function Modeling() {
   const [assistantLoading, setAssistantLoading] = useState(false);
   const [selectedModels, setSelectedModels] = useState<string[]>([]);
   const [semanticPrompt, setSemanticPrompt] = useState('');
+  const [semanticStep, setSemanticStep] = useState<'pick' | 'generate' | 'review'>(
+    'pick',
+  );
+  const [semanticSearch, setSemanticSearch] = useState('');
   const [semanticResult, setSemanticResult] = useState<any[]>([]);
   const [relationshipResult, setRelationshipResult] = useState<any[]>([]);
 
@@ -458,11 +516,38 @@ export default function Modeling() {
     throw new Error('AI assistant timed out.');
   };
 
+  const normalizeSemanticModel = (name: string, value: any): any => ({
+    name: value?.name || name,
+    description: value?.description || value?.properties?.description || '',
+    columns: (value?.columns || []).map((column) => ({
+      name: column?.name,
+      type: column?.type,
+      description: column?.description || column?.properties?.description || '',
+    })),
+  });
+
   const normalizeSemanticResult = (result: any): any[] => {
-    if (Array.isArray(result)) return result;
-    if (Array.isArray(result?.models)) return result.models;
-    if (Array.isArray(result?.semantics)) return result.semantics;
-    if (Array.isArray(result?.descriptions)) return result.descriptions;
+    if (Array.isArray(result)) {
+      return result.map((model) => normalizeSemanticModel(model?.name, model));
+    }
+    if (Array.isArray(result?.models)) {
+      return result.models.map((model) => normalizeSemanticModel(model?.name, model));
+    }
+    if (Array.isArray(result?.semantics)) {
+      return result.semantics.map((model) =>
+        normalizeSemanticModel(model?.name, model),
+      );
+    }
+    if (Array.isArray(result?.descriptions)) {
+      return result.descriptions.map((model) =>
+        normalizeSemanticModel(model?.name, model),
+      );
+    }
+    if (result && typeof result === 'object') {
+      return Object.entries(result).map(([name, value]) =>
+        normalizeSemanticModel(name, value),
+      );
+    }
     return [];
   };
 
@@ -477,6 +562,8 @@ export default function Modeling() {
 
   const openAssistant = (mode: 'semantics' | 'relationships') => {
     setAssistantMode(mode);
+    setSemanticStep('pick');
+    setSemanticSearch('');
     setSelectedModels(diagramData?.models?.map((model) => model.referenceName) || []);
     setSemanticResult([]);
     setRelationshipResult([]);
@@ -503,7 +590,9 @@ export default function Modeling() {
           MODELING_SEMANTICS_RESULT,
           'modelingSemanticsResult',
         );
-        setSemanticResult(normalizeSemanticResult(result));
+        const normalizedResult = normalizeSemanticResult(result);
+        setSemanticResult(normalizedResult);
+        setSemanticStep('review');
       }
       if (assistantMode === 'relationships') {
         if (!diagramData?.models || diagramData.models.length < 2) {
@@ -523,6 +612,42 @@ export default function Modeling() {
     } finally {
       setAssistantLoading(false);
     }
+  };
+
+  const updateSemanticModelDescription = (
+    modelName: string,
+    description: string,
+  ) => {
+    setSemanticResult((models) =>
+      models.map((model) =>
+        model.name === modelName ? { ...model, description } : model,
+      ),
+    );
+  };
+
+  const updateSemanticColumnDescription = (
+    modelName: string,
+    columnName: string,
+    description: string,
+  ) => {
+    setSemanticResult((models) =>
+      models.map((model) =>
+        model.name === modelName
+          ? {
+              ...model,
+              columns: (model.columns || []).map((column) =>
+                column.name === columnName ? { ...column, description } : column,
+              ),
+            }
+          : model,
+      ),
+    );
+  };
+
+  const closeAssistant = () => {
+    setAssistantMode(null);
+    setSemanticStep('pick');
+    setSemanticSearch('');
   };
 
   const saveAssistantResult = async () => {
@@ -604,7 +729,7 @@ export default function Modeling() {
           });
         }
       }
-      setAssistantMode(null);
+      closeAssistant();
       message.success('Saved Modeling AI Assistant suggestions.');
     } catch (error: any) {
       message.error(error.message || 'Failed to save assistant suggestions.');
@@ -612,6 +737,229 @@ export default function Modeling() {
       setAssistantLoading(false);
     }
   };
+
+  const semanticModelOptions = (diagramData?.models || []).filter((model) => {
+    const keyword = semanticSearch.trim().toLowerCase();
+    if (!keyword) return true;
+    return [model.displayName, model.referenceName]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(keyword));
+  });
+
+  if (assistantMode === 'semantics') {
+    return (
+      <DeployStatusContext.Provider value={{ ...deployStatusQueryResult }}>
+        <AssistantPage>
+          <AssistantBack onClick={closeAssistant}>
+            &larr; Back to modeling
+          </AssistantBack>
+          <AssistantCard>
+            {semanticStep === 'pick' && (
+              <>
+                <AssistantTitle>Pick models</AssistantTitle>
+                <AssistantDescription>
+                  <strong>
+                    Good semantics improve how AI understands and queries your
+                    data.
+                  </strong>{' '}
+                  Select models to generate semantics with AI. Modeling AI
+                  Assistant will help you create semantics that improve how AI
+                  understands and queries your data.
+                </AssistantDescription>
+                <div className="mb-3">
+                  {selectedModels.length}/{diagramData?.models?.length || 0}{' '}
+                  model(s)
+                </div>
+                <Input
+                  className="mb-3"
+                  placeholder="Search here"
+                  value={semanticSearch}
+                  onChange={(event) => setSemanticSearch(event.target.value)}
+                />
+                <Table
+                  size="small"
+                  rowKey="referenceName"
+                  pagination={false}
+                  dataSource={semanticModelOptions}
+                  rowSelection={{
+                    selectedRowKeys: selectedModels,
+                    preserveSelectedRowKeys: true,
+                    onChange: (keys) => setSelectedModels(keys as string[]),
+                  }}
+                  columns={[
+                    {
+                      title: 'Model name',
+                      render: (_value, model) =>
+                        model.displayName || model.referenceName,
+                    },
+                  ]}
+                />
+                <AssistantFooter>
+                  <span />
+                  <Button
+                    type="primary"
+                    disabled={!selectedModels.length}
+                    onClick={() => setSemanticStep('generate')}
+                  >
+                    Next
+                  </Button>
+                </AssistantFooter>
+              </>
+            )}
+
+            {semanticStep === 'generate' && (
+              <>
+                <AssistantTitle>Generate semantics</AssistantTitle>
+                <h3>User Prompt</h3>
+                <AssistantDescription>
+                  Help AI better understand your data by providing a brief
+                  description of your dataset&apos;s purpose. Modeling AI
+                  Assistant will use this context to generate more relevant
+                  semantics.
+                </AssistantDescription>
+                <div style={{ display: 'flex', gap: 16 }}>
+                  <Input.TextArea
+                    rows={2}
+                    value={semanticPrompt}
+                    onChange={(event) => setSemanticPrompt(event.target.value)}
+                    placeholder="Describe what this dataset represents and how it is used."
+                  />
+                  <Button
+                    type="primary"
+                    loading={assistantLoading}
+                    onClick={runAssistant}
+                  >
+                    Generate
+                  </Button>
+                </div>
+                <div
+                  style={{
+                    marginTop: 24,
+                    padding: 16,
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 4,
+                  }}
+                >
+                  <strong>Example prompt</strong>
+                  <div style={{ marginTop: 16, color: '#5f6368' }}>
+                    This dataset tracks operational records, users, events, and
+                    business entities. It is used to answer analytical questions
+                    about activity, performance, ownership, and trends.
+                  </div>
+                </div>
+                <AssistantFooter>
+                  <Button onClick={() => setSemanticStep('pick')}>Back</Button>
+                  <Button
+                    disabled={!semanticResult.length}
+                    onClick={() => setSemanticStep('review')}
+                  >
+                    Review
+                  </Button>
+                </AssistantFooter>
+              </>
+            )}
+
+            {semanticStep === 'review' && (
+              <>
+                <AssistantTitle>Generate semantics</AssistantTitle>
+                <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
+                  <Input.TextArea
+                    rows={2}
+                    value={semanticPrompt}
+                    onChange={(event) => setSemanticPrompt(event.target.value)}
+                  />
+                  <Button loading={assistantLoading} onClick={runAssistant}>
+                    Regenerate
+                  </Button>
+                </div>
+                <div
+                  style={{
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 4,
+                  }}
+                >
+                  <div style={{ padding: 16 }}>
+                    <strong>Generated semantics</strong>
+                    <div style={{ marginTop: 12, color: '#5f6368' }}>
+                      Review the semantics generated by AI.
+                    </div>
+                  </div>
+                  {semanticResult.map((model) => (
+                    <SemanticReviewCard key={model.name}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          marginBottom: 16,
+                        }}
+                      >
+                        <strong>{model.name}</strong>
+                        <span style={{ color: '#9aa0a6' }}>
+                          {(model.columns || []).length} column(s)
+                        </span>
+                      </div>
+                      <div className="mb-2">Description</div>
+                      <Input
+                        className="mb-4"
+                        value={model.description}
+                        onChange={(event) =>
+                          updateSemanticModelDescription(
+                            model.name,
+                            event.target.value,
+                          )
+                        }
+                      />
+                      <Table
+                        size="small"
+                        rowKey="name"
+                        pagination={false}
+                        dataSource={model.columns || []}
+                        columns={[
+                          { title: 'Name', dataIndex: 'name', width: 180 },
+                          {
+                            title: 'Alias',
+                            dataIndex: 'name',
+                            width: 180,
+                          },
+                          { title: 'Type', dataIndex: 'type', width: 140 },
+                          {
+                            title: 'Description',
+                            render: (_value, column) => (
+                              <Input
+                                value={column.description}
+                                onChange={(event) =>
+                                  updateSemanticColumnDescription(
+                                    model.name,
+                                    column.name,
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                            ),
+                          },
+                        ]}
+                      />
+                    </SemanticReviewCard>
+                  ))}
+                </div>
+                <AssistantFooter>
+                  <Button onClick={() => setSemanticStep('generate')}>Back</Button>
+                  <Button
+                    type="primary"
+                    loading={assistantLoading}
+                    disabled={!semanticResult.length}
+                    onClick={saveAssistantResult}
+                  >
+                    Save
+                  </Button>
+                </AssistantFooter>
+              </>
+            )}
+          </AssistantCard>
+        </AssistantPage>
+      </DeployStatusContext.Provider>
+    );
+  }
 
   return (
     <DeployStatusContext.Provider value={{ ...deployStatusQueryResult }}>
