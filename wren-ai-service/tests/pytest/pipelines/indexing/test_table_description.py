@@ -126,6 +126,31 @@ def test_table_description_missing_description():
     assert document.content == str({"name": "user", "description": "", "columns": ""})
 
 
+def test_table_description_null_description():
+    chunker = TableDescriptionChunker()
+    mdl = {
+        "models": [
+            {
+                "name": "user",
+                "properties": {"description": None, "displayName": None},
+                "columns": [{"name": "id"}, {"name": None}],
+            }
+        ],
+        "views": [],
+        "relationships": [],
+        "metrics": [],
+    }
+
+    actual = chunker.run(mdl)
+    assert len(actual["documents"]) == 1
+
+    document: Document = actual["documents"][0]
+    assert document.meta == {"type": "TABLE_DESCRIPTION", "name": "user"}
+    assert document.content == str(
+        {"name": "user", "description": "", "columns": "id, "}
+    )
+
+
 def test_table_description_truncates_long_column_lists():
     chunker = TableDescriptionChunker()
     mdl = {

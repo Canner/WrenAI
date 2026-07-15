@@ -32,11 +32,15 @@ MAX_DB_SCHEMA_DOCUMENT_LENGTH = 12000
 
 @component
 class DDLChunker:
-    def _truncate_text(self, text: str, max_length: int) -> str:
-        if len(text) <= max_length:
-            return text
+    def _normalize_text(self, value: Any) -> str:
+        return "" if value is None else str(value)
 
-        return text[:max_length].rstrip() + "..."
+    def _truncate_text(self, text: Any, max_length: int) -> str:
+        normalized_text = self._normalize_text(text)
+        if len(normalized_text) <= max_length:
+            return normalized_text
+
+        return normalized_text[:max_length].rstrip() + "..."
 
     def _serialize_table_columns_payload(self, columns: List[dict]) -> str:
         return str({"type": "TABLE_COLUMNS", "columns": columns})
@@ -174,9 +178,13 @@ class DDLChunker:
                 for column in model.get("columns", [])
                 if column.get("isHidden") is not True
             ]
+            properties = model.get("properties")
+            if not isinstance(properties, dict):
+                properties = {}
+
             return {
                 "name": model.get("name", ""),
-                "properties": model.get("properties", {}),
+                "properties": properties,
                 "columns": columns,
                 "primaryKey": model.get("primaryKey", ""),
             }
@@ -212,9 +220,14 @@ class DDLChunker:
     ) -> List[Dict[str, str]]:
         def _model_command(model: Dict[str, Any]) -> dict:
             properties = model.get("properties", {})
+            if not isinstance(properties, dict):
+                properties = {}
 
+            display_name = properties.get("displayName", "")
             model_properties = {
-                "alias": clean_display_name(properties.get("displayName", "")),
+                "alias": clean_display_name(
+                    "" if display_name is None else str(display_name)
+                ),
                 "description": self._truncate_text(
                     properties.get("description", ""),
                     MAX_DB_SCHEMA_COMMENT_LENGTH,
@@ -322,10 +335,14 @@ class DDLChunker:
 
     def _convert_views(self, views: List[Dict[str, Any]]) -> List[Dict[str, str]]:
         def _payload(view: Dict[str, Any]) -> dict:
+            properties = view.get("properties")
+            if not isinstance(properties, dict):
+                properties = {}
+
             return {
                 "type": "VIEW",
                 "comment": self._truncate_text(
-                    f"/* {view['properties']} */\n" if "properties" in view else "",
+                    f"/* {properties} */\n" if properties else "",
                     MAX_DB_SCHEMA_COMMENT_LENGTH,
                 ),
                 "name": view["name"],

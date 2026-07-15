@@ -200,6 +200,57 @@ async def test_column_with_properties():
 
 
 @pytest.mark.asyncio
+async def test_null_metadata_properties_are_indexed_as_empty_text():
+    chunker = DDLChunker()
+    mdl = {
+        "models": [
+            {
+                "name": "user",
+                "properties": {"description": None, "displayName": None},
+                "columns": [
+                    {
+                        "name": "id",
+                        "type": "INTEGER",
+                        "properties": {
+                            "displayName": None,
+                            "description": None,
+                        },
+                    }
+                ],
+            }
+        ],
+        "views": [],
+        "relationships": [],
+        "metrics": [],
+    }
+
+    actual = await chunker.run(mdl, column_batch_size=1)
+
+    assert len(actual["documents"]) == 2
+    assert actual["documents"][0].content == str(
+        {
+            "type": "TABLE_COLUMNS",
+            "columns": [
+                {
+                    "type": "COLUMN",
+                    "comment": '-- {"alias":"","description":""}\n  ',
+                    "name": "id",
+                    "data_type": "INTEGER",
+                    "is_primary_key": False,
+                }
+            ],
+        }
+    )
+    assert actual["documents"][1].content == str(
+        {
+            "type": "TABLE",
+            "comment": "\n/* {'alias': '', 'description': ''} */\n",
+            "name": "user",
+        }
+    )
+
+
+@pytest.mark.asyncio
 async def test_column_with_nested_columns():
     chunker = DDLChunker()
     mdl = {

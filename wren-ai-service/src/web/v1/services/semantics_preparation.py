@@ -62,7 +62,44 @@ class SemanticsPreparationService:
         parsed.setdefault("views", [])
         parsed.setdefault("metrics", [])
         parsed.setdefault("relationships", [])
+        self._normalize_mdl_metadata(parsed)
         return parsed
+
+    def _normalize_text(self, value: Any) -> str:
+        return "" if value is None else str(value)
+
+    def _normalize_properties(self, payload: dict[str, Any]) -> None:
+        properties = payload.get("properties")
+        if not isinstance(properties, dict):
+            properties = {}
+            payload["properties"] = properties
+
+        for key in ("description", "displayName"):
+            if key in properties:
+                properties[key] = self._normalize_text(properties[key])
+
+    def _normalize_resource_metadata(self, payload: dict[str, Any]) -> None:
+        self._normalize_properties(payload)
+        columns = payload.get("columns", [])
+        if not isinstance(columns, list):
+            payload["columns"] = []
+            return
+
+        for column in columns:
+            if not isinstance(column, dict):
+                continue
+            self._normalize_properties(column)
+
+    def _normalize_mdl_metadata(self, mdl: dict[str, Any]) -> None:
+        for collection in ("models", "views", "metrics"):
+            resources = mdl.get(collection, [])
+            if not isinstance(resources, list):
+                mdl[collection] = []
+                continue
+
+            for resource in resources:
+                if isinstance(resource, dict):
+                    self._normalize_resource_metadata(resource)
 
     def _validate_mdl_integrity(self, mdl: dict[str, Any]) -> None:
         model_names = set()
@@ -185,10 +222,11 @@ class SemanticsPreparationService:
         try:
             mdl = self._parse_mdl(prepare_semantics_request.mdl)
             self._validate_mdl_integrity(mdl)
-            logger.info(f"MDL: {prepare_semantics_request.mdl}")
+            normalized_mdl = orjson.dumps(mdl).decode("utf-8")
+            logger.info(f"MDL: {normalized_mdl}")
 
             input = {
-                "mdl_str": prepare_semantics_request.mdl,
+                "mdl_str": normalized_mdl,
                 "project_id": prepare_semantics_request.project_id,
             }
 
