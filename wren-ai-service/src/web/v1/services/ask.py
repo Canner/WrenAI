@@ -665,6 +665,45 @@ class AskService:
             return []
 
         concept_groups: list[set[str]] = []
+        if re.search(r"\bcustomers?\b|\bclients?\b|\baccounts?\b|\bcust\b", normalized):
+            concept_groups.append(
+                {"account", "client", "cust", "customer", "customers", "name"}
+            )
+        if re.search(r"\borders?\b|\border\s+count\b|\bbookings?\b", normalized):
+            concept_groups.append(
+                {
+                    "booking",
+                    "bookings",
+                    "ord",
+                    "order",
+                    "orders",
+                    "purchase",
+                    "transaction",
+                }
+            )
+        if re.search(r"\binvoices?\b|\bbilling\b|\bbills?\b", normalized):
+            concept_groups.append({"bill", "billing", "invoice", "invoices", "inv"})
+        if re.search(r"\bsales?\b|\brevenue\b|\bamount\b|\bvalue\b", normalized):
+            concept_groups.append(
+                {
+                    "amount",
+                    "fxsales",
+                    "margin",
+                    "revenue",
+                    "sale",
+                    "sales",
+                    "total",
+                    "value",
+                }
+            )
+        if re.search(r"\bproducts?\b|\bitems?\b|\bparts?\b|\bsku\b", normalized):
+            concept_groups.append(
+                {"item", "items", "part", "parts", "product", "products", "sku"}
+            )
+        if re.search(r"\bquantity\b|\bquantities\b|\bqty\b|\bunits?\b", normalized):
+            concept_groups.append(
+                {"qty", "quantity", "quantities", "unit", "units", "volume"}
+            )
         if "product line" in normalized or "productline" in normalized:
             concept_groups.append({"product", "prod", "line", "productline"})
         if "pcb" in normalized:
