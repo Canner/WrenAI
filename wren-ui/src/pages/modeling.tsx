@@ -2,7 +2,16 @@ import dynamic from 'next/dynamic';
 import { useRouter } from 'next/router';
 import { useSearchParams } from 'next/navigation';
 import { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Checkbox, Dropdown, Input, Modal, Table, message } from 'antd';
+import {
+  Button,
+  Checkbox,
+  Dropdown,
+  Input,
+  Menu,
+  Modal,
+  Table,
+  message,
+} from 'antd';
 import { RobotOutlined } from '@ant-design/icons';
 import { gql, useApolloClient, useMutation } from '@apollo/client';
 import styled from 'styled-components';
@@ -429,6 +438,10 @@ export default function Modeling() {
     query: any,
     fieldName: string,
   ) => {
+    if (!queryId) {
+      throw new Error('AI assistant did not return a task id.');
+    }
+
     for (let attempt = 0; attempt < 90; attempt += 1) {
       const res = await apolloClient.query({
         query,
@@ -456,6 +469,9 @@ export default function Modeling() {
     try {
       setAssistantLoading(true);
       if (assistantMode === 'semantics') {
+        if (!selectedModels.length) {
+          throw new Error('Select at least one model.');
+        }
         const res = await generateModelingSemantics({
           variables: {
             data: {
@@ -473,6 +489,9 @@ export default function Modeling() {
         setSemanticResult(result);
       }
       if (assistantMode === 'relationships') {
+        if (!diagramData?.models || diagramData.models.length < 2) {
+          throw new Error('At least two models are required.');
+        }
         const res = await generateModelingRelationships();
         const queryId = res.data?.generateModelingRelationships?.queryId;
         const result = await waitForAssistantResult(
@@ -539,7 +558,8 @@ export default function Modeling() {
           );
           if (!fromModel || !toModel || !fromField || !toField) continue;
           const alreadyExists = diagramData.models.some((model) =>
-            model.relationFields.some((field) => {
+            (model.relationFields || []).some((field) => {
+              if (!field) return false;
               const forward =
                 field.fromModelName === relationship.fromModel &&
                 field.fromColumnName === relationship.fromColumn &&
@@ -590,14 +610,18 @@ export default function Modeling() {
           <AssistantAction>
             <Dropdown
               trigger={['hover', 'click']}
-              menu={{
-                items: [
-                  { key: 'semantics', label: 'Generate semantics' },
-                  { key: 'relationships', label: 'Generate relationships' },
-                ],
-                onClick: ({ key }) =>
-                  openAssistant(key as 'semantics' | 'relationships'),
-              }}
+              overlay={
+                <Menu
+                  onClick={({ key }) =>
+                    openAssistant(key as 'semantics' | 'relationships')
+                  }
+                >
+                  <Menu.Item key="semantics">Generate semantics</Menu.Item>
+                  <Menu.Item key="relationships">
+                    Generate relationships
+                  </Menu.Item>
+                </Menu>
+              }
             >
               <Button icon={<RobotOutlined />}>Modeling AI Assistant</Button>
             </Dropdown>
