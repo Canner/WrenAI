@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from typing import Dict, List, Literal, Optional
 
 from cachetools import TTLCache
@@ -119,6 +120,9 @@ class AskService:
         self._ask_results: Dict[str, AskResultResponse] = TTLCache(
             maxsize=maxsize, ttl=ttl
         )
+        self._general_streaming_results: Dict[str, str] = TTLCache(
+            maxsize=maxsize, ttl=ttl
+        )
         self._allow_sql_generation_reasoning = allow_sql_generation_reasoning
         self._allow_sql_functions_retrieval = allow_sql_functions_retrieval
         self._allow_intent_classification = allow_intent_classification
@@ -137,6 +141,20 @@ class AskService:
             return True
 
         return False
+
+    def _is_greeting_query(self, query: str | None) -> bool:
+        normalized = " ".join(re.findall(r"[a-z]+", (query or "").lower()))
+        return normalized in {
+            "hi",
+            "hello",
+            "hey",
+            "good morning",
+            "good afternoon",
+            "good evening",
+        }
+
+    def _build_greeting_response(self, query: str | None) -> str:
+        return "Hello! Ask me a question about your data, and I will help generate an answer."
 
     @observe(name="Ask Question")
     @trace_metadata
@@ -665,6 +683,15 @@ class AskService:
         self,
         query_id: str,
     ):
+        if query_id in self._general_streaming_results:
+            event = SSEEvent(
+                data=SSEEvent.SSEEventMessage(
+                    message=self._general_streaming_results[query_id],
+                ),
+            )
+            yield event.serialize()
+            return
+
         if self._ask_results.get(query_id):
             _pipeline_name = ""
             if self._ask_results.get(query_id).type == "GENERAL":
