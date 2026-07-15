@@ -123,6 +123,41 @@ async def test_recommend_success(relationship_recommendation_service, mock_pipel
 
 
 @pytest.mark.asyncio
+async def test_recommend_replaces_technical_llm_relationship_reason(
+    relationship_recommendation_service,
+    mock_pipeline,
+    mdl_with_project_relationship_candidate,
+):
+    request = RelationshipRecommendation.Input(
+        id="test_id", mdl=mdl_with_project_relationship_candidate
+    )
+    mock_pipeline.run.return_value = {
+        "validated": {
+            "relationships": [
+                {
+                    "name": "view_project",
+                    "fromModel": "view",
+                    "fromColumn": "project_id",
+                    "type": "MANY_TO_ONE",
+                    "toModel": "project",
+                    "toColumn": "id",
+                    "reason": "view.project_id references project.id.",
+                }
+            ]
+        }
+    }
+
+    await relationship_recommendation_service.recommend(request)
+    response = relationship_recommendation_service[request.id]
+
+    assert response.status == "finished"
+    assert response.response["relationships"][0]["reason"] == (
+        "Each view belongs to one project, so views can be grouped and analyzed "
+        "by project."
+    )
+
+
+@pytest.mark.asyncio
 async def test_recommend_invalid_mdl(relationship_recommendation_service):
     request = RelationshipRecommendation.Input(id="test_id", mdl="invalid_json")
 
@@ -209,7 +244,10 @@ async def test_recommend_timeout_returns_fallback_relationships(
                 "type": "MANY_TO_ONE",
                 "toModel": "project",
                 "toColumn": "id",
-                "reason": "view.project_id appears to reference project.id.",
+                "reason": (
+                    "Each view belongs to one project, so views can be grouped "
+                    "and analyzed by project."
+                ),
             }
         ]
     }
@@ -258,7 +296,10 @@ async def test_recommend_fallback_matches_prefixed_model_name(
             "type": "MANY_TO_ONE",
             "toModel": "dbo_project",
             "toColumn": "id",
-            "reason": "dbo_view.project_id appears to reference dbo_project.id.",
+            "reason": (
+                "Each view belongs to one project, so views can be grouped "
+                "and analyzed by project."
+            ),
         }
     ]
 
@@ -286,7 +327,10 @@ async def test_recommend_fallback_identifies_one_to_one_relationships(
             "type": "ONE_TO_ONE",
             "toModel": "user",
             "toColumn": "id",
-            "reason": "profile.user_id appears to reference user.id.",
+            "reason": (
+                "Each profile is linked to one matching user, connecting details "
+                "that describe the same business record."
+            ),
         }
     ]
 
@@ -314,7 +358,10 @@ async def test_recommend_fallback_scans_all_models_and_identifies_one_to_many(
             "type": "ONE_TO_MANY",
             "toModel": "titles",
             "toColumn": "emp_no",
-            "reason": "employees.emp_no appears to be referenced by titles.emp_no.",
+            "reason": (
+                "Each employee can be associated with multiple titles, supporting "
+                "analysis of titles by employee."
+            ),
         },
         {
             "name": "employees_dept_emp",
@@ -323,7 +370,10 @@ async def test_recommend_fallback_scans_all_models_and_identifies_one_to_many(
             "type": "ONE_TO_MANY",
             "toModel": "dept_emp",
             "toColumn": "emp_no",
-            "reason": "employees.emp_no appears to be referenced by dept_emp.emp_no.",
+            "reason": (
+                "Each employee can be associated with multiple department employees, "
+                "supporting analysis of department employees by employee."
+            ),
         },
         {
             "name": "departments_dept_emp",
@@ -332,7 +382,10 @@ async def test_recommend_fallback_scans_all_models_and_identifies_one_to_many(
             "type": "ONE_TO_MANY",
             "toModel": "dept_emp",
             "toColumn": "dept_no",
-            "reason": "departments.dept_no appears to be referenced by dept_emp.dept_no.",
+            "reason": (
+                "Each department can be associated with multiple department employees, "
+                "supporting analysis of department employees by department."
+            ),
         },
     ]
 

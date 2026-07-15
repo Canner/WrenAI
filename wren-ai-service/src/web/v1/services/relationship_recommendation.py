@@ -86,6 +86,144 @@ class RelationshipRecommendation:
             if column.get("name") and not column.get("relationship")
         ]
 
+    def _humanize_identifier(self, value: Any) -> str:
+        text = "" if value is None else str(value)
+        text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text)
+        text = re.sub(r"[_\-.]+", " ", text)
+        text = re.sub(r"\b(id|pk|fk)\b", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"\s+", " ", text).strip()
+        replacements = {
+            "dept": "department",
+            "emp": "employee",
+            "org": "organization",
+            "cust": "customer",
+            "prod": "product",
+            "dim": "dimension",
+            "fact": "fact",
+        }
+        parts = [replacements.get(part.lower(), part) for part in text.split()]
+        if len(parts) > 1 and parts[0].lower() in {
+            "dbo",
+            "public",
+            "stage",
+            "staging",
+            "tbl",
+        }:
+            parts = parts[1:]
+        if len(parts) > 1 and parts[0].lower() == "q":
+            parts = parts[1:]
+        text = " ".join(parts)
+        return text.lower() if text else "record"
+
+    def _singularize_label(self, label: str) -> str:
+        if label.endswith("ies") and len(label) > 3:
+            return f"{label[:-3]}y"
+        if label.endswith(("ses", "xes", "zes", "ches", "shes")):
+            return label[:-2]
+        if (
+            label.endswith("s")
+            and not label.endswith(("ss", "us", "is", "sales", "series"))
+        ):
+            return label[:-1]
+        return label
+
+    def _model_label(self, model: dict) -> str:
+        properties = model.get("properties") or {}
+        return self._singularize_label(
+            self._humanize_identifier(
+                properties.get("displayName")
+                or model.get("tableReference", {}).get("table")
+                or model.get("name")
+            )
+        )
+
+    def _pluralize_label(self, label: str) -> str:
+        if label.endswith("y") and label[-2:] not in {"ay", "ey", "iy", "oy", "uy"}:
+            return f"{label[:-1]}ies"
+        if label.endswith(("s", "x", "z", "ch", "sh")):
+            return f"{label}es"
+        return f"{label}s"
+
+    def _relationship_description(
+        self,
+        from_model: dict,
+        to_model: dict,
+        relationship_type: str,
+    ) -> str:
+        from_label = self._model_label(from_model)
+        to_label = self._model_label(to_model)
+        from_plural = self._pluralize_label(from_label)
+        to_plural = self._pluralize_label(to_label)
+
+        if relationship_type == "ONE_TO_ONE":
+            return (
+                f"Each {from_label} is linked to one matching {to_label}, "
+                "connecting details that describe the same business record."
+            )
+        if relationship_type == "ONE_TO_MANY":
+            return (
+                f"Each {from_label} can be associated with multiple {to_plural}, "
+                f"supporting analysis of {to_plural} by {from_label}."
+            )
+        return (
+            f"Each {from_label} belongs to one {to_label}, "
+            f"so {from_plural} can be grouped and analyzed by {to_label}."
+        )
+
+    def _description_is_meaningful(self, value: Any) -> bool:
+        if not isinstance(value, str):
+            return False
+
+        text = value.strip()
+        if len(text) < 24:
+            return False
+
+        technical_patterns = [
+            r"\bappears to reference\b",
+            r"\breferences\b",
+            r"\bforeign key\b",
+            r"\bprimary key\b",
+            r"\w+\.\w+",
+        ]
+        return not any(
+            re.search(pattern, text, flags=re.IGNORECASE)
+            for pattern in technical_patterns
+        )
+
+    def _ensure_relationship_descriptions(self, response: dict, mdl: dict) -> dict:
+        relationships = response.get("relationships")
+        if not isinstance(relationships, list):
+            return response
+
+        models_by_name = {
+            model.get("name"): model
+            for model in mdl.get("models", []) or []
+            if model.get("name")
+        }
+        normalized_relationships = []
+        for relationship in relationships:
+            if not isinstance(relationship, dict):
+                continue
+
+            from_model = models_by_name.get(relationship.get("fromModel"))
+            to_model = models_by_name.get(relationship.get("toModel"))
+            if not from_model or not to_model:
+                normalized_relationships.append(relationship)
+                continue
+
+            reason = relationship.get("reason")
+            if not self._description_is_meaningful(reason):
+                relationship = {
+                    **relationship,
+                    "reason": self._relationship_description(
+                        from_model, to_model, relationship.get("type", "MANY_TO_ONE")
+                    ),
+                }
+
+            normalized_relationships.append(relationship)
+
+        return {**response, "relationships": normalized_relationships}
+
     def _primary_key(self, model: dict) -> Optional[str]:
         primary_key = model.get("primaryKey")
         columns = self._model_columns(model)
@@ -219,15 +357,9 @@ class RelationshipRecommendation:
             relationship_type = self._fallback_relationship_type(
                 from_model, from_column, to_model, to_column
             )
-            reason = (
-                f"{from_model_name}.{from_column} appears to reference "
-                f"{to_model_name}.{to_column}."
+            reason = self._relationship_description(
+                from_model, to_model, relationship_type
             )
-            if relationship_type == "ONE_TO_MANY":
-                reason = (
-                    f"{from_model_name}.{from_column} appears to be referenced by "
-                    f"{to_model_name}.{to_column}."
-                )
 
             seen.add(signature)
             seen_pairs.add(pair_signature)
@@ -350,6 +482,8 @@ class RelationshipRecommendation:
                     self._generation_timeout_seconds,
                 )
                 response = self._fallback_relationships(mdl_dict)
+
+            response = self._ensure_relationship_descriptions(response, mdl_dict)
 
             self._cache[request.id] = self.Resource(
                 id=request.id,

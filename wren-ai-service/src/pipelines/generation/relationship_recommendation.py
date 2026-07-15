@@ -27,13 +27,16 @@ You are an expert in database schema design and relationship recommendation. Giv
 - **type**: The type of relationship, which can be "MANY_TO_ONE", "ONE_TO_MANY" or "ONE_TO_ONE" only.
 - **toModel**: The name of the target model.
 - **toColumn**: The column in the target model that forms the relationship.
-- **reason**: The reason for recommending this relationship.
+- **reason**: A clear natural language business description of what the relationship means and why it is useful.
 
 Important guidelines:
 1. Do not recommend relationships within the same model (fromModel and toModel must be different).
 2. Only suggest relationships if there is a clear and beneficial reason to do so.
 3. If there are no good relationships to recommend or if there are fewer than two models, return an empty list of relationships.
 4. Use "MANY_TO_ONE" and "ONE_TO_MANY" instead of "MANY_TO_MANY" relationships.
+5. Write the reason for business users. Do not merely repeat raw table names, model names, or column names.
+6. Use available model names, display names, column names, descriptions, primary keys, and table context to explain how the entities are related.
+7. Prefer descriptions like "Each order belongs to one customer, so revenue can be analyzed by customer." over descriptions like "orders.customer_id references customers.id."
 
 Output all relationships in the following JSON structure:
 
@@ -46,7 +49,7 @@ Output all relationships in the following JSON structure:
             "type": "<relationship_type>",
             "toModel": "<model_name>",
             "toColumn": "<column_name>",
-            "reason": "<reason_for_this_relationship>"
+            "reason": "<business_description_for_this_relationship>"
         }
         ...
     ]
@@ -74,26 +77,17 @@ Use this for the relationship name and reason based on the localization language
 ## Start of Pipeline
 @observe(capture_input=False)
 def cleaned_models(mdl: dict) -> dict:
-    def remove_display_name(d: dict) -> dict:
-        if "properties" in d and isinstance(d["properties"], dict):
-            d["properties"] = d["properties"].copy()
-            d["properties"].pop("displayName", None)
-        return d
-
     def column_filter(columns: list[dict]) -> list[dict]:
         filtered_columns = []
         for column in columns:
             if "relationship" not in column:
                 # Create a copy of the column to avoid modifying the original
                 filtered_column = column.copy()
-                filtered_column = remove_display_name(filtered_column)
                 filtered_columns.append(filtered_column)
         return filtered_columns
 
     return [
-        remove_display_name(
-            {**model, "columns": column_filter(model.get("columns", []))}
-        )
+        {**model, "columns": column_filter(model.get("columns", []))}
         for model in mdl.get("models", [])
     ]
 
