@@ -37,6 +37,27 @@ def mdl_with_project_relationship_candidate():
     """
 
 
+@pytest.fixture
+def mdl_with_prefixed_project_model():
+    return """
+    {
+      "models": [
+        {
+          "name": "dbo_project",
+          "primaryKey": "id",
+          "tableReference": {"schema": "dbo", "table": "project"},
+          "columns": [{"name": "id"}, {"name": "name"}]
+        },
+        {
+          "name": "dbo_view",
+          "columns": [{"name": "id"}, {"name": "project_id"}]
+        }
+      ],
+      "relationships": []
+    }
+    """
+
+
 @pytest.mark.asyncio
 async def test_recommend_success(relationship_recommendation_service, mock_pipeline):
     request = RelationshipRecommendation.Input(id="test_id", mdl='{"key": "value"}')
@@ -161,6 +182,34 @@ async def test_recommend_empty_llm_result_returns_fallback_relationships(
     assert response.status == "finished"
     assert response.response["relationships"][0]["fromModel"] == "view"
     assert response.response["relationships"][0]["toModel"] == "project"
+
+
+@pytest.mark.asyncio
+async def test_recommend_fallback_matches_prefixed_model_name(
+    relationship_recommendation_service,
+    mock_pipeline,
+    mdl_with_prefixed_project_model,
+):
+    request = RelationshipRecommendation.Input(
+        id="test_id", mdl=mdl_with_prefixed_project_model
+    )
+    mock_pipeline.run.return_value = {"validated": {"relationships": []}}
+
+    await relationship_recommendation_service.recommend(request)
+    response = relationship_recommendation_service[request.id]
+
+    assert response.status == "finished"
+    assert response.response["relationships"] == [
+        {
+            "name": "dbo_view_dbo_project",
+            "fromModel": "dbo_view",
+            "fromColumn": "project_id",
+            "type": "MANY_TO_ONE",
+            "toModel": "dbo_project",
+            "toColumn": "id",
+            "reason": "dbo_view.project_id appears to reference dbo_project.id.",
+        }
+    ]
 
 
 def test_setitem(relationship_recommendation_service):

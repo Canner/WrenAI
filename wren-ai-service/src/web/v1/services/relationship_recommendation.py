@@ -50,6 +50,35 @@ class RelationshipRecommendation:
         text = re.sub(r"[^a-zA-Z0-9]", "", text).lower()
         return text[:-1] if text.endswith("s") else text
 
+    def _identifier_tokens(self, value: Any) -> list[str]:
+        text = "" if value is None else str(value)
+        text = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", text)
+        return [
+            self._normalize_identifier(token)
+            for token in re.split(r"[^a-zA-Z0-9]+", text)
+            if token
+        ]
+
+    def _model_aliases(self, model: dict) -> set[str]:
+        aliases: set[str] = set()
+        raw_values = [
+            model.get("name"),
+            model.get("properties", {}).get("displayName"),
+            model.get("tableReference", {}).get("table"),
+        ]
+
+        for value in raw_values:
+            normalized = self._normalize_identifier(value)
+            if normalized:
+                aliases.add(normalized)
+
+            tokens = self._identifier_tokens(value)
+            if tokens:
+                aliases.add(tokens[-1])
+                aliases.add("".join(tokens))
+
+        return aliases
+
     def _fallback_relationships(self, mdl: dict) -> dict:
         models = mdl.get("models", []) or []
         existing = {
@@ -62,9 +91,10 @@ class RelationshipRecommendation:
         }
         candidates = []
 
-        model_lookup = {
-            self._normalize_identifier(model.get("name")): model for model in models
-        }
+        model_lookup = {}
+        for model in models:
+            for alias in self._model_aliases(model):
+                model_lookup.setdefault(alias, model)
 
         for from_model in models:
             from_model_name = from_model.get("name")
