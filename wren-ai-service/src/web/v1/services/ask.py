@@ -1397,8 +1397,7 @@ class AskService:
                         sql_user_query = user_query
 
                         if intent == "MISLEADING_QUERY":
-                            general_result = await self._run_with_timeout(
-                                "Misleading assistance",
+                            asyncio.create_task(
                                 self._pipelines["misleading_assistance"].run(
                                     query=user_query,
                                     histories=histories,
@@ -1406,18 +1405,14 @@ class AskService:
                                         "db_schemas"
                                     ),
                                     language=ask_request.configurations.language,
+                                    query_id=query_id,
                                     custom_instruction=ask_request.custom_instruction,
-                                ),
-                            )
-                            self._general_streaming_results[query_id] = (
-                                self._extract_pipeline_reply(
-                                    general_result, "misleading_assistance"
                                 )
                             )
 
                             self._ask_results[query_id] = AskResultResponse(
                                 status="finished",
-                                type="MISLEADING_QUERY",
+                                type="GENERAL",
                                 rephrased_question=rephrased_question,
                                 intent_reasoning=intent_reasoning,
                                 trace_id=trace_id,
@@ -1427,8 +1422,7 @@ class AskService:
                             results["metadata"]["type"] = "MISLEADING_QUERY"
                             return results
                         elif intent == "GENERAL":
-                            general_result = await self._run_with_timeout(
-                                "Data assistance",
+                            asyncio.create_task(
                                 self._pipelines["data_assistance"].run(
                                     query=user_query,
                                     histories=histories,
@@ -1436,12 +1430,8 @@ class AskService:
                                         "db_schemas"
                                     ),
                                     language=ask_request.configurations.language,
+                                    query_id=query_id,
                                     custom_instruction=ask_request.custom_instruction,
-                                ),
-                            )
-                            self._general_streaming_results[query_id] = (
-                                self._extract_pipeline_reply(
-                                    general_result, "data_assistance"
                                 )
                             )
 
@@ -1457,17 +1447,12 @@ class AskService:
                             results["metadata"]["type"] = "GENERAL"
                             return results
                         elif intent == "USER_GUIDE":
-                            general_result = await self._run_with_timeout(
-                                "User guide assistance",
+                            asyncio.create_task(
                                 self._pipelines["user_guide_assistance"].run(
                                     query=user_query,
                                     language=ask_request.configurations.language,
+                                    query_id=query_id,
                                     custom_instruction=ask_request.custom_instruction,
-                                ),
-                            )
-                            self._general_streaming_results[query_id] = (
-                                self._extract_pipeline_reply(
-                                    general_result, "user_guide_assistance"
                                 )
                             )
 
