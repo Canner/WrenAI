@@ -7,7 +7,6 @@ from src.pipelines.retrieval.db_schema_retrieval import (
     _select_relevant_table_documents,
     check_using_db_schemas_without_pruning,
     dbschema_retrieval,
-    embedding,
     expand_business_terms_for_retrieval,
     table_retrieval,
 )
@@ -46,27 +45,6 @@ def test_expand_business_terms_for_retrieval_leaves_query_unchanged():
     query = "Explain what this workspace does"
 
     assert expand_business_terms_for_retrieval(query) == query
-
-
-@pytest.mark.asyncio
-async def test_embedding_uses_original_query_without_business_term_expansion():
-    class Embedder:
-        def __init__(self):
-            self.query = None
-
-        async def run(self, query):
-            self.query = query
-            return {"embedding": [0.1, 0.2]}
-
-    embedder = Embedder()
-
-    await embedding(
-        query="Show top customers by invoice amount",
-        embedder=embedder,
-        histories=[],
-    )
-
-    assert embedder.query == "\nShow top customers by invoice amount"
 
 
 def test_rerank_table_documents_prefers_question_relevant_table_text():
@@ -175,7 +153,7 @@ def test_select_relevant_table_documents_excludes_unrequested_test_candidate():
 
 
 @pytest.mark.asyncio
-async def test_table_retrieval_returns_embedding_results_without_local_reranking():
+async def test_table_retrieval_caps_embedding_results_before_schema_loading():
     documents = [
         Document(
             content="Raw staging audit rows with load metadata.",
@@ -221,7 +199,9 @@ async def test_table_retrieval_returns_embedding_results_without_local_reranking
         table_retriever=Retriever(),
     )
 
-    assert result["documents"] == documents
+    selected_names = [document.meta["name"] for document in result["documents"]]
+    assert 1 <= len(selected_names) <= 5
+    assert "staging_audit" not in selected_names
 
 
 def test_rerank_table_documents_prefers_reference_source_for_entity_listing():

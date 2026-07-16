@@ -161,7 +161,6 @@ class AskService:
         max_sql_correction_retries: int = 3,
         pipeline_timeout_seconds: int = 90,
         schema_retrieval_timeout_seconds: int = 180,
-        allow_schema_sql_shortcuts: bool = False,
         max_histories: int = 5,
         maxsize: int = 1_000_000,
         ttl: int = 120,
@@ -179,7 +178,6 @@ class AskService:
         self._allow_sql_diagnosis = allow_sql_diagnosis
         self._allow_sql_knowledge_retrieval = allow_sql_knowledge_retrieval
         self._enable_column_pruning = enable_column_pruning
-        self._allow_schema_sql_shortcuts = allow_schema_sql_shortcuts
         self._pipeline_timeout_seconds = pipeline_timeout_seconds
         self._schema_retrieval_timeout_seconds = schema_retrieval_timeout_seconds
         self._max_histories = max_histories
@@ -5473,7 +5471,6 @@ class AskService:
         sql: Optional[str],
         table_ddls: list[str],
         query: str | None = None,
-        strict_semantic_validation: bool = True,
     ) -> Optional[AskResult]:
         if isinstance(sql, str):
             sql = normalize_sql_direction_keywords(sql)
@@ -5570,42 +5567,41 @@ class AskService:
             )
             return None
 
+        invalid_unqualified_identifiers = self._invalid_unqualified_sql_identifiers(
+            ask_result.sql,
+            schema_tables,
+        )
+        if invalid_unqualified_identifiers:
+            logger.warning(
+                "Ignoring SQL because it references unqualified fields outside the active schema. "
+                "invalid_identifiers=%s sql=%s",
+                invalid_unqualified_identifiers,
+                ask_result.sql,
+            )
+            return None
+
+        invalid_output_aliases = self._invalid_sql_output_aliases(
+            ask_result.sql,
+            schema_tables,
+        )
+        if invalid_output_aliases:
+            logger.warning(
+                "Ignoring SQL because it aliases output fields to unavailable schema concepts. "
+                "invalid_aliases=%s sql=%s",
+                invalid_output_aliases,
+                ask_result.sql,
+            )
+            return None
+
         if not self._sql_references_explicit_table(ask_result.sql, query):
             return None
 
-        if strict_semantic_validation:
-            invalid_unqualified_identifiers = self._invalid_unqualified_sql_identifiers(
-                ask_result.sql,
-                schema_tables,
-            )
-            if invalid_unqualified_identifiers:
-                logger.warning(
-                    "Ignoring SQL because it references unqualified fields outside the active schema. "
-                    "invalid_identifiers=%s sql=%s",
-                    invalid_unqualified_identifiers,
-                    ask_result.sql,
-                )
-                return None
-
-            invalid_output_aliases = self._invalid_sql_output_aliases(
-                ask_result.sql,
-                schema_tables,
-            )
-            if invalid_output_aliases:
-                logger.warning(
-                    "Ignoring SQL because it aliases output fields to unavailable schema concepts. "
-                    "invalid_aliases=%s sql=%s",
-                    invalid_output_aliases,
-                    ask_result.sql,
-                )
-                return None
-
-            if not self._sql_matches_question_intent(
-                ask_result.sql,
-                query,
-                schema_tables,
-            ):
-                return None
+        if not self._sql_matches_question_intent(
+            ask_result.sql,
+            query,
+            schema_tables,
+        ):
+            return None
 
         return ask_result
 
@@ -6096,7 +6092,9 @@ class AskService:
                     )
 
                 historical_question_result = []
-                should_skip_pre_sql_retrieval = False
+                should_skip_pre_sql_retrieval = self._is_data_analysis_query(
+                    user_query
+                )
                 if should_skip_pre_sql_retrieval:
                     rephrased_question = user_query
                     intent_reasoning = (
@@ -6545,7 +6543,7 @@ class AskService:
                     "Retrieved tables for query_id %s: %s", query_id, table_names
                 )
 
-                if self._allow_schema_sql_shortcuts and not api_results and (
+                if not api_results and (
                     ranked_measure_sql := self._build_schema_ranked_measure_sql(
                         user_query,
                         table_ddls,
@@ -6566,7 +6564,7 @@ class AskService:
                         invalid_sql = ranked_measure_sql
                         error_message = "Schema-grounded ranked measure SQL was not valid for the active datasource schema."
 
-                if self._allow_schema_sql_shortcuts and not api_results and (
+                if not api_results and (
                     table_question_sql := self._build_schema_grounded_table_question_sql(
                         user_query, table_ddls
                     )
@@ -6586,7 +6584,7 @@ class AskService:
                         invalid_sql = table_question_sql
                         error_message = "Schema-grounded table SQL was not valid for the active datasource schema."
 
-                if self._allow_schema_sql_shortcuts and not api_results and (
+                if not api_results and (
                     explicit_table_preview := self._build_explicit_table_preview_sql(
                         user_query, table_ddls
                     )
@@ -6610,7 +6608,7 @@ class AskService:
                         invalid_sql = explicit_sql
                         error_message = "Explicit table preview SQL was not valid for the active datasource schema."
 
-                if self._allow_schema_sql_shortcuts and not api_results and (
+                if not api_results and (
                     audit_log_activity_sql := self._build_audit_log_activity_sql(
                         user_query, table_ddls, table_names=table_names
                     )
@@ -6633,8 +6631,6 @@ class AskService:
                         )
 
                 if (
-                    self._allow_schema_sql_shortcuts
-                    and
                     not api_results
                     and self._is_data_analysis_query(user_query)
                     and (
@@ -6660,7 +6656,7 @@ class AskService:
                             "Schema-grounded SQL was not valid for the active datasource schema and question intent."
                         )
 
-                if self._allow_schema_sql_shortcuts and not api_results and any(
+                if not api_results and any(
                     term in user_query.lower()
                     for term in (
                         "pcb",
@@ -6693,7 +6689,7 @@ class AskService:
                                 "Schema-grounded operational SQL was not valid for the active datasource schema and question intent."
                             )
 
-                if self._allow_schema_sql_shortcuts and not api_results and (
+                if not api_results and (
                     deterministic_sales_sql := self._build_schema_grounded_sales_sql(
                         user_query, table_ddls
                     )
@@ -6767,26 +6763,24 @@ class AskService:
                             table_names,
                         )
 
-                        full_schema_sql_candidates = ()
-                        if self._allow_schema_sql_shortcuts:
-                            full_schema_preview = self._build_explicit_table_preview_sql(
+                        full_schema_preview = self._build_explicit_table_preview_sql(
+                            user_query, table_ddls
+                        )
+                        full_schema_sql_candidates = (
+                            self._build_schema_grounded_table_question_sql(
                                 user_query, table_ddls
-                            )
-                            full_schema_sql_candidates = (
-                                self._build_schema_grounded_table_question_sql(
-                                    user_query, table_ddls
-                                ),
-                                full_schema_preview[0] if full_schema_preview else None,
-                                self._build_audit_log_activity_sql(
-                                    user_query, table_ddls, table_names=table_names
-                                ),
-                                self._build_schema_grounded_analytics_sql(
-                                    user_query, table_ddls
-                                ),
-                                self._build_schema_grounded_sales_sql(
-                                    user_query, table_ddls
-                                ),
-                            )
+                            ),
+                            full_schema_preview[0] if full_schema_preview else None,
+                            self._build_audit_log_activity_sql(
+                                user_query, table_ddls, table_names=table_names
+                            ),
+                            self._build_schema_grounded_analytics_sql(
+                                user_query, table_ddls
+                            ),
+                            self._build_schema_grounded_sales_sql(
+                                user_query, table_ddls
+                            ),
+                        )
                         for full_schema_sql in full_schema_sql_candidates:
                             if not full_schema_sql:
                                 continue
@@ -6831,7 +6825,7 @@ class AskService:
                     results["metadata"]["type"] = "TEXT_TO_SQL"
                     return results
 
-                if self._allow_schema_sql_shortcuts and not documents:
+                if not documents:
                     if heuristic_sql := self._build_heuristic_text_to_sql_fallback(
                         user_query, table_ddls, table_names=table_names
                     ):
@@ -7115,7 +7109,6 @@ class AskService:
                         sql_valid_result.get("sql"),
                         table_ddls,
                         sql_user_query,
-                        strict_semantic_validation=False,
                     ):
                         api_results = [ask_result]
                     else:
@@ -7201,7 +7194,6 @@ class AskService:
                                 valid_generation_result.get("sql"),
                                 table_ddls,
                                 sql_user_query,
-                                strict_semantic_validation=False,
                             ):
                                 api_results = [ask_result]
                                 break
@@ -7234,10 +7226,8 @@ class AskService:
                 results["ask_result"] = api_results
                 results["metadata"]["type"] = "TEXT_TO_SQL"
             else:
-                if self._allow_schema_sql_shortcuts and (
-                    heuristic_sql := self._build_heuristic_text_to_sql_fallback(
-                        user_query, table_ddls, table_names=table_names
-                    )
+                if heuristic_sql := self._build_heuristic_text_to_sql_fallback(
+                    user_query, table_ddls, table_names=table_names
                 ):
                     logger.info(
                         "Using heuristic text-to-sql fallback for query_id %s: %s",
@@ -7271,41 +7261,17 @@ class AskService:
                         return results
 
                 logger.exception(f"ask pipeline - NO_RELEVANT_SQL: {user_query}")
-                failure_message = (
-                    error_message
-                    or "SQL generation could not produce a valid query for the retrieved schema."
-                )
-                failure_code = (
-                    "NO_RELEVANT_SQL"
-                    if documents or table_names
-                    else "NO_RELEVANT_DATA"
-                )
                 if not self._is_stopped(query_id, self._ask_results):
-                    if failure_code == "NO_RELEVANT_SQL":
-                        self._ask_results[query_id] = (
-                            self._build_failed_text_to_sql_response(
-                                trace_id,
-                                failure_message,
-                                rephrased_question=rephrased_question,
-                                intent_reasoning=intent_reasoning,
-                                retrieved_tables=table_names,
-                                sql_generation_reasoning=sql_generation_reasoning,
-                                invalid_sql=invalid_sql,
-                                is_followup=True if histories else False,
-                                code="NO_RELEVANT_SQL",
-                            )
+                    self._ask_results[query_id] = (
+                        self._build_no_relevant_active_datasource_response(
+                            trace_id,
+                            rephrased_question=rephrased_question,
+                            intent_reasoning=intent_reasoning,
+                            retrieved_tables=table_names,
+                            sql_generation_reasoning=sql_generation_reasoning,
+                            is_followup=True if histories else False,
                         )
-                    else:
-                        self._ask_results[query_id] = (
-                            self._build_no_relevant_active_datasource_response(
-                                trace_id,
-                                rephrased_question=rephrased_question,
-                                intent_reasoning=intent_reasoning,
-                                retrieved_tables=table_names,
-                                sql_generation_reasoning=sql_generation_reasoning,
-                                is_followup=True if histories else False,
-                            )
-                        )
+                    )
                 if error_message or invalid_sql:
                     logger.info(
                         "Suppressed technical SQL failure for query_id %s. "
@@ -7314,11 +7280,9 @@ class AskService:
                         error_message,
                         invalid_sql,
                     )
-                results["metadata"]["error_type"] = failure_code
+                results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
                 results["metadata"]["error_message"] = (
-                    failure_message
-                    if failure_code == "NO_RELEVANT_SQL"
-                    else NO_RELEVANT_ACTIVE_DATASOURCE_MESSAGE
+                    NO_RELEVANT_ACTIVE_DATASOURCE_MESSAGE
                 )
                 results["metadata"]["type"] = "TEXT_TO_SQL"
 
