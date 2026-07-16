@@ -85,7 +85,9 @@ def _model_seeds(
         is_pk = norm_name in primary_keys
         # Identifiers are numeric by storage but not measures: summing a join
         # key (e.g. SUM(customer_id)) is semantically meaningless.
-        is_identifier = is_pk or norm_name in relationship_keys or _is_id_like(str(col_name))
+        is_identifier = (
+            is_pk or norm_name in relationship_keys or _is_id_like(str(col_name))
+        )
 
         if (
             col_type in _NUMERIC_TYPES
