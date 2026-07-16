@@ -12,14 +12,12 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
+    SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
     construct_instructions,
-    construct_valid_table_columns,
-    construct_valid_table_names,
     get_calculated_field_instructions,
     get_json_field_instructions,
     get_metric_instructions,
-    get_sql_generation_model_kwargs,
     get_sql_generation_system_prompt,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
@@ -30,22 +28,9 @@ logger = logging.getLogger("wren-ai-service")
 
 
 sql_generation_user_prompt_template = """
-### TARGET DATA SOURCE ###
-{{ data_source }}
-
-### ACTIVE DATASOURCE METADATA ###
-This is the complete deployed metadata for the active datasource, including schema,
-tables, columns, metrics, views, and relationships. Use only this metadata when
-interpreting intent and generating SQL.
+### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
-{% endfor %}
-
-### VALID TABLE NAMES ###
-Only use these exact table names from the schema. Do not invent, rename, singularize,
-pluralize, or add catalog/schema prefixes unless the table name is shown that way here.
-{% for table_name in valid_table_names %}
-- {{ table_name }}
 {% endfor %}
 
 {% if calculated_field_instructions %}
@@ -87,13 +72,6 @@ SQL:
 ### QUESTION ###
 User's Question: {{ query }}
 
-### INTENT AND SCHEMA GROUNDING ###
-Interpret the user's business terms by matching them to explicit tables, columns,
-metrics, views, and relationships in ACTIVE DATASOURCE METADATA. Do not answer with
-general guidance when the question can be answered with SQL over the active metadata.
-Never reuse table or column names from SQL SAMPLES unless those exact names also
-appear in ACTIVE DATASOURCE METADATA or VALID TABLE NAMES for the active datasource.
-
 {% if sql_generation_reasoning %}
 ### REASONING PLAN ###
 {{ sql_generation_reasoning }}
@@ -109,7 +87,6 @@ def prompt(
     query: str,
     documents: list[str],
     prompt_builder: PromptBuilder,
-    data_source: str,
     sql_generation_reasoning: str | None = None,
     sql_samples: list[dict] | None = None,
     instructions: list[dict] | None = None,
@@ -119,25 +96,9 @@ def prompt(
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
-    schema_context = "\n".join(documents or []).lower()
-    has_pcb_context = any(
-        term in schema_context
-        for term in (
-            "dbo_debugentries",
-            "debugentryid",
-            "failure_patterns",
-            "repair_logs",
-            "failedat",
-            "failuresys",
-            "workorder",
-        )
-    )
     _prompt = prompt_builder.run(
         query=query,
-        data_source=data_source,
         documents=documents,
-        has_pcb_context=has_pcb_context,
-        valid_table_names=construct_valid_table_names(documents),
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
@@ -148,9 +109,7 @@ def prompt(
             else ""
         ),
         metric_instructions=(
-            get_metric_instructions(sql_knowledge, data_source=data_source)
-            if has_metric
-            else ""
+            get_metric_instructions(sql_knowledge) if has_metric else ""
         ),
         json_field_instructions=(
             get_json_field_instructions(sql_knowledge) if has_json_field else ""
@@ -167,13 +126,9 @@ async def generate_sql(
     prompt: dict,
     generator: Any,
     generator_name: str,
-    data_source: str,
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
-    current_system_prompt = get_sql_generation_system_prompt(
-        sql_knowledge,
-        data_source=data_source,
-    )
+    current_system_prompt = get_sql_generation_system_prompt(sql_knowledge)
     return await generator(
         prompt=prompt.get("prompt"), current_system_prompt=current_system_prompt
     ), generator_name
@@ -183,7 +138,6 @@ async def generate_sql(
 async def post_process(
     generate_sql: dict,
     post_processor: SQLGenPostProcessor,
-    documents: list[str],
     data_source: str,
     project_id: str | None = None,
     use_dry_plan: bool = False,
@@ -197,8 +151,6 @@ async def post_process(
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
         allow_data_preview=allow_data_preview,
-        valid_table_names=construct_valid_table_names(documents),
-        valid_table_columns=construct_valid_table_columns(documents),
     )
 
 
@@ -220,7 +172,7 @@ class SQLGeneration(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=get_sql_generation_system_prompt(None),
-                generation_kwargs=get_sql_generation_model_kwargs(llm_provider),
+                generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
             "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
@@ -253,7 +205,10 @@ class SQLGeneration(BasicPipeline):
     ):
         logger.info("SQL Generation pipeline is running...")
 
-        metadata = await retrieve_metadata(project_id or "", self._retriever)
+        if use_dry_plan:
+            metadata = await retrieve_metadata(project_id or "", self._retriever)
+        else:
+            metadata = {}
 
         return await self._pipe.execute(
             ["post_process"],
