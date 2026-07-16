@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from loguru import logger
 from mcp.server.fastmcp import FastMCP
@@ -32,6 +32,11 @@ class ServeContext:
     engine: Any  # wren.engine.WrenEngine
     allow_write: bool
     no_connect: bool
+
+
+def _memory_path(ctx: ServeContext) -> str:
+    """Return the project-local memory path derived solely from ctx.project."""
+    return str(ctx.project / ".wren" / "memory")
 
 
 def _normalize_value(value: Any) -> Any:
@@ -71,10 +76,36 @@ def _table_to_result(table, *, truncated: bool) -> dict:
 
 
 def _query_with_limit_probe(ctx: ServeContext, sql: str, limit: int | None) -> dict:
-    """Run ``sql`` capped at ``MAX_ROW_LIMIT``, probing one extra row to detect truncation."""
+    """Run arbitrary SQL with a connector-applied N+1 truncation probe.
+
+    The connector owns dialect-specific row limiting for opaque user SQL. The
+    requested limit is capped at ``MAX_ROW_LIMIT`` before the probe is applied.
+    """
+    if limit is not None and limit < 0:
+        raise ValueError(f"run_sql limit must be non-negative, got {limit}.")
     effective_limit = DEFAULT_ROW_LIMIT if limit is None else limit
     effective_limit = min(effective_limit, MAX_ROW_LIMIT)
     table = ctx.engine.query(sql, effective_limit + 1)
+    truncated = table.num_rows > effective_limit
+    if truncated:
+        table = table.slice(0, effective_limit)
+    return _table_to_result(table, truncated=truncated)
+
+
+def _query_cube_with_limit_probe(
+    ctx: ServeContext, build_sql: Callable[[int], str], limit: int | None
+) -> dict:
+    """Run cube SQL with an embedded N+1 truncation probe.
+
+    The generated SQL carries the row cap, and the connector receives no
+    additional limit. This preserves valid ``LIMIT``/``OFFSET`` ordering for
+    append-style connectors and bounds connectors that materialize results
+    before Python slicing.
+    """
+    effective_limit = DEFAULT_ROW_LIMIT if limit is None else limit
+    effective_limit = min(effective_limit, MAX_ROW_LIMIT)
+    sql = build_sql(effective_limit + 1)
+    table = ctx.engine.query(sql, None)
     truncated = table.num_rows > effective_limit
     if truncated:
         table = table.slice(0, effective_limit)
@@ -93,6 +124,7 @@ def _register_query_tools(mcp: FastMCP, ctx: ServeContext) -> None:
             SQL is written against MDL model names, not raw database tables.
             Applies a default cap of 1000 rows when ``limit`` is not given, and
             a hard maximum of 10000 rows regardless of the requested limit.
+            Negative limits are rejected.
             """
             return _query_with_limit_probe(ctx, sql, limit)
 
@@ -135,23 +167,32 @@ def _register_query_tools(mcp: FastMCP, ctx: ServeContext) -> None:
 
             if not cube or not measures:
                 raise ValueError("query_cube requires 'cube' and at least one measure.")
+            if limit is not None and limit < 0:
+                raise ValueError(f"query_cube limit must be non-negative, got {limit}.")
 
-            cube_query = _build_cube_query(
-                cube,
-                ",".join(measures),
-                ",".join(dimensions or []),
-                time_dimension,
-                filters or [],
-                limit,
-                offset,
-            )
             mdl_json = json.dumps(context.build_json(ctx.project))
-            sql = cube_query_to_sql(json.dumps(cube_query), mdl_json)
+
+            def build_sql(row_limit: int | None) -> str:
+                """Build cube SQL with the caller-supplied row limit.
+
+                SQL-only requests supply the user limit; execution supplies
+                the probe limit.
+                """
+                cube_query = _build_cube_query(
+                    cube,
+                    ",".join(measures),
+                    ",".join(dimensions or []),
+                    time_dimension,
+                    filters or [],
+                    row_limit,
+                    offset,
+                )
+                return cube_query_to_sql(json.dumps(cube_query), mdl_json)
 
             if sql_only:
-                return {"sql": sql}
+                return {"sql": build_sql(limit)}
 
-            return _query_with_limit_probe(ctx, sql, limit)
+            return _query_cube_with_limit_probe(ctx, build_sql, limit)
 
     @mcp.tool(
         annotations=ToolAnnotations(title="Dry Plan SQL", readOnlyHint=True),
@@ -329,12 +370,7 @@ def _register_knowledge_tools(mcp: FastMCP, ctx: ServeContext) -> None:
         """
         from wren.memory.index_backend import get_index  # noqa: PLC0415
 
-        try:
-            from wren.memory.cli import _default_memory_path  # noqa: PLC0415
-
-            mem_path = str(_default_memory_path())
-        except ImportError:
-            mem_path = str(ctx.project / ".wren" / "memory")
+        mem_path = _memory_path(ctx)
 
         idx = get_index(ctx.project, mem_path)
         return {"matches": idx.search(question, limit=limit)}
@@ -362,10 +398,9 @@ def _register_knowledge_tools(mcp: FastMCP, ctx: ServeContext) -> None:
 
         manifest = build_json(ctx.project)
         try:
-            from wren.memory.cli import _default_memory_path  # noqa: PLC0415
             from wren.memory.store import MemoryStore  # noqa: PLC0415
 
-            store = MemoryStore(path=str(_default_memory_path()))
+            store = MemoryStore(path=_memory_path(ctx))
             return store.get_context(
                 manifest,
                 question,
@@ -413,10 +448,9 @@ def _register_knowledge_tools(mcp: FastMCP, ctx: ServeContext) -> None:
         "user", "seed"). Returns ``{"queries": [...]}``.
         """
         try:
-            from wren.memory.cli import _default_memory_path  # noqa: PLC0415
             from wren.memory.store import MemoryStore  # noqa: PLC0415
 
-            store = MemoryStore(path=str(_default_memory_path()))
+            store = MemoryStore(path=_memory_path(ctx))
             rows, _total = store.list_queries(
                 source=source,
                 limit=limit if limit is not None else MAX_ROW_LIMIT,
@@ -491,10 +525,9 @@ def _register_write_tools(mcp: FastMCP, ctx: ServeContext) -> None:
         )
 
         try:
-            from wren.memory.cli import _default_memory_path  # noqa: PLC0415
             from wren.memory.store import MemoryStore  # noqa: PLC0415
 
-            MemoryStore(path=str(_default_memory_path())).store_query(
+            MemoryStore(path=_memory_path(ctx)).store_query(
                 nl_query, sql_query, datasource=datasource, tags=tags
             )
         except Exception as e:
@@ -589,30 +622,54 @@ def _register_resources(mcp: FastMCP, ctx: ServeContext) -> None:
         return _read_knowledge_file(f"{subdir}/{name}")
 
 
-def _register_prompts(mcp: FastMCP) -> None:
+def _workflow_text(ctx: ServeContext, question: str | None = None) -> str:
+    """Build the `wren_workflow` prompt body, reflecting the registered tool set.
+
+    The run_sql/dry_run/query_cube steps only apply when `ctx.no_connect` is
+    False; the store_query step only applies when `ctx.allow_write` is True.
+    Steps are numbered sequentially after gating so the list stays 1..N with
+    no gaps regardless of which flags are set.
+    """
+    intro = f'The user asked: "{question}"\n\n' if question else ""
+    steps = [
+        "Read the `wren://mdl` resource and use `list_models` / "
+        "`describe_model` to understand the schema; for schema, read "
+        "`wren://mdl` or use `get_context` / `describe_schema`; browse "
+        "project knowledge via `list_knowledge` + the "
+        "`wren://knowledge/{path}` resource.",
+        "Call `get_instructions` for business rules that affect how to "
+        "interpret the data.",
+        "Call `recall_queries` for proven NL->SQL exemplars similar to "
+        "the question, or `list_stored_queries` to browse all of them.",
+    ]
+    if ctx.no_connect:
+        steps.append(
+            "Write SQL in the project's dialect and expand it with "
+            "`dry_plan` to inspect the target-dialect SQL (no database "
+            "connection is available in this mode)."
+        )
+    else:
+        steps.append(
+            "Write SQL in the project's dialect, validate it with "
+            "`dry_run`, then execute it with `run_sql`."
+        )
+        steps.append(
+            "For named metrics, prefer `query_cube` over hand-written aggregate SQL."
+        )
+    if ctx.allow_write:
+        steps.append(
+            "Once the answer is confirmed correct, optionally call "
+            "`store_query` to persist the NL->SQL pair for future recall."
+        )
+    numbered = "\n".join(f"{i}. {step}" for i, step in enumerate(steps, start=1))
+    return f"{intro}Follow this workflow to answer a data question:\n{numbered}"
+
+
+def _register_prompts(mcp: FastMCP, ctx: ServeContext) -> None:
     @mcp.prompt()
     def wren_workflow(question: str | None = None) -> str:
         """SOP for answering a data question with the wren MCP tools."""
-        intro = f'The user asked: "{question}"\n\n' if question else ""
-        return (
-            f"{intro}"
-            "Follow this workflow to answer a data question:\n"
-            "1. Read the `wren://mdl` resource and use `list_models` / "
-            "`describe_model` to understand the schema; for schema, read "
-            "`wren://mdl` or use `get_context` / `describe_schema`; browse "
-            "project knowledge via `list_knowledge` + the "
-            "`wren://knowledge/{path}` resource.\n"
-            "2. Call `get_instructions` for business rules that affect how to "
-            "interpret the data.\n"
-            "3. Call `recall_queries` for proven NL->SQL exemplars similar to "
-            "the question, or `list_stored_queries` to browse all of them.\n"
-            "4. Write SQL in the project's dialect, validate it with `dry_run`, "
-            "then execute it with `run_sql`.\n"
-            "5. For named metrics, prefer `query_cube` over hand-written "
-            "aggregate SQL.\n"
-            "6. Once the answer is confirmed correct, optionally call "
-            "`store_query` to persist the NL->SQL pair for future recall."
-        )
+        return _workflow_text(ctx, question)
 
 
 def build_server(ctx: ServeContext) -> FastMCP:
@@ -625,7 +682,7 @@ def build_server(ctx: ServeContext) -> FastMCP:
     if ctx.allow_write:
         _register_write_tools(mcp, ctx)
     _register_resources(mcp, ctx)
-    _register_prompts(mcp)
+    _register_prompts(mcp, ctx)
 
     return mcp
 

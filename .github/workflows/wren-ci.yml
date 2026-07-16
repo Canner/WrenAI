@@ -69,8 +69,13 @@ jobs:
         # Run the whole tests/unit/ tree rather than filtering on `-m unit`:
         # the marker is opt-in, so any unmarked file (e.g. test_context_cli.py)
         # was silently skipped. Exclude test_memory.py — it needs the `memory`
-        # extra and runs in the dedicated `memory tests` job below.
-        run: uv run --no-sync pytest tests/unit/ -v --ignore=tests/unit/test_memory.py
+        # extra and runs in the dedicated `memory tests` job below. Exclude
+        # test_mcp_server.py — it needs the `mcp` extra and runs in the
+        # dedicated `mcp tests` job below.
+        run: |
+          uv run --no-sync pytest tests/unit/ -v \
+            --ignore=tests/unit/test_memory.py \
+            --ignore=tests/unit/test_mcp_server.py
 
   test-connector:
     name: ${{ matrix.datasource }} tests
@@ -205,3 +210,42 @@ jobs:
         env:
           WREN_EMBEDDING_MODEL: paraphrase-MiniLM-L3-v2
         run: uv run --no-sync pytest tests/unit/test_memory.py -v
+
+  test-mcp:
+    name: mcp tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: core/wren
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ./core/wren-core-py/target/
+          key: ${{ runner.os }}-cargo-wren-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build wren-core-py wheel
+        working-directory: core/wren-core-py
+        run: |
+          uv sync --locked --no-install-project
+          uv run --no-sync maturin build
+      - name: Install dependencies
+        run: |
+          uv sync --locked --extra mcp
+          uv pip install --reinstall --no-index --find-links ../wren-core-py/target/wheels/ wren-core-py
+      - name: Run mcp tests
+        run: uv run --no-sync pytest tests/unit/test_mcp_server.py -v
