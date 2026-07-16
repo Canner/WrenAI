@@ -450,7 +450,20 @@ def _make_fake_model_class(calls: list, raise_on=None):
     import numpy as np  # noqa: PLC0415
 
     class _Fake:
-        def __init__(self, *args, **kwargs):
+        def __init__(
+            self,
+            model_name_or_path=None,
+            *,
+            device=None,
+            trust_remote_code=False,
+            local_files_only=False,
+        ):
+            kwargs = {
+                "model_name_or_path": model_name_or_path,
+                "device": device,
+                "trust_remote_code": trust_remote_code,
+                "local_files_only": local_files_only,
+            }
             calls.append(kwargs)
             if raise_on is not None:
                 exc = raise_on(kwargs)
@@ -487,7 +500,12 @@ class TestLocalFirstEmbeddings:
         fn = self._adapter("fake-model-local-first")
         fn.compute_source_embeddings(["hello"])
         assert len(calls) == 1
-        assert calls[0]["local_files_only"] is True
+        assert calls[0] == {
+            "model_name_or_path": "fake-model-local-first",
+            "device": "cpu",
+            "trust_remote_code": True,
+            "local_files_only": True,
+        }
 
     def test_oserror_falls_back_to_online_construction(self, monkeypatch):
         calls: list[dict] = []
@@ -505,7 +523,7 @@ class TestLocalFirstEmbeddings:
         fn.compute_source_embeddings(["hello"])
         assert len(calls) == 2
         assert calls[0]["local_files_only"] is True
-        assert "local_files_only" not in calls[1]
+        assert calls[1]["local_files_only"] is False
 
     def test_non_oserror_is_not_swallowed(self, monkeypatch):
         calls: list[dict] = []
