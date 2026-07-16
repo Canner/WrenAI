@@ -362,80 +362,7 @@ class AskService:
         return False
 
     def _rewrite_query_for_text_to_sql(self, query: str) -> str:
-        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
-        if not normalized:
-            return query
-
-        guidance: list[str] = []
-
-        if any(
-            term in normalized
-            for term in ("chart", "bar chart", "line chart", "pie chart", "graph")
-        ):
-            guidance.append(
-                "Return SQL only for the aggregated dataset required to build the requested chart."
-            )
-
-        if any(
-            term in normalized
-            for term in (
-                "failure category",
-                "failure categories",
-                "common failure",
-                "common failures",
-                "failure code",
-                "top 10",
-                "most common",
-            )
-        ):
-            guidance.append(
-                "Use an exposed failure category, failure name, or failure code field from the schema and return that dimension with a count metric."
-            )
-
-        if any(
-            term in normalized
-            for term in ("monthly", "last 12 months", "last month", "trend", "volume")
-        ):
-            guidance.append(
-                "Use a real timestamp column from the schema and aggregate results by calendar month when a monthly trend is requested."
-            )
-
-        if re.search(
-            r"\b(?:by|across|per|each|grouped by|group by)\s+[a-z][a-z0-9 _-]*",
-            normalized,
-        ) or "over time" in normalized:
-            guidance.append(
-                "Preserve explicit grouping dimensions requested by the question, such as market, region, currency, product, customer, status, type, or category, using only matching columns exposed in the provided schema."
-            )
-
-        if any(term in normalized for term in ("currency", "currencies", "fx")):
-            guidance.append(
-                "For currency questions, use an exposed currency, money, exchange, or FX code/name column from the schema and group by it."
-            )
-
-        if any(
-            term in normalized
-            for term in (
-                "amount",
-                "cost",
-                "revenue",
-                "sales value",
-                "sum",
-                "total",
-                "value",
-            )
-        ) and not any(
-            term in normalized
-            for term in ("count", "how many", "number of records", "record count")
-        ):
-            guidance.append(
-                "When the question asks for total, sum, amount, value, revenue, or cost, aggregate an exposed numeric measure with SUM; use COUNT only for record-count questions."
-            )
-
-        if not guidance:
-            return query
-
-        return f"{query}\n\nSQL generation guidance:\n- " + "\n- ".join(guidance)
+        return query
 
     def _schema_contains(
         self,
@@ -1898,18 +1825,6 @@ class AskService:
                 and table_name not in table_names
             ):
                 table_names.append(table_name)
-        if re.search(
-            r"\b(?:repair\s+logs?|repair\s+tickets?|board\s+models?)\b",
-            query or "",
-            flags=re.IGNORECASE,
-        ):
-            for table_name in ("repair_logs", "dbo_repair_logs"):
-                if table_name not in table_names:
-                    table_names.append(table_name)
-        if re.search(r"\bticket\s+labels?\b", query or "", flags=re.IGNORECASE):
-            for table_name in ("ticket_labels", "dbo_ticket_labels"):
-                if table_name not in table_names:
-                    table_names.append(table_name)
         return table_names
 
     def _explicit_table_name_candidates(self, table_name: str) -> list[str]:
@@ -5814,16 +5729,11 @@ class AskService:
         request_explicit_table_names = self._normalize_explicit_table_names(
             ask_request.explicit_tables
         )
-        query_explicit_table_names = self._normalize_explicit_table_names(
-            self._extract_explicit_table_names_from_query(user_query)
-        )
         forced_request_explicit_table_names = self._forced_explicit_table_names(
             request_explicit_table_names,
             source="request",
         )
-        explicit_table_names = (
-            forced_request_explicit_table_names or query_explicit_table_names
-        )
+        explicit_table_names = forced_request_explicit_table_names
         retrieval_table_names = explicit_table_names or None
 
         try:

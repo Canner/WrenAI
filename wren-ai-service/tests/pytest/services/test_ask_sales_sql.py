@@ -184,15 +184,13 @@ def test_data_query_timeout_retry_does_not_allow_full_project_schema():
     assert service._should_retry_selected_schema_after_retrieval_timeout(["orders"])
 
 
-def test_rewrite_query_for_text_to_sql_guides_total_amount_to_sum():
+def test_rewrite_query_for_text_to_sql_preserves_user_question():
     service = AskService.__new__(AskService)
 
-    rewritten = service._rewrite_query_for_text_to_sql(
-        "Show total invoice amount by currency."
-    )
+    query = "Show total invoice amount by currency."
+    rewritten = service._rewrite_query_for_text_to_sql(query)
 
-    assert "aggregate an exposed numeric measure with SUM" in rewritten
-    assert "use COUNT only for record-count questions" in rewritten
+    assert rewritten == query
 
 
 def test_validated_sql_rejects_count_for_total_amount_question():
@@ -604,7 +602,7 @@ def test_extract_explicit_table_names_from_repair_logs_phrase():
 
     assert service._extract_explicit_table_names_from_query(
         "Count repair logs by failure_code in repair logs."
-    ) == ["repair_logs", "dbo_repair_logs"]
+    ) == []
 
 
 def test_extract_explicit_table_names_from_pcb_repair_phrases():
@@ -612,10 +610,10 @@ def test_extract_explicit_table_names_from_pcb_repair_phrases():
 
     assert service._extract_explicit_table_names_from_query(
         "How many different board models are present in the dbo.repair_logs table?"
-    ) == ["dbo.repair_logs", "repair_logs", "dbo_repair_logs"]
+    ) == ["dbo.repair_logs"]
     assert service._extract_explicit_table_names_from_query(
         "Display top 10 ticket labels."
-    ) == ["ticket_labels", "dbo_ticket_labels"]
+    ) == []
 
 
 def test_explicit_table_name_candidates_include_dotted_and_short_forms():
