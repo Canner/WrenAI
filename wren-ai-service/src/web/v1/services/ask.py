@@ -116,39 +116,6 @@ class AskResultResponse(_AskResultResponse):
 
 
 class AskService:
-    _HISTORICAL_QUESTION_STOP_WORDS = {
-        "a",
-        "an",
-        "and",
-        "are",
-        "as",
-        "at",
-        "be",
-        "by",
-        "can",
-        "chart",
-        "create",
-        "each",
-        "for",
-        "from",
-        "give",
-        "graph",
-        "how",
-        "in",
-        "is",
-        "me",
-        "of",
-        "on",
-        "please",
-        "show",
-        "the",
-        "to",
-        "total",
-        "what",
-        "which",
-        "with",
-    }
-
     def __init__(
         self,
         pipelines: Dict[str, BasicPipeline],
@@ -191,64 +158,19 @@ class AskService:
 
         return False
 
-    @classmethod
-    def _normalize_historical_question_text(cls, question: str | None) -> str:
-        return " ".join(re.findall(r"[a-z0-9]+", (question or "").lower()))
-
-    @classmethod
-    def _historical_question_tokens(cls, question: str | None) -> set[str]:
-        normalized = cls._normalize_historical_question_text(question)
-        return {
-            token
-            for token in normalized.split()
-            if len(token) > 1 and token not in cls._HISTORICAL_QUESTION_STOP_WORDS
-        }
-
-    @classmethod
-    def _is_reusable_historical_question(
-        cls, query: str | None, historical_question: str | None
-    ) -> bool:
-        normalized_query = cls._normalize_historical_question_text(query)
-        normalized_historical_question = cls._normalize_historical_question_text(
-            historical_question
-        )
-        if not normalized_query or not normalized_historical_question:
-            return False
-        return normalized_query == normalized_historical_question
-
-    @classmethod
-    def _should_use_histories_for_query(cls, query: str | None) -> bool:
-        normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
-        if not normalized:
-            return False
-
-        contextual_prefixes = (
-            "also ",
-            "and ",
-            "but ",
-            "for those ",
-            "for that ",
-            "for the same ",
-            "from that ",
-            "how about ",
-            "in that ",
-            "now ",
-            "same ",
-            "show more",
-            "show the same",
-            "then ",
-            "use that ",
-            "what about ",
-            "what if ",
-        )
-        if normalized.startswith(contextual_prefixes):
-            return True
-
-        contextual_patterns = (
-            r"\b(previous|last|above|earlier|same|those|that|these|them|it|its|there)\b",
-            r"\b(add|break down|compare|filter|group|instead|only|sort|split)\b.+\b(by|to|with)\b",
-        )
-        return any(re.search(pattern, normalized) for pattern in contextual_patterns)
+    async def _run_with_timeout(
+        self,
+        label: str,
+        awaitable,
+        *,
+        timeout_seconds: Optional[int] = None,
+    ):
+        timeout = timeout_seconds or self._pipeline_timeout_seconds
+        try:
+            return await asyncio.wait_for(awaitable, timeout=timeout)
+        except TimeoutError:
+            logger.warning("%s timed out after %s seconds", label, timeout)
+            raise
 
     def _is_greeting_query(self, query: str) -> bool:
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
@@ -266,13 +188,6 @@ class AskService:
             "thank you",
         }
         return normalized in greeting_patterns
-
-    def _should_reuse_historical_question_sql(
-        self,
-        query: str,
-        histories: list[AskHistory] | None,
-    ) -> bool:
-        return False
 
     def _parse_schema_tables(self, table_ddls: list[str]) -> list[dict[str, Any]]:
         tables: list[dict[str, Any]] = []
@@ -1127,13 +1042,6 @@ class AskService:
         histories = ask_request.histories[: self._max_histories][
             ::-1
         ]  # reverse the order of histories
-        if histories and not self._should_use_histories_for_query(user_query):
-            logger.info(
-                "Ignoring thread histories for independent question. query_id=%s query=%s",
-                query_id,
-                user_query,
-            )
-            histories = []
         rephrased_question = None
         intent_reasoning = None
         sql_generation_reasoning = None
@@ -1357,12 +1265,7 @@ class AskService:
                     sql_user_query = user_query
 
                 historical_question_result = []
-                if (
-                    not api_results
-                    and self._should_reuse_historical_question_sql(
-                        user_query, histories
-                    )
-                ):
+                if not api_results:
                     if not self._is_stopped(query_id, self._ask_results):
                         self._ask_results[query_id] = AskResultResponse(
                             status="searching",
@@ -1397,18 +1300,6 @@ class AskService:
 
                 valid_historical_results = []
                 for result in historical_question_result:
-                    historical_question_text = result.get("question")
-                    if not self._is_reusable_historical_question(
-                        user_query, historical_question_text
-                    ):
-                        logger.info(
-                            "Ignoring historical SQL for materially different question. query_id=%s query=%s historical_question=%s",
-                            query_id,
-                            user_query,
-                            historical_question_text,
-                        )
-                        continue
-
                     sql_statement = result.get("statement")
                     if not self._is_valid_select_sql(sql_statement):
                         logger.warning(
@@ -1430,7 +1321,6 @@ class AskService:
                     api_results = valid_historical_results
                     sql_generation_reasoning = ""
                 elif not api_results:
-                    original_user_query = user_query
                     # Run both pipeline operations concurrently
                     try:
                         sql_samples_task, instructions_task = await self._run_with_timeout(
@@ -1500,24 +1390,6 @@ class AskService:
                             "rephrased_question"
                         )
                         intent_reasoning = intent_classification_result.get("reasoning")
-                        retrieved_db_schemas = intent_classification_result.get(
-                            "db_schemas"
-                        ) or []
-                        is_schema_grounded_query = self._is_schema_grounded_query(
-                            original_user_query, retrieved_db_schemas
-                        ) or self._is_schema_grounded_query(
-                            rephrased_question or "", retrieved_db_schemas
-                        )
-
-                        if intent in {"GENERAL", "MISLEADING_QUERY", "USER_GUIDE"} and (
-                            is_schema_grounded_query
-                        ):
-                            logger.info(
-                                "Overriding intent %s to TEXT_TO_SQL for schema/data query: %s",
-                                intent,
-                                user_query,
-                            )
-                            intent = "TEXT_TO_SQL"
 
                         if rephrased_question:
                             user_query = rephrased_question
