@@ -161,7 +161,6 @@ class AskService:
         max_sql_correction_retries: int = 3,
         pipeline_timeout_seconds: int = 90,
         schema_retrieval_timeout_seconds: int = 180,
-        allow_schema_sql_shortcuts: bool = False,
         max_histories: int = 5,
         maxsize: int = 1_000_000,
         ttl: int = 120,
@@ -181,7 +180,6 @@ class AskService:
         self._enable_column_pruning = enable_column_pruning
         self._pipeline_timeout_seconds = pipeline_timeout_seconds
         self._schema_retrieval_timeout_seconds = schema_retrieval_timeout_seconds
-        self._allow_schema_sql_shortcuts = allow_schema_sql_shortcuts
         self._max_histories = max_histories
         self._max_sql_correction_retries = max_sql_correction_retries
 
@@ -5983,11 +5981,9 @@ class AskService:
                         table_names,
                     )
 
-                    if self._allow_schema_sql_shortcuts and (
-                        ranked_measure_sql := self._build_schema_ranked_measure_sql(
-                            user_query,
-                            table_ddls,
-                        )
+                    if ranked_measure_sql := self._build_schema_ranked_measure_sql(
+                        user_query,
+                        table_ddls,
                     ):
                         ask_result = self._build_validated_ask_result_from_sql(
                             ranked_measure_sql,
@@ -6011,10 +6007,8 @@ class AskService:
                             return results
                         invalid_sql = ranked_measure_sql
 
-                    if self._allow_schema_sql_shortcuts and (
-                        table_question_sql := self._build_schema_grounded_table_question_sql(
-                            user_query, table_ddls
-                        )
+                    if table_question_sql := self._build_schema_grounded_table_question_sql(
+                        user_query, table_ddls
                     ):
                         ask_result = self._build_validated_ask_result_from_sql(
                             table_question_sql,
@@ -6038,10 +6032,8 @@ class AskService:
                             return results
                         invalid_sql = table_question_sql
 
-                    if self._allow_schema_sql_shortcuts and (
-                        explicit_table_preview := self._build_explicit_table_preview_sql(
-                            user_query, table_ddls
-                        )
+                    if explicit_table_preview := self._build_explicit_table_preview_sql(
+                        user_query, table_ddls
                     ):
                         explicit_sql, explicit_table_name = explicit_table_preview
                         if explicit_table_name not in table_names:
@@ -6068,7 +6060,7 @@ class AskService:
                             return results
                         invalid_sql = explicit_sql
 
-                    if self._allow_schema_sql_shortcuts and documents and (
+                    if documents and (
                         deterministic_sql := self._build_schema_grounded_sales_sql(
                             user_query, table_ddls
                         )
@@ -6124,11 +6116,7 @@ class AskService:
                     )
                     sql_user_query = self._rewrite_query_for_text_to_sql(user_query)
 
-                if (
-                    self._allow_schema_sql_shortcuts
-                    and not explicit_table_names
-                    and self._is_direct_heuristic_sql_query(user_query)
-                ):
+                if not explicit_table_names and self._is_direct_heuristic_sql_query(user_query):
                     self._ask_results[query_id] = AskResultResponse(
                         status="searching",
                         type="TEXT_TO_SQL",
@@ -6183,10 +6171,8 @@ class AskService:
                         invalid_sql = heuristic_sql
                         error_message = "Heuristic SQL fallback was not valid for the active datasource schema."
 
-                if self._allow_schema_sql_shortcuts and (
-                    explicit_group_count_sql := self._build_explicit_group_count_sql(
-                        user_query
-                    )
+                if explicit_group_count_sql := self._build_explicit_group_count_sql(
+                    user_query
                 ):
                     invalid_sql = explicit_group_count_sql
                     rephrased_question = user_query
@@ -6647,7 +6633,7 @@ class AskService:
                     "Retrieved tables for query_id %s: %s", query_id, table_names
                 )
 
-                if self._allow_schema_sql_shortcuts and not api_results and (
+                if not api_results and (
                     ranked_measure_sql := self._build_schema_ranked_measure_sql(
                         user_query,
                         table_ddls,
@@ -6668,7 +6654,7 @@ class AskService:
                         invalid_sql = ranked_measure_sql
                         error_message = "Schema-grounded ranked measure SQL was not valid for the active datasource schema."
 
-                if self._allow_schema_sql_shortcuts and not api_results and (
+                if not api_results and (
                     table_question_sql := self._build_schema_grounded_table_question_sql(
                         user_query, table_ddls
                     )
@@ -6688,7 +6674,7 @@ class AskService:
                         invalid_sql = table_question_sql
                         error_message = "Schema-grounded table SQL was not valid for the active datasource schema."
 
-                if self._allow_schema_sql_shortcuts and not api_results and (
+                if not api_results and (
                     explicit_table_preview := self._build_explicit_table_preview_sql(
                         user_query, table_ddls
                     )
@@ -6712,7 +6698,7 @@ class AskService:
                         invalid_sql = explicit_sql
                         error_message = "Explicit table preview SQL was not valid for the active datasource schema."
 
-                if self._allow_schema_sql_shortcuts and not api_results and (
+                if not api_results and (
                     audit_log_activity_sql := self._build_audit_log_activity_sql(
                         user_query, table_ddls, table_names=table_names
                     )
@@ -6735,8 +6721,7 @@ class AskService:
                         )
 
                 if (
-                    self._allow_schema_sql_shortcuts
-                    and not api_results
+                    not api_results
                     and self._is_data_analysis_query(user_query)
                     and (
                         schema_grounded_sql := self._build_schema_grounded_analytics_sql(
@@ -6761,7 +6746,7 @@ class AskService:
                             "Schema-grounded SQL was not valid for the active datasource schema and question intent."
                         )
 
-                if self._allow_schema_sql_shortcuts and not api_results and any(
+                if not api_results and any(
                     term in user_query.lower()
                     for term in (
                         "pcb",
@@ -6794,7 +6779,7 @@ class AskService:
                                 "Schema-grounded operational SQL was not valid for the active datasource schema and question intent."
                             )
 
-                if self._allow_schema_sql_shortcuts and not api_results and (
+                if not api_results and (
                     deterministic_sales_sql := self._build_schema_grounded_sales_sql(
                         user_query, table_ddls
                     )
@@ -6817,8 +6802,7 @@ class AskService:
                         )
 
                 should_retry_full_schema = (
-                    self._allow_schema_sql_shortcuts
-                    and not api_results
+                    not api_results
                     and self._get_metadata_question_kind(user_query)
                     and "db_schema_retrieval" in self._pipelines
                     and not request_explicit_table_names
@@ -6932,10 +6916,8 @@ class AskService:
                     return results
 
                 if not documents:
-                    if self._allow_schema_sql_shortcuts and (
-                        heuristic_sql := self._build_heuristic_text_to_sql_fallback(
-                            user_query, table_ddls, table_names=table_names
-                        )
+                    if heuristic_sql := self._build_heuristic_text_to_sql_fallback(
+                        user_query, table_ddls, table_names=table_names
                     ):
                         logger.info(
                             "Using heuristic text-to-sql fallback before retrieval failure for query_id %s: %s",
@@ -7334,10 +7316,8 @@ class AskService:
                 results["ask_result"] = api_results
                 results["metadata"]["type"] = "TEXT_TO_SQL"
             else:
-                if self._allow_schema_sql_shortcuts and (
-                    heuristic_sql := self._build_heuristic_text_to_sql_fallback(
-                        user_query, table_ddls, table_names=table_names
-                    )
+                if heuristic_sql := self._build_heuristic_text_to_sql_fallback(
+                    user_query, table_ddls, table_names=table_names
                 ):
                     logger.info(
                         "Using heuristic text-to-sql fallback for query_id %s: %s",
