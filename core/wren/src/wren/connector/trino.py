@@ -40,8 +40,12 @@ def _parse_trino_data_type(type_str: str | None) -> pa.DataType:
         return pa.string()
     try:
         parsed = sqlglot.parse_one(type_str, into=DataType, dialect="trino")
-    except sqlglot.errors.ParseError:
-        logger.warning(f"Failed to parse trino type string: {type_str}")
+    except (sqlglot.errors.SqlglotError, ValueError):
+        # SqlglotError covers ParseError *and* TokenError (tokenizer failures
+        # on stray control chars / unterminated quotes are NOT subclasses of
+        # ParseError). Mirror wren.type_mapping.parse_type's fallback contract
+        # so a bad cursor.description type cannot abort an otherwise-valid query.
+        logger.warning(f"Failed to parse trino type string: {type_str!r}")
         return pa.string()
     if parsed is None:
         return pa.string()

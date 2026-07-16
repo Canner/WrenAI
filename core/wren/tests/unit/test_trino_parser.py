@@ -115,6 +115,17 @@ def test_parse_trino_data_type_unparseable_falls_back() -> None:
     assert _parse_trino_data_type("not a real type {{") == pa.string()
 
 
+def test_parse_trino_data_type_tokenizer_error_falls_back() -> None:
+    """TokenError is a SqlglotError but not a ParseError — must not bubble.
+
+    Mirrors the type_mapping TokenError regression: unterminated quotes and
+    control characters trip the tokenizer. Columns with bad description types
+    should degrade to string Arrow, not abort the result table build.
+    """
+    assert _parse_trino_data_type('"unterminated') == pa.string()
+    assert _parse_trino_data_type("VARC\x00HAR") == pa.string()
+
+
 def test_build_trino_column_map_dict_to_pairs() -> None:
     # Trino driver returns Python dicts; PyArrow map_ wants (k, v) pairs.
     arrow_type = pa.map_(pa.string(), pa.int64())
