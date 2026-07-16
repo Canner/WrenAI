@@ -1,8 +1,7 @@
 import ast
 import logging
-import re
 import sys
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
 import orjson
 import tiktoken
@@ -19,17 +18,11 @@ from src.pipelines.common import (
     build_table_ddl,
     clean_up_new_lines,
     get_engine_supported_data_type,
-    normalize_data_type,
 )
 from src.utils import trace_cost
-if TYPE_CHECKING:
-    from src.web.v1.services.ask import AskHistory
-else:
-    AskHistory = Any
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
-
-MAX_RELEVANT_TABLE_CANDIDATES = 5
 
 
 table_columns_selection_system_prompt = """
@@ -108,9 +101,9 @@ table_columns_selection_user_prompt_template = """
 
 def _build_metric_ddl(content: dict) -> str:
     columns_ddl = [
-        f"{column['comment']}{column['name']} {get_engine_supported_data_type(normalize_data_type(column.get('data_type')))}"
+        f"{column['comment']}{column['name']} {get_engine_supported_data_type(column['data_type'])}"
         for column in content["columns"]
-        if normalize_data_type(column.get("data_type")).lower()
+        if column["data_type"].lower()
         != "unknown"  # quick fix: filtering out UNKNOWN column type
     ]
 
@@ -128,424 +121,8 @@ def _build_view_ddl(content: dict) -> str:
 
 
 ## Start of Pipeline
-def expand_business_terms_for_retrieval(query: str) -> str:
-    normalized = (query or "").lower()
-    expansions: list[str] = []
-
-    if any(
-        term in normalized
-        for term in (
-            "amount",
-            "currency",
-            "currencies",
-            "customer",
-            "customers",
-            "invoice",
-            "invoices",
-            "market",
-            "markets",
-            "order",
-            "orders",
-            "product",
-            "products",
-            "category",
-            "categories",
-            "quantity",
-            "qty",
-            "region",
-            "regions",
-            "sales",
-            "salesperson",
-            "sales person",
-            "sold",
-            "value",
-        )
-    ):
-        expansions.append(
-            "transaction purchase billing account geography area representative product item category sku quantity units sold amount value total metric money exchange currency"
-        )
-
-    if any(
-        term in normalized
-        for term in ("defect", "failure", "issue", "repair", "resolved", "status")
-    ):
-        expansions.append(
-            "issue defect category status resolved created updated date timestamp event"
-        )
-
-    if any(term in normalized for term in ("throughput", "production", "manufacturing")):
-        expansions.append(
-            "rate volume output capacity process unit group completed timestamp date"
-        )
-
-    if not expansions:
-        return query
-
-    return f"{query}\n" + "\n".join(expansions)
-
-
-def _normalize_retrieval_token(value: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
-
-
-def _retrieval_terms(value: str) -> set[str]:
-    stop_words = {
-        "about",
-        "across",
-        "and",
-        "are",
-        "ask",
-        "bar",
-        "chart",
-        "create",
-        "different",
-        "for",
-        "from",
-        "how",
-        "in",
-        "is",
-        "of",
-        "show",
-        "the",
-        "to",
-        "top",
-        "what",
-        "which",
-        "with",
-    }
-    terms = {
-        _normalize_retrieval_token(token)
-        for token in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", value or "")
-        if len(token) > 2 and token.lower() not in stop_words
-    }
-    return {term for term in terms if term}
-
-
-def _query_mentions_any(query: str, terms: tuple[str, ...]) -> bool:
-    normalized = (query or "").lower()
-    return any(re.search(rf"\b{re.escape(term)}\b", normalized) for term in terms)
-
-
-def _source_text(document: Document) -> str:
-    return " ".join(
-        str(part or "")
-        for part in (
-            document.meta.get("name"),
-            document.meta.get("description"),
-            document.content,
-        )
-    ).lower()
-
-
-def _source_shape_score(query: str, document: Document) -> int:
-    normalized_query = (query or "").lower()
-    source_text = _source_text(document)
-    source_terms = _retrieval_terms(source_text)
-
-    score = 0
-    non_production_terms = (
-        "archive",
-        "backup",
-        "copy",
-        "dev",
-        "development",
-        "duplicate",
-        "sample",
-        "stage",
-        "staging",
-        "temp",
-        "test",
-        "tmp",
-    )
-    if any(term in source_terms for term in non_production_terms) and not _query_mentions_any(
-        normalized_query,
-        non_production_terms,
-    ):
-        score -= 60
-
-    aggregation_terms = (
-        "amount",
-        "average",
-        "avg",
-        "count",
-        "distribution",
-        "metric",
-        "revenue",
-        "sum",
-        "total",
-        "trend",
-        "value",
-        "volume",
-    )
-    transaction_source_terms = (
-        "activity",
-        "detail",
-        "event",
-        "fact",
-        "history",
-        "invoice",
-        "line",
-        "order",
-        "sale",
-        "sales",
-        "transaction",
-    )
-    reference_source_terms = (
-        "account",
-        "catalog",
-        "dimension",
-        "directory",
-        "entity",
-        "lookup",
-        "master",
-        "profile",
-        "reference",
-    )
-    entity_listing_pattern = re.search(
-        r"\b(?:list|show|display|get|find)\b.*\b(?:accounts?|customers?|"
-        r"employees?|entities|items?|names?|products?|suppliers?|users?|vendors?)\b",
-        normalized_query,
-    )
-    asks_for_aggregation = _query_mentions_any(normalized_query, aggregation_terms) or bool(
-        re.search(r"\b(?:by|per|each|top|bottom|rank|ranking)\b", normalized_query)
-    )
-    asks_for_entity_listing = bool(entity_listing_pattern) and not asks_for_aggregation
-
-    if asks_for_entity_listing:
-        if source_terms & set(reference_source_terms):
-            score += 35
-        if source_terms & set(transaction_source_terms):
-            score -= 12
-    elif asks_for_aggregation:
-        if source_terms & set(transaction_source_terms):
-            score += 25
-        if source_terms & set(reference_source_terms):
-            score += 5
-
-    return score
-
-
-def _document_relevance_score(document: Document, query_terms: set[str]) -> int:
-    if not query_terms:
-        return 0
-
-    document_terms = _retrieval_terms(
-        " ".join(
-            str(part or "")
-            for part in (
-                document.meta.get("name"),
-                document.meta.get("description"),
-                document.content,
-            )
-        )
-    )
-    if not document_terms:
-        return 0
-
-    score = 0
-    for query_term in query_terms:
-        if query_term in document_terms:
-            score += 20
-            continue
-        for document_term in document_terms:
-            if query_term in document_term or document_term in query_term:
-                score += 8
-                break
-    return score
-
-
-def _semantic_score(document: Document) -> float:
-    score = getattr(document, "score", None)
-    if isinstance(score, (int, float)):
-        return float(score)
-    score = document.meta.get("score")
-    if isinstance(score, (int, float)):
-        return float(score)
-    return 0.0
-
-
-def _score_table_documents(
-    query: str, documents: list[Document]
-) -> list[tuple[float, int, Document, int, float]]:
-    if not documents:
-        return []
-
-    query_terms = _retrieval_terms(expand_business_terms_for_retrieval(query))
-    if not query_terms:
-        return [
-            (_semantic_score(document), -index, document, 0, _semantic_score(document))
-            for index, document in enumerate(documents)
-        ]
-
-    scored_documents: list[tuple[float, int, Document, int, float]] = []
-    for index, document in enumerate(documents):
-        lexical_score = _document_relevance_score(document, query_terms)
-        semantic_score = _semantic_score(document)
-        source_shape_score = _source_shape_score(query, document)
-        combined_score = semantic_score + lexical_score + source_shape_score
-        scored_documents.append(
-            (combined_score, -index, document, lexical_score, semantic_score)
-        )
-
-    return sorted(scored_documents, key=lambda item: (item[0], item[1]), reverse=True)
-
-
-def _rerank_table_documents(query: str, documents: list[Document]) -> list[Document]:
-    if not documents:
-        return documents
-
-    reranked = _score_table_documents(query, documents)
-    if not reranked:
-        return documents
-
-    logger.info(
-        "Top table candidates after retrieval rerank: %s",
-        [
-            {
-                "name": document.meta.get("name"),
-                "semantic_score": round(semantic_score, 4),
-                "lexical_score": lexical_score,
-                "combined_score": round(combined_score, 4),
-            }
-            for combined_score, _index, document, lexical_score, semantic_score in reranked[
-                :5
-            ]
-        ],
-    )
-    return [document for _score, _index, document, _lexical, _semantic in reranked]
-
-
-def _select_relevant_table_documents(
-    query: str,
-    documents: list[Document],
-    *,
-    max_tables: int = MAX_RELEVANT_TABLE_CANDIDATES,
-) -> list[Document]:
-    if not documents or max_tables <= 0:
-        return []
-
-    reranked = _score_table_documents(query, documents)
-    if not reranked:
-        return documents[:max_tables]
-
-    candidate_pool = [item for item in reranked if item[3] > 0] or reranked
-    selected = [
-        document
-        for _score, _index, document, _lexical, _semantic in candidate_pool[:max_tables]
-    ]
-    if len(selected) < len(documents):
-        logger.info(
-            "Scoped table candidates for schema loading from %s to %s tables: %s",
-            len(documents),
-            len(selected),
-            [document.meta.get("name") for document in selected],
-        )
-    return selected
-
-
-def _is_project_wide_analysis_query(query: str) -> bool:
-    normalized = (query or "").lower()
-    if not normalized:
-        return False
-
-    analysis_terms = {
-        "average",
-        "avg",
-        "bar chart",
-        "breakdown",
-        "chart",
-        "completed",
-        "compare",
-        "count",
-        "counts",
-        "distribution",
-        "group by",
-        "grouped",
-        "highest",
-        "line chart",
-        "lowest",
-        "maximum",
-        "minimum",
-        "monthly",
-        "most common",
-        "number of",
-        "pie chart",
-        "quarter",
-        "rank",
-        "ranking",
-        "recommend",
-        "recommended",
-        "show",
-        "status",
-        "sum",
-        "total",
-        "totals",
-        "top",
-        "trend",
-        "volume",
-    }
-    return any(term in normalized for term in analysis_terms)
-
-
-def _dedupe_documents(documents: list[Document]) -> list[Document]:
-    deduped: list[Document] = []
-    seen: set[tuple[str, str, str]] = set()
-    for document in documents:
-        key = (
-            str(document.meta.get("name", "")),
-            str(document.meta.get("type", "")),
-            document.content,
-        )
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped.append(document)
-    return deduped
-
-
-def _normalize_table_names(table_names: Optional[list[str]]) -> list[str]:
-    normalized: list[str] = []
-    for table_name in table_names or []:
-        if not isinstance(table_name, str):
-            continue
-        table_name = table_name.strip()
-        if table_name and table_name not in normalized:
-            normalized.append(table_name)
-    return normalized
-
-
-def _extract_table_names_from_table_retrieval(
-    table_retrieval: dict, explicit_tables: Optional[list[str]] = None
-) -> list[str]:
-    table_names = _normalize_table_names(explicit_tables)
-    for document in table_retrieval.get("documents") or []:
-        if not isinstance(document, Document):
-            continue
-        table_name = document.meta.get("name")
-        if not isinstance(table_name, str):
-            try:
-                content = ast.literal_eval(document.content)
-            except (SyntaxError, ValueError):
-                content = {}
-            table_name = content.get("name") if isinstance(content, dict) else None
-        if isinstance(table_name, str):
-            table_name = table_name.strip()
-            if table_name and table_name not in table_names:
-                table_names.append(table_name)
-    return table_names
-
-
 @observe(capture_input=False, capture_output=False)
-async def embedding(
-    query: str,
-    embedder: Any,
-    histories: list[AskHistory],
-    tables: Optional[list[str]] = None,
-) -> dict:
-    if tables:
-        logger.info("Skipping embedding retrieval for explicit tables: %s", tables)
-        return {}
-
+async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> dict:
     if query:
         if histories:
             previous_query_summaries = [history.question for history in histories]
@@ -553,7 +130,6 @@ async def embedding(
             previous_query_summaries = []
 
         query = "\n".join(previous_query_summaries) + "\n" + query
-        query = expand_business_terms_for_retrieval(query)
 
         return await embedder.run(query)
     else:
@@ -562,13 +138,9 @@ async def embedding(
 
 @observe(capture_input=False)
 async def table_retrieval(
-    query: str,
-    embedding: dict,
-    project_id: str,
-    tables: list[str],
-    table_retriever: Any,
+    embedding: dict, project_id: str, tables: list[str], table_retriever: Any
 ) -> dict:
-    base_filters = {
+    filters = {
         "operator": "AND",
         "conditions": [
             {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
@@ -576,82 +148,59 @@ async def table_retrieval(
     }
 
     if project_id:
-        base_filters["conditions"].append(
+        filters["conditions"].append(
             {"field": "project_id", "operator": "==", "value": project_id}
         )
 
     if embedding:
-        results = await table_retriever.run(
+        return await table_retriever.run(
             query_embedding=embedding.get("embedding"),
-            filters=base_filters,
+            filters=filters,
         )
-        results["documents"] = _select_relevant_table_documents(
-            query, results.get("documents") or []
+    else:
+        filters["conditions"].append(
+            {"field": "name", "operator": "in", "value": tables}
         )
-        return results
 
-    if tables:
-        logger.info("Loading explicit table descriptions: %s", tables)
-        explicit_filters = {
-            **base_filters,
-            "conditions": [
-                *base_filters["conditions"],
-                {"field": "name", "operator": "in", "value": tables},
-            ],
-        }
-        return await table_retriever.run(query_embedding=[], filters=explicit_filters)
-
-    return {"documents": []}
+        return await table_retriever.run(
+            query_embedding=[],
+            filters=filters,
+        )
 
 
 @observe(capture_input=False)
 async def dbschema_retrieval(
-    query: str,
-    table_retrieval: dict,
-    project_id: str,
-    dbschema_retriever: Any,
-    tables: Optional[list[str]] = None,
+    table_retrieval: dict, project_id: str, dbschema_retriever: Any
 ) -> list[Document]:
-    selected_table_names = _extract_table_names_from_table_retrieval(
-        table_retrieval, tables
-    )
+    tables = table_retrieval.get("documents", [])
+    table_names = []
+    for table in tables:
+        content = ast.literal_eval(table.content)
+        table_names.append(content["name"])
 
-    filters = {
-        "operator": "AND",
-        "conditions": [
-            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-        ],
-    }
-    if project_id:
-        filters["conditions"].append(
-            {"field": "project_id", "operator": "==", "value": project_id}
-        )
+    table_name_conditions = [
+        {"field": "name", "operator": "==", "value": table_name}
+        for table_name in table_names
+    ]
 
-    if selected_table_names:
-        filters["conditions"].append(
-            {"field": "name", "operator": "in", "value": selected_table_names}
-        )
-        logger.info(
-            "Loading selected deployed schema metadata for active project_id %s tables=%s",
-            project_id,
-            selected_table_names,
-        )
-    elif not query:
-        logger.info(
-            "Loading complete deployed schema metadata for active project_id %s",
-            project_id,
-        )
-    else:
-        logger.info(
-            "No relevant table-description candidates found for active project_id %s; "
-            "skipping full schema loading for query=%s",
-            project_id,
-            query,
-        )
-        return []
+    if table_name_conditions:
+        filters = {
+            "operator": "AND",
+            "conditions": [
+                {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+                {"operator": "OR", "conditions": table_name_conditions},
+            ],
+        }
 
-    results = await dbschema_retriever.run(query_embedding=[], filters=filters)
-    return results.get("documents", [])
+        if project_id:
+            filters["conditions"].append(
+                {"field": "project_id", "operator": "==", "value": project_id}
+            )
+
+        results = await dbschema_retriever.run(query_embedding=[], filters=filters)
+        return results["documents"]
+
+    return []
 
 
 @observe()
