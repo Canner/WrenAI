@@ -217,6 +217,31 @@ def test_validated_sql_rejects_count_for_total_amount_question():
     assert result is None
 
 
+def test_validated_llm_sql_accepts_schema_valid_count_for_total_amount_question():
+    service = AskService.__new__(AskService)
+
+    result = service._build_validated_ask_result_from_sql(
+        (
+            'SELECT "dbo_Invoices"."Currency" AS "Currency", '
+            'COUNT(*) AS "RecordCount" '
+            'FROM "dbo_Invoices" '
+            'GROUP BY "dbo_Invoices"."Currency"'
+        ),
+        [
+            """
+            CREATE TABLE dbo_Invoices (
+              Currency VARCHAR,
+              InvoiceAmount DOUBLE
+            );
+            """
+        ],
+        "Show total invoice amount by currency.",
+        strict_semantic_validation=False,
+    )
+
+    assert result is not None
+
+
 def test_validated_sql_rejects_detail_rows_for_customer_order_count_question():
     service = AskService.__new__(AskService)
 

@@ -428,7 +428,32 @@ def _select_relevant_table_documents(
     if not reranked:
         return documents[:max_tables]
 
-    candidate_pool = [item for item in reranked if item[3] > 0] or reranked
+    non_production_terms = (
+        "archive",
+        "backup",
+        "copy",
+        "dev",
+        "development",
+        "duplicate",
+        "sample",
+        "stage",
+        "staging",
+        "temp",
+        "test",
+        "tmp",
+    )
+    query_mentions_non_production = _query_mentions_any(query, non_production_terms)
+    production_candidates = [
+        item
+        for item in reranked
+        if query_mentions_non_production
+        or not (_retrieval_terms(_source_text(item[2])) & set(non_production_terms))
+    ]
+    candidate_pool = (
+        [item for item in production_candidates if item[3] > 0]
+        or production_candidates
+        or reranked
+    )
     selected = [
         document
         for _score, _index, document, _lexical, _semantic in candidate_pool[:max_tables]
@@ -553,7 +578,6 @@ async def embedding(
             previous_query_summaries = []
 
         query = "\n".join(previous_query_summaries) + "\n" + query
-        query = expand_business_terms_for_retrieval(query)
 
         return await embedder.run(query)
     else:
@@ -581,14 +605,10 @@ async def table_retrieval(
         )
 
     if embedding:
-        results = await table_retriever.run(
+        return await table_retriever.run(
             query_embedding=embedding.get("embedding"),
             filters=base_filters,
         )
-        results["documents"] = _select_relevant_table_documents(
-            query, results.get("documents") or []
-        )
-        return results
 
     if tables:
         logger.info("Loading explicit table descriptions: %s", tables)
