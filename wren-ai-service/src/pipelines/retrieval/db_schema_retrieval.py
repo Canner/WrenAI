@@ -1,7 +1,7 @@
 import ast
 import logging
 import sys
-from typing import Any, Optional, Protocol
+from typing import Any, Optional
 
 import orjson
 import tiktoken
@@ -20,11 +20,7 @@ from src.pipelines.common import (
     get_engine_supported_data_type,
 )
 from src.utils import trace_cost
-
-
-class AskHistoryLike(Protocol):
-    question: str
-    sql: str
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -126,7 +122,7 @@ def _build_view_ddl(content: dict) -> str:
 
 ## Start of Pipeline
 @observe(capture_input=False, capture_output=False)
-async def embedding(query: str, embedder: Any, histories: list[AskHistoryLike]) -> dict:
+async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> dict:
     if query:
         if histories:
             previous_query_summaries = [history.question for history in histories]
@@ -309,7 +305,7 @@ def prompt(
     construct_db_schemas: list[dict],
     prompt_builder: PromptBuilder,
     check_using_db_schemas_without_pruning: dict,
-    histories: list[AskHistoryLike],
+    histories: list[AskHistory],
 ) -> dict:
     if not check_using_db_schemas_without_pruning["db_schemas"]:
         db_schemas = [
@@ -505,7 +501,7 @@ class DbSchemaRetrieval(BasicPipeline):
         query: str = "",
         tables: Optional[list[str]] = None,
         project_id: Optional[str] = None,
-        histories: Optional[list[AskHistoryLike]] = None,
+        histories: Optional[list[AskHistory]] = None,
         enable_column_pruning: bool = False,
     ):
         logger.info("Ask Retrieval pipeline is running...")
