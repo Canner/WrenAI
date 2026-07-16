@@ -87,12 +87,10 @@ def _describe_model(model: dict, lines: list[str]) -> None:
     if data_scope:
         lines.append(f"  Data scope: {data_scope}")
 
-    cols = model.get("columns", [])
+    cols = [c for c in (model.get("columns") or []) if isinstance(c, dict) and c.get("name")]
     if cols:
         lines.append("  Columns:")
         for col in cols:
-            if not isinstance(col, dict):
-                continue
             _describe_column(col, lines)
     lines.append("")
 
