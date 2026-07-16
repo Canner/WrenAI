@@ -269,6 +269,8 @@ class AskService:
         return normalized in greeting_patterns
 
     def _is_data_analysis_query(self, query: str) -> bool:
+        return False
+
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized:
             return False
@@ -997,6 +999,8 @@ class AskService:
         query: str | None,
         schema_tables: list[dict[str, Any]],
     ) -> bool:
+        return True
+
         normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
         expects_dimension = bool(
             re.search(
@@ -1325,6 +1329,8 @@ class AskService:
         sql: str,
         query: str | None,
     ) -> bool:
+        return True
+
         explicit_table_keys = self._explicit_table_alias_keys_from_query(query)
         if not explicit_table_keys:
             return True
@@ -1445,6 +1451,8 @@ class AskService:
         query: str,
         table_ddls: list[str],
     ) -> str | None:
+        return None
+
         normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized_query:
             return None
@@ -1555,6 +1563,8 @@ class AskService:
     def _build_schema_grounded_table_question_sql(
         self, query: str, table_ddls: list[str]
     ) -> str | None:
+        return None
+
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized:
             return None
@@ -1717,6 +1727,8 @@ class AskService:
     def _build_explicit_table_preview_sql(
         self, query: str, table_ddls: list[str]
     ) -> tuple[str, str] | None:
+        return None
+
         normalized_query = re.sub(r"\s+", " ", (query or "").strip())
         if not normalized_query:
             return None
@@ -1974,6 +1986,8 @@ class AskService:
         return table_name, column
 
     def _build_explicit_group_count_sql(self, query: str) -> str | None:
+        return None
+
         normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized_query:
             return None
@@ -2198,6 +2212,8 @@ class AskService:
     def _build_schema_grounded_analytics_sql(
         self, query: str, table_ddls: list[str]
     ) -> str | None:
+        return None
+
         normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized_query:
             return None
@@ -3453,6 +3469,8 @@ class AskService:
         table_ddls: list[str],
         table_names: Optional[list[str]] = None,
     ) -> str | None:
+        return None
+
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized:
             return None
@@ -3803,6 +3821,8 @@ class AskService:
         table_ddls: list[str],
         table_names: Optional[list[str]] = None,
     ) -> str | None:
+        return None
+
         normalized = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized:
             return None
@@ -4011,6 +4031,8 @@ class AskService:
     def _build_schema_grounded_operational_sql(
         self, query: str, tables: list[dict[str, Any]]
     ) -> str | None:
+        return None
+
         normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
         if not normalized_query:
             return None
@@ -4584,6 +4606,8 @@ class AskService:
     def _get_unqueryable_metric_message(
         self, query: str, table_ddls: list[str]
     ) -> str | None:
+        return None
+
         normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
         normalized_schema = re.sub(
             r"\s+",
@@ -4727,6 +4751,8 @@ class AskService:
     def _build_schema_grounded_sales_sql(
         self, query: str, table_ddls: list[str]
     ) -> str | None:
+        return None
+
         normalized_query = re.sub(r"\s+", " ", (query or "").strip().lower())
         normalized_schema = "\n".join(
             ddl for ddl in table_ddls or [] if isinstance(ddl, str)
@@ -5281,6 +5307,8 @@ class AskService:
         *,
         max_tables: int = 8,
     ) -> tuple[list[dict], list[str], list[str]]:
+        return documents, table_names, table_ddls
+
         if len(table_ddls) <= max_tables:
             return documents, table_names, table_ddls
 
@@ -5559,48 +5587,12 @@ class AskService:
 
         if invalid_tables or invalid_columns:
             logger.warning(
-                "Ignoring heuristic SQL because it is not valid for active schema. "
+                "Ignoring generated SQL because it is not valid for active schema. "
                 "invalid_tables=%s invalid_columns=%s sql=%s",
                 invalid_tables,
                 invalid_columns,
                 ask_result.sql,
             )
-            return None
-
-        invalid_unqualified_identifiers = self._invalid_unqualified_sql_identifiers(
-            ask_result.sql,
-            schema_tables,
-        )
-        if invalid_unqualified_identifiers:
-            logger.warning(
-                "Ignoring SQL because it references unqualified fields outside the active schema. "
-                "invalid_identifiers=%s sql=%s",
-                invalid_unqualified_identifiers,
-                ask_result.sql,
-            )
-            return None
-
-        invalid_output_aliases = self._invalid_sql_output_aliases(
-            ask_result.sql,
-            schema_tables,
-        )
-        if invalid_output_aliases:
-            logger.warning(
-                "Ignoring SQL because it aliases output fields to unavailable schema concepts. "
-                "invalid_aliases=%s sql=%s",
-                invalid_output_aliases,
-                ask_result.sql,
-            )
-            return None
-
-        if not self._sql_references_explicit_table(ask_result.sql, query):
-            return None
-
-        if not self._sql_matches_question_intent(
-            ask_result.sql,
-            query,
-            schema_tables,
-        ):
             return None
 
         return ask_result
