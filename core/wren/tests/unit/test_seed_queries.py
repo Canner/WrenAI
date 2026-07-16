@@ -792,3 +792,25 @@ class TestIdentifierExclusion:
         sqls = [p["sql"] for p in generate_seed_queries(manifest)]
         assert not any("SUM(CreatedBy)" in s for s in sqls)
         assert "SELECT SUM(word_count) FROM documents" in sqls
+
+
+def test_skips_non_dict_columns():
+    """Partial MDL column arrays must not TypeError the seed generator."""
+    manifest = {
+        "models": [
+            {
+                "name": "orders",
+                "primaryKey": "id",
+                "columns": [
+                    None,
+                    "bad",
+                    {"name": "amount", "type": "int"},
+                    {"type": "varchar"},  # missing name
+                ],
+            }
+        ]
+    }
+    pairs = generate_seed_queries(manifest)
+    sqls = [p["sql"] for p in pairs]
+    assert "SELECT * FROM orders LIMIT 100" in sqls
+    assert "SELECT SUM(amount) FROM orders" in sqls
