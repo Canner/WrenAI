@@ -16,7 +16,12 @@ def strip_trailing_semicolon(sql: str) -> str:
     or ``EXPLAIN SELECT 1;``). Only the *terminating* run of semicolons and
     whitespace is removed, so semicolons inside string literals
     (``SELECT 'a;b'``) are preserved.
+
+    Non-string inputs (None/bytes) coerce to ``""`` so call sites that pass
+    placeholders do not raise TypeError inside the re engine.
     """
+    if not isinstance(sql, str):
+        return ""
     return _TRAILING_SEMICOLONS_RE.sub("", sql)
 
 
