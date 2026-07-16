@@ -12,6 +12,12 @@ def is_exploratory(sql: str) -> bool:
     Top-level clauses are inspected via stmt.args to avoid descending into
     subqueries (e.g. an inner LIMIT does not affect the outer query).
     """
+    # Call sites may pass None / non-text placeholders. Treat them as
+    # non-exploratory (same tip-not-suppressed outcome as unparseable SQL)
+    # rather than letting sqlglot TypeError through.
+    if not isinstance(sql, str) or not sql.strip():
+        return False
+
     try:
         parsed = sqlglot.parse(sql)
     except sqlglot.errors.ParseError:
