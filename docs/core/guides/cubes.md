@@ -48,9 +48,12 @@ time_dimensions:
     expression: order_date
     type: DATE
 hierarchies:
-  - name: time
-    levels: [year, quarter, month]
+  time: [order_date]
 ```
+
+`hierarchies` is a map from a hierarchy name to an ordered list of declared
+dimension or time-dimension names. The level names must match entries in
+`dimensions` or `time_dimensions`.
 
 See the [MDL schema reference](/oss/reference/mdl) for every cube field.
 
