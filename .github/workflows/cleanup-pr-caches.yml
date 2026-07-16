@@ -1,0 +1,62 @@
+name: Cleanup PR Caches
+
+# Deletes GitHub Actions caches scoped to a pull request's merge ref once the
+# PR closes. PR-scoped caches (including those created by fork PRs) are stored
+# in this repository under refs/pull/<number>/merge and can only be restored
+# by re-runs of that same PR, so after close they only consume repository
+# cache capacity and crowd out reusable main-branch caches.
+#
+# Security: pull_request_target is used solely to obtain a base-repository
+# token with actions: write for fork-initiated closures. The job never checks
+# out or executes PR-controlled code — the only value consumed from the event
+# is the PR number.
+
+on:
+  pull_request_target:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Closed PR number whose merge-ref caches should be deleted"
+        required: true
+        type: number
+
+permissions: {}
+
+jobs:
+  cleanup:
+    name: Delete merge-ref caches
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      pull-requests: read
+    steps:
+      - name: Delete caches for the PR merge ref
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr_number }}
+        run: |
+          # Only ever delete caches for a PR that is no longer open. The closed
+          # event normally guarantees this; the explicit check also stops a
+          # mistyped manual dispatch from evicting an active PR's warm cache,
+          # and skips a PR reopened in the brief window before this job runs.
+          state=$(gh pr view "$PR_NUMBER" --json state --jq .state)
+          if [ "$state" = "OPEN" ]; then
+            if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+              echo "::error::PR #${PR_NUMBER} is open; refusing manual cache deletion."
+              exit 1
+            fi
+            echo "PR #${PR_NUMBER} was reopened before cleanup ran; skipping." \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # --all deletes every cache for the ref in a single call: a genuine
+          # deletion, permission, or API error fails the job (so the ref is not
+          # silently left populated), while an empty ref is a successful no-op.
+          ref="refs/pull/${PR_NUMBER}/merge"
+          gh cache delete --all --ref "$ref" --succeed-on-no-caches
+          echo "Cleaned caches for ${ref} (PR state=${state})" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
