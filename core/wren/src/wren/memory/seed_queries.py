@@ -59,9 +59,7 @@ def _model_seeds(
 ) -> list[dict]:
     name = model["name"]
     columns = [
-        c
-        for c in (model.get("columns") or [])
-        if isinstance(c, dict) and c.get("name")
+        c for c in (model.get("columns") or []) if isinstance(c, dict) and c.get("name")
     ]
     primary_keys = _primary_key_columns(model)
     pairs = []
