@@ -58,7 +58,11 @@ def _model_seeds(
     model: dict, relationship_keys: frozenset[str] = frozenset()
 ) -> list[dict]:
     name = model["name"]
-    columns = model.get("columns", [])
+    columns = [
+        c
+        for c in (model.get("columns") or [])
+        if isinstance(c, dict) and c.get("name")
+    ]
     primary_keys = _primary_key_columns(model)
     pairs = []
 
@@ -74,11 +78,7 @@ def _model_seeds(
     numeric_col = None
     group_col = None
     for col in columns:
-        if not isinstance(col, dict):
-            continue
         col_name = col.get("name")
-        if not col_name:
-            continue
         norm_name = _norm_ident(str(col_name))
         col_type = (col.get("type") or "").split("(")[0].lower().strip()
         is_calc = col.get("isCalculated", False)
@@ -123,11 +123,7 @@ def _model_seeds(
         )
 
     for col in columns:
-        if not isinstance(col, dict):
-            continue
         col_name = col.get("name")
-        if not col_name:
-            continue
         accepted_values = _prop_raw(col, "acceptedValues", "accepted_values")
         first_value = _first_accepted_value(accepted_values)
         if not first_value:
