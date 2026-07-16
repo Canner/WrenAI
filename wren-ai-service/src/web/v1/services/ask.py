@@ -5653,513 +5653,6 @@ class AskService:
             code="NO_RELEVANT_DATA",
         )
 
-    async def _ask_with_legacy_retrieval_flow(
-        self,
-        ask_request: AskRequest,
-        trace_id: Optional[str],
-    ):
-        results = {
-            "ask_result": {},
-            "metadata": {
-                "type": "",
-                "error_type": "",
-                "error_message": "",
-                "request_from": ask_request.request_from,
-            },
-        }
-
-        query_id = ask_request.query_id
-        histories = ask_request.histories[: self._max_histories][::-1]
-        rephrased_question = None
-        intent_reasoning = None
-        sql_generation_reasoning = None
-        sql_samples = []
-        instructions = []
-        api_results = []
-        table_names = []
-        table_ddls = []
-        error_message = None
-        invalid_sql = None
-        allow_sql_generation_reasoning = (
-            self._allow_sql_generation_reasoning
-            and not ask_request.ignore_sql_generation_reasoning
-        )
-        enable_column_pruning = (
-            self._enable_column_pruning or ask_request.enable_column_pruning
-        )
-        allow_sql_functions_retrieval = self._allow_sql_functions_retrieval
-        allow_sql_diagnosis = self._allow_sql_diagnosis
-        allow_sql_knowledge_retrieval = self._allow_sql_knowledge_retrieval
-        max_sql_correction_retries = self._max_sql_correction_retries
-        current_sql_correction_retries = 0
-        use_dry_plan = ask_request.use_dry_plan
-        allow_dry_plan_fallback = ask_request.allow_dry_plan_fallback
-        sql_knowledge = None
-
-        try:
-            user_query = ask_request.query
-
-            if not self._is_stopped(query_id, self._ask_results):
-                self._ask_results[query_id] = AskResultResponse(
-                    status="understanding",
-                    trace_id=trace_id,
-                    is_followup=True if histories else False,
-                )
-
-                if self._is_greeting_query(user_query):
-                    self._general_streaming_results[query_id] = (
-                        self._build_greeting_response(user_query)
-                    )
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="finished",
-                        type="GENERAL",
-                        trace_id=trace_id,
-                        is_followup=True if histories else False,
-                        general_type="USER_GUIDE",
-                    )
-                    results["metadata"]["type"] = "GENERAL"
-                    return results
-
-                historical_question = await self._pipelines["historical_question"].run(
-                    query=user_query,
-                    project_id=ask_request.project_id,
-                )
-                historical_question_result = historical_question.get(
-                    "formatted_output", {}
-                ).get("documents", [])[:1]
-
-                if historical_question_result:
-                    api_results = [
-                        AskResult(
-                            sql=result.get("statement"),
-                            type="view" if result.get("viewId") else "llm",
-                            viewId=result.get("viewId"),
-                        )
-                        for result in historical_question_result
-                    ]
-                    sql_generation_reasoning = ""
-                else:
-                    sql_samples_task, instructions_task = await asyncio.gather(
-                        self._pipelines["sql_pairs_retrieval"].run(
-                            query=user_query,
-                            project_id=ask_request.project_id,
-                        ),
-                        self._pipelines["instructions_retrieval"].run(
-                            query=user_query,
-                            project_id=ask_request.project_id,
-                            scope="sql",
-                        ),
-                    )
-
-                    sql_samples = sql_samples_task["formatted_output"].get(
-                        "documents", []
-                    )
-                    instructions = instructions_task["formatted_output"].get(
-                        "documents", []
-                    )
-
-                    if self._allow_intent_classification:
-                        intent_classification_result = (
-                            await self._pipelines["intent_classification"].run(
-                                query=user_query,
-                                histories=histories,
-                                sql_samples=sql_samples,
-                                instructions=instructions,
-                                project_id=ask_request.project_id,
-                                configuration=ask_request.configurations,
-                            )
-                        ).get("post_process", {})
-                        intent = intent_classification_result.get("intent")
-                        rephrased_question = intent_classification_result.get(
-                            "rephrased_question"
-                        )
-                        intent_reasoning = intent_classification_result.get("reasoning")
-
-                        if rephrased_question:
-                            user_query = rephrased_question
-
-                        if intent == "MISLEADING_QUERY":
-                            asyncio.create_task(
-                                self._pipelines["misleading_assistance"].run(
-                                    query=user_query,
-                                    histories=histories,
-                                    db_schemas=intent_classification_result.get(
-                                        "db_schemas"
-                                    ),
-                                    language=ask_request.configurations.language,
-                                    query_id=ask_request.query_id,
-                                    custom_instruction=ask_request.custom_instruction,
-                                )
-                            )
-                            self._ask_results[query_id] = AskResultResponse(
-                                status="finished",
-                                type="GENERAL",
-                                rephrased_question=rephrased_question,
-                                intent_reasoning=intent_reasoning,
-                                trace_id=trace_id,
-                                is_followup=True if histories else False,
-                                general_type="MISLEADING_QUERY",
-                            )
-                            results["metadata"]["type"] = "MISLEADING_QUERY"
-                            return results
-
-                        if intent == "GENERAL":
-                            asyncio.create_task(
-                                self._pipelines["data_assistance"].run(
-                                    query=user_query,
-                                    histories=histories,
-                                    db_schemas=intent_classification_result.get(
-                                        "db_schemas"
-                                    ),
-                                    language=ask_request.configurations.language,
-                                    query_id=ask_request.query_id,
-                                    custom_instruction=ask_request.custom_instruction,
-                                )
-                            )
-                            self._ask_results[query_id] = AskResultResponse(
-                                status="finished",
-                                type="GENERAL",
-                                rephrased_question=rephrased_question,
-                                intent_reasoning=intent_reasoning,
-                                trace_id=trace_id,
-                                is_followup=True if histories else False,
-                                general_type="DATA_ASSISTANCE",
-                            )
-                            results["metadata"]["type"] = "GENERAL"
-                            return results
-
-                        if intent == "USER_GUIDE":
-                            asyncio.create_task(
-                                self._pipelines["user_guide_assistance"].run(
-                                    query=user_query,
-                                    language=ask_request.configurations.language,
-                                    query_id=ask_request.query_id,
-                                    custom_instruction=ask_request.custom_instruction,
-                                )
-                            )
-                            self._ask_results[query_id] = AskResultResponse(
-                                status="finished",
-                                type="GENERAL",
-                                rephrased_question=rephrased_question,
-                                intent_reasoning=intent_reasoning,
-                                trace_id=trace_id,
-                                is_followup=True if histories else False,
-                                general_type="USER_GUIDE",
-                            )
-                            results["metadata"]["type"] = "GENERAL"
-                            return results
-
-                        self._ask_results[query_id] = AskResultResponse(
-                            status="understanding",
-                            type="TEXT_TO_SQL",
-                            rephrased_question=rephrased_question,
-                            intent_reasoning=intent_reasoning,
-                            trace_id=trace_id,
-                            is_followup=True if histories else False,
-                        )
-
-            if not self._is_stopped(query_id, self._ask_results) and not api_results:
-                self._ask_results[query_id] = AskResultResponse(
-                    status="searching",
-                    type="TEXT_TO_SQL",
-                    rephrased_question=rephrased_question,
-                    intent_reasoning=intent_reasoning,
-                    trace_id=trace_id,
-                    is_followup=True if histories else False,
-                )
-
-                retrieval_result = await self._pipelines["db_schema_retrieval"].run(
-                    query=user_query,
-                    histories=histories,
-                    project_id=ask_request.project_id,
-                    enable_column_pruning=enable_column_pruning,
-                )
-                _retrieval_result = retrieval_result.get(
-                    "construct_retrieval_results", {}
-                )
-                documents = _retrieval_result.get("retrieval_results", [])
-                table_names = [document.get("table_name") for document in documents]
-                table_ddls = [document.get("table_ddl") for document in documents]
-
-                if not documents:
-                    logger.exception(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
-                    if not self._is_stopped(query_id, self._ask_results):
-                        self._ask_results[query_id] = AskResultResponse(
-                            status="failed",
-                            type="TEXT_TO_SQL",
-                            error=AskError(
-                                code="NO_RELEVANT_DATA",
-                                message="No relevant data",
-                            ),
-                            rephrased_question=rephrased_question,
-                            intent_reasoning=intent_reasoning,
-                            trace_id=trace_id,
-                            is_followup=True if histories else False,
-                        )
-                    results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
-                    results["metadata"]["type"] = "TEXT_TO_SQL"
-                    return results
-
-            if (
-                not self._is_stopped(query_id, self._ask_results)
-                and not api_results
-                and allow_sql_generation_reasoning
-            ):
-                self._ask_results[query_id] = AskResultResponse(
-                    status="planning",
-                    type="TEXT_TO_SQL",
-                    rephrased_question=rephrased_question,
-                    intent_reasoning=intent_reasoning,
-                    retrieved_tables=table_names,
-                    trace_id=trace_id,
-                    is_followup=True if histories else False,
-                )
-
-                if histories:
-                    sql_generation_reasoning = (
-                        await self._pipelines["followup_sql_generation_reasoning"].run(
-                            query=user_query,
-                            contexts=table_ddls,
-                            histories=histories,
-                            sql_samples=sql_samples,
-                            instructions=instructions,
-                            configuration=ask_request.configurations,
-                            query_id=query_id,
-                        )
-                    ).get("post_process", {})
-                else:
-                    sql_generation_reasoning = (
-                        await self._pipelines["sql_generation_reasoning"].run(
-                            query=user_query,
-                            contexts=table_ddls,
-                            sql_samples=sql_samples,
-                            instructions=instructions,
-                            configuration=ask_request.configurations,
-                            query_id=query_id,
-                        )
-                    ).get("post_process", {})
-
-                self._ask_results[query_id] = AskResultResponse(
-                    status="planning",
-                    type="TEXT_TO_SQL",
-                    rephrased_question=rephrased_question,
-                    intent_reasoning=intent_reasoning,
-                    retrieved_tables=table_names,
-                    sql_generation_reasoning=sql_generation_reasoning,
-                    trace_id=trace_id,
-                    is_followup=True if histories else False,
-                )
-
-            if not self._is_stopped(query_id, self._ask_results) and not api_results:
-                self._ask_results[query_id] = AskResultResponse(
-                    status="generating",
-                    type="TEXT_TO_SQL",
-                    rephrased_question=rephrased_question,
-                    intent_reasoning=intent_reasoning,
-                    retrieved_tables=table_names,
-                    sql_generation_reasoning=sql_generation_reasoning,
-                    trace_id=trace_id,
-                    is_followup=True if histories else False,
-                )
-
-                sql_functions, sql_knowledge = await asyncio.gather(
-                    (
-                        self._pipelines["sql_functions_retrieval"].run(
-                            project_id=ask_request.project_id,
-                        )
-                        if allow_sql_functions_retrieval
-                        else _return_value([])
-                    ),
-                    (
-                        self._pipelines["sql_knowledge_retrieval"].run(
-                            project_id=ask_request.project_id,
-                        )
-                        if allow_sql_knowledge_retrieval
-                        else _return_value(None)
-                    ),
-                )
-
-                has_calculated_field = _retrieval_result.get(
-                    "has_calculated_field", False
-                )
-                has_metric = _retrieval_result.get("has_metric", False)
-                has_json_field = _retrieval_result.get("has_json_field", False)
-
-                if histories:
-                    text_to_sql_generation_results = await self._pipelines[
-                        "followup_sql_generation"
-                    ].run(
-                        query=user_query,
-                        contexts=table_ddls,
-                        sql_generation_reasoning=sql_generation_reasoning,
-                        histories=histories,
-                        project_id=ask_request.project_id,
-                        sql_samples=sql_samples,
-                        instructions=instructions,
-                        has_calculated_field=has_calculated_field,
-                        has_metric=has_metric,
-                        has_json_field=has_json_field,
-                        sql_functions=sql_functions,
-                        use_dry_plan=use_dry_plan,
-                        allow_dry_plan_fallback=allow_dry_plan_fallback,
-                        sql_knowledge=sql_knowledge,
-                    )
-                else:
-                    text_to_sql_generation_results = await self._pipelines[
-                        "sql_generation"
-                    ].run(
-                        query=user_query,
-                        contexts=table_ddls,
-                        sql_generation_reasoning=sql_generation_reasoning,
-                        project_id=ask_request.project_id,
-                        sql_samples=sql_samples,
-                        instructions=instructions,
-                        has_calculated_field=has_calculated_field,
-                        has_metric=has_metric,
-                        has_json_field=has_json_field,
-                        sql_functions=sql_functions,
-                        use_dry_plan=use_dry_plan,
-                        allow_dry_plan_fallback=allow_dry_plan_fallback,
-                        sql_knowledge=sql_knowledge,
-                    )
-
-                if sql_valid_result := text_to_sql_generation_results["post_process"][
-                    "valid_generation_result"
-                ]:
-                    api_results = [
-                        AskResult(
-                            sql=sql_valid_result.get("sql"),
-                            type="llm",
-                        )
-                    ]
-                elif failed_dry_run_result := text_to_sql_generation_results[
-                    "post_process"
-                ]["invalid_generation_result"]:
-                    while current_sql_correction_retries < max_sql_correction_retries:
-                        if failed_dry_run_result["type"] == "TIME_OUT":
-                            break
-
-                        original_sql = failed_dry_run_result["original_sql"]
-                        invalid_sql = failed_dry_run_result["sql"]
-                        error_message = failed_dry_run_result["error"]
-                        current_sql_correction_retries += 1
-
-                        self._ask_results[query_id] = AskResultResponse(
-                            status="correcting",
-                            type="TEXT_TO_SQL",
-                            rephrased_question=rephrased_question,
-                            intent_reasoning=intent_reasoning,
-                            retrieved_tables=table_names,
-                            sql_generation_reasoning=sql_generation_reasoning,
-                            trace_id=trace_id,
-                            is_followup=True if histories else False,
-                        )
-
-                        sql_diagnosis_reasoning = None
-                        if allow_sql_diagnosis:
-                            sql_diagnosis_results = await self._pipelines[
-                                "sql_diagnosis"
-                            ].run(
-                                contexts=table_ddls,
-                                original_sql=original_sql,
-                                invalid_sql=invalid_sql,
-                                error_message=error_message,
-                                language=ask_request.configurations.language,
-                            )
-                            sql_diagnosis_reasoning = sql_diagnosis_results[
-                                "post_process"
-                            ].get("reasoning")
-
-                        sql_correction_results = await self._pipelines[
-                            "sql_correction"
-                        ].run(
-                            contexts=table_ddls,
-                            instructions=instructions,
-                            invalid_generation_result={
-                                "sql": original_sql,
-                                "error": sql_diagnosis_reasoning
-                                if allow_sql_diagnosis
-                                else error_message,
-                            },
-                            project_id=ask_request.project_id,
-                            use_dry_plan=use_dry_plan,
-                            allow_dry_plan_fallback=allow_dry_plan_fallback,
-                            sql_functions=sql_functions,
-                            sql_knowledge=sql_knowledge,
-                        )
-
-                        if valid_generation_result := sql_correction_results[
-                            "post_process"
-                        ]["valid_generation_result"]:
-                            api_results = [
-                                AskResult(
-                                    sql=valid_generation_result.get("sql"),
-                                    type="llm",
-                                )
-                            ]
-                            break
-
-                        failed_dry_run_result = sql_correction_results["post_process"][
-                            "invalid_generation_result"
-                        ]
-
-            if api_results:
-                if not self._is_stopped(query_id, self._ask_results):
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="finished",
-                        type="TEXT_TO_SQL",
-                        response=api_results,
-                        rephrased_question=rephrased_question,
-                        intent_reasoning=intent_reasoning,
-                        retrieved_tables=table_names,
-                        sql_generation_reasoning=sql_generation_reasoning,
-                        trace_id=trace_id,
-                        is_followup=True if histories else False,
-                    )
-                results["ask_result"] = api_results
-                results["metadata"]["type"] = "TEXT_TO_SQL"
-            else:
-                logger.exception(f"ask pipeline - NO_RELEVANT_SQL: {user_query}")
-                if not self._is_stopped(query_id, self._ask_results):
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="failed",
-                        type="TEXT_TO_SQL",
-                        error=AskError(
-                            code="NO_RELEVANT_SQL",
-                            message=error_message or "No relevant SQL",
-                        ),
-                        rephrased_question=rephrased_question,
-                        intent_reasoning=intent_reasoning,
-                        retrieved_tables=table_names,
-                        sql_generation_reasoning=sql_generation_reasoning,
-                        invalid_sql=invalid_sql,
-                        trace_id=trace_id,
-                        is_followup=True if histories else False,
-                    )
-                results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
-                results["metadata"]["error_message"] = error_message
-                results["metadata"]["type"] = "TEXT_TO_SQL"
-
-            return results
-        except Exception as e:
-            logger.exception(f"ask pipeline - OTHERS: {e}")
-
-            self._ask_results[query_id] = AskResultResponse(
-                status="failed",
-                type="TEXT_TO_SQL",
-                error=AskError(
-                    code="OTHERS",
-                    message=str(e),
-                ),
-                trace_id=trace_id,
-                is_followup=True if histories else False,
-            )
-
-            results["metadata"]["error_type"] = "OTHERS"
-            results["metadata"]["error_message"] = str(e)
-            results["metadata"]["type"] = "TEXT_TO_SQL"
-            return results
-
     @observe(name="Ask Question")
     @trace_metadata
     async def ask(
@@ -6195,7 +5688,1623 @@ class AskService:
             return results
 
         logger.info(f"Ask pipeline started for query_id: {query_id}")
-        return await self._ask_with_legacy_retrieval_flow(ask_request, trace_id)
+        histories = ask_request.histories[: self._max_histories][
+            ::-1
+        ]  # reverse the order of histories
+        if histories and not self._should_use_histories_for_query(user_query):
+            logger.info(
+                "Ignoring thread histories for independent question. query_id=%s query=%s",
+                query_id,
+                user_query,
+            )
+            histories = []
+        rephrased_question = None
+        intent_reasoning = None
+        sql_generation_reasoning = None
+        sql_samples = []
+        instructions = []
+        api_results = []
+        documents = []
+        table_names = []
+        table_ddls = []
+        _retrieval_result = {}
+        error_message = None
+        invalid_sql = None
+        allow_sql_generation_reasoning = (
+            self._allow_sql_generation_reasoning
+            and not ask_request.ignore_sql_generation_reasoning
+        )
+        enable_column_pruning = (
+            self._enable_column_pruning or ask_request.enable_column_pruning
+        )
+        allow_sql_functions_retrieval = self._allow_sql_functions_retrieval
+        allow_sql_diagnosis = self._allow_sql_diagnosis
+        allow_sql_knowledge_retrieval = self._allow_sql_knowledge_retrieval
+        max_sql_correction_retries = self._max_sql_correction_retries
+        current_sql_correction_retries = 0
+        use_dry_plan = ask_request.use_dry_plan
+        allow_dry_plan_fallback = ask_request.allow_dry_plan_fallback
+        sql_knowledge = None
+        understanding_timeout_seconds = min(self._pipeline_timeout_seconds, 20)
+        request_explicit_table_names = self._normalize_explicit_table_names(
+            ask_request.explicit_tables
+        )
+        forced_request_explicit_table_names = self._forced_explicit_table_names(
+            request_explicit_table_names,
+            source="request",
+        )
+        explicit_table_names = forced_request_explicit_table_names
+        retrieval_table_names = explicit_table_names or None
+
+        try:
+            sql_user_query = user_query
+
+            # ask status can be understanding, searching, generating, finished, failed, stopped
+            # we will need to handle business logic for each status
+            if not self._is_stopped(query_id, self._ask_results):
+                self._ask_results[query_id] = AskResultResponse(
+                    status="understanding",
+                    trace_id=trace_id,
+                    is_followup=True if histories else False,
+                )
+
+                if self._is_greeting_query(user_query):
+                    self._general_streaming_results[query_id] = (
+                        self._build_greeting_response(user_query)
+                    )
+
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="finished",
+                        type="GENERAL",
+                        trace_id=trace_id,
+                        is_followup=True if histories else False,
+                        general_type="USER_GUIDE",
+                    )
+                    results["metadata"]["type"] = "GENERAL"
+                    return results
+
+                metadata_question_kind = self._get_metadata_question_kind(user_query)
+                if metadata_question_kind:
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="searching",
+                        type="GENERAL",
+                        rephrased_question=user_query,
+                        intent_reasoning=(
+                            "Basic datasource metadata question detected; "
+                            "retrieving deployed schema metadata directly."
+                        ),
+                        trace_id=trace_id,
+                        is_followup=True if histories else False,
+                        general_type="DATA_ASSISTANCE",
+                    )
+                    retrieval_result = await self._run_with_timeout(
+                        "Metadata schema retrieval",
+                        self._pipelines["db_schema_retrieval"].run(
+                            query="",
+                            project_id=ask_request.project_id,
+                            histories=[],
+                            enable_column_pruning=False,
+                        ),
+                        timeout_seconds=min(
+                            self._schema_retrieval_timeout_seconds,
+                            self._pipeline_timeout_seconds,
+                            20,
+                        ),
+                    )
+                    documents, table_names, table_ddls = (
+                        self._extract_retrieval_metadata(retrieval_result)
+                    )
+                    metadata_answer = self._build_metadata_response(
+                        user_query, table_ddls, table_names
+                    )
+                    self._general_streaming_results[query_id] = metadata_answer
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="finished",
+                        type="GENERAL",
+                        rephrased_question=user_query,
+                        intent_reasoning=(
+                            "Answered from active datasource deployed metadata "
+                            "without SQL generation."
+                        ),
+                        retrieved_tables=table_names,
+                        trace_id=trace_id,
+                        is_followup=True if histories else False,
+                        general_type="DATA_ASSISTANCE",
+                    )
+                    results["metadata"]["type"] = "GENERAL"
+                    results["metadata"]["metadata_question_kind"] = (
+                        metadata_question_kind
+                    )
+                    results["metadata"]["retrieved_table_count"] = len(documents)
+                    return results
+
+                if explicit_table_names:
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="searching",
+                        type="TEXT_TO_SQL",
+                        rephrased_question=user_query,
+                        intent_reasoning="Explicit table name detected; retrieving that deployed schema directly.",
+                        trace_id=trace_id,
+                        is_followup=True if histories else False,
+                    )
+                    retrieval_result = await self._run_with_timeout(
+                        "Explicit table schema retrieval",
+                        self._pipelines["db_schema_retrieval"].run(
+                            query=user_query,
+                            tables=explicit_table_names,
+                            project_id=ask_request.project_id,
+                            histories=[],
+                            enable_column_pruning=False,
+                        ),
+                        timeout_seconds=min(
+                            self._schema_retrieval_timeout_seconds,
+                            self._pipeline_timeout_seconds,
+                            20,
+                        ),
+                    )
+                    documents, table_names, table_ddls = (
+                        self._extract_retrieval_metadata(retrieval_result)
+                    )
+                    documents, table_names, table_ddls = (
+                        self._filter_retrieval_metadata_for_explicit_query(
+                            user_query,
+                            documents,
+                            explicit_table_names,
+                        )
+                    )
+                    if not documents and not request_explicit_table_names:
+                        logger.info(
+                            "Explicit table retrieval did not return requested active-schema table; "
+                            "loading full active schema. query_id=%s",
+                            query_id,
+                        )
+                        retrieval_result = await self._run_with_timeout(
+                            "Full active schema retrieval for explicit table",
+                            self._pipelines["db_schema_retrieval"].run(
+                                query="",
+                                project_id=ask_request.project_id,
+                                histories=[],
+                                enable_column_pruning=False,
+                            ),
+                            timeout_seconds=min(
+                                self._schema_retrieval_timeout_seconds,
+                                self._pipeline_timeout_seconds,
+                                20,
+                            ),
+                        )
+                        all_documents, _, _ = self._extract_retrieval_metadata(
+                            retrieval_result
+                        )
+                        documents, table_names, table_ddls = (
+                            self._filter_retrieval_metadata_for_explicit_query(
+                                user_query,
+                                all_documents,
+                                explicit_table_names,
+                            )
+                        )
+                    _retrieval_result = retrieval_result.get(
+                        "construct_retrieval_results", {}
+                    )
+                    logger.info(
+                        "Retrieved explicit tables for query_id %s: %s",
+                        query_id,
+                        table_names,
+                    )
+
+                    if ranked_measure_sql := self._build_schema_ranked_measure_sql(
+                        user_query,
+                        table_ddls,
+                    ):
+                        ask_result = self._build_validated_ask_result_from_sql(
+                            ranked_measure_sql,
+                            table_ddls,
+                            user_query,
+                        )
+                        if ask_result:
+                            api_results = [ask_result]
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="TEXT_TO_SQL",
+                                response=api_results,
+                                rephrased_question=user_query,
+                                intent_reasoning="Explicit table request matched deployed schema and generated ranked measure SQL locally.",
+                                retrieved_tables=table_names,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                            )
+                            results["ask_result"] = api_results
+                            results["metadata"]["type"] = "TEXT_TO_SQL"
+                            return results
+                        invalid_sql = ranked_measure_sql
+
+                    if table_question_sql := self._build_schema_grounded_table_question_sql(
+                        user_query, table_ddls
+                    ):
+                        ask_result = self._build_validated_ask_result_from_sql(
+                            table_question_sql,
+                            table_ddls,
+                            user_query,
+                        )
+                        if ask_result:
+                            api_results = [ask_result]
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="TEXT_TO_SQL",
+                                response=api_results,
+                                rephrased_question=user_query,
+                                intent_reasoning="Explicit table question matched deployed schema.",
+                                retrieved_tables=table_names,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                            )
+                            results["ask_result"] = api_results
+                            results["metadata"]["type"] = "TEXT_TO_SQL"
+                            return results
+                        invalid_sql = table_question_sql
+
+                    if explicit_table_preview := self._build_explicit_table_preview_sql(
+                        user_query, table_ddls
+                    ):
+                        explicit_sql, explicit_table_name = explicit_table_preview
+                        if explicit_table_name not in table_names:
+                            table_names.append(explicit_table_name)
+                        ask_result = self._build_validated_ask_result_from_sql(
+                            explicit_sql,
+                            table_ddls,
+                            user_query,
+                        )
+                        if ask_result:
+                            api_results = [ask_result]
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="TEXT_TO_SQL",
+                                response=api_results,
+                                rephrased_question=user_query,
+                                intent_reasoning="Explicit table preview request matched deployed schema.",
+                                retrieved_tables=table_names,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                            )
+                            results["ask_result"] = api_results
+                            results["metadata"]["type"] = "TEXT_TO_SQL"
+                            return results
+                        invalid_sql = explicit_sql
+
+                    if documents and (
+                        deterministic_sql := self._build_schema_grounded_sales_sql(
+                            user_query, table_ddls
+                        )
+                    ):
+                        ask_result = self._build_validated_ask_result_from_sql(
+                            deterministic_sql,
+                            table_ddls,
+                            user_query,
+                        )
+                        if ask_result:
+                            api_results = [ask_result]
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="TEXT_TO_SQL",
+                                response=api_results,
+                                rephrased_question=user_query,
+                                intent_reasoning="Explicit table request matched deployed schema and generated SQL locally.",
+                                retrieved_tables=table_names,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                            )
+                            results["ask_result"] = api_results
+                            results["metadata"]["type"] = "TEXT_TO_SQL"
+                            return results
+                        invalid_sql = deterministic_sql
+
+                    if not documents:
+                        error_message = (
+                            "The requested table was not found in the deployed schema: "
+                            + ", ".join(explicit_table_names)
+                        )
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="failed",
+                            type="TEXT_TO_SQL",
+                            error=AskError(
+                                code="NO_RELEVANT_DATA",
+                                message=error_message,
+                            ),
+                            rephrased_question=user_query,
+                            intent_reasoning="Explicit table request did not match any deployed schema table.",
+                            retrieved_tables=table_names,
+                            trace_id=trace_id,
+                            is_followup=True if histories else False,
+                        )
+                        results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
+                        results["metadata"]["error_message"] = error_message
+                        results["metadata"]["type"] = "TEXT_TO_SQL"
+                        return results
+
+                    rephrased_question = user_query
+                    intent_reasoning = (
+                        "Explicit table request matched deployed schema; generating SQL against retrieved schema."
+                    )
+                    sql_user_query = self._rewrite_query_for_text_to_sql(user_query)
+
+                if not explicit_table_names and self._is_direct_heuristic_sql_query(user_query):
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="searching",
+                        type="TEXT_TO_SQL",
+                        trace_id=trace_id,
+                        is_followup=True if histories else False,
+                    )
+                    retrieval_result = await self._run_with_timeout(
+                        "Schema retrieval",
+                        self._pipelines["db_schema_retrieval"].run(
+                            query=user_query,
+                            histories=[],
+                            project_id=ask_request.project_id,
+                            enable_column_pruning=False,
+                        ),
+                    )
+                    documents, table_names, table_ddls = (
+                        self._extract_retrieval_metadata(retrieval_result)
+                    )
+                    logger.info(
+                        "Retrieved tables for direct heuristic query_id %s: %s",
+                        query_id,
+                        table_names,
+                    )
+
+                    if heuristic_sql := self._build_heuristic_text_to_sql_fallback(
+                        user_query, table_ddls, table_names=table_names
+                    ):
+                        logger.info(
+                            "Using direct heuristic text-to-sql fallback for query_id %s: %s",
+                            query_id,
+                            user_query,
+                        )
+                        if ask_result := self._build_validated_ask_result_from_sql(
+                            heuristic_sql,
+                            table_ddls,
+                            user_query,
+                        ):
+                            api_results = [ask_result]
+                            if not self._is_stopped(query_id, self._ask_results):
+                                self._ask_results[query_id] = AskResultResponse(
+                                    status="finished",
+                                    type="TEXT_TO_SQL",
+                                    response=api_results,
+                                    rephrased_question=user_query,
+                                    retrieved_tables=table_names,
+                                    trace_id=trace_id,
+                                    is_followup=True if histories else False,
+                                )
+                            results["ask_result"] = api_results
+                            results["metadata"]["type"] = "TEXT_TO_SQL"
+                            return results
+                        invalid_sql = heuristic_sql
+                        error_message = "Heuristic SQL fallback was not valid for the active datasource schema."
+
+                if explicit_group_count_sql := self._build_explicit_group_count_sql(
+                    user_query
+                ):
+                    invalid_sql = explicit_group_count_sql
+                    rephrased_question = user_query
+                    logger.info(
+                        "Deferring explicit grouped count SQL until active schema validation for query_id %s",
+                        query_id,
+                    )
+
+                historical_question_result = []
+                should_skip_pre_sql_retrieval = self._is_data_analysis_query(
+                    user_query
+                )
+                if should_skip_pre_sql_retrieval:
+                    rephrased_question = user_query
+                    intent_reasoning = (
+                        "Detected a deployed-data analytics question; skipping "
+                        "intent classification and using SQL generation."
+                    )
+                    sql_user_query = self._rewrite_query_for_text_to_sql(user_query)
+                    logger.info(
+                        "Skipping pre-SQL retrieval for analytics query_id %s: %s",
+                        query_id,
+                        user_query,
+                    )
+
+                if (
+                    not api_results
+                    and not should_skip_pre_sql_retrieval
+                    and self._should_reuse_historical_question_sql(
+                        user_query, histories
+                    )
+                ):
+                    if not self._is_stopped(query_id, self._ask_results):
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="searching",
+                            type="TEXT_TO_SQL",
+                            rephrased_question=rephrased_question,
+                            intent_reasoning=intent_reasoning,
+                            trace_id=trace_id,
+                            is_followup=True if histories else False,
+                        )
+
+                    try:
+                        historical_question = await self._run_with_timeout(
+                            "Historical question retrieval",
+                            self._pipelines["historical_question"].run(
+                                query=user_query,
+                                project_id=ask_request.project_id,
+                            ),
+                            timeout_seconds=min(understanding_timeout_seconds, 10),
+                        )
+
+                        # we only return top 1 result
+                        historical_question_result = historical_question.get(
+                            "formatted_output", {}
+                        ).get("documents", [])[:1]
+                    except TimeoutError as exc:
+                        logger.warning(
+                            "Historical question retrieval timed out; continuing without history match. query_id=%s project_id=%s error=%s",
+                            query_id,
+                            ask_request.project_id,
+                            exc,
+                        )
+
+                valid_historical_results = []
+                for result in historical_question_result:
+                    historical_question_text = result.get("question")
+                    if not self._is_reusable_historical_question(
+                        user_query, historical_question_text
+                    ):
+                        logger.info(
+                            "Ignoring historical SQL for materially different question. query_id=%s query=%s historical_question=%s",
+                            query_id,
+                            user_query,
+                            historical_question_text,
+                        )
+                        continue
+
+                    sql_statement = result.get("statement")
+                    if not self._is_valid_select_sql(sql_statement):
+                        logger.warning(
+                            "Ignoring historical question without valid SQL for query_id %s",
+                            query_id,
+                        )
+                        continue
+                    valid_historical_results.append(
+                        AskResult(
+                            **{
+                                "sql": sql_statement.strip(),
+                                "type": "view" if result.get("viewId") else "llm",
+                                "viewId": result.get("viewId"),
+                            }
+                        )
+                    )
+
+                if valid_historical_results:
+                    api_results = valid_historical_results
+                    sql_generation_reasoning = ""
+                elif not api_results and not should_skip_pre_sql_retrieval:
+                    original_user_query = user_query
+                    # Run both pipeline operations concurrently
+                    try:
+                        sql_samples_task, instructions_task = await self._run_with_timeout(
+                            "SQL pair and instruction retrieval",
+                            asyncio.gather(
+                                self._pipelines["sql_pairs_retrieval"].run(
+                                    query=user_query,
+                                    project_id=ask_request.project_id,
+                                ),
+                                self._pipelines["instructions_retrieval"].run(
+                                    query=user_query,
+                                    project_id=ask_request.project_id,
+                                    scope="sql",
+                                ),
+                            ),
+                            timeout_seconds=understanding_timeout_seconds,
+                        )
+
+                        # Extract results from completed tasks
+                        sql_samples = sql_samples_task["formatted_output"].get(
+                            "documents", []
+                        )
+                        instructions = instructions_task["formatted_output"].get(
+                            "documents", []
+                        )
+                    except TimeoutError as exc:
+                        logger.warning(
+                            "SQL pair and instruction retrieval timed out; continuing without optional examples. query_id=%s project_id=%s error=%s",
+                            query_id,
+                            ask_request.project_id,
+                            exc,
+                        )
+                        sql_samples = []
+                        instructions = []
+
+                    if self._allow_intent_classification:
+                        try:
+                            intent_classification_result = (
+                                await self._run_with_timeout(
+                                    "Intent classification",
+                                    self._pipelines["intent_classification"].run(
+                                        query=user_query,
+                                        histories=histories,
+                                        sql_samples=sql_samples,
+                                        instructions=instructions,
+                                        project_id=ask_request.project_id,
+                                        configuration=ask_request.configurations,
+                                    ),
+                                    timeout_seconds=understanding_timeout_seconds,
+                                )
+                            ).get("post_process", {})
+                        except TimeoutError as exc:
+                            logger.warning(
+                                "Intent classification timed out; continuing with TEXT_TO_SQL. query_id=%s project_id=%s error=%s",
+                                query_id,
+                                ask_request.project_id,
+                                exc,
+                            )
+                            intent_classification_result = {
+                                "intent": "TEXT_TO_SQL",
+                                "rephrased_question": user_query,
+                                "reasoning": "Intent classification timed out; using SQL generation.",
+                                "db_schemas": [],
+                            }
+                        intent = intent_classification_result.get("intent")
+                        rephrased_question = intent_classification_result.get(
+                            "rephrased_question"
+                        )
+                        intent_reasoning = intent_classification_result.get("reasoning")
+                        retrieved_db_schemas = intent_classification_result.get(
+                            "db_schemas"
+                        ) or []
+                        is_original_analytics_query = self._is_data_analysis_query(
+                            original_user_query
+                        )
+                        is_schema_grounded_query = self._is_schema_grounded_query(
+                            original_user_query, retrieved_db_schemas
+                        ) or self._is_schema_grounded_query(
+                            rephrased_question or "", retrieved_db_schemas
+                        )
+
+                        if intent in {"GENERAL", "MISLEADING_QUERY", "USER_GUIDE"} and (
+                            is_original_analytics_query
+                            or is_schema_grounded_query
+                            or self._is_data_analysis_query(rephrased_question or "")
+                        ):
+                            logger.info(
+                                "Overriding intent %s to TEXT_TO_SQL for schema/data query: %s",
+                                intent,
+                                user_query,
+                            )
+                            intent = "TEXT_TO_SQL"
+
+                        if is_original_analytics_query:
+                            if rephrased_question and rephrased_question != user_query:
+                                logger.info(
+                                    "Ignoring rephrased analytics query from intent classification. original=%s rephrased=%s",
+                                    original_user_query,
+                                    rephrased_question,
+                                )
+                            user_query = original_user_query
+                            rephrased_question = original_user_query
+                        elif rephrased_question:
+                            user_query = rephrased_question
+
+                        sql_user_query = (
+                            self._rewrite_query_for_text_to_sql(user_query)
+                            if self._is_data_analysis_query(user_query)
+                            else user_query
+                        )
+
+                        if intent == "MISLEADING_QUERY":
+                            general_result = await self._run_with_timeout(
+                                "Misleading assistance",
+                                self._pipelines["misleading_assistance"].run(
+                                    query=user_query,
+                                    histories=histories,
+                                    db_schemas=intent_classification_result.get(
+                                        "db_schemas"
+                                    ),
+                                    language=ask_request.configurations.language,
+                                    custom_instruction=ask_request.custom_instruction,
+                                ),
+                            )
+                            self._general_streaming_results[query_id] = (
+                                self._extract_pipeline_reply(
+                                    general_result, "misleading_assistance"
+                                )
+                            )
+
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="MISLEADING_QUERY",
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                                general_type="MISLEADING_QUERY",
+                            )
+                            results["metadata"]["type"] = "MISLEADING_QUERY"
+                            return results
+                        elif intent == "GENERAL":
+                            general_result = await self._run_with_timeout(
+                                "Data assistance",
+                                self._pipelines["data_assistance"].run(
+                                    query=user_query,
+                                    histories=histories,
+                                    db_schemas=intent_classification_result.get(
+                                        "db_schemas"
+                                    ),
+                                    language=ask_request.configurations.language,
+                                    custom_instruction=ask_request.custom_instruction,
+                                ),
+                            )
+                            self._general_streaming_results[query_id] = (
+                                self._extract_pipeline_reply(
+                                    general_result, "data_assistance"
+                                )
+                            )
+
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="GENERAL",
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                                general_type="DATA_ASSISTANCE",
+                            )
+                            results["metadata"]["type"] = "GENERAL"
+                            return results
+                        elif intent == "USER_GUIDE":
+                            general_result = await self._run_with_timeout(
+                                "User guide assistance",
+                                self._pipelines["user_guide_assistance"].run(
+                                    query=user_query,
+                                    language=ask_request.configurations.language,
+                                    custom_instruction=ask_request.custom_instruction,
+                                ),
+                            )
+                            self._general_streaming_results[query_id] = (
+                                self._extract_pipeline_reply(
+                                    general_result, "user_guide_assistance"
+                                )
+                            )
+
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="GENERAL",
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                                general_type="USER_GUIDE",
+                            )
+                            results["metadata"]["type"] = "GENERAL"
+                            return results
+                        else:
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="understanding",
+                                type="TEXT_TO_SQL",
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                            )
+            if (
+                not self._is_stopped(query_id, self._ask_results)
+                and not api_results
+                and not documents
+            ):
+                self._ask_results[query_id] = AskResultResponse(
+                    status="searching",
+                    type="TEXT_TO_SQL",
+                    rephrased_question=rephrased_question,
+                    intent_reasoning=intent_reasoning,
+                    trace_id=trace_id,
+                    is_followup=True if histories else False,
+                )
+
+                try:
+                    retrieval_result = await self._run_with_timeout(
+                        "Schema retrieval",
+                        self._pipelines["db_schema_retrieval"].run(
+                            query=sql_user_query,
+                            tables=retrieval_table_names,
+                            histories=[],
+                            project_id=ask_request.project_id,
+                            enable_column_pruning=(
+                                enable_column_pruning
+                                and not self._is_data_analysis_query(user_query)
+                            ),
+                        ),
+                        timeout_seconds=self._schema_retrieval_timeout_seconds,
+                    )
+                except TimeoutError as error:
+                    if not self._should_retry_selected_schema_after_retrieval_timeout(
+                        retrieval_table_names
+                    ):
+                        logger.warning(
+                            "Schema retrieval timed out for data query; not loading full project schema. "
+                            "query_id=%s project_id=%s error=%s",
+                            query_id,
+                            ask_request.project_id,
+                            error,
+                        )
+                        retrieval_result = {"construct_retrieval_results": {}}
+                    else:
+                        logger.warning(
+                            "Schema retrieval timed out; retrying only explicit selected schemas. "
+                            "query_id=%s project_id=%s tables=%s error=%s",
+                            query_id,
+                            ask_request.project_id,
+                            retrieval_table_names,
+                            error,
+                        )
+                        retrieval_result = await self._run_with_timeout(
+                            "Selected schema fallback retrieval",
+                            self._pipelines["db_schema_retrieval"].run(
+                                query=sql_user_query,
+                                tables=retrieval_table_names,
+                                histories=[],
+                                project_id=ask_request.project_id,
+                                enable_column_pruning=False,
+                            ),
+                            timeout_seconds=min(
+                                self._schema_retrieval_timeout_seconds,
+                                30,
+                            ),
+                        )
+                _retrieval_result = retrieval_result.get(
+                    "construct_retrieval_results", {}
+                )
+                documents, table_names, table_ddls = (
+                    self._extract_retrieval_metadata(retrieval_result)
+                )
+                if explicit_table_names:
+                    documents, table_names, table_ddls = (
+                        self._filter_retrieval_metadata_for_explicit_query(
+                            user_query,
+                            documents,
+                            explicit_table_names,
+                        )
+                    )
+                if not documents:
+                    if explicit_table_names:
+                        logger.info(
+                            "Retrying schema retrieval for explicit tables query_id %s: %s",
+                            query_id,
+                            explicit_table_names,
+                        )
+                        retrieval_result = await self._run_with_timeout(
+                            "Explicit table schema retrieval",
+                            self._pipelines["db_schema_retrieval"].run(
+                                query=user_query,
+                                tables=explicit_table_names,
+                                project_id=ask_request.project_id,
+                                histories=[],
+                                enable_column_pruning=enable_column_pruning,
+                            ),
+                            timeout_seconds=min(
+                                self._schema_retrieval_timeout_seconds,
+                                20,
+                            ),
+                        )
+                        _retrieval_result = retrieval_result.get(
+                            "construct_retrieval_results", {}
+                        )
+                        documents, table_names, table_ddls = (
+                            self._extract_retrieval_metadata(retrieval_result)
+                        )
+                        documents, table_names, table_ddls = (
+                            self._filter_retrieval_metadata_for_explicit_query(
+                                user_query,
+                                documents,
+                                explicit_table_names,
+                            )
+                        )
+                if (
+                    not documents
+                    and self._get_metadata_question_kind(user_query)
+                    and not request_explicit_table_names
+                ):
+                    logger.info(
+                        "Query-based schema retrieval returned no tables for data question; "
+                        "retrying full active deployed schema for query_id %s",
+                        query_id,
+                    )
+                    retrieval_result = await self._run_with_timeout(
+                        "Full active schema retrieval",
+                        self._pipelines["db_schema_retrieval"].run(
+                            query="",
+                            histories=[],
+                            project_id=ask_request.project_id,
+                            enable_column_pruning=False,
+                        ),
+                        timeout_seconds=min(
+                            self._schema_retrieval_timeout_seconds,
+                            self._pipeline_timeout_seconds,
+                            20,
+                        ),
+                    )
+                    _retrieval_result = retrieval_result.get(
+                        "construct_retrieval_results", {}
+                    )
+                    documents, table_names, table_ddls = (
+                        self._extract_retrieval_metadata(retrieval_result)
+                    )
+                    if explicit_table_names:
+                        documents, table_names, table_ddls = (
+                            self._filter_retrieval_metadata_for_explicit_query(
+                                user_query,
+                                documents,
+                                explicit_table_names,
+                            )
+                        )
+                logger.info(
+                    "Retrieved tables for query_id %s: %s", query_id, table_names
+                )
+
+                if not api_results and (
+                    ranked_measure_sql := self._build_schema_ranked_measure_sql(
+                        user_query,
+                        table_ddls,
+                    )
+                ):
+                    logger.info(
+                        "Using schema-grounded ranked measure SQL for query_id %s",
+                        query_id,
+                    )
+                    ask_result = self._build_validated_ask_result_from_sql(
+                        ranked_measure_sql,
+                        table_ddls,
+                        user_query,
+                    )
+                    if ask_result:
+                        api_results = [ask_result]
+                    else:
+                        invalid_sql = ranked_measure_sql
+                        error_message = "Schema-grounded ranked measure SQL was not valid for the active datasource schema."
+
+                if not api_results and (
+                    table_question_sql := self._build_schema_grounded_table_question_sql(
+                        user_query, table_ddls
+                    )
+                ):
+                    logger.info(
+                        "Using schema-grounded table question SQL for query_id %s",
+                        query_id,
+                    )
+                    ask_result = self._build_validated_ask_result_from_sql(
+                        table_question_sql,
+                        table_ddls,
+                        user_query,
+                    )
+                    if ask_result:
+                        api_results = [ask_result]
+                    else:
+                        invalid_sql = table_question_sql
+                        error_message = "Schema-grounded table SQL was not valid for the active datasource schema."
+
+                if not api_results and (
+                    explicit_table_preview := self._build_explicit_table_preview_sql(
+                        user_query, table_ddls
+                    )
+                ):
+                    explicit_sql, explicit_table_name = explicit_table_preview
+                    logger.info(
+                        "Using explicit table preview SQL for query_id %s and table %s",
+                        query_id,
+                        explicit_table_name,
+                    )
+                    if explicit_table_name not in table_names:
+                        table_names.append(explicit_table_name)
+                    ask_result = self._build_validated_ask_result_from_sql(
+                        explicit_sql,
+                        table_ddls,
+                        user_query,
+                    )
+                    if ask_result:
+                        api_results = [ask_result]
+                    else:
+                        invalid_sql = explicit_sql
+                        error_message = "Explicit table preview SQL was not valid for the active datasource schema."
+
+                if not api_results and (
+                    audit_log_activity_sql := self._build_audit_log_activity_sql(
+                        user_query, table_ddls, table_names=table_names
+                    )
+                ):
+                    logger.info(
+                        "Using schema-grounded audit log activity SQL for query_id %s",
+                        query_id,
+                    )
+                    ask_result = self._build_validated_ask_result_from_sql(
+                        audit_log_activity_sql,
+                        table_ddls,
+                        user_query,
+                    )
+                    if ask_result:
+                        api_results = [ask_result]
+                    else:
+                        invalid_sql = audit_log_activity_sql
+                        error_message = (
+                            "Schema-grounded audit SQL was not valid for the active datasource schema and question intent."
+                        )
+
+                if (
+                    not api_results
+                    and self._is_data_analysis_query(user_query)
+                    and (
+                        schema_grounded_sql := self._build_schema_grounded_analytics_sql(
+                            user_query, table_ddls
+                        )
+                    )
+                ):
+                    logger.info(
+                        "Using generic schema-grounded analytics SQL for query_id %s",
+                        query_id,
+                    )
+                    ask_result = self._build_validated_ask_result_from_sql(
+                        schema_grounded_sql,
+                        table_ddls,
+                        user_query,
+                    )
+                    if ask_result:
+                        api_results = [ask_result]
+                    else:
+                        invalid_sql = schema_grounded_sql
+                        error_message = (
+                            "Schema-grounded SQL was not valid for the active datasource schema and question intent."
+                        )
+
+                if not api_results and any(
+                    term in user_query.lower()
+                    for term in (
+                        "pcb",
+                        "repair",
+                        "failure",
+                        "business unit",
+                        "business units",
+                        "product line",
+                        "product family",
+                    )
+                ):
+                    operational_sql = self._build_schema_grounded_analytics_sql(
+                        user_query, table_ddls
+                    )
+                    if operational_sql:
+                        logger.info(
+                            "Using schema-grounded operational SQL for query_id %s",
+                            query_id,
+                        )
+                        ask_result = self._build_validated_ask_result_from_sql(
+                            operational_sql,
+                            table_ddls,
+                            user_query,
+                        )
+                        if ask_result:
+                            api_results = [ask_result]
+                        else:
+                            invalid_sql = operational_sql
+                            error_message = (
+                                "Schema-grounded operational SQL was not valid for the active datasource schema and question intent."
+                            )
+
+                if not api_results and (
+                    deterministic_sales_sql := self._build_schema_grounded_sales_sql(
+                        user_query, table_ddls
+                    )
+                ):
+                    logger.info(
+                        "Using schema-grounded CWSales SQL for query_id %s",
+                        query_id,
+                    )
+                    ask_result = self._build_validated_ask_result_from_sql(
+                        deterministic_sales_sql,
+                        table_ddls,
+                        user_query,
+                    )
+                    if ask_result:
+                        api_results = [ask_result]
+                    else:
+                        invalid_sql = deterministic_sales_sql
+                        error_message = (
+                            "Schema-grounded SQL was not valid for the active datasource schema and question intent."
+                        )
+
+                should_retry_full_schema = (
+                    not api_results
+                    and self._get_metadata_question_kind(user_query)
+                    and "db_schema_retrieval" in self._pipelines
+                    and not request_explicit_table_names
+                    and not table_names
+                )
+                if should_retry_full_schema:
+                    logger.info(
+                        "No grounded SQL from retrieved schema; retrying with full active deployed schema for query_id %s",
+                        query_id,
+                    )
+                    retrieval_result = await self._run_with_timeout(
+                        "Full active schema retry",
+                        self._pipelines["db_schema_retrieval"].run(
+                            query="",
+                            histories=[],
+                            project_id=ask_request.project_id,
+                            enable_column_pruning=False,
+                        ),
+                        timeout_seconds=min(
+                            self._schema_retrieval_timeout_seconds,
+                            self._pipeline_timeout_seconds,
+                            30,
+                        ),
+                    )
+                    _retrieval_result = retrieval_result.get(
+                        "construct_retrieval_results", {}
+                    )
+                    full_documents, full_table_names, full_table_ddls = (
+                        self._extract_retrieval_metadata(retrieval_result)
+                    )
+                    if explicit_table_names:
+                        full_documents, full_table_names, full_table_ddls = (
+                            self._filter_retrieval_metadata_for_explicit_query(
+                                user_query,
+                                full_documents,
+                                explicit_table_names,
+                            )
+                        )
+                    if full_documents:
+                        documents, table_names, table_ddls = (
+                            full_documents,
+                            full_table_names,
+                            full_table_ddls,
+                        )
+                        logger.info(
+                            "Using full active deployed schema retry for query_id %s: %s",
+                            query_id,
+                            table_names,
+                        )
+
+                        full_schema_preview = self._build_explicit_table_preview_sql(
+                            user_query, table_ddls
+                        )
+                        full_schema_sql_candidates = (
+                            self._build_schema_grounded_table_question_sql(
+                                user_query, table_ddls
+                            ),
+                            full_schema_preview[0] if full_schema_preview else None,
+                            self._build_audit_log_activity_sql(
+                                user_query, table_ddls, table_names=table_names
+                            ),
+                            self._build_schema_grounded_analytics_sql(
+                                user_query, table_ddls
+                            ),
+                            self._build_schema_grounded_sales_sql(
+                                user_query, table_ddls
+                            ),
+                        )
+                        for full_schema_sql in full_schema_sql_candidates:
+                            if not full_schema_sql:
+                                continue
+                            ask_result = self._build_validated_ask_result_from_sql(
+                                full_schema_sql,
+                                table_ddls,
+                                user_query,
+                            )
+                            if ask_result:
+                                api_results = [ask_result]
+                                break
+                            invalid_sql = full_schema_sql
+                            error_message = (
+                                "Full-schema grounded SQL was not valid for the active datasource schema and question intent."
+                            )
+
+                if not api_results and (
+                    unqueryable_metric_message := self._get_unqueryable_metric_message(
+                        user_query, table_ddls
+                    )
+                ):
+                    logger.info(
+                        "ask pipeline - NO_RELEVANT_SQL due to unqueryable metric: %s",
+                        user_query,
+                    )
+                    if not self._is_stopped(query_id, self._ask_results):
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="failed",
+                            type="TEXT_TO_SQL",
+                            error=AskError(
+                                code="NO_RELEVANT_SQL",
+                                message=unqueryable_metric_message,
+                            ),
+                            rephrased_question=rephrased_question,
+                            intent_reasoning=intent_reasoning,
+                            retrieved_tables=table_names,
+                            trace_id=trace_id,
+                            is_followup=True if histories else False,
+                        )
+                    results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
+                    results["metadata"]["error_message"] = unqueryable_metric_message
+                    results["metadata"]["type"] = "TEXT_TO_SQL"
+                    return results
+
+                if not documents:
+                    if heuristic_sql := self._build_heuristic_text_to_sql_fallback(
+                        user_query, table_ddls, table_names=table_names
+                    ):
+                        logger.info(
+                            "Using heuristic text-to-sql fallback before retrieval failure for query_id %s: %s",
+                            query_id,
+                            user_query,
+                        )
+                        ask_result = self._build_validated_ask_result_from_sql(
+                            heuristic_sql,
+                            table_ddls,
+                            user_query,
+                        )
+                        if not ask_result:
+                            invalid_sql = heuristic_sql
+                            error_message = "Heuristic SQL fallback was not valid for the active datasource schema."
+                            if not self._is_stopped(query_id, self._ask_results):
+                                self._ask_results[query_id] = (
+                                    self._build_no_relevant_active_datasource_response(
+                                        trace_id,
+                                        rephrased_question=rephrased_question,
+                                        intent_reasoning=intent_reasoning,
+                                        retrieved_tables=table_names,
+                                        is_followup=True if histories else False,
+                                    )
+                                )
+                            results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
+                            results["metadata"]["error_message"] = (
+                                NO_RELEVANT_ACTIVE_DATASOURCE_MESSAGE
+                            )
+                            results["metadata"]["type"] = "TEXT_TO_SQL"
+                            return results
+                        api_results = [ask_result]
+                        if not self._is_stopped(query_id, self._ask_results):
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="TEXT_TO_SQL",
+                                response=api_results,
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                retrieved_tables=table_names,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                            )
+                        results["ask_result"] = api_results
+                        results["metadata"]["type"] = "TEXT_TO_SQL"
+                        return results
+
+                    logger.exception(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
+                    if not self._is_stopped(query_id, self._ask_results):
+                        self._ask_results[query_id] = (
+                            self._build_no_relevant_active_datasource_response(
+                                trace_id,
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                retrieved_tables=table_names,
+                                is_followup=True if histories else False,
+                            )
+                        )
+                    results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
+                    results["metadata"]["error_message"] = (
+                        NO_RELEVANT_ACTIVE_DATASOURCE_MESSAGE
+                    )
+                    results["metadata"]["type"] = "TEXT_TO_SQL"
+                    return results
+
+            if documents and not api_results:
+                documents, table_names, table_ddls = self._prune_sql_generation_context(
+                    sql_user_query,
+                    documents,
+                    table_names,
+                    table_ddls,
+                )
+                (
+                    documents,
+                    table_names,
+                    table_ddls,
+                    completed_retrieval_result,
+                ) = await self._complete_sql_generation_context(
+                    query=sql_user_query,
+                    project_id=ask_request.project_id,
+                    documents=documents,
+                    table_names=table_names,
+                    table_ddls=table_ddls,
+                )
+                if completed_retrieval_result:
+                    _retrieval_result = completed_retrieval_result
+
+            sql_generation_histories = histories
+            if self._is_data_analysis_query(
+                sql_user_query
+            ) and not self._needs_conversation_context(sql_user_query):
+                sql_generation_histories = []
+                allow_sql_generation_reasoning = False
+                allow_sql_knowledge_retrieval = False
+                max_sql_correction_retries = min(max_sql_correction_retries, 1)
+                logger.info(
+                    "Using fast standalone SQL generation path for query_id %s",
+                    query_id,
+                )
+
+            if (
+                not self._is_stopped(query_id, self._ask_results)
+                and not api_results
+                and allow_sql_generation_reasoning
+            ):
+                self._ask_results[query_id] = AskResultResponse(
+                    status="planning",
+                    type="TEXT_TO_SQL",
+                    rephrased_question=rephrased_question,
+                    intent_reasoning=intent_reasoning,
+                    retrieved_tables=table_names,
+                    trace_id=trace_id,
+                    is_followup=True if histories else False,
+                )
+
+                if sql_generation_histories:
+                    try:
+                        sql_generation_reasoning = (
+                            await self._run_with_timeout(
+                                "Follow-up SQL generation reasoning",
+                                self._pipelines[
+                                    "followup_sql_generation_reasoning"
+                                ].run(
+                                    query=sql_user_query,
+                                    contexts=table_ddls,
+                                    histories=sql_generation_histories,
+                                    sql_samples=sql_samples,
+                                    instructions=instructions,
+                                    configuration=ask_request.configurations,
+                                    query_id=query_id,
+                                ),
+                            )
+                        ).get("post_process", {})
+                    except Exception as reasoning_error:
+                        logger.warning(
+                            "Follow-up SQL generation reasoning failed for query_id %s; continuing without reasoning: %s",
+                            query_id,
+                            reasoning_error,
+                        )
+                        sql_generation_reasoning = ""
+                else:
+                    try:
+                        sql_generation_reasoning = (
+                            await self._run_with_timeout(
+                                "SQL generation reasoning",
+                                self._pipelines["sql_generation_reasoning"].run(
+                                    query=sql_user_query,
+                                    contexts=table_ddls,
+                                    sql_samples=sql_samples,
+                                    instructions=instructions,
+                                    configuration=ask_request.configurations,
+                                    query_id=query_id,
+                                ),
+                            )
+                        ).get("post_process", {})
+                    except Exception as reasoning_error:
+                        logger.warning(
+                            "SQL generation reasoning failed for query_id %s; continuing without reasoning: %s",
+                            query_id,
+                            reasoning_error,
+                        )
+                        sql_generation_reasoning = ""
+
+                self._ask_results[query_id] = AskResultResponse(
+                    status="planning",
+                    type="TEXT_TO_SQL",
+                    rephrased_question=rephrased_question,
+                    intent_reasoning=intent_reasoning,
+                    retrieved_tables=table_names,
+                    sql_generation_reasoning=sql_generation_reasoning,
+                    trace_id=trace_id,
+                    is_followup=True if histories else False,
+                )
+
+            if not self._is_stopped(query_id, self._ask_results) and not api_results:
+                self._ask_results[query_id] = AskResultResponse(
+                    status="generating",
+                    type="TEXT_TO_SQL",
+                    rephrased_question=rephrased_question,
+                    intent_reasoning=intent_reasoning,
+                    retrieved_tables=table_names,
+                    sql_generation_reasoning=sql_generation_reasoning,
+                    trace_id=trace_id,
+                    is_followup=True if histories else False,
+                )
+
+                try:
+                    sql_functions, sql_knowledge = await self._run_with_timeout(
+                        "SQL helper retrieval",
+                        asyncio.gather(
+                            (
+                                self._pipelines["sql_functions_retrieval"].run(
+                                    project_id=ask_request.project_id,
+                                )
+                                if allow_sql_functions_retrieval
+                                else _return_value([])
+                            ),
+                            (
+                                self._pipelines["sql_knowledge_retrieval"].run(
+                                    project_id=ask_request.project_id,
+                                )
+                                if allow_sql_knowledge_retrieval
+                                else _return_value(None)
+                            ),
+                        ),
+                        timeout_seconds=min(self._pipeline_timeout_seconds, 10),
+                    )
+                except TimeoutError as helper_timeout:
+                    logger.warning(
+                        "SQL helper retrieval timed out for query_id %s; continuing with schema only: %s",
+                        query_id,
+                        helper_timeout,
+                    )
+                    sql_functions, sql_knowledge = [], None
+
+                has_calculated_field = _retrieval_result.get(
+                    "has_calculated_field", False
+                )
+                has_metric = _retrieval_result.get("has_metric", False)
+                has_json_field = _retrieval_result.get("has_json_field", False)
+
+                try:
+                    if sql_generation_histories:
+                        text_to_sql_generation_results = await self._run_with_timeout(
+                            "Follow-up SQL generation",
+                            self._pipelines["followup_sql_generation"].run(
+                                query=sql_user_query,
+                                contexts=table_ddls,
+                                sql_generation_reasoning=sql_generation_reasoning,
+                                histories=sql_generation_histories,
+                                project_id=ask_request.project_id,
+                                sql_samples=sql_samples,
+                                instructions=instructions,
+                                has_calculated_field=has_calculated_field,
+                                has_metric=has_metric,
+                                has_json_field=has_json_field,
+                                sql_functions=sql_functions,
+                                use_dry_plan=use_dry_plan,
+                                allow_dry_plan_fallback=allow_dry_plan_fallback,
+                                sql_knowledge=sql_knowledge,
+                            ),
+                        )
+                    else:
+                        text_to_sql_generation_results = await self._run_with_timeout(
+                            "SQL generation",
+                            self._pipelines["sql_generation"].run(
+                                query=sql_user_query,
+                                contexts=table_ddls,
+                                sql_generation_reasoning=sql_generation_reasoning,
+                                project_id=ask_request.project_id,
+                                sql_samples=sql_samples,
+                                instructions=instructions,
+                                has_calculated_field=has_calculated_field,
+                                has_metric=has_metric,
+                                has_json_field=has_json_field,
+                                sql_functions=sql_functions,
+                                use_dry_plan=use_dry_plan,
+                                allow_dry_plan_fallback=allow_dry_plan_fallback,
+                                sql_knowledge=sql_knowledge,
+                            ),
+                        )
+                except TimeoutError as generation_timeout:
+                    logger.warning(
+                        "SQL generation timed out for query_id %s; trying schema-grounded fallback: %s",
+                        query_id,
+                        generation_timeout,
+                    )
+                    text_to_sql_generation_results = {
+                        "post_process": {
+                            "valid_generation_result": None,
+                            "invalid_generation_result": None,
+                        }
+                    }
+                    error_message = str(generation_timeout)
+
+                if sql_valid_result := text_to_sql_generation_results["post_process"][
+                    "valid_generation_result"
+                ]:
+                    if ask_result := self._build_validated_ask_result_from_sql(
+                        sql_valid_result.get("sql"),
+                        table_ddls,
+                        sql_user_query,
+                    ):
+                        api_results = [ask_result]
+                    else:
+                        invalid_sql = sql_valid_result.get("sql")
+                        error_message = (
+                            "SQL generation did not produce SQL that matches the active datasource schema and question intent."
+                        )
+                elif failed_dry_run_result := text_to_sql_generation_results[
+                    "post_process"
+                ]["invalid_generation_result"]:
+                    while current_sql_correction_retries < max_sql_correction_retries:
+                        if failed_dry_run_result["type"] in {
+                            "TIME_OUT",
+                            "UNSUPPORTED_SQL",
+                        }:
+                            invalid_sql = failed_dry_run_result.get("sql", invalid_sql)
+                            error_message = failed_dry_run_result.get(
+                                "error", error_message
+                            )
+                            break
+
+                        original_sql = failed_dry_run_result["original_sql"]
+                        invalid_sql = failed_dry_run_result["sql"]
+                        error_message = failed_dry_run_result["error"]
+                        sql_diagnosis_reasoning = None
+                        current_sql_correction_retries += 1
+
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="correcting",
+                            type="TEXT_TO_SQL",
+                            rephrased_question=rephrased_question,
+                            intent_reasoning=intent_reasoning,
+                            retrieved_tables=table_names,
+                            sql_generation_reasoning=sql_generation_reasoning,
+                            trace_id=trace_id,
+                            is_followup=True if histories else False,
+                        )
+
+                        if allow_sql_diagnosis:
+                            sql_diagnosis_results = await self._run_with_timeout(
+                                "SQL diagnosis",
+                                self._pipelines["sql_diagnosis"].run(
+                                    contexts=table_ddls,
+                                    original_sql=original_sql,
+                                    invalid_sql=invalid_sql,
+                                    error_message=error_message,
+                                    language=ask_request.configurations.language,
+                                ),
+                            )
+                            sql_diagnosis_reasoning = sql_diagnosis_results[
+                                "post_process"
+                            ].get("reasoning")
+
+                        correction_error_message = error_message
+                        if sql_diagnosis_reasoning:
+                            correction_error_message = (
+                                f"{error_message}\nDiagnosis: {sql_diagnosis_reasoning}"
+                            )
+
+                        sql_correction_results = await self._run_with_timeout(
+                            "SQL correction",
+                            self._pipelines["sql_correction"].run(
+                                contexts=table_ddls,
+                                instructions=instructions,
+                                invalid_generation_result={
+                                    "original_sql": original_sql,
+                                    "sql": invalid_sql,
+                                    "error": correction_error_message,
+                                },
+                                project_id=ask_request.project_id,
+                                use_dry_plan=use_dry_plan,
+                                allow_dry_plan_fallback=allow_dry_plan_fallback,
+                                sql_functions=sql_functions,
+                                sql_knowledge=sql_knowledge,
+                                query=sql_user_query,
+                            ),
+                        )
+
+                        if valid_generation_result := sql_correction_results[
+                            "post_process"
+                        ]["valid_generation_result"]:
+                            if ask_result := self._build_validated_ask_result_from_sql(
+                                valid_generation_result.get("sql"),
+                                table_ddls,
+                                sql_user_query,
+                            ):
+                                api_results = [ask_result]
+                                break
+                            invalid_sql = valid_generation_result.get("sql")
+                            error_message = (
+                                "SQL correction did not produce SQL that matches the active datasource schema and question intent."
+                            )
+
+                        failed_dry_run_result = sql_correction_results["post_process"][
+                            "invalid_generation_result"
+                        ]
+                        invalid_sql = failed_dry_run_result.get("sql", invalid_sql)
+                        error_message = failed_dry_run_result.get(
+                            "error", error_message
+                        )
+
+            if api_results:
+                if not self._is_stopped(query_id, self._ask_results):
+                    self._ask_results[query_id] = AskResultResponse(
+                        status="finished",
+                        type="TEXT_TO_SQL",
+                        response=api_results,
+                        rephrased_question=rephrased_question,
+                        intent_reasoning=intent_reasoning,
+                        retrieved_tables=table_names,
+                        sql_generation_reasoning=sql_generation_reasoning,
+                        trace_id=trace_id,
+                        is_followup=True if histories else False,
+                    )
+                results["ask_result"] = api_results
+                results["metadata"]["type"] = "TEXT_TO_SQL"
+            else:
+                if heuristic_sql := self._build_heuristic_text_to_sql_fallback(
+                    user_query, table_ddls, table_names=table_names
+                ):
+                    logger.info(
+                        "Using heuristic text-to-sql fallback for query_id %s: %s",
+                        query_id,
+                        user_query,
+                    )
+                    ask_result = self._build_validated_ask_result_from_sql(
+                        heuristic_sql,
+                        table_ddls,
+                        user_query,
+                    )
+                    if not ask_result:
+                        invalid_sql = heuristic_sql
+                        error_message = "Heuristic SQL fallback was not valid for the active datasource schema."
+                    else:
+                        api_results = [ask_result]
+                        if not self._is_stopped(query_id, self._ask_results):
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="TEXT_TO_SQL",
+                                response=api_results,
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                retrieved_tables=table_names,
+                                sql_generation_reasoning=sql_generation_reasoning,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                            )
+                        results["ask_result"] = api_results
+                        results["metadata"]["type"] = "TEXT_TO_SQL"
+                        return results
+
+                logger.exception(f"ask pipeline - NO_RELEVANT_SQL: {user_query}")
+                if not self._is_stopped(query_id, self._ask_results):
+                    self._ask_results[query_id] = (
+                        self._build_no_relevant_active_datasource_response(
+                            trace_id,
+                            rephrased_question=rephrased_question,
+                            intent_reasoning=intent_reasoning,
+                            retrieved_tables=table_names,
+                            sql_generation_reasoning=sql_generation_reasoning,
+                            is_followup=True if histories else False,
+                        )
+                    )
+                if error_message or invalid_sql:
+                    logger.info(
+                        "Suppressed technical SQL failure for query_id %s. "
+                        "error=%s invalid_sql=%s",
+                        query_id,
+                        error_message,
+                        invalid_sql,
+                    )
+                results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
+                results["metadata"]["error_message"] = (
+                    NO_RELEVANT_ACTIVE_DATASOURCE_MESSAGE
+                )
+                results["metadata"]["type"] = "TEXT_TO_SQL"
+
+            return results
+        except Exception as e:
+            logger.exception(f"ask pipeline - OTHERS: {e}")
+
+            self._ask_results[query_id] = AskResultResponse(
+                status="failed",
+                type="TEXT_TO_SQL",
+                error=AskError(
+                    code="OTHERS",
+                    message=str(e),
+                ),
+                trace_id=trace_id,
+                is_followup=True if histories else False,
+            )
+
+            results["metadata"]["error_type"] = "OTHERS"
+            results["metadata"]["error_message"] = str(e)
+            results["metadata"]["type"] = "TEXT_TO_SQL"
+            return results
 
     def stop_ask(
         self,
