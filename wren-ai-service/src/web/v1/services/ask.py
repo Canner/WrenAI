@@ -11,6 +11,7 @@ from src.core.pipeline import BasicPipeline
 from src.pipelines.generation.utils.sql import (
     construct_valid_table_columns,
     construct_valid_table_names,
+    extract_sql_table_references,
     normalize_sql_direction_keywords,
     normalize_sql_column_references_to_schema,
     normalize_sql_table_references_to_schema,
@@ -851,6 +852,40 @@ class AskService:
         )
         return pruned_documents, pruned_table_names, pruned_table_ddls
 
+    def _filter_sql_samples_for_retrieved_schema(
+        self, sql_samples: list[dict], table_ddls: list[str]
+    ) -> list[dict]:
+        valid_table_names = {
+            table_name.lower()
+            for table_name in construct_valid_table_names(table_ddls)
+            if table_name
+        }
+        if not valid_table_names:
+            return []
+
+        filtered_samples = []
+        for sample in sql_samples or []:
+            sql = sample.get("sql") or sample.get("statement") or ""
+            table_references = {
+                table_reference.lower()
+                for table_reference in extract_sql_table_references(sql)
+                if table_reference
+            }
+            if not table_references:
+                filtered_samples.append(sample)
+                continue
+
+            if table_references.issubset(valid_table_names):
+                filtered_samples.append(sample)
+
+        if len(filtered_samples) != len(sql_samples or []):
+            logger.info(
+                "Filtered SQL samples from %s to %s using retrieved schema context.",
+                len(sql_samples or []),
+                len(filtered_samples),
+            )
+        return filtered_samples
+
     def _is_valid_select_sql(self, sql: Optional[str]) -> bool:
         if not isinstance(sql, str):
             return False
@@ -1083,6 +1118,9 @@ class AskService:
         allow_dry_plan_fallback = ask_request.allow_dry_plan_fallback
         sql_knowledge = None
         understanding_timeout_seconds = min(self._pipeline_timeout_seconds, 12)
+        optional_context_timeout_seconds = min(self._pipeline_timeout_seconds, 3)
+        intent_timeout_seconds = min(self._pipeline_timeout_seconds, 6)
+        schema_timeout_seconds = min(self._schema_retrieval_timeout_seconds, 12)
         planning_timeout_seconds = min(self._pipeline_timeout_seconds, 15)
         generation_timeout_seconds = min(self._pipeline_timeout_seconds, 30)
         correction_timeout_seconds = min(self._pipeline_timeout_seconds, 15)
@@ -1268,7 +1306,7 @@ class AskService:
                                 query=user_query,
                                 project_id=ask_request.project_id,
                             ),
-                            timeout_seconds=min(understanding_timeout_seconds, 10),
+                            timeout_seconds=optional_context_timeout_seconds,
                         )
 
                         # we only return top 1 result
@@ -1321,7 +1359,7 @@ class AskService:
                                     scope="sql",
                                 ),
                             ),
-                            timeout_seconds=understanding_timeout_seconds,
+                            timeout_seconds=optional_context_timeout_seconds,
                         )
 
                         # Extract results from completed tasks
@@ -1354,7 +1392,7 @@ class AskService:
                                         project_id=ask_request.project_id,
                                         configuration=ask_request.configurations,
                                     ),
-                                    timeout_seconds=understanding_timeout_seconds,
+                                    timeout_seconds=intent_timeout_seconds,
                                 )
                             ).get("post_process", {})
                         except TimeoutError as exc:
@@ -1476,7 +1514,7 @@ class AskService:
                             project_id=ask_request.project_id,
                             enable_column_pruning=enable_column_pruning,
                         ),
-                        timeout_seconds=self._schema_retrieval_timeout_seconds,
+                        timeout_seconds=schema_timeout_seconds,
                     )
                 except TimeoutError as error:
                     if not self._should_retry_selected_schema_after_retrieval_timeout(
@@ -1508,10 +1546,7 @@ class AskService:
                                 project_id=ask_request.project_id,
                                 enable_column_pruning=False,
                             ),
-                            timeout_seconds=min(
-                                self._schema_retrieval_timeout_seconds,
-                                30,
-                            ),
+                            timeout_seconds=schema_timeout_seconds,
                         )
                 _retrieval_result = retrieval_result.get(
                     "construct_retrieval_results", {}
@@ -1543,10 +1578,7 @@ class AskService:
                                 histories=[],
                                 enable_column_pruning=enable_column_pruning,
                             ),
-                            timeout_seconds=min(
-                                self._schema_retrieval_timeout_seconds,
-                                20,
-                            ),
+                            timeout_seconds=schema_timeout_seconds,
                         )
                         _retrieval_result = retrieval_result.get(
                             "construct_retrieval_results", {}
@@ -1605,6 +1637,10 @@ class AskService:
                 )
                 if completed_retrieval_result:
                     _retrieval_result = completed_retrieval_result
+                sql_samples = self._filter_sql_samples_for_retrieved_schema(
+                    sql_samples,
+                    table_ddls,
+                )
 
             sql_generation_histories = histories
 
