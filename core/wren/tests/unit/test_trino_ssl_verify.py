@@ -30,3 +30,9 @@ def test_apply_insecure_alias():
     out = _apply_trino_ssl_overrides({"host": "h", "insecure": "true"})
     assert out["verify"] is False
     assert "insecure" not in out
+
+
+def test_apply_ssl_verify_alias():
+    out = _apply_trino_ssl_overrides({"host": "h", "ssl_verify": "false"})
+    assert out["verify"] is False
+    assert "ssl_verify" not in out

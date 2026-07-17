@@ -317,6 +317,11 @@ def _apply_trino_ssl_overrides(connect_kwargs: dict) -> dict:
             connect_kwargs["verify"] = True
     elif "insecure" in connect_kwargs:
         connect_kwargs.pop("insecure", None)
+    if connect_kwargs.get("verify") is False:
+        logger.warning(
+            "Trino SSL certificate verification is disabled (verify=false); "
+            "the connection will not validate the server certificate."
+        )
     return connect_kwargs
 
 
