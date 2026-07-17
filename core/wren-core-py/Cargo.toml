@@ -12,7 +12,7 @@ name = "wren_core_py"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.26.0", features = ["extension-module", "abi3-py311"] }
+pyo3 = { version = "0.29.0", features = ["extension-module", "abi3-py311"] }
 wren-core = { path = "../wren-core/core", package = "wren-semantic-core" }
 wren-core-base = { path = "../wren-core-base", features = ["python-binding"] }
 datafusion-common = "53.0.0"
@@ -29,7 +29,7 @@ tokio = "1.46.0"
 rstest = "0.23.0"
 
 [build-dependencies]
-pyo3-build-config = "0.23.3"
+pyo3-build-config = "0.29.0"
 
 [features]
 extension-module = ["pyo3/extension-module"]
