@@ -351,3 +351,30 @@ def test_translate_types_skips_non_dict_rows() -> None:
     assert [r["column"] for r in out] == ["id", "name"]
     assert out[0]["type"] == "INT64"
     assert out[1]["type"] == "STRING"
+
+
+def test_parse_types_accepts_non_dict_mappings() -> None:
+    from types import MappingProxyType
+
+    columns = [
+        MappingProxyType({"column": "id", "raw_type": "int8"}),
+        MappingProxyType({"column": "name", "raw_type": "character varying"}),
+    ]
+    out = parse_types(columns, "postgres")
+    assert [r["column"] for r in out] == ["id", "name"]
+    assert out[0]["type"] == "BIGINT"
+    # results are plain, mutable dicts even though inputs were read-only mappings
+    assert all(isinstance(r, dict) for r in out)
+
+
+def test_translate_types_accepts_non_dict_mappings() -> None:
+    from types import MappingProxyType
+
+    columns = [
+        MappingProxyType({"column": "id", "raw_type": "int8"}),
+        MappingProxyType({"column": "name", "raw_type": "character varying"}),
+    ]
+    out = translate_types(columns, "postgres", "bigquery")
+    assert [r["column"] for r in out] == ["id", "name"]
+    assert out[0]["type"] == "INT64"
+    assert out[1]["type"] == "STRING"

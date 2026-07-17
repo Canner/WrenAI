@@ -64,6 +64,11 @@ def parse_types_cmd(
         raise typer.Exit(1)
 
     results = parse_types(data, dialect, type_field=type_field)
+    if isinstance(data, list) and len(results) < len(data):
+        typer.echo(
+            f"Note: skipped {len(data) - len(results)} non-mapping row(s)",
+            err=True,
+        )
     typer.echo(json.dumps(results, indent=2))
 
 
@@ -124,4 +129,9 @@ def translate_types_cmd(
         raise typer.Exit(1)
 
     results = translate_types(data, source, target, type_field=type_field)
+    if isinstance(data, list) and len(results) < len(data):
+        typer.echo(
+            f"Note: skipped {len(data) - len(results)} non-mapping row(s)",
+            err=True,
+        )
     typer.echo(json.dumps(results, indent=2))

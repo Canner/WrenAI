@@ -20,6 +20,8 @@ Use as a library:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import sqlglot
 import sqlglot.errors
 from sqlglot.expressions import DataType
@@ -55,15 +57,21 @@ def parse_types(
 ) -> list[dict]:
     """Batch-normalize types for a list of column dicts.
 
-    Each dict must have a key matching *type_field* (default "raw_type").
+    Each mapping should have a key matching *type_field* (default "raw_type").
     Returns a new list with an added "type" key containing the normalized type.
-    Original dicts are not mutated.
+    Original mappings are not mutated.
+
+    Non-mapping rows (e.g. ``None`` padding or malformed entries from dynamic
+    schema exporters) are skipped, so ``len(out) <= len(columns)``. Any
+    ``collections.abc.Mapping`` is accepted, not just ``dict`` (e.g. SQLAlchemy
+    ``RowMapping`` or ``types.MappingProxyType``).
     """
     results = []
     for col in columns:
         # Callers occasionally pass sparse / non-mapping rows from dynamic
-        # schemas; skip rather than TypeError on dict(col).
-        if not isinstance(col, dict):
+        # schemas; skip rather than TypeError on dict(col). Accept any Mapping
+        # (not just dict) so mapping-likes from schema exporters survive.
+        if not isinstance(col, Mapping):
             continue
         row = dict(col)
         row["type"] = parse_type(row.get(type_field, ""), dialect)
@@ -110,13 +118,16 @@ def translate_types(
 ) -> list[dict]:
     """Batch-translate types from *source_dialect* to *target_dialect*.
 
-    Each dict must have a key matching *type_field* (default "raw_type").
+    Each mapping should have a key matching *type_field* (default "raw_type").
     Returns a new list with an added "type" key holding the translated type.
-    Original dicts are not mutated.
+    Original mappings are not mutated.
+
+    Non-mapping rows are skipped, so ``len(out) <= len(columns)``. Any
+    ``collections.abc.Mapping`` is accepted, not just ``dict``.
     """
     results = []
     for col in columns:
-        if not isinstance(col, dict):
+        if not isinstance(col, Mapping):
             continue
         row = dict(col)
         row["type"] = translate_type(
