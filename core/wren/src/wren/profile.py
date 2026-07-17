@@ -355,7 +355,7 @@ def _registry_sensitive_keys() -> set[str]:
     return keys
 
 
-def _mask_obj(obj: Any, is_sensitive: Callable[[str], bool]) -> Any:
+def _mask_obj(obj: Any, is_sensitive: Callable[[Any], bool]) -> Any:
     """Recursively mask sensitive keys, mirroring :func:`_expand_obj`.
 
     Expansion walks nested dicts and lists, so secrets legitimately live at
@@ -407,8 +407,10 @@ def debug_profile(name: str | None = None) -> dict[str, Any]:
     }
     registry_sensitive = _registry_sensitive_keys()
 
-    def _is_sensitive(key: str) -> bool:
-        kl = key.lower()
+    def _is_sensitive(key: Any) -> bool:
+        # YAML permits non-string keys (``123:``, ``true:``); str() keeps the
+        # traversal from raising AttributeError on them.
+        kl = str(key).lower()
         return (
             kl in registry_sensitive
             or kl in _SENSITIVE

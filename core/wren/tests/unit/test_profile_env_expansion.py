@@ -260,3 +260,30 @@ def test_debug_leaves_nested_benign_fields_intact(tmp_path, monkeypatch):
     assert cfg["kwargs"]["sslmode"] == "require"
     assert cfg["kwargs"]["connect_timeout"] == 10
     assert cfg["extras"][0]["retries"] == 3
+
+
+def test_debug_survives_non_string_keys(tmp_path, monkeypatch):
+    """Non-string YAML keys must not crash the masking walk.
+
+    ``profiles.yml`` is hand-written, and YAML admits ``123:``/``true:`` as
+    keys; recursing into ``kwargs``/``settings`` exposes the key predicate to
+    them, where a bare ``key.lower()`` raises AttributeError.
+    """
+    monkeypatch.setattr(profile_mod, "_WREN_HOME", tmp_path)
+    monkeypatch.setattr(profile_mod, "_PROFILES_FILE", tmp_path / "profiles.yml")
+
+    profile_mod.add_profile(
+        "pg",
+        {
+            "datasource": "postgres",
+            "kwargs": {123: "int-key", True: "bool-key"},
+            "settings": {"deep": {None: "none-key", "password": "NESTED"}},
+        },
+    )
+
+    cfg = profile_mod.debug_profile("pg")["config"]
+    assert cfg["kwargs"][123] == "int-key"
+    assert cfg["kwargs"][True] == "bool-key"
+    assert cfg["settings"]["deep"][None] == "none-key"
+    # Non-string siblings must not stop the walk from reaching real secrets.
+    assert cfg["settings"]["deep"]["password"] == "***"
