@@ -142,7 +142,10 @@ async def embedding(query: str, embedder: Any, histories: list[AskHistoryLike]) 
 
 @observe(capture_input=False)
 async def table_retrieval(
-    embedding: dict, project_id: str, tables: list[str], table_retriever: Any
+    embedding: dict,
+    project_id: str,
+    tables: list[str] | None,
+    table_retriever: Any,
 ) -> dict:
     filters = {
         "operator": "AND",
@@ -161,15 +164,15 @@ async def table_retrieval(
             query_embedding=embedding.get("embedding"),
             filters=filters,
         )
-    else:
-        filters["conditions"].append(
-            {"field": "name", "operator": "in", "value": tables}
-        )
 
-        return await table_retriever.run(
-            query_embedding=[],
-            filters=filters,
-        )
+    if not tables:
+        return {"documents": []}
+
+    filters["conditions"].append({"field": "name", "operator": "in", "value": tables})
+    return await table_retriever.run(
+        query_embedding=[],
+        filters=filters,
+    )
 
 
 @observe(capture_input=False)

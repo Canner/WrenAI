@@ -199,27 +199,41 @@ def _replace_relative_getdate_calls(sql: str, now: datetime) -> str:
 
 
 def _replace_relative_current_date_calls(sql: str, now: datetime) -> str:
+    def timestamp_for_interval(amount: int, unit: str, direction: int = -1) -> str:
+        normalized_unit = unit.lower()
+        signed_amount = amount * direction
+        if normalized_unit.startswith("month"):
+            return _format_timestamp_literal(_add_months(now, signed_amount))
+        if normalized_unit.startswith("year"):
+            return _format_timestamp_literal(_add_months(now, signed_amount * 12))
+        if normalized_unit.startswith("day"):
+            return _format_timestamp_literal(now + timedelta(days=signed_amount))
+        if normalized_unit.startswith("hour"):
+            return _format_timestamp_literal(now + timedelta(hours=signed_amount))
+        if normalized_unit.startswith("minute"):
+            return _format_timestamp_literal(now + timedelta(minutes=signed_amount))
+        if normalized_unit.startswith("second"):
+            return _format_timestamp_literal(now + timedelta(seconds=signed_amount))
+        return ""
+
     def replace_date_sub_interval(match: re.Match[str]) -> str:
         amount = int(match.group("amount"))
         unit = match.group("unit").lower()
-        if unit.startswith("month"):
-            return _format_timestamp_literal(_add_months(now, -amount))
-        if unit.startswith("year"):
-            return _format_timestamp_literal(_add_months(now, -amount * 12))
-        if unit.startswith("day"):
-            return _format_timestamp_literal(now - timedelta(days=amount))
-        return match.group(0)
+        return timestamp_for_interval(amount, unit) or match.group(0)
 
     def replace_date_sub_unit_amount(match: re.Match[str]) -> str:
         unit = match.group("unit").lower()
         amount = int(match.group("amount"))
-        if unit.startswith("month"):
-            return _format_timestamp_literal(_add_months(now, -amount))
-        if unit.startswith("year"):
-            return _format_timestamp_literal(_add_months(now, -amount * 12))
-        if unit.startswith("day"):
-            return _format_timestamp_literal(now - timedelta(days=amount))
-        return match.group(0)
+        return timestamp_for_interval(amount, unit) or match.group(0)
+
+    def replace_timestamp_interval(match: re.Match[str]) -> str:
+        direction = -1 if match.group("operator") == "-" else 1
+        return (
+            timestamp_for_interval(
+                int(match.group("amount")), match.group("unit"), direction
+            )
+            or match.group(0)
+        )
 
     sql = re.sub(
         r"\bDATE_SUB\(\s*CURRENT_DATE(?:\(\))?\s*,\s*INTERVAL\s+(?P<amount>\d+)\s+(?P<unit>YEAR|MONTH|DAY)S?\s*\)",
@@ -234,7 +248,13 @@ def _replace_relative_current_date_calls(sql: str, now: datetime) -> str:
         flags=re.IGNORECASE,
     )
     sql = re.sub(
-        r"\bCURRENT_DATE(?:\(\))?\b",
+        r"\b(?:CURRENT_DATE|CURRENT_TIMESTAMP|NOW)(?:\(\))?\s*(?P<operator>[+-])\s*INTERVAL\s+'?(?P<amount>\d+)\s+(?P<unit>YEAR|MONTH|DAY|HOUR|MINUTE|SECOND)S?'?",
+        replace_timestamp_interval,
+        sql,
+        flags=re.IGNORECASE,
+    )
+    sql = re.sub(
+        r"\b(?:CURRENT_DATE|CURRENT_TIMESTAMP|NOW)(?:\(\))?\b",
         _format_timestamp_literal(now),
         sql,
         flags=re.IGNORECASE,

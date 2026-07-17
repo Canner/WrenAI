@@ -9,6 +9,7 @@ from src.core.pipeline import BasicPipeline
 from src.pipelines.generation.utils.sql import (
     construct_valid_table_columns,
     construct_valid_table_names,
+    extract_sql_table_references,
     find_invalid_column_references,
     find_invalid_table_references,
     normalize_sql_column_references_to_schema,
@@ -93,14 +94,19 @@ class ChartService:
         return False
 
     async def _load_active_schema_contexts(
-        self, project_id: Optional[str]
+        self, project_id: Optional[str], sql: str
     ) -> list[str]:
         retrieval_pipeline = self._pipelines.get("db_schema_retrieval")
         if not retrieval_pipeline:
             return []
 
+        table_references = extract_sql_table_references(sql)
+        if not table_references:
+            return []
+
         retrieval_result = await retrieval_pipeline.run(
             query="",
+            tables=table_references,
             histories=[],
             project_id=project_id,
             enable_column_pruning=False,
@@ -155,6 +161,7 @@ class ChartService:
             execute_sql_error_message = None
             schema_contexts = await self._load_active_schema_contexts(
                 chart_request.project_id,
+                chart_request.sql,
             )
             normalized_sql = self._normalize_and_validate_sql(
                 chart_request.sql,
