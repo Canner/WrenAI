@@ -15,8 +15,6 @@ from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
     construct_instructions,
-    construct_valid_table_columns,
-    construct_valid_table_names,
     get_calculated_field_instructions,
     get_json_field_instructions,
     get_metric_instructions,
@@ -34,16 +32,6 @@ sql_generation_user_prompt_template = """
 {% for document in documents %}
     {{ document }}
 {% endfor %}
-
-{% if valid_table_names %}
-### VALID TABLE NAMES ###
-Only use these exact table names from DATABASE SCHEMA. Do not invent, rename,
-singularize, pluralize, or add catalog/schema prefixes unless the table name is
-shown that way here.
-{% for table_name in valid_table_names %}
-- {{ table_name }}
-{% endfor %}
-{% endif %}
 
 {% if calculated_field_instructions %}
 {{ calculated_field_instructions }}
@@ -89,13 +77,6 @@ User's Question: {{ query }}
 {{ sql_generation_reasoning }}
 {% endif %}
 
-### INTENT AND SCHEMA GROUNDING ###
-Interpret the user's business terms by matching them to explicit tables, columns,
-metrics, views, and relationships in DATABASE SCHEMA. Never reuse table or column
-names from SQL SAMPLES unless those exact names also appear in DATABASE SCHEMA or
-VALID TABLE NAMES for the active datasource. Do not invent tables, columns, joins,
-metrics, or relationships.
-
 Let's think step by step.
 """
 
@@ -118,7 +99,6 @@ def prompt(
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
-        valid_table_names=construct_valid_table_names(documents),
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
@@ -171,8 +151,6 @@ async def post_process(
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
         allow_data_preview=allow_data_preview,
-        valid_table_names=construct_valid_table_names(documents),
-        valid_table_columns=construct_valid_table_columns(documents),
     )
 
 
