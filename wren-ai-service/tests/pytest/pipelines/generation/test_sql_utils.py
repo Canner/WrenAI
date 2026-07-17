@@ -285,6 +285,21 @@ def test_schema_validation_ignores_null_table_metadata():
     ) == []
 
 
+def test_schema_validation_does_not_treat_extract_from_expression_as_table():
+    sql = """
+    SELECT
+      "Market",
+      SUM(CASE WHEN EXTRACT(YEAR FROM "InvDate") = EXTRACT(YEAR FROM GETDATE()) - 1
+        THEN "SalesValue"
+        ELSE 0
+      END) AS "LastYearSales"
+    FROM "dbo_tblSales"
+    GROUP BY "Market"
+    """
+
+    assert find_invalid_table_references(sql, ["dbo_tblSales"]) == []
+
+
 def test_schema_validation_ignores_null_column_metadata():
     assert find_invalid_column_references(
         'SELECT "dbo_tblSales"."Market" FROM "dbo_tblSales"',

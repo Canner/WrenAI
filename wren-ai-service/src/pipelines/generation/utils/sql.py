@@ -2786,9 +2786,16 @@ def _quote_table_reference(table_reference: str) -> str:
     )
 
 
+def _is_extract_argument_from_keyword(sql: str, from_keyword_start: int) -> bool:
+    prefix = sql[:from_keyword_start]
+    return bool(re.search(r"\bEXTRACT\s*\([^)]*$", prefix, flags=re.IGNORECASE))
+
+
 def extract_sql_table_references(sql: str) -> list[str]:
     references = []
     for match in _SQL_TABLE_REFERENCE_PATTERN.finditer(sql):
+        if _is_extract_argument_from_keyword(sql, match.start()):
+            continue
         table_reference = match.group("table")
         if table_reference.startswith("("):
             continue
