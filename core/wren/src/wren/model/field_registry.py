@@ -389,5 +389,25 @@ def get_fields(datasource: str, *, variant: str | None = None) -> list[FieldDef]
 
 
 def get_datasource_options() -> list[str]:
-    """Return sorted list of all available datasource names."""
+    """Return sorted list of every key in ``DATASOURCE_MODELS``.
+
+    Includes ``connection_url``, which is a connection *form* rather than a
+    :class:`DataSource`. Use :func:`get_selectable_datasources` for anything a
+    user picks and we then store as a profile's ``datasource``.
+    """
     return sorted(DATASOURCE_MODELS.keys())
+
+
+def get_selectable_datasources() -> list[str]:
+    """Return datasource names that are valid to store in a profile.
+
+    ``DATASOURCE_MODELS`` also carries ``connection_url`` — a cross-datasource
+    connection form, not a ``DataSource`` member — so offering it as a choice
+    yields a profile whose ``datasource`` no connector can resolve. Callers that
+    need *every* connection model (docs generation, secret masking) must keep
+    using ``DATASOURCE_MODELS`` / :func:`get_datasource_options`.
+    """
+    from wren.model.data_source import DataSource  # noqa: PLC0415
+
+    valid = {d.value for d in DataSource}
+    return sorted(k for k in DATASOURCE_MODELS if k in valid)

@@ -397,12 +397,12 @@ def _interactive_add(default_ds: str | None) -> dict:
     import click  # noqa: PLC0415
 
     from wren.model.field_registry import (  # noqa: PLC0415
-        get_datasource_options,
         get_fields,
+        get_selectable_datasources,
         get_variants,
     )
 
-    ds_choices = get_datasource_options()
+    ds_choices = get_selectable_datasources()
     ds = typer.prompt(
         "Data source",
         default=default_ds,

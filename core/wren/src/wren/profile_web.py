@@ -27,7 +27,11 @@ from starlette.responses import HTMLResponse
 from starlette.routing import Route
 from starlette.templating import Jinja2Templates
 
-from wren.model.field_registry import get_datasource_options, get_fields, get_variants
+from wren.model.field_registry import (
+    get_fields,
+    get_selectable_datasources,
+    get_variants,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +61,7 @@ def create_app(
             "profile_form.html",
             {
                 "profile_name": profile_name,
-                "datasource_options": get_datasource_options(),
+                "datasource_options": get_selectable_datasources(),
             },
         )
 
