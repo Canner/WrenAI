@@ -135,11 +135,6 @@ const handleUpdateRerunAskingTaskCache = (
 
   if (result?.thread) {
     const task = cloneDeep(askingTask);
-    // bypass understanding status to thread response
-    if (task.status === AskingTaskStatus.UNDERSTANDING) {
-      task.status = AskingTaskStatus.SEARCHING;
-      task.type = AskingTaskType.TEXT_TO_SQL;
-    }
     client.cache.updateQuery(
       {
         query: THREAD,

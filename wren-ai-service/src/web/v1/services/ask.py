@@ -126,8 +126,8 @@ class AskService:
         allow_sql_knowledge_retrieval: bool = True,
         enable_column_pruning: bool = False,
         max_sql_correction_retries: int = 3,
-        pipeline_timeout_seconds: int = 90,
-        schema_retrieval_timeout_seconds: int = 180,
+        pipeline_timeout_seconds: int = 45,
+        schema_retrieval_timeout_seconds: int = 25,
         max_histories: int = 5,
         maxsize: int = 1_000_000,
         ttl: int = 120,
@@ -835,9 +835,22 @@ class AskService:
         table_names: list[str],
         table_ddls: list[str],
         *,
-        max_tables: int = 8,
+        max_tables: int = 10,
     ) -> tuple[list[dict], list[str], list[str]]:
-        return documents, table_names, table_ddls
+        if len(documents) <= max_tables:
+            return documents, table_names, table_ddls
+
+        pruned_documents = documents[:max_tables]
+        pruned_table_names = table_names[:max_tables]
+        pruned_table_ddls = table_ddls[:max_tables]
+        logger.info(
+            "Pruned SQL generation context from %s to %s tables for query: %s",
+            len(documents),
+            len(pruned_documents),
+            query,
+        )
+        return pruned_documents, pruned_table_names, pruned_table_ddls
+
     def _is_valid_select_sql(self, sql: Optional[str]) -> bool:
         if not isinstance(sql, str):
             return False
@@ -1069,7 +1082,10 @@ class AskService:
         use_dry_plan = ask_request.use_dry_plan
         allow_dry_plan_fallback = ask_request.allow_dry_plan_fallback
         sql_knowledge = None
-        understanding_timeout_seconds = min(self._pipeline_timeout_seconds, 20)
+        understanding_timeout_seconds = min(self._pipeline_timeout_seconds, 12)
+        planning_timeout_seconds = min(self._pipeline_timeout_seconds, 15)
+        generation_timeout_seconds = min(self._pipeline_timeout_seconds, 30)
+        correction_timeout_seconds = min(self._pipeline_timeout_seconds, 15)
         request_explicit_table_names = self._normalize_explicit_table_names(
             ask_request.explicit_tables
         )
@@ -1196,36 +1212,6 @@ class AskService:
                             explicit_table_names,
                         )
                     )
-                    if not documents and not request_explicit_table_names:
-                        logger.info(
-                            "Explicit table retrieval did not return requested active-schema table; "
-                            "loading full active schema. query_id=%s",
-                            query_id,
-                        )
-                        retrieval_result = await self._run_with_timeout(
-                            "Full active schema retrieval for explicit table",
-                            self._pipelines["db_schema_retrieval"].run(
-                                query="",
-                                project_id=ask_request.project_id,
-                                histories=[],
-                                enable_column_pruning=False,
-                            ),
-                            timeout_seconds=min(
-                                self._schema_retrieval_timeout_seconds,
-                                self._pipeline_timeout_seconds,
-                                20,
-                            ),
-                        )
-                        all_documents, _, _ = self._extract_retrieval_metadata(
-                            retrieval_result
-                        )
-                        documents, table_names, table_ddls = (
-                            self._filter_retrieval_metadata_for_explicit_query(
-                                user_query,
-                                all_documents,
-                                explicit_table_names,
-                            )
-                        )
                     _retrieval_result = retrieval_result.get(
                         "construct_retrieval_results", {}
                     )
@@ -1268,8 +1254,7 @@ class AskService:
                 if not api_results:
                     if not self._is_stopped(query_id, self._ask_results):
                         self._ask_results[query_id] = AskResultResponse(
-                            status="searching",
-                            type="TEXT_TO_SQL",
+                            status="understanding",
                             rephrased_question=rephrased_question,
                             intent_reasoning=intent_reasoning,
                             trace_id=trace_id,
@@ -1585,99 +1570,9 @@ class AskService:
                                 explicit_table_names,
                             )
                         )
-                if (
-                    not documents
-                    and self._get_metadata_question_kind(user_query)
-                    and not request_explicit_table_names
-                ):
-                    logger.info(
-                        "Query-based schema retrieval returned no tables for data question; "
-                        "retrying full active deployed schema for query_id %s",
-                        query_id,
-                    )
-                    retrieval_result = await self._run_with_timeout(
-                        "Full active schema retrieval",
-                        self._pipelines["db_schema_retrieval"].run(
-                            query="",
-                            histories=[],
-                            project_id=ask_request.project_id,
-                            enable_column_pruning=False,
-                        ),
-                        timeout_seconds=min(
-                            self._schema_retrieval_timeout_seconds,
-                            self._pipeline_timeout_seconds,
-                            20,
-                        ),
-                    )
-                    _retrieval_result = retrieval_result.get(
-                        "construct_retrieval_results", {}
-                    )
-                    documents, table_names, table_ddls = (
-                        self._extract_retrieval_metadata(retrieval_result)
-                    )
-                    if explicit_table_names:
-                        documents, table_names, table_ddls = (
-                            self._filter_retrieval_metadata_for_explicit_query(
-                                user_query,
-                                documents,
-                                explicit_table_names,
-                            )
-                        )
                 logger.info(
                     "Retrieved tables for query_id %s: %s", query_id, table_names
                 )
-
-                should_retry_full_schema = (
-                    not api_results
-                    and self._get_metadata_question_kind(user_query)
-                    and "db_schema_retrieval" in self._pipelines
-                    and not request_explicit_table_names
-                    and not table_names
-                )
-                if should_retry_full_schema:
-                    logger.info(
-                        "No grounded SQL from retrieved schema; retrying with full active deployed schema for query_id %s",
-                        query_id,
-                    )
-                    retrieval_result = await self._run_with_timeout(
-                        "Full active schema retry",
-                        self._pipelines["db_schema_retrieval"].run(
-                            query="",
-                            histories=[],
-                            project_id=ask_request.project_id,
-                            enable_column_pruning=False,
-                        ),
-                        timeout_seconds=min(
-                            self._schema_retrieval_timeout_seconds,
-                            self._pipeline_timeout_seconds,
-                            30,
-                        ),
-                    )
-                    _retrieval_result = retrieval_result.get(
-                        "construct_retrieval_results", {}
-                    )
-                    full_documents, full_table_names, full_table_ddls = (
-                        self._extract_retrieval_metadata(retrieval_result)
-                    )
-                    if explicit_table_names:
-                        full_documents, full_table_names, full_table_ddls = (
-                            self._filter_retrieval_metadata_for_explicit_query(
-                                user_query,
-                                full_documents,
-                                explicit_table_names,
-                            )
-                        )
-                    if full_documents:
-                        documents, table_names, table_ddls = (
-                            full_documents,
-                            full_table_names,
-                            full_table_ddls,
-                        )
-                        logger.info(
-                            "Using full active deployed schema retry for query_id %s: %s",
-                            query_id,
-                            table_names,
-                        )
 
                 if not documents:
                     logger.exception(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
@@ -1753,6 +1648,7 @@ class AskService:
                                     configuration=ask_request.configurations,
                                     query_id=query_id,
                                 ),
+                                timeout_seconds=planning_timeout_seconds,
                             )
                         ).get("post_process", {})
                     except Exception as reasoning_error:
@@ -1775,6 +1671,7 @@ class AskService:
                                     configuration=ask_request.configurations,
                                     query_id=query_id,
                                 ),
+                                timeout_seconds=planning_timeout_seconds,
                             )
                         ).get("post_process", {})
                     except Exception as reasoning_error:
@@ -1863,6 +1760,7 @@ class AskService:
                                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                                 sql_knowledge=sql_knowledge,
                             ),
+                            timeout_seconds=generation_timeout_seconds,
                         )
                     else:
                         text_to_sql_generation_results = await self._run_with_timeout(
@@ -1882,6 +1780,7 @@ class AskService:
                                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                                 sql_knowledge=sql_knowledge,
                             ),
+                            timeout_seconds=generation_timeout_seconds,
                         )
                 except TimeoutError as generation_timeout:
                     logger.warning(
@@ -1952,6 +1851,7 @@ class AskService:
                                     error_message=error_message,
                                     language=ask_request.configurations.language,
                                 ),
+                                timeout_seconds=correction_timeout_seconds,
                             )
                             sql_diagnosis_reasoning = sql_diagnosis_results[
                                 "post_process"
@@ -1980,6 +1880,7 @@ class AskService:
                                 sql_knowledge=sql_knowledge,
                                 query=sql_user_query,
                             ),
+                            timeout_seconds=correction_timeout_seconds,
                         )
 
                         if valid_generation_result := sql_correction_results[

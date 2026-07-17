@@ -50,32 +50,14 @@ const inferMssqlTimestampExpression = (sql: string): string => {
     return qualifiedTimestamp[0];
   }
 
-  const fromTable = sql.match(/\bFROM\s+(?:"([^"]+)"|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_]*))/i);
-  if (fromTable) {
-    const tableName = fromTable[1] || fromTable[2] || fromTable[3];
-    if (tableName.toLowerCase() === 'dbo_debugentries') {
-      return `"${tableName}"."DateIn"`;
-    }
-    if (tableName.toLowerCase() === 'dbo_reports') {
-      return `"${tableName}"."generated_at"`;
-    }
-    if (
-      tableName.toLowerCase() === 'dbo_knowledge_articles' ||
-      tableName.toLowerCase() === 'dbo_kb_articles'
-    ) {
-      return `"${tableName}"."created_at"`;
-    }
-    if (tableName.toLowerCase() === 'dbo_repair_logs') {
-      return `"${tableName}"."created_at"`;
-    }
-    return `"${tableName}"."created_at"`;
-  }
-
-  return '"created_at"';
+  return '';
 };
 
 const replaceInventedDateFields = (sql: string): string => {
   const timestampExpression = inferMssqlTimestampExpression(sql);
+  if (!timestampExpression) {
+    return sql;
+  }
   const inventedDateFields = [
     'RepairDate',
     'repairDate',
@@ -120,41 +102,11 @@ const rewriteMssqlDatepartFunctions = (sql: string): string =>
       `EXTRACT(${String(part).toUpperCase()} FROM ${String(expression).trim()})`,
   );
 
-const replaceCwSalesAliases = (sql: string): string => {
-  if (!/\bdbo_(?:qSales1|tblSalesHistory|tblSales)\b/i.test(sql)) {
-    return sql;
-  }
-
-  const salesTable = String.raw`(?:"dbo_(?:qSales1|tblSalesHistory|tblSales)"|\[dbo_(?:qSales1|tblSalesHistory|tblSales)\]|dbo_(?:qSales1|tblSalesHistory|tblSales))`;
-  const otdDate = String.raw`(?:"OTD_Date"|"OTDDate"|\[OTD_Date\]|\[OTDDate\]|OTD_Date|OTDDate)`;
-  const fixLogId = String.raw`(?:"FixLogId"|"FixLogID"|\[FixLogId\]|\[FixLogID\]|FixLogId|FixLogID)`;
-
-  sql = sql.replace(
-    new RegExp(String.raw`(${salesTable})\s*\.\s*${otdDate}`, 'gi'),
-    '$1."InvDate"',
-  );
-  sql = sql.replace(
-    new RegExp(String.raw`(${salesTable})\s*\.\s*${fixLogId}`, 'gi'),
-    '$1."InvoiceNo"',
-  );
-
-  const tableReferences = sql.match(new RegExp(salesTable, 'gi')) || [];
-  if (new Set(tableReferences.map((table) => table.toLowerCase())).size === 1) {
-    sql = sql.replace(
-      new RegExp(String.raw`(?<![\.\w])${otdDate}(?!\w)`, 'gi'),
-      '"InvDate"',
-    );
-    sql = sql.replace(
-      new RegExp(String.raw`(?<![\.\w])${fixLogId}(?!\w)`, 'gi'),
-      '"InvoiceNo"',
-    );
-  }
-
-  return sql;
-};
-
 const replaceInventedTimeBuckets = (sql: string): string => {
   const timestampExpression = inferMssqlTimestampExpression(sql);
+  if (!timestampExpression) {
+    return sql;
+  }
   const bucketExpressions: Record<string, string> = {
     YEAR: `EXTRACT(YEAR FROM ${timestampExpression})`,
     MONTH: `EXTRACT(MONTH FROM ${timestampExpression})`,
@@ -524,16 +476,8 @@ export const normalizeMssqlGeneratedSqlFields = (
   sql = normalizeMssqlGeneratedSqlSyntax(sql);
   sql = rewriteMssqlDatepartFunctions(sql);
   sql = replaceRelativeCurrentDateCalls(sql);
-  sql = replaceCwSalesAliases(sql);
   sql = replaceInventedDateFields(sql);
-  sql = replaceRepairLogThroughputShape(sql);
-  sql = replaceTicketCycleTurnaroundShape(sql);
-  sql = replacePcbThroughputFields(sql);
-  sql = replaceInventedFailureCategory(sql);
-  sql = replaceInventedReportFields(sql);
-  sql = replaceInventedKnowledgeArticleFields(sql);
   sql = replaceInventedTimeBuckets(sql);
-  sql = replaceBadFailurePatternJoins(sql);
   sql = rewriteMssqlDatepartFunctions(sql);
   sql = quoteMssqlDboModelReferences(sql);
   return normalizeMssqlGeneratedSqlSyntax(sql);

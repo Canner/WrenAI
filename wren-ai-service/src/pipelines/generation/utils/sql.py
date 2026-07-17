@@ -501,30 +501,6 @@ def _infer_mssql_timestamp_expression(sql: str) -> str | None:
     if match := timestamp_column_pattern.search(sql):
         return match.group(0)
 
-    table_pattern = re.compile(
-        r'\bFROM\s+("[^"]+"|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)',
-        re.IGNORECASE,
-    )
-    if match := table_pattern.search(sql):
-        table_name = match.group(1)
-        raw_table_name = str(table_name or "").strip('"[]')
-        normalized_table_name = raw_table_name.lower()
-        quoted_table_name = f'"{raw_table_name}"'
-        if normalized_table_name == "dbo_debugentries":
-            return f'{quoted_table_name}."DateIn"'
-        if "report" in normalized_table_name:
-            return f'{quoted_table_name}."generated_at"'
-        if any(
-            token in normalized_table_name
-            for token in ("knowledge", "kb_article", "kb_articles", "article")
-        ):
-            return f'{quoted_table_name}."created_at"'
-        if any(
-            token in normalized_table_name
-            for token in ("repair", "ticket", "event", "log")
-        ):
-            return f'{quoted_table_name}."created_at"'
-
     return None
 
 
@@ -1428,10 +1404,6 @@ def _rewrite_known_schema_hallucinations(sql: str, now: datetime) -> str:
     normalized = _rewrite_mssql_limit_clause(normalized)
     normalized = _rewrite_mssql_to_date_buckets(normalized)
     normalized = _rewrite_mssql_aggregate_qualified_temporal_columns(normalized)
-    normalized = _rewrite_mssql_invented_date_identifiers(normalized)
-    normalized = _rewrite_mssql_invented_report_fields(normalized)
-    normalized = _rewrite_mssql_invented_ticket_metrics(normalized)
-    normalized = _rewrite_mssql_invented_knowledge_article_fields(normalized)
     normalized = _rewrite_mssql_bare_time_bucket_identifiers(normalized)
     normalized = _rewrite_temporal_bucket_functions(normalized)
     normalized = _rewrite_mssql_datepart_alias_references(normalized)
@@ -1522,7 +1494,6 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
         normalized = _rewrite_mssql_to_date_buckets(normalized)
         normalized = _rewrite_mssql_timestamp_casts(normalized)
         normalized = _rewrite_mssql_aggregate_qualified_temporal_columns(normalized)
-        normalized = _rewrite_mssql_invented_date_identifiers(normalized)
         normalized = _rewrite_mssql_bare_time_bucket_identifiers(normalized)
         normalized = _rewrite_mssql_bucket_functions(normalized)
         normalized = _rewrite_temporal_bucket_functions(normalized)
@@ -2661,74 +2632,7 @@ def _sql_identifier_alias_candidates(identifier: str) -> set[str]:
     return {candidate for candidate in candidates if candidate}
 
 
-_SEMANTIC_COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
-    "source": (
-        "source",
-        "source_ticket_id",
-        "source_repair_ids",
-        "category",
-        "subcategory",
-        "author",
-        "created_by_user_id",
-        "status",
-    ),
-    "leadsource": ("source", "source_ticket_id", "source_repair_ids", "category"),
-    "articletype": ("article_type", "category", "subcategory", "type", "status"),
-    "articleid": ("article_id", "id"),
-    "knowledgearticleid": ("knowledge_article_id", "id"),
-    "type": ("type", "category", "subcategory", "status"),
-    "category": ("category", "subcategory", "status", "priority"),
-    "subcategory": ("subcategory", "category", "status", "priority"),
-    "author": ("author", "created_by_user_id", "owner", "assignee_user_id"),
-    "createdby": ("created_by", "created_by_user_id", "author"),
-    "createdbyuser": ("created_by_user", "created_by_user_id", "author"),
-    "createdbyuserid": ("created_by_user_id", "author"),
-    "lastupdatedate": (
-        "last_update_date",
-        "last_updated_at",
-        "updated_at",
-        "DateOut",
-        "DateIn",
-        "FailedAt",
-        "ModifiedAt",
-        "CreatedAt",
-        "created_at",
-    ),
-    "lastupdate": (
-        "last_update_date",
-        "last_updated_at",
-        "updated_at",
-        "DateOut",
-        "DateIn",
-        "FailedAt",
-        "ModifiedAt",
-        "CreatedAt",
-        "created_at",
-    ),
-    "updateddate": (
-        "updated_at",
-        "last_update_date",
-        "last_updated_at",
-        "DateOut",
-        "DateIn",
-        "FailedAt",
-        "ModifiedAt",
-        "CreatedAt",
-        "created_at",
-    ),
-    "invoicequantity": ("Qty", "Quantity", "InvoiceQty", "InvoiceCount"),
-    "otddate": ("InvDate", "OrdDate", "OrderDate", "InvoiceDate", "Date"),
-    "period": ("timeid", "TimeID", "TimeId", "YearInd", "Year", "Date"),
-    "periodid": ("timeid", "TimeID", "TimeId"),
-    "timeid": ("timeid", "TimeID", "TimeId"),
-    "customer": ("account", "Customer", "CustName", "CustNo", "customerpo"),
-    "customers": ("account", "Customer", "CustName", "CustNo", "customerpo"),
-    "customername": ("account", "Customer", "CustName", "CustNo", "customerpo"),
-    "customerid": ("account", "Customer", "CustNo", "customerpo"),
-    "customeraccount": ("account", "Customer", "CustName", "CustNo"),
-    "customerregion": ("Country", "Market", "Region", "CustomerRegion"),
-    "fixlogid": ("DebugEntryId", "FixId", "RepairItem", "id"),
-}
+_SEMANTIC_COLUMN_ALIASES: dict[str, tuple[str, ...]] = {}
 
 
 def _find_semantic_column_alias(

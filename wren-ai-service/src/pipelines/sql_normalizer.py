@@ -309,21 +309,6 @@ def _infer_mssql_timestamp_expression(sql: str) -> str | None:
     if match := timestamp_column_pattern.search(sql):
         return match.group(0)
 
-    table_pattern = re.compile(
-        r'\bFROM\s+("[^"]+"|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_]*)',
-        re.IGNORECASE,
-    )
-    if match := table_pattern.search(sql):
-        table_name = match.group(1)
-        normalized_table_name = str(table_name or "").strip('"[]').lower()
-        if "report" in normalized_table_name:
-            return f'{table_name}."generated_at"'
-        if any(
-            token in normalized_table_name
-            for token in ("repair", "ticket", "debug", "event", "log")
-        ):
-            return f'{table_name}."created_at"'
-
     return None
 
 
@@ -495,17 +480,9 @@ def normalize_generation_result_sql(sql: str, data_source: str | None = None) ->
             flags=re.IGNORECASE,
         )
         normalized = _replace_relative_getdate_calls(normalized, now)
-        normalized = re.sub(
-            r"\bAS\s+failure\s+category\b",
-            'AS "failure_category"',
-            normalized,
-            flags=re.IGNORECASE,
-        )
         normalized = _rewrite_mssql_to_unixtime(normalized)
         normalized = _rewrite_mssql_timestamp_subtraction(normalized)
         normalized = _rewrite_mssql_timestamp_casts(normalized)
-        normalized = _rewrite_mssql_invented_date_identifiers(normalized)
-        normalized = _rewrite_mssql_invented_failure_category(normalized)
         normalized = _rewrite_mssql_bare_time_bucket_identifiers(normalized)
         normalized = _rewrite_mssql_bucket_functions(normalized)
         normalized = _rewrite_temporal_bucket_functions(normalized)
