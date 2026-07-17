@@ -47,3 +47,9 @@ def test_unparseable_sql_returns_false():
 
 def test_empty_string_returns_false():
     assert is_exploratory("") is False
+
+
+def test_none_and_non_string_sql_return_false():
+    assert is_exploratory(None) is False
+    assert is_exploratory(123) is False
+    assert is_exploratory(b"SELECT 1") is False
