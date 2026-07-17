@@ -462,8 +462,7 @@ def _register_knowledge_tools(mcp: FastMCP, ctx: ServeContext) -> None:
             pairs = load_query_pairs(ctx.project)
             if source:
                 pairs = [p for p in pairs if p.get("source", "user") == source]
-            if limit is not None:
-                pairs = pairs[:limit]
+            pairs = pairs[: limit if limit is not None else MAX_ROW_LIMIT]
             queries = [
                 {
                     "nl_query": p["nl"],
