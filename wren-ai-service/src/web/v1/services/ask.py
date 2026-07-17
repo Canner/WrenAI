@@ -1407,30 +1407,21 @@ class AskService:
                             results["metadata"]["type"] = "MISLEADING_QUERY"
                             return results
                         elif intent == "GENERAL":
-                            asyncio.create_task(
-                                self._pipelines["data_assistance"].run(
-                                    query=user_query,
-                                    histories=histories,
-                                    db_schemas=intent_classification_result.get(
-                                        "db_schemas"
-                                    ),
-                                    language=ask_request.configurations.language,
-                                    query_id=query_id,
-                                    custom_instruction=ask_request.custom_instruction,
-                                )
+                            intent_reasoning = (
+                                f"{intent_reasoning or ''}\n"
+                                "Classifier returned GENERAL, but this ask flow "
+                                "treats non-schema, non-guide questions as data "
+                                "retrieval requests so they continue through "
+                                "semantic retrieval and SQL generation."
                             )
-
                             self._ask_results[query_id] = AskResultResponse(
-                                status="finished",
-                                type="GENERAL",
+                                status="understanding",
+                                type="TEXT_TO_SQL",
                                 rephrased_question=rephrased_question,
                                 intent_reasoning=intent_reasoning,
                                 trace_id=trace_id,
                                 is_followup=True if histories else False,
-                                general_type="DATA_ASSISTANCE",
                             )
-                            results["metadata"]["type"] = "GENERAL"
-                            return results
                         elif intent == "USER_GUIDE":
                             asyncio.create_task(
                                 self._pipelines["user_guide_assistance"].run(
