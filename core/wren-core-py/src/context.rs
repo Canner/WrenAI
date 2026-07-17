@@ -162,10 +162,10 @@ impl PySessionContext {
                 if obj.is_none(py) {
                     HashMap::new()
                 } else {
-                    let frozenset = obj.downcast_bound::<PyFrozenSet>(py)?;
+                    let frozenset = obj.cast_bound::<PyFrozenSet>(py)?;
                     let mut map = HashMap::new();
                     for item in frozenset.iter() {
-                        match item.as_any().clone().downcast_into::<PyTuple>() {
+                        match item.as_any().clone().cast_into::<PyTuple>() {
                             Ok(tuple) => {
                                 if tuple.len()? != 2 {
                                     return Err(CoreError::new(
