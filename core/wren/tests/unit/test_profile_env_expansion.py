@@ -205,3 +205,58 @@ def test_debug_masks_registry_sensitive_fields(tmp_path, monkeypatch):
     for name, prof, key in cases:
         profile_mod.add_profile(name, prof)
         assert profile_mod.debug_profile(name)["config"][key] == "***", key
+
+
+def test_debug_masks_nested_sensitive_fields(tmp_path, monkeypatch):
+    """Secrets nested under ``kwargs``/``settings`` must be masked too.
+
+    ``expand_profile_secrets`` walks dicts and lists recursively so
+    ``kwargs: {password: ${PG_PW}}`` resolves; masking must cover the same
+    shape, or ``debug`` under-masks exactly the values expansion supports.
+    """
+    monkeypatch.setattr(profile_mod, "_WREN_HOME", tmp_path)
+    monkeypatch.setattr(profile_mod, "_PROFILES_FILE", tmp_path / "profiles.yml")
+
+    profile_mod.add_profile(
+        "pg",
+        {
+            "datasource": "postgres",
+            "host": "db.local",
+            "password": "TOP",
+            "kwargs": {"password": "NESTED", "connection_url": "postgresql://u:PW@h"},
+            "settings": {"deep": {"token": "DEEP"}},
+            "extras": [{"secret": "IN_LIST"}],
+        },
+    )
+
+    cfg = profile_mod.debug_profile("pg")["config"]
+    assert cfg["password"] == "***"
+    assert cfg["kwargs"]["password"] == "***"
+    assert cfg["kwargs"]["connection_url"] == "***"  # registry-sensitive, nested
+    assert cfg["settings"]["deep"]["token"] == "***"  # arbitrary depth
+    assert cfg["extras"][0]["secret"] == "***"  # dicts inside lists
+
+
+def test_debug_leaves_nested_benign_fields_intact(tmp_path, monkeypatch):
+    """Recursive masking must not over-mask: benign nested values survive.
+
+    Reverse anchor for ``test_debug_masks_nested_sensitive_fields`` — walking
+    nested containers must not turn every nested value into ``***``.
+    """
+    monkeypatch.setattr(profile_mod, "_WREN_HOME", tmp_path)
+    monkeypatch.setattr(profile_mod, "_PROFILES_FILE", tmp_path / "profiles.yml")
+
+    profile_mod.add_profile(
+        "pg",
+        {
+            "datasource": "postgres",
+            "host": "db.local",
+            "kwargs": {"sslmode": "require", "connect_timeout": 10},
+            "extras": [{"retries": 3}],
+        },
+    )
+
+    cfg = profile_mod.debug_profile("pg")["config"]
+    assert cfg["kwargs"]["sslmode"] == "require"
+    assert cfg["kwargs"]["connect_timeout"] == 10
+    assert cfg["extras"][0]["retries"] == 3
