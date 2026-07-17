@@ -240,6 +240,8 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[dict]:
 
 @observe(capture_input=False)
 def check_using_db_schemas_without_pruning(
+    query: str,
+    tables: list[str] | None,
     construct_db_schemas: list[dict],
     dbschema_retrieval: list[Document],
     encoding: tiktoken.Encoding,
@@ -288,7 +290,16 @@ def check_using_db_schemas_without_pruning(
         retrieval_result["table_ddl"] for retrieval_result in retrieval_results
     ]
     _token_count = len(encoding.encode(" ".join(table_ddls)))
-    if _token_count > context_window_size or enable_column_pruning:
+    should_select_tables_for_question = (
+        bool((query or "").strip())
+        and not tables
+        and len(retrieval_results) > 1
+    )
+    if (
+        _token_count > context_window_size
+        or enable_column_pruning
+        or should_select_tables_for_question
+    ):
         return {
             "db_schemas": [],
             "tokens": _token_count,
