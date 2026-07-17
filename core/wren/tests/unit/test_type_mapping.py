@@ -326,3 +326,55 @@ def test_cli_translate_types_unreadable_file_is_clean(tmp_path) -> None:
     assert result.returncode == 1
     assert "could not read file" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+def test_parse_types_skips_non_dict_rows() -> None:
+    columns = [
+        {"column": "id", "raw_type": "int8"},
+        "not-a-dict",
+        None,
+        {"column": "name", "raw_type": "character varying"},
+    ]
+    out = parse_types(columns, "postgres")
+    assert [r["column"] for r in out] == ["id", "name"]
+    assert out[0]["type"] == "BIGINT"
+
+
+def test_translate_types_skips_non_dict_rows() -> None:
+    columns = [
+        {"column": "id", "raw_type": "int8"},
+        42,
+        {"column": "name", "raw_type": "character varying"},
+    ]
+    out = translate_types(columns, "postgres", "bigquery")
+    assert len(out) == 2
+    assert [r["column"] for r in out] == ["id", "name"]
+    assert out[0]["type"] == "INT64"
+    assert out[1]["type"] == "STRING"
+
+
+def test_parse_types_accepts_non_dict_mappings() -> None:
+    from types import MappingProxyType
+
+    columns = [
+        MappingProxyType({"column": "id", "raw_type": "int8"}),
+        MappingProxyType({"column": "name", "raw_type": "character varying"}),
+    ]
+    out = parse_types(columns, "postgres")
+    assert [r["column"] for r in out] == ["id", "name"]
+    assert out[0]["type"] == "BIGINT"
+    # results are plain, mutable dicts even though inputs were read-only mappings
+    assert all(isinstance(r, dict) for r in out)
+
+
+def test_translate_types_accepts_non_dict_mappings() -> None:
+    from types import MappingProxyType
+
+    columns = [
+        MappingProxyType({"column": "id", "raw_type": "int8"}),
+        MappingProxyType({"column": "name", "raw_type": "character varying"}),
+    ]
+    out = translate_types(columns, "postgres", "bigquery")
+    assert [r["column"] for r in out] == ["id", "name"]
+    assert out[0]["type"] == "INT64"
+    assert out[1]["type"] == "STRING"
