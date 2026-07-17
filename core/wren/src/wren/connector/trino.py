@@ -269,6 +269,66 @@ def _build_trino_arrow_table(cursor) -> pa.Table:
     )
 
 
+def _coerce_trino_verify(value):
+    """Normalize a ``verify`` SSL override for ``trino.dbapi.connect``.
+
+    Trino's client accepts ``verify`` as a bool or a CA path. Connection URLs
+    and form kwargs always deliver strings, so ``?verify=false`` must not be
+    treated as a truthy path. Returns the coerced value, or ``None`` when the
+    key should be omitted (leave package defaults).
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and value in (0, 1):
+        return bool(value)
+    text = str(value).strip()
+    if text == "":
+        return None
+    low = text.lower()
+    if low in {"0", "false", "no", "off"}:
+        return False
+    if low in {"1", "true", "yes", "on"}:
+        return True
+    # Treat as CA bundle / cert path.
+    return text
+
+
+def _apply_trino_ssl_overrides(connect_kwargs: dict) -> dict:
+    """Mutate connect kwargs so SSL verify overrides are real booleans/paths.
+
+    Users connecting to private Trino (OpenShift, corporate CA) often need
+    ``verify=false`` or a custom CA. Without coercion, the string ``"false"``
+    is truthy and still attempts system CA verification (#1502).
+    """
+    if "verify" in connect_kwargs:
+        coerced = _coerce_trino_verify(connect_kwargs.pop("verify"))
+        if coerced is not None:
+            connect_kwargs["verify"] = coerced
+    # Alias common misspellings / UI keys
+    if "ssl_verify" in connect_kwargs and "verify" not in connect_kwargs:
+        coerced = _coerce_trino_verify(connect_kwargs.pop("ssl_verify"))
+        if coerced is not None:
+            connect_kwargs["verify"] = coerced
+    elif "ssl_verify" in connect_kwargs:
+        connect_kwargs.pop("ssl_verify", None)
+    if "insecure" in connect_kwargs and "verify" not in connect_kwargs:
+        insecure = _coerce_trino_verify(connect_kwargs.pop("insecure"))
+        if insecure is True:
+            connect_kwargs["verify"] = False
+        elif insecure is False:
+            connect_kwargs["verify"] = True
+    elif "insecure" in connect_kwargs:
+        connect_kwargs.pop("insecure", None)
+    if connect_kwargs.get("verify") is False:
+        logger.warning(
+            "Trino SSL certificate verification is disabled (verify=false); "
+            "the connection will not validate the server certificate."
+        )
+    return connect_kwargs
+
+
 def _build_trino_connect_kwargs(connection_info) -> dict:
     """Build kwargs for ``trino.dbapi.connect`` from either a typed
     ``TrinoConnectionInfo`` or a generic ``ConnectionUrl``.
@@ -296,7 +356,7 @@ def _build_trino_connect_kwargs(connection_info) -> dict:
         "_password": password,
     }
     out.update(kwargs)
-    return out
+    return _apply_trino_ssl_overrides(out)
 
 
 def _parse_trino_url(url: str, extra_kwargs: dict | None) -> dict:
@@ -341,7 +401,7 @@ def _parse_trino_url(url: str, extra_kwargs: dict | None) -> dict:
     if parsed.scheme == "trino+https":
         out["http_scheme"] = "https"
     out.update(query_kwargs)
-    return out
+    return _apply_trino_ssl_overrides(out)
 
 
 _TRINO_IMPORT_HINT = (
