@@ -75,17 +75,27 @@ def format_fetch_context_content(result: dict[str, Any]) -> str:
         return _cap_to_bytes(text, suffix="\n\n...[truncated]")
 
     items = result.get("results", []) or []
+    if not isinstance(items, list):
+        return "_No relevant context items found._"
     if not items:
         return "_No relevant context items found._"
 
     lines = []
-    for i, item in enumerate(items, start=1):
+    n = 0
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        n += 1
         item_type = item.get("item_type", "item")
         name = item.get("name", "")
         summary = item.get("summary") or item.get("text") or ""
+        if not isinstance(summary, str):
+            summary = str(summary) if summary is not None else ""
         if len(summary) > 120:
             summary = summary[:117] + "..."
-        lines.append(f"{i}. [{item_type}] {name} — {summary}")
+        lines.append(f"{n}. [{item_type}] {name} — {summary}")
+    if not lines:
+        return "_No relevant context items found._"
     return _cap_to_bytes("\n".join(lines), suffix="\n...[truncated]")
 
 
@@ -108,12 +118,20 @@ def format_recall_content(rows: list[dict[str, Any]]) -> str:
     """Render recalled NL→SQL pairs as a numbered list with code fences."""
     if not rows:
         return "_No similar past queries found._"
+    if not isinstance(rows, list):
+        return "_No similar past queries found._"
 
     chunks = []
-    for i, row in enumerate(rows, start=1):
+    n = 0
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        n += 1
         nl = row.get("nl_query") or row.get("nl") or ""
         sql = row.get("sql_query") or row.get("sql") or ""
-        chunks.append(f'{i}. "{nl}"\n   ```sql\n   {sql}\n   ```')
+        chunks.append(f'{n}. "{nl}"\n   ```sql\n   {sql}\n   ```')
+    if not chunks:
+        return "_No similar past queries found._"
     return "\n".join(chunks)
 
 
@@ -132,18 +150,28 @@ def format_list_models_content(manifest: dict[str, Any]) -> str:
     Columns: model | cols | description.
     """
     models = manifest.get("models", []) or []
-    if not models:
+    if not isinstance(models, list) or not models:
         return "_No models defined in this Wren project._"
 
     lines = ["| model | cols | description |", "|---|---|---|"]
+    any_model = False
     for m in models:
+        if not isinstance(m, dict):
+            continue
+        any_model = True
         name = m.get("name", "")
-        col_count = len(m.get("columns", []) or [])
-        desc = (
-            (m.get("properties") or {}).get("description") or m.get("description") or ""
-        )
+        cols = m.get("columns", []) or []
+        col_count = len(cols) if isinstance(cols, list) else 0
+        props = m.get("properties") or {}
+        if not isinstance(props, dict):
+            props = {}
+        desc = props.get("description") or m.get("description") or ""
+        if not isinstance(desc, str):
+            desc = str(desc) if desc is not None else ""
         # Trim long descriptions to keep table compact.
         if len(desc) > 80:
             desc = desc[:77] + "..."
         lines.append(f"| {name} | {col_count} | {desc} |")
+    if not any_model:
+        return "_No models defined in this Wren project._"
     return "\n".join(lines)
