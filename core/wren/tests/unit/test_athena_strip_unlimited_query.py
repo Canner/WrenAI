@@ -25,7 +25,9 @@ def test_without_unconditional_strip_semicolon_would_reach_execute():
     def old_query(sql: str, limit: int | None = None) -> str:
         executed = sql
         if limit is not None:
-            executed = f"SELECT * FROM ({re.sub(r'[;\\s]+\\Z', '', sql)}) AS t LIMIT {limit}"
+            # Precompute strip outside f-string (Py3.11: no backslash in f-expr).
+            cleaned = re.sub(r"[;\s]+\Z", "", sql)
+            executed = f"SELECT * FROM ({cleaned}) AS t LIMIT {limit}"
         return executed
 
     assert old_query("SELECT 1;", None) == "SELECT 1;"
