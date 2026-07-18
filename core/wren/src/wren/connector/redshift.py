@@ -44,11 +44,9 @@ class RedshiftConnector(ConnectorABC):
         self.connection.autocommit = True
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
+        sql = strip_trailing_semicolon(sql)
         if limit is not None:
-            sql = (
-                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) "
-                f"AS _q LIMIT {int(limit)}"
-            )
+            sql = f"SELECT * FROM ({sql}) AS _q LIMIT {int(limit)}"
         with closing(self.connection.cursor()) as cursor:
             cursor.execute(sql)
             cols = [desc[0] for desc in cursor.description]
