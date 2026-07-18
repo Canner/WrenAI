@@ -46,7 +46,7 @@ def test_extract_schema_items_skips_non_dict_models():
             "views": [None],
         }
     )
-    names = {i.get("name") for i in items}
+    names = {i.get("item_name") for i in items}
     assert "ok" in names
     assert "id" in names
     assert None not in names

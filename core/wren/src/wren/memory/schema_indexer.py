@@ -286,7 +286,11 @@ def extract_schema_items(manifest: dict) -> list[dict]:
 def _model_record(model: dict, mdl_h: str, now: datetime) -> dict:
     name = model["name"]
     cols = model.get("columns", [])
-    col_summaries = ", ".join(f"{c['name']} ({c.get('type', '?')})" for c in cols[:20])
+    col_summaries = ", ".join(
+        f"{c['name']} ({c.get('type', '?')})"
+        for c in cols[:20]
+        if isinstance(c, dict) and c.get("name")
+    )
     pk = model.get("primaryKey") or ""
 
     description = _prop_description(model)
