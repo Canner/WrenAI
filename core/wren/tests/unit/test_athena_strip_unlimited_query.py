@@ -1,33 +1,44 @@
-"""Athena unlimited query strips trailing semicolon like limit wrap."""
+"""Athena unlimited query strips trailing semicolon like the limit wrap."""
 
 from __future__ import annotations
 
-import re
-from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from wren.connector.athena import AthenaConnector
+
+pytestmark = pytest.mark.unit
+
+
+class _CM:
+    def __init__(self, obj):
+        self.obj = obj
+
+    def __enter__(self):
+        return self.obj
+
+    def __exit__(self, *a):
+        return False
+
+
+def _make_mock_connector():
+    connector = AthenaConnector.__new__(AthenaConnector)
+    connector.connection = MagicMock()
+    cursor = MagicMock()
+    cursor.close = MagicMock()
+    connector.connection.cursor.return_value = cursor
+    return connector, cursor
 
 
 def test_query_unlimited_path_strips_trailing_semicolon():
-    src = (
-        Path(__file__).resolve().parents[2]
-        / "src"
-        / "wren"
-        / "connector"
-        / "athena.py"
-    ).read_text(encoding="utf-8")
-    assert "stripped = strip_trailing_semicolon(sql)" in src
-    assert "executed = stripped" in src
+    connector, cursor = _make_mock_connector()
+    with (
+        patch(
+            "wren.connector.athena._build_athena_arrow_table", return_value=MagicMock()
+        ),
+        patch("wren.connector.athena.contextlib.closing", side_effect=lambda c: _CM(c)),
+    ):
+        connector.query("SELECT 1;")
 
-    helper = re.compile(r"[;\s]+\Z")
-    assert helper.sub("", "SELECT 1;") == "SELECT 1"
-
-
-def test_without_unconditional_strip_semicolon_would_reach_execute():
-    def old_query(sql: str, limit: int | None = None) -> str:
-        executed = sql
-        if limit is not None:
-            # Precompute strip outside f-string (Py3.11: no backslash in f-expr).
-            cleaned = re.sub(r"[;\s]+\Z", "", sql)
-            executed = f"SELECT * FROM ({cleaned}) AS t LIMIT {limit}"
-        return executed
-
-    assert old_query("SELECT 1;", None) == "SELECT 1;"
+    cursor.execute.assert_called_once_with("SELECT 1")
