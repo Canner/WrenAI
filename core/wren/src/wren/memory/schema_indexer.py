@@ -50,14 +50,23 @@ def describe_schema(manifest: dict) -> str:
         lines.append(f"Catalog: {catalog}, Schema: {schema}")
         lines.append("")
 
-    for model in manifest.get("models", []):
-        _describe_model(model, lines)
+    models = manifest.get("models") or []
+    if isinstance(models, list):
+        for model in models:
+            if isinstance(model, dict) and model.get("name"):
+                _describe_model(model, lines)
 
-    for rel in manifest.get("relationships", []):
-        _describe_relationship(rel, lines)
+    rels = manifest.get("relationships") or []
+    if isinstance(rels, list):
+        for rel in rels:
+            if isinstance(rel, dict):
+                _describe_relationship(rel, lines)
 
-    for view in manifest.get("views", []):
-        _describe_view(view, lines)
+    views = manifest.get("views") or []
+    if isinstance(views, list):
+        for view in views:
+            if isinstance(view, dict):
+                _describe_view(view, lines)
 
     cubes = manifest.get("cubes", []) or []
     if isinstance(cubes, list):
@@ -228,16 +237,28 @@ def extract_schema_items(manifest: dict) -> list[dict]:
     mdl_h = manifest_hash(manifest)
     items: list[dict] = []
 
-    for model in manifest.get("models", []):
-        items.append(_model_record(model, mdl_h, now))
-        for col in model.get("columns", []):
-            items.append(_column_record(col, model["name"], mdl_h, now))
+    models = manifest.get("models") or []
+    if isinstance(models, list):
+        for model in models:
+            if not isinstance(model, dict) or not model.get("name"):
+                continue
+            items.append(_model_record(model, mdl_h, now))
+            for col in model.get("columns", []) or []:
+                if not isinstance(col, dict) or not col.get("name"):
+                    continue
+                items.append(_column_record(col, model["name"], mdl_h, now))
 
-    for rel in manifest.get("relationships", []):
-        items.append(_relationship_record(rel, mdl_h, now))
+    rels = manifest.get("relationships") or []
+    if isinstance(rels, list):
+        for rel in rels:
+            if isinstance(rel, dict):
+                items.append(_relationship_record(rel, mdl_h, now))
 
-    for view in manifest.get("views", []):
-        items.append(_view_record(view, mdl_h, now))
+    views = manifest.get("views") or []
+    if isinstance(views, list):
+        for view in views:
+            if isinstance(view, dict):
+                items.append(_view_record(view, mdl_h, now))
 
     cubes = manifest.get("cubes", []) or []
     if isinstance(cubes, list):
