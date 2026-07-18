@@ -302,7 +302,8 @@ class AthenaConnector(ConnectorABC):
         # engines can stop early instead of us downloading a full result and
         # slicing in Python. Subquery-wrap + trailing-semicolon strip keeps
         # composition valid for client SQL terminated with ``;``.
-        executed = sql
+        stripped = strip_trailing_semicolon(sql)
+        executed = stripped
         if limit is not None:
             # Multiline wrap so a trailing `-- line comment` in the inner SQL
             # is terminated by the newline instead of swallowing the closing
@@ -310,7 +311,7 @@ class AthenaConnector(ConnectorABC):
             # guard this.)
             executed = (
                 "SELECT * FROM (\n"
-                f"{strip_trailing_semicolon(sql)}\n"
+                f"{stripped}\n"
                 f") AS _wren_sub LIMIT {int(limit)}"
             )
         try:
