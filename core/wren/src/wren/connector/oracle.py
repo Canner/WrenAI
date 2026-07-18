@@ -178,11 +178,12 @@ class OracleConnector(ConnectorABC):
         self.connection = _make_oracle_connection(connection_info)
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
+        # Always strip terminating `;` even on the unlimited path: a bare
+        # trailing semicolon is rejected by some Oracle clients/drivers even
+        # though engines accept multi-statement scripts elsewhere.
+        sql = strip_trailing_semicolon(sql)
         if limit is not None:
-            sql = (
-                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) t "
-                f"WHERE ROWNUM <= {limit}"
-            )
+            sql = f"SELECT * FROM ({sql}) t WHERE ROWNUM <= {limit}"
         try:
             with self.connection.cursor() as cursor:
                 cursor.execute(sql)
