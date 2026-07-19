@@ -71,7 +71,9 @@ def _model_seeds(
     columns = model.get("columns", []) or []
     if not isinstance(columns, list):
         columns = []
-    columns = [c for c in columns if isinstance(c, dict) and c.get("name") is not None]
+    columns = [
+        c for c in columns if isinstance(c, dict) and isinstance(c.get("name"), str)
+    ]
     primary_keys = _primary_key_columns(model)
     pairs = []
 
