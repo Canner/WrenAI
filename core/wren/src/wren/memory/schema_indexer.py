@@ -50,14 +50,23 @@ def describe_schema(manifest: dict) -> str:
         lines.append(f"Catalog: {catalog}, Schema: {schema}")
         lines.append("")
 
-    for model in manifest.get("models", []):
-        _describe_model(model, lines)
+    models = manifest.get("models", []) or []
+    if isinstance(models, list):
+        for model in models:
+            if isinstance(model, dict):
+                _describe_model(model, lines)
 
-    for rel in manifest.get("relationships", []):
-        _describe_relationship(rel, lines)
+    rels = manifest.get("relationships", []) or []
+    if isinstance(rels, list):
+        for rel in rels:
+            if isinstance(rel, dict):
+                _describe_relationship(rel, lines)
 
-    for view in manifest.get("views", []):
-        _describe_view(view, lines)
+    views = manifest.get("views", []) or []
+    if isinstance(views, list):
+        for view in views:
+            if isinstance(view, dict):
+                _describe_view(view, lines)
 
     cubes = manifest.get("cubes", []) or []
     if isinstance(cubes, list):
@@ -87,11 +96,12 @@ def _describe_model(model: dict, lines: list[str]) -> None:
     if data_scope:
         lines.append(f"  Data scope: {data_scope}")
 
-    cols = model.get("columns", [])
-    if cols:
+    cols = model.get("columns", []) or []
+    if isinstance(cols, list) and cols:
         lines.append("  Columns:")
         for col in cols:
-            _describe_column(col, lines)
+            if isinstance(col, dict) and col.get("name") is not None:
+                _describe_column(col, lines)
     lines.append("")
 
 
