@@ -53,19 +53,19 @@ def describe_schema(manifest: dict) -> str:
     models = manifest.get("models", []) or []
     if isinstance(models, list):
         for model in models:
-            if isinstance(model, dict):
+            if isinstance(model, dict) and model.get("name") is not None:
                 _describe_model(model, lines)
 
     rels = manifest.get("relationships", []) or []
     if isinstance(rels, list):
         for rel in rels:
-            if isinstance(rel, dict):
+            if isinstance(rel, dict) and rel.get("name") is not None:
                 _describe_relationship(rel, lines)
 
     views = manifest.get("views", []) or []
     if isinstance(views, list):
         for view in views:
-            if isinstance(view, dict):
+            if isinstance(view, dict) and view.get("name") is not None:
                 _describe_view(view, lines)
 
     cubes = manifest.get("cubes", []) or []
