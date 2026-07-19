@@ -177,7 +177,12 @@ def _relationship_key_columns(manifest: dict) -> dict[str, frozenset[str]]:
     of aggregation seeds.
     """
     accum: dict[str, set[str]] = {}
-    for rel in manifest.get("relationships", []):
+    rels = manifest.get("relationships", []) or []
+    if not isinstance(rels, list):
+        return {}
+    for rel in rels:
+        if not isinstance(rel, dict):
+            continue
         condition = rel.get("condition") or ""
         try:
             tree = sqlglot.parse_one(condition)
