@@ -19,8 +19,9 @@ def test_extract_skips_nonduct_models_and_columns():
             "views": [1, {"name": "v", "statement": "SELECT 1"}],
         }
     )
-    kinds = {(i.get("type"), i.get("name")) for i in items}
+    kinds = {(i.get("item_type"), i.get("item_name")) for i in items}
     assert ("model", "orders") in kinds
     assert ("column", "id") in kinds
-    # corrupted entries skipped
-    assert all(i.get("name") != "nope" for i in items)
+    assert ("relationship", "r") in kinds
+    assert ("view", "v") in kinds
+    assert all(i.get("item_name") != "nope" for i in items)
