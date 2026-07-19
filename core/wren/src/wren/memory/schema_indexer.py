@@ -244,13 +244,13 @@ def extract_schema_items(manifest: dict) -> list[dict]:
     rels = manifest.get("relationships", []) or []
     if isinstance(rels, list):
         for rel in rels:
-            if isinstance(rel, dict):
+            if isinstance(rel, dict) and rel.get("name") is not None:
                 items.append(_relationship_record(rel, mdl_h, now))
 
     views = manifest.get("views", []) or []
     if isinstance(views, list):
         for view in views:
-            if isinstance(view, dict):
+            if isinstance(view, dict) and view.get("name") is not None:
                 items.append(_view_record(view, mdl_h, now))
 
     cubes = manifest.get("cubes", []) or []
