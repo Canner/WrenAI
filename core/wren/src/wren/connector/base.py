@@ -16,7 +16,15 @@ def strip_trailing_semicolon(sql: str) -> str:
     or ``EXPLAIN SELECT 1;``). Only the *terminating* run of semicolons and
     whitespace is removed, so semicolons inside string literals
     (``SELECT 'a;b'``) are preserved.
+
+    Non-string values are coerced with ``str(...)`` so accidental ``None``/
+    numeric SQL arguments degrade instead of raising ``TypeError`` inside
+    the regex. Empty input becomes ``""``.
     """
+    if sql is None:
+        return ""
+    if not isinstance(sql, str):
+        sql = str(sql)
     return _TRAILING_SEMICOLONS_RE.sub("", sql)
 
 
