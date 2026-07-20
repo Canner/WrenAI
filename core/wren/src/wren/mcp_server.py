@@ -254,11 +254,7 @@ def _register_context_tools(mcp: FastMCP, ctx: ServeContext) -> None:
 
         models = load_models(ctx.project)
         model = next(
-            (
-                m
-                for m in models
-                if isinstance(m, dict) and m.get("name") == name
-            ),
+            (m for m in models if isinstance(m, dict) and m.get("name") == name),
             None,
         )
         if model is None:
