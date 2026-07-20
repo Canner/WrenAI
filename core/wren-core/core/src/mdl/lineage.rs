@@ -125,6 +125,7 @@ impl Lineage {
                 let mut expr_parts = to_expr_queue(source_column.clone());
                 let mut relation_ref = current_relation.clone();
                 while !expr_parts.is_empty() {
+                    #[allow(clippy::unwrap_used)]
                     let ident = expr_parts.pop_front().unwrap();
                     let Some(source_column_ref) = mdl.get_column_reference(&Column::new(
                         Some(relation_ref.clone()),
@@ -143,7 +144,12 @@ impl Lineage {
                                         .iter()
                                         .find(|m| m != &relation_ref.table())
                                         .cloned()
-                                        .unwrap();
+                                        .ok_or_else(|| {
+                                            plan_err!(
+                                                "related model not found for relationship: {}",
+                                                rs_rf.name
+                                            )
+                                        })?;
                                     if related_model_name
                                         != source_column_ref.column.r#type
                                     {
@@ -172,7 +178,12 @@ impl Lineage {
                                         });
 
                                     let related_model =
-                                        mdl.get_model(&related_model_name).unwrap();
+                                        mdl.get_model(&related_model_name).ok_or_else(|| {
+                                            plan_err!(
+                                                "model not found: {} for relationship",
+                                                related_model_name
+                                            )
+                                        })?;
 
                                     let right_vertex = *node_index_map
                                         .entry(Dataset::Model(Arc::clone(&related_model)))

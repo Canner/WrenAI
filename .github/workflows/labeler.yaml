@@ -1,6 +1,12 @@
 name: 'Pull Request Labeler'
 on:
-- pull_request_target
+  # SAFETY: pull_request_target runs from the base branch with full token
+  # permissions. This is REQUIRED so the labeler can write labels on forked
+  # PRs. The only step is actions/labeler@v5, which reads the PR metadata and
+  # applies labels — it does NOT checkout code. DO NOT add actions/checkout
+  # or any other step that processes PR-supplied files, as that would allow
+  # PR authors to exfiltrate repository secrets.
+  pull_request_target
 
 jobs:
   labeler:

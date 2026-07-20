@@ -398,7 +398,8 @@ class ClickHouseConnector(ConnectorABC):
         stripped = strip_trailing_semicolon(sql)
         statement = stripped
         if limit is not None:
-            statement = f"SELECT * FROM ({stripped}) AS _wren_sub LIMIT {limit}"
+            safe_limit = self._normalize_limit(limit)
+            statement = f"SELECT * FROM ({stripped}) AS _wren_sub LIMIT {safe_limit}"
         try:
             result = self.connection.query(statement)
         except _ClickHouseDbError as e:

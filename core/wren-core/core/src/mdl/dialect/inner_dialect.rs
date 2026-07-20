@@ -385,6 +385,7 @@ pub struct OracleDialect {}
 impl InnerDialect for OracleDialect {
     fn identifier_quote_style(&self, identifier: &str) -> Option<char> {
         // Oracle defaults to upper case for identifiers
+        #[allow(clippy::unwrap_used)]
         let identifier_regex = Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_]*$").unwrap();
         if ALL_KEYWORDS.contains(&identifier.to_uppercase().as_str())
             || !identifier_regex.is_match(identifier)
@@ -502,7 +503,12 @@ impl InnerDialect for ClickHouseDialect {
                                 "toDayOfWeek",
                                 &[args[1].clone()],
                             )?
-                            .expect("clickhouse_function_to_sql always returns Some");
+                            .ok_or_else(|| {
+                                datafusion::error::DataFusionError::Plan(
+                                    "clickhouse_function_to_sql should return Some for toDayOfWeek"
+                                        .to_string(),
+                                )
+                            })?;
                             return Ok(Some(ast::Expr::BinaryOp {
                                 left: Box::new(inner_expr),
                                 op: ast::BinaryOperator::Modulo,

@@ -33,7 +33,7 @@ from wren.mdl import get_manifest_extractor, get_session_context, to_json_base64
 from wren.mdl.cte_rewriter import CTERewriter, get_sqlglot_dialect
 from wren.model.data_source import DataSource
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
-from wren.policy import resolve_model_name, validate_sql_policy
+from wren.policy import basic_safety_check, resolve_model_name, validate_sql_policy
 
 
 class WrenEngine:
@@ -98,6 +98,7 @@ class WrenEngine:
               → sqlglot generate (target dialect)
               → output SQL with model CTEs in target dialect
         """
+        basic_safety_check(sql)
         return self._plan(sql, properties)
 
     # ------------------------------------------------------------------
@@ -111,6 +112,7 @@ class WrenEngine:
         properties: dict | None = None,
     ) -> pa.Table:
         """Transpile and execute SQL, return results as an Arrow table."""
+        basic_safety_check(sql)
         dialect_sql = self.dry_plan(sql, properties)
         connector = self._get_connector()
         try:
@@ -127,6 +129,7 @@ class WrenEngine:
 
     def dry_run(self, sql: str, properties: dict | None = None) -> None:
         """Transpile and dry-run SQL without returning results."""
+        basic_safety_check(sql)
         dialect_sql = self.dry_plan(sql, properties)
         connector = self._get_connector()
         try:

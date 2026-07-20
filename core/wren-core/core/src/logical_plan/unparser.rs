@@ -42,7 +42,11 @@ impl UserDefinedLogicalNodeUnparser for SqlReferenceNodeUnparser {
             )));
         }
 
-        let statement = statements.into_iter().next().expect("checked length == 1");
+        let statement = statements.into_iter().next().ok_or_else(|| {
+            datafusion::error::DataFusionError::Internal(
+                "expected exactly one statement after length check".to_string(),
+            )
+        })?;
         let Statement::Query(parsed_query) = statement else {
             return Err(datafusion::error::DataFusionError::Plan(format!(
                 "ref_sql for model '{}' must be a SELECT statement",

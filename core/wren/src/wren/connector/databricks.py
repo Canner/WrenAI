@@ -55,7 +55,7 @@ class DatabricksConnector(ConnectorABC):
         with closing(self.connection.cursor()) as cursor:
             cursor.execute(sql)
             if limit is not None:
-                return cursor.fetchmany_arrow(limit)
+                return cursor.fetchmany_arrow(self._normalize_limit(limit))
             return cursor.fetchall_arrow()
 
     def dry_run(self, sql: str) -> None:

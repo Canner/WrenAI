@@ -19,7 +19,7 @@ try:
 except ImportError:  # pragma: no cover
     pyodbc = None
 
-from wren.connector.base import ConnectorABC
+from wren.connector.base import ConnectorABC, MAX_ROW_LIMIT
 from wren.model import MSSqlConnectionInfo
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 
@@ -44,12 +44,13 @@ class MSSqlConnector(ConnectorABC):
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         sql = self._flatten_pagination_limit(sql)
+        safe_limit = self._normalize_limit(limit) if limit is not None else None
         with closing(self.connection.cursor()) as cursor:
-            cursor.execute(self._raw_cursor_sql(sql, limit))
+            cursor.execute(self._raw_cursor_sql(sql, safe_limit))
             if cursor.description is None:
                 return pa.table({})
 
-            rows = cursor.fetchmany(limit) if limit is not None else cursor.fetchall()
+            rows = cursor.fetchmany(safe_limit) if safe_limit is not None else cursor.fetchall()
             arrow_schema = self._build_mssql_arrow_schema(cursor.description, rows)
             arrays = [
                 self._build_mssql_column(

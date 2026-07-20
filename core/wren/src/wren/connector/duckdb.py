@@ -13,40 +13,38 @@ from wren.model import (
 from wren.model.error import ErrorCode, WrenError
 
 
-def _escape_sql(value: str) -> str:
-    return value.replace("'", "''")
-
-
 def _init_duckdb_s3(connection, info: S3FileConnectionInfo):
-    connection.execute(f"""
-    CREATE SECRET wren_s3 (
-        TYPE S3,
-        KEY_ID '{_escape_sql(info.access_key.get_secret_value())}',
-        SECRET '{_escape_sql(info.secret_key.get_secret_value())}',
-        REGION '{_escape_sql(info.region)}'
-    )""")
+    connection.execute(
+        "CREATE SECRET wren_s3 (TYPE S3, KEY_ID ?, SECRET ?, REGION ?)",
+        [
+            info.access_key.get_secret_value(),
+            info.secret_key.get_secret_value(),
+            info.region,
+        ],
+    )
 
 
 def _init_duckdb_minio(connection, info: MinioFileConnectionInfo):
-    connection.execute(f"""
-    CREATE SECRET wren_minio (
-        TYPE S3,
-        KEY_ID '{_escape_sql(info.access_key.get_secret_value())}',
-        SECRET '{_escape_sql(info.secret_key.get_secret_value())}',
-        REGION 'ap-northeast-1'
-    )""")
+    connection.execute(
+        "CREATE SECRET wren_minio (TYPE S3, KEY_ID ?, SECRET ?, REGION 'ap-northeast-1')",
+        [
+            info.access_key.get_secret_value(),
+            info.secret_key.get_secret_value(),
+        ],
+    )
     connection.execute("SET s3_endpoint=?", [info.endpoint])
     connection.execute("SET s3_url_style='path'")
     connection.execute("SET s3_use_ssl=?", [info.ssl_enabled])
 
 
 def _init_duckdb_gcs(connection, info: GcsFileConnectionInfo):
-    connection.execute(f"""
-    CREATE SECRET wren_gcs (
-        TYPE GCS,
-        KEY_ID '{_escape_sql(info.key_id.get_secret_value())}',
-        SECRET '{_escape_sql(info.secret_key.get_secret_value())}'
-    )""")
+    connection.execute(
+        "CREATE SECRET wren_gcs (TYPE GCS, KEY_ID ?, SECRET ?)",
+        [
+            info.key_id.get_secret_value(),
+            info.secret_key.get_secret_value(),
+        ],
+    )
 
 
 class DuckDBConnector(ConnectorABC):
@@ -78,14 +76,8 @@ class DuckDBConnector(ConnectorABC):
         When ``limit`` is provided the query is wrapped in a ``LIMIT`` clause
         so only that many rows are fetched.
         """
-        if limit is not None:
-            # Strip the terminating run of ``;`` / whitespace before wrapping so
-            # the subquery stays valid SQL (e.g. ``SELECT 1;`` must not become
-            # ``SELECT * FROM (SELECT 1;) AS _q LIMIT ...``). Semicolons inside
-            # string literals are preserved.
-            stripped = strip_trailing_semicolon(sql)
-            sql = f"SELECT * FROM ({stripped}) AS _q LIMIT {int(limit)}"
-        return self.connection.execute(sql).fetch_arrow_table()
+        executed, params = self._apply_limit_param(sql, limit, param_style="qmark")
+        return self.connection.execute(executed, params).fetch_arrow_table()
 
     def dry_run(self, sql: str) -> None:
         """Validate ``sql`` without returning rows or side effects.
@@ -98,8 +90,8 @@ class DuckDBConnector(ConnectorABC):
         statement then becomes a natural syntax error inside the subquery, and
         no rows are materialized.
         """
-        stripped = strip_trailing_semicolon(sql)
-        self.connection.execute(f"SELECT * FROM ({stripped}) AS _q LIMIT 0")
+        executed, params = self._apply_limit_param(sql, 0, param_style="qmark")
+        self.connection.execute(executed, params)
 
     def _attach_database(self, connection_info) -> None:
         """Attach every discovered DuckDB file as a read-only database.

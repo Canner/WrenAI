@@ -179,9 +179,10 @@ class OracleConnector(ConnectorABC):
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         if limit is not None:
+            safe_limit = self._normalize_limit(limit)
             sql = (
                 f"SELECT * FROM ({strip_trailing_semicolon(sql)}) t "
-                f"WHERE ROWNUM <= {limit}"
+                f"WHERE ROWNUM <= {safe_limit}"
             )
         try:
             with self.connection.cursor() as cursor:

@@ -2,6 +2,10 @@
 name = "wren-core-base"
 version = "0.3.0"
 edition = "2021"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
 license = "Apache-2.0"
 description = "Shared MDL manifest types for the Wren semantic engine"
 homepage = "https://getwren.ai"

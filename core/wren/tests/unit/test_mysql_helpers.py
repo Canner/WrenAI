@@ -11,13 +11,11 @@ import pyarrow as pa
 import pytest
 
 from wren.connector.mysql import (
-    _apply_limit,
+    _apply_limit_mysql,
     _arrow_decimal_from_mysql_field,
     _build_mysql_column,
     _build_mysql_connect_kwargs,
-    _coerce_limit,
     _mysql_blob_codes,
-    _mysql_decimal_codes,
     _mysql_field_type_map,
     _mysql_string_codes,
     _mysql_unsigned_variant_map,
@@ -41,52 +39,34 @@ class _FakeConnInfoFromUrl:
         self.kwargs = kwargs
 
 
-# ── _coerce_limit ─────────────────────────────────────────────────────────
+# ── _apply_limit_mysql ──────────────────────────────────────────────────────
 
 
-def test_coerce_limit_none_passthrough() -> None:
-    assert _coerce_limit(None) is None
-
-
-def test_coerce_limit_accepts_int() -> None:
-    assert _coerce_limit(10) == 10
-
-
-def test_coerce_limit_accepts_numeric_string() -> None:
-    # ``int()`` accepts numeric strings — keep that contract.
-    assert _coerce_limit("25") == 25
-
-
-def test_coerce_limit_rejects_injection_string() -> None:
-    """A crafted limit value must not survive ``int()`` coercion."""
-    with pytest.raises(ValueError):
-        _coerce_limit("1; DROP TABLE foo")
-
-
-def test_coerce_limit_rejects_negative() -> None:
-    with pytest.raises(ValueError):
-        _coerce_limit(-1)
-
-
-# ── _apply_limit ──────────────────────────────────────────────────────────
-
-
-def test_apply_limit_appends_clause() -> None:
-    out = _apply_limit("SELECT a FROM t", 5)
-    assert out.endswith("LIMIT 5")
+def test_apply_limit_mysql_appends_clause() -> None:
+    out, params = _apply_limit_mysql("SELECT a FROM t", 5)
+    assert out.endswith("LIMIT %s")
+    assert params == [5]
     assert "SELECT a FROM t" in out
 
 
-def test_apply_limit_strips_trailing_semicolon() -> None:
-    out = _apply_limit("SELECT a FROM t;", 3)
-    assert "; " not in out
-    assert out.endswith("LIMIT 3")
+def test_apply_limit_mysql_none_returns_unchanged() -> None:
+    out, params = _apply_limit_mysql("SELECT a FROM t", None)
+    assert out == "SELECT a FROM t"
+    assert params is None
+
+
+def test_apply_limit_mysql_strips_trailing_semicolon() -> None:
+    out, params = _apply_limit_mysql("SELECT a FROM t;", 3)
+    assert params == [3]
     assert ";" not in out.split("LIMIT")[0]
 
 
-def test_apply_limit_zero() -> None:
-    out = _apply_limit("SELECT a FROM t", 0)
-    assert out.endswith("LIMIT 0")
+def test_apply_limit_mysql_parameterized() -> None:
+    """LIMIT is always a parameter, never interpolated."""
+    out, params = _apply_limit_mysql("SELECT a FROM t", 99)
+    assert "%s" in out
+    assert params == [99]
+    assert "LIMIT 99" not in out  # not interpolated
 
 
 # ── URL connection kwargs ─────────────────────────────────────────────────

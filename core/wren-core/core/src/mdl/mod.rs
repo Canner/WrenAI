@@ -67,6 +67,10 @@ impl Default for AnalyzedWrenMDL {
     fn default() -> Self {
         let manifest = ManifestBuilder::default().build();
         let wren_mdl = WrenMDL::new(manifest);
+        // SAFETY: Lineage::new cannot fail on a freshly-built default manifest.
+        // The manifest has no models, views, or relationships — lineage
+        // resolution is trivially empty.
+        #[allow(clippy::unwrap_used)]
         let lineage = lineage::Lineage::new(&wren_mdl).unwrap();
         AnalyzedWrenMDL {
             wren_mdl: Arc::new(wren_mdl),
@@ -241,9 +245,9 @@ impl WrenMDL {
                 .iter()
                 .map(|model| match model.source() {
                     ModelSource::TableReference => {
-                        let name = TableReference::from(model.table_reference().expect(
-                            "table_reference must exist for TableReference source",
-                        ));
+                        let name = TableReference::from(model.table_reference().ok_or_else(|| {
+                            plan_err!("table_reference must exist for TableReference source")
+                        })?);
                         let available_columns = model
                             .columns
                             .iter()
@@ -265,9 +269,10 @@ impl WrenMDL {
                             .collect::<Result<Vec<_>>>()?;
                         let fields: Vec<_> = available_columns
                             .into_iter()
-                            .filter(|c| c.is_some())
                             .filter_map(|column| {
-                                Self::infer_source_column(&column.unwrap()).ok().flatten()
+                                column.and_then(|c| {
+                                    Self::infer_source_column(&c).ok().flatten()
+                                })
                             })
                             .collect();
                         let schema =
@@ -447,6 +452,7 @@ pub fn create_wren_ctx(
 
     if config.options().execution.time_zone.is_none() {
         // Set default time zone to UTC to avoid time zone related issues in timestamp inference and comparison. It can be overridden by the user config.
+        #[allow(clippy::unwrap_used)]
         config
             .options_mut()
             .set("datafusion.execution.time_zone", "+00:00")
@@ -468,6 +474,7 @@ pub fn transform_sql(
     properties: HashMap<String, Option<String>>,
     sql: &str,
 ) -> Result<String> {
+    #[allow(clippy::unwrap_used)]
     let runtime = tokio::runtime::Runtime::new().unwrap();
     runtime.block_on(transform_sql_with_ctx(
         &create_wren_ctx(None, analyzed_mdl.wren_mdl().data_source().as_ref()),

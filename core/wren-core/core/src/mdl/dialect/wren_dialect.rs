@@ -43,6 +43,7 @@ impl Dialect for WrenDialect {
             return Some(quote);
         }
 
+        #[allow(clippy::unwrap_used)]
         let identifier_regex = Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_]*$").unwrap();
         if ALL_KEYWORDS.contains(&identifier.to_uppercase().as_str())
             || !identifier_regex.is_match(identifier)

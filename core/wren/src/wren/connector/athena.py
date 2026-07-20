@@ -302,20 +302,10 @@ class AthenaConnector(ConnectorABC):
         # engines can stop early instead of us downloading a full result and
         # slicing in Python. Subquery-wrap + trailing-semicolon strip keeps
         # composition valid for client SQL terminated with ``;``.
-        executed = sql
-        if limit is not None:
-            # Multiline wrap so a trailing `-- line comment` in the inner SQL
-            # is terminated by the newline instead of swallowing the closing
-            # `) AS _wren_sub LIMIT n`. (Single-line sibling connectors don't
-            # guard this.)
-            executed = (
-                "SELECT * FROM (\n"
-                f"{strip_trailing_semicolon(sql)}\n"
-                f") AS _wren_sub LIMIT {int(limit)}"
-            )
+        executed, params = self._apply_limit_param(sql, limit, param_style="format")
         try:
             with contextlib.closing(self.connection.cursor()) as cursor:
-                cursor.execute(executed)
+                cursor.execute(executed, params)
                 return _build_athena_arrow_table(cursor)
         except (WrenError, TimeoutError):
             raise

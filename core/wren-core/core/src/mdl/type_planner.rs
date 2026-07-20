@@ -15,17 +15,19 @@ impl TypePlanner for WrenTypePlanner {
             SQLDataType::Int32 => Ok(Some(DataType::Int32)),
             SQLDataType::Float32 => Ok(Some(DataType::Float32)),
             SQLDataType::Float64 => Ok(Some(DataType::Float64)),
-            SQLDataType::Datetime(precision)
-                if precision.is_none() || [0, 3, 6, 9].contains(&precision.unwrap()) =>
-            {
-                let precision = match precision {
-                    Some(0) => TimeUnit::Second,
-                    Some(3) => TimeUnit::Millisecond,
-                    Some(6) => TimeUnit::Microsecond,
-                    None | Some(9) => TimeUnit::Nanosecond,
-                    _ => unreachable!(),
-                };
-                Ok(Some(DataType::Timestamp(precision, None)))
+            SQLDataType::Datetime(precision) => {
+                let p = precision.unwrap_or(9);
+                if [0, 3, 6, 9].contains(&p) {
+                    let time_unit = match p {
+                        0 => TimeUnit::Second,
+                        3 => TimeUnit::Millisecond,
+                        6 => TimeUnit::Microsecond,
+                        _ => TimeUnit::Nanosecond,
+                    };
+                    Ok(Some(DataType::Timestamp(time_unit, None)))
+                } else {
+                    Ok(None)
+                }
             }
             _ => Ok(None),
         }

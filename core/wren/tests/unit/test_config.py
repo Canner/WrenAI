@@ -15,7 +15,7 @@ pytestmark = pytest.mark.unit
 def test_load_config_no_file(tmp_path):
     config = load_config(tmp_path)
     assert config == WrenConfig()
-    assert config.strict_mode is False
+    assert config.strict_mode is True
     assert config.denied_functions == frozenset()
 
 
@@ -74,7 +74,7 @@ def test_load_config_partial_only_denied_functions(tmp_path):
     data = {"denied_functions": ["dblink"]}
     (tmp_path / "config.json").write_text(json.dumps(data))
     config = load_config(tmp_path)
-    assert config.strict_mode is False
+    assert config.strict_mode is True
     assert config.denied_functions == frozenset(["dblink"])
 
 
@@ -124,6 +124,22 @@ def test_load_config_allowed_source_functions_not_array(tmp_path):
     (tmp_path / "config.json").write_text(json.dumps(data))
     with pytest.raises(WrenError):
         load_config(tmp_path)
+
+
+def test_post_init_normalizes_case():
+    config = WrenConfig(denied_functions=frozenset(["PG_READ_FILE", "dblink"]))
+    assert config.denied_functions == frozenset(["pg_read_file", "dblink"])
+
+
+def test_post_init_normalizes_allowed_source_functions():
+    config = WrenConfig(allowed_source_functions=frozenset(["Generate_Series"]))
+    assert config.allowed_source_functions == frozenset(["generate_series"])
+
+
+def test_post_init_empty_frozensets_unchanged():
+    config = WrenConfig()
+    assert config.denied_functions == frozenset()
+    assert config.allowed_source_functions == frozenset()
 
 
 def test_load_config_allowed_source_functions_mixed_types_rejected(tmp_path):

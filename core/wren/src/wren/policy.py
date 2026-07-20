@@ -9,6 +9,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Iterable
 
+import sqlglot
 from sqlglot import exp, parse_one
 from sqlglot.errors import SqlglotError
 
@@ -168,6 +169,66 @@ def resolve_model_name(
         if candidate.lower() == name_lower:
             return candidate
     return None
+
+
+def basic_safety_check(sql: str) -> None:
+    """Run BEFORE any SQL execution, regardless of strict_mode.
+
+    Rejects empty SQL, multi-statement SQL, DDL, DML, and file-reading
+    operations (COPY). This is a fundamental safety gate — not a replacement
+    for strict-mode policy validation.
+    """
+    if not sql.strip():
+        raise WrenError(
+            ErrorCode.POLICY_VIOLATION,
+            "Empty SQL statement",
+            phase=ErrorPhase.SQL_POLICY_CHECK,
+        )
+
+    try:
+        stmts = list(sqlglot.parse(sql))
+    except SqlglotError as e:
+        raise WrenError(
+            ErrorCode.INVALID_SQL,
+            f"Could not parse SQL: {e}",
+            phase=ErrorPhase.SQL_POLICY_CHECK,
+        ) from e
+
+    if len(stmts) > 1:
+        raise WrenError(
+            ErrorCode.POLICY_VIOLATION,
+            "Multi-statement SQL is not allowed",
+            phase=ErrorPhase.SQL_POLICY_CHECK,
+        )
+
+    stmt = stmts[0]
+    if stmt is None:
+        raise WrenError(
+            ErrorCode.INVALID_SQL,
+            "Could not parse SQL statement",
+            phase=ErrorPhase.SQL_POLICY_CHECK,
+        )
+
+    if isinstance(stmt, (exp.Create, exp.Drop, exp.Alter, exp.Truncate, exp.Rename)):
+        raise WrenError(
+            ErrorCode.POLICY_VIOLATION,
+            f"DDL not allowed: {type(stmt).__name__}",
+            phase=ErrorPhase.SQL_POLICY_CHECK,
+        )
+
+    if isinstance(stmt, (exp.Insert, exp.Update, exp.Delete, exp.Merge)):
+        raise WrenError(
+            ErrorCode.POLICY_VIOLATION,
+            f"DML not allowed: {type(stmt).__name__}",
+            phase=ErrorPhase.SQL_POLICY_CHECK,
+        )
+
+    if isinstance(stmt, exp.Copy):
+        raise WrenError(
+            ErrorCode.POLICY_VIOLATION,
+            "COPY statement is not allowed",
+            phase=ErrorPhase.SQL_POLICY_CHECK,
+        )
 
 
 def validate_sql_policy(
@@ -431,7 +492,7 @@ def _check_functions(
         if name.lower() in canonical:
             raise WrenError(
                 ErrorCode.BLOCKED_FUNCTION,
-                f"Function '{name}' is not allowed. "
-                "This function is on the denied list.",
+                f"Function '{name}' is not allowed "
+                f"(matched denied function '{name.lower()}').",
                 phase=ErrorPhase.SQL_POLICY_CHECK,
             )

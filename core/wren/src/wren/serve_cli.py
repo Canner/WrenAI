@@ -65,6 +65,7 @@ def _print_connection_help(
     profile: str | None,
     allow_write: bool,
     no_connect: bool,
+    api_key: str | None = None,
 ) -> None:
     """Print client-registration guidance.
 
@@ -85,10 +86,22 @@ def _print_connection_help(
         url = f"http://{display_host}:{port}/mcp"
         echo(" wren MCP server — Streamable HTTP")
         echo(f"   URL: {url}")
+        if api_key:
+            echo(f"   Auth: Bearer token (--api-key)")
         echo("")
         echo(" Register with a client:")
-        echo(f"   Claude Code   claude mcp add --transport http wren {url}")
-        echo(f"   Codex         codex mcp add wren --url {url}")
+        if api_key:
+            echo(
+                "   Claude Code   claude mcp add --transport http"
+                f" wren {url} --bearer-token {api_key}"
+            )
+            echo(
+                f"   Codex         codex mcp add wren --url {url}"
+                f" --bearer-token {api_key}"
+            )
+        else:
+            echo(f"   Claude Code   claude mcp add --transport http wren {url}")
+            echo(f"   Codex         codex mcp add wren --url {url}")
         echo(
             "   Inspector     npx @modelcontextprotocol/inspector   "
             "(Streamable HTTP → the URL above)"
@@ -137,6 +150,13 @@ def serve_mcp(
     profile: Annotated[
         Optional[str],
         typer.Option("--profile", help="Connection profile name."),
+    ] = None,
+    api_key: Annotated[
+        Optional[str],
+        typer.Option(
+            "--api-key",
+            help="Require this bearer token on every HTTP request (--transport http only).",
+        ),
     ] = None,
     allow_write: Annotated[
         bool,
@@ -244,6 +264,7 @@ def serve_mcp(
         engine=engine,
         allow_write=allow_write,
         no_connect=no_connect,
+        api_key=api_key,
     )
     if not quiet:
         _print_connection_help(
@@ -254,5 +275,6 @@ def serve_mcp(
             profile=profile,
             allow_write=allow_write,
             no_connect=no_connect,
+            api_key=api_key,
         )
     run_server(ctx, transport=transport, host=host, port=port)

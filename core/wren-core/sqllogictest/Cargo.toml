@@ -1,5 +1,6 @@
 [package]
 name = "wren-sqllogictest"
+lints.workspace = true
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true

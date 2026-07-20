@@ -251,13 +251,11 @@ class PostgresConnector(ConnectorABC):
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         # Strip terminating ``;`` even when no LIMIT wrapper is applied so
         # client-pasted statements match dry_run / limited composition rules.
-        sql = strip_trailing_semicolon(sql)
-        if limit is not None:
-            sql = f"SELECT * FROM ({sql}) AS _sub LIMIT {limit}"
+        sql, params = self._apply_limit_param(sql, limit, param_style="format")
 
         try:
             with self.connection.cursor() as cursor:
-                cursor.execute(sql)
+                cursor.execute(sql, params)
                 return _build_pg_arrow_table(cursor)
         except psycopg.errors.QueryCanceled:
             raise
@@ -272,10 +270,10 @@ class PostgresConnector(ConnectorABC):
             ) from e
 
     def dry_run(self, sql: str) -> None:
-        wrapped = f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS _sub LIMIT 0"
+        wrapped, params = self._apply_limit_param(sql, 0)
         try:
             with self.connection.cursor() as cursor:
-                cursor.execute(wrapped)
+                cursor.execute(wrapped, params)
         except psycopg.errors.QueryCanceled:
             raise
         except (WrenError, TimeoutError):
