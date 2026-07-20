@@ -244,8 +244,15 @@ class CannerConnector(ConnectorABC):
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         import psycopg  # noqa: PLC0415
 
+        # Always strip a trailing statement terminator. Unlimited queries still
+        # go to execute() raw; ``SELECT 1;`` is fine for single-shot clients, but
+        # multi-semicolon whitespace after tools paste (``SELECT 1; ;``) and
+        # empty trailing statements can produce Protocol/syntax noise/door. More
+        # importantly we keep composition consistent with the limited path so
+        # callers can always end SQL with ``;`` without branching.
+        sql = strip_trailing_semicolon(sql)
         if limit is not None:
-            sql = f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS _t LIMIT {limit}"
+            sql = f"SELECT * FROM ({sql}) AS _t LIMIT {limit}"
 
         try:
             with self.connection.cursor() as cursor:
