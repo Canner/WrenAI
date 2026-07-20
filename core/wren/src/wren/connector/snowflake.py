@@ -88,7 +88,7 @@ class SnowflakeConnector(ConnectorABC):
     def dry_run(self, sql: str) -> None:
         # ``describe`` still fails when the statement is terminated with ``;``
         # (ProgrammingError: unexpected ';'). Strip only the trailing run.
-        cleaned = _strip_trailing_semicolon(sql)
+        cleaned = strip_trailing_semicolon(sql)
         try:
             with self.connection.cursor() as cursor:
                 cursor.describe(cleaned)

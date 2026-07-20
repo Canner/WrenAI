@@ -43,7 +43,7 @@ class DataFusionConnector(ConnectorABC):
         # break the LIMIT subquery wrap (``SELECT 1;`` is a multi-statement batch
         # the planner rejects). Strip only the terminating run so ';' inside
         # string literals stays intact — same helper already used by ``query``.
-        self.ctx.dry_run(_strip_trailing_semicolon(sql))
+        self.ctx.dry_run(strip_trailing_semicolon(sql))
 
     def close(self) -> None:
         pass
