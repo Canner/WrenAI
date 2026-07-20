@@ -209,24 +209,10 @@ def basic_safety_check(sql: str) -> None:
         )
     stmt = stmts[0]
 
-    if isinstance(stmt, (exp.Create, exp.Drop, exp.Alter, exp.Truncate, exp.Rename)):
+    if not isinstance(stmt, (exp.Select, exp.Explain)):
         raise WrenError(
             ErrorCode.POLICY_VIOLATION,
-            f"DDL not allowed: {type(stmt).__name__}",
-            phase=ErrorPhase.SQL_POLICY_CHECK,
-        )
-
-    if isinstance(stmt, (exp.Insert, exp.Update, exp.Delete, exp.Merge)):
-        raise WrenError(
-            ErrorCode.POLICY_VIOLATION,
-            f"DML not allowed: {type(stmt).__name__}",
-            phase=ErrorPhase.SQL_POLICY_CHECK,
-        )
-
-    if isinstance(stmt, exp.Copy):
-        raise WrenError(
-            ErrorCode.POLICY_VIOLATION,
-            "COPY statement is not allowed",
+            f"Only read-only queries are allowed, got: {type(stmt).__name__}",
             phase=ErrorPhase.SQL_POLICY_CHECK,
         )
 

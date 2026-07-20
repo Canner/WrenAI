@@ -427,7 +427,7 @@ warns that the MDL may be stale but still serves it — it never auto-builds.
 
 For `--transport http`, connect the client to the Streamable HTTP endpoint at
 `http://<host>:<port>` instead of spawning a process. Binds to `127.0.0.1` by
-default; there is no bearer-token auth in this version — treat it as local-only.
+default. Pass `--api-key <secret>` to enable bearer-token authentication.
 
 ### Tools
 
