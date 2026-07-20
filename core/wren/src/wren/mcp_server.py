@@ -228,14 +228,19 @@ def _register_context_tools(mcp: FastMCP, ctx: ServeContext) -> None:
         models = load_models(ctx.project)
         result = []
         for model in models:
+            if not isinstance(model, dict):
+                continue
             description = model.get("description")
             if description is None:
                 description = (model.get("properties") or {}).get("description")
+            columns = model.get("columns") or []
+            if not isinstance(columns, list):
+                columns = []
             result.append(
                 {
                     "name": model.get("name"),
                     "description": description,
-                    "column_count": len(model.get("columns", []) or []),
+                    "column_count": len(columns),
                 }
             )
         return {"models": result}
@@ -248,25 +253,36 @@ def _register_context_tools(mcp: FastMCP, ctx: ServeContext) -> None:
         from wren.context import load_models, load_relationships  # noqa: PLC0415
 
         models = load_models(ctx.project)
-        model = next((m for m in models if m.get("name") == name), None)
+        model = next(
+            (
+                m
+                for m in models
+                if isinstance(m, dict) and m.get("name") == name
+            ),
+            None,
+        )
         if model is None:
             raise ValueError(f"Model '{name}' not found.")
 
-        columns = [
-            {
-                "name": col.get("name"),
-                "type": col.get("type"),
-                "description": col.get("description")
-                or (col.get("properties") or {}).get("description"),
-            }
-            for col in model.get("columns", []) or []
-        ]
+        columns = []
+        for col in model.get("columns") or []:
+            if not isinstance(col, dict):
+                continue
+            columns.append(
+                {
+                    "name": col.get("name"),
+                    "type": col.get("type"),
+                    "description": col.get("description")
+                    or (col.get("properties") or {}).get("description"),
+                }
+            )
 
-        relationships = [
-            rel
-            for rel in load_relationships(ctx.project)
-            if name in (rel.get("models") or [])
-        ]
+        relationships = []
+        for rel in load_relationships(ctx.project):
+            if not isinstance(rel, dict):
+                continue
+            if name in (rel.get("models") or []):
+                relationships.append(rel)
 
         return {
             "name": model.get("name"),
