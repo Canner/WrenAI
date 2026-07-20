@@ -58,3 +58,25 @@ def test_query_without_limit_runs_original_sql():
     connector.query("SELECT 1")
 
     cursor.execute.assert_called_once_with("SELECT 1")
+
+
+def test_dry_run_strips_trailing_semicolon_before_describe():
+    connector = SnowflakeConnector.__new__(SnowflakeConnector)
+    connector.connection = MagicMock()
+    cursor = MagicMock()
+    connector.connection.cursor.return_value.__enter__.return_value = cursor
+
+    connector.dry_run("SELECT 1 AS x;")
+
+    cursor.describe.assert_called_once_with("SELECT 1 AS x")
+
+
+def test_dry_run_preserves_interior_semicolon_in_literal():
+    connector = SnowflakeConnector.__new__(SnowflakeConnector)
+    connector.connection = MagicMock()
+    cursor = MagicMock()
+    connector.connection.cursor.return_value.__enter__.return_value = cursor
+
+    connector.dry_run("SELECT 'a;b' FROM t;  \n")
+
+    cursor.describe.assert_called_once_with("SELECT 'a;b' FROM t")
