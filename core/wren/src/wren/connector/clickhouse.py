@@ -55,7 +55,10 @@ def _parse_clickhouse_type(type_str: str | None) -> pa.DataType:
         return pa.string()
     try:
         parsed = sqlglot.parse_one(type_str, into=DataType, dialect="clickhouse")
-    except sqlglot.errors.ParseError:
+    except (sqlglot.errors.SqlglotError, ValueError):
+        # SqlglotError covers ParseError *and* TokenError (unterminated quotes /
+        # stray control chars). Match wren.type_mapping: fall back to string
+        # rather than failing the entire query result conversion.
         logger.warning(f"Failed to parse ClickHouse type string: {type_str}")
         return pa.string()
     if parsed is None:

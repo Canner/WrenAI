@@ -228,6 +228,19 @@ def test_parse_clickhouse_type_nullable(
     assert _parse_clickhouse_type(type_str) == expected
 
 
+@pytest.mark.parametrize(
+    "type_str",
+    [
+        # TokenError (not ParseError) — must fall back to string, not raise.
+        '"unterminated',
+        "VARC\x00HAR",
+    ],
+)
+def test_parse_clickhouse_type_falls_back_on_sqlglot_error(type_str: str) -> None:
+    """TokenError is a SqlglotError but not a ParseError; never hatch out."""
+    assert _parse_clickhouse_type(type_str) == pa.string()
+
+
 def test_clickhouse_arrow_table_nullable_columns_preserve_none_values() -> None:
     """Nullable columns must round-trip None through _build_clickhouse_arrow_table.
 
