@@ -189,6 +189,13 @@ def serve_mcp(
         )
         raise typer.Exit(1)
 
+    if api_key and transport != "http":
+        typer.echo(
+            "Error: --api-key requires --transport http.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
     try:
         import mcp  # noqa: F401, PLC0415
     except ImportError:

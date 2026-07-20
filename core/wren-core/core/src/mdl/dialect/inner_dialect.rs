@@ -385,8 +385,10 @@ pub struct OracleDialect {}
 impl InnerDialect for OracleDialect {
     fn identifier_quote_style(&self, identifier: &str) -> Option<char> {
         // Oracle defaults to upper case for identifiers
-        #[allow(clippy::unwrap_used)]
-        let identifier_regex = Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_]*$").unwrap();
+        static IDENTIFIER_REGEX: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
+        let identifier_regex = IDENTIFIER_REGEX.get_or_init(|| {
+            Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_]*$").expect("built-in regex is valid")
+        });
         if ALL_KEYWORDS.contains(&identifier.to_uppercase().as_str())
             || !identifier_regex.is_match(identifier)
             || non_uppercase(identifier)

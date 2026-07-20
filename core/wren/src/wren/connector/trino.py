@@ -484,7 +484,7 @@ class TrinoConnector(ConnectorABC):
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         trino = _import_trino()
 
-        sql, params = self._apply_limit_param(sql, limit, param_style="format")
+        sql, params = self._apply_limit_param(sql, limit, param_style="qmark")
         try:
             with contextlib.closing(self.connection.cursor()) as cursor:
                 cursor.execute(sql, params)
@@ -504,7 +504,7 @@ class TrinoConnector(ConnectorABC):
     def dry_run(self, sql: str) -> None:
         trino = _import_trino()
 
-        wrapped, params = self._apply_limit_param(sql, 0, param_style="format")
+        wrapped, params = self._apply_limit_param(sql, 0, param_style="qmark")
         try:
             with contextlib.closing(self.connection.cursor()) as cursor:
                 cursor.execute(wrapped, params)

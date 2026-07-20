@@ -201,13 +201,13 @@ def basic_safety_check(sql: str) -> None:
             phase=ErrorPhase.SQL_POLICY_CHECK,
         )
 
-    stmt = stmts[0]
-    if stmt is None:
+    if not stmts or stmts[0] is None:
         raise WrenError(
             ErrorCode.INVALID_SQL,
             "Could not parse SQL statement",
             phase=ErrorPhase.SQL_POLICY_CHECK,
         )
+    stmt = stmts[0]
 
     if isinstance(stmt, (exp.Create, exp.Drop, exp.Alter, exp.Truncate, exp.Rename)):
         raise WrenError(

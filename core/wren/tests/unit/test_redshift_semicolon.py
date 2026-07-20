@@ -30,16 +30,18 @@ def _make_mock_connector() -> tuple[RedshiftConnector, MagicMock]:
 def test_query_strips_trailing_semicolon_before_subquery_wrap() -> None:
     connector, cursor = _make_mock_connector()
     connector.query("SELECT 1;", limit=5)
-    (sent,), _ = cursor.execute.call_args
-    assert sent == "SELECT * FROM (SELECT 1) AS _q LIMIT 5"
+    sent, params = cursor.execute.call_args.args
+    assert sent == "SELECT * FROM (SELECT 1) AS _q LIMIT %s"
+    assert params == [5]
     assert ";)" not in sent
 
 
 def test_dry_run_strips_trailing_semicolon() -> None:
     connector, cursor = _make_mock_connector()
     connector.dry_run("SELECT 1;  ")
-    (sent,), _ = cursor.execute.call_args
-    assert sent == "SELECT * FROM (SELECT 1) AS sub LIMIT 0"
+    sent, params = cursor.execute.call_args.args
+    assert sent == "SELECT * FROM (SELECT 1) AS _q LIMIT %s"
+    assert params == [0]
     assert ";)" not in sent
 
 

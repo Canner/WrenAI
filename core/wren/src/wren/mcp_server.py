@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import math
+import secrets
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from decimal import Decimal
@@ -34,6 +35,8 @@ class ServeContext:
     allow_write: bool
     no_connect: bool
     api_key: str | None = None
+    host: str = "0.0.0.0"
+    port: int = 8080
 
 
 def _memory_path(ctx: ServeContext) -> str:
@@ -681,7 +684,7 @@ class _ApiKeyVerifier:
         self._api_key = api_key
 
     async def verify_token(self, token: str) -> AccessToken | None:
-        if token == self._api_key:
+        if secrets.compare_digest(token, self._api_key):
             return AccessToken(
                 token=token,
                 client_id="api_key_user",
@@ -697,9 +700,10 @@ def build_server(ctx: ServeContext) -> FastMCP:
     if ctx.api_key:
         from mcp.server.auth.settings import AuthSettings  # noqa: PLC0415
 
+        base_url = f"http://{ctx.host}:{ctx.port}"
         kwargs["auth"] = AuthSettings(
-            issuer_url="http://localhost:8080",
-            resource_server_url="http://localhost:8080",
+            issuer_url=base_url,
+            resource_server_url=base_url,
         )
         kwargs["token_verifier"] = _ApiKeyVerifier(ctx.api_key)
 

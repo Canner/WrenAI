@@ -270,7 +270,7 @@ class PostgresConnector(ConnectorABC):
             ) from e
 
     def dry_run(self, sql: str) -> None:
-        wrapped, params = self._apply_limit_param(sql, 0)
+        wrapped, params = self._apply_limit_param(sql, 0, param_style="format")
         try:
             with self.connection.cursor() as cursor:
                 cursor.execute(wrapped, params)

@@ -1,6 +1,5 @@
 [package]
 name = "wren-example"
-lints.workspace = true
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
@@ -10,6 +9,9 @@ repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
 publish = false
+
+[lints]
+workspace = true
 
 [dev-dependencies]
 async-trait = { workspace = true }

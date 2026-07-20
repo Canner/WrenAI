@@ -40,26 +40,28 @@ class ConnectorABC(ABC):
     # Shared limit utilities for all connectors
     # ------------------------------------------------------------------
 
-    def _normalize_limit(self, limit: int | None, max_limit: int = MAX_ROW_LIMIT) -> int:
+    def _normalize_limit(self, limit: int | None, max_limit: int = MAX_ROW_LIMIT) -> int | None:
         """Validate and normalize a row limit across all connectors.
 
         Parameters
         ----------
         limit:
-            User-supplied limit. ``None`` uses *max_limit*. Negative values
-            are treated as "no limit" and return *max_limit* (matching SQL
-            convention where ``LIMIT -1`` means unlimited).
+            User-supplied limit. ``None`` is returned as-is (no limit applied).
+            Negative values are treated as "no limit" and return *max_limit*
+            (matching SQL convention where ``LIMIT -1`` means unlimited).
         max_limit:
-            Absolute ceiling. The returned limit is clamped to ``[0, max_limit]``
-            (zero is permitted for dry-run / EXPLAIN).
+            Absolute ceiling (ignored when *limit* is ``None``). The returned
+            limit is clamped to ``[0, max_limit]`` (zero is permitted for
+            dry-run / EXPLAIN).
 
         Returns
         -------
-        int
-            A safe, clamped non-negative integer guaranteed to be within *max_limit*.
+        int | None
+            ``None`` if *limit* was ``None``; otherwise a safe, clamped
+            non-negative integer guaranteed to be within *max_limit*.
         """
         if limit is None:
-            return max_limit
+            return None
         try:
             limit = int(limit)
         except (TypeError, ValueError, OverflowError):

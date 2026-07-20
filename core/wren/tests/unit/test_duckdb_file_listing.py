@@ -94,8 +94,9 @@ def test_query_strips_trailing_semicolon_before_limit_wrap():
 
     result = connector.query("SELECT 1;", limit=5)
 
-    executed = connector.connection.execute.call_args.args[0]
-    assert executed == "SELECT * FROM (SELECT 1) AS _q LIMIT 5"
+    executed, params = connector.connection.execute.call_args.args
+    assert executed == "SELECT * FROM (SELECT 1) AS _q LIMIT ?"
+    assert params == [5]
     assert result == "tbl"
 
 
@@ -109,10 +110,11 @@ def test_dry_run_wraps_in_limit_zero_subquery():
 
     connector.dry_run("SELECT 1; DROP TABLE t;")
 
-    executed = connector.connection.execute.call_args.args[0]
+    executed, params = connector.connection.execute.call_args.args
     # The trailing terminator is stripped; the interior ``;`` stays inside the
     # subquery where DuckDB rejects it as a syntax error (no side effects).
-    assert executed == "SELECT * FROM (SELECT 1; DROP TABLE t) AS _q LIMIT 0"
+    assert executed == "SELECT * FROM (SELECT 1; DROP TABLE t) AS _q LIMIT ?"
+    assert params == [0]
 
 
 def test_dry_run_strips_trailing_semicolon():
@@ -121,8 +123,9 @@ def test_dry_run_strips_trailing_semicolon():
 
     connector.dry_run("SELECT 1;")
 
-    executed = connector.connection.execute.call_args.args[0]
-    assert executed == "SELECT * FROM (SELECT 1) AS _q LIMIT 0"
+    executed, params = connector.connection.execute.call_args.args
+    assert executed == "SELECT * FROM (SELECT 1) AS _q LIMIT ?"
+    assert params == [0]
 
 
 def test_dry_run_preserves_semicolon_in_string_literal():
@@ -133,5 +136,6 @@ def test_dry_run_preserves_semicolon_in_string_literal():
 
     connector.dry_run("SELECT ';' AS x")
 
-    executed = connector.connection.execute.call_args.args[0]
-    assert executed == "SELECT * FROM (SELECT ';' AS x) AS _q LIMIT 0"
+    executed, params = connector.connection.execute.call_args.args
+    assert executed == "SELECT * FROM (SELECT ';' AS x) AS _q LIMIT ?"
+    assert params == [0]

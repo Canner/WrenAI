@@ -356,7 +356,7 @@ impl ModelPlanNodeBuilder {
                 self.fields.iter().cloned().collect(),
                 HashMap::new(),
             )
-            .map_err(|e| internal_err!("create schema failed: {e}"))?,
+            .map_err(|e| internal_datafusion_err!("create schema failed: {e}"))?,
         );
 
         let mut iter = self.directed_graph.node_indices();
@@ -605,14 +605,14 @@ impl ModelPlanNodeBuilder {
         let mut iter = column_graph.node_indices();
 
         let start = iter.next().ok_or_else(|| {
-            internal_err!("column graph has no nodes")
+            internal_datafusion_err!("column graph has no nodes")
         })?;
         let source_required_fields = partial_model_required_fields
             .get(&model_ref)
             .map(|c| c.iter().cloned().map(|c| c.expr).collect())
             .unwrap_or_default();
         let source = column_graph.node_weight(start).ok_or_else(|| {
-            internal_err!("node not found in column graph")
+            internal_datafusion_err!("node not found in column graph")
         })?;
 
         let source_chain = RelationChain::source(
@@ -689,7 +689,7 @@ fn collect_partial_model_plan_for_calculation(
             let expr = create_wren_expr_for_model(
                 &c.name,
                 dataset.try_as_model().ok_or_else(|| {
-                    internal_err!("expected dataset to be a model")
+                    internal_datafusion_err!("expected dataset to be a model")
                 })?,
                 Arc::clone(&session_state_ref),
             )?;
@@ -948,10 +948,10 @@ fn merge_graph(
             return internal_err!("Edge not found");
         };
         let source = node_map.get(&source).ok_or_else(|| {
-            internal_err!("source node not found in merged graph")
+            internal_datafusion_err!("source node not found in merged graph")
         })?;
         let target = node_map.get(&target).ok_or_else(|| {
-            internal_err!("target node not found in merged graph")
+            internal_datafusion_err!("target node not found in merged graph")
         })?;
         // Skip duplicate edges between the same pair of nodes: the same
         // relationship may appear in multiple calc-col sub-graphs (e.g. two
@@ -1164,7 +1164,7 @@ impl ModelSourceNode {
         let fields = fields_buffer.into_iter().collect::<Vec<_>>();
         let schema_ref = DFSchemaRef::new(
             DFSchema::new_with_metadata(fields, HashMap::new())
-                .map_err(|e| internal_err!("create schema failed: {e}"))?,
+                .map_err(|e| internal_datafusion_err!("create schema failed: {e}"))?,
         );
         let required_exprs = required_exprs_buffer
             .into_iter()
@@ -1281,7 +1281,7 @@ impl CalculationPlanNode {
             .collect::<Result<Vec<_>>>()?;
         let schema_ref = DFSchemaRef::new(
             DFSchema::new_with_metadata(output_field, HashMap::new())
-                .map_err(|e| internal_err!("create schema failed: {e}"))?,
+                .map_err(|e| internal_datafusion_err!("create schema failed: {e}"))?,
         );
         Ok(Self {
             calculation,

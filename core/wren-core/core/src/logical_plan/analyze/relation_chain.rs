@@ -14,7 +14,7 @@ use crate::mdl::Dataset;
 use crate::mdl::{AnalyzedWrenMDL, SessionStateRef};
 use crate::DataFusionError;
 use datafusion::common::alias::AliasGenerator;
-use datafusion::common::{internal_err, plan_err, DFSchema, DFSchemaRef, Result};
+use datafusion::common::{internal_datafusion_err, internal_err, plan_err, DFSchema, DFSchemaRef, Result};
 use datafusion::common::{plan_datafusion_err, TableReference};
 use datafusion::logical_expr::{
     col, Expr, Extension, LogicalPlan, LogicalPlanBuilder, SubqueryAlias,
@@ -82,7 +82,7 @@ impl RelationChain {
 
         for next in iter {
             let target = directed_graph.node_weight(next).ok_or_else(|| {
-                internal_err!("node not found in relation chain graph")
+                internal_datafusion_err!("node not found in relation chain graph")
             })?;
             let link_index = directed_graph
                 .find_edge(prev, next)
@@ -91,7 +91,7 @@ impl RelationChain {
                 break;
             };
             let link = directed_graph.edge_weight(link_index).ok_or_else(|| {
-                internal_err!("edge not found in relation chain graph")
+                internal_datafusion_err!("edge not found in relation chain graph")
             })?;
             let target_ref = TableReference::full(
                 analyzed_wren_mdl.wren_mdl().catalog(),

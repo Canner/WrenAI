@@ -112,7 +112,6 @@ class WrenEngine:
         properties: dict | None = None,
     ) -> pa.Table:
         """Transpile and execute SQL, return results as an Arrow table."""
-        basic_safety_check(sql)
         dialect_sql = self.dry_plan(sql, properties)
         connector = self._get_connector()
         try:
@@ -129,7 +128,6 @@ class WrenEngine:
 
     def dry_run(self, sql: str, properties: dict | None = None) -> None:
         """Transpile and dry-run SQL without returning results."""
-        basic_safety_check(sql)
         dialect_sql = self.dry_plan(sql, properties)
         connector = self._get_connector()
         try:

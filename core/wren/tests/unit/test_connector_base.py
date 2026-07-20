@@ -29,8 +29,8 @@ def connector():
 
 
 class TestNormalizeLimit:
-    def test_none_uses_max_limit(self, connector):
-        assert connector._normalize_limit(None) == MAX_ROW_LIMIT
+    def test_none_returns_none(self, connector):
+        assert connector._normalize_limit(None) is None
 
     def test_zero_passthrough(self, connector):
         assert connector._normalize_limit(0) == 0

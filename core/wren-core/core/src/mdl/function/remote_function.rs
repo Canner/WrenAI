@@ -41,7 +41,8 @@ impl RemoteFunction {
                 } else {
                     let coercions = coercions
                         .into_iter()
-                        .collect::<Result<Vec<_>>>()?;
+                        .filter_map(|r| r.ok())
+                        .collect::<Vec<_>>();
                     signatures.push(TypeSignature::Coercible(coercions));
                 }
             }

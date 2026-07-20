@@ -57,7 +57,7 @@ def test_query_unlimited_strips_trailing_semicolon(monkeypatch, fake_psycopg):
 
     connector.query("SELECT 1 AS x;")
 
-    cursor.execute.assert_called_once_with("SELECT 1 AS x")
+    cursor.execute.assert_called_once_with("SELECT 1 AS x", None)
 
 
 def test_query_limited_strips_before_wrap(monkeypatch, fake_psycopg):
@@ -70,5 +70,5 @@ def test_query_limited_strips_before_wrap(monkeypatch, fake_psycopg):
     connector.query("SELECT 1 AS x;", limit=3)
 
     cursor.execute.assert_called_once_with(
-        "SELECT * FROM (SELECT 1 AS x) AS _t LIMIT 3"
+        "SELECT * FROM (SELECT 1 AS x) AS _q LIMIT %s", [3]
     )

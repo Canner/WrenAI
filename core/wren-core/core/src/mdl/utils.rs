@@ -1,5 +1,5 @@
 use datafusion::arrow::datatypes::Field;
-use datafusion::common::{plan_err, Column, DFSchema};
+use datafusion::common::{plan_datafusion_err, plan_err, Column, DFSchema};
 use datafusion::error::Result;
 use datafusion::execution::session_state::SessionState;
 use datafusion::logical_expr::Expr;
@@ -182,11 +182,10 @@ pub fn create_wren_calculated_field_expr(
         .filter_map(|c| c.relation.as_ref().map(|r| r.table().to_string()))
         .collect::<BTreeSet<_>>() // Collect into a BTreeSet to remove duplicates
         .into_iter() // Convert BTreeSet back into an iterator
-        .map(|m| m.to_string())
         .collect::<Vec<String>>();
     // Remove all relationship fields from the expression. Only keep the target expression and its source table.
     let expr = column_rf.column.expression.clone().ok_or_else(|| {
-        plan_err!(
+        plan_datafusion_err!(
             "calculated field must have an expression: {}",
             column_rf.column.name()
         )

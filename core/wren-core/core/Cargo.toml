@@ -1,6 +1,5 @@
 [package]
 name = "wren-semantic-core"
-lints.workspace = true
 description = "Wren semantic engine — MDL-based semantic SQL layer and query planner built on Apache DataFusion"
 keywords = ["sql", "semantic-layer", "datafusion", "mdl", "query"]
 categories = ["database"]
@@ -12,6 +11,9 @@ homepage = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
 authors = { workspace = true }
+
+[lints]
+workspace = true
 
 [lib]
 name = "wren_core"

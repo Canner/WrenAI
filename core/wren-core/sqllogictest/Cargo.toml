@@ -1,6 +1,5 @@
 [package]
 name = "wren-sqllogictest"
-lints.workspace = true
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
@@ -9,6 +8,9 @@ readme.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
+
+[lints]
+workspace = true
 
 [lib]
 name = "wren_sqllogictest"

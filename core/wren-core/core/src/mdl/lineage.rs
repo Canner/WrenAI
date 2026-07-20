@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::sync::Arc;
 
-use datafusion::common::{internal_err, plan_err, Column};
+use datafusion::common::{internal_err, plan_datafusion_err, plan_err, Column};
 use datafusion::error::Result;
 use datafusion::sql::TableReference;
 use petgraph::Graph;
@@ -145,7 +145,7 @@ impl Lineage {
                                         .find(|m| m != &relation_ref.table())
                                         .cloned()
                                         .ok_or_else(|| {
-                                            plan_err!(
+                                            plan_datafusion_err!(
                                                 "related model not found for relationship: {}",
                                                 rs_rf.name
                                             )
@@ -179,7 +179,7 @@ impl Lineage {
 
                                     let related_model =
                                         mdl.get_model(&related_model_name).ok_or_else(|| {
-                                            plan_err!(
+                                            plan_datafusion_err!(
                                                 "model not found: {} for relationship",
                                                 related_model_name
                                             )

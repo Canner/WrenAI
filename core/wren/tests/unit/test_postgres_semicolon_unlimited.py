@@ -44,7 +44,7 @@ def test_unlimited_query_strips_trailing_semicolon(monkeypatch):
 
     connector.query("SELECT 1 AS x; \n")
 
-    cursor.execute.assert_called_once_with("SELECT 1 AS x")
+    cursor.execute.assert_called_once_with("SELECT 1 AS x", None)
 
 
 def test_limited_query_wraps_after_strip(monkeypatch):
@@ -59,5 +59,5 @@ def test_limited_query_wraps_after_strip(monkeypatch):
     connector.query("SELECT 1 AS x;", limit=9)
 
     cursor.execute.assert_called_once_with(
-        "SELECT * FROM (SELECT 1 AS x) AS _sub LIMIT 9"
+        "SELECT * FROM (SELECT 1 AS x) AS _q LIMIT %s", [9]
     )
