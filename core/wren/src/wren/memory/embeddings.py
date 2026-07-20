@@ -1,12 +1,14 @@
 """Embedding function abstraction for Wren Memory.
 
-Uses LanceDB's embedding registry with sentence-transformers (local, no API key).
+The sentence-transformer loads from the local HF cache before falling back to
+an online-capable load. Model construction is single-flighted per process.
 """
 
 from __future__ import annotations
 
 import contextlib
 import os
+import threading
 
 _DEFAULT_MODEL = os.getenv(
     "WREN_EMBEDDING_MODEL", "paraphrase-multilingual-MiniLM-L12-v2"
@@ -22,18 +24,68 @@ def _disable_transformers_progress_bar() -> None:
     transformers_logging.disable_progress_bar()
 
 
+_local_first_embedding_cls = None
+_local_first_embedding_cls_lock = threading.Lock()
+_model_cache_lock = threading.Lock()
+_model_cache: tuple[tuple[str, str, bool], object] | None = None
+
+
+def _get_local_first_embedding_class():
+    """Build the adapter lazily so importing this module needs no memory extra."""
+    global _local_first_embedding_cls
+    with _local_first_embedding_cls_lock:
+        if _local_first_embedding_cls is not None:
+            return _local_first_embedding_cls
+
+        import lancedb.embeddings.sentence_transformers as lancedb_st  # noqa: PLC0415
+
+        class LocalFirstSentenceTransformerEmbeddings(
+            lancedb_st.SentenceTransformerEmbeddings
+        ):
+            """Sentence-transformers embedding function with local-first loading."""
+
+            def get_embedding_model(self):
+                global _model_cache
+                key = (self.name, self.device, self.trust_remote_code)
+
+                with _model_cache_lock:
+                    if _model_cache is not None and _model_cache[0] == key:
+                        return _model_cache[1]
+
+                    import sentence_transformers  # noqa: PLC0415
+
+                    try:
+                        model = sentence_transformers.SentenceTransformer(
+                            self.name,
+                            device=self.device,
+                            trust_remote_code=self.trust_remote_code,
+                            local_files_only=True,
+                        )
+                    except OSError:
+                        model = sentence_transformers.SentenceTransformer(
+                            self.name,
+                            device=self.device,
+                            trust_remote_code=self.trust_remote_code,
+                        )
+                    _model_cache = (key, model)
+                    return model
+
+        _local_first_embedding_cls = LocalFirstSentenceTransformerEmbeddings
+        return _local_first_embedding_cls
+
+
 def get_embedding_function(model_name: str = _DEFAULT_MODEL):
     """Return a LanceDB sentence-transformers embedding function.
 
     The returned object implements ``compute_source_embeddings(texts)``
     and ``compute_query_embeddings(query)`` used by :class:`MemoryStore`.
+
+    The adapter is instantiated directly, without mutating LanceDB's registry.
     """
     _disable_transformers_progress_bar()
 
-    import lancedb.embeddings  # noqa: PLC0415
-
-    registry = lancedb.embeddings.get_registry()
-    return registry.get("sentence-transformers").create(name=model_name)
+    local_first_cls = _get_local_first_embedding_class()
+    return local_first_cls.create(name=model_name)
 
 
 @contextlib.contextmanager

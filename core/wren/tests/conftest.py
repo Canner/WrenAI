@@ -27,3 +27,8 @@ def pytest_configure(config: pytest.Config) -> None:
     )
     config.addinivalue_line("markers", "mssql: MSSQL connector tests — requires Docker")
     config.addinivalue_line("markers", "trino: Trino connector tests — requires Docker")
+    config.addinivalue_line(
+        "markers",
+        "slow: slow tests that load a real model / hit real LanceDB "
+        "(e.g. cross-model vector-compatibility checks)",
+    )

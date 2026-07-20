@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -92,9 +93,79 @@ class MemoryStore:
         resolved.mkdir(parents=True, exist_ok=True)
         self._path = resolved
         self._db = lancedb.connect(str(resolved))
-        self._embed_fn = get_embedding_function(model_name or _DEFAULT_MODEL)
-        # Trigger model loading silently and derive vector dimension.
-        self._dim = warm_up(self._embed_fn)
+        self._model_name = model_name or _DEFAULT_MODEL
+        self._embed_fn_cached = None
+        self._dim_cached = None
+        self._init_lock = threading.Lock()
+        # _resolve_dim() may initialize _embed_fn while holding _dim_lock.
+        self._dim_lock = threading.Lock()
+
+    @property
+    def _embed_fn(self):
+        """Construct the shared embedding function on first use."""
+        if self._embed_fn_cached is None:
+            with self._init_lock:
+                if self._embed_fn_cached is None:
+                    self._embed_fn_cached = get_embedding_function(self._model_name)
+        return self._embed_fn_cached
+
+    @property
+    def _dim(self) -> int:
+        if self._dim_cached is None:
+            with self._dim_lock:
+                if self._dim_cached is None:
+                    self._dim_cached = self._resolve_dim()
+        return self._dim_cached
+
+    def _table_vector_dim(self, name: str) -> int | None:
+        """Return an existing table's fixed vector dimension."""
+        if name not in _table_names(self._db):
+            return None
+        table = self._db.open_table(name)
+        vector_field = table.schema.field("vector")
+        if not isinstance(vector_field.type, pa.FixedSizeListType):
+            raise ValueError(
+                f"Table '{name}' vector column is not a fixed-size list "
+                f"(got {vector_field.type!r}); cannot resolve dimension."
+            )
+        return vector_field.type.list_size
+
+    def _resolve_dim(self) -> int:
+        """Resolve dimension from existing tables or an embedding probe."""
+        dims: dict[str, int] = {}
+        for name in (_SCHEMA_TABLE, _QUERY_TABLE):
+            dim = self._table_vector_dim(name)
+            if dim is not None:
+                dims[name] = dim
+
+        if dims:
+            unique_dims = set(dims.values())
+            if len(unique_dims) > 1:
+                raise ValueError(
+                    f"Mixed-dimension memory store: {dims!r}. This happens "
+                    "when WREN_EMBEDDING_MODEL was swapped for a "
+                    "different-dim model against an existing store. Reset "
+                    "the store or restore the original model to continue."
+                )
+            return next(iter(unique_dims))
+
+        return warm_up(self._embed_fn)
+
+    def _validate_and_set_dim(self, dim: int) -> None:
+        """Validate a computed vector dimension before caching it."""
+        with self._dim_lock:
+            for name in (_SCHEMA_TABLE, _QUERY_TABLE):
+                existing_dim = self._table_vector_dim(name)
+                if existing_dim is not None and existing_dim != dim:
+                    raise ValueError(
+                        f"New vector dim {dim} does not match existing "
+                        f"table '{name}' dim {existing_dim}. This happens "
+                        "when WREN_EMBEDDING_MODEL was swapped for a "
+                        "different-dim model against an existing store. "
+                        "Reset the store or restore the original model to "
+                        "continue."
+                    )
+            self._dim_cached = dim
 
     def _schema_table_schema(self) -> pa.Schema:
         return _schema_items_arrow_schema(dim=self._dim)
@@ -129,6 +200,7 @@ class MemoryStore:
         else:
             texts = [item["text"] for item in items]
             vectors = self._embed_fn.compute_source_embeddings(texts)
+            self._validate_and_set_dim(len(vectors[0]))
 
             for item, vec in zip(items, vectors):
                 item["vector"] = vec
@@ -160,29 +232,27 @@ class MemoryStore:
         return {"schema_items": schema_count, "seed_queries": seed_count}
 
     def _upsert_seed_queries(self, manifest: dict) -> int:
-        """Replace seed query entries, preserving user-confirmed ones."""
+        """Replace seed queries after their embeddings are ready."""
         from wren.memory.seed_queries import (  # noqa: PLC0415
             SEED_TAG,
             generate_seed_queries,
         )
 
-        # Remove old seeds (tagged 'source:seed') but keep user entries
+        pairs = generate_seed_queries(manifest)
+
+        if not pairs:
+            if _QUERY_TABLE in _table_names(self._db):
+                table = self._db.open_table(_QUERY_TABLE)
+                table.delete(f"tags = '{SEED_TAG}'")
+            return 0
+
+        records = self._prepare_query_records(pairs, tags=SEED_TAG)
+
         if _QUERY_TABLE in _table_names(self._db):
             table = self._db.open_table(_QUERY_TABLE)
             table.delete(f"tags = '{SEED_TAG}'")
 
-        pairs = generate_seed_queries(manifest)
-        if not pairs:
-            return 0
-
-        # Insert new seeds via the existing store_query() method
-        for pair in pairs:
-            self.store_query(
-                nl_query=pair["nl"],
-                sql_query=pair["sql"],
-                tags=SEED_TAG,
-            )
-
+        self._write_query_records(records)
         return len(pairs)
 
     def schema_is_current(self, manifest: dict) -> bool:
@@ -287,6 +357,7 @@ class MemoryStore:
         """Store a NL→SQL pair with embedding of the NL query."""
         now = datetime.now(timezone.utc)
         vectors = self._embed_fn.compute_source_embeddings([nl_query])
+        self._validate_and_set_dim(len(vectors[0]))
 
         record = {
             "text": nl_query,
@@ -380,20 +451,22 @@ class MemoryStore:
         if _QUERY_TABLE not in _table_names(self._db):
             return 0
         table = self._db.open_table(_QUERY_TABLE)
+        existing_schema = table.schema
         df = table.to_pandas()
         to_delete = sorted({i for i in row_ids if 0 <= i < len(df)})
         if not to_delete:
             return 0
         keep = df.drop(index=to_delete).reset_index(drop=True)
-        # Rebuild the table with remaining rows
-        self._db.drop_table(_QUERY_TABLE)
         if len(keep) == 0:
+            self._db.drop_table(_QUERY_TABLE)
             return len(to_delete)
-        keep_arrow = pa.Table.from_pandas(keep, schema=self._query_table_schema())
+        # Build the replacement before asking LanceDB to overwrite the table.
+        keep_arrow = pa.Table.from_pandas(keep, schema=existing_schema)
         self._db.create_table(
             _QUERY_TABLE,
             keep_arrow,
-            schema=self._query_table_schema(),
+            schema=existing_schema,
+            mode="overwrite",
         )
         return len(to_delete)
 
@@ -446,6 +519,49 @@ class MemoryStore:
             nl_to_rowids.setdefault(nl, []).append(idx)
         return exact_set, nl_to_rowids
 
+    def _prepare_query_records(
+        self, pairs: list[dict], *, tags: str | None = None
+    ) -> list[dict]:
+        """Prepare a complete query batch without changing its table."""
+        if not pairs:
+            return []
+        texts = [p["nl"] for p in pairs]
+        vectors = self._embed_fn.compute_source_embeddings(texts)
+        self._validate_and_set_dim(len(vectors[0]))
+        now = datetime.now(timezone.utc)
+        records = []
+        for p, vec in zip(pairs, vectors):
+            record_tags = (
+                tags if tags is not None else f"source:{p.get('source', 'user')}"
+            )
+            records.append(
+                {
+                    "text": p["nl"],
+                    "vector": vec,
+                    "nl_query": p["nl"],
+                    "sql_query": p["sql"],
+                    "datasource": p.get("datasource") or "",
+                    "created_at": now,
+                    "tags": record_tags,
+                }
+            )
+        return records
+
+    def _write_query_records(self, records: list[dict]) -> None:
+        """Batch-insert precomputed query_history records built by
+        :meth:`_prepare_query_records`."""
+        if not records:
+            return
+        if _QUERY_TABLE in _table_names(self._db):
+            table = self._db.open_table(_QUERY_TABLE)
+            table.add(records)
+        else:
+            self._db.create_table(
+                _QUERY_TABLE,
+                records,
+                schema=self._query_table_schema(),
+            )
+
     def load_queries(
         self,
         pairs: list[dict],
@@ -459,19 +575,11 @@ class MemoryStore:
         """
         if overwrite:
             sources = {p.get("source", "user") for p in pairs}
+            records = self._prepare_query_records(pairs)
             for src in sources:
                 self.forget_queries_by_source(src)
-            loaded = 0
-            for p in pairs:
-                tags = f"source:{p.get('source', 'user')}"
-                self.store_query(
-                    nl_query=p["nl"],
-                    sql_query=p["sql"],
-                    datasource=p.get("datasource"),
-                    tags=tags,
-                )
-                loaded += 1
-            return {"loaded": loaded, "skipped": 0, "updated": 0}
+            self._write_query_records(records)
+            return {"loaded": len(records), "skipped": 0, "updated": 0}
 
         exact_set, nl_to_rowids = self._existing_pairs_index()
 
@@ -482,6 +590,8 @@ class MemoryStore:
                 seen_nl[p["nl"]] = p
             deduped = list(seen_nl.values())
 
+            records = self._prepare_query_records(deduped)
+
             # Batch: collect IDs to delete, then delete once, then insert all.
             ids_to_delete = []
             updated = 0
@@ -491,14 +601,7 @@ class MemoryStore:
                     updated += 1
             if ids_to_delete:
                 self.forget_queries_by_ids(ids_to_delete)
-            for p in deduped:
-                tags = f"source:{p.get('source', 'user')}"
-                self.store_query(
-                    nl_query=p["nl"],
-                    sql_query=p["sql"],
-                    datasource=p.get("datasource"),
-                    tags=tags,
-                )
+            self._write_query_records(records)
             loaded = len(deduped) - updated
             return {"loaded": loaded, "skipped": 0, "updated": updated}
 

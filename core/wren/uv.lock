@@ -3700,7 +3700,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "redshift-connector", marker = "extra == 'redshift'" },
     { name = "requests", specifier = ">=2.33.0" },
-    { name = "sentence-transformers", marker = "extra == 'memory'", specifier = ">=2.2" },
+    { name = "sentence-transformers", marker = "extra == 'memory'", specifier = ">=3.0.0" },
     { name = "snowflake-connector-python", extras = ["pandas"], marker = "extra == 'snowflake'", specifier = ">=3.10" },
     { name = "sqlglot", specifier = ">=29" },
     { name = "starlette", marker = "extra == 'ui'", specifier = ">=1.3.1" },
