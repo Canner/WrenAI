@@ -359,13 +359,45 @@ def _build_trino_connect_kwargs(connection_info) -> dict:
     return _apply_trino_ssl_overrides(out)
 
 
+def _parse_trino_connection_url(url: str):
+    """Parse a Trino URL after escaping raw brackets in userinfo only.
+
+    ``urllib.parse.urlparse`` treats ``[`` / ``]`` anywhere in the netloc as
+    IPv6 host delimiters. That is correct for hosts like ``trino://alice@[::1]``
+    but it breaks on raw credentials such as ``trino://user:p[a]ss@host/c/s``.
+    Sanitise only the userinfo segment so valid IPv6 hosts still parse.
+    Mirrors the MySQL connector helper.
+    """
+    scheme_idx = url.find("://")
+    if scheme_idx == -1:
+        return urlparse(url)
+
+    prefix = url[: scheme_idx + 3]
+    rest = url[scheme_idx + 3 :]
+
+    authority_end = len(rest)
+    for separator in "/?#":
+        idx = rest.find(separator)
+        if idx != -1:
+            authority_end = min(authority_end, idx)
+
+    authority = rest[:authority_end]
+    if "@" not in authority:
+        return urlparse(url)
+
+    userinfo, hostinfo = authority.rsplit("@", 1)
+    sanitized_userinfo = userinfo.replace("[", "%5B").replace("]", "%5D")
+    sanitized_url = f"{prefix}{sanitized_userinfo}@{hostinfo}{rest[authority_end:]}"
+    return urlparse(sanitized_url)
+
+
 def _parse_trino_url(url: str, extra_kwargs: dict | None) -> dict:
     """Parse a ``trino://[user[:pwd]@]host[:port][/catalog[/schema]][?...]`` URL.
 
     Returns the same ``_password`` sentinel-key shape as
     :func:`_build_trino_connect_kwargs`.
     """
-    parsed = urlparse(url)
+    parsed = _parse_trino_connection_url(url)
     if parsed.scheme not in {"trino", "trino+https"}:
         raise WrenError(
             ErrorCode.INVALID_CONNECTION_INFO,
@@ -386,9 +418,10 @@ def _parse_trino_url(url: str, extra_kwargs: dict | None) -> dict:
     if extra_kwargs:
         query_kwargs.update(extra_kwargs)
 
-    # urlparse leaves percent-encoded characters in userinfo/path, so decode
-    # them before they reach Trino. Use unquote (not unquote_plus) so a
-    # literal ``+`` in a credential is preserved.
+    # urlparse leaves percent-encoded characters (including the brackets we
+    # pre-escaped above) in userinfo/path — decode with unquote so raw and
+    # percent-encoded credentials both land as the intended string. Use
+    # unquote (not unquote_plus) so a literal ``+`` is preserved.
     out: dict = {
         "host": parsed.hostname,
         "port": int(parsed.port or 8080),

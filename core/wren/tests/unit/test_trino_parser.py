@@ -204,6 +204,22 @@ def test_parse_trino_url_preserves_literal_plus_in_userinfo() -> None:
     assert out["_password"] == "pw+1"
 
 
+
+
+def test_parse_trino_url_allows_raw_brackets_in_password() -> None:
+    """Raw '[' / ']' in userinfo must not raise ValueError from urlparse."""
+    out = _parse_trino_url("trino://user:p[a]ss@host:8080/catalog/schema", None)
+    assert out["user"] == "user"
+    assert out["_password"] == "p[a]ss"
+    assert out["host"] == "host"
+
+
+def test_parse_trino_url_preserves_ipv6_host_with_bracketed_password() -> None:
+    out = _parse_trino_url("trino://user:p[a]ss@[::1]:8080/catalog/schema", None)
+    assert out["host"] == "::1"
+    assert out["_password"] == "p[a]ss"
+
+
 def test_parse_trino_url_rejects_bad_scheme() -> None:
     with pytest.raises(WrenError) as exc:
         _parse_trino_url("http://alice@host:8080/c/s", None)
