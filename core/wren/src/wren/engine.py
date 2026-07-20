@@ -35,6 +35,24 @@ from wren.model.data_source import DataSource
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 from wren.policy import resolve_model_name, validate_sql_policy
 
+def _named_manifest_entries(items: object) -> set[str]:
+    """Collect ``name`` values from a manifest list, skipping junk rows.
+
+    Deployed MDLs occasionally retain nulls or non-object entries after
+    manual edits or partial merges. KeyError/TypeError here would abort
+    planning before policy checks can run.
+    """
+    if not isinstance(items, list):
+        return set()
+    names: set[str] = set()
+    for entry in items:
+        if not isinstance(entry, dict):
+            continue
+        name = entry.get("name")
+        if isinstance(name, str) and name:
+            names.add(name)
+    return names
+
 
 class WrenEngine:
     """Thin facade over wren-core MDL processing and connector execution.
@@ -172,8 +190,8 @@ class WrenEngine:
             ast = parse_one(sql, dialect=dialect)
 
             manifest_json = json.loads(base64.b64decode(self.manifest_str))
-            model_names = {m["name"] for m in manifest_json.get("models", [])}
-            view_names = {v["name"] for v in manifest_json.get("views", [])}
+            model_names = _named_manifest_entries(manifest_json.get("models"))
+            view_names = _named_manifest_entries(manifest_json.get("views"))
             # Views are MDL-defined objects too. Strict mode gates access to
             # objects *outside* the manifest, so a view reference is allowed;
             # ``extract_by`` scopes the view (and the models it joins) in.
