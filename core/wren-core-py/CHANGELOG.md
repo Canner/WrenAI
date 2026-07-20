@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.7.2](https://github.com/Canner/WrenAI/compare/wren-core-py-v0.7.1...wren-core-py-v0.7.2) (2026-07-20)
+
+
+### Bug Fixes
+
+* **core-py:** sync Rust crate versions in Cargo.lock ([#2478](https://github.com/Canner/WrenAI/issues/2478)) ([7f352e0](https://github.com/Canner/WrenAI/commit/7f352e0f0bc39a4c51e5762befa451de3b3b1b94))
+* **deps:** patch idna, cryptography, and pytest security advisories ([#2458](https://github.com/Canner/WrenAI/issues/2458)) ([8c72492](https://github.com/Canner/WrenAI/commit/8c724925aae679281e30a872469ecf20d85a854c))
+* finish wren-engine → wrenai rename cleanup ([#2425](https://github.com/Canner/WrenAI/issues/2425)) ([0733d37](https://github.com/Canner/WrenAI/commit/0733d379e15f041235bd7ff7449ecc421834a7f4))
+
+
+### Performance Improvements
+
+* **core-py:** release the GIL while blocking on the tokio runtime ([#2485](https://github.com/Canner/WrenAI/issues/2485)) ([ac499d7](https://github.com/Canner/WrenAI/commit/ac499d796bc2c60316c2424ae0b6784824892319))
+* **core-py:** share one Tokio runtime across session contexts ([#2510](https://github.com/Canner/WrenAI/issues/2510)) ([c5f5a24](https://github.com/Canner/WrenAI/commit/c5f5a24a1754e8f5a875f4d8d02f6c021d6ed2dc))
+
+
+### Dependencies
+
+* **core:** bump pyo3 to 0.29 and serde_with to 3.21 for security advisories ([#2530](https://github.com/Canner/WrenAI/issues/2530)) ([3dac00a](https://github.com/Canner/WrenAI/commit/3dac00a178aa5e78e9d6472fc6e048d17d1f7271))
+
 ## [0.7.1](https://github.com/Canner/WrenAI/compare/wren-core-py-v0.7.0...wren-core-py-v0.7.1) (2026-06-22)
 
 
