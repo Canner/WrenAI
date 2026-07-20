@@ -1251,8 +1251,16 @@ def _build_dbt_query_pairs(
     from wren.memory.seed_queries import generate_seed_queries  # noqa: PLC0415
 
     manifest = {
-        "models": [_seed_model_payload(model) for model in imported_models],
-        "relationships": [_seed_relationship_payload(rel) for rel in relationships],
+        "models": [
+            payload
+            for model in imported_models
+            if (payload := _seed_model_payload(model)) is not None
+        ],
+        "relationships": [
+            payload
+            for rel in relationships
+            if (payload := _seed_relationship_payload(rel)) is not None
+        ],
     }
 
     pairs = generate_seed_queries(manifest)
@@ -1267,24 +1275,39 @@ def _build_dbt_query_pairs(
     ]
 
 
-def _seed_model_payload(model: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "name": model["name"],
-        "primaryKey": model.get("primary_key"),
-        "properties": _camelize_props(model.get("properties", {})),
-        "columns": [
+def _seed_model_payload(model: dict[str, Any]) -> dict[str, Any] | None:
+    """Build seed payload for one imported model, or None if unusable."""
+    if not isinstance(model, dict) or not model.get("name"):
+        return None
+    props = model.get("properties") or {}
+    if not isinstance(props, dict):
+        props = {}
+    columns_out: list[dict[str, Any]] = []
+    for column in model.get("columns") or []:
+        if not isinstance(column, dict) or not column.get("name"):
+            continue
+        col_props = column.get("properties") or {}
+        if not isinstance(col_props, dict):
+            col_props = {}
+        columns_out.append(
             {
                 "name": column["name"],
                 "type": column.get("type"),
                 "isCalculated": column.get("is_calculated", False),
-                "properties": _camelize_props(column.get("properties", {})),
+                "properties": _camelize_props(col_props),
             }
-            for column in model.get("columns", [])
-        ],
+        )
+    return {
+        "name": model["name"],
+        "primaryKey": model.get("primary_key"),
+        "properties": _camelize_props(props),
+        "columns": columns_out,
     }
 
 
-def _seed_relationship_payload(relationship: dict[str, Any]) -> dict[str, Any]:
+def _seed_relationship_payload(relationship: dict[str, Any]) -> dict[str, Any] | None:
+    if not isinstance(relationship, dict):
+        return None
     return {
         "name": relationship.get("name"),
         "models": relationship.get("models", []),
@@ -1293,7 +1316,9 @@ def _seed_relationship_payload(relationship: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _camelize_props(properties: dict[str, Any]) -> dict[str, Any]:
+def _camelize_props(properties: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(properties, dict):
+        return {}
     mapping = {
         "accepted_values": "acceptedValues",
         "data_scope": "dataScope",
