@@ -35,6 +35,7 @@ from wren.model.data_source import DataSource
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 from wren.policy import resolve_model_name, validate_sql_policy
 
+
 def _named_manifest_entries(items: object) -> set[str]:
     """Collect ``name`` values from a manifest list, skipping junk rows.
 
