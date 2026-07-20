@@ -50,6 +50,8 @@ class DatabricksConnector(ConnectorABC):
             )
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
+        # Strip terminating ;/whitespace before execute (matches dry_run).
+        sql = strip_trailing_semicolon(sql)
         with closing(self.connection.cursor()) as cursor:
             cursor.execute(sql)
             if limit is not None:
