@@ -209,7 +209,7 @@ def basic_safety_check(sql: str) -> None:
         )
     stmt = stmts[0]
 
-    if not isinstance(stmt, (exp.Select, exp.Explain)):
+    if not isinstance(stmt, (exp.Query, exp.Explain, exp.Subquery)):
         raise WrenError(
             ErrorCode.POLICY_VIOLATION,
             f"Only read-only queries are allowed, got: {type(stmt).__name__}",
