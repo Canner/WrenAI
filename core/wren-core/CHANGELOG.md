@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/Canner/WrenAI/compare/wren-semantic-core-v0.2.0...wren-semantic-core-v0.3.0) (2026-07-20)
+
+
+### Bug Fixes
+
+* **core:** address Rust 1.97 Clippy warnings ([#2479](https://github.com/Canner/WrenAI/issues/2479)) ([f0270c1](https://github.com/Canner/WrenAI/commit/f0270c19e46630fb9e9b901f8107ade6f4f04105))
+* **core:** prevent catalog races in concurrent same-context transforms ([#2495](https://github.com/Canner/WrenAI/issues/2495)) ([6d56ef0](https://github.com/Canner/WrenAI/commit/6d56ef0ab1a11d916ec4ec5e2d551b098bcf4ebb))
+
 ## [0.2.0](https://github.com/Canner/WrenAI/compare/wren-semantic-core-v0.1.0...wren-semantic-core-v0.2.0) (2026-07-10)
 
 

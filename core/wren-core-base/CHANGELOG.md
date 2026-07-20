@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/Canner/WrenAI/compare/wren-core-base-v0.2.0...wren-core-base-v0.3.0) (2026-07-20)
+
+
+### Features
+
+* **wren-mdl:** loosen manifest schema and bump layout version to 4 ([#2501](https://github.com/Canner/WrenAI/issues/2501)) ([283d089](https://github.com/Canner/WrenAI/commit/283d0896e692bfacc408677a9ee456ee4f73ada2))
+
 ## [0.2.0](https://github.com/Canner/WrenAI/compare/wren-core-base-v0.1.0...wren-core-base-v0.2.0) (2026-07-10)
 
 
