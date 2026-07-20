@@ -62,9 +62,7 @@ def _format_model_inventory(models: list[dict] | None) -> str:
         raw_cols = model.get("columns") or []
         if not isinstance(raw_cols, list):
             raw_cols = []
-        cols = ", ".join(
-            c.get("name", "?") for c in raw_cols if isinstance(c, dict)
-        )
+        cols = ", ".join(c.get("name", "?") for c in raw_cols if isinstance(c, dict))
         lines.append(f"- **{model.get('name', '?')}**: {cols}")
     if not lines:
         return "- (no models found — run `wren context build` first)"
