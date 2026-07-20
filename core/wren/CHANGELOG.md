@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.13.1](https://github.com/Canner/WrenAI/compare/wren-v0.13.0...wren-v0.13.1) (2026-07-20)
+
+
+### Bug Fixes
+
+* **athena:** push LIMIT into SQL and strip trailing semicolon on wrap ([#2457](https://github.com/Canner/WrenAI/issues/2457)) ([79af489](https://github.com/Canner/WrenAI/commit/79af489464431c4bdaf1ff44a28050f0086376c9))
+* **canner:** strip trailing semicolon on unlimited query path ([#2488](https://github.com/Canner/WrenAI/issues/2488)) ([c7e7462](https://github.com/Canner/WrenAI/commit/c7e7462e30bee1ba356861f885f7554fe8fefa3d))
+* **clickhouse:** catch SqlglotError in type string parsing ([#2523](https://github.com/Canner/WrenAI/issues/2523)) ([e99d5ee](https://github.com/Canner/WrenAI/commit/e99d5eef086896152b29a0e5af30fa51e1bd765c))
+* **connector:** use public strip_trailing_semicolon in dry_run paths ([#2550](https://github.com/Canner/WrenAI/issues/2550)) ([4e0c4f3](https://github.com/Canner/WrenAI/commit/4e0c4f35db1024cd5361b8b7156d878dd600630d))
+* **context:** guard `wren context show`/`validate` against null relationship models ([#2494](https://github.com/Canner/WrenAI/issues/2494)) ([30f045d](https://github.com/Canner/WrenAI/commit/30f045d327f72d2acf5ed7749d831c7d5a86edce))
+* **databricks:** strip trailing semicolon before query execute ([#2477](https://github.com/Canner/WrenAI/issues/2477)) ([7aebe4e](https://github.com/Canner/WrenAI/commit/7aebe4e7e28523cd34944e611f1d1981e694fa1d))
+* **datafusion:** strip trailing semicolon before dry_run ([#2463](https://github.com/Canner/WrenAI/issues/2463)) ([fc5949f](https://github.com/Canner/WrenAI/commit/fc5949fde786653ba67e404b9592283d8f0b2fcd))
+* **memory:** guard schema indexing against null relationship models ([#2493](https://github.com/Canner/WrenAI/issues/2493)) ([e19677f](https://github.com/Canner/WrenAI/commit/e19677fbe3fcc3249b7f24dfb45c7dcc01261c56))
+* **postgres:** strip trailing semicolon on unlimited query path ([#2490](https://github.com/Canner/WrenAI/issues/2490)) ([7e4cfca](https://github.com/Canner/WrenAI/commit/7e4cfca9b40fc9b4055137b1a73718ef79358a6c))
+* **profile:** mask all registry-sensitive fields in `wren profile debug` ([#2492](https://github.com/Canner/WrenAI/issues/2492)) ([68cf17b](https://github.com/Canner/WrenAI/commit/68cf17bd3b26a1a508694b44ce3f0a057eb60bde))
+* **snowflake:** strip trailing semicolon before dry_run describe ([#2487](https://github.com/Canner/WrenAI/issues/2487)) ([724c9bd](https://github.com/Canner/WrenAI/commit/724c9bd2fce3d7b6cc1fbb53b7cf83f08fbefd9e))
+* **trino:** coerce verify=false URL/kwargs for SSL connections ([#2481](https://github.com/Canner/WrenAI/issues/2481)) ([243eec8](https://github.com/Canner/WrenAI/commit/243eec883e12657791bcf911f4c2f2de6638bfa8))
+* **trino:** fall back on Sqlglot TokenError for type strings ([#2505](https://github.com/Canner/WrenAI/issues/2505)) ([82ad7a1](https://github.com/Canner/WrenAI/commit/82ad7a1c473f8b28fd8df32d5e35b9955bc30b61))
+* **trino:** sanitize bracketed userinfo and URL-decode credentials ([#2472](https://github.com/Canner/WrenAI/issues/2472)) ([769e222](https://github.com/Canner/WrenAI/commit/769e222a1366e4c2eaff8177a10065f2fb295efa))
+* **type_mapping:** skip non-dict rows in parse/translate_types ([#2508](https://github.com/Canner/WrenAI/issues/2508)) ([aab727f](https://github.com/Canner/WrenAI/commit/aab727fa240f362547d2f21f56bc54bd2c17bdde))
+* **wren:** align MCP handlers with ServeContext and query limits ([#2500](https://github.com/Canner/WrenAI/issues/2500)) ([55c128a](https://github.com/Canner/WrenAI/commit/55c128ab20a27ad20b2bce2320fa3bafd883be05))
+* **wren:** bump transitive deps to clear security advisories ([#2529](https://github.com/Canner/WrenAI/issues/2529)) ([9b2c362](https://github.com/Canner/WrenAI/commit/9b2c362f42c4f05651d8d2adbc128fadbb043a93))
+* **wren:** treat non-string SQL as not exploratory ([#2509](https://github.com/Canner/WrenAI/issues/2509)) ([cba94ad](https://github.com/Canner/WrenAI/commit/cba94ad1476ba4583695fed2aa3da31ddbbf59f3))
+
+
+### Performance Improvements
+
+* **wren:** defer memory model initialization ([#2513](https://github.com/Canner/WrenAI/issues/2513)) ([736175c](https://github.com/Canner/WrenAI/commit/736175c83f562e842b0e906279962cedfe9908bd))
+
+
+### Documentation
+
+* **wren:** fix cube hierarchy YAML examples ([#2502](https://github.com/Canner/WrenAI/issues/2502)) ([d0c6a46](https://github.com/Canner/WrenAI/commit/d0c6a46b348be785e3fbbc41270a4aadefbfb42a))
+
 ## [0.13.0](https://github.com/Canner/WrenAI/compare/wren-v0.12.0...wren-v0.13.0) (2026-07-13)
 
 
