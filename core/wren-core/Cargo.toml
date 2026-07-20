@@ -12,6 +12,10 @@ repository = "https://github.com/Canner/WrenAI"
 rust-version = "1.78"
 version = "0.3.0"
 
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+
 [workspace.dependencies]
 async-trait = "0.1.89"
 datafusion = { version = "53", default-features = false, features = [

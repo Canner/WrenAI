@@ -1,5 +1,16 @@
 """Root pytest configuration for the wren package test suite."""
 
+import sys
+from unittest.mock import MagicMock
+
+# wren_core (wren-core-py) requires a Rust compilation and is not
+# available in CI or bare test environments.  Provide a module-level
+# mock so the import chain
+#   wren.__init__ → wren.engine → wren.mdl → wren_core
+# succeeds without a compiled native binary.
+if "wren_core" not in sys.modules:
+    sys.modules["wren_core"] = MagicMock()
+
 import pytest
 
 

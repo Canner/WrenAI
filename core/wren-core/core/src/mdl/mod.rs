@@ -13,7 +13,7 @@ use crate::mdl::utils::{dequote_identifier, quoted, to_field};
 use crate::DataFusionError;
 use context::SessionPropertiesRef;
 use datafusion::arrow::datatypes::Field;
-use datafusion::common::{internal_datafusion_err, plan_err};
+use datafusion::common::{internal_datafusion_err, plan_datafusion_err, plan_err};
 use datafusion::datasource::TableProvider;
 use datafusion::error::Result;
 use datafusion::execution::context::SessionState;
@@ -31,6 +31,8 @@ use log::{debug, info, warn};
 use manifest::Relationship;
 use parking_lot::RwLock;
 use std::hash::Hash;
+#[cfg(feature = "multi-thread")]
+use std::sync::OnceLock;
 use std::{collections::HashMap, sync::Arc};
 use wren_core_base::mdl::DataSource;
 
@@ -67,6 +69,10 @@ impl Default for AnalyzedWrenMDL {
     fn default() -> Self {
         let manifest = ManifestBuilder::default().build();
         let wren_mdl = WrenMDL::new(manifest);
+        // SAFETY: Lineage::new cannot fail on a freshly-built default manifest.
+        // The manifest has no models, views, or relationships — lineage
+        // resolution is trivially empty.
+        #[allow(clippy::unwrap_used)]
         let lineage = lineage::Lineage::new(&wren_mdl).unwrap();
         AnalyzedWrenMDL {
             wren_mdl: Arc::new(wren_mdl),
@@ -241,9 +247,9 @@ impl WrenMDL {
                 .iter()
                 .map(|model| match model.source() {
                     ModelSource::TableReference => {
-                        let name = TableReference::from(model.table_reference().expect(
-                            "table_reference must exist for TableReference source",
-                        ));
+                        let name = TableReference::from(model.table_reference().ok_or_else(|| {
+                            plan_datafusion_err!("table_reference must exist for TableReference source")
+                        })?);
                         let available_columns = model
                             .columns
                             .iter()
@@ -265,9 +271,10 @@ impl WrenMDL {
                             .collect::<Result<Vec<_>>>()?;
                         let fields: Vec<_> = available_columns
                             .into_iter()
-                            .filter(|c| c.is_some())
                             .filter_map(|column| {
-                                Self::infer_source_column(&column.unwrap()).ok().flatten()
+                                column.and_then(|c| {
+                                    Self::infer_source_column(&c).ok().flatten()
+                                })
                             })
                             .collect();
                         let schema =
@@ -447,6 +454,7 @@ pub fn create_wren_ctx(
 
     if config.options().execution.time_zone.is_none() {
         // Set default time zone to UTC to avoid time zone related issues in timestamp inference and comparison. It can be overridden by the user config.
+        #[allow(clippy::unwrap_used)]
         config
             .options_mut()
             .set("datafusion.execution.time_zone", "+00:00")
@@ -462,13 +470,29 @@ pub fn create_wren_ctx(
 ///
 /// Not available on WASM — use [`transform_sql_with_ctx`] directly in async context.
 #[cfg(feature = "multi-thread")]
+fn get_runtime() -> Result<&'static tokio::runtime::Runtime> {
+    static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+
+    if let Some(runtime) = RUNTIME.get() {
+        return Ok(runtime);
+    }
+
+    let runtime = tokio::runtime::Runtime::new().map_err(|e| {
+        DataFusionError::Internal(format!("failed to create tokio runtime: {e}"))
+    })?;
+
+    let runtime = RUNTIME.get_or_init(|| runtime);
+    Ok(runtime)
+}
+
+#[cfg(feature = "multi-thread")]
 pub fn transform_sql(
     analyzed_mdl: Arc<AnalyzedWrenMDL>,
     remote_functions: &[RemoteFunction],
     properties: HashMap<String, Option<String>>,
     sql: &str,
 ) -> Result<String> {
-    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let runtime = get_runtime()?;
     runtime.block_on(transform_sql_with_ctx(
         &create_wren_ctx(None, analyzed_mdl.wren_mdl().data_source().as_ref()),
         analyzed_mdl,
@@ -670,7 +694,7 @@ mod test {
     use datafusion::arrow::util::pretty::pretty_format_batches_with_options;
     use datafusion::common::format::DEFAULT_FORMAT_OPTIONS;
     use datafusion::common::not_impl_err;
-    use datafusion::common::Result;
+    use datafusion::error::Result;
     use datafusion::sql::unparser::plan_to_sql;
     use insta::assert_snapshot;
     use wren_core_base::mdl::{

@@ -116,7 +116,29 @@ pub async fn apply_wren_on_ctx(
     // SessionStates within the call share that snapshot, isolating in-flight
     // catalog registration from the base context and concurrent calls. See
     // `clone_catalog_list` for the exact sharing contract.
-    let private_catalog_list = clone_catalog_list(ctx.state().catalog_list());
+    let private_catalog_list: Arc<dyn CatalogProviderList> = if matches!(mode, Mode::LocalRuntime) {
+        // Strip non-MDL catalogs in LocalRuntime mode to prevent direct
+        // physical table access that bypasses the MDL semantic layer
+        // (column-level ACL, row-level security, model rewrites). Only the
+        // MDL's own catalog and information_schema survive the filter.
+        // ModelGenerationRule uses create_remote_table_source (catalog-free)
+        // so MDL model expansion is unaffected.
+        let state = ctx.state();
+        let original = state.catalog_list();
+        let wren_mdl = analyzed_mdl.wren_mdl();
+        let mdl_catalog = wren_mdl.catalog().to_string();
+        let filtered = MemoryCatalogProviderList::new();
+        for name in original.catalog_names() {
+            if name == mdl_catalog || name == "information_schema" {
+                if let Some(catalog) = original.catalog(&name) {
+                    filtered.register_catalog(name, catalog);
+                }
+            }
+        }
+        Arc::new(filtered)
+    } else {
+        clone_catalog_list(ctx.state().catalog_list())
+    };
     let reset_default_catalog_schema = Arc::new(RwLock::new(
         SessionStateBuilder::new_from_existing(ctx.state())
             .with_config(config.clone())

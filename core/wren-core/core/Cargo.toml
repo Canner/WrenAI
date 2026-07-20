@@ -12,6 +12,9 @@ repository = { workspace = true }
 license = { workspace = true }
 authors = { workspace = true }
 
+[lints]
+workspace = true
+
 [lib]
 name = "wren_core"
 path = "src/lib.rs"

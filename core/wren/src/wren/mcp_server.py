@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import math
+import secrets
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from decimal import Decimal
@@ -17,6 +18,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from loguru import logger
+from mcp.server.auth.provider import AccessToken
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
@@ -32,6 +34,9 @@ class ServeContext:
     engine: Any  # wren.engine.WrenEngine
     allow_write: bool
     no_connect: bool
+    api_key: str | None = None
+    host: str = "0.0.0.0"
+    port: int = 8080
 
 
 def _memory_path(ctx: ServeContext) -> str:
@@ -672,9 +677,37 @@ def _register_prompts(mcp: FastMCP, ctx: ServeContext) -> None:
         return _workflow_text(ctx, question)
 
 
+class _ApiKeyVerifier:
+    """TokenVerifier that accepts exactly one API key as a bearer token."""
+
+    def __init__(self, api_key: str):
+        self._api_key = api_key
+
+    async def verify_token(self, token: str) -> AccessToken | None:
+        if secrets.compare_digest(token, self._api_key):
+            return AccessToken(
+                token=token,
+                client_id="api_key_user",
+                scopes=[],
+            )
+        return None
+
+
 def build_server(ctx: ServeContext) -> FastMCP:
     """Build and register all tools on a FastMCP server instance."""
-    mcp = FastMCP("wren")
+
+    kwargs: dict[str, Any] = {"name": "wren"}
+    if ctx.api_key:
+        from mcp.server.auth.settings import AuthSettings  # noqa: PLC0415
+
+        base_url = f"http://{ctx.host}:{ctx.port}"
+        kwargs["auth"] = AuthSettings(
+            issuer_url=base_url,
+            resource_server_url=base_url,
+        )
+        kwargs["token_verifier"] = _ApiKeyVerifier(ctx.api_key)
+
+    mcp = FastMCP(**kwargs)
 
     _register_query_tools(mcp, ctx)
     _register_context_tools(mcp, ctx)

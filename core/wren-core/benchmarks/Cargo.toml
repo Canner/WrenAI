@@ -9,6 +9,9 @@ repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
+[lints]
+workspace = true
+
 [lib]
 name = "wren_benchmarks"
 path = "src/lib.rs"

@@ -398,6 +398,7 @@ Requires the `mcp` extra: `pip install 'wrenai[mcp]'`.
 | `--transport` | `stdio` | `stdio` or `http` |
 | `--host` | `127.0.0.1` | Bind host, `--transport http` only |
 | `--port` | `8080` | Bind port, `--transport http` only |
+| `--api-key` | — | Bearer-token secret for HTTP requests, `--transport http` only |
 | `--project` | discovered | Override project root |
 | `--profile` | active profile | Connection profile name |
 | `--allow-write` | off | Enable the `store_query` write tool |
@@ -427,7 +428,7 @@ warns that the MDL may be stale but still serves it — it never auto-builds.
 
 For `--transport http`, connect the client to the Streamable HTTP endpoint at
 `http://<host>:<port>` instead of spawning a process. Binds to `127.0.0.1` by
-default; there is no bearer-token auth in this version — treat it as local-only.
+default. Pass `--api-key <secret>` to enable bearer-token authentication.
 
 ### Tools
 

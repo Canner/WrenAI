@@ -39,7 +39,10 @@ impl RemoteFunction {
                 if coercions.iter().any(|r| r.is_err()) {
                     signatures.push(TypeSignature::Exact(types.clone()));
                 } else {
-                    let coercions = coercions.into_iter().map(|r| r.unwrap()).collect();
+                    let coercions = coercions
+                        .into_iter()
+                        .filter_map(|r| r.ok())
+                        .collect::<Vec<_>>();
                     signatures.push(TypeSignature::Coercible(coercions));
                 }
             }
@@ -274,14 +277,14 @@ fn build_document(func: &RemoteFunction) -> Documentation {
         "",
     );
     if let Some(param_names) = func.param_names.as_ref() {
+        let param_types = func.param_types.as_deref().unwrap_or(&[]);
         for (i, name) in param_names.iter().enumerate() {
-            let description = func
-                .param_types
-                .as_ref()
-                .map(|types| types[i].clone().unwrap_or("".to_string()))
-                .unwrap_or("".to_string());
+            let description = param_types
+                .get(i)
+                .and_then(|t| t.clone())
+                .unwrap_or_default();
             builder = builder
-                .with_argument(name.clone().unwrap_or("".to_string()), description);
+                .with_argument(name.clone().unwrap_or_default(), description);
         }
     }
     builder.build()
@@ -376,8 +379,8 @@ impl ByPassAggregateUDF {
 
 impl From<RemoteFunction> for ByPassAggregateUDF {
     fn from(func: RemoteFunction) -> Self {
-        // just panic if the return type is not valid to avoid we input invalid type
-        let return_type = ReturnType::from_str(&func.return_type).unwrap();
+        let return_type = ReturnType::from_str(&func.return_type)
+            .unwrap_or(ReturnType::Specific(DataType::Utf8));
         ByPassAggregateUDF {
             return_type,
             signature: func.get_signature(),
@@ -458,8 +461,8 @@ impl ByPassWindowFunction {
 
 impl From<RemoteFunction> for ByPassWindowFunction {
     fn from(func: RemoteFunction) -> Self {
-        // just panic if the return type is not valid to avoid we input invalid type
-        let return_type = ReturnType::from_str(&func.return_type).unwrap();
+        let return_type = ReturnType::from_str(&func.return_type)
+            .unwrap_or(ReturnType::Specific(DataType::Utf8));
         ByPassWindowFunction {
             return_type,
             signature: func.get_signature(),

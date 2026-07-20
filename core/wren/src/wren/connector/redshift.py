@@ -44,23 +44,18 @@ class RedshiftConnector(ConnectorABC):
         self.connection.autocommit = True
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
-        if limit is not None:
-            sql = (
-                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) "
-                f"AS _q LIMIT {int(limit)}"
-            )
+        executed, params = self._apply_limit_param(sql, limit, param_style="format")
         with closing(self.connection.cursor()) as cursor:
-            cursor.execute(sql)
+            cursor.execute(executed, params)
             cols = [desc[0] for desc in cursor.description]
             rows = cursor.fetchall()
             df = pd.DataFrame(rows, columns=cols)
             return pa.Table.from_pandas(df)
 
     def dry_run(self, sql: str) -> None:
+        executed, params = self._apply_limit_param(sql, 0, param_style="format")
         with closing(self.connection.cursor()) as cursor:
-            cursor.execute(
-                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS sub LIMIT 0"
-            )
+            cursor.execute(executed, params)
 
     def close(self) -> None:
         try:

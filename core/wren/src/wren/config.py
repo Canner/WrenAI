@@ -29,9 +29,13 @@ class WrenConfig:
         NEVER be allowed via this list; they are always blocked in strict mode.
     """
 
-    strict_mode: bool = False
+    strict_mode: bool = True
     denied_functions: frozenset[str] = field(default_factory=frozenset)
     allowed_source_functions: frozenset[str] = field(default_factory=frozenset)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "denied_functions", frozenset(f.lower() for f in self.denied_functions))
+        object.__setattr__(self, "allowed_source_functions", frozenset(f.lower() for f in self.allowed_source_functions))
 
 
 def load_config(wren_home: Path) -> WrenConfig:
@@ -58,7 +62,14 @@ def load_config(wren_home: Path) -> WrenConfig:
             f"{config_path} must contain a JSON object.",
         )
 
-    strict_mode_raw = raw.get("strict_mode", False)
+    if "strict_mode" not in raw:
+        from loguru import logger
+        logger.warning(
+            "WrenConfig: 'strict_mode' default is now True (was False). "
+            "Set \"strict_mode\": false in your config.json to restore the old "
+            "behavior. This fallback will be removed in a future release."
+        )
+    strict_mode_raw = raw.get("strict_mode", True)
     if not isinstance(strict_mode_raw, bool):
         raise WrenError(
             ErrorCode.GENERIC_USER_ERROR,
@@ -76,7 +87,6 @@ def load_config(wren_home: Path) -> WrenConfig:
             ErrorCode.GENERIC_USER_ERROR,
             f"{config_path}: 'denied_functions' must contain only strings.",
         )
-    denied_functions = frozenset(f.lower() for f in denied_raw)
 
     allowed_src_raw = raw.get("allowed_source_functions", [])
     if not isinstance(allowed_src_raw, list):
@@ -89,10 +99,9 @@ def load_config(wren_home: Path) -> WrenConfig:
             ErrorCode.GENERIC_USER_ERROR,
             f"{config_path}: 'allowed_source_functions' must contain only strings.",
         )
-    allowed_source_functions = frozenset(f.lower() for f in allowed_src_raw)
 
     return WrenConfig(
         strict_mode=strict_mode_raw,
-        denied_functions=denied_functions,
-        allowed_source_functions=allowed_source_functions,
+        denied_functions=frozenset(denied_raw),
+        allowed_source_functions=frozenset(allowed_src_raw),
     )

@@ -9,6 +9,10 @@ repository = "https://github.com/Canner/WrenAI"
 keywords = ["sql", "semantic-layer", "mdl", "manifest", "wren"]
 categories = ["database"]
 
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+
 [features]
 python-binding = ["dep:pyo3"]
 default = []
