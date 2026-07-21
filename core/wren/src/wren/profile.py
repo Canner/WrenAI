@@ -12,6 +12,7 @@ import os
 import re
 import string
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -354,12 +355,30 @@ def _registry_sensitive_keys() -> set[str]:
     return keys
 
 
+def _mask_obj(obj: Any, is_sensitive: Callable[[Any], bool]) -> Any:
+    """Recursively mask sensitive keys, mirroring :func:`_expand_obj`.
+
+    Expansion walks nested dicts and lists, so secrets legitimately live at
+    ``kwargs: {password: ...}``; masking must cover the same shape or it
+    under-masks exactly the values expansion supports.
+    """
+    if isinstance(obj, dict):
+        return {
+            k: "***" if is_sensitive(k) else _mask_obj(v, is_sensitive)
+            for k, v in obj.items()
+        }
+    if isinstance(obj, list):
+        return [_mask_obj(v, is_sensitive) for v in obj]
+    return obj
+
+
 def debug_profile(name: str | None = None) -> dict[str, Any]:
     """Return diagnostic info for a profile (or the active one).
 
     Masks fields the connection-field registry marks sensitive (``SecretStr``),
     plus a name heuristic (password, credentials, secret, token, ...) for keys
-    the registry does not know about.
+    the registry does not know about. Nested dicts and lists are walked, since
+    ``kwargs``/``settings`` may carry secrets.
     """
     if name is None:
         name = get_active_name()
@@ -387,15 +406,16 @@ def debug_profile(name: str | None = None) -> dict[str, Any]:
         "role_arn",
     }
     registry_sensitive = _registry_sensitive_keys()
-    masked = {}
-    for k, v in profile.items():
-        kl = k.lower()
-        if (
+
+    def _is_sensitive(key: Any) -> bool:
+        # YAML permits non-string keys (``123:``, ``true:``); str() keeps the
+        # traversal from raising AttributeError on them.
+        kl = str(key).lower()
+        return (
             kl in registry_sensitive
             or kl in _SENSITIVE
             or any(s in kl for s in _SENSITIVE)
-        ):
-            masked[k] = "***"
-        else:
-            masked[k] = v
+        )
+
+    masked = _mask_obj(profile, _is_sensitive)
     return {"name": name, "active": data.get("active") == name, "config": masked}
