@@ -90,6 +90,9 @@ class MySqlConnector(ConnectorABC):
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         limit = _coerce_limit(limit)
+        # Always strip terminator so unlimited execute matches dry_run EXPLAIN
+        # and LIMIT rewrite composition for client-pasted ``SELECT 1;``.
+        sql = strip_trailing_semicolon(sql)
         if limit is not None:
             sql = _apply_limit(sql, limit)
         with closing(self.connection.cursor()) as cursor:
