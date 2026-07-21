@@ -67,11 +67,7 @@ class SnowflakeConnector(ConnectorABC):
         if limit is not None:
             # Place the user SQL on its own line so a trailing line comment
             # (`-- ...`) cannot swallow the closing paren, alias, or LIMIT.
-            executed = (
-                "SELECT * FROM (\n"
-                f"{sql}\n"
-                f") AS _wren_sub LIMIT {int(limit)}"
-            )
+            executed = f"SELECT * FROM (\n{sql}\n) AS _wren_sub LIMIT {int(limit)}"
         try:
             with self.connection.cursor() as cursor:
                 cursor.execute(executed)
