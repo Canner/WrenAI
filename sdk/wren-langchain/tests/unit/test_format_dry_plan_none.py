@@ -2,12 +2,7 @@
 
 from pathlib import Path
 
-SRC = (
-    Path(__file__).resolve().parents[2]
-    / "src"
-    / "wren_langchain"
-    / "_format.py"
-)
+SRC = Path(__file__).resolve().parents[2] / "src" / "wren_langchain" / "_format.py"
 
 
 def test_source_coerces_none():
