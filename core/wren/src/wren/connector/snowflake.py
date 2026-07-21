@@ -55,6 +55,9 @@ class SnowflakeConnector(ConnectorABC):
         self.connection = make_snowflake_connection(connection_info)
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
+        # Always strip so unlimited execute matches dry_run and LIMIT wrap for
+        # client-pasted statement terminators (``SELECT 1;`` / ``; ;``).
+        sql = strip_trailing_semicolon(sql)
         # Push LIMIT into Snowflake when requested so we do not download a
         # full result set only to slice it in Python. Wrap as a subquery so a
         # trailing semicolon in the user SQL cannot break composition, and so
@@ -66,7 +69,7 @@ class SnowflakeConnector(ConnectorABC):
             # (`-- ...`) cannot swallow the closing paren, alias, or LIMIT.
             executed = (
                 "SELECT * FROM (\n"
-                f"{strip_trailing_semicolon(sql)}\n"
+                f"{sql}\n"
                 f") AS _wren_sub LIMIT {int(limit)}"
             )
         try:
