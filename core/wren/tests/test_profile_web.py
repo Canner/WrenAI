@@ -46,6 +46,17 @@ def test_form_contains_datasource_options(client):
     assert resp.status_code == 200
     assert "postgres" in resp.text
     assert "bigquery" in resp.text
+
+
+def test_form_omits_connection_url_datasource(client):
+    """The dropdown must not offer ``connection_url``.
+
+    It is a registry entry but not a DataSource, so saving it produces a profile
+    no connector can resolve.
+    """
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert '<option value="connection_url"' not in resp.text
     assert "duckdb" in resp.text
 
 

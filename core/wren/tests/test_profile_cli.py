@@ -608,3 +608,28 @@ def test_validate_unknown_datasource(monkeypatch):
     output = buf.getvalue()
     assert "Cannot validate" in output
     assert "unknown datasource" in output
+
+
+def test_interactive_add_does_not_offer_connection_url(monkeypatch):
+    """The interactive "Data source" prompt must not offer ``connection_url``.
+
+    It is a field-registry entry but not a DataSource, so picking it saves a
+    profile whose datasource no connector can resolve.
+    """
+    import wren.profile_cli as cli_mod
+
+    captured = {}
+
+    def fake_prompt(text, **kwargs):
+        captured["choices"] = list(kwargs["type"].choices)
+        raise RuntimeError("stop after the datasource prompt")
+
+    monkeypatch.setattr(cli_mod.typer, "prompt", fake_prompt)
+
+    with pytest.raises(RuntimeError):
+        cli_mod._interactive_add(None)
+
+    assert "connection_url" not in captured["choices"]
+    # Reverse anchor: real datasources must still be offered.
+    assert "postgres" in captured["choices"]
+    assert "bigquery" in captured["choices"]

@@ -9,6 +9,7 @@ from wren.model.field_registry import (
     FieldDef,
     get_datasource_options,
     get_fields,
+    get_selectable_datasources,
     get_variants,
 )
 
@@ -27,6 +28,38 @@ def test_all_datasources_covered():
 
 def test_get_datasource_options_sorted():
     opts = get_datasource_options()
+    assert opts == sorted(opts)
+
+
+def test_selectable_datasources_excludes_non_datasource_entries():
+    """Every selectable option must be a real DataSource.
+
+    ``connection_url`` is a registry entry but not a DataSource enum value, so a
+    profile saved with ``datasource: connection_url`` can never be resolved by a
+    connector.
+    """
+    from wren.model.data_source import DataSource  # noqa: PLC0415
+
+    ds_names = {e.value for e in DataSource}
+    selectable = get_selectable_datasources()
+
+    assert "connection_url" not in selectable
+    assert not set(selectable) - ds_names
+
+
+def test_selectable_datasources_keeps_every_real_datasource():
+    """Reverse anchor: filtering must not drop any genuine DataSource."""
+    from wren.model.data_source import DataSource  # noqa: PLC0415
+
+    ds_names = {e.value for e in DataSource}
+    selectable = set(get_selectable_datasources())
+
+    assert not ds_names - selectable
+    assert selectable == set(get_datasource_options()) - {"connection_url"}
+
+
+def test_selectable_datasources_sorted():
+    opts = get_selectable_datasources()
     assert opts == sorted(opts)
     assert "postgres" in opts
     assert "bigquery" in opts
