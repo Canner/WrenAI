@@ -26,33 +26,20 @@ from wren.model.data_source import DataSource
 from wren.model.error import ErrorCode, WrenError
 
 
-def _apply_limit(sql: str, limit: int) -> str:
-    """Append ``LIMIT n`` to a user-supplied SQL string.
+def _apply_limit_mysql(sql: str, limit: int | None) -> tuple[str, list | None]:
+    """Apply a parameterized ``LIMIT %s`` to *sql* using MySQLdb-compatible style.
 
-    Strips any trailing semicolon and whitespace, then appends ``LIMIT n``.
-    ``limit`` MUST already be validated as a non-negative ``int`` by the caller
-    — this helper does not re-validate to keep the call site explicit.
-
-    Wrapping the user SQL in ``SELECT * FROM (...) AS _sub LIMIT n`` was
-    rejected because it fails with ``ER_DUP_FIELDNAME`` whenever the inner
-    SELECT projects two columns with the same name (e.g. a join that selects
-    ``a.id`` and ``b.id``).
+    Returns ``(modified_sql, params)``. Never interpolates the limit.
+    Uses direct ``LIMIT %s`` instead of subquery-wrapping because MySQL fails with
+    ``ER_DUP_FIELDNAME`` when the inner SELECT projects duplicate column names.
+    The caller is responsible for normalizing *limit* via ``_normalize_limit()``
+    before calling this function. A ``None`` *limit* means no LIMIT clause.
     """
-    return f"{strip_trailing_semicolon(sql)}\nLIMIT {limit}"
+    from wren.connector.base import strip_trailing_semicolon as _strip
 
-
-def _coerce_limit(limit: int | None) -> int | None:
-    """Validate and coerce a user-supplied ``limit`` to a non-negative ``int``.
-
-    ``int(limit)`` rejects strings like ``"5 OR 1=1"`` so the value can be
-    safely interpolated into SQL. Negative limits are also rejected.
-    """
     if limit is None:
-        return None
-    coerced = int(limit)
-    if coerced < 0:
-        raise ValueError(f"limit must be non-negative, got {coerced}")
-    return coerced
+        return _strip(sql), None
+    return f"{_strip(sql)}\nLIMIT %s", [limit]
 
 
 class MySqlConnector(ConnectorABC):
@@ -89,11 +76,11 @@ class MySqlConnector(ConnectorABC):
             raise
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
-        limit = _coerce_limit(limit)
         if limit is not None:
-            sql = _apply_limit(sql, limit)
+            limit = self._normalize_limit(limit)
+        sql, params = _apply_limit_mysql(sql, limit)
         with closing(self.connection.cursor()) as cursor:
-            cursor.execute(sql)
+            cursor.execute(sql, params)
             return _build_mysql_arrow_table(cursor)
 
     def dry_run(self, sql: str) -> None:

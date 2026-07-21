@@ -484,13 +484,10 @@ class TrinoConnector(ConnectorABC):
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         trino = _import_trino()
 
-        if limit is not None:
-            sql = (
-                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS _sub LIMIT {limit}"
-            )
+        sql, params = self._apply_limit_param(sql, limit, param_style="qmark")
         try:
             with contextlib.closing(self.connection.cursor()) as cursor:
-                cursor.execute(sql)
+                cursor.execute(sql, params)
                 return _build_trino_arrow_table(cursor)
         except trino.exceptions.TrinoQueryError as e:
             if e.error_name == "EXCEEDED_TIME_LIMIT":
@@ -507,10 +504,10 @@ class TrinoConnector(ConnectorABC):
     def dry_run(self, sql: str) -> None:
         trino = _import_trino()
 
-        wrapped = f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS _sub LIMIT 0"
+        wrapped, params = self._apply_limit_param(sql, 0, param_style="qmark")
         try:
             with contextlib.closing(self.connection.cursor()) as cursor:
-                cursor.execute(wrapped)
+                cursor.execute(wrapped, params)
                 cursor.fetchall()
         except trino.exceptions.TrinoQueryError as e:
             if e.error_name == "EXCEEDED_TIME_LIMIT":

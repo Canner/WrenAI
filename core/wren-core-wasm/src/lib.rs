@@ -601,6 +601,15 @@ impl WrenEngine {
         use arrow::json::writer::JsonArray;
         use arrow::json::WriterBuilder;
 
+        // Require MDL to be loaded — without it, the DataFusion context has no
+        // Wren analyzer rules and SQL would bypass column-level ACL, row-level
+        // security, and model rewrites entirely.
+        if self.analyzed_mdl.is_none() {
+            return Err(JsError::new(
+                "No MDL loaded. Call loadMDL() first, or use cubeQuery() for structured queries.",
+            ));
+        }
+
         self.runtime.block_on(async {
             let df = self
                 .ctx

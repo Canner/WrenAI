@@ -17,7 +17,7 @@ use crate::DataFusionError;
 use datafusion::common::alias::AliasGenerator;
 use datafusion::common::config::ConfigOptions;
 use datafusion::common::tree_node::{Transformed, TransformedResult};
-use datafusion::common::{plan_err, Result};
+use datafusion::common::{internal_datafusion_err, plan_datafusion_err, plan_err, Result};
 use datafusion::logical_expr::{col, ident, Extension, UserDefinedLogicalNodeCore};
 use datafusion::logical_expr::{Expr, LogicalPlan, LogicalPlanBuilder};
 use datafusion::optimizer::analyzer::AnalyzerRule;
@@ -69,8 +69,10 @@ impl ModelGenerationRule {
                         model_plan
                             .required_exprs
                             .iter()
-                            .map(|expr| rebase_column(expr, &alias).unwrap())
-                            .collect()
+                            .map(|expr| rebase_column(expr, &alias).map_err(|e| {
+                                internal_datafusion_err!("failed to rebase column: {e}")
+                            }))
+                            .collect::<Result<Vec<_>>>()?
                     } else {
                         model_plan.required_exprs.clone()
                     };
@@ -114,7 +116,9 @@ impl ModelGenerationRule {
                             .analyzed_wren_mdl
                             .wren_mdl()
                             .get_model(&model_plan.model_name)
-                            .expect("Model not found"),
+                            .ok_or_else(|| {
+                                plan_datafusion_err!("Model not found: {}", model_plan.model_name)
+                            })?,
                     );
                     let mut required_exprs = model_plan.required_exprs.clone();
                     required_exprs.iter_mut().try_for_each(|expr| {
@@ -124,7 +128,7 @@ impl ModelGenerationRule {
                     let table_scan = match &model_plan.original_table_scan {
                         Some(LogicalPlan::TableScan(original_scan)) => {
                             let table_ref_name = model.table_reference()
-                                .expect("TableScan-based model must have a table_reference");
+                                .ok_or_else(|| plan_datafusion_err!("TableScan-based model must have a table_reference"))?;
                             LogicalPlanBuilder::scan_with_filters(
                                 TableReference::from(table_ref_name),
                                 create_remote_table_source(
@@ -157,7 +161,7 @@ impl ModelGenerationRule {
                                 }
                                 wren_core_base::mdl::ModelSource::TableReference => {
                                     let table_ref_name = model.table_reference()
-                                        .expect("table_reference model must have a table_reference");
+                                        .ok_or_else(|| plan_datafusion_err!("table_reference model must have a table_reference"))?;
                                     LogicalPlanBuilder::scan(
                                         TableReference::from(table_ref_name),
                                         create_remote_table_source(

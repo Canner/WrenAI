@@ -54,9 +54,8 @@ impl Dataset {
                     .unwrap_or_else(|| quoted(model.name()));
 
                 let schema = register_tables
-                    .map(|rt| rt.get(&qualifier))
-                    .filter(|rt| rt.is_some())
-                    .map(|rt| rt.unwrap().schema());
+                    .and_then(|rt| rt.get(&qualifier))
+                    .map(|rt| rt.schema());
 
                 if let Some(schema) = schema {
                     DFSchema::try_from_qualified_schema(qualifier.as_str(), &schema)

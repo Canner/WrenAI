@@ -65,8 +65,8 @@ spawns the server over stdio:
 For a server other machines/processes connect to, run
 `wren serve mcp --transport http --port 8080` and point the client at the
 Streamable HTTP endpoint on that host/port instead of spawning a process.
-HTTP binds to `127.0.0.1` by default and ships no bearer-token auth in this
-version — keep it local.
+HTTP binds to `127.0.0.1` by default. Pass `--api-key <secret>` to enable
+bearer-token authentication on the HTTP transport.
 
 ## What the client gets
 

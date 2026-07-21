@@ -62,12 +62,13 @@ class SnowflakeConnector(ConnectorABC):
         # under the outer LIMIT.
         executed = sql
         if limit is not None:
+            safe_limit = self._normalize_limit(limit)
             # Place the user SQL on its own line so a trailing line comment
             # (`-- ...`) cannot swallow the closing paren, alias, or LIMIT.
             executed = (
                 "SELECT * FROM (\n"
                 f"{strip_trailing_semicolon(sql)}\n"
-                f") AS _wren_sub LIMIT {int(limit)}"
+                f") AS _wren_sub LIMIT {safe_limit}"
             )
         try:
             with self.connection.cursor() as cursor:

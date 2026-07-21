@@ -33,7 +33,7 @@ from wren.mdl import get_manifest_extractor, get_session_context, to_json_base64
 from wren.mdl.cte_rewriter import CTERewriter, get_sqlglot_dialect
 from wren.model.data_source import DataSource
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
-from wren.policy import resolve_model_name, validate_sql_policy
+from wren.policy import basic_safety_check, resolve_model_name, validate_sql_policy
 
 
 class WrenEngine:
@@ -98,6 +98,7 @@ class WrenEngine:
               → sqlglot generate (target dialect)
               → output SQL with model CTEs in target dialect
         """
+        basic_safety_check(sql)
         return self._plan(sql, properties)
 
     # ------------------------------------------------------------------
