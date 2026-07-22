@@ -10,7 +10,12 @@ _spec.loader.exec_module(_mod)
 
 def test_skips_non_dict_rows():
     out = _mod.format_recall_content(
-        [None, "x", {"nl": "q1", "sql": "SELECT 1"}, {"nl_query": "q2", "sql_query": "SELECT 2"}]
+        [
+            None,
+            "x",
+            {"nl": "q1", "sql": "SELECT 1"},
+            {"nl_query": "q2", "sql_query": "SELECT 2"},
+        ]
     )
     assert "q1" in out and "SELECT 1" in out
     assert "q2" in out
