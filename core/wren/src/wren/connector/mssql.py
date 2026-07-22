@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import datetime as dtlib
 import json
-import re
 import urllib.parse
 import uuid
 from contextlib import closing
@@ -20,7 +19,7 @@ try:
 except ImportError:  # pragma: no cover
     pyodbc = None
 
-from wren.connector.base import ConnectorABC
+from wren.connector.base import ConnectorABC, strip_trailing_semicolon
 from wren.model import MSSqlConnectionInfo
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 
@@ -28,18 +27,6 @@ from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 # cursor.description so we can register an output converter that decodes the
 # raw 20-byte payload into a timezone-aware datetime.
 MSSQL_DATETIMEOFFSET_TYPE_CODE = -155
-
-_TRAILING_SEMICOLONS_RE = re.compile(r"[;\s]+\Z")
-
-
-def _strip_trailing_semicolon(sql: str) -> str:
-    """Strip the terminating run of ``;`` / whitespace before sqlglot parse.
-
-    sqlglot parses ``SELECT 1;;`` as a ``Block``, not a bare ``Select``, so
-    LIMIT injection and pagination flatten silently no-op. Terminating-run
-    strip matches postgres/canner/mysql helpers.
-    """
-    return _TRAILING_SEMICOLONS_RE.sub("", sql)
 
 
 class MSSqlConnector(ConnectorABC):
@@ -115,7 +102,7 @@ class MSSqlConnector(ConnectorABC):
         if limit is None:
             return sql
 
-        sql = _strip_trailing_semicolon(sql)
+        sql = strip_trailing_semicolon(sql)
 
         try:
             parsed = parse_one(sql, dialect=input_dialect)
@@ -133,7 +120,7 @@ class MSSqlConnector(ConnectorABC):
     ) -> str:
         """Collapse an outer ``LIMIT`` wrapped around a single subquery into
         the inner Select's ``LIMIT`` — undoes the v4 paginate-wrap pattern."""
-        sql_query = _strip_trailing_semicolon(sql_query)
+        sql_query = strip_trailing_semicolon(sql_query)
         try:
             parsed = parse_one(sql_query, dialect=input_dialect)
             if not isinstance(parsed, exp.Select) or not parsed.args.get("limit"):

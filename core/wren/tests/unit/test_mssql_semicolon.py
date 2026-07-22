@@ -1,11 +1,12 @@
 """MSSQL trailing-semicolon strip before sqlglot LIMIT rewrite."""
 
-from wren.connector.mssql import MSSqlConnector, _strip_trailing_semicolon
+from wren.connector.base import strip_trailing_semicolon
+from wren.connector.mssql import MSSqlConnector
 
 
 def test_helper_strips_multi_semicolon():
-    assert _strip_trailing_semicolon("SELECT 1;;") == "SELECT 1"
-    assert _strip_trailing_semicolon("SELECT 1; ;") == "SELECT 1"
+    assert strip_trailing_semicolon("SELECT 1;;") == "SELECT 1"
+    assert strip_trailing_semicolon("SELECT 1; ;") == "SELECT 1"
 
 
 def test_raw_cursor_sql_injects_limit_after_multi_semicolon():
