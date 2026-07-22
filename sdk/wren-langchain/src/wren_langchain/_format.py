@@ -119,11 +119,15 @@ def format_recall_content(rows: list[dict[str, Any]]) -> str:
 
 def format_store_content(nl: str, sql: str, tags: list[str] | None) -> str:
     """One-liner ``Stored: "<nl>" → <sql preview> (N tags)``."""
-    sql_preview = sql.strip().split("\n")[0]
+    # Memory/tool callers may pass None for sql/nl before validation; bare
+    # ``sql.strip()`` raised AttributeError and aborted the store envelope.
+    nl_text = "" if nl is None else str(nl)
+    sql_text = "" if sql is None else str(sql)
+    sql_preview = sql_text.strip().split("\n")[0]
     if len(sql_preview) > 80:
         sql_preview = sql_preview[:77] + "..."
     tag_count = len(tags) if tags else 0
-    return f'Stored: "{nl}" → {sql_preview} ({tag_count} tags)'
+    return f'Stored: "{nl_text}" → {sql_preview} ({tag_count} tags)'
 
 
 def format_list_models_content(manifest: dict[str, Any]) -> str:
