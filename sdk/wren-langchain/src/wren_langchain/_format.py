@@ -110,10 +110,19 @@ def format_recall_content(rows: list[dict[str, Any]]) -> str:
         return "_No similar past queries found._"
 
     chunks = []
-    for i, row in enumerate(rows, start=1):
+    n = 0
+    for row in rows:
+        # Vector stores / serializers occasionally emit None or plain
+        # strings alongside dict hits. Calling ``.get`` on those aborted
+        # the entire recall content render.
+        if not isinstance(row, dict):
+            continue
         nl = row.get("nl_query") or row.get("nl") or ""
         sql = row.get("sql_query") or row.get("sql") or ""
-        chunks.append(f'{i}. "{nl}"\n   ```sql\n   {sql}\n   ```')
+        n += 1
+        chunks.append(f'{n}. "{nl}"\n   ```sql\n   {sql}\n   ```')
+    if not chunks:
+        return "_No similar past queries found._"
     return "\n".join(chunks)
 
 
