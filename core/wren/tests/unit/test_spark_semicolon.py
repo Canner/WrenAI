@@ -2,7 +2,8 @@
 
 from unittest.mock import MagicMock
 
-from wren.connector.spark import SparkConnector, _strip_trailing_semicolon
+from wren.connector.base import strip_trailing_semicolon
+from wren.connector.spark import SparkConnector
 
 
 def _make_mock_connector() -> tuple[SparkConnector, MagicMock]:
@@ -32,8 +33,8 @@ def test_dry_run_strips_trailing_semicolon() -> None:
 
 def test_helper_preserves_semicolon_inside_string_literal() -> None:
     sql = "SELECT 'a;b' AS x"
-    assert _strip_trailing_semicolon(sql) == sql
+    assert strip_trailing_semicolon(sql) == sql
 
 
 def test_helper_no_trailing_semicolon_unchanged() -> None:
-    assert _strip_trailing_semicolon("SELECT 1") == "SELECT 1"
+    assert strip_trailing_semicolon("SELECT 1") == "SELECT 1"
