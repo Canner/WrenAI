@@ -137,11 +137,21 @@ def format_list_models_content(manifest: dict[str, Any]) -> str:
 
     lines = ["| model | cols | description |", "|---|---|---|"]
     for m in models:
-        name = m.get("name", "")
-        col_count = len(m.get("columns", []) or [])
-        desc = (
-            (m.get("properties") or {}).get("description") or m.get("description") or ""
-        )
+        # MDL loaders / LLM-shaped manifests may include None rows, bare
+        # strings, or mixed types. Non-dicts previously AttributeError'd
+        # on ``.get`` and aborted the whole list_models content path.
+        if not isinstance(m, dict):
+            continue
+        name = m.get("name", "") or ""
+        columns = m.get("columns", []) or []
+        if not isinstance(columns, list):
+            columns = []
+        col_count = len(columns)
+        props = m.get("properties") or {}
+        if not isinstance(props, dict):
+            props = {}
+        desc = props.get("description") or m.get("description") or ""
+        desc = str(desc)
         # Trim long descriptions to keep table compact.
         if len(desc) > 80:
             desc = desc[:77] + "..."
