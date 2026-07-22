@@ -58,7 +58,9 @@ def _model_seeds(
     model: dict, relationship_keys: frozenset[str] = frozenset()
 ) -> list[dict]:
     name = model["name"]
-    columns = model.get("columns", [])
+    columns = [
+        c for c in (model.get("columns") or []) if isinstance(c, dict) and c.get("name")
+    ]
     primary_keys = _primary_key_columns(model)
     pairs = []
 
@@ -74,14 +76,16 @@ def _model_seeds(
     numeric_col = None
     group_col = None
     for col in columns:
-        col_name = col["name"]
-        norm_name = _norm_ident(col_name)
+        col_name = col.get("name")
+        norm_name = _norm_ident(str(col_name))
         col_type = (col.get("type") or "").split("(")[0].lower().strip()
         is_calc = col.get("isCalculated", False)
         is_pk = norm_name in primary_keys
         # Identifiers are numeric by storage but not measures: summing a join
         # key (e.g. SUM(customer_id)) is semantically meaningless.
-        is_identifier = is_pk or norm_name in relationship_keys or _is_id_like(col_name)
+        is_identifier = (
+            is_pk or norm_name in relationship_keys or _is_id_like(str(col_name))
+        )
 
         if (
             col_type in _NUMERIC_TYPES
@@ -117,6 +121,7 @@ def _model_seeds(
         )
 
     for col in columns:
+        col_name = col.get("name")
         accepted_values = _prop_raw(col, "acceptedValues", "accepted_values")
         first_value = _first_accepted_value(accepted_values)
         if not first_value:
@@ -124,8 +129,8 @@ def _model_seeds(
         quoted = first_value.replace("'", "''")
         pairs.append(
             {
-                "nl": f"Show {name} where {col['name']} is {first_value}",
-                "sql": f"SELECT * FROM {name} WHERE {col['name']} = '{quoted}' LIMIT 100",
+                "nl": f"Show {name} where {col_name} is {first_value}",
+                "sql": f"SELECT * FROM {name} WHERE {col_name} = '{quoted}' LIMIT 100",
             }
         )
 
