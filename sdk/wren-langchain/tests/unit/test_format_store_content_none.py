@@ -1,17 +1,15 @@
 """format_store_content must tolerate None nl/sql."""
+
 import importlib.util
 from pathlib import Path
 
-_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "src"
-    / "wren_langchain"
-    / "_format.py"
-)
+_PATH = Path(__file__).resolve().parents[2] / "src" / "wren_langchain" / "_format.py"
 # file is under tests/unit → parents[2] is wren-langchain package root
 _PATH = Path(__file__).resolve().parents[2] / "src" / "wren_langchain" / "_format.py"
 if not _PATH.exists():
-    _PATH = Path(__file__).resolve().parents[3] / "src" / "wren_langchain" / "_format.py"
+    _PATH = (
+        Path(__file__).resolve().parents[3] / "src" / "wren_langchain" / "_format.py"
+    )
 
 # Direct load: path is sdk/wren-langchain/tests/unit/... so parents:
 # 0=unit 1=tests 2=wren-langchain
