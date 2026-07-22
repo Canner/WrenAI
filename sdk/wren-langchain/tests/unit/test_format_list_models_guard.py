@@ -14,8 +14,17 @@ def test_skips_non_dict_and_bad_nested():
             "models": [
                 None,
                 "x",
-                {"name": "ok", "columns": None, "properties": "bad", "description": "d"},
-                {"name": "wide", "columns": [1, 2], "properties": {"description": "y" * 100}},
+                {
+                    "name": "ok",
+                    "columns": None,
+                    "properties": "bad",
+                    "description": "d",
+                },
+                {
+                    "name": "wide",
+                    "columns": [1, 2],
+                    "properties": {"description": "y" * 100},
+                },
             ]
         }
     )
