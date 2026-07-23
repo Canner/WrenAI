@@ -6,6 +6,15 @@ from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
+from src.pipelines.generation.utils.sql import (
+    construct_valid_table_columns,
+    construct_valid_table_names,
+    extract_sql_table_references,
+    find_invalid_column_references,
+    find_invalid_table_references,
+    normalize_sql_column_references_to_schema,
+    normalize_sql_table_references_to_schema,
+)
 from src.pipelines.generation.utils.chart import build_fallback_chart_result
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest
@@ -91,8 +100,13 @@ class ChartService:
         if not retrieval_pipeline:
             return []
 
+        table_references = extract_sql_table_references(sql)
+        if not table_references:
+            return []
+
         retrieval_result = await retrieval_pipeline.run(
             query="",
+            tables=table_references,
             histories=[],
             project_id=project_id,
             enable_column_pruning=False,
@@ -109,7 +123,21 @@ class ChartService:
     def _normalize_and_validate_sql(
         self, sql: str, schema_contexts: list[str]
     ) -> str | None:
-        return sql
+        valid_table_names = construct_valid_table_names(schema_contexts)
+        valid_table_columns = construct_valid_table_columns(schema_contexts)
+        normalized_sql = normalize_sql_table_references_to_schema(
+            sql,
+            valid_table_names,
+        )
+        normalized_sql = normalize_sql_column_references_to_schema(
+            normalized_sql,
+            valid_table_columns,
+        )
+        if find_invalid_table_references(normalized_sql, valid_table_names):
+            return None
+        if find_invalid_column_references(normalized_sql, valid_table_columns):
+            return None
+        return normalized_sql
 
     @observe(name="Generate Chart")
     @trace_metadata

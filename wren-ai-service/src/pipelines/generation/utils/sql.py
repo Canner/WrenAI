@@ -515,10 +515,7 @@ def _extract_from_sql_knowledge(
     return value if value and value.strip() else default_value
 
 
-def get_text_to_sql_rules(
-    sql_knowledge: SqlKnowledge | None = None,
-    data_source: str | None = None,
-) -> str:
+def get_text_to_sql_rules(sql_knowledge: SqlKnowledge | None = None) -> str:
     if sql_knowledge is not None:
         return _extract_from_sql_knowledge(
             sql_knowledge, "text_to_sql_rule", _DEFAULT_TEXT_TO_SQL_RULES
@@ -538,10 +535,7 @@ def get_calculated_field_instructions(sql_knowledge: SqlKnowledge | None = None)
     return _DEFAULT_CALCULATED_FIELD_INSTRUCTIONS
 
 
-def get_metric_instructions(
-    sql_knowledge: SqlKnowledge | None = None,
-    data_source: str | None = None,
-) -> str:
+def get_metric_instructions(sql_knowledge: SqlKnowledge | None = None) -> str:
     if sql_knowledge is not None:
         return _extract_from_sql_knowledge(
             sql_knowledge, "metric_instructions", _DEFAULT_METRIC_INSTRUCTIONS
