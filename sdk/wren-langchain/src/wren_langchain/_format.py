@@ -12,7 +12,7 @@ CONTENT_CAP_BYTES = 16 * 1024
 
 
 def format_query_content(
-    table: pa.Table, total_rows: int | None = None
+    table: pa.Table | None, total_rows: int | None = None
 ) -> tuple[str, list[str]]:
     """Render query rows as JSON, truncating to fit ``CONTENT_CAP_BYTES``.
 
