@@ -52,7 +52,7 @@ class RedshiftConnector(ConnectorABC):
         else:
             # Unlimited path also rejects trailing ``;`` for single statements
             # depending on driver/session settings — strip for consistency.
-            sql = _strip_trailing_semicolon(sql)
+            sql = strip_trailing_semicolon(sql)
         with closing(self.connection.cursor()) as cursor:
             cursor.execute(sql)
             cols = [desc[0] for desc in cursor.description]
