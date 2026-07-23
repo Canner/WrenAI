@@ -209,7 +209,9 @@ def _tool_name(tool) -> str:
     when the ``name`` attribute is missing or not a non-empty string."""
     name = getattr(tool, "name", None)
     if not isinstance(name, str) or not name:
-        name = getattr(tool, "__name__", "tool")
+        name = getattr(tool, "__name__", None)
+    if not isinstance(name, str) or not name:
+        name = "tool"
     return name
 
 

@@ -29,7 +29,7 @@ def test_build_tools_section_non_str_description():
         SimpleNamespace(name="wren_ok", description="line1\nline2"),
     ]
     out = fn(tools)
-    assert "`wren_query`:" in out
+    assert "- `wren_query`: " in out.splitlines()
     assert "`wren_store`: 42" in out
     assert "`wren_ok`: line1" in out
     assert "line2" not in out
