@@ -8,13 +8,6 @@ from langfuse.decorators import observe
 from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
-from src.pipelines.generation.utils.sql import (
-    construct_valid_table_columns,
-    construct_valid_table_names,
-    normalize_sql_direction_keywords,
-    normalize_sql_column_references_to_schema,
-    normalize_sql_table_references_to_schema,
-)
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest, SSEEvent
 
@@ -872,16 +865,6 @@ class AskService:
         table_ddls: list[str],
         query: str | None = None,
     ) -> Optional[AskResult]:
-        if isinstance(sql, str):
-            sql = normalize_sql_direction_keywords(sql)
-            sql = normalize_sql_table_references_to_schema(
-                sql,
-                construct_valid_table_names(table_ddls),
-            )
-            sql = normalize_sql_column_references_to_schema(
-                sql,
-                construct_valid_table_columns(table_ddls),
-            )
         ask_result = self._build_ask_result_from_sql(sql)
         if not ask_result:
             return None
