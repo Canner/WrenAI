@@ -15,7 +15,6 @@ from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQLGenPostProcessor,
     construct_instructions,
-    construct_valid_table_columns,
     construct_valid_table_names,
     get_sql_generation_model_kwargs,
     get_text_to_sql_rules,
@@ -179,8 +178,6 @@ async def post_process(
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
-        valid_table_names=construct_valid_table_names(documents),
-        valid_table_columns=construct_valid_table_columns(documents),
     )
 
 
