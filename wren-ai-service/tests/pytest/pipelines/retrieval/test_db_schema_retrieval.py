@@ -129,6 +129,8 @@ def test_check_using_db_schemas_without_pruning_triggers_legacy_column_pruning()
             return value.split()
 
     result = check_using_db_schemas_without_pruning(
+        query="show top customers by invoice amount",
+        tables=None,
         construct_db_schemas=[
                 {
                     "type": "TABLE",
@@ -157,7 +159,7 @@ def test_check_using_db_schemas_without_pruning_triggers_legacy_column_pruning()
     assert result["tokens"] > 0
 
 
-def test_check_using_db_schemas_without_pruning_keeps_semantic_retrieval_context():
+def test_check_using_db_schemas_without_pruning_selects_tables_for_question():
     class Encoding:
         def encode(self, value):
             return value.split()
@@ -181,6 +183,8 @@ def test_check_using_db_schemas_without_pruning_keeps_semantic_retrieval_context
         }
 
     result = check_using_db_schemas_without_pruning(
+        query="compare recent activity by account",
+        tables=None,
         construct_db_schemas=[
             table_schema("activity"),
             table_schema("account"),
@@ -191,19 +195,18 @@ def test_check_using_db_schemas_without_pruning_keeps_semantic_retrieval_context
         context_window_size=1000,
     )
 
-    assert [schema["table_name"] for schema in result["db_schemas"]] == [
-        "activity",
-        "account",
-    ]
+    assert result["db_schemas"] == []
     assert result["tokens"] > 0
 
 
-def test_check_using_db_schemas_without_pruning_keeps_selected_table_context():
+def test_check_using_db_schemas_without_pruning_keeps_explicit_table_fast_path():
     class Encoding:
         def encode(self, value):
             return value.split()
 
     result = check_using_db_schemas_without_pruning(
+        query="show records from activity",
+        tables=["activity"],
         construct_db_schemas=[
             {
                 "type": "TABLE",
