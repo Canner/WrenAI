@@ -75,9 +75,7 @@ def format_fetch_context_content(result: dict[str, Any]) -> str:
         return _cap_to_bytes(text, suffix="\n\n...[truncated]")
 
     items = result.get("results", []) or []
-    if not isinstance(items, list):
-        return "_No relevant context items found._"
-    if not items:
+    if not isinstance(items, list) or not items:
         return "_No relevant context items found._"
 
     lines = []
@@ -116,9 +114,7 @@ def _cap_to_bytes(text: str, *, suffix: str) -> str:
 
 def format_recall_content(rows: list[dict[str, Any]]) -> str:
     """Render recalled NL→SQL pairs as a numbered list with code fences."""
-    if not rows:
-        return "_No similar past queries found._"
-    if not isinstance(rows, list):
+    if not isinstance(rows, list) or not rows:
         return "_No similar past queries found._"
 
     chunks = []
