@@ -19,7 +19,7 @@ try:
 except ImportError:  # pragma: no cover
     pyodbc = None
 
-from wren.connector.base import ConnectorABC
+from wren.connector.base import ConnectorABC, strip_trailing_semicolon
 from wren.model import MSSqlConnectionInfo
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 
@@ -102,6 +102,8 @@ class MSSqlConnector(ConnectorABC):
         if limit is None:
             return sql
 
+        sql = strip_trailing_semicolon(sql)
+
         try:
             parsed = parse_one(sql, dialect=input_dialect)
         except Exception:
@@ -118,6 +120,7 @@ class MSSqlConnector(ConnectorABC):
     ) -> str:
         """Collapse an outer ``LIMIT`` wrapped around a single subquery into
         the inner Select's ``LIMIT`` — undoes the v4 paginate-wrap pattern."""
+        sql_query = strip_trailing_semicolon(sql_query)
         try:
             parsed = parse_one(sql_query, dialect=input_dialect)
             if not isinstance(parsed, exp.Select) or not parsed.args.get("limit"):
