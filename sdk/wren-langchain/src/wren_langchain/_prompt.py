@@ -209,8 +209,14 @@ def _build_tools_section(tool_list: list) -> str:
         return ""
     lines = ["## Available tools"]
     for tool in tool_list:
-        description = (tool.description or "").strip().split("\n")[0]
-        lines.append(f"- `{tool.name}`: {description}")
+        raw_desc = getattr(tool, "description", None)
+        if not isinstance(raw_desc, str):
+            raw_desc = "" if raw_desc is None else str(raw_desc)
+        description = raw_desc.strip().split("\n")[0]
+        name = getattr(tool, "name", None)
+        if not isinstance(name, str) or not name:
+            name = getattr(tool, "__name__", "tool")
+        lines.append(f"- `{name}`: {description}")
     return "\n".join(lines)
 
 
