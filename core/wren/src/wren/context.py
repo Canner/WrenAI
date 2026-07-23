@@ -197,7 +197,11 @@ def convert_mdl_to_project(mdl_json: dict) -> list[ProjectFile]:
     )
 
     # ── Models ────────────────────────────────────────────────
-    for i, model in enumerate(mdl_json.get("models", [])):
+    for i, model in enumerate(mdl_json.get("models", []) or []):
+        if not isinstance(model, dict):
+            raise ValueError(
+                f"Model at index {i} must be an object, got {type(model).__name__}"
+            )
         model_snake = _convert_keys_to_snake(model)
         if "name" not in model_snake:
             raise ValueError(f"Model at index {i} is missing required 'name' field")
@@ -226,7 +230,11 @@ def convert_mdl_to_project(mdl_json: dict) -> list[ProjectFile]:
         )
 
     # ── Views ─────────────────────────────────────────────────
-    for i, view in enumerate(mdl_json.get("views", [])):
+    for i, view in enumerate(mdl_json.get("views", []) or []):
+        if not isinstance(view, dict):
+            raise ValueError(
+                f"View at index {i} must be an object, got {type(view).__name__}"
+            )
         view_snake = _convert_keys_to_snake(view)
         if "name" not in view_snake:
             raise ValueError(f"View at index {i} is missing required 'name' field")
@@ -941,6 +949,15 @@ def validate_project(project_path: Path) -> list[ValidationError]:
 
     # Check models
     for i, model in enumerate(models):
+        if not isinstance(model, dict):
+            errors.append(
+                ValidationError(
+                    "error",
+                    f"models[{i}]",
+                    f"model entry must be an object, got {type(model).__name__}",
+                )
+            )
+            continue
         src = model.get("_source_dir", f"models[{i}]")
         src_path = f"models/{src}/metadata.yml"
         name = model.get("name")
@@ -1098,6 +1115,15 @@ def validate_project(project_path: Path) -> list[ValidationError]:
 
     # Check views
     for i, view in enumerate(views):
+        if not isinstance(view, dict):
+            errors.append(
+                ValidationError(
+                    "error",
+                    f"views[{i}]",
+                    f"view entry must be an object, got {type(view).__name__}",
+                )
+            )
+            continue
         src_dir = view.get("_source_dir", f"views[{i}]")
         name = view.get("name")
         if not name:
