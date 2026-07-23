@@ -181,7 +181,7 @@ def build_system_prompt(toolkit: WrenToolkit, *, tools: Iterable | None = None) 
     ``wren_store_query``, the workflow's persistence step is dropped too.
     """
     tool_list = list(tools) if tools is not None else list(toolkit.get_tools())
-    tool_names = {t.name for t in tool_list}
+    tool_names = {_tool_name(t) for t in tool_list}
 
     sections: list[str] = [_INTRO]
     sections.append(_build_workflow_section(tool_names))
@@ -204,6 +204,15 @@ def build_system_prompt(toolkit: WrenToolkit, *, tools: Iterable | None = None) 
     return "\n\n".join(sections)
 
 
+def _tool_name(tool) -> str:
+    """Return a validated tool name, falling back to ``__name__`` or ``"tool"``
+    when the ``name`` attribute is missing or not a non-empty string."""
+    name = getattr(tool, "name", None)
+    if not isinstance(name, str) or not name:
+        name = getattr(tool, "__name__", "tool")
+    return name
+
+
 def _build_tools_section(tool_list: list) -> str:
     if not tool_list:
         return ""
@@ -213,10 +222,7 @@ def _build_tools_section(tool_list: list) -> str:
         if not isinstance(raw_desc, str):
             raw_desc = "" if raw_desc is None else str(raw_desc)
         description = raw_desc.strip().split("\n")[0]
-        name = getattr(tool, "name", None)
-        if not isinstance(name, str) or not name:
-            name = getattr(tool, "__name__", "tool")
-        lines.append(f"- `{name}`: {description}")
+        lines.append(f"- `{_tool_name(tool)}`: {description}")
     return "\n".join(lines)
 
 
