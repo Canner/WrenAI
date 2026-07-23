@@ -120,7 +120,6 @@ class AskService:
         enable_column_pruning: bool = False,
         max_sql_correction_retries: int = 3,
         max_sql_generation_tables: int = 10,
-        max_forced_explicit_tables: int = MAX_FORCED_EXPLICIT_TABLES,
         pipeline_timeout_seconds: int = 45,
         schema_retrieval_timeout_seconds: int = 25,
         max_histories: int = 5,
@@ -145,7 +144,6 @@ class AskService:
         self._max_histories = max_histories
         self._max_sql_correction_retries = max_sql_correction_retries
         self._max_sql_generation_tables = max_sql_generation_tables
-        self._max_forced_explicit_tables = max_forced_explicit_tables
 
     def _is_stopped(self, query_id: str, container: dict):
         if (
@@ -354,7 +352,7 @@ class AskService:
     ) -> list[str]:
         if not table_names:
             return []
-        if len(table_names) <= self._max_forced_explicit_tables:
+        if len(table_names) <= MAX_FORCED_EXPLICIT_TABLES:
             return table_names
 
         logger.info(
