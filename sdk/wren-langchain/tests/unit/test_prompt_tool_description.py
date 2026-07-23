@@ -8,9 +8,7 @@ from types import SimpleNamespace
 
 
 def _load_build_tools_section():
-    path = (
-        Path(__file__).resolve().parents[2] / "src" / "wren_langchain" / "_prompt.py"
-    )
+    path = Path(__file__).resolve().parents[2] / "src" / "wren_langchain" / "_prompt.py"
     tree = ast.parse(path.read_text())
     fn_node = next(
         n
