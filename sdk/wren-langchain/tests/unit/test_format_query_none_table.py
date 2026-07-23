@@ -9,12 +9,7 @@ from pathlib import Path
 
 
 def _load_format():
-    path = (
-        Path(__file__).resolve().parents[2]
-        / "src"
-        / "wren_langchain"
-        / "_format.py"
-    )
+    path = Path(__file__).resolve().parents[2] / "src" / "wren_langchain" / "_format.py"
     # Provide a lightweight pyarrow stub if missing — only Table is referenced.
     original = sys.modules.get("pyarrow")
     if "pyarrow" not in sys.modules:
@@ -28,9 +23,7 @@ def _load_format():
         sys.modules["pyarrow"] = pa
 
     try:
-        spec = importlib.util.spec_from_file_location(
-            "wren_langchain_format_ut", path
-        )
+        spec = importlib.util.spec_from_file_location("wren_langchain_format_ut", path)
         mod = importlib.util.module_from_spec(spec)
         assert spec.loader is not None
         spec.loader.exec_module(mod)
