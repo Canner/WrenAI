@@ -17,9 +17,7 @@ def _load_build_tools_section():
     tree = ast.parse(path.read_text())
     wanted = {"_tool_name", "_build_tools_section"}
     nodes = [
-        n
-        for n in tree.body
-        if isinstance(n, ast.FunctionDef) and n.name in wanted
+        n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in wanted
     ]
     mod = ast.Module(body=nodes, type_ignores=[])
     ast.fix_missing_locations(mod)
