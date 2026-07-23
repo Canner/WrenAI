@@ -119,7 +119,6 @@ class AskService:
         allow_sql_knowledge_retrieval: bool = True,
         enable_column_pruning: bool = False,
         max_sql_correction_retries: int = 3,
-        max_sql_generation_tables: int = 10,
         pipeline_timeout_seconds: int = 45,
         schema_retrieval_timeout_seconds: int = 25,
         max_histories: int = 5,
@@ -143,7 +142,6 @@ class AskService:
         self._schema_retrieval_timeout_seconds = schema_retrieval_timeout_seconds
         self._max_histories = max_histories
         self._max_sql_correction_retries = max_sql_correction_retries
-        self._max_sql_generation_tables = max_sql_generation_tables
 
     def _is_stopped(self, query_id: str, container: dict):
         if (
@@ -1575,7 +1573,6 @@ class AskService:
                     documents,
                     table_names,
                     table_ddls,
-                    max_tables=self._max_sql_generation_tables,
                 )
                 (
                     documents,
