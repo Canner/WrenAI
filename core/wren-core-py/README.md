@@ -22,18 +22,52 @@ Linux ARM64 wheels are not yet available. To use on that platform, build from so
 ## Quick Start
 
 ```python
-from wren_core import SessionContext, to_manifest
+from wren_core import SessionContext
 
-# Load an MDL manifest from a base64-encoded JSON string
+# Create a session context from a base64-encoded MDL JSON string
 base64_mdl_json = "<your-base64-encoded-mdl-json>"
-manifest = to_manifest(base64_mdl_json)
-
-# Create a session context for query planning
-ctx = SessionContext(manifest, remote_functions=[])
+ctx = SessionContext(base64_mdl_json)
 
 # Transform a SQL query through the semantic layer
 planned_sql = ctx.transform_sql("SELECT * FROM my_model")
 ```
+
+### Registering local files (Parquet/CSV)
+
+Physical files can back MDL models via two-phase initialization — register the
+files, then load the MDL so models resolve to them:
+
+```python
+from wren_core import SessionContext
+
+base64_mdl_json = "<your-base64-encoded-mdl-json>"
+
+ctx = SessionContext()
+ctx.register_parquet("customer", "/data/customer.parquet")
+ctx.register_csv("orders", "/data/orders.csv")
+ctx.load_mdl(base64_mdl_json)  # MDL models now resolve to the files
+
+# Query by the MDL's catalog.schema.model name; returns Arrow IPC stream bytes
+ipc_bytes = ctx.query("SELECT * FROM my_catalog.my_schema.customer")
+```
+
+Visibility contract:
+
+- Tables land in the pre-existing default catalog (`datafusion`.`public`). An
+  MDL model resolves to a registered file only if its `tableReference` is
+  `{"catalog": "datafusion", "schema": "public", "table": "<registered name>"}`
+  and the columns it declares exist in the file.
+- Registering after the context was created still works: the internals of
+  pre-existing catalogs are live-shared with derived contexts, so the table is
+  visible to `query`, `dry_run`, and `list_tables`.
+- Brand-new *top-level* catalogs are the exception — they must exist before
+  MDL construction, `load_mdl`, or a transform, each of which snapshots the
+  top-level catalog list.
+- `load_mdl` must not overlap other calls on the same context; overlapping
+  calls raise `RuntimeError`.
+
+For complete runnable examples (fixture files, matching manifests, decoding
+the returned bytes), see `tests/test_physical_tables.py`.
 
 ## Developer Guide
 
