@@ -128,10 +128,7 @@ def format_store_content(nl: str, sql: str, tags: list[str] | None) -> str:
     sql_preview = sql.strip().split("\n")[0]
     if len(sql_preview) > 80:
         sql_preview = sql_preview[:77] + "..."
-    if tags is None or not isinstance(tags, list):
-        tag_count = 0
-    else:
-        tag_count = len(tags)
+    tag_count = len(tags) if isinstance(tags, list) else 0
     return f'Stored: "{nl}" → {sql_preview} ({tag_count} tags)'
 
 
