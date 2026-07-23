@@ -21,6 +21,8 @@ def test_raw_cursor_sql_injects_limit_after_multi_semicolon():
     assert ";;" not in out
 
 
-def test_raw_cursor_sql_no_limit_unchanged_except_strip_not_required():
-    # limit None returns original (including trailing ;) — execute path allows it
-    assert MSSqlConnector._raw_cursor_sql("SELECT 1;", None) == "SELECT 1;"
+def test_raw_cursor_sql_no_limit_strips_trailing_semicolon():
+    # Unlimited path still strips a terminating ``;`` so paste/execute matches
+    # limited / dry_run composition (multi-statement terminator surprises).
+    assert MSSqlConnector._raw_cursor_sql("SELECT 1;", None) == "SELECT 1"
+    assert MSSqlConnector._raw_cursor_sql("SELECT 1;;", None) == "SELECT 1"

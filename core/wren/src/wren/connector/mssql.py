@@ -99,10 +99,12 @@ class MSSqlConnector(ConnectorABC):
     ) -> str:
         """Inject a ``LIMIT n`` into a Select so sqlglot emits the tsql
         ``OFFSET 0 ROWS FETCH NEXT n ROWS ONLY`` clause."""
+        # Always strip terminating ``;`` — also on the unlimited path — so
+        # poster/paste SQL matches dry_run / limited composition and does
+        # not trip pyodbc multi-statement restrictions with a lone terminator.
+        sql = strip_trailing_semicolon(sql)
         if limit is None:
             return sql
-
-        sql = strip_trailing_semicolon(sql)
 
         try:
             parsed = parse_one(sql, dialect=input_dialect)
