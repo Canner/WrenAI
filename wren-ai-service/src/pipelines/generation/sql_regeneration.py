@@ -12,14 +12,12 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.sql import (
+    SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
     construct_instructions,
-    construct_valid_table_columns,
-    construct_valid_table_names,
     get_calculated_field_instructions,
     get_json_field_instructions,
     get_metric_instructions,
-    get_sql_generation_model_kwargs,
     get_text_to_sql_rules,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
@@ -33,10 +31,7 @@ def get_sql_regeneration_system_prompt(
     sql_knowledge: SqlKnowledge | None = None,
     data_source: str | None = None,
 ) -> str:
-    text_to_sql_rules = get_text_to_sql_rules(
-        sql_knowledge,
-        data_source=data_source,
-    )
+    text_to_sql_rules = get_text_to_sql_rules(sql_knowledge)
 
     return f"""
 ### TASK ###
@@ -139,9 +134,7 @@ def prompt(
             else ""
         ),
         metric_instructions=(
-            get_metric_instructions(sql_knowledge, data_source=data_source)
-            if has_metric
-            else ""
+            get_metric_instructions(sql_knowledge) if has_metric else ""
         ),
         json_field_instructions=(
             get_json_field_instructions(sql_knowledge) if has_json_field else ""
@@ -182,8 +175,6 @@ async def post_process(
         regenerate_sql.get("replies"),
         project_id=project_id,
         data_source=data_source,
-        valid_table_names=construct_valid_table_names(documents),
-        valid_table_columns=construct_valid_table_columns(documents),
     )
 
 
@@ -200,7 +191,7 @@ class SQLRegeneration(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=get_sql_regeneration_system_prompt(None),
-                generation_kwargs=get_sql_generation_model_kwargs(llm_provider),
+                generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
             "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(

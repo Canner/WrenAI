@@ -8,13 +8,6 @@ from langfuse.decorators import observe
 from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
-from src.pipelines.generation.utils.sql import (
-    construct_valid_table_columns,
-    construct_valid_table_names,
-    normalize_sql_direction_keywords,
-    normalize_sql_column_references_to_schema,
-    normalize_sql_table_references_to_schema,
-)
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest, SSEEvent
 
@@ -872,102 +865,7 @@ class AskService:
         table_ddls: list[str],
         query: str | None = None,
     ) -> Optional[AskResult]:
-        if isinstance(sql, str):
-            sql = normalize_sql_direction_keywords(sql)
-            sql = normalize_sql_table_references_to_schema(
-                sql,
-                construct_valid_table_names(table_ddls),
-            )
-            sql = normalize_sql_column_references_to_schema(
-                sql,
-                construct_valid_table_columns(table_ddls),
-            )
-        ask_result = self._build_ask_result_from_sql(sql)
-        if not ask_result:
-            return None
-
-        schema_tables = self._parse_schema_tables(table_ddls)
-        valid_tables = {
-            str(table.get("name") or "").lower(): table
-            for table in schema_tables
-            if table.get("name")
-        }
-        valid_table_suffixes = {
-            table_name.split(".")[-1].lower(): table
-            for table_name, table in valid_tables.items()
-        }
-
-        table_reference_pattern = re.compile(
-            r'\b(?:FROM|JOIN)\s+(?:"(?P<quoted>[^"]+)"|'
-            r"\[(?P<bracketed>[^\]]+)\]|(?P<bare>[A-Za-z_][A-Za-z0-9_.$]*))",
-            flags=re.IGNORECASE,
-        )
-        referenced_tables = [
-            next(value for value in match.groupdict().values() if value)
-            for match in table_reference_pattern.finditer(ask_result.sql)
-        ]
-        invalid_tables = [
-            table
-            for table in referenced_tables
-            if table.lower() not in valid_tables
-            and table.lower().split(".")[-1] not in valid_table_suffixes
-        ]
-
-        columns_by_table = {
-            table_name: {
-                str(column.get("name") or "").lower()
-                for column in table.get("columns", [])
-                if column.get("name")
-            }
-            for table_name, table in valid_tables.items()
-        }
-        columns_by_table.update(
-            {
-                table_name.split(".")[-1].lower(): columns
-                for table_name, columns in columns_by_table.items()
-            }
-        )
-
-        qualified_column_pattern = re.compile(
-            r'(?:"(?P<table_quoted>[^"]+)"|\[(?P<table_bracketed>[^\]]+)\]|'
-            r"(?P<table_bare>[A-Za-z_][A-Za-z0-9_.$]*))\s*\.\s*"
-            r'(?:"(?P<column_quoted>[^"]+)"|\[(?P<column_bracketed>[^\]]+)\]|'
-            r"(?P<column_bare>[A-Za-z_][A-Za-z0-9_$]*))",
-            flags=re.IGNORECASE,
-        )
-        invalid_columns = []
-        for match in qualified_column_pattern.finditer(ask_result.sql):
-            table_reference = (
-                match.group("table_quoted")
-                or match.group("table_bracketed")
-                or match.group("table_bare")
-                or ""
-            )
-            column_reference = (
-                match.group("column_quoted")
-                or match.group("column_bracketed")
-                or match.group("column_bare")
-                or ""
-            )
-            table_key = table_reference.lower()
-            column_key = column_reference.lower()
-            table_columns = columns_by_table.get(table_key) or columns_by_table.get(
-                table_key.split(".")[-1]
-            )
-            if table_columns is not None and column_key not in table_columns:
-                invalid_columns.append(f"{table_reference}.{column_reference}")
-
-        if invalid_tables or invalid_columns:
-            logger.warning(
-                "Ignoring generated SQL because it is not valid for active schema. "
-                "invalid_tables=%s invalid_columns=%s sql=%s",
-                invalid_tables,
-                invalid_columns,
-                ask_result.sql,
-            )
-            return None
-
-        return ask_result
+        return self._build_ask_result_from_sql(sql)
 
     def _build_failed_text_to_sql_response(
         self,
