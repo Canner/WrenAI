@@ -126,7 +126,13 @@ class AskService:
         max_histories: int = 5,
         maxsize: int = 1_000_000,
         ttl: int = 120,
+        **kwargs: Any,
     ):
+        if kwargs:
+            logger.info(
+                "Ignoring unsupported AskService config keys: %s",
+                sorted(kwargs),
+            )
         self._pipelines = pipelines
         self._ask_results: Dict[str, AskResultResponse] = TTLCache(
             maxsize=maxsize, ttl=ttl
