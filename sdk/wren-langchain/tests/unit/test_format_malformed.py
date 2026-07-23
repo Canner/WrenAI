@@ -105,3 +105,19 @@ def test_format_list_models_normalizes_non_list_columns() -> None:
         {"models": [{"name": "customers", "columns": "nope", "description": "d"}]}
     )
     assert "| customers | 0 | d |" in out
+
+
+def test_format_list_models_normalizes_non_dict_properties() -> None:
+    out = format_list_models_content(
+        {
+            "models": [
+                {
+                    "name": "customers",
+                    "columns": [{}],
+                    "properties": "oops",
+                    "description": "fallback desc",
+                }
+            ]
+        }
+    )
+    assert "| customers | 1 | fallback desc |" in out
