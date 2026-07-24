@@ -16,8 +16,6 @@ logger = logging.getLogger("wren-ai-service")
 NO_RELEVANT_ACTIVE_DATASOURCE_MESSAGE = (
     "No relevant data found in the active datasource for this question."
 )
-MAX_FORCED_EXPLICIT_TABLES = 5
-
 
 async def _return_value(value):
     return value
@@ -252,113 +250,6 @@ class AskService:
             tables.append({"name": table_name, "columns": columns})
 
         return tables
-
-    def _normalize_schema_identifier_key(self, value: str) -> str:
-        return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
-
-    def _schema_identifier_alias_keys(self, value: str) -> set[str]:
-        raw_value = str(value or "")
-        base_key = self._normalize_schema_identifier_key(raw_value)
-        separator_normalized_key = self._normalize_schema_identifier_key(
-            re.sub(r"[._\-]+", " ", raw_value)
-        )
-        part_keys = {
-            self._normalize_schema_identifier_key(part)
-            for part in re.split(r"[._\-]+", raw_value)
-            if part
-        }
-        return {key for key in {base_key, separator_normalized_key, *part_keys} if key}
-
-    def _extract_explicit_table_names_from_query(self, query: str) -> list[str]:
-        names: list[str] = []
-        for quoted in re.findall(r"[`\"\[]([^`\"\]]+)[`\"\]]", query or ""):
-            if quoted and quoted not in names:
-                names.append(quoted)
-        for token in re.findall(r"\b[A-Za-z_][A-Za-z0-9_$]*(?:\.[A-Za-z_][A-Za-z0-9_$]*)+\b", query or ""):
-            if token and token not in names:
-                names.append(token)
-        return names
-
-    def _explicit_table_alias_keys_from_query(self, query: str | None) -> set[str]:
-        keys: set[str] = set()
-        for table_name in self._extract_explicit_table_names_from_query(query or ""):
-            keys.update(self._schema_identifier_alias_keys(table_name))
-        return keys
-
-    def _explicit_table_alias_keys(self, table_names: list[str]) -> set[str]:
-        keys: set[str] = set()
-        for table_name in table_names:
-            keys.update(self._schema_identifier_alias_keys(table_name))
-        return keys
-
-    def _filter_retrieval_metadata_for_explicit_query(
-        self,
-        query: str,
-        documents: list[dict],
-        explicit_table_names: list[str] | None = None,
-    ) -> tuple[list[dict], list[str], list[str]]:
-        explicit_keys = (
-            self._explicit_table_alias_keys(explicit_table_names or [])
-            if explicit_table_names
-            else self._explicit_table_alias_keys_from_query(query)
-        )
-        if not explicit_keys:
-            return self._metadata_from_documents(documents)
-
-        filtered_documents: list[dict] = []
-        for document in documents or []:
-            metadata = document.get("metadata") or {}
-            table_name = metadata.get("table_name") or document.get("table_name")
-            table_ddl = metadata.get("table_ddl") or document.get("table_ddl")
-            candidate_names = [table_name]
-            if table_ddl:
-                candidate_names.extend(
-                    table.get("name")
-                    for table in self._parse_schema_tables([table_ddl])
-                    if table.get("name")
-                )
-
-            candidate_keys: set[str] = set()
-            for candidate_name in candidate_names:
-                candidate_keys.update(self._schema_identifier_alias_keys(candidate_name))
-
-            if candidate_keys & explicit_keys:
-                filtered_documents.append(document)
-
-        if not filtered_documents:
-            return [], [], []
-        return self._metadata_from_documents(filtered_documents)
-
-    def _normalize_explicit_table_names(
-        self,
-        table_names: list[str] | None,
-    ) -> list[str]:
-        normalized: list[str] = []
-        for table_name in table_names or []:
-            candidate = str(table_name or "").strip()
-            if candidate and candidate not in normalized:
-                normalized.append(candidate)
-        return normalized
-
-    def _should_retry_selected_schema_after_retrieval_timeout(
-        self, retrieval_table_names: Optional[list[str]]
-    ) -> bool:
-        return bool(retrieval_table_names)
-
-    def _forced_explicit_table_names(
-        self, table_names: list[str], *, source: str = "request"
-    ) -> list[str]:
-        if not table_names:
-            return []
-        if len(table_names) <= MAX_FORCED_EXPLICIT_TABLES:
-            return table_names
-
-        logger.info(
-            "Treating broad %s explicit_tables list as retrieval candidates, not a forced schema scope: %s",
-            source,
-            table_names,
-        )
-        return []
 
     def _build_greeting_response(self, query: str) -> str:
         return (
@@ -984,16 +875,6 @@ class AskService:
         planning_timeout_seconds = min(self._pipeline_timeout_seconds, 15)
         generation_timeout_seconds = min(self._pipeline_timeout_seconds, 30)
         correction_timeout_seconds = min(self._pipeline_timeout_seconds, 15)
-        request_explicit_table_names = self._normalize_explicit_table_names(
-            ask_request.explicit_tables
-        )
-        forced_request_explicit_table_names = self._forced_explicit_table_names(
-            request_explicit_table_names,
-            source="request",
-        )
-        explicit_table_names = forced_request_explicit_table_names
-        retrieval_table_names = explicit_table_names or None
-
         try:
             sql_user_query = user_query
 
@@ -1075,78 +956,6 @@ class AskService:
                     )
                     results["metadata"]["retrieved_table_count"] = len(documents)
                     return results
-
-                if explicit_table_names:
-                    self._ask_results[query_id] = AskResultResponse(
-                        status="searching",
-                        type="TEXT_TO_SQL",
-                        rephrased_question=user_query,
-                        intent_reasoning="Explicit table name detected; retrieving that deployed schema directly.",
-                        trace_id=trace_id,
-                        is_followup=True if histories else False,
-                    )
-                    retrieval_result = await self._run_with_timeout(
-                        "Explicit table schema retrieval",
-                        self._pipelines["db_schema_retrieval"].run(
-                            query=user_query,
-                            tables=explicit_table_names,
-                            project_id=ask_request.project_id,
-                            histories=[],
-                            enable_column_pruning=False,
-                        ),
-                        timeout_seconds=min(
-                            self._schema_retrieval_timeout_seconds,
-                            self._pipeline_timeout_seconds,
-                            20,
-                        ),
-                    )
-                    documents, table_names, table_ddls = (
-                        self._extract_retrieval_metadata(retrieval_result)
-                    )
-                    documents, table_names, table_ddls = (
-                        self._filter_retrieval_metadata_for_explicit_query(
-                            user_query,
-                            documents,
-                            explicit_table_names,
-                        )
-                    )
-                    _retrieval_result = retrieval_result.get(
-                        "construct_retrieval_results", {}
-                    )
-                    logger.info(
-                        "Retrieved explicit tables for query_id %s: %s",
-                        query_id,
-                        table_names,
-                    )
-
-                    if not documents:
-                        error_message = (
-                            "The requested table was not found in the deployed schema: "
-                            + ", ".join(explicit_table_names)
-                        )
-                        self._ask_results[query_id] = AskResultResponse(
-                            status="failed",
-                            type="TEXT_TO_SQL",
-                            error=AskError(
-                                code="NO_RELEVANT_DATA",
-                                message=error_message,
-                            ),
-                            rephrased_question=user_query,
-                            intent_reasoning="Explicit table request did not match any deployed schema table.",
-                            retrieved_tables=table_names,
-                            trace_id=trace_id,
-                            is_followup=True if histories else False,
-                        )
-                        results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
-                        results["metadata"]["error_message"] = error_message
-                        results["metadata"]["type"] = "TEXT_TO_SQL"
-                        return results
-
-                    rephrased_question = user_query
-                    intent_reasoning = (
-                        "Explicit table request matched deployed schema; generating SQL against retrieved schema."
-                    )
-                    sql_user_query = user_query
 
                 historical_question_result = []
                 if not api_results:
@@ -1369,96 +1178,28 @@ class AskService:
                         "Schema retrieval",
                         self._pipelines["db_schema_retrieval"].run(
                             query=sql_user_query,
-                            tables=retrieval_table_names,
-                            histories=[],
+                            tables=None,
+                            histories=histories,
                             project_id=ask_request.project_id,
                             enable_column_pruning=enable_column_pruning,
                         ),
                         timeout_seconds=self._schema_retrieval_timeout_seconds,
                     )
                 except TimeoutError as error:
-                    if not self._should_retry_selected_schema_after_retrieval_timeout(
-                        retrieval_table_names
-                    ):
-                        logger.warning(
-                            "Schema retrieval timed out for data query; not loading full project schema. "
-                            "query_id=%s project_id=%s error=%s",
-                            query_id,
-                            ask_request.project_id,
-                            error,
-                        )
-                        retrieval_result = {"construct_retrieval_results": {}}
-                    else:
-                        logger.warning(
-                            "Schema retrieval timed out; retrying only explicit selected schemas. "
-                            "query_id=%s project_id=%s tables=%s error=%s",
-                            query_id,
-                            ask_request.project_id,
-                            retrieval_table_names,
-                            error,
-                        )
-                        retrieval_result = await self._run_with_timeout(
-                            "Selected schema fallback retrieval",
-                            self._pipelines["db_schema_retrieval"].run(
-                                query=sql_user_query,
-                                tables=retrieval_table_names,
-                                histories=[],
-                                project_id=ask_request.project_id,
-                                enable_column_pruning=False,
-                            ),
-                            timeout_seconds=min(
-                                self._schema_retrieval_timeout_seconds,
-                                30,
-                            ),
-                        )
+                    logger.warning(
+                        "Schema retrieval timed out for data query; not loading full project schema. "
+                        "query_id=%s project_id=%s error=%s",
+                        query_id,
+                        ask_request.project_id,
+                        error,
+                    )
+                    retrieval_result = {"construct_retrieval_results": {}}
                 _retrieval_result = retrieval_result.get(
                     "construct_retrieval_results", {}
                 )
                 documents, table_names, table_ddls = (
                     self._extract_retrieval_metadata(retrieval_result)
                 )
-                if explicit_table_names:
-                    documents, table_names, table_ddls = (
-                        self._filter_retrieval_metadata_for_explicit_query(
-                            user_query,
-                            documents,
-                            explicit_table_names,
-                        )
-                    )
-                if not documents:
-                    if explicit_table_names:
-                        logger.info(
-                            "Retrying schema retrieval for explicit tables query_id %s: %s",
-                            query_id,
-                            explicit_table_names,
-                        )
-                        retrieval_result = await self._run_with_timeout(
-                            "Explicit table schema retrieval",
-                            self._pipelines["db_schema_retrieval"].run(
-                                query=user_query,
-                                tables=explicit_table_names,
-                                project_id=ask_request.project_id,
-                                histories=[],
-                                enable_column_pruning=enable_column_pruning,
-                            ),
-                            timeout_seconds=min(
-                                self._schema_retrieval_timeout_seconds,
-                                20,
-                            ),
-                        )
-                        _retrieval_result = retrieval_result.get(
-                            "construct_retrieval_results", {}
-                        )
-                        documents, table_names, table_ddls = (
-                            self._extract_retrieval_metadata(retrieval_result)
-                        )
-                        documents, table_names, table_ddls = (
-                            self._filter_retrieval_metadata_for_explicit_query(
-                                user_query,
-                                documents,
-                                explicit_table_names,
-                            )
-                        )
                 logger.info(
                     "Retrieved tables for query_id %s: %s", query_id, table_names
                 )
