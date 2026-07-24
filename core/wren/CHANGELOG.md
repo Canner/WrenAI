@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.13.2](https://github.com/Canner/WrenAI/compare/wren-v0.13.1...wren-v0.13.2) (2026-07-24)
+
+
+### Bug Fixes
+
+* **bigquery:** push LIMIT into SQL and strip trailing semicolon ([#2465](https://github.com/Canner/WrenAI/issues/2465)) ([0a25df3](https://github.com/Canner/WrenAI/commit/0a25df3eaba8d40ece29061c6970c63a46717178))
+* **duckdb:** strip trailing semicolon on unlimited query path ([#2489](https://github.com/Canner/WrenAI/issues/2489)) ([3d1be24](https://github.com/Canner/WrenAI/commit/3d1be241e8cc625b7bb7df17cc871365edfbab9f))
+* **mcp:** apply default row cap in list_stored_queries markdown fallback ([#2526](https://github.com/Canner/WrenAI/issues/2526)) ([86fac4f](https://github.com/Canner/WrenAI/commit/86fac4fcb2fdadeb5b7f5939539c19df24f8644c))
+* **memory:** skip non-dict columns in seed query generation ([#2514](https://github.com/Canner/WrenAI/issues/2514)) ([a3de389](https://github.com/Canner/WrenAI/commit/a3de389752f5cfc5c01de9333bbf9f0c1e252597))
+* **mssql:** strip trailing semicolons before sqlglot LIMIT rewrite ([#2476](https://github.com/Canner/WrenAI/issues/2476)) ([2e2d0a9](https://github.com/Canner/WrenAI/commit/2e2d0a9346319f0d871c84048fdc08687b8c1ba4))
+* **oracle:** strip trailing semicolon on unlimited query path ([#2534](https://github.com/Canner/WrenAI/issues/2534)) ([78b5b93](https://github.com/Canner/WrenAI/commit/78b5b934792b8869c185bdb15796d2fdcf32c0ab))
+* **profile:** exclude connection_url from selectable datasources ([#2527](https://github.com/Canner/WrenAI/issues/2527)) ([62712f2](https://github.com/Canner/WrenAI/commit/62712f21d9264578bfb34fd439b6cf5486b161fb))
+* **profile:** mask secrets nested under kwargs and settings in profile debug ([#2525](https://github.com/Canner/WrenAI/issues/2525)) ([682e829](https://github.com/Canner/WrenAI/commit/682e829bb52f3fbcd4d2a203664f371ba2442f7b))
+* **redshift:** strip trailing semicolon on unlimited query path ([#2482](https://github.com/Canner/WrenAI/issues/2482)) ([812e802](https://github.com/Canner/WrenAI/commit/812e80289687715460304469a5af01cecfcaf1ad))
+* **redshift:** use public strip_trailing_semicolon on unlimited path ([#2560](https://github.com/Canner/WrenAI/issues/2560)) ([50e710d](https://github.com/Canner/WrenAI/commit/50e710deea6df466bce23c5915ccfd148d5f1113))
+* **spark:** strip trailing semicolon before sql/dry_run ([#2464](https://github.com/Canner/WrenAI/issues/2464)) ([f4b45ed](https://github.com/Canner/WrenAI/commit/f4b45eddab3bd19919045c3f3bee16c85a8f7ebf))
+
 ## [0.13.1](https://github.com/Canner/WrenAI/compare/wren-v0.13.0...wren-v0.13.1) (2026-07-20)
 
 
