@@ -15,13 +15,13 @@ logger = logging.getLogger("wren-ai-service")
 
 
 DATA_QUERY_PATTERN = re.compile(
-    r"\b("
+    r"(\bhow\s+many\b|\bhow\s+much\b|\bwhat\s+(?:is|are|was|were)\b|\bwhich\b|\b("
     r"show|list|find|get|give|display|retrieve|fetch|compare|count|sum|total|"
     r"average|avg|min|max|rank|top|bottom|highest|lowest|latest|earliest|"
     r"newest|oldest|sort|order|group|filter|where|between|starts|ends|"
     r"contains|duplicate|unique|distinct|percentage|percent|trend|growth|"
-    r"breakdown|by|per"
-    r")\b",
+    r"breakdown|placed|created|became|active|inactive|expired|valid|by|per"
+    r")\b)",
     re.IGNORECASE,
 )
 
@@ -139,7 +139,7 @@ class AskService:
         self._max_sql_correction_retries = max_sql_correction_retries
 
     def _should_continue_text_to_sql(self, query: str, intent: Optional[str]) -> bool:
-        if intent not in {"GENERAL", "MISLEADING_QUERY"}:
+        if intent not in {"GENERAL", "MISLEADING_QUERY", "USER_GUIDE"}:
             return False
 
         return bool(DATA_QUERY_PATTERN.search(query or ""))
