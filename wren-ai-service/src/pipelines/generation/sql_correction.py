@@ -79,9 +79,6 @@ sql_correction_user_prompt_template = """
 SQL: {{ invalid_generation_result.sql }}
 Error Message: {{ invalid_generation_result.error }}
 
-### FINAL CORRECTION INSTRUCTION ###
-Use only the exact table and column identifiers in DATABASE SCHEMA above. Treat the invalid SQL and error message as guidance only. Do not convert underscores to dots or add database/schema prefixes.
-
 Let's think step by step.
 """
 

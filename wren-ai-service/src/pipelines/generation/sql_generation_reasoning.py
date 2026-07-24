@@ -50,9 +50,6 @@ Language: {{ language }}
 Current Time: {{ current_time }}
 
 Let's think step by step.
-
-### FINAL REASONING INSTRUCTION ###
-Mention only the exact table and column identifiers in DATABASE SCHEMA above. Do not convert underscores to dots or add database/schema prefixes.
 """
 
 
