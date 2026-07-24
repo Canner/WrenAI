@@ -36,16 +36,6 @@ async def ask(
         status="understanding",
     )
 
-    if ask_service._is_greeting_query(ask_request.query):
-        ask_service._general_streaming_results[query_id] = (
-            ask_service._build_greeting_response(ask_request.query)
-        )
-        ask_service._ask_results[query_id] = AskResultResponse(
-            status="finished",
-            type="GENERAL",
-        )
-        return AskResponse(query_id=query_id)
-
     task = asyncio.create_task(
         ask_service.ask(
             ask_request,
