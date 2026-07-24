@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import logging
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List
 
 import aiohttp
 import orjson
@@ -12,7 +14,9 @@ from src.core.engine import (
     clean_generation_result,
 )
 from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
-from src.web.v1.services.ask import AskHistory
+
+if TYPE_CHECKING:
+    from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -563,7 +567,7 @@ def construct_instructions(
 
 
 def construct_ask_history_messages(
-    histories: list[AskHistory] | list[dict],
+    histories: list["AskHistory"] | list[dict],
 ) -> list[ChatMessage]:
     messages = []
     for history in histories:
