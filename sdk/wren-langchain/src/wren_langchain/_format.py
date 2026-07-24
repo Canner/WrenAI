@@ -133,10 +133,16 @@ def format_recall_content(rows: list[dict[str, Any]]) -> str:
 
 def format_store_content(nl: str, sql: str, tags: list[str] | None) -> str:
     """One-liner ``Stored: "<nl>" → <sql preview> (N tags)``."""
+    # Store tool paths occasionally surface None/placeholders before validation.
+    # Coerce so format helpers never TypeError on .strip().
+    if not isinstance(nl, str):
+        nl = "" if nl is None else str(nl)
+    if not isinstance(sql, str):
+        sql = "" if sql is None else str(sql)
     sql_preview = sql.strip().split("\n")[0]
     if len(sql_preview) > 80:
         sql_preview = sql_preview[:77] + "..."
-    tag_count = len(tags) if tags else 0
+    tag_count = len(tags) if isinstance(tags, list) else 0
     return f'Stored: "{nl}" → {sql_preview} ({tag_count} tags)'
 
 
