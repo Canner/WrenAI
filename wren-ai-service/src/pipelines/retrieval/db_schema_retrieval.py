@@ -39,9 +39,6 @@ The database schema includes tables, columns, primary keys, foreign keys, relati
 5. The number of columns chosen must match the number of reasoning.
 6. Final chosen columns must be only column names, don't prefix it with table names.
 7. If the chosen column is a child column of a STRUCT type column, choose the parent column instead of the child column.
-8. Match the user's business wording to schema meaning, not exact word matches only. Use table names, column names, comments, aliases, descriptions, data types, relationships, metrics, calculated fields, and SQL samples when available.
-9. Do not invent a table or column because the user used a business word. Select only tables and columns that are explicitly present in the provided schema.
-10. If a requested concept cannot be grounded to a schema table or column, omit that table/column instead of creating a placeholder.
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:
@@ -85,8 +82,6 @@ Please provide your response as a JSON object, structured as follows:
 - Use table name used in the "Create Table" statement, don't use "alias".
 - Match Column names with the definition in the "Create Table" statement.
 - Match Table names with the definition in the "Create Table" statement.
-- Never return placeholder, example, or inferred names unless those exact names are
-  present in the provided schema.
 
 Good luck!
 
