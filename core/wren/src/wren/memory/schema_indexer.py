@@ -87,7 +87,9 @@ def _describe_model(model: dict, lines: list[str]) -> None:
     if data_scope:
         lines.append(f"  Data scope: {data_scope}")
 
-    cols = model.get("columns", [])
+    cols = [
+        c for c in (model.get("columns") or []) if isinstance(c, dict) and c.get("name")
+    ]
     if cols:
         lines.append("  Columns:")
         for col in cols:
@@ -96,7 +98,9 @@ def _describe_model(model: dict, lines: list[str]) -> None:
 
 
 def _describe_column(col: dict, lines: list[str]) -> None:
-    name = col["name"]
+    name = col.get("name")
+    if not name:
+        return
     dtype = col.get("type", "?")
     parts = [f"    - {name} ({dtype})"]
 
@@ -230,7 +234,9 @@ def extract_schema_items(manifest: dict) -> list[dict]:
 
     for model in manifest.get("models", []):
         items.append(_model_record(model, mdl_h, now))
-        for col in model.get("columns", []):
+        for col in model.get("columns", []) or []:
+            if not isinstance(col, dict) or not col.get("name"):
+                continue
             items.append(_column_record(col, model["name"], mdl_h, now))
 
     for rel in manifest.get("relationships", []):
@@ -264,7 +270,9 @@ def extract_schema_items(manifest: dict) -> list[dict]:
 
 def _model_record(model: dict, mdl_h: str, now: datetime) -> dict:
     name = model["name"]
-    cols = model.get("columns", [])
+    cols = [
+        c for c in (model.get("columns") or []) if isinstance(c, dict) and c.get("name")
+    ]
     col_summaries = ", ".join(f"{c['name']} ({c.get('type', '?')})" for c in cols[:20])
     pk = model.get("primaryKey") or ""
 
@@ -297,7 +305,9 @@ def _model_record(model: dict, mdl_h: str, now: datetime) -> dict:
 
 
 def _column_record(col: dict, model_name: str, mdl_h: str, now: datetime) -> dict:
-    name = col["name"]
+    name = col.get("name") or ""
+    if not name:
+        raise ValueError("column record requires name")
     dtype = col.get("type", "")
     expr = col.get("expression") or None
     is_calc = col.get("isCalculated", False)
