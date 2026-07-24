@@ -13,8 +13,15 @@ def test_describe_schema_skips_non_dict_models_rels_views():
             "views": ["bad", {"name": "v1"}],
         }
     )
-    assert "orders" in text
+    # Valid records are rendered exactly once.
+    assert "### Model: orders" in text
+    assert text.count("### Model:") == 1
+    assert "r1" in text
+    assert "v1" in text
+    # Malformed entries (None / bare strings) produce no rendered sections.
     assert "None" not in text
+    assert text.count("### Relationship:") == 1
+    assert text.count("### View:") == 1
 
 
 def test_describe_schema_skips_null_and_unnamed_columns():
