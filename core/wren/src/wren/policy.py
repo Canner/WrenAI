@@ -156,9 +156,10 @@ def resolve_model_name(
     falls back to a case-insensitive scan. Returns ``None`` if no model
     matches.
     """
-    model_set = (
-        model_names if isinstance(model_names, (set, frozenset)) else set(model_names)
-    )
+    # Drop non-str names so a corrupt models collection cannot crash .lower().
+    if not isinstance(name, str) or not name:
+        return None
+    model_set = {n for n in model_names if isinstance(n, str) and n}
     if name in model_set:
         return name
     if quoted:
