@@ -1,5 +1,6 @@
 import ast
 import logging
+import re
 import sys
 from typing import TYPE_CHECKING, Any, Literal, Optional
 
@@ -36,7 +37,8 @@ You are an expert detective specializing in intent classification. Combine the u
 - **Rephrase Question:** Rewrite follow-up questions into full standalone questions using prior conversation context.
 - **Concise Reasoning:** The reasoning must be clear, concise, and limited to 20 words.
 - **Language Consistency:** Use the same language as specified in the user's output language for the rephrased question and reasoning.
-- **Vague Queries:** If the question is vague or does not related to a table or property from the schema, classify it as `MISLEADING_QUERY`.
+- **Natural-language data questions:** A user does not need to mention exact table or column names. If the question asks for data, counts, totals, averages, trends, comparisons, rankings, distinct values, frequencies, distributions, filters, lists, or chart-ready analysis that could be answered from the provided schema, classify it as `TEXT_TO_SQL`.
+- **Vague Queries:** If the question is vague and cannot be connected to any data concept, table, column, metric, or SQL sample from the schema, classify it as `MISLEADING_QUERY`.
 - **Incomplete Queries:** If the question is related to the database schema but references unspecified values (e.g., "the following", "these", "those") without providing them, classify as `GENERAL`.
 - **Time-related Queries:** Don't rephrase time-related information in the user's question.
 
@@ -46,19 +48,22 @@ You are an expert detective specializing in intent classification. Combine the u
 **When to Use:**  
 - The user's inputs are about modifying SQL from previous questions.
 - The user's inputs are related to the database schema and requires an SQL query.
-- The question (or related previous query) includes references to specific tables, columns, or data details.
-- The question includes **complete information** with specific tables, columns, or data values needed for execution.
+- The question (or related previous query) includes references to business entities, measures, dimensions, dates, filters, or data details, even when exact table or column names are not mentioned.
+- The question includes enough business intent to retrieve matching tables and columns from the schema.
 - The question provides **all necessary parameters** to generate executable SQL.
 
 **Requirements:**
-- Must have complete filter criteria, specific values, or clear references to previous context.
-- Include specific table and column names from the schema in your reasoning or modifying SQL from previous questions.
-- Reference phrases from the user's inputs that clearly relate to the schema.
+- Do not require users to provide table names or column names.
+- Use the provided schema to map natural-language concepts to tables and columns.
+- Reference phrases from the user's inputs that clearly describe the requested data operation.
 
 **Examples:**  
 - "What is the total sales for last quarter?"
 - "Show me all customers who purchased product X."
 - "List the top 10 products by revenue."
+- "What are the unique values and frequencies for business unit?"
+- "What is the average length of emails?"
+- "Which markets have the highest growth rate this year compared to last year?"
 </TEXT_TO_SQL>
 
 <GENERAL>
@@ -84,6 +89,7 @@ You are an expert detective specializing in intent classification. Combine the u
 **When to Use:**  
 - The user's inputs pertains to Wren AI's features, usage, or capabilities.
 - The query relates directly to content in the user guide.
+- Do not use this category for business/data questions just because the exact table name is missing.
 
 **Examples:**  
 - "What can Wren AI do?"
@@ -96,7 +102,7 @@ You are an expert detective specializing in intent classification. Combine the u
 <MISLEADING_QUERY>
 **When to Use:**  
 - The user's inputs is irrelevant to the database schema or includes SQL code.
-- The user's inputs lacks specific details (like table names or columns) needed to generate an SQL query.
+- The user's inputs lacks any data-analysis intent that can be mapped to the provided schema.
 - It appears off-topic or is simply a casual conversation starter.
 
 **Requirements:**  
@@ -299,13 +305,55 @@ async def classify_intent(prompt: dict, generator: Any, generator_name: str) -> 
     return await generator(prompt=prompt.get("prompt")), generator_name
 
 
+def _looks_like_data_question(query: str) -> bool:
+    return bool(
+        re.search(
+            r"\b("
+            r"show|list|find|get|give|fetch|compare|calculate|count|sum|total|"
+            r"average|avg|mean|min|max|median|distinct|unique|frequency|"
+            r"frequencies|distribution|trend|growth|rate|ratio|percentage|"
+            r"top|bottom|highest|lowest|rank|group|breakdown|by|where|filter|"
+            r"chart|graph|plot|values|records|rows"
+            r")\b",
+            query or "",
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _looks_like_user_guide_question(query: str) -> bool:
+    return bool(
+        re.search(
+            r"\b("
+            r"wren|project|workspace|connect|connection|database connection|"
+            r"setup|configure|configuration|delete|reset|invite|permission|"
+            r"role|user guide|documentation|how do i|how can i"
+            r")\b",
+            query or "",
+            flags=re.IGNORECASE,
+        )
+    )
+
+
 @observe(capture_input=False)
-def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict:
+def post_process(
+    classify_intent: dict, construct_db_schemas: list[str], query: str
+) -> dict:
     try:
         results = orjson.loads(classify_intent.get("replies")[0])
+        intent = results["results"]
+        if (
+            construct_db_schemas
+            and intent in {"MISLEADING_QUERY", "USER_GUIDE"}
+            and _looks_like_data_question(query)
+            and not (
+                intent == "USER_GUIDE" and _looks_like_user_guide_question(query)
+            )
+        ):
+            intent = "TEXT_TO_SQL"
         return {
             "rephrased_question": results["rephrased_question"],
-            "intent": results["results"],
+            "intent": intent,
             "reasoning": results["reasoning"],
             "db_schemas": construct_db_schemas,
         }
