@@ -4,12 +4,63 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
 
 utils_app = typer.Typer(name="utils", help="Utility commands")
+
+# Cap on how many dropped rows we list individually; past this we still
+# report the total but stop naming each one, mirroring context_cli's
+# _WARNING_SUMMARY_THRESHOLD so large batches don't flood stderr.
+_SKIP_REPORT_LIMIT = 10
+
+
+def _skipped_rows(data: object) -> list[tuple[int, object]]:
+    """Return (index, value) for entries parse_types/translate_types will drop.
+
+    Mirrors the ``isinstance(col, Mapping)`` guard those functions apply
+    internally; recomputed here (rather than threaded back out of the pure
+    library functions) so the CLI layer can report which rows were skipped
+    and why.
+    """
+    if not isinstance(data, list):
+        return []
+    return [(i, row) for i, row in enumerate(data) if not isinstance(row, Mapping)]
+
+
+def _report_skipped(skipped: list[tuple[int, object]]) -> None:
+    """Warn about dropped rows, splitting benign padding from likely corruption.
+
+    ``None`` is treated as benign padding from dynamic schema exporters and
+    only counted. Any other non-mapping value (a bare string, number, list,
+    ...) is treated as more likely a real data problem and listed with its
+    index and value so it isn't invisible in the output.
+    """
+    if not skipped:
+        return
+    benign = [i for i, v in skipped if v is None]
+    corrupt = [(i, v) for i, v in skipped if v is not None]
+    if benign:
+        typer.echo(
+            f"Note: skipped {len(benign)} None row(s) (benign padding)", err=True
+        )
+    if corrupt:
+        typer.echo(
+            f"Warning: skipped {len(corrupt)} non-mapping row(s) with unexpected values:",
+            err=True,
+        )
+        for i, v in corrupt[:_SKIP_REPORT_LIMIT]:
+            typer.echo(f"  [{i}] {type(v).__name__}: {v!r}", err=True)
+        remaining = len(corrupt) - _SKIP_REPORT_LIMIT
+        if remaining > 0:
+            typer.echo(f"  ... and {remaining} more", err=True)
+
+
+def _has_corrupt_skips(skipped: list[tuple[int, object]]) -> bool:
+    return any(v is not None for _, v in skipped)
 
 
 @utils_app.command(name="parse-type")
@@ -37,6 +88,16 @@ def parse_types_cmd(
         Optional[str],
         typer.Option("--input", "-i", help="Input JSON file (default: stdin)"),
     ] = None,
+    strict: Annotated[
+        bool,
+        typer.Option(
+            "--strict",
+            help=(
+                "Exit 1 if any dropped row held a non-None value "
+                "(likely corruption, not benign padding)."
+            ),
+        ),
+    ] = False,
 ):
     """Batch-normalize types. Reads JSON array from stdin or file, writes JSON to stdout.
 
@@ -63,13 +124,12 @@ def parse_types_cmd(
         typer.echo(f"Error: invalid JSON input: {e}", err=True)
         raise typer.Exit(1)
 
+    skipped = _skipped_rows(data)
     results = parse_types(data, dialect, type_field=type_field)
-    if isinstance(data, list) and len(results) < len(data):
-        typer.echo(
-            f"Note: skipped {len(data) - len(results)} non-mapping row(s)",
-            err=True,
-        )
+    _report_skipped(skipped)
     typer.echo(json.dumps(results, indent=2))
+    if strict and _has_corrupt_skips(skipped):
+        raise typer.Exit(1)
 
 
 @utils_app.command(name="translate-type")
@@ -102,6 +162,16 @@ def translate_types_cmd(
         Optional[str],
         typer.Option("--input", "-i", help="Input JSON file (default: stdin)"),
     ] = None,
+    strict: Annotated[
+        bool,
+        typer.Option(
+            "--strict",
+            help=(
+                "Exit 1 if any dropped row held a non-None value "
+                "(likely corruption, not benign padding)."
+            ),
+        ),
+    ] = False,
 ):
     """Batch-translate types between dialects. Reads/writes JSON.
 
@@ -128,10 +198,9 @@ def translate_types_cmd(
         typer.echo(f"Error: invalid JSON input: {e}", err=True)
         raise typer.Exit(1)
 
+    skipped = _skipped_rows(data)
     results = translate_types(data, source, target, type_field=type_field)
-    if isinstance(data, list) and len(results) < len(data):
-        typer.echo(
-            f"Note: skipped {len(data) - len(results)} non-mapping row(s)",
-            err=True,
-        )
+    _report_skipped(skipped)
     typer.echo(json.dumps(results, indent=2))
+    if strict and _has_corrupt_skips(skipped):
+        raise typer.Exit(1)

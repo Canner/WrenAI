@@ -378,3 +378,108 @@ def test_translate_types_accepts_non_dict_mappings() -> None:
     assert [r["column"] for r in out] == ["id", "name"]
     assert out[0]["type"] == "INT64"
     assert out[1]["type"] == "STRING"
+
+
+# ── CLI skipped-row reporting (Canner/WrenAI#2528) ─────────────────────────
+#
+# #2508 made parse_types/translate_types skip non-mapping rows instead of
+# crashing the batch, but the CLI only reported a bare count with no signal
+# of *which* rows were dropped or whether they looked like real corruption
+# (a stray string/int) versus benign None padding.
+
+
+def test_cli_parse_types_none_row_is_benign_note() -> None:
+    columns = [{"column": "id", "raw_type": "int8"}, None]
+    result = _run_wren(
+        "utils", "parse-types", "--dialect", "postgres", stdin=json.dumps(columns)
+    )
+    _assert_success(result)
+    assert "Note: skipped 1 None row(s) (benign padding)" in result.stderr
+    assert "Warning:" not in result.stderr
+    data = json.loads(result.stdout)
+    assert len(data) == 1
+
+
+def test_cli_parse_types_non_none_row_is_warning_with_index_and_value() -> None:
+    columns = [{"column": "id", "raw_type": "int8"}, "not-a-dict", 42]
+    result = _run_wren(
+        "utils", "parse-types", "--dialect", "postgres", stdin=json.dumps(columns)
+    )
+    # Without --strict, a corrupt-looking row is still just a warning, not a failure.
+    _assert_success(result)
+    assert "Warning: skipped 2 non-mapping row(s)" in result.stderr
+    assert "[1] str: 'not-a-dict'" in result.stderr
+    assert "[2] int: 42" in result.stderr
+
+
+def test_cli_parse_types_strict_exits_nonzero_on_corrupt_row() -> None:
+    columns = [{"column": "id", "raw_type": "int8"}, "not-a-dict"]
+    result = _run_wren(
+        "utils",
+        "parse-types",
+        "--dialect",
+        "postgres",
+        "--strict",
+        stdin=json.dumps(columns),
+    )
+    assert result.returncode == 1
+    assert "Warning: skipped 1 non-mapping row(s)" in result.stderr
+    # Results still printed even though the command signals failure.
+    data = json.loads(result.stdout)
+    assert len(data) == 1
+
+
+def test_cli_parse_types_strict_stays_zero_on_none_only_rows() -> None:
+    columns = [{"column": "id", "raw_type": "int8"}, None, None]
+    result = _run_wren(
+        "utils",
+        "parse-types",
+        "--dialect",
+        "postgres",
+        "--strict",
+        stdin=json.dumps(columns),
+    )
+    _assert_success(result)
+    assert "Note: skipped 2 None row(s) (benign padding)" in result.stderr
+
+
+def test_cli_parse_types_skip_report_truncates_past_limit() -> None:
+    columns = [{"column": "id", "raw_type": "int8"}] + list(range(12))
+    result = _run_wren(
+        "utils", "parse-types", "--dialect", "postgres", stdin=json.dumps(columns)
+    )
+    _assert_success(result)
+    assert "Warning: skipped 12 non-mapping row(s)" in result.stderr
+    assert "[1] int: 0" in result.stderr
+    assert "... and 2 more" in result.stderr
+
+
+def test_cli_translate_types_strict_exits_nonzero_on_corrupt_row() -> None:
+    columns = [{"column": "id", "raw_type": "int8"}, "not-a-dict"]
+    result = _run_wren(
+        "utils",
+        "translate-types",
+        "--source",
+        "postgres",
+        "--target",
+        "bigquery",
+        "--strict",
+        stdin=json.dumps(columns),
+    )
+    assert result.returncode == 1
+    assert "Warning: skipped 1 non-mapping row(s)" in result.stderr
+
+
+def test_cli_translate_types_none_row_is_benign_note() -> None:
+    columns = [{"column": "id", "raw_type": "int8"}, None]
+    result = _run_wren(
+        "utils",
+        "translate-types",
+        "--source",
+        "postgres",
+        "--target",
+        "bigquery",
+        stdin=json.dumps(columns),
+    )
+    _assert_success(result)
+    assert "Note: skipped 1 None row(s) (benign padding)" in result.stderr
