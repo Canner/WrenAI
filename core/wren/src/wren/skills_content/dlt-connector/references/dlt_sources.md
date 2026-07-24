@@ -37,6 +37,7 @@ pipeline = dlt.pipeline(
 
 # With the verified source:
 from hubspot import hubspot_source
+
 source = hubspot_source(api_key=dlt.secrets.value)
 info = pipeline.run(source)
 print(info)

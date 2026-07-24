@@ -112,6 +112,7 @@ After the run, confirm:
 
 ```python
 import duckdb
+
 con = duckdb.connect("<pipeline_name>.duckdb", read_only=True)
 for row in con.execute("""
     SELECT table_schema, table_name,
@@ -179,7 +180,9 @@ wren_home = Path.home() / ".wren"
 wren_home.mkdir(exist_ok=True)
 profiles_file = wren_home / "profiles.yml"
 
-existing = (yaml.safe_load(profiles_file.read_text()) or {}) if profiles_file.exists() else {}
+existing = (
+    (yaml.safe_load(profiles_file.read_text()) or {}) if profiles_file.exists() else {}
+)
 existing.setdefault("profiles", {})
 
 profile_name = "<source>_dlt"
