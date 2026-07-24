@@ -80,7 +80,7 @@ User's Question: {{ query }}
 Let's think step by step.
 
 ### FINAL SQL INSTRUCTION ###
-Use only the exact table and column identifiers in DATABASE SCHEMA above. Treat all other sections as guidance only.
+Use only the exact table and column identifiers in DATABASE SCHEMA above. Treat all other sections as guidance only. Do not convert underscores to dots or add database/schema prefixes.
 """
 
 

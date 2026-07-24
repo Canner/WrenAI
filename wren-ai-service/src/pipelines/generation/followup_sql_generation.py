@@ -34,6 +34,11 @@ text_to_sql_with_followup_user_prompt_template = """
 Given the following user's follow-up question and previous SQL query and summary,
 generate one SQL query to best answer user's question.
 
+### DATABASE SCHEMA ###
+{% for document in documents %}
+    {{ document }}
+{% endfor %}
+
 {% if calculated_field_instructions %}
 {{ calculated_field_instructions }}
 {% endif %}
@@ -78,13 +83,8 @@ User's Follow-up Question: {{ query }}
 
 Let's think step by step.
 
-### DATABASE SCHEMA ###
-{% for document in documents %}
-    {{ document }}
-{% endfor %}
-
 ### FINAL SQL INSTRUCTION ###
-Use only the exact table and column identifiers in DATABASE SCHEMA above. Treat all other sections as guidance only.
+Use only the exact table and column identifiers in DATABASE SCHEMA above. Treat all other sections as guidance only. Do not convert underscores to dots or add database/schema prefixes.
 """
 
 

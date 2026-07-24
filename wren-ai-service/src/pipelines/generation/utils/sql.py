@@ -172,6 +172,8 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - ONLY USE SELECT statements. Do not generate ALTER, CREATE, DROP, INSERT, UPDATE, DELETE, MERGE, TRUNCATE, GRANT, REVOKE, or any other statement that can change the database or schema.
 - ONLY USE the tables and columns mentioned in the database schema.
 - Treat the DATABASE SCHEMA section as the only authoritative source for table and column identifiers. Never invent a normalized, friendly, translated, or guessed identifier.
+- Do not use names from policies, instructions, SQL functions, SQL samples, query history, reasoning text, error messages, or the user's wording as table or column identifiers unless they appear exactly in DATABASE SCHEMA.
+- Policy documents and policy names are not database tables or columns unless they appear exactly in DATABASE SCHEMA.
 - If a user uses business wording that does not exactly match a column name, map it only to an existing table or column by using the schema comments, aliases, descriptions, and available column names.
 - When the schema exposes raw or generated names, use those exact names in SQL. Do not replace them with natural-language names.
 - ONLY USE "*" if the user query asks for all the columns of a table.
@@ -474,9 +476,13 @@ def _extract_from_sql_knowledge(
 
 def get_text_to_sql_rules(sql_knowledge: SqlKnowledge | None = None) -> str:
     if sql_knowledge is not None:
-        return _extract_from_sql_knowledge(
-            sql_knowledge, "text_to_sql_rule", _DEFAULT_TEXT_TO_SQL_RULES
-        )
+        value = getattr(sql_knowledge, "text_to_sql_rule", "")
+        if value and value.strip():
+            return (
+                f"{_DEFAULT_TEXT_TO_SQL_RULES}\n\n"
+                "### PROJECT SQL RULES ###\n"
+                f"{value.strip()}"
+            )
 
     return _DEFAULT_TEXT_TO_SQL_RULES
 
@@ -523,7 +529,7 @@ Given user's question, database schema, etc., you should think deeply and carefu
 1. YOU MUST FOLLOW the instructions strictly to generate the SQL query if the section of USER INSTRUCTIONS is available in user's input.
 2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
 3. YOU MUST REFER to the sql samples and learn the usage of the schema structures and how SQL is written based on them if the section of SQL SAMPLES is available in user's input.
-4. YOU MUST FOLLOW the reasoning plan step by step strictly to generate the SQL query if the section of REASONING PLAN is available in user's input.
+4. YOU MUST USE the reasoning plan only as analytical guidance if the section of REASONING PLAN is available in user's input. Do not copy table or column names from it unless they appear exactly in DATABASE SCHEMA.
 5. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 6. DATABASE SCHEMA is more authoritative than the reasoning plan, SQL samples, and user wording. If any of those mention a table or column that is not present in DATABASE SCHEMA, do not use it.
 7. For every table and column in the final SQL, verify that the exact identifier appears in DATABASE SCHEMA before returning the SQL.

@@ -23,6 +23,11 @@ logger = logging.getLogger("wren-ai-service")
 
 
 sql_generation_reasoning_user_prompt_template = """
+### DATABASE SCHEMA ###
+{% for document in documents %}
+    {{ document }}
+{% endfor %}
+
 {% if sql_samples %}
 ### SQL SAMPLES ###
 {% for sql_sample in sql_samples %}
@@ -55,13 +60,8 @@ Current Time: {{ current_time }}
 
 Let's think step by step.
 
-### DATABASE SCHEMA ###
-{% for document in documents %}
-    {{ document }}
-{% endfor %}
-
 ### FINAL REASONING INSTRUCTION ###
-Mention only the exact table and column identifiers in DATABASE SCHEMA above.
+Mention only the exact table and column identifiers in DATABASE SCHEMA above. Do not convert underscores to dots or add database/schema prefixes.
 """
 
 
