@@ -59,13 +59,13 @@ def describe_schema(manifest: dict) -> str:
     rels = manifest.get("relationships") or []
     if isinstance(rels, list):
         for rel in rels:
-            if isinstance(rel, dict):
+            if isinstance(rel, dict) and rel.get("name"):
                 _describe_relationship(rel, lines)
 
     views = manifest.get("views") or []
     if isinstance(views, list):
         for view in views:
-            if isinstance(view, dict):
+            if isinstance(view, dict) and view.get("name"):
                 _describe_view(view, lines)
 
     cubes = manifest.get("cubes", []) or []
@@ -96,10 +96,11 @@ def _describe_model(model: dict, lines: list[str]) -> None:
     if data_scope:
         lines.append(f"  Data scope: {data_scope}")
 
-    cols = model.get("columns", [])
-    if cols:
+    cols = model.get("columns", []) or []
+    described = [c for c in cols if isinstance(c, dict) and c.get("name")]
+    if described:
         lines.append("  Columns:")
-        for col in cols:
+        for col in described:
             _describe_column(col, lines)
     lines.append("")
 
@@ -251,13 +252,13 @@ def extract_schema_items(manifest: dict) -> list[dict]:
     rels = manifest.get("relationships") or []
     if isinstance(rels, list):
         for rel in rels:
-            if isinstance(rel, dict):
+            if isinstance(rel, dict) and rel.get("name"):
                 items.append(_relationship_record(rel, mdl_h, now))
 
     views = manifest.get("views") or []
     if isinstance(views, list):
         for view in views:
-            if isinstance(view, dict):
+            if isinstance(view, dict) and view.get("name"):
                 items.append(_view_record(view, mdl_h, now))
 
     cubes = manifest.get("cubes", []) or []
