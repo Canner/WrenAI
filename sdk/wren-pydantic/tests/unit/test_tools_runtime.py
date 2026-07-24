@@ -215,6 +215,32 @@ def test_wren_list_models_empty_manifest():
     assert result == []
 
 
+def test_wren_list_models_skips_non_dict_and_nameless():
+    """Partial manifests must not AttributeError mid-comprehension."""
+    toolkit = _mock_toolkit(
+        manifest={
+            "models": [
+                "bad",
+                None,
+                {"columns": [{"name": "id"}]},  # missing name
+                {
+                    "name": "ok",
+                    "columns": "skewed",
+                    "properties": "not-a-dict",
+                },
+            ]
+        }
+    )
+    ts = build_runtime_toolset(toolkit, takes_ctx=False)
+    fn = _get_tool(ts, "wren_list_models")
+
+    result = fn()
+    assert len(result) == 1
+    assert result[0].name == "ok"
+    assert result[0].column_count == 0
+    assert result[0].description is None
+
+
 def test_wren_list_models_wraps_error_as_model_retry():
     toolkit = _mock_toolkit()
     toolkit._mdl_source.load_manifest.side_effect = WrenError(

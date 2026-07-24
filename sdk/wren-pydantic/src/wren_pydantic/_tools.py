@@ -169,11 +169,27 @@ def _run_list_models(toolkit: WrenToolkit) -> list[ModelSummary]:
         raise to_model_retry(exc) from exc
 
     models = manifest.get("models") or []
-    return [
-        ModelSummary(
-            name=m["name"],
-            column_count=len(m.get("columns") or []),
-            description=(m.get("properties") or {}).get("description"),
+    if not isinstance(models, list):
+        return []
+
+    summaries: list[ModelSummary] = []
+    for m in models:
+        if not isinstance(m, dict):
+            continue
+        name = m.get("name")
+        if not name:
+            continue
+        columns = m.get("columns") or []
+        if not isinstance(columns, list):
+            columns = []
+        props = m.get("properties") or {}
+        if not isinstance(props, dict):
+            props = {}
+        summaries.append(
+            ModelSummary(
+                name=name,
+                column_count=len(columns),
+                description=props.get("description"),
+            )
         )
-        for m in models
-    ]
+    return summaries
