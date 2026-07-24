@@ -511,7 +511,7 @@ class AskService:
                     ].run(
                         query=user_query,
                         contexts=table_ddls,
-                        sql_generation_reasoning=sql_generation_reasoning,
+                        sql_generation_reasoning="",
                         histories=histories,
                         project_id=ask_request.project_id,
                         sql_samples=sql_samples,
@@ -531,7 +531,7 @@ class AskService:
                     ].run(
                         query=user_query,
                         contexts=table_ddls,
-                        sql_generation_reasoning=sql_generation_reasoning,
+                        sql_generation_reasoning=None,
                         project_id=ask_request.project_id,
                         sql_samples=sql_samples,
                         instructions=instructions,

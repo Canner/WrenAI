@@ -506,6 +506,9 @@ otherwise, you will put the relative timeframe in the SQL query.
 14. ONLY SHOWING the reasoning plan in bullet points.
 15. Never include SQL code, table aliases, or assumed table/column names in the reasoning plan.
 16. Only mention a table or column when the exact name appears in the DATABASE SCHEMA.
+17. Map the user's business wording to schema meaning, not exact word matches only. Use table/column descriptions, aliases, data types, relationships, metrics, calculated fields, and SQL samples to identify grounded concepts.
+18. If a business concept cannot be grounded to an exact table/column from the DATABASE SCHEMA, say that the concept is not grounded in the retrieved metadata. Do not create substitute table names, column names, or example SQL.
+19. Do not write phrases like "Here is a possible SQL query", "replace with actual table", or any placeholder table/column names.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
