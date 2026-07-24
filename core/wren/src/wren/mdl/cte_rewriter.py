@@ -136,16 +136,27 @@ class CTERewriter:
         self._model_cols: dict[str, list[str]] = {}
 
         for model in self.manifest.get("models", []):
-            name = model["name"]
+            if not isinstance(model, dict):
+                continue
+            name = model.get("name")
+            if not isinstance(name, str) or not name:
+                continue
             self.model_dict[name] = model
             cols: dict[str, str] = {}
             orig: dict[str, str] = {}
-            for col in model.get("columns", []):
+            raw_cols = model.get("columns", []) or []
+            if not isinstance(raw_cols, list):
+                raw_cols = []
+            for col in raw_cols:
+                if not isinstance(col, dict):
+                    continue
                 if col.get("isHidden"):
                     continue
                 if col.get("relationship"):
                     continue
-                col_name = col["name"]
+                col_name = col.get("name")
+                if not isinstance(col_name, str) or not col_name:
+                    continue
                 # Case-only collisions were already vetted by the pre-scan: on
                 # case-insensitive-column dialects they raised INVALID_MDL; on
                 # case-sensitive-column dialects they are kept distinct here and
@@ -180,9 +191,13 @@ class CTERewriter:
         # It is NOT expanded by wren-core — it becomes a CTE kept verbatim,
         # preceded by model CTEs for the models it references. view_dict maps
         # name → the view object so the statement can be emitted as-is.
-        self.view_dict: dict[str, dict] = {
-            view["name"]: view for view in self.manifest.get("views", [])
-        }
+        self.view_dict: dict[str, dict] = {}
+        for view in self.manifest.get("views", []) or []:
+            if not isinstance(view, dict):
+                continue
+            vname = view.get("name")
+            if isinstance(vname, str) and vname:
+                self.view_dict[vname] = view
         self.view_names: set[str] = set(self.view_dict)
 
     @staticmethod
@@ -192,14 +207,23 @@ class CTERewriter:
         Mirrors the column filter used when populating the schema so the
         case-collision pre-scan sees exactly the columns that get registered.
         """
-        for col in model.get("columns", []):
+        cols = model.get("columns", []) or []
+        if not isinstance(cols, list):
+            return
+        for col in cols:
+            if not isinstance(col, dict):
+                continue
             if col.get("isHidden") or col.get("relationship"):
                 continue
-            yield col["name"]
+            col_name = col.get("name")
+            if isinstance(col_name, str) and col_name:
+                yield col_name
 
     def _manifest_has_case_distinct_columns(self) -> bool:
         """True if any model has two visible columns differing only in case."""
         for model in self.manifest.get("models", []):
+            if not isinstance(model, dict):
+                continue
             seen: set[str] = set()
             for col_name in self._iter_model_column_names(model):
                 low = col_name.lower()
@@ -216,6 +240,8 @@ class CTERewriter:
         silently collide — and the backing database cannot represent them.
         """
         for model in self.manifest.get("models", []):
+            if not isinstance(model, dict):
+                continue
             seen: dict[str, str] = {}
             for col_name in self._iter_model_column_names(model):
                 low = col_name.lower()
