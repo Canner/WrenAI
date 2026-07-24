@@ -165,10 +165,7 @@ async def generate_sql_in_followup(
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
     history_messages = construct_ask_history_messages(histories)
-    current_system_prompt = get_sql_generation_system_prompt(
-        sql_knowledge,
-        data_source=data_source,
-    )
+    current_system_prompt = get_sql_generation_system_prompt(sql_knowledge)
     return await generator(
         prompt=prompt.get("prompt"),
         history_messages=history_messages,
