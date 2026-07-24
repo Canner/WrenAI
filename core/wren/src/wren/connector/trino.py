@@ -484,10 +484,12 @@ class TrinoConnector(ConnectorABC):
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         trino = _import_trino()
 
+        # Always strip a trailing terminator so client-pasted ``SELECT 1;`` and
+        # multi-semicolon whitespace match limited/dry_run composition. Without
+        # this, unlimited execute keeps the raw terminator while LIMIT wraps strip.
+        sql = strip_trailing_semicolon(sql)
         if limit is not None:
-            sql = (
-                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS _sub LIMIT {limit}"
-            )
+            sql = f"SELECT * FROM ({sql}) AS _sub LIMIT {limit}"
         try:
             with contextlib.closing(self.connection.cursor()) as cursor:
                 cursor.execute(sql)
