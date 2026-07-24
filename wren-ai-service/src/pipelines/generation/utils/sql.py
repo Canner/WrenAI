@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Any, Dict, List
 
 import aiohttp
@@ -15,6 +16,127 @@ from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
+
+
+_SQL_IDENTIFIER_PATTERN = r'"([^"]+)"|`([^`]+)`|\[([^\]]+)\]|([A-Za-z_][A-Za-z0-9_$]*)'
+_CREATE_TABLE_PATTERN = re.compile(
+    rf"\bCREATE\s+(?:TABLE|VIEW)\s+{_SQL_IDENTIFIER_PATTERN}",
+    re.IGNORECASE,
+)
+_COLUMN_PATTERN = re.compile(rf"^\s*{_SQL_IDENTIFIER_PATTERN}\s+([A-Za-z][\w()]+)")
+_COLUMN_COMMENT_PATTERN = re.compile(
+    rf"--\s*(\{{.*?\}})\s*\n\s*{_SQL_IDENTIFIER_PATTERN}\s+([A-Za-z][\w()]+)",
+    re.DOTALL,
+)
+_SKIPPED_COLUMN_TOKENS = {
+    "CONSTRAINT",
+    "FOREIGN",
+    "PRIMARY",
+    "UNIQUE",
+    "CHECK",
+    "KEY",
+    "REFERENCES",
+}
+MAX_SCHEMA_GROUNDING_COLUMNS_PER_TABLE = 160
+MAX_SCHEMA_GROUNDING_CONTEXT_LENGTH = 20000
+
+
+def _first_identifier(match: re.Match) -> str:
+    for group in match.groups():
+        if group:
+            return group.strip()
+    return ""
+
+
+def _truncate_schema_text(value: Any, limit: int = 120) -> str:
+    text = " ".join(str(value or "").split())
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip() + "..."
+
+
+def construct_schema_grounding_context(documents: list[str] | None) -> str:
+    if not documents:
+        return ""
+
+    sections: list[str] = []
+
+    for document in documents:
+        table_match = _CREATE_TABLE_PATTERN.search(document or "")
+        table_name = _first_identifier(table_match) if table_match else ""
+        if not table_name:
+            continue
+
+        comment_metadata_by_column: dict[str, dict[str, Any]] = {}
+        for comment_match in _COLUMN_COMMENT_PATTERN.finditer(document):
+            column_name = next(
+                (
+                    group.strip()
+                    for group in comment_match.groups()[1:-1]
+                    if group and group.strip()
+                ),
+                "",
+            )
+            try:
+                metadata = orjson.loads(comment_match.group(1))
+            except Exception:
+                metadata = {}
+            comment_metadata_by_column[column_name] = metadata
+
+        columns: list[str] = []
+        seen_columns: set[str] = set()
+        for line in (document or "").splitlines():
+            if len(columns) >= MAX_SCHEMA_GROUNDING_COLUMNS_PER_TABLE:
+                break
+
+            match = _COLUMN_PATTERN.match(line)
+            if not match:
+                continue
+
+            column_name = _first_identifier(match)
+            if (
+                not column_name
+                or column_name.upper() in _SKIPPED_COLUMN_TOKENS
+                or column_name in seen_columns
+            ):
+                continue
+
+            seen_columns.add(column_name)
+            metadata = comment_metadata_by_column.get(column_name, {})
+            details = [column_name]
+
+            data_type = _truncate_schema_text(match.group(5))
+            if data_type:
+                details.append(f"type={data_type}")
+
+            alias = _truncate_schema_text(metadata.get("alias"))
+            if alias and alias != column_name:
+                details.append(f"alias={alias}")
+
+            description = _truncate_schema_text(metadata.get("description"))
+            if description:
+                details.append(f"description={description}")
+
+            columns.append("; ".join(details))
+
+        if columns:
+            if len(seen_columns) >= MAX_SCHEMA_GROUNDING_COLUMNS_PER_TABLE:
+                columns.append("...")
+
+            sections.append(
+                f"- table `{table_name}` valid columns: {', '.join(columns)}"
+            )
+        else:
+            sections.append(f"- table `{table_name}`")
+
+    schema_grounding_context = "\n".join(sections)
+    if len(schema_grounding_context) <= MAX_SCHEMA_GROUNDING_CONTEXT_LENGTH:
+        return schema_grounding_context
+
+    return (
+        schema_grounding_context[:MAX_SCHEMA_GROUNDING_CONTEXT_LENGTH].rstrip()
+        + "\n..."
+    )
 
 
 @component
@@ -196,6 +318,7 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
     - example 1: CAST(properties_closedate AS TIMESTAMP WITH TIME ZONE)
     - example 2: CAST('2024-11-09 00:00:00' AS TIMESTAMP WITH TIME ZONE)
     - example 3: CAST(DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') AS TIMESTAMP WITH TIME ZONE)
+- For date parts such as year, month, day, quarter, or week, use `EXTRACT(<PART> FROM CAST(<date_column> AS TIMESTAMP WITH TIME ZONE))`. Do not use `YEAR()`, `MONTH()`, `DAY()`, or `DATEPART()` unless the SQL FUNCTIONS section explicitly says that function is supported.
 - If the user asks for a specific date, please give the date range in SQL query
     - example: "What is the total revenue for the month of 2024-11-01?"
     - answer: "SELECT SUM(r.PriceSum) FROM Revenue r WHERE CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) >= CAST('2024-11-01 00:00:00' AS TIMESTAMP WITH TIME ZONE) AND CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) < CAST('2024-11-02 00:00:00' AS TIMESTAMP WITH TIME ZONE)"

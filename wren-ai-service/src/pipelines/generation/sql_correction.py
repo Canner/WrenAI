@@ -15,6 +15,7 @@ from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
+    construct_schema_grounding_context,
     construct_instructions,
     get_text_to_sql_rules,
 )
@@ -65,6 +66,11 @@ sql_correction_user_prompt_template = """
 - Resolve invalid identifiers by matching the user's wording and error message to existing schema comments, aliases, descriptions, and column names.
 - Do not create normalized or friendly identifiers that are not present in DATABASE SCHEMA.
 - Before returning the corrected SQL, verify every table and column name exists exactly in DATABASE SCHEMA.
+{% if schema_grounding_context %}
+
+### VALID SCHEMA IDENTIFIERS ###
+{{ schema_grounding_context }}
+{% endif %}
 {% endif %}
 
 {% if sql_functions %}
@@ -98,8 +104,10 @@ def prompt(
     instructions: list[dict] | None = None,
     sql_functions: list[SqlFunction] | None = None,
 ) -> dict:
+    schema_grounding_context = construct_schema_grounding_context(documents)
     _prompt = prompt_builder.run(
         documents=documents,
+        schema_grounding_context=schema_grounding_context,
         invalid_generation_result=invalid_generation_result,
         instructions=construct_instructions(
             instructions=instructions,

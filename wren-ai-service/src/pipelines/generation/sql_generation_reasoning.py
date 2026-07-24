@@ -12,6 +12,7 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.sql import (
+    construct_schema_grounding_context,
     construct_instructions,
     sql_generation_reasoning_system_prompt,
 )
@@ -32,6 +33,11 @@ sql_generation_reasoning_user_prompt_template = """
 - Resolve user business wording by matching it to existing schema comments, aliases, descriptions, and column names.
 - Do not create normalized or friendly identifiers that are not present in DATABASE SCHEMA.
 - If SQL SAMPLES or USER INSTRUCTIONS mention identifiers that are not present in DATABASE SCHEMA, ignore those identifiers.
+{% if schema_grounding_context %}
+
+### VALID SCHEMA IDENTIFIERS ###
+{{ schema_grounding_context }}
+{% endif %}
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
@@ -69,9 +75,11 @@ def prompt(
     prompt_builder: PromptBuilder,
     configuration: Configuration | None = Configuration(),
 ) -> dict:
+    schema_grounding_context = construct_schema_grounding_context(documents)
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
+        schema_grounding_context=schema_grounding_context,
         sql_samples=sql_samples,
         instructions=construct_instructions(
             instructions=instructions,

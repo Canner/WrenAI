@@ -14,6 +14,7 @@ from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
+    construct_schema_grounding_context,
     construct_instructions,
     get_calculated_field_instructions,
     get_json_field_instructions,
@@ -39,6 +40,11 @@ sql_generation_user_prompt_template = """
 - Do not create normalized or friendly identifiers that are not present in DATABASE SCHEMA.
 - If the REASONING PLAN, SQL SAMPLES, or USER INSTRUCTIONS mention identifiers that are not present in DATABASE SCHEMA, ignore those identifiers.
 - Before returning the SQL, verify every table and column name exists exactly in DATABASE SCHEMA.
+{% if schema_grounding_context %}
+
+### VALID SCHEMA IDENTIFIERS ###
+{{ schema_grounding_context }}
+{% endif %}
 
 {% if calculated_field_instructions %}
 {{ calculated_field_instructions }}
@@ -103,9 +109,11 @@ def prompt(
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
+    schema_grounding_context = construct_schema_grounding_context(documents)
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
+        schema_grounding_context=schema_grounding_context,
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
