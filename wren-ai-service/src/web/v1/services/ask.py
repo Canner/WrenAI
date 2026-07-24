@@ -256,6 +256,16 @@ class AskService:
                         if rephrased_question:
                             user_query = rephrased_question
 
+                        if (
+                            intent == "GENERAL"
+                            and not intent_classification_result.get("db_schemas")
+                        ):
+                            logger.info(
+                                "Intent classification returned GENERAL without schema context; continuing Text-to-SQL retrieval for query_id %s",
+                                query_id,
+                            )
+                            intent = "TEXT_TO_SQL"
+
                         if intent == "MISLEADING_QUERY":
                             asyncio.create_task(
                                 self._pipelines["misleading_assistance"].run(
