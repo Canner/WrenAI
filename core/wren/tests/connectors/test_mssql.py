@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import datetime as dtlib
+import re
 from decimal import Decimal as PyDecimal
 
 import duckdb
@@ -312,6 +313,17 @@ def test_url_connection(mssql_container: SqlServerContainer) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _has_exact_limit(sql: str, n: int) -> bool:
+    """True if the rendered SQL limits to exactly ``n`` rows (TOP or FETCH form).
+
+    Token-boundary aware so ``TOP 3`` does not match ``TOP 30``.
+    """
+    return bool(
+        re.search(rf"\bTOP {n}\b", sql, re.IGNORECASE)
+        or re.search(rf"\bNEXT {n} ROWS\b", sql, re.IGNORECASE)
+    )
+
+
 def test_flatten_pagination_preserves_outer_cte() -> None:
     """Flattening must not drop an outer WITH — the inner select would then
     reference a CTE that no longer exists (e.g. semantic-layer model CTEs)."""
@@ -340,7 +352,7 @@ def test_flatten_pagination_still_collapses_bare_wrap() -> None:
     sql = "SELECT * FROM (SELECT a FROM dbo.t) AS w LIMIT 5"
     out = MSSqlConnector._flatten_pagination_limit(None, sql)
     assert "(SELECT" not in out.upper().replace(" ", "")
-    assert "TOP 5" in out.upper() or "NEXT 5 ROWS" in out.upper()
+    assert _has_exact_limit(out, 5)
 
 
 def test_flatten_pagination_limit_keyword_with_cte_becomes_tsql() -> None:
@@ -353,7 +365,7 @@ def test_flatten_pagination_limit_keyword_with_cte_becomes_tsql() -> None:
     out = MSSqlConnector._flatten_pagination_limit(None, sql)
     assert "WITH" in out.upper()
     assert "LIMIT" not in out.upper()
-    assert "TOP 3" in out.upper() or "NEXT 3 ROWS" in out.upper()
+    assert _has_exact_limit(out, 3)
 
 
 def test_flatten_pagination_limit_keyword_with_order_by_becomes_tsql() -> None:
@@ -365,4 +377,4 @@ def test_flatten_pagination_limit_keyword_with_order_by_becomes_tsql() -> None:
     out = MSSqlConnector._flatten_pagination_limit(None, sql)
     assert "ORDER BY" in out.upper()
     assert "LIMIT" not in out.upper()
-    assert "TOP 3" in out.upper() or "NEXT 3 ROWS" in out.upper()
+    assert _has_exact_limit(out, 3)
