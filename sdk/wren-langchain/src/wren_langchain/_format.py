@@ -12,14 +12,19 @@ CONTENT_CAP_BYTES = 16 * 1024
 
 
 def format_query_content(
-    table: pa.Table, total_rows: int | None = None
+    table: pa.Table | None, total_rows: int | None = None
 ) -> tuple[str, list[str]]:
     """Render query rows as JSON, truncating to fit ``CONTENT_CAP_BYTES``.
 
     Returns ``(content, warnings)``. The content is a JSON array of row dicts
     plus an optional ``(showing N of M rows)`` footer when truncated.
     """
-    rows = table.to_pylist()
+    if table is None:
+        return "[]", ["query content empty: table is None"]
+    try:
+        rows = table.to_pylist()
+    except Exception as exc:  # pragma: no cover - defensive for non-Table mocks
+        return "[]", [f"query content empty: unable to read table ({exc})"]
     full = json.dumps(rows, default=str)
     encoded = full.encode("utf-8")
     if len(encoded) <= CONTENT_CAP_BYTES:
