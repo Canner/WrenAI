@@ -27,7 +27,10 @@ class SparkConnector(ConnectorABC):
         # outer subscript form stays valid.
         cleaned = strip_trailing_semicolon(sql)
         if limit is not None:
-            cleaned = f"SELECT * FROM ({cleaned}) AS _q LIMIT {int(limit)}"
+            coerced = int(limit)
+            if coerced < 0:
+                raise ValueError(f"limit must be non-negative, got {coerced}")
+            cleaned = f"SELECT * FROM ({cleaned}) AS _q LIMIT {coerced}"
         df = self.connection.sql(cleaned).toPandas()
         if hasattr(df, "attrs") and df.attrs:
             df.attrs = {
