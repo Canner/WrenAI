@@ -14,12 +14,18 @@ from tqdm import tqdm
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
-from src.pipelines.indexing import AsyncDocumentWriter, DocumentCleaner, MDLValidator
+from src.pipelines.indexing import (
+    AsyncDocumentWriter,
+    DocumentCleaner,
+    MDLValidator,
+    clean_display_name,
+)
 
 logger = logging.getLogger("wren-ai-service")
 
 MAX_TABLE_DESCRIPTION_COLUMNS = 200
 MAX_TABLE_DESCRIPTION_DESCRIPTION_LENGTH = 4000
+MAX_TABLE_DESCRIPTION_COLUMN_DESCRIPTION_LENGTH = 500
 
 
 @component
@@ -37,6 +43,18 @@ class TableDescriptionChunker:
             + "..."
         )
 
+    def _truncate_column_description(self, description: Any) -> str:
+        normalized_description = self._normalize_text(description)
+        if len(normalized_description) <= MAX_TABLE_DESCRIPTION_COLUMN_DESCRIPTION_LENGTH:
+            return normalized_description
+
+        return (
+            normalized_description[
+                :MAX_TABLE_DESCRIPTION_COLUMN_DESCRIPTION_LENGTH
+            ].rstrip()
+            + "..."
+        )
+
     def _format_columns(self, columns: List[Any]) -> str:
         normalized_columns = [self._normalize_text(column) for column in columns]
         if len(normalized_columns) <= MAX_TABLE_DESCRIPTION_COLUMNS:
@@ -47,6 +65,37 @@ class TableDescriptionChunker:
             f"... (+{remaining_columns} more columns)"
         ]
         return ", ".join(truncated_columns)
+
+    def _properties(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        properties = payload.get("properties")
+        return properties if isinstance(properties, dict) else {}
+
+    def _display_name(self, properties: Dict[str, Any]) -> str:
+        return clean_display_name(
+            self._normalize_text(properties.get("displayName", ""))
+        )
+
+    def _column_text(self, column: Dict[str, Any]) -> str:
+        properties = self._properties(column)
+        parts = [self._normalize_text(column.get("name", ""))]
+
+        display_name = self._display_name(properties)
+        if display_name:
+            parts.append(f"alias: {display_name}")
+
+        data_type = self._normalize_text(
+            column.get("type", column.get("data_type", ""))
+        )
+        if data_type:
+            parts.append(f"type: {data_type}")
+
+        description = self._truncate_column_description(
+            properties.get("description", "")
+        )
+        if description:
+            parts.append(f"description: {description}")
+
+        return " | ".join(part for part in parts if part)
 
     @component.output_types(documents=List[Document])
     def run(self, mdl: Dict[str, Any], project_id: Optional[str] = None):
@@ -78,15 +127,13 @@ class TableDescriptionChunker:
 
     def _get_table_descriptions(self, mdl: Dict[str, Any]) -> List[str]:
         def _structure_data(mdl_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-            properties = payload.get("properties")
-            if not isinstance(properties, dict):
-                properties = {}
+            properties = self._properties(payload)
 
             return {
                 "mdl_type": mdl_type,
                 "name": payload.get("name"),
                 "columns": [
-                    column.get("name", "")
+                    self._column_text(column)
                     for column in payload.get("columns", [])
                     if isinstance(column, dict)
                 ],
@@ -102,6 +149,8 @@ class TableDescriptionChunker:
         return [
             {
                 "name": resource["name"],
+                "type": resource["mdl_type"],
+                "alias": self._display_name(resource["properties"]),
                 "description": self._truncate_description(
                     resource["properties"].get("description", "")
                 ),
