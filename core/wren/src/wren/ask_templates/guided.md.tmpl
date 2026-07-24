@@ -3,7 +3,7 @@ Identify the task type, then follow the matching flow:
 
 TASK TYPE A — data question:
   1. wren context show [--path <project>]   # see MDL models
-  2. wren memory recall --nl "<keywords>"   # similar past queries (skip if no memory)
+  2. wren memory recall --query "<keywords>"  # similar past queries (skip if no memory)
   3. write SQL using model names (not raw tables)
   4. wren dry-plan --sql '...'              # validate non-trivial SQL
   5. wren query --sql '...'                 # execute
