@@ -228,16 +228,30 @@ def extract_schema_items(manifest: dict) -> list[dict]:
     mdl_h = manifest_hash(manifest)
     items: list[dict] = []
 
-    for model in manifest.get("models", []):
-        items.append(_model_record(model, mdl_h, now))
-        for col in model.get("columns", []):
-            items.append(_column_record(col, model["name"], mdl_h, now))
+    models = manifest.get("models", []) or []
+    if isinstance(models, list):
+        for model in models:
+            if not isinstance(model, dict) or model.get("name") is None:
+                continue
+            items.append(_model_record(model, mdl_h, now))
+            cols = model.get("columns", []) or []
+            if not isinstance(cols, list):
+                continue
+            for col in cols:
+                if isinstance(col, dict) and col.get("name") is not None:
+                    items.append(_column_record(col, model["name"], mdl_h, now))
 
-    for rel in manifest.get("relationships", []):
-        items.append(_relationship_record(rel, mdl_h, now))
+    rels = manifest.get("relationships", []) or []
+    if isinstance(rels, list):
+        for rel in rels:
+            if isinstance(rel, dict) and rel.get("name") is not None:
+                items.append(_relationship_record(rel, mdl_h, now))
 
-    for view in manifest.get("views", []):
-        items.append(_view_record(view, mdl_h, now))
+    views = manifest.get("views", []) or []
+    if isinstance(views, list):
+        for view in views:
+            if isinstance(view, dict) and view.get("name") is not None:
+                items.append(_view_record(view, mdl_h, now))
 
     cubes = manifest.get("cubes", []) or []
     if isinstance(cubes, list):
@@ -264,8 +278,13 @@ def extract_schema_items(manifest: dict) -> list[dict]:
 
 def _model_record(model: dict, mdl_h: str, now: datetime) -> dict:
     name = model["name"]
-    cols = model.get("columns", [])
-    col_summaries = ", ".join(f"{c['name']} ({c.get('type', '?')})" for c in cols[:20])
+    cols = model.get("columns", []) or []
+    if not isinstance(cols, list):
+        cols = []
+    safe_cols = [c for c in cols if isinstance(c, dict) and c.get("name") is not None]
+    col_summaries = ", ".join(
+        f"{c['name']} ({c.get('type', '?')})" for c in safe_cols[:20]
+    )
     pk = model.get("primaryKey") or ""
 
     description = _prop_description(model)
