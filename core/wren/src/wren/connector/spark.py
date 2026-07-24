@@ -22,20 +22,29 @@ class SparkConnector(ConnectorABC):
         )
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
-        df = self.connection.sql(strip_trailing_semicolon(sql)).toPandas()
+        # Push LIMIT into Spark SQL so the engine does not materialize the full
+        # result only for a client-side slice. Strip trailing ``;`` first so the
+        # outer subscript form stays valid.
+        cleaned = strip_trailing_semicolon(sql)
+        if limit is not None:
+            coerced = int(limit)
+            if coerced < 0:
+                raise ValueError(f"limit must be non-negative, got {coerced}")
+            cleaned = f"SELECT * FROM ({cleaned}) AS _q LIMIT {coerced}"
+        df = self.connection.sql(cleaned).toPandas()
         if hasattr(df, "attrs") and df.attrs:
             df.attrs = {
                 k: v
                 for k, v in df.attrs.items()
                 if k not in ("metrics", "observed_metrics")
             }
-        arrow_table = pa.Table.from_pandas(df)
-        if limit is not None:
-            arrow_table = arrow_table.slice(0, limit)
-        return arrow_table
+        return pa.Table.from_pandas(df)
 
     def dry_run(self, sql: str) -> None:
-        self.connection.sql(strip_trailing_semicolon(sql)).limit(0).count()
+        # Prefer a LIMIT 0 subquery wrapper (like other connectors) so EXPLAIN
+        # is unnecessary and a trailing semicolon cannot break Spark SQL.
+        cleaned = strip_trailing_semicolon(sql)
+        self.connection.sql(f"SELECT * FROM ({cleaned}) AS _q LIMIT 0").count()
 
     def close(self) -> None:
         if self._closed:
