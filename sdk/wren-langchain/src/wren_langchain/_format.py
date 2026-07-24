@@ -58,9 +58,14 @@ def format_query_content(
     return body + footer, [warning]
 
 
-def format_dry_plan_content(sql: str) -> str:
-    """Wrap dialect SQL in a markdown code fence."""
-    return f"```sql\n{sql}\n```"
+def format_dry_plan_content(sql: str | None) -> str:
+    """Wrap dialect SQL in a markdown code fence.
+
+    Coerce ``None`` to empty so tool wrappers that pass through a missing plan
+    do not render the literal string ``None`` inside the fence.
+    """
+    text = "" if sql is None else str(sql)
+    return f"```sql\n{text}\n```"
 
 
 def format_fetch_context_content(result: dict[str, Any]) -> str:
