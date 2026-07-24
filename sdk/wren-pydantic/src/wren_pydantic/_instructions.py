@@ -184,7 +184,7 @@ def build_instructions(toolkit: WrenToolkit, *, toolset: object | None = None) -
     if toolset is None:
         toolset = toolkit.toolset()
     tool_list = _extract_tool_list(toolset)
-    tool_names = {t.name for t in tool_list}
+    tool_names = {_tool_name(t) for t in tool_list}
 
     sections: list[str] = [_INTRO]
     sections.append(_build_workflow_section(tool_names))
@@ -223,13 +223,27 @@ def _extract_tool_list(toolset: object) -> list:
     return list(tools_attr)
 
 
+def _tool_name(tool) -> str:
+    """Return a validated tool name, falling back to ``__name__`` or ``"tool"``
+    when the ``name`` attribute is missing or not a non-empty string."""
+    name = getattr(tool, "name", None)
+    if not isinstance(name, str) or not name:
+        name = getattr(tool, "__name__", None)
+    if not isinstance(name, str) or not name:
+        name = "tool"
+    return name
+
+
 def _build_tools_section(tool_list: list) -> str:
     if not tool_list:
         return ""
     lines = ["## Available tools"]
     for tool in tool_list:
-        description = (tool.description or "").strip().split("\n")[0]
-        lines.append(f"- `{tool.name}`: {description}")
+        raw_desc = getattr(tool, "description", None)
+        if not isinstance(raw_desc, str):
+            raw_desc = "" if raw_desc is None else str(raw_desc)
+        description = raw_desc.strip().split("\n")[0]
+        lines.append(f"- `{_tool_name(tool)}`: {description}")
     return "\n".join(lines)
 
 
