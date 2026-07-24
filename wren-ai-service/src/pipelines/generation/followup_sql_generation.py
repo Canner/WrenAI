@@ -15,7 +15,6 @@ from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
     construct_ask_history_messages,
-    construct_schema_grounding_context,
     construct_instructions,
     get_calculated_field_instructions,
     get_json_field_instructions,
@@ -34,23 +33,6 @@ text_to_sql_with_followup_user_prompt_template = """
 ### TASK ###
 Given the following user's follow-up question and previous SQL query and summary,
 generate one SQL query to best answer user's question.
-
-### DATABASE SCHEMA ###
-{% for document in documents %}
-    {{ document }}
-{% endfor %}
-
-### SCHEMA GROUNDING ###
-- Use only tables and columns that appear in DATABASE SCHEMA.
-- Resolve user business wording by matching it to existing schema comments, aliases, descriptions, and column names.
-- Do not create normalized or friendly identifiers that are not present in DATABASE SCHEMA.
-- If the REASONING PLAN, SQL SAMPLES, USER INSTRUCTIONS, or QUERY HISTORY mention identifiers that are not present in DATABASE SCHEMA, ignore those identifiers.
-- Before returning the SQL, verify every table and column name exists exactly in DATABASE SCHEMA.
-{% if schema_grounding_context %}
-
-### VALID SCHEMA IDENTIFIERS ###
-{{ schema_grounding_context }}
-{% endif %}
 
 {% if calculated_field_instructions %}
 {{ calculated_field_instructions }}
@@ -95,6 +77,14 @@ User's Follow-up Question: {{ query }}
 {{ sql_generation_reasoning }}
 
 Let's think step by step.
+
+### DATABASE SCHEMA ###
+{% for document in documents %}
+    {{ document }}
+{% endfor %}
+
+### FINAL SQL INSTRUCTION ###
+Use only the exact table and column identifiers in DATABASE SCHEMA above. Treat all other sections as guidance only.
 """
 
 
@@ -113,11 +103,9 @@ def prompt(
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
-    schema_grounding_context = construct_schema_grounding_context(documents)
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
-        schema_grounding_context=schema_grounding_context,
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,

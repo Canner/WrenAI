@@ -1,6 +1,8 @@
 import { IWrenAIAdaptor } from '@server/adaptors/wrenAIAdaptor';
 import {
   AskResultStatus,
+  AskResultType,
+  AskCandidateType,
   RecommendationQuestionsResult,
   RecommendationQuestionsInput,
   RecommendationQuestion,
@@ -17,7 +19,6 @@ import {
   IThreadResponseRepository,
   ThreadResponse,
   ThreadResponseAnswerDetail,
-  ThreadResponseAdjustmentType,
 } from '../repositories/threadResponseRepository';
 import { getLogger } from '@server/utils';
 import { isEmpty, isNil } from 'lodash';
@@ -1409,18 +1410,45 @@ export class AskingService implements IAskingService {
     }
     await this.ensureThreadInCurrentProject(response.threadId);
 
-    return await this.threadResponseRepository.createOne({
-      sql: input.sql,
-      threadId: response.threadId,
-      question: response.question,
-      adjustment: {
-        type: ThreadResponseAdjustmentType.APPLY_SQL,
-        payload: {
-          originalThreadResponseId: response.id,
-          sql: input.sql,
-        },
-      },
+    const project = await this.getProjectForThreadResponse(response);
+    const deployment = await this.deployService.getLastDeployment(project.id);
+    await this.queryService.preview(input.sql, {
+      project,
+      manifest: deployment.manifest,
+      modelingOnly: false,
+      limit: 1,
+      cacheEnabled: false,
     });
+
+    const updatedResponse = await this.threadResponseRepository.updateOne(
+      response.id,
+      {
+        sql: input.sql,
+        viewId: null,
+        answerDetail: null,
+        breakdownDetail: null,
+        chartDetail: null,
+      },
+    );
+
+    if (response.askingTaskId) {
+      await this.askingTaskRepository.updateOne(response.askingTaskId, {
+        detail: {
+          type: AskResultType.TEXT_TO_SQL,
+          status: AskResultStatus.FINISHED,
+          response: [
+            {
+              type: AskCandidateType.LLM,
+              sql: input.sql,
+            },
+          ],
+          error: null,
+          invalidSql: null,
+        },
+      });
+    }
+
+    return updatedResponse;
   }
 
   public async adjustThreadResponseAnswer(

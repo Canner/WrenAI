@@ -124,7 +124,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
     previewData({
       variables: { where: { responseId: threadResponse.id } },
     });
-  }, [previewData, status, threadResponse.id]);
+  }, [previewData, status, threadResponse.id, threadResponse.sql]);
 
   const chartSpec = useMemo(() => {
     if (

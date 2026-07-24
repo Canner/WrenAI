@@ -71,7 +71,7 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
     if (isLastThreadResponse) {
       autoTriggerPreviewDataButton();
     }
-  }, [isLastThreadResponse]);
+  }, [isLastThreadResponse, threadResponse.sql]);
 
   const { id, sql } = threadResponse;
 

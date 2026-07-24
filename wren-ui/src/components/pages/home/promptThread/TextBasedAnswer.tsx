@@ -135,7 +135,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
 
       onInitPreviewDone();
     }
-  }, [isLastThreadResponse, allowPreviewData]);
+  }, [isLastThreadResponse, allowPreviewData, threadResponse.sql]);
 
   const loading = !getIsLoadingFinished(status);
 
