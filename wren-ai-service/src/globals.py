@@ -90,7 +90,6 @@ def create_service_container(
                     **pipe_components["semantics_description"],
                 )
             },
-            generation_timeout_seconds=settings.pipeline_timeout_seconds,
             **query_cache,
         ),
         semantics_preparation_service=services.SemanticsPreparationService(
@@ -163,9 +162,6 @@ def create_service_container(
             max_histories=settings.max_histories,
             enable_column_pruning=settings.enable_column_pruning,
             max_sql_correction_retries=settings.max_sql_correction_retries,
-            max_sql_generation_tables=settings.max_sql_generation_tables,
-            pipeline_timeout_seconds=settings.pipeline_timeout_seconds,
-            schema_retrieval_timeout_seconds=settings.schema_retrieval_timeout_seconds,
             **query_cache,
         ),
         ask_feedback_service=services.AskFeedbackService(
@@ -191,7 +187,6 @@ def create_service_container(
         chart_service=services.ChartService(
             pipelines={
                 "sql_executor": _sql_executor_pipeline,
-                "db_schema_retrieval": _db_schema_retrieval_pipeline,
                 "chart_generation": generation.ChartGeneration(
                     **pipe_components["chart_generation"],
                 ),
@@ -209,7 +204,6 @@ def create_service_container(
         ),
         sql_answer_service=services.SqlAnswerService(
             pipelines={
-                "db_schema_retrieval": _db_schema_retrieval_pipeline,
                 "preprocess_sql_data": retrieval.PreprocessSqlData(
                     **pipe_components["preprocess_sql_data"],
                 ),

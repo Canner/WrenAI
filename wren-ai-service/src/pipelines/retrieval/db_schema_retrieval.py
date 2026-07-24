@@ -1,7 +1,7 @@
 import ast
 import logging
 import sys
-from typing import Any, Optional, Protocol
+from typing import Any, Optional
 
 import orjson
 import tiktoken
@@ -20,11 +20,7 @@ from src.pipelines.common import (
     get_engine_supported_data_type,
 )
 from src.utils import trace_cost
-
-
-class AskHistoryLike(Protocol):
-    question: str
-    sql: str
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -43,12 +39,6 @@ The database schema includes tables, columns, primary keys, foreign keys, relati
 5. The number of columns chosen must match the number of reasoning.
 6. Final chosen columns must be only column names, don't prefix it with table names.
 7. If the chosen column is a child column of a STRUCT type column, choose the parent column instead of the child column.
-8. The user does not need to mention exact table or column names. Map natural-language business terms to tables and columns using table names, column names, comments, aliases, descriptions, data types, primary keys, foreign keys, relationships, metrics, and views.
-9. Prefer tables, views, or metrics whose descriptions and columns directly match the requested business entities, measures, dimensions, dates, filters, rankings, frequencies, or comparisons.
-10. For metric questions such as total, count, average, rate, value, amount, growth, frequency, or distribution, include numeric/measure columns and the grouping/filter/date columns needed to answer the question.
-11. For "unique values", "frequency", "distribution", or "count by" questions, include the categorical column being counted and any requested filter/date columns.
-12. Prefer canonical/business-ready models, metrics, and views over staging, raw, temporary, backup, load, or test tables when the metadata indicates that distinction.
-13. If no table clearly matches, return an empty results list instead of selecting unrelated tables.
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:
@@ -92,7 +82,6 @@ Please provide your response as a JSON object, structured as follows:
 - Use table name used in the "Create Table" statement, don't use "alias".
 - Match Column names with the definition in the "Create Table" statement.
 - Match Table names with the definition in the "Create Table" statement.
-- Do not choose a column only because it has a similar name; choose it only when its metadata meaning and data type fit the user's question.
 
 Good luck!
 
@@ -133,7 +122,7 @@ def _build_view_ddl(content: dict) -> str:
 
 ## Start of Pipeline
 @observe(capture_input=False, capture_output=False)
-async def embedding(query: str, embedder: Any, histories: list[AskHistoryLike]) -> dict:
+async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> dict:
     if query:
         if histories:
             previous_query_summaries = [history.question for history in histories]
@@ -149,10 +138,7 @@ async def embedding(query: str, embedder: Any, histories: list[AskHistoryLike]) 
 
 @observe(capture_input=False)
 async def table_retrieval(
-    embedding: dict,
-    project_id: str,
-    tables: list[str] | None,
-    table_retriever: Any,
+    embedding: dict, project_id: str, tables: list[str], table_retriever: Any
 ) -> dict:
     filters = {
         "operator": "AND",
@@ -171,15 +157,15 @@ async def table_retrieval(
             query_embedding=embedding.get("embedding"),
             filters=filters,
         )
+    else:
+        filters["conditions"].append(
+            {"field": "name", "operator": "in", "value": tables}
+        )
 
-    if not tables:
-        return {"documents": []}
-
-    filters["conditions"].append({"field": "name", "operator": "in", "value": tables})
-    return await table_retriever.run(
-        query_embedding=[],
-        filters=filters,
-    )
+        return await table_retriever.run(
+            query_embedding=[],
+            filters=filters,
+        )
 
 
 @observe(capture_input=False)
@@ -247,8 +233,6 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[dict]:
 
 @observe(capture_input=False)
 def check_using_db_schemas_without_pruning(
-    query: str,
-    tables: list[str] | None,
     construct_db_schemas: list[dict],
     dbschema_retrieval: list[Document],
     encoding: tiktoken.Encoding,
@@ -321,7 +305,7 @@ def prompt(
     construct_db_schemas: list[dict],
     prompt_builder: PromptBuilder,
     check_using_db_schemas_without_pruning: dict,
-    histories: list[AskHistoryLike],
+    histories: list[AskHistory],
 ) -> dict:
     if not check_using_db_schemas_without_pruning["db_schemas"]:
         db_schemas = [
@@ -361,78 +345,30 @@ def construct_retrieval_results(
     construct_db_schemas: list[dict],
     dbschema_retrieval: list[Document],
 ) -> dict[str, Any]:
-    fallback_retrieval_results = check_using_db_schemas_without_pruning["db_schemas"]
-    fallback_result = {
-        "retrieval_results": fallback_retrieval_results,
-        "has_calculated_field": check_using_db_schemas_without_pruning[
-            "has_calculated_field"
-        ],
-        "has_metric": check_using_db_schemas_without_pruning["has_metric"],
-        "has_json_field": check_using_db_schemas_without_pruning["has_json_field"],
-    }
-
     if filter_columns_in_tables:
-        try:
-            columns_and_tables_needed = orjson.loads(
-                filter_columns_in_tables["replies"][0]
-            )["results"]
-        except Exception:
-            logger.warning(
-                "Column pruning returned invalid output; using full retrieved schemas."
-            )
-            return fallback_result
-
-        if not columns_and_tables_needed:
-            logger.info(
-                "Column pruning selected no tables; using full retrieved schemas."
-            )
-            return fallback_result
+        columns_and_tables_needed = orjson.loads(
+            filter_columns_in_tables["replies"][0]
+        )["results"]
 
         # we need to change the below code to match the new schema of structured output
         # the objective of this loop is to change the structure of JSON to match the needed format
         reformated_json = {}
         for table in columns_and_tables_needed:
-            table_name = table.get("table_name")
-            table_contents = table.get("table_contents") or {}
-            if table_name:
-                reformated_json[table_name] = table_contents
+            reformated_json[table["table_name"]] = table["table_contents"]
         columns_and_tables_needed = reformated_json
-        if not columns_and_tables_needed:
-            logger.info(
-                "Column pruning selected no usable tables; using full retrieved schemas."
-            )
-            return fallback_result
-
         tables = set(columns_and_tables_needed.keys())
         retrieval_results = []
         has_calculated_field = False
         has_metric = False
         has_json_field = False
 
-        valid_table_names = {
-            table_schema["name"] for table_schema in construct_db_schemas
-        }
         for table_schema in construct_db_schemas:
             if table_schema["type"] == "TABLE" and table_schema["name"] in tables:
-                requested_columns = set(
-                    columns_and_tables_needed[table_schema["name"]].get("columns", [])
-                )
-                valid_columns = {
-                    column.get("name")
-                    for column in table_schema.get("columns", [])
-                    if isinstance(column, dict) and column.get("name")
-                }
-                selected_columns = requested_columns & valid_columns
-                if not selected_columns:
-                    logger.info(
-                        "Column pruning selected no valid columns for table %s; using full retrieved schemas.",
-                        table_schema["name"],
-                    )
-                    return fallback_result
-
                 ddl, _has_calculated_field, _has_json_field = build_table_ddl(
                     table_schema,
-                    columns=selected_columns,
+                    columns=set(
+                        columns_and_tables_needed[table_schema["name"]]["columns"]
+                    ),
                     tables=tables,
                 )
                 if _has_calculated_field:
@@ -450,7 +386,6 @@ def construct_retrieval_results(
         for document in dbschema_retrieval:
             if document.meta["name"] in columns_and_tables_needed:
                 content = ast.literal_eval(document.content)
-                valid_table_names.add(content["name"])
 
                 if content["type"] == "METRIC":
                     retrieval_results.append(
@@ -468,14 +403,6 @@ def construct_retrieval_results(
                         }
                     )
 
-        unknown_tables = tables - valid_table_names
-        if unknown_tables or not retrieval_results:
-            logger.info(
-                "Column pruning selected unknown or unusable tables %s; using full retrieved schemas.",
-                sorted(unknown_tables),
-            )
-            return fallback_result
-
         return {
             "retrieval_results": retrieval_results,
             "has_calculated_field": has_calculated_field,
@@ -483,7 +410,16 @@ def construct_retrieval_results(
             "has_json_field": has_json_field,
         }
     else:
-        return fallback_result
+        retrieval_results = check_using_db_schemas_without_pruning["db_schemas"]
+
+        return {
+            "retrieval_results": retrieval_results,
+            "has_calculated_field": check_using_db_schemas_without_pruning[
+                "has_calculated_field"
+            ],
+            "has_metric": check_using_db_schemas_without_pruning["has_metric"],
+            "has_json_field": check_using_db_schemas_without_pruning["has_json_field"],
+        }
 
 
 ## End of Pipeline
@@ -565,7 +501,7 @@ class DbSchemaRetrieval(BasicPipeline):
         query: str = "",
         tables: Optional[list[str]] = None,
         project_id: Optional[str] = None,
-        histories: Optional[list[AskHistoryLike]] = None,
+        histories: Optional[list[AskHistory]] = None,
         enable_column_pruning: bool = False,
     ):
         logger.info("Ask Retrieval pipeline is running...")
