@@ -127,12 +127,13 @@ def prompt(
     has_json_field: bool = False,
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
+    valid_table_names: list[str] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
         data_source=data_source,
         documents=documents,
-        valid_table_names=[],
+        valid_table_names=valid_table_names or [],
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
@@ -240,6 +241,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
         sql_knowledge: SqlKnowledge | None = None,
+        valid_table_names: list[str] | None = None,
     ):
         logger.info("Follow-Up SQL Generation pipeline is running...")
 
@@ -250,6 +252,7 @@ class FollowUpSQLGeneration(BasicPipeline):
             inputs={
                 "query": query,
                 "documents": contexts,
+                "valid_table_names": valid_table_names or [],
                 "sql_generation_reasoning": sql_generation_reasoning,
                 "histories": histories,
                 "project_id": project_id,

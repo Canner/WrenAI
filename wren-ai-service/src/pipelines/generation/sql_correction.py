@@ -125,12 +125,13 @@ def prompt(
     query: str | None = None,
     instructions: list[dict] | None = None,
     sql_functions: list[SqlFunction] | None = None,
+    valid_table_names: list[str] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
         data_source=data_source,
         documents=documents,
-        valid_table_names=[],
+        valid_table_names=valid_table_names or [],
         invalid_generation_result=invalid_generation_result,
         instructions=construct_instructions(
             instructions=instructions,
@@ -220,6 +221,7 @@ class SQLCorrection(BasicPipeline):
         allow_dry_plan_fallback: bool = True,
         sql_knowledge: SqlKnowledge | None = None,
         query: str | None = None,
+        valid_table_names: list[str] | None = None,
     ):
         logger.info("SQLCorrection pipeline is running...")
 
@@ -230,6 +232,7 @@ class SQLCorrection(BasicPipeline):
             inputs={
                 "invalid_generation_result": invalid_generation_result,
                 "documents": contexts,
+                "valid_table_names": valid_table_names or [],
                 "query": query,
                 "instructions": instructions,
                 "sql_functions": sql_functions,

@@ -1,4 +1,5 @@
 from src.pipelines.generation.followup_sql_generation import generate_sql_in_followup
+from src.pipelines.generation.sql_generation import sql_generation_user_prompt_template
 from src.pipelines.generation.intent_classification import post_process
 from src.pipelines.generation.sql_answer import sql_to_answer_system_prompt
 from src.pipelines.generation.utils.sql import get_sql_generation_system_prompt
@@ -36,6 +37,8 @@ def test_prompts_enforce_metadata_grounding_and_result_grounded_answers():
     assert "Do not SUM or AVG string columns" in sql_prompt
     assert "Never say you do not have access" in sql_to_answer_system_prompt
     assert "If Data rows are empty" in sql_to_answer_system_prompt
+    assert "VALID TABLE NAMES" in sql_generation_user_prompt_template
+    assert "Do not invent, rename" in sql_generation_user_prompt_template
 
 
 async def test_followup_sql_generation_uses_current_system_prompt_signature():

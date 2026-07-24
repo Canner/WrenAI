@@ -1275,6 +1275,7 @@ class AskService:
                                 ].run(
                                     query=sql_user_query,
                                     contexts=table_ddls,
+                                    valid_table_names=table_names,
                                     histories=sql_generation_histories,
                                     sql_samples=sql_samples,
                                     instructions=instructions,
@@ -1299,6 +1300,7 @@ class AskService:
                                 self._pipelines["sql_generation_reasoning"].run(
                                     query=sql_user_query,
                                     contexts=table_ddls,
+                                    valid_table_names=table_names,
                                     sql_samples=sql_samples,
                                     instructions=instructions,
                                     configuration=ask_request.configurations,
@@ -1380,6 +1382,7 @@ class AskService:
                             self._pipelines["followup_sql_generation"].run(
                                 query=sql_user_query,
                                 contexts=table_ddls,
+                                valid_table_names=table_names,
                                 sql_generation_reasoning=sql_generation_reasoning,
                                 histories=sql_generation_histories,
                                 project_id=ask_request.project_id,
@@ -1401,6 +1404,7 @@ class AskService:
                             self._pipelines["sql_generation"].run(
                                 query=sql_user_query,
                                 contexts=table_ddls,
+                                valid_table_names=table_names,
                                 sql_generation_reasoning=sql_generation_reasoning,
                                 project_id=ask_request.project_id,
                                 sql_samples=sql_samples,
@@ -1500,6 +1504,7 @@ class AskService:
                             "SQL correction",
                             self._pipelines["sql_correction"].run(
                                 contexts=table_ddls,
+                                valid_table_names=table_names,
                                 instructions=instructions,
                                 invalid_generation_result={
                                     "original_sql": original_sql,

@@ -30,6 +30,16 @@ planning SQL.
     {{ document }}
 {% endfor %}
 
+{% if valid_table_names %}
+### VALID TABLE NAMES ###
+Only mention these exact table names in the reasoning plan. Do not invent, rename,
+singularize, pluralize, normalize, abbreviate, or add catalog/schema prefixes unless
+the table name is shown that way here.
+{% for table_name in valid_table_names %}
+- {{ table_name }}
+{% endfor %}
+{% endif %}
+
 {% if sql_samples %}
 ### SQL SAMPLES ###
 {% for sql_sample in sql_samples %}
@@ -65,10 +75,12 @@ def prompt(
     instructions: list[dict],
     prompt_builder: PromptBuilder,
     configuration: Configuration | None = Configuration(),
+    valid_table_names: list[str] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
+        valid_table_names=valid_table_names or [],
         sql_samples=sql_samples,
         instructions=construct_instructions(
             instructions=instructions,
@@ -163,6 +175,7 @@ class SQLGenerationReasoning(BasicPipeline):
         instructions: Optional[list[str]] = None,
         configuration: Configuration = Configuration(),
         query_id: Optional[str] = None,
+        valid_table_names: Optional[list[str]] = None,
     ):
         logger.info("SQL Generation Reasoning pipeline is running...")
         return await self._pipe.execute(
@@ -170,6 +183,7 @@ class SQLGenerationReasoning(BasicPipeline):
             inputs={
                 "query": query,
                 "documents": contexts,
+                "valid_table_names": valid_table_names or [],
                 "sql_samples": sql_samples or [],
                 "instructions": instructions or [],
                 "configuration": configuration,
