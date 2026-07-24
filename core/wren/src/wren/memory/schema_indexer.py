@@ -50,14 +50,23 @@ def describe_schema(manifest: dict) -> str:
         lines.append(f"Catalog: {catalog}, Schema: {schema}")
         lines.append("")
 
-    for model in manifest.get("models", []):
-        _describe_model(model, lines)
+    models = manifest.get("models") or []
+    if isinstance(models, list):
+        for model in models:
+            if isinstance(model, dict) and model.get("name"):
+                _describe_model(model, lines)
 
-    for rel in manifest.get("relationships", []):
-        _describe_relationship(rel, lines)
+    rels = manifest.get("relationships") or []
+    if isinstance(rels, list):
+        for rel in rels:
+            if isinstance(rel, dict) and rel.get("name"):
+                _describe_relationship(rel, lines)
 
-    for view in manifest.get("views", []):
-        _describe_view(view, lines)
+    views = manifest.get("views") or []
+    if isinstance(views, list):
+        for view in views:
+            if isinstance(view, dict) and view.get("name"):
+                _describe_view(view, lines)
 
     cubes = manifest.get("cubes", []) or []
     if isinstance(cubes, list):
@@ -87,10 +96,11 @@ def _describe_model(model: dict, lines: list[str]) -> None:
     if data_scope:
         lines.append(f"  Data scope: {data_scope}")
 
-    cols = model.get("columns", [])
-    if cols:
+    cols = model.get("columns", []) or []
+    described = [c for c in cols if isinstance(c, dict) and c.get("name")]
+    if described:
         lines.append("  Columns:")
-        for col in cols:
+        for col in described:
             _describe_column(col, lines)
     lines.append("")
 
@@ -228,16 +238,28 @@ def extract_schema_items(manifest: dict) -> list[dict]:
     mdl_h = manifest_hash(manifest)
     items: list[dict] = []
 
-    for model in manifest.get("models", []):
-        items.append(_model_record(model, mdl_h, now))
-        for col in model.get("columns", []):
-            items.append(_column_record(col, model["name"], mdl_h, now))
+    models = manifest.get("models") or []
+    if isinstance(models, list):
+        for model in models:
+            if not isinstance(model, dict) or not model.get("name"):
+                continue
+            items.append(_model_record(model, mdl_h, now))
+            for col in model.get("columns", []) or []:
+                if not isinstance(col, dict) or not col.get("name"):
+                    continue
+                items.append(_column_record(col, model["name"], mdl_h, now))
 
-    for rel in manifest.get("relationships", []):
-        items.append(_relationship_record(rel, mdl_h, now))
+    rels = manifest.get("relationships") or []
+    if isinstance(rels, list):
+        for rel in rels:
+            if isinstance(rel, dict) and rel.get("name"):
+                items.append(_relationship_record(rel, mdl_h, now))
 
-    for view in manifest.get("views", []):
-        items.append(_view_record(view, mdl_h, now))
+    views = manifest.get("views") or []
+    if isinstance(views, list):
+        for view in views:
+            if isinstance(view, dict) and view.get("name"):
+                items.append(_view_record(view, mdl_h, now))
 
     cubes = manifest.get("cubes", []) or []
     if isinstance(cubes, list):
@@ -265,7 +287,11 @@ def extract_schema_items(manifest: dict) -> list[dict]:
 def _model_record(model: dict, mdl_h: str, now: datetime) -> dict:
     name = model["name"]
     cols = model.get("columns", [])
-    col_summaries = ", ".join(f"{c['name']} ({c.get('type', '?')})" for c in cols[:20])
+    col_summaries = ", ".join(
+        f"{c['name']} ({c.get('type', '?')})"
+        for c in cols[:20]
+        if isinstance(c, dict) and c.get("name")
+    )
     pk = model.get("primaryKey") or ""
 
     description = _prop_description(model)
