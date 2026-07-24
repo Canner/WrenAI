@@ -2,7 +2,7 @@
   "core/wren-core-py": "0.7.2",
   "core/wren": "0.13.1",
   "core/wren-core-wasm": "0.4.1",
-  "sdk/wren-langchain": "0.2.0",
+  "sdk/wren-langchain": "0.2.1",
   "sdk/wren-pydantic": "0.2.0",
   "core/wren-core-base/manifest-macro": "0.3.0",
   "core/wren-core-base": "0.3.0",
