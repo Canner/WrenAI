@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     allow_sql_knowledge_retrieval: bool = Field(default=True)
     max_histories: int = Field(default=5)
     max_sql_correction_retries: int = Field(default=3)
+    max_sql_generation_tables: int = Field(default=10)
     pipeline_timeout_seconds: int = Field(default=90)
     schema_retrieval_timeout_seconds: int = Field(default=600)
 
