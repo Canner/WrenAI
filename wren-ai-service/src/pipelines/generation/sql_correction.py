@@ -25,10 +25,7 @@ from src.utils import trace_cost
 logger = logging.getLogger("wren-ai-service")
 
 
-def get_sql_correction_system_prompt(
-    sql_knowledge: SqlKnowledge | None = None,
-    data_source: str | None = None,
-) -> str:
+def get_sql_correction_system_prompt(sql_knowledge: SqlKnowledge | None = None) -> str:
     text_to_sql_rules = get_text_to_sql_rules(sql_knowledge)
 
     return f"""
@@ -55,27 +52,10 @@ The final answer must be in JSON format:
 
 
 sql_correction_user_prompt_template = """
-### TARGET DATA SOURCE ###
-{{ data_source }}
-
 {% if documents %}
-### ACTIVE DATASOURCE METADATA ###
-This is the complete deployed metadata for the active datasource, including schema,
-tables, columns, metrics, views, and relationships. Use only this metadata when
-correcting SQL.
+### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
-{% endfor %}
-{% endif %}
-
-{% if valid_table_names %}
-### VALID TABLE NAMES ###
-Only use these exact table names from the schema. If the invalid SQL references a
-table not listed here, replace it with the closest listed table only when the schema
-clearly supports the user's request. Do not invent, rename, singularize, pluralize,
-or add catalog/schema prefixes unless the table name is shown that way here.
-{% for table_name in valid_table_names %}
-- {{ table_name }}
 {% endfor %}
 {% endif %}
 
@@ -94,22 +74,8 @@ or add catalog/schema prefixes unless the table name is shown that way here.
 {% endif %}
 
 ### QUESTION ###
-{% if query %}
-User's Question: {{ query }}
-{% endif %}
-{% if invalid_generation_result.original_sql %}
-Original SQL: {{ invalid_generation_result.original_sql }}
-{% endif %}
-Invalid SQL: {{ invalid_generation_result.sql }}
+SQL: {{ invalid_generation_result.sql }}
 Error Message: {{ invalid_generation_result.error }}
-
-### CORRECTION GROUNDING ###
-Use ACTIVE DATASOURCE METADATA and VALID TABLE NAMES as the source of truth. If the
-invalid SQL references a table or column not listed above, replace it only when the
-active datasource metadata clearly contains an equivalent object that supports the
-user's request. Do not invent tables, columns, joins, metrics, or relationships.
-Only apply aggregate functions to columns whose active metadata type supports that
-operation.
 
 Let's think step by step.
 """
@@ -121,17 +87,11 @@ def prompt(
     documents: List[Document],
     invalid_generation_result: Dict,
     prompt_builder: PromptBuilder,
-    data_source: str,
-    query: str | None = None,
     instructions: list[dict] | None = None,
     sql_functions: list[SqlFunction] | None = None,
-    valid_table_names: list[str] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
-        query=query,
-        data_source=data_source,
         documents=documents,
-        valid_table_names=valid_table_names or [],
         invalid_generation_result=invalid_generation_result,
         instructions=construct_instructions(
             instructions=instructions,
@@ -147,13 +107,9 @@ async def generate_sql_correction(
     prompt: dict,
     generator: Any,
     generator_name: str,
-    data_source: str,
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
-    current_system_prompt = get_sql_correction_system_prompt(
-        sql_knowledge,
-        data_source=data_source,
-    )
+    current_system_prompt = get_sql_correction_system_prompt(sql_knowledge)
     return await generator(
         prompt=prompt.get("prompt"), current_system_prompt=current_system_prompt
     ), generator_name
@@ -163,7 +119,6 @@ async def generate_sql_correction(
 async def post_process(
     generate_sql_correction: dict,
     post_processor: SQLGenPostProcessor,
-    documents: List[Document],
     data_source: str,
     project_id: str | None = None,
     use_dry_plan: bool = False,
@@ -220,20 +175,19 @@ class SQLCorrection(BasicPipeline):
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
         sql_knowledge: SqlKnowledge | None = None,
-        query: str | None = None,
-        valid_table_names: list[str] | None = None,
     ):
         logger.info("SQLCorrection pipeline is running...")
 
-        metadata = await retrieve_metadata(project_id or "", self._retriever)
+        if use_dry_plan:
+            metadata = await retrieve_metadata(project_id or "", self._retriever)
+        else:
+            metadata = {}
 
         return await self._pipe.execute(
             ["post_process"],
             inputs={
                 "invalid_generation_result": invalid_generation_result,
                 "documents": contexts,
-                "valid_table_names": valid_table_names or [],
-                "query": query,
                 "instructions": instructions,
                 "sql_functions": sql_functions,
                 "project_id": project_id,

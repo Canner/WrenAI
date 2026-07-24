@@ -1,5 +1,4 @@
 import logging
-import re
 from typing import Any, Dict, List
 
 import aiohttp
@@ -13,59 +12,9 @@ from src.core.engine import (
     clean_generation_result,
 )
 from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
-
-
-def _extract_ddl_columns(ddl: str) -> list[str]:
-    if not isinstance(ddl, str):
-        return []
-
-    column_section = re.search(r"\((.*)\)", ddl, flags=re.DOTALL)
-    if not column_section:
-        return []
-
-    columns = []
-    for raw_line in re.split(r",\s*(?:\n|(?=[A-Za-z_\"`\[]))", column_section.group(1)):
-        line = re.sub(r"/\*.*?\*/", "", raw_line).strip()
-        line = re.sub(r"^--.*$", "", line).strip().rstrip(",")
-        if not line:
-            continue
-
-        first_token = line.split()[0].strip('"`[]')
-        if first_token.upper() in {
-            "CONSTRAINT",
-            "FOREIGN",
-            "PRIMARY",
-            "UNIQUE",
-            "KEY",
-        }:
-            continue
-        columns.append(first_token)
-
-    return columns
-
-
-def format_retrieved_schema_manifest(
-    documents: list[str] | None,
-    allowed_table_names: list[str] | None,
-) -> list[dict[str, Any]]:
-    table_names = allowed_table_names or []
-    ddls = documents or []
-
-    manifest = []
-    for index, table_name in enumerate(table_names):
-        if not isinstance(table_name, str) or not table_name.strip():
-            continue
-        ddl = ddls[index] if index < len(ddls) and isinstance(ddls[index], str) else ""
-        manifest.append(
-            {
-                "table_name": table_name.strip(),
-                "columns": _extract_ddl_columns(ddl),
-            }
-        )
-
-    return manifest
 
 
 @component
@@ -218,14 +167,6 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 ### SQL RULES ###
 - ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
 - ONLY USE the tables and columns mentioned in the database schema.
-- NEVER invent, assume, or rename tables and columns. Generate SQL only from tables and columns present in the provided database schema.
-- Treat the retrieved schema manifest and DATABASE SCHEMA as the exact identifier allowlist. Every SELECT, WHERE, JOIN, GROUP BY, HAVING, and ORDER BY table/column must exist there.
-- Select columns by business meaning, not by name similarity alone. Match the user's entities, metrics, dimensions, filters, and dates to column names, descriptions, aliases, data types, user instructions, and SQL samples.
-- Prefer semantically described business/canonical models, metrics, and views over staging, temp, test, raw, backup, load, or legacy tables when the metadata indicates that distinction.
-- For value, amount, total, rate, count, average, or KPI questions, use numeric measures or numeric columns whose description/alias matches the requested metric. Do not SUM or AVG string columns.
-- For comparison or "by" questions, use categorical/date dimension columns for grouping and numeric measures for aggregation.
-- Do not use technical audit or ingestion columns (created_at, updated_at, loaded_at, inserted_at, file_date, batch_id, row_id, ingestion timestamps, etc.) unless the user explicitly asks about sync, load, audit, or ingestion.
-- If multiple columns are equally plausible and no metadata/rule/sample disambiguates them, do not guess; return SQL only when the chosen columns are grounded by the metadata.
 - ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - DON'T INCLUDE comments in the generated SQL query.
@@ -489,8 +430,8 @@ You are a helpful data analyst who is great at thinking deeply and reasoning abo
 
 ### INSTRUCTIONS ###
 1. Think deeply and reason about the user's question, the database schema, and the user's query history if provided.
-2. Explicitly state the following information in the reasoning plan:
-if the user puts any specific timeframe(e.g. YYYY-MM-DD) in the user's question(excluding the value of the current time), you will put the absolute time frame in the SQL query;
+2. Explicitly state the following information in the reasoning plan: 
+if the user puts any specific timeframe(e.g. YYYY-MM-DD) in the user's question(excluding the value of the current time), you will put the absolute time frame in the SQL query; 
 otherwise, you will put the relative timeframe in the SQL query.
 3. For the ranking problem(e.g. "top x", "bottom x", "first x", "last x"), you must use the ranking function, `DENSE_RANK()` to rank the results and then use `WHERE` clause to filter the results.
 4. For the ranking problem(e.g. "top x", "bottom x", "first x", "last x"), you must add the ranking column to the final SELECT clause.
@@ -504,8 +445,6 @@ otherwise, you will put the relative timeframe in the SQL query.
 12. A table name in the reasoning plan must be in this format: `table: <table_name>`.
 13. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
 14. ONLY SHOWING the reasoning plan in bullet points.
-15. Never include SQL code, table aliases, or assumed table/column names in the reasoning plan.
-16. Only mention a table or column when the exact name appears in the DATABASE SCHEMA.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
@@ -566,16 +505,15 @@ def get_sql_generation_system_prompt(sql_knowledge: SqlKnowledge | None = None) 
     return f"""
 You are a helpful assistant that converts natural language queries into ANSI SQL queries.
 
-Given user's question, database schema, etc., you should think deeply and carefully and generate the SQL query from the provided database schema.
+Given user's question, database schema, etc., you should think deeply and carefully and generate the SQL query based on the given reasoning plan step by step.
 
 ### GENERAL RULES ###
 
 1. YOU MUST FOLLOW the instructions strictly to generate the SQL query if the section of USER INSTRUCTIONS is available in user's input.
 2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
 3. YOU MUST REFER to the sql samples and learn the usage of the schema structures and how SQL is written based on them if the section of SQL SAMPLES is available in user's input.
-4. If the section of REASONING PLAN is available in user's input, treat it only as high-level guidance. Ignore any table, column, alias, filter, or SQL fragment from the reasoning plan that is not explicitly present in the DATABASE SCHEMA.
-5. Before finalizing, validate the SQL against the retrieved metadata: every table, column, join, filter, GROUP BY, HAVING, and ORDER BY identifier must exist in the provided schema, and selected columns must match the user's business intent.
-6. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
+4. YOU MUST FOLLOW the reasoning plan step by step strictly to generate the SQL query if the section of REASONING PLAN is available in user's input.
+5. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {text_to_sql_rules}
 
@@ -616,7 +554,7 @@ def construct_instructions(
 
 
 def construct_ask_history_messages(
-    histories: list[Any] | list[dict],
+    histories: list[AskHistory] | list[dict],
 ) -> list[ChatMessage]:
     messages = []
     for history in histories:

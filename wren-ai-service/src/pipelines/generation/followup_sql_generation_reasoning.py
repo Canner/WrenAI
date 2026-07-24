@@ -1,9 +1,7 @@
-from __future__ import annotations
-
 import asyncio
 import logging
 import sys
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -19,33 +17,16 @@ from src.pipelines.generation.utils.sql import (
 )
 from src.utils import trace_cost
 from src.web.v1.services import Configuration
-
-if TYPE_CHECKING:
-    from src.web.v1.services.ask import AskHistory
-else:
-    AskHistory = Any
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
 
 sql_generation_reasoning_user_prompt_template = """
-### ACTIVE DATASOURCE METADATA ###
-This is the complete deployed metadata for the active datasource, including schema,
-tables, columns, metrics, views, and relationships. Use only this metadata when
-planning SQL.
+### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
 {% endfor %}
-
-{% if valid_table_names %}
-### VALID TABLE NAMES ###
-Only mention these exact table names in the reasoning plan. Do not invent, rename,
-singularize, pluralize, normalize, abbreviate, or add catalog/schema prefixes unless
-the table name is shown that way here.
-{% for table_name in valid_table_names %}
-- {{ table_name }}
-{% endfor %}
-{% endif %}
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
@@ -91,12 +72,10 @@ def prompt(
     instructions: list[dict],
     prompt_builder: PromptBuilder,
     configuration: Configuration | None = Configuration(),
-    valid_table_names: list[str] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
-        valid_table_names=valid_table_names or [],
         histories=histories,
         sql_samples=sql_samples,
         instructions=construct_instructions(
@@ -197,7 +176,6 @@ class FollowUpSQLGenerationReasoning(BasicPipeline):
         instructions: Optional[list[dict]] = None,
         configuration: Configuration = Configuration(),
         query_id: Optional[str] = None,
-        valid_table_names: Optional[list[str]] = None,
     ):
         logger.info("Followup SQL Generation Reasoning pipeline is running...")
         return await self._pipe.execute(
@@ -205,7 +183,6 @@ class FollowUpSQLGenerationReasoning(BasicPipeline):
             inputs={
                 "query": query,
                 "documents": contexts,
-                "valid_table_names": valid_table_names or [],
                 "histories": histories,
                 "sql_samples": sql_samples or [],
                 "instructions": instructions or [],

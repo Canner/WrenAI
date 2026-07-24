@@ -1,8 +1,6 @@
-from __future__ import annotations
-
 import logging
 import sys
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
@@ -26,11 +24,7 @@ from src.pipelines.generation.utils.sql import (
 from src.pipelines.retrieval.sql_functions import SqlFunction
 from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 from src.utils import trace_cost
-
-if TYPE_CHECKING:
-    from src.web.v1.services.ask import AskHistory
-else:
-    AskHistory = Any
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -40,22 +34,9 @@ text_to_sql_with_followup_user_prompt_template = """
 Given the following user's follow-up question and previous SQL query and summary,
 generate one SQL query to best answer user's question.
 
-### TARGET DATA SOURCE ###
-{{ data_source }}
-
-### ACTIVE DATASOURCE METADATA ###
-This is the complete deployed metadata for the active datasource, including schema,
-tables, columns, metrics, views, and relationships. Use only this metadata when
-interpreting intent and generating SQL.
+### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
-{% endfor %}
-
-### VALID TABLE NAMES ###
-Only use these exact table names from the schema. Do not invent, rename, singularize,
-pluralize, or add catalog/schema prefixes unless the table name is shown that way here.
-{% for table_name in valid_table_names %}
-- {{ table_name }}
 {% endfor %}
 
 {% if calculated_field_instructions %}
@@ -97,14 +78,6 @@ SQL:
 ### QUESTION ###
 User's Follow-up Question: {{ query }}
 
-### INTENT AND SCHEMA GROUNDING ###
-Interpret the user's business terms by matching them to explicit tables, columns,
-metrics, views, and relationships in ACTIVE DATASOURCE METADATA. Never reuse table
-or column names from SQL SAMPLES or chat history unless those exact names also
-appear in ACTIVE DATASOURCE METADATA or VALID TABLE NAMES for the active datasource.
-Only apply aggregate functions to columns whose active metadata type supports that
-operation.
-
 ### REASONING PLAN ###
 {{ sql_generation_reasoning }}
 
@@ -119,7 +92,6 @@ def prompt(
     documents: list[str],
     sql_generation_reasoning: str,
     prompt_builder: PromptBuilder,
-    data_source: str,
     sql_samples: list[dict] | None = None,
     instructions: list[dict] | None = None,
     has_calculated_field: bool = False,
@@ -127,13 +99,10 @@ def prompt(
     has_json_field: bool = False,
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
-    valid_table_names: list[str] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
-        data_source=data_source,
         documents=documents,
-        valid_table_names=valid_table_names or [],
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
@@ -162,7 +131,6 @@ async def generate_sql_in_followup(
     generator: Any,
     histories: list[AskHistory],
     generator_name: str,
-    data_source: str,
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
     history_messages = construct_ask_history_messages(histories)
@@ -178,7 +146,6 @@ async def generate_sql_in_followup(
 async def post_process(
     generate_sql_in_followup: dict,
     post_processor: SQLGenPostProcessor,
-    documents: list[str],
     data_source: str,
     project_id: str | None = None,
     use_dry_plan: bool = False,
@@ -241,18 +208,19 @@ class FollowUpSQLGeneration(BasicPipeline):
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
         sql_knowledge: SqlKnowledge | None = None,
-        valid_table_names: list[str] | None = None,
     ):
         logger.info("Follow-Up SQL Generation pipeline is running...")
 
-        metadata = await retrieve_metadata(project_id or "", self._retriever)
+        if use_dry_plan:
+            metadata = await retrieve_metadata(project_id or "", self._retriever)
+        else:
+            metadata = {}
 
         return await self._pipe.execute(
             ["post_process"],
             inputs={
                 "query": query,
                 "documents": contexts,
-                "valid_table_names": valid_table_names or [],
                 "sql_generation_reasoning": sql_generation_reasoning,
                 "histories": histories,
                 "project_id": project_id,
