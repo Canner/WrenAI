@@ -38,11 +38,19 @@ def parse_type(type_str: str, dialect: str) -> str:
         Canonical type string (e.g. "VARCHAR(255)", "BIGINT").
         Falls back to original string if parsing fails.
     """
+    # Dynamic exporters occasionally send None / ints; coerce before truthiness
+    # checks and sqlglot so callers never see TypeError from parse_one.
+    if type_str is None:
+        return ""
+    if not isinstance(type_str, str):
+        type_str = str(type_str)
+    if not isinstance(dialect, str) or not dialect:
+        dialect = ""
     if not type_str:
         return type_str
     try:
         return sqlglot.parse_one(type_str, into=DataType, dialect=dialect).sql()
-    except (sqlglot.errors.SqlglotError, ValueError):
+    except (sqlglot.errors.SqlglotError, ValueError, TypeError):
         # SqlglotError covers both ParseError and TokenError (the tokenizer
         # raises TokenError on unterminated quotes / stray control chars, and
         # it is NOT a subclass of ParseError). Fall back to the raw string.

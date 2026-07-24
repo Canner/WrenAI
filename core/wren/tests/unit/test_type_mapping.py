@@ -378,3 +378,17 @@ def test_translate_types_accepts_non_dict_mappings() -> None:
     assert [r["column"] for r in out] == ["id", "name"]
     assert out[0]["type"] == "INT64"
     assert out[1]["type"] == "STRING"
+
+
+def test_parse_type_none_and_non_str():
+    assert parse_type(None, "postgres") == ""  # type: ignore[arg-type]
+    assert parse_type(38, "postgres")  # type: ignore[arg-type]
+    # int falls back to stringified form when not a parseable type name
+    out = parse_type(38, "postgres")  # type: ignore[arg-type]
+    assert isinstance(out, str)
+
+
+def test_parse_types_none_type_field():
+    out = parse_types([{"column": "a", "raw_type": None}], dialect="postgres")
+    assert len(out) == 1
+    assert out[0]["type"] == ""
