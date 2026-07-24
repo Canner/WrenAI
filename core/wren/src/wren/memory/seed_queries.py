@@ -31,13 +31,19 @@ SEED_TAG = "source:seed"
 def generate_seed_queries(manifest: dict) -> list[dict]:
     """Return a list of {"nl": ..., "sql": ...} seed pairs."""
     pairs: list[dict] = []
+    models = manifest.get("models", []) or []
+    if not isinstance(models, list):
+        models = []
     model_layers = {
         model["name"]: _prop_value(model, "dbtLayer", "dbt_layer")
-        for model in manifest.get("models", [])
+        for model in models
+        if isinstance(model, dict) and model.get("name") is not None
     }
     relationship_keys = _relationship_key_columns(manifest)
 
-    for model in manifest.get("models", []):
+    for model in models:
+        if not isinstance(model, dict) or model.get("name") is None:
+            continue
         if model_layers.get(model["name"]) == "raw":
             continue
         pairs.extend(
@@ -46,10 +52,14 @@ def generate_seed_queries(manifest: dict) -> list[dict]:
             )
         )
 
-    for rel in manifest.get("relationships", []):
-        pair = _relationship_seed(rel, model_layers)
-        if pair:
-            pairs.append(pair)
+    rels = manifest.get("relationships", []) or []
+    if isinstance(rels, list):
+        for rel in rels:
+            if not isinstance(rel, dict):
+                continue
+            pair = _relationship_seed(rel, model_layers)
+            if pair:
+                pairs.append(pair)
 
     return pairs
 
@@ -58,8 +68,11 @@ def _model_seeds(
     model: dict, relationship_keys: frozenset[str] = frozenset()
 ) -> list[dict]:
     name = model["name"]
+    columns = model.get("columns", []) or []
+    if not isinstance(columns, list):
+        columns = []
     columns = [
-        c for c in (model.get("columns") or []) if isinstance(c, dict) and c.get("name")
+        c for c in columns if isinstance(c, dict) and isinstance(c.get("name"), str)
     ]
     primary_keys = _primary_key_columns(model)
     pairs = []
@@ -166,7 +179,12 @@ def _relationship_key_columns(manifest: dict) -> dict[str, frozenset[str]]:
     of aggregation seeds.
     """
     accum: dict[str, set[str]] = {}
-    for rel in manifest.get("relationships", []):
+    rels = manifest.get("relationships", []) or []
+    if not isinstance(rels, list):
+        return {}
+    for rel in rels:
+        if not isinstance(rel, dict):
+            continue
         condition = rel.get("condition") or ""
         try:
             tree = sqlglot.parse_one(condition)
