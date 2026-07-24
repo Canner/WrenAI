@@ -341,3 +341,28 @@ def test_flatten_pagination_still_collapses_bare_wrap() -> None:
     out = MSSqlConnector._flatten_pagination_limit(None, sql)
     assert "(SELECT" not in out.upper().replace(" ", "")
     assert "TOP 5" in out.upper() or "NEXT 5 ROWS" in out.upper()
+
+
+def test_flatten_pagination_limit_keyword_with_cte_becomes_tsql() -> None:
+    """A literal LIMIT on the guarded path must still be rewritten to valid
+    T-SQL (TOP/FETCH) while the outer WITH survives."""
+    sql = (
+        "WITH m AS (SELECT a, b FROM dbo.t) "
+        "SELECT * FROM (SELECT a, SUM(b) AS s FROM m GROUP BY a) AS _c LIMIT 3"
+    )
+    out = MSSqlConnector._flatten_pagination_limit(None, sql)
+    assert "WITH" in out.upper()
+    assert "LIMIT" not in out.upper()
+    assert "TOP 3" in out.upper() or "NEXT 3 ROWS" in out.upper()
+
+
+def test_flatten_pagination_limit_keyword_with_order_by_becomes_tsql() -> None:
+    """LIMIT + outer ORDER BY: ordering survives and LIMIT is rewritten."""
+    sql = (
+        "SELECT * FROM (SELECT a, SUM(b) AS s FROM dbo.t GROUP BY a) AS _c "
+        "ORDER BY s DESC LIMIT 3"
+    )
+    out = MSSqlConnector._flatten_pagination_limit(None, sql)
+    assert "ORDER BY" in out.upper()
+    assert "LIMIT" not in out.upper()
+    assert "TOP 3" in out.upper() or "NEXT 3 ROWS" in out.upper()
