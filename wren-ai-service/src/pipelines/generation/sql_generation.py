@@ -28,6 +28,11 @@ logger = logging.getLogger("wren-ai-service")
 
 
 sql_generation_user_prompt_template = """
+### DATABASE SCHEMA ###
+{% for document in documents %}
+    {{ document }}
+{% endfor %}
+
 {% if calculated_field_instructions %}
 {{ calculated_field_instructions }}
 {% endif %}
@@ -73,11 +78,6 @@ User's Question: {{ query }}
 {% endif %}
 
 Let's think step by step.
-
-### DATABASE SCHEMA ###
-{% for document in documents %}
-    {{ document }}
-{% endfor %}
 
 ### FINAL SQL INSTRUCTION ###
 Use only the exact table and column identifiers in DATABASE SCHEMA above. Treat all other sections as guidance only.

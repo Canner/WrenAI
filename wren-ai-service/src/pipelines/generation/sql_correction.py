@@ -54,6 +54,13 @@ The final answer must be in JSON format:
 
 
 sql_correction_user_prompt_template = """
+{% if documents %}
+### DATABASE SCHEMA ###
+{% for document in documents %}
+    {{ document }}
+{% endfor %}
+{% endif %}
+
 {% if sql_functions %}
 ### SQL FUNCTIONS ###
 {% for function in sql_functions %}
@@ -72,17 +79,10 @@ sql_correction_user_prompt_template = """
 SQL: {{ invalid_generation_result.sql }}
 Error Message: {{ invalid_generation_result.error }}
 
-Let's think step by step.
-
-{% if documents %}
-### DATABASE SCHEMA ###
-{% for document in documents %}
-    {{ document }}
-{% endfor %}
-
 ### FINAL CORRECTION INSTRUCTION ###
 Use only the exact table and column identifiers in DATABASE SCHEMA above. Treat the invalid SQL and error message as guidance only.
-{% endif %}
+
+Let's think step by step.
 """
 
 

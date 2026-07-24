@@ -169,7 +169,7 @@ class SQLGenPostProcessor:
 
 _DEFAULT_TEXT_TO_SQL_RULES = """
 ### SQL RULES ###
-- ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
+- ONLY USE SELECT statements. Do not generate ALTER, CREATE, DROP, INSERT, UPDATE, DELETE, MERGE, TRUNCATE, GRANT, REVOKE, or any other statement that can change the database or schema.
 - ONLY USE the tables and columns mentioned in the database schema.
 - Treat the DATABASE SCHEMA section as the only authoritative source for table and column identifiers. Never invent a normalized, friendly, translated, or guessed identifier.
 - If a user uses business wording that does not exactly match a column name, map it only to an existing table or column by using the schema comments, aliases, descriptions, and available column names.
