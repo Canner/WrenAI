@@ -1,13 +1,15 @@
 """BigQuery trailing-semicolon + LIMIT pushdown helpers (mocked client)."""
 
-from unittest.mock import MagicMock
+import sys
+import types
+from unittest.mock import MagicMock, patch
 
 import pyarrow as pa
 
+from wren.connector.base import strip_trailing_semicolon
 from wren.connector.bigquery import (
     BigQueryConnector,
     _apply_limit,
-    _strip_trailing_semicolon,
 )
 
 
@@ -48,9 +50,6 @@ def test_query_with_inner_limit_outer_wrap_still_enforces_caller_limit() -> None
 
 def test_dry_run_strips_trailing_semicolon() -> None:
     connector, client = _make_mock_connector()
-    import sys
-    import types
-    from unittest.mock import patch
 
     fake_mod = types.ModuleType("google.cloud.bigquery")
 
@@ -80,5 +79,5 @@ def test_dry_run_strips_trailing_semicolon() -> None:
 
 
 def test_helper_preserves_literal_semicolon() -> None:
-    assert _strip_trailing_semicolon("SELECT ';' AS x") == "SELECT ';' AS x"
+    assert strip_trailing_semicolon("SELECT ';' AS x") == "SELECT ';' AS x"
     assert _apply_limit("SELECT 1;", 3) == "SELECT * FROM (SELECT 1) AS _sub LIMIT 3"
