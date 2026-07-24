@@ -585,6 +585,7 @@ class AskService:
                             "sql_correction"
                         ].run(
                             contexts=table_ddls,
+                            query=user_query,
                             instructions=instructions,
                             invalid_generation_result={
                                 "sql": original_sql,

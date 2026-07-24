@@ -19,6 +19,7 @@ router = APIRouter()
 class PostRequest(BaseRequest):
     sql: str
     error: str
+    query: Optional[str] = None
     retrieved_tables: Optional[List[str]] = None
     use_dry_plan: bool = False
     allow_dry_plan_fallback: bool = True

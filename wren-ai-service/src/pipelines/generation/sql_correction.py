@@ -35,9 +35,8 @@ You are an ANSI SQL expert with exceptional logical thinking skills and debuggin
 ### SQL CORRECTION INSTRUCTIONS ###
 
 1. First, think hard about the error message, and figure out the root cause first(please use the DATABASE SCHEMA, SQL FUNCTIONS and USER INSTRUCTIONS to help you figure out the root cause).
-2. Then, generate the syntactically correct ANSI SQL query to correct the error.
-3. If the error says a table or column does not exist, replace it only with an exact table or column identifier from DATABASE SCHEMA. Do not create a normalized, friendly, translated, or guessed identifier.
-4. The corrected SQL must use only tables and columns that appear in DATABASE SCHEMA.
+2. Then, generate the syntactically correct ANSI SQL query that answers the user's question.
+3. Use the failed SQL and error message as diagnostic context only. Regenerate the corrected SQL from the DATABASE SCHEMA instead of patching invalid table or column names from the failed SQL or error message.
 
 ### SQL RULES ###
 Make sure you follow the SQL Rules strictly.
@@ -76,7 +75,10 @@ sql_correction_user_prompt_template = """
 {% endif %}
 
 ### QUESTION ###
-SQL: {{ invalid_generation_result.sql }}
+{% if query %}
+User's Question: {{ query }}
+{% endif %}
+Failed SQL: {{ invalid_generation_result.sql }}
 Error Message: {{ invalid_generation_result.error }}
 
 Let's think step by step.
@@ -89,10 +91,12 @@ def prompt(
     documents: List[Document],
     invalid_generation_result: Dict,
     prompt_builder: PromptBuilder,
+    query: str | None = None,
     instructions: list[dict] | None = None,
     sql_functions: list[SqlFunction] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
+        query=query,
         documents=documents,
         invalid_generation_result=invalid_generation_result,
         instructions=construct_instructions(
@@ -171,6 +175,7 @@ class SQLCorrection(BasicPipeline):
         self,
         contexts: List[Document],
         invalid_generation_result: Dict[str, str],
+        query: str | None = None,
         instructions: list[dict] | None = None,
         sql_functions: list[SqlFunction] | None = None,
         project_id: str | None = None,
@@ -189,6 +194,7 @@ class SQLCorrection(BasicPipeline):
             ["post_process"],
             inputs={
                 "invalid_generation_result": invalid_generation_result,
+                "query": query,
                 "documents": contexts,
                 "instructions": instructions,
                 "sql_functions": sql_functions,
