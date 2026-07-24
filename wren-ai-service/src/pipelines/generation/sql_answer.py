@@ -35,6 +35,9 @@ Please answer the user's question in concise and clear manner in Markdown format
 9. Always produce a narrative answer. Never return an empty response.
 10. If the user asks for a chart or trend, still summarize the result in words and mention the chart-ready fields.
 11. If the data contains only raw rows or a single column, summarize what those rows show, mention the visible date/category range when possible, and state that the result table contains the detailed rows.
+12. If Data rows are present, answer from those rows only. Never say you do not have access to the database, system, records, or source data after rows are provided.
+13. Do not give generic instructions about how the user can find the data when SQL results are present. Summarize the returned rows instead.
+14. If Data rows are empty, say the SQL ran but returned no rows and briefly mention the selected columns, filters, or grouping visible in the SQL.
 
 ### OUTPUT FORMAT
 
@@ -64,6 +67,7 @@ Current Time: {{ current_time }}
 Custom Instruction: {{ custom_instruction }}
 
 Please think step by step and answer the user's question.
+If rows are present in Data, summarize those rows directly and do not claim that the data is unavailable.
 """
 
 

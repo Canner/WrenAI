@@ -219,6 +219,13 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
 - ONLY USE the tables and columns mentioned in the database schema.
 - NEVER invent, assume, or rename tables and columns. Generate SQL only from tables and columns present in the provided database schema.
+- Treat the retrieved schema manifest and DATABASE SCHEMA as the exact identifier allowlist. Every SELECT, WHERE, JOIN, GROUP BY, HAVING, and ORDER BY table/column must exist there.
+- Select columns by business meaning, not by name similarity alone. Match the user's entities, metrics, dimensions, filters, and dates to column names, descriptions, aliases, data types, user instructions, and SQL samples.
+- Prefer semantically described business/canonical models, metrics, and views over staging, temp, test, raw, backup, load, or legacy tables when the metadata indicates that distinction.
+- For value, amount, total, rate, count, average, or KPI questions, use numeric measures or numeric columns whose description/alias matches the requested metric. Do not SUM or AVG string columns.
+- For comparison or "by" questions, use categorical/date dimension columns for grouping and numeric measures for aggregation.
+- Do not use technical audit or ingestion columns (created_at, updated_at, loaded_at, inserted_at, file_date, batch_id, row_id, ingestion timestamps, etc.) unless the user explicitly asks about sync, load, audit, or ingestion.
+- If multiple columns are equally plausible and no metadata/rule/sample disambiguates them, do not guess; return SQL only when the chosen columns are grounded by the metadata.
 - ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - DON'T INCLUDE comments in the generated SQL query.
@@ -567,7 +574,8 @@ Given user's question, database schema, etc., you should think deeply and carefu
 2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
 3. YOU MUST REFER to the sql samples and learn the usage of the schema structures and how SQL is written based on them if the section of SQL SAMPLES is available in user's input.
 4. If the section of REASONING PLAN is available in user's input, treat it only as high-level guidance. Ignore any table, column, alias, filter, or SQL fragment from the reasoning plan that is not explicitly present in the DATABASE SCHEMA.
-5. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
+5. Before finalizing, validate the SQL against the retrieved metadata: every table, column, join, filter, GROUP BY, HAVING, and ORDER BY identifier must exist in the provided schema, and selected columns must match the user's business intent.
+6. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {text_to_sql_rules}
 

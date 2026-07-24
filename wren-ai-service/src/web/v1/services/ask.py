@@ -752,13 +752,201 @@ class AskService:
             return None
         return AskResult(sql=sql.strip(), type="llm")
 
+    def _extract_sql_table_aliases(
+        self, sql: str, schema_tables: dict[str, dict[str, Any]]
+    ) -> dict[str, str]:
+        aliases: dict[str, str] = {}
+        reserved_aliases = {
+            "on",
+            "where",
+            "group",
+            "order",
+            "having",
+            "limit",
+            "join",
+            "left",
+            "right",
+            "inner",
+            "outer",
+            "full",
+            "cross",
+        }
+        pattern = re.compile(
+            r"\b(?:FROM|JOIN)\s+([A-Za-z_\"`\[][A-Za-z0-9_.$\"`\[\]]*)"
+            r"(?:\s+(?:AS\s+)?([A-Za-z_\"`\[][A-Za-z0-9_.$\"`\[\]]*))?",
+            flags=re.IGNORECASE,
+        )
+
+        for match in pattern.finditer(sql):
+            table_ref = match.group(1).strip().strip('"`[]').lower()
+            matched_table = next(
+                (
+                    table_name
+                    for table_name in schema_tables
+                    if self._normalize_schema_token(table_ref)
+                    == self._normalize_schema_token(table_name)
+                ),
+                table_ref,
+            )
+            aliases[table_ref] = matched_table
+
+            alias = match.group(2)
+            if alias:
+                normalized_alias = alias.strip().strip('"`[]').lower()
+                if normalized_alias not in reserved_aliases:
+                    aliases[normalized_alias] = matched_table
+
+        return aliases
+
+    def _find_invalid_sql_identifiers(
+        self, sql: str, table_ddls: list[str]
+    ) -> list[str]:
+        parsed_tables = self._parse_schema_tables(table_ddls)
+        schema_tables = {
+            str(table.get("name") or "").lower(): table
+            for table in parsed_tables
+            if table.get("name")
+        }
+        if not schema_tables:
+            return []
+
+        aliases = self._extract_sql_table_aliases(sql, schema_tables)
+        invalid_identifiers: set[str] = set()
+
+        for table_ref in re.findall(
+            r"\b(?:FROM|JOIN)\s+([A-Za-z_\"`\[][A-Za-z0-9_.$\"`\[\]]*)",
+            sql,
+            flags=re.IGNORECASE,
+        ):
+            normalized_table_ref = table_ref.strip().strip('"`[]').lower()
+            if normalized_table_ref not in aliases:
+                invalid_identifiers.add(normalized_table_ref)
+
+        for match in re.finditer(
+            r"([A-Za-z_\"`\[][A-Za-z0-9_.$\"`\[\]]*)\s*\.\s*([A-Za-z_\"`\[][A-Za-z0-9_$\"`\[\]]*)",
+            sql,
+        ):
+            table_or_alias = match.group(1).strip().strip('"`[]').lower()
+            column_name = match.group(2).strip().strip('"`[]').lower()
+            table_name = aliases.get(table_or_alias, table_or_alias)
+            table = schema_tables.get(table_name)
+            if not table:
+                invalid_identifiers.add(table_or_alias)
+                continue
+
+            schema_columns = {
+                str(column.get("name") or "").lower()
+                for column in table.get("columns", [])
+                if isinstance(column, dict) and column.get("name")
+            }
+            if column_name not in schema_columns:
+                invalid_identifiers.add(f"{table_or_alias}.{column_name}")
+
+        referenced_tables = set(aliases.values())
+        if len(referenced_tables) == 1:
+            table_name = next(iter(referenced_tables))
+            table = schema_tables.get(table_name)
+            schema_columns = {
+                str(column.get("name") or "").lower()
+                for column in (table or {}).get("columns", [])
+                if isinstance(column, dict) and column.get("name")
+            }
+            sql_without_qualified_refs = re.sub(
+                r"[A-Za-z_\"`\[][A-Za-z0-9_.$\"`\[\]]*\s*\.\s*[A-Za-z_\"`\[][A-Za-z0-9_$\"`\[\]]*",
+                " ",
+                sql,
+            )
+            sql_without_literals = re.sub(
+                r"'(?:''|[^'])*'|\"(?:\"\"|[^\"])*\"",
+                " ",
+                sql_without_qualified_refs,
+            )
+            keywords = {
+                "as",
+                "and",
+                "or",
+                "not",
+                "null",
+                "is",
+                "in",
+                "like",
+                "between",
+                "case",
+                "when",
+                "then",
+                "else",
+                "end",
+                "select",
+                "from",
+                "join",
+                "on",
+                "where",
+                "group",
+                "by",
+                "order",
+                "having",
+                "limit",
+                "distinct",
+                "asc",
+                "desc",
+                "with",
+                "over",
+                "partition",
+                "sum",
+                "avg",
+                "count",
+                "min",
+                "max",
+                "cast",
+                "datepart",
+                "dateadd",
+                "datediff",
+                "lower",
+                "upper",
+                "coalesce",
+                "round",
+                "rank",
+                "dense_rank",
+                "row_number",
+            }
+            for candidate in re.findall(
+                r"\b[A-Za-z_][A-Za-z0-9_$]*\b", sql_without_literals
+            ):
+                normalized = candidate.lower()
+                if (
+                    normalized in keywords
+                    or normalized in aliases
+                    or normalized in schema_tables
+                    or normalized in schema_columns
+                ):
+                    continue
+                invalid_identifiers.add(f"{table_name}.{normalized}")
+
+        return sorted(invalid_identifiers)
+
     def _build_validated_ask_result_from_sql(
         self,
         sql: Optional[str],
         table_ddls: list[str],
         query: str | None = None,
     ) -> Optional[AskResult]:
-        return self._build_ask_result_from_sql(sql)
+        ask_result = self._build_ask_result_from_sql(sql)
+        if not ask_result:
+            return None
+
+        invalid_identifiers = self._find_invalid_sql_identifiers(
+            ask_result.sql, table_ddls
+        )
+        if invalid_identifiers:
+            logger.warning(
+                "Generated SQL references identifiers outside deployed metadata. query=%s invalid_identifiers=%s sql=%s",
+                query,
+                invalid_identifiers,
+                ask_result.sql,
+            )
+            return None
+
+        return ask_result
 
     def _build_failed_text_to_sql_response(
         self,
