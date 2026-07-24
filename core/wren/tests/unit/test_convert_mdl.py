@@ -383,3 +383,13 @@ def test_cli_init_from_mdl_force(tmp_path: Path, sample_mdl_file: Path):
     assert "Imported MDL" in result.output
     project = yaml.safe_load((tmp_path / "wren_project.yml").read_text())
     assert project["schema_version"] == 2
+
+
+def test_convert_mdl_rejects_non_dict_model():
+    with pytest.raises(ValueError, match="must be an object"):
+        convert_mdl_to_project({"models": ["not-a-dict"], "views": []})
+
+
+def test_convert_mdl_rejects_non_dict_view():
+    with pytest.raises(ValueError, match="View at index 0 must be an object"):
+        convert_mdl_to_project({"models": [], "views": [None]})
