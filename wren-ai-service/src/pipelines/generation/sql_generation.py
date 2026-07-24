@@ -28,6 +28,16 @@ logger = logging.getLogger("wren-ai-service")
 
 
 sql_generation_user_prompt_template = """
+{% if valid_table_names %}
+### VALID TABLE NAMES ###
+Only use these exact table names from the retrieved schema. Do not invent, rename,
+singularize, pluralize, normalize, abbreviate, or add catalog/schema prefixes unless
+the table name is shown that way here.
+{% for table_name in valid_table_names %}
+- {{ table_name }}
+{% endfor %}
+{% endif %}
+
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
@@ -95,10 +105,12 @@ def prompt(
     has_json_field: bool = False,
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
+    valid_table_names: list[str] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
+        valid_table_names=valid_table_names or [],
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
@@ -202,6 +214,7 @@ class SQLGeneration(BasicPipeline):
         allow_dry_plan_fallback: bool = True,
         allow_data_preview: bool = False,
         sql_knowledge: SqlKnowledge | None = None,
+        valid_table_names: list[str] | None = None,
     ):
         logger.info("SQL Generation pipeline is running...")
 
@@ -215,6 +228,7 @@ class SQLGeneration(BasicPipeline):
             inputs={
                 "query": query,
                 "documents": contexts,
+                "valid_table_names": valid_table_names or [],
                 "sql_generation_reasoning": sql_generation_reasoning,
                 "sql_samples": sql_samples,
                 "instructions": instructions,
