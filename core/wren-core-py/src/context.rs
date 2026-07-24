@@ -418,8 +418,18 @@ impl PySessionContext {
         })
     }
 
-    /// Register a Parquet file as a named table.
-    /// Tables registered on base_ctx are visible to exec_ctx via shared catalog.
+    /// Register a Parquet file as a named table on the base context.
+    ///
+    /// The table lands in the pre-existing default catalog
+    /// (`datafusion`.`public`), whose internals are live-shared with derived
+    /// contexts — so it is visible to `query`/`dry_run`/`list_tables` even
+    /// when the session context was created before this call. Only
+    /// pre-existing catalogs get this guarantee: derived contexts and each
+    /// `transform_sql` call snapshot *top-level* catalog membership, so new
+    /// top-level catalogs must exist before MDL construction, `load_mdl`,
+    /// or a transform. See `clone_catalog_list` in wren-core's
+    /// `mdl::context` for the exact contract. Call `load_mdl` afterward if
+    /// MDL models should resolve to this table (two-phase init).
     #[pyo3(signature = (name, path))]
     pub fn register_parquet(
         &self,
@@ -441,8 +451,11 @@ impl PySessionContext {
         Ok(())
     }
 
-    /// Register a CSV file as a named table.
-    /// Tables registered on base_ctx are visible to exec_ctx via shared catalog.
+    /// Register a CSV file as a named table on the base context.
+    ///
+    /// Same visibility contract as `register_parquet`: lands in the
+    /// pre-existing default catalog (`datafusion`.`public`), visible to
+    /// derived contexts even when they were created before this call.
     #[pyo3(signature = (name, path))]
     pub fn register_csv(&self, py: Python<'_>, name: &str, path: &str) -> PyResult<()> {
         let (name, path) = (name.to_owned(), path.to_owned());
@@ -502,6 +515,12 @@ impl PySessionContext {
 
     /// Load MDL and apply semantic layer rules (two-phase init).
     /// Call this after registering physical tables to enable the semantic layer.
+    ///
+    /// Concurrency: this method takes `&mut self`, so PyO3's exclusive
+    /// borrow rejects any overlapping call on the same SessionContext with a
+    /// `RuntimeError`. Finish `register_parquet`/`register_csv` calls before
+    /// `load_mdl`, and finish `load_mdl` before issuing queries that depend
+    /// on the new MDL.
     #[pyo3(signature = (mdl_base64))]
     pub fn load_mdl(&mut self, py: Python<'_>, mdl_base64: &str) -> PyResult<()> {
         let manifest = to_manifest(mdl_base64)?;
