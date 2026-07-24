@@ -36,6 +36,8 @@ You are an ANSI SQL expert with exceptional logical thinking skills and debuggin
 
 1. First, think hard about the error message, and figure out the root cause first(please use the DATABASE SCHEMA, SQL FUNCTIONS and USER INSTRUCTIONS to help you figure out the root cause).
 2. Then, generate the syntactically correct ANSI SQL query to correct the error.
+3. If the error says a table or column does not exist, replace it only with an exact table or column identifier from DATABASE SCHEMA. Do not create a normalized, friendly, translated, or guessed identifier.
+4. The corrected SQL must use only tables and columns that appear in DATABASE SCHEMA.
 
 ### SQL RULES ###
 Make sure you follow the SQL Rules strictly.
@@ -57,6 +59,12 @@ sql_correction_user_prompt_template = """
 {% for document in documents %}
     {{ document }}
 {% endfor %}
+
+### SCHEMA GROUNDING ###
+- Use only tables and columns that appear in DATABASE SCHEMA.
+- Resolve invalid identifiers by matching the user's wording and error message to existing schema comments, aliases, descriptions, and column names.
+- Do not create normalized or friendly identifiers that are not present in DATABASE SCHEMA.
+- Before returning the corrected SQL, verify every table and column name exists exactly in DATABASE SCHEMA.
 {% endif %}
 
 {% if sql_functions %}

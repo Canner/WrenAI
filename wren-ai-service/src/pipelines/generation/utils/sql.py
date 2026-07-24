@@ -167,6 +167,9 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 ### SQL RULES ###
 - ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
 - ONLY USE the tables and columns mentioned in the database schema.
+- Treat the DATABASE SCHEMA section as the only authoritative source for table and column identifiers. Never invent a normalized, friendly, translated, or guessed identifier.
+- If a user uses business wording that does not exactly match a column name, map it only to an existing table or column by using the schema comments, aliases, descriptions, and available column names.
+- When the schema exposes raw or generated names, use those exact names in SQL. Do not replace them with natural-language names.
 - ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - DON'T INCLUDE comments in the generated SQL query.
@@ -437,14 +440,17 @@ otherwise, you will put the relative timeframe in the SQL query.
 4. For the ranking problem(e.g. "top x", "bottom x", "first x", "last x"), you must add the ranking column to the final SELECT clause.
 5. If USER INSTRUCTIONS section is provided, make sure to consider them in the reasoning plan.
 6. If SQL SAMPLES section is provided, make sure to consider them in the reasoning plan.
-7. Give a step by step reasoning plan in order to answer user's question.
-8. The reasoning plan should be in the language same as the language user provided in the input.
-9. Don't include SQL in the reasoning plan.
-10. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
-11. Do not include ```markdown or ``` in the answer.
-12. A table name in the reasoning plan must be in this format: `table: <table_name>`.
-13. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
-14. ONLY SHOWING the reasoning plan in bullet points.
+7. Treat the DATABASE SCHEMA section as the only authoritative source for table and column identifiers.
+8. Do not mention a table or column in the reasoning plan unless it appears in the DATABASE SCHEMA section.
+9. If the user's wording is different from the schema names, map the wording to existing schema names by using comments, aliases, descriptions, and available column names. Do not invent normalized or friendly names.
+10. Give a step by step reasoning plan in order to answer user's question.
+11. The reasoning plan should be in the language same as the language user provided in the input.
+12. Don't include SQL in the reasoning plan.
+13. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
+14. Do not include ```markdown or ``` in the answer.
+15. A table name in the reasoning plan must be in this format: `table: <table_name>`.
+16. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
+17. ONLY SHOWING the reasoning plan in bullet points.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
@@ -514,6 +520,8 @@ Given user's question, database schema, etc., you should think deeply and carefu
 3. YOU MUST REFER to the sql samples and learn the usage of the schema structures and how SQL is written based on them if the section of SQL SAMPLES is available in user's input.
 4. YOU MUST FOLLOW the reasoning plan step by step strictly to generate the SQL query if the section of REASONING PLAN is available in user's input.
 5. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
+6. DATABASE SCHEMA is more authoritative than the reasoning plan, SQL samples, and user wording. If any of those mention a table or column that is not present in DATABASE SCHEMA, do not use it.
+7. For every table and column in the final SQL, verify that the exact identifier appears in DATABASE SCHEMA before returning the SQL.
 
 {text_to_sql_rules}
 

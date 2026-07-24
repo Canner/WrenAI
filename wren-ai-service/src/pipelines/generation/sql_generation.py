@@ -33,6 +33,13 @@ sql_generation_user_prompt_template = """
     {{ document }}
 {% endfor %}
 
+### SCHEMA GROUNDING ###
+- Use only tables and columns that appear in DATABASE SCHEMA.
+- Resolve user business wording by matching it to existing schema comments, aliases, descriptions, and column names.
+- Do not create normalized or friendly identifiers that are not present in DATABASE SCHEMA.
+- If the REASONING PLAN, SQL SAMPLES, or USER INSTRUCTIONS mention identifiers that are not present in DATABASE SCHEMA, ignore those identifiers.
+- Before returning the SQL, verify every table and column name exists exactly in DATABASE SCHEMA.
+
 {% if calculated_field_instructions %}
 {{ calculated_field_instructions }}
 {% endif %}

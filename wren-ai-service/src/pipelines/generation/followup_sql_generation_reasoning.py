@@ -28,6 +28,12 @@ sql_generation_reasoning_user_prompt_template = """
     {{ document }}
 {% endfor %}
 
+### SCHEMA GROUNDING ###
+- Mention only tables and columns that appear in DATABASE SCHEMA.
+- Resolve user business wording by matching it to existing schema comments, aliases, descriptions, and column names.
+- Do not create normalized or friendly identifiers that are not present in DATABASE SCHEMA.
+- If SQL SAMPLES, USER INSTRUCTIONS, or QUERY HISTORY mention identifiers that are not present in DATABASE SCHEMA, ignore those identifiers.
+
 {% if sql_samples %}
 ### SQL SAMPLES ###
 {% for sql_sample in sql_samples %}
