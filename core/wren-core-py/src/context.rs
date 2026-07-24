@@ -18,6 +18,7 @@
 use crate::errors::CoreError;
 use crate::manifest::to_manifest;
 use crate::remote_functions::PyRemoteFunction;
+use futures::TryStreamExt;
 use log::debug;
 use pyo3::types::{PyAnyMethods, PyFrozenSet, PyFrozenSetMethods, PyTuple};
 use pyo3::Python;
@@ -395,8 +396,13 @@ impl PySessionContext {
             let (batches, schema) = rt
                 .block_on(async {
                     let df = self.exec_ctx.sql(&sql).await?;
-                    let schema = df.schema().inner().clone();
-                    let batches = df.collect().await?;
+                    // Write the IPC stream with the execution schema: it
+                    // matches every batch (even zero of them), while the
+                    // plan's declared MDL types can differ from the physical
+                    // types (e.g. `integer` over int64, Utf8 vs Utf8View).
+                    let stream = df.execute_stream().await?;
+                    let schema = stream.schema();
+                    let batches: Vec<_> = stream.try_collect().await?;
                     Ok::<_, wren_core::DataFusionError>((batches, schema))
                 })
                 .map_err(CoreError::from)?;
