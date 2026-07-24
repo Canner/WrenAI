@@ -126,6 +126,14 @@ class MSSqlConnector(ConnectorABC):
             if not isinstance(parsed, exp.Select) or not parsed.args.get("limit"):
                 return sql_query
 
+            # Flattening keeps only the inner Select, so an outer WITH (e.g.
+            # semantic-layer model CTEs) or ORDER BY would be silently dropped —
+            # producing invalid references or wrong TOP-n rows. Both are valid
+            # T-SQL next to TOP; only the bare paginate-wrap shape
+            # ``SELECT * FROM (inner) LIMIT n`` is safe to collapse.
+            if parsed.args.get("with_") or parsed.args.get("order"):
+                return sql_query
+
             from_clause = parsed.find(exp.From)
             if not from_clause:
                 return sql_query

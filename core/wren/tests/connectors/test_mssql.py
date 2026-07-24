@@ -305,3 +305,39 @@ def test_url_connection(mssql_container: SqlServerContainer) -> None:
         cur.close()
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# _flatten_pagination_limit unit tests (no container needed)
+# ---------------------------------------------------------------------------
+
+
+def test_flatten_pagination_preserves_outer_cte() -> None:
+    """Flattening must not drop an outer WITH — the inner select would then
+    reference a CTE that no longer exists (e.g. semantic-layer model CTEs)."""
+    sql = (
+        "WITH m AS (SELECT a, b FROM dbo.t) "
+        "SELECT TOP 3 * FROM (SELECT a, SUM(b) AS s FROM m GROUP BY a) AS _c"
+    )
+    out = MSSqlConnector._flatten_pagination_limit(None, sql)
+    assert "WITH" in out.upper()
+    assert "FROM m" in out or "FROM [m]" in out
+
+
+def test_flatten_pagination_preserves_outer_order_by() -> None:
+    """Flattening must not drop an outer ORDER BY — TOP-n without the ordering
+    silently returns arbitrary rows."""
+    sql = (
+        "SELECT TOP 3 * FROM "
+        "(SELECT a, SUM(b) AS s FROM dbo.t GROUP BY a) AS _c ORDER BY s DESC"
+    )
+    out = MSSqlConnector._flatten_pagination_limit(None, sql)
+    assert "ORDER BY" in out.upper()
+
+
+def test_flatten_pagination_still_collapses_bare_wrap() -> None:
+    """The plain paginate-wrap shape (no WITH, no ORDER BY) keeps collapsing."""
+    sql = "SELECT * FROM (SELECT a FROM dbo.t) AS w LIMIT 5"
+    out = MSSqlConnector._flatten_pagination_limit(None, sql)
+    assert "(SELECT" not in out.upper().replace(" ", "")
+    assert "TOP 5" in out.upper() or "NEXT 5 ROWS" in out.upper()
