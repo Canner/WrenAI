@@ -176,10 +176,12 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - Policy documents and policy names are not database tables or columns unless they appear exactly in DATABASE SCHEMA.
 - If a user uses business wording that does not exactly match a column name, map it only to an existing table or column by using the schema comments, aliases, descriptions, and available column names.
 - When the schema exposes raw or generated names, use those exact names in SQL. Do not replace them with natural-language names.
-- ONLY USE "*" if the user query asks for all the columns of a table.
+- Do not use "*" unless the user explicitly asks for every column or every field from a table. For ordinary requests such as recent records, customers, transactions, comparisons, summaries, or aggregations, select only the columns needed to answer the question.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - DON'T INCLUDE comments in the generated SQL query.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
+- Use multiple retrieved tables when the question requires them, and join only with relationships that are present in the DATABASE SCHEMA section. Do not infer joins from similar names, business wording, SQL samples, query history, or reasoning text.
+- Do not invent measure, dimension, or filter columns. If the question refers to a business concept, map it only to an exact table or column that appears in DATABASE SCHEMA.
 - PREFER USING CTEs over subqueries.
 - When generating SQL query, always:
     - Put double quotes around column and table names.
@@ -450,14 +452,16 @@ otherwise, you will put the relative timeframe in the SQL query.
 7. Treat the DATABASE SCHEMA section as the only authoritative source for table and column identifiers.
 8. Do not mention a table or column in the reasoning plan unless it appears in the DATABASE SCHEMA section.
 9. If the user's wording is different from the schema names, map the wording to existing schema names by using comments, aliases, descriptions, and available column names. Do not invent normalized or friendly names.
-10. Give a step by step reasoning plan in order to answer user's question.
-11. The reasoning plan should be in the language same as the language user provided in the input.
-12. Don't include SQL in the reasoning plan.
-13. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
-14. Do not include ```markdown or ``` in the answer.
-15. A table name in the reasoning plan must be in this format: `table: <table_name>`.
-16. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
-17. ONLY SHOWING the reasoning plan in bullet points.
+10. Do not enumerate the full schema. Mention only the retrieved tables, columns, and relationships that are relevant to answering the user's question.
+11. When the question requires multiple tables, use only relationships that are present in the DATABASE SCHEMA section; do not infer relationships from similar names, business wording, SQL samples, query history, or reasoning text.
+12. Give a step by step reasoning plan in order to answer user's question.
+13. The reasoning plan should be in the language same as the language user provided in the input.
+14. Don't include SQL in the reasoning plan.
+15. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
+16. Do not include ```markdown or ``` in the answer.
+17. A table name in the reasoning plan must be in this format: `table: <table_name>`.
+18. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
+19. ONLY SHOWING the reasoning plan in bullet points.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
