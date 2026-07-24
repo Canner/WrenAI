@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from typing import Dict, List, Literal, Optional
 
 from cachetools import TTLCache
@@ -11,6 +12,18 @@ from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest, SSEEvent
 
 logger = logging.getLogger("wren-ai-service")
+
+
+DATA_QUERY_PATTERN = re.compile(
+    r"\b("
+    r"show|list|find|get|give|display|retrieve|fetch|compare|count|sum|total|"
+    r"average|avg|min|max|rank|top|bottom|highest|lowest|latest|earliest|"
+    r"newest|oldest|sort|order|group|filter|where|between|starts|ends|"
+    r"contains|duplicate|unique|distinct|percentage|percent|trend|growth|"
+    r"breakdown|by|per"
+    r")\b",
+    re.IGNORECASE,
+)
 
 
 class AskHistory(BaseModel):
@@ -124,6 +137,12 @@ class AskService:
         self._enable_column_pruning = enable_column_pruning
         self._max_histories = max_histories
         self._max_sql_correction_retries = max_sql_correction_retries
+
+    def _should_continue_text_to_sql(self, query: str, intent: Optional[str]) -> bool:
+        if intent not in {"GENERAL", "MISLEADING_QUERY"}:
+            return False
+
+        return bool(DATA_QUERY_PATTERN.search(query or ""))
 
     def _is_stopped(self, query_id: str, container: dict):
         if (
@@ -256,12 +275,16 @@ class AskService:
                         if rephrased_question:
                             user_query = rephrased_question
 
-                        if (
+                        if self._should_continue_text_to_sql(
+                            user_query,
+                            intent,
+                        ) or (
                             intent == "GENERAL"
                             and not intent_classification_result.get("db_schemas")
                         ):
                             logger.info(
-                                "Intent classification returned GENERAL without schema context; continuing Text-to-SQL retrieval for query_id %s",
+                                "Intent classification returned %s for an analytical query; continuing Text-to-SQL retrieval for query_id %s",
+                                intent,
                                 query_id,
                             )
                             intent = "TEXT_TO_SQL"

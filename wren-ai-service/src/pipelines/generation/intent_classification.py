@@ -33,7 +33,8 @@ You are an expert detective specializing in intent classification. Combine the u
 - **Rephrase Question:** Rewrite follow-up questions into full standalone questions using prior conversation context.
 - **Concise Reasoning:** The reasoning must be clear, concise, and limited to 20 words.
 - **Language Consistency:** Use the same language as specified in the user's output language for the rephrased question and reasoning.
-- **Vague Queries:** If the question is vague or does not related to a table or property from the schema, classify it as `MISLEADING_QUERY`.
+- **Vague Queries:** If the question is not a data retrieval or analysis request and does not relate to the schema, classify it as `MISLEADING_QUERY`.
+- **Natural Language Data Queries:** Do not require exact physical table or column names. If the user asks to show, list, find, compare, count, aggregate, rank, filter, sort, or analyze data, classify it as `TEXT_TO_SQL` when schema context may answer it.
 - **Incomplete Queries:** If the question is related to the database schema but references unspecified values (e.g., "the following", "these", "those") without providing them, classify as `GENERAL`.
 - **Time-related Queries:** Don't rephrase time-related information in the user's question.
 
