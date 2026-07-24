@@ -101,6 +101,9 @@ User's Question: {{ query }}
 Original SQL: {{ invalid_generation_result.original_sql }}
 {% endif %}
 Invalid SQL: {{ invalid_generation_result.sql }}
+{% if invalid_generation_result.executed_sql %}
+Engine SQL that failed validation/execution: {{ invalid_generation_result.executed_sql }}
+{% endif %}
 Error Message: {{ invalid_generation_result.error }}
 
 ### CORRECTION GROUNDING ###

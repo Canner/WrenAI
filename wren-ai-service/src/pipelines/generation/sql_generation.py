@@ -82,6 +82,14 @@ SQL:
 ### QUESTION ###
 User's Question: {{ query }}
 
+### INTENT AND SCHEMA GROUNDING ###
+Interpret the user's business terms by matching them to explicit tables, columns,
+metrics, views, and relationships in DATABASE SCHEMA. Never copy table or column
+names from SQL SAMPLES, REASONING PLAN, or prior assumptions unless those exact
+names also appear in DATABASE SCHEMA or VALID TABLE NAMES. If a required metric,
+dimension, filter, date, or join key cannot be grounded by the retrieved metadata,
+do not replace it with a generic placeholder.
+
 {% if sql_generation_reasoning %}
 ### REASONING PLAN ###
 {{ sql_generation_reasoning }}
