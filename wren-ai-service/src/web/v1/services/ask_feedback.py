@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Dict, List, Literal, Optional
 
@@ -113,9 +114,24 @@ class AskFeedbackService:
                     trace_id=trace_id,
                 )
 
-                retrieval_task = await self._pipelines["db_schema_retrieval"].run(
-                    tables=ask_feedback_request.tables,
-                    project_id=ask_feedback_request.project_id,
+                (
+                    retrieval_task,
+                    sql_samples_task,
+                    instructions_task,
+                ) = await asyncio.gather(
+                    self._pipelines["db_schema_retrieval"].run(
+                        tables=ask_feedback_request.tables,
+                        project_id=ask_feedback_request.project_id,
+                    ),
+                    self._pipelines["sql_pairs_retrieval"].run(
+                        query=ask_feedback_request.question,
+                        project_id=ask_feedback_request.project_id,
+                    ),
+                    self._pipelines["instructions_retrieval"].run(
+                        query=ask_feedback_request.question,
+                        project_id=ask_feedback_request.project_id,
+                        scope="sql",
+                    ),
                 )
 
                 if allow_sql_functions_retrieval:
@@ -145,6 +161,10 @@ class AskFeedbackService:
                 has_json_field = _retrieval_result.get("has_json_field", False)
                 documents = _retrieval_result.get("retrieval_results", [])
                 table_ddls = [document.get("table_ddl") for document in documents]
+                sql_samples = sql_samples_task["formatted_output"].get("documents", [])
+                instructions = instructions_task["formatted_output"].get(
+                    "documents", []
+                )
 
             if not self._is_stopped(query_id, self._ask_feedback_results):
                 self._ask_feedback_results[query_id] = AskFeedbackResultResponse(
@@ -156,11 +176,11 @@ class AskFeedbackService:
                     "sql_regeneration"
                 ].run(
                     contexts=table_ddls,
-                    sql_generation_reasoning=None,
+                    sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
                     sql=ask_feedback_request.sql,
                     project_id=ask_feedback_request.project_id,
-                    sql_samples=[],
-                    instructions=[],
+                    sql_samples=sql_samples,
+                    instructions=instructions,
                     has_calculated_field=has_calculated_field,
                     has_metric=has_metric,
                     has_json_field=has_json_field,
@@ -219,7 +239,7 @@ class AskFeedbackService:
                             "sql_correction"
                         ].run(
                             contexts=table_ddls,
-                            instructions=[],
+                            instructions=instructions,
                             invalid_generation_result={
                                 "original_sql": original_sql,
                                 "sql": invalid_sql,

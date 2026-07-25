@@ -166,10 +166,8 @@ class SQLGenPostProcessor:
 _DEFAULT_TEXT_TO_SQL_RULES = """
 ### SQL RULES ###
 - ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
-- The CREATE TABLE and CREATE VIEW statements in DATABASE SCHEMA describe metadata only. NEVER output CREATE, ALTER, DROP, INSERT, UPDATE, DELETE, MERGE, or any other DDL/DML statement.
 - ONLY USE the tables and columns mentioned in the database schema.
 - ONLY USE "*" if the user query asks for all the columns of a table.
-- ONLY SELECT columns and aggregations that are required to answer the user's question. Do not include unrelated columns.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - DON'T INCLUDE comments in the generated SQL query.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!

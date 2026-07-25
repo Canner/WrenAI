@@ -82,8 +82,29 @@ class QuestionRecommendation:
             has_json_field = _retrieval_result.get("has_json_field", False)
             return table_ddls, has_calculated_field, has_metric, has_json_field
 
+        async def _sql_pairs_retrieval() -> list[dict]:
+            sql_pairs_result = await self._pipelines["sql_pairs_retrieval"].run(
+                query=candidate["question"],
+                project_id=project_id,
+            )
+            sql_samples = sql_pairs_result["formatted_output"].get("documents", [])
+            return sql_samples
+
+        async def _instructions_retrieval() -> list[dict]:
+            result = await self._pipelines["instructions_retrieval"].run(
+                query=candidate["question"],
+                project_id=project_id,
+                scope="sql",
+            )
+            instructions = result["formatted_output"].get("instructions", [])
+            return instructions
+
         try:
-            _document = await _document_retrieval()
+            _document, sql_samples, instructions = await asyncio.gather(
+                _document_retrieval(),
+                _sql_pairs_retrieval(),
+                _instructions_retrieval(),
+            )
             table_ddls, has_calculated_field, has_metric, has_json_field = _document
 
             if self._allow_sql_functions_retrieval:
@@ -104,8 +125,8 @@ class QuestionRecommendation:
                 query=candidate["question"],
                 contexts=table_ddls,
                 project_id=project_id,
-                sql_samples=[],
-                instructions=[],
+                sql_samples=sql_samples,
+                instructions=instructions,
                 has_calculated_field=has_calculated_field,
                 has_metric=has_metric,
                 has_json_field=has_json_field,

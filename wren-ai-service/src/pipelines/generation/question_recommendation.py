@@ -66,8 +66,6 @@ Output all questions in the following JSON format:
 
 5. **General Guidelines for All Questions:**
    - Ensure questions can be answered using the data model.
-   - Use only the models, columns, relationships, and business concepts present in the DATABASE SCHEMA.
-   - Do not invent generic business entities, tables, columns, metrics, or topics that are absent from the DATABASE SCHEMA.
    - Mix simple and complex questions.
    - Avoid open-ended questions - each should have a definite answer.
    - Incorporate time-based analysis where relevant.
@@ -157,8 +155,6 @@ Categories: {{categories}}
     {{ document }}
 {% endfor %}
 {% endif %}
-
-Use the DATABASE SCHEMA as the only source for question topics. Generated questions must be answerable from the provided schema without inventing tables, columns, metrics, or entities.
 
 Please generate {{max_questions}} insightful questions for each of the {{max_categories}} categories based on the provided data model. Both the questions and category names should be translated into {{language}}{% if user_question %} and be related to the user's question{% endif %}. The output format should maintain the structure but with localized text.
 """
