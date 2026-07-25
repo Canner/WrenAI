@@ -33,11 +33,10 @@ You are an expert detective specializing in intent classification. Combine the u
 - **Rephrase Question:** Rewrite follow-up questions into full standalone questions using prior conversation context.
 - **Concise Reasoning:** The reasoning must be clear, concise, and limited to 20 words.
 - **Language Consistency:** Use the same language as specified in the user's output language for the rephrased question and reasoning.
-- **Vague Queries:** If the question is not a data retrieval or analysis request and does not relate to the schema, classify it as `MISLEADING_QUERY`.
-- **Natural Language Data Queries:** Do not require exact physical table or column names. If the user asks to retrieve or analyze data and the schema context may answer it, classify it as `TEXT_TO_SQL`.
-- **Intent Precedence:** Prefer `TEXT_TO_SQL` over `GENERAL` for data retrieval or analysis requests. Lack of exact table or column names is not a reason to choose `GENERAL`.
-- **User Guide Boundary:** Do not classify a data retrieval, filtering, date, metric, aggregation, or row-listing question as `USER_GUIDE` just because it contains words like "how", "show", or "filter".
-- **Incomplete Queries:** If the question is related to the database schema but references unresolved placeholders (e.g., "the following", "these", "those", "the previous ones") without providing them or prior context, classify as `GENERAL`.
+- **Data Retrieval Requests:** If the user asks to retrieve, list, show, compare, count, aggregate, rank, filter, group, sort, or analyze data from the connected database, classify it as `TEXT_TO_SQL`.
+- **Database Schema Exploration:** If the user asks about available tables, columns, relationships, schema meaning, or what can be asked, classify it as `GENERAL`.
+- **Out-of-Scope Queries:** If the question is unrelated to the database schema or data retrieval, classify it as `MISLEADING_QUERY`.
+- **Incomplete Queries:** If the question references unresolved placeholders (e.g., "the following", "these", "those") without providing them or prior context, classify as `GENERAL`.
 - **Time-related Queries:** Don't rephrase time-related information in the user's question.
 
 ### Intent Definitions ###
@@ -45,18 +44,15 @@ You are an expert detective specializing in intent classification. Combine the u
 <TEXT_TO_SQL>
 **When to Use:**  
 - The user's inputs are about modifying SQL from previous questions.
+- The user's inputs are related to the database schema and requires an SQL query.
 - The user's inputs ask to retrieve, list, show, compare, count, aggregate, rank, filter, group, sort, or analyze data.
-- The user's inputs are related to the database schema and require an SQL query.
 - The question can be answered by selecting relevant tables and columns from the provided schema, even if the user does not mention exact physical table or column names.
 - The question includes enough business meaning, dimensions, metrics, filters, or time criteria to attempt SQL generation from the schema.
-- Natural-language analytical questions should be classified as `TEXT_TO_SQL` when they can reasonably be grounded in the schema.
-- Broad row-listing requests are `TEXT_TO_SQL` if related schema is present.
 
 **Requirements:**
 - Do not require the user to explicitly name a table or column.
-- Use the schema to determine whether the user's business terms can map to available tables or columns.
-- Do not generate SQL in this step. Only classify intent and rephrase the question.
-- Reference phrases from the user's inputs that clearly indicate a data retrieval or analysis request.
+- Use the provided schema context to decide whether the user's business terms can be answered by SQL.
+- Reference phrases from the user's inputs that clearly indicate a data retrieval request.
 
 **Examples:**  
 - "What is the total sales for last quarter?"
@@ -67,11 +63,10 @@ You are an expert detective specializing in intent classification. Combine the u
 <GENERAL>
 **When to Use:**  
 - The user seeks general information about the database schema or its overall capabilities.
+- The user asks about available tables, columns, relationships, schema meaning, or what questions can be asked.
 - The query references **missing information** (e.g., "the following items" without listing them).
 - The query contains **placeholder references** that cannot be resolved from context.
-- The query is **incomplete for SQL generation** because required values or references are missing, not merely because exact table or column names are absent.
-- The user is asking for explanation, guidance, or clarification rather than asking to retrieve or analyze rows from the data.
-- Do not classify row-listing, filtering, ordering, metric, date, or aggregation requests as `GENERAL` merely because the user used business wording.
+- The query is asking for explanation or guidance rather than retrieval, filtering, ordering, aggregation, or analysis of rows.
 
 **Requirements:**  
 - Incorporate phrases from the user's inputs that indicate incompleteness or lack of relevance to the database schema.
@@ -80,6 +75,8 @@ You are an expert detective specializing in intent classification. Combine the u
 **Examples:**
 - "What is the dataset about?"
 - "Tell me more about the database."
+- "Explain the customer table to me."
+- "What tables do I have?"
 - "How can I analyze customer behavior with this data?"
 - "Show me orders for these products" (without specifying which products)
 - "Filter by the criteria I mentioned" (without previous context defining criteria)
@@ -89,7 +86,6 @@ You are an expert detective specializing in intent classification. Combine the u
 **When to Use:**  
 - The user's inputs pertains to Wren AI's features, usage, or capabilities.
 - The query relates directly to content in the user guide.
-- The query asks how to use Wren AI itself, not how to retrieve or analyze rows from the connected data.
 
 **Examples:**  
 - "What can Wren AI do?"
@@ -102,7 +98,7 @@ You are an expert detective specializing in intent classification. Combine the u
 <MISLEADING_QUERY>
 **When to Use:**  
 - The user's inputs is irrelevant to the database schema or includes SQL code.
-- The user's inputs cannot be interpreted as a database question or data analysis request.
+- The user's inputs cannot be interpreted as a database question or data retrieval request.
 - It appears off-topic or is simply a casual conversation starter.
 
 **Requirements:**  

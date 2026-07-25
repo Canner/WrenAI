@@ -92,17 +92,7 @@ async def generate_sql_diagnosis(
 async def post_process(
     generate_sql_diagnosis: dict,
 ) -> str:
-    reply = (generate_sql_diagnosis.get("replies") or [""])[0]
-    try:
-        parsed_reply = orjson.loads(reply)
-    except orjson.JSONDecodeError:
-        return {"reasoning": reply.strip()}
-
-    if isinstance(parsed_reply, dict):
-        reasoning = parsed_reply.get("reasoning", "")
-        return {"reasoning": reasoning if isinstance(reasoning, str) else ""}
-
-    return {"reasoning": str(parsed_reply)}
+    return orjson.loads(generate_sql_diagnosis.get("replies")[0])
 
 
 ## End of Pipeline

@@ -1,7 +1,5 @@
-from __future__ import annotations
-
 import logging
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import Any, Dict, List
 
 import aiohttp
 import orjson
@@ -14,9 +12,7 @@ from src.core.engine import (
     clean_generation_result,
 )
 from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
-
-if TYPE_CHECKING:
-    from src.web.v1.services.ask import AskHistory
+from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -169,19 +165,12 @@ class SQLGenPostProcessor:
 
 _DEFAULT_TEXT_TO_SQL_RULES = """
 ### SQL RULES ###
-- ONLY USE SELECT statements. Do not generate ALTER, CREATE, DROP, INSERT, UPDATE, DELETE, MERGE, TRUNCATE, GRANT, REVOKE, or any other statement that can change the database or schema.
+- ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
 - ONLY USE the tables and columns mentioned in the database schema.
-- Treat the DATABASE SCHEMA section as the only authoritative source for table and column identifiers. Never invent, rename, translate, normalize, prefix, suffix, or guess an identifier.
-- Do not use names from policies, instructions, SQL functions, SQL samples, query history, reasoning text, error messages, or the user's wording as table or column identifiers unless they appear exactly in DATABASE SCHEMA.
-- Policy documents and policy names are not database tables or columns unless they appear exactly in DATABASE SCHEMA.
-- Use schema comments, aliases, and descriptions only to choose among identifiers that already appear exactly in DATABASE SCHEMA. Do not derive new table or column names from them.
-- When the schema exposes raw or generated names, use those exact names in SQL. Do not replace them with natural-language names or inferred business names.
-- Do not use "*" unless the user explicitly asks for every column or every field from a table. For ordinary requests such as recent records, customers, transactions, comparisons, summaries, or aggregations, select only the columns needed to answer the question.
+- ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - DON'T INCLUDE comments in the generated SQL query.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
-- Use multiple retrieved tables when the question requires them, and join only with relationships that are present in the DATABASE SCHEMA section. Do not infer joins from similar names, business wording, SQL samples, query history, or reasoning text.
-- Do not invent measure, dimension, or filter columns. If the question refers to a business concept, use only an exact table or column that appears in DATABASE SCHEMA.
 - PREFER USING CTEs over subqueries.
 - When generating SQL query, always:
     - Put double quotes around column and table names.
@@ -204,7 +193,6 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
     - example 1: CAST(properties_closedate AS TIMESTAMP WITH TIME ZONE)
     - example 2: CAST('2024-11-09 00:00:00' AS TIMESTAMP WITH TIME ZONE)
     - example 3: CAST(DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') AS TIMESTAMP WITH TIME ZONE)
-- For date parts such as year, month, day, quarter, or week, use `EXTRACT(<PART> FROM CAST(<date_column> AS TIMESTAMP WITH TIME ZONE))`. Do not use `YEAR()`, `MONTH()`, `DAY()`, or `DATEPART()` unless the SQL FUNCTIONS section explicitly says that function is supported.
 - If the user asks for a specific date, please give the date range in SQL query
     - example: "What is the total revenue for the month of 2024-11-01?"
     - answer: "SELECT SUM(r.PriceSum) FROM Revenue r WHERE CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) >= CAST('2024-11-01 00:00:00' AS TIMESTAMP WITH TIME ZONE) AND CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) < CAST('2024-11-02 00:00:00' AS TIMESTAMP WITH TIME ZONE)"
@@ -447,21 +435,16 @@ if the user puts any specific timeframe(e.g. YYYY-MM-DD) in the user's question(
 otherwise, you will put the relative timeframe in the SQL query.
 3. For the ranking problem(e.g. "top x", "bottom x", "first x", "last x"), you must use the ranking function, `DENSE_RANK()` to rank the results and then use `WHERE` clause to filter the results.
 4. For the ranking problem(e.g. "top x", "bottom x", "first x", "last x"), you must add the ranking column to the final SELECT clause.
-5. If USER INSTRUCTIONS section is provided, make sure to consider them in the reasoning plan, but do not treat them as schema.
-6. If SQL SAMPLES section is provided, use them only as examples of SQL structure. Do not treat their identifiers as schema unless they appear exactly in DATABASE SCHEMA.
-7. Treat the DATABASE SCHEMA section as the only authoritative source for table and column identifiers.
-8. Do not mention a table or column in the reasoning plan unless it appears in the DATABASE SCHEMA section.
-9. If the user's wording is different from the schema names, use comments, aliases, and descriptions only to choose among existing schema names. Do not invent normalized, friendly, or inferred names.
-10. Do not enumerate the full schema. Mention only the retrieved tables, columns, and relationships that are relevant to answering the user's question.
-11. When the question requires multiple tables, use only relationships that are present in the DATABASE SCHEMA section; do not infer relationships from similar names, business wording, SQL samples, query history, or reasoning text.
-12. Give a step by step reasoning plan in order to answer user's question.
-13. The reasoning plan should be in the language same as the language user provided in the input.
-14. Don't include SQL in the reasoning plan.
-15. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
-16. Do not include ```markdown or ``` in the answer.
-17. A table name in the reasoning plan must be in this format: `table: <table_name>`.
-18. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
-19. ONLY SHOWING the reasoning plan in bullet points.
+5. If USER INSTRUCTIONS section is provided, make sure to consider them in the reasoning plan.
+6. If SQL SAMPLES section is provided, make sure to consider them in the reasoning plan.
+7. Give a step by step reasoning plan in order to answer user's question.
+8. The reasoning plan should be in the language same as the language user provided in the input.
+9. Don't include SQL in the reasoning plan.
+10. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
+11. Do not include ```markdown or ``` in the answer.
+12. A table name in the reasoning plan must be in this format: `table: <table_name>`.
+13. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
+14. ONLY SHOWING the reasoning plan in bullet points.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
@@ -480,13 +463,9 @@ def _extract_from_sql_knowledge(
 
 def get_text_to_sql_rules(sql_knowledge: SqlKnowledge | None = None) -> str:
     if sql_knowledge is not None:
-        value = getattr(sql_knowledge, "text_to_sql_rule", "")
-        if value and value.strip():
-            return (
-                f"{_DEFAULT_TEXT_TO_SQL_RULES}\n\n"
-                "### PROJECT SQL RULES ###\n"
-                f"{value.strip()}"
-            )
+        return _extract_from_sql_knowledge(
+            sql_knowledge, "text_to_sql_rule", _DEFAULT_TEXT_TO_SQL_RULES
+        )
 
     return _DEFAULT_TEXT_TO_SQL_RULES
 
@@ -532,10 +511,9 @@ Given user's question, database schema, etc., you should think deeply and carefu
 
 1. YOU MUST FOLLOW the instructions strictly to generate the SQL query if the section of USER INSTRUCTIONS is available in user's input.
 2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
-3. YOU MUST REFER to sql samples only for SQL structure and patterns if the section of SQL SAMPLES is available in user's input. Do not copy identifiers from samples unless they appear exactly in DATABASE SCHEMA.
-4. YOU MUST USE the reasoning plan only as analytical guidance if the section of REASONING PLAN is available in user's input. Do not copy table or column names from it unless they appear exactly in DATABASE SCHEMA.
+3. YOU MUST REFER to the sql samples and learn the usage of the schema structures and how SQL is written based on them if the section of SQL SAMPLES is available in user's input.
+4. YOU MUST FOLLOW the reasoning plan step by step strictly to generate the SQL query if the section of REASONING PLAN is available in user's input.
 5. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
-6. DATABASE SCHEMA is more authoritative than the reasoning plan, SQL samples, and user wording. If any of those mention a table or column that is not present in DATABASE SCHEMA, do not use it.
 
 {text_to_sql_rules}
 
@@ -576,7 +554,7 @@ def construct_instructions(
 
 
 def construct_ask_history_messages(
-    histories: list["AskHistory"] | list[dict],
+    histories: list[AskHistory] | list[dict],
 ) -> list[ChatMessage]:
     messages = []
     for history in histories:
