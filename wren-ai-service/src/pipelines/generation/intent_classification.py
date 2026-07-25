@@ -1,6 +1,5 @@
 import ast
 import logging
-import re
 import sys
 from typing import Any, Literal, Optional
 
@@ -303,54 +302,12 @@ async def classify_intent(prompt: dict, generator: Any, generator_name: str) -> 
 
 
 @observe(capture_input=False)
-def post_process(
-    query: str, classify_intent: dict, construct_db_schemas: list[str]
-) -> dict:
+def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict:
     try:
         results = orjson.loads(classify_intent.get("replies")[0])
-        intent = results["results"]
-        query_text = " ".join(
-            [
-                str(query or ""),
-                str(results.get("rephrased_question") or ""),
-            ]
-        ).lower()
-        data_request_patterns = (
-            r"\bshow\b",
-            r"\blist\b",
-            r"\bdisplay\b",
-            r"\bfetch\b",
-            r"\bfind\b",
-            r"\bcompare\b",
-            r"\bcount\b",
-            r"\bsum\b",
-            r"\btotal\b",
-            r"\baverage\b",
-            r"\bavg\b",
-            r"\bmin\b",
-            r"\bmax\b",
-            r"\btop\b",
-            r"\bbottom\b",
-            r"\brecent\b",
-            r"\blatest\b",
-            r"\bfilter\b",
-            r"\bgroup\b",
-            r"\border(?:s|ed|ing)?\b",
-            r"\bsort\b",
-            r"\brank\b",
-            r"\btrend\b",
-        )
-        if (
-            intent in {"GENERAL", "USER_GUIDE"}
-            and construct_db_schemas
-            and any(
-                re.search(pattern, query_text) for pattern in data_request_patterns
-            )
-        ):
-            intent = "TEXT_TO_SQL"
         return {
             "rephrased_question": results["rephrased_question"],
-            "intent": intent,
+            "intent": results["results"],
             "reasoning": results["reasoning"],
             "db_schemas": construct_db_schemas,
         }
