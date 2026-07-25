@@ -22,7 +22,17 @@ def _request(*, method: str, url: str, headers: dict, payload: dict) -> dict:
     resp = requests.request(method, url, headers=headers, json=payload, timeout=120)
     if resp.status_code >= 400:
         raise DeployError(f"Vercel API error {resp.status_code}: {resp.text[:500]}")
-    return resp.json()
+    try:
+        data = resp.json()
+    except ValueError as exc:
+        raise DeployError(
+            f"Vercel API returned non-JSON body (HTTP {resp.status_code}): {resp.text[:200]!r}"
+        ) from exc
+    if not isinstance(data, dict):
+        raise DeployError(
+            f"Vercel API returned non-object JSON (HTTP {resp.status_code}): {type(data).__name__}"
+        )
+    return data
 
 
 def _collect_files(build_dir: Path) -> list[dict]:
