@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     instructions_top_k: int = Field(default=10)
 
     # generation config
-    allow_intent_classification: bool = Field(default=True)
+    allow_intent_classification: bool = Field(default=False)
     allow_sql_generation_reasoning: bool = Field(default=True)
     allow_sql_functions_retrieval: bool = Field(default=True)
     allow_sql_diagnosis: bool = Field(default=True)
