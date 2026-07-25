@@ -12,22 +12,15 @@ const quoteIdentifier = (identifier: unknown) => {
 };
 
 const isMetricColumn = (column: Partial<ColumnMDL>) => {
-  const name = String(column.name || '').toLowerCase();
   const type = String(column.type || '').toLowerCase();
-  return (
-    /int|float|double|decimal|numeric|number|real|money/.test(type) ||
-    /amount|value|total|count|qty|quantity|price|cost|revenue|sales|margin|rate/.test(
-      name,
-    )
+  return /int|bigint|smallint|tinyint|float|double|decimal|numeric|number|real|money/.test(
+    type,
   );
 };
 
 const isDateColumn = (column: Partial<ColumnMDL>) => {
-  const name = String(column.name || '').toLowerCase();
   const type = String(column.type || '').toLowerCase();
-  return (
-    /date|time|timestamp/.test(type) || /date|time|created|updated/.test(name)
-  );
+  return /date|time|timestamp/.test(type);
 };
 
 const isDimensionColumn = (column: Partial<ColumnMDL>) => {

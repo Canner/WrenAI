@@ -6,7 +6,6 @@ import { Manifest } from '@server/mdl/type';
 import * as Errors from '@server/utils/error';
 import { getConfig } from '@server/config';
 import { toDockerHost } from '@server/utils';
-import { normalizeMssqlSqlForIbis } from '@server/utils/mssqlSqlNormalizer';
 import {
   CompactColumn,
   CompactTable,
@@ -271,7 +270,7 @@ export class IbisAdaptor implements IIbisAdaptor {
   public async getNativeSql(options: IbisDryPlanOptions): Promise<string> {
     const { dataSource, mdl, sql } = options;
     const body = {
-      sql: normalizeMssqlSqlForIbis(sql, dataSource),
+      sql,
       manifestStr: Buffer.from(JSON.stringify(mdl)).toString('base64'),
     };
     try {
@@ -295,7 +294,6 @@ export class IbisAdaptor implements IIbisAdaptor {
     options: IbisQueryOptions,
   ): Promise<IbisQueryResponse> {
     const { dataSource, mdl } = options;
-    query = normalizeMssqlSqlForIbis(query, dataSource);
     const connectionInfo = this.updateConnectionInfo(options.connectionInfo);
     const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
     const queryString = this.buildQueryString(options);
@@ -340,7 +338,6 @@ export class IbisAdaptor implements IIbisAdaptor {
     options: IbisQueryOptions,
   ): Promise<DryRunResponse> {
     const { dataSource, mdl } = options;
-    query = normalizeMssqlSqlForIbis(query, dataSource);
     const connectionInfo = this.updateConnectionInfo(options.connectionInfo);
     const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
     const body = {

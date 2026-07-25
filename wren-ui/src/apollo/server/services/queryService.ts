@@ -1,5 +1,5 @@
 import { DataSourceName } from '@server/types';
-import { Manifest, TableReference } from '@server/mdl/type';
+import { Manifest } from '@server/mdl/type';
 import { IWrenEngineAdaptor } from '../adaptors/wrenEngineAdaptor';
 import {
   SupportedDataSource,
@@ -9,7 +9,6 @@ import {
   IbisResponse,
 } from '../adaptors/ibisAdaptor';
 import { getLogger } from '@server/utils';
-import { normalizeMssqlSqlForIbis } from '@server/utils/mssqlSqlNormalizer';
 import { Project } from '../repositories';
 import { PostHogTelemetry, TelemetryEvent } from '../telemetry/telemetry';
 
@@ -77,390 +76,6 @@ export interface IQueryService {
   ): Promise<ValidateResponse>;
 }
 
-const normalizePreviewSqlForIbis = (
-  sql: string,
-  dataSource: DataSourceName,
-  limit?: number,
-): { sql: string; limit?: number } => {
-  sql = normalizeMssqlSqlForIbis(sql, dataSource);
-
-  if (dataSource !== DataSourceName.MSSQL) {
-    return {
-      sql: normalizeNonMssqlGeneratedSqlSyntax(sql, dataSource),
-      limit,
-    };
-  }
-
-  const topMatch = sql.match(/^\s*SELECT\s+(DISTINCT\s+)?TOP\s*\(?\s*(\d+)\s*\)?\s+/i);
-  if (!topMatch) {
-    return { sql, limit };
-  }
-
-  const distinctClause = topMatch[1] || '';
-  const topLimit = Number(topMatch[2]);
-  const normalizedSql = sql.replace(
-    /^\s*SELECT\s+(DISTINCT\s+)?TOP\s*\(?\s*\d+\s*\)?\s+/i,
-    `SELECT ${distinctClause}`,
-  );
-
-  return {
-    sql: normalizedSql,
-    limit:
-      limit && limit > 0 ? Math.min(limit, topLimit) : topLimit,
-  };
-};
-
-const normalizeDeployedManifestForDatasource = (
-  manifest: Manifest,
-  project: Project,
-): Manifest => {
-  if (project.type === DataSourceName.MSSQL || !manifest?.models?.length) {
-    return manifest;
-  }
-
-  const fallbackCatalog = manifest.catalog || project.catalog || null;
-  const fallbackSchema = manifest.schema || project.schema || null;
-
-  return {
-    ...manifest,
-    models: manifest.models.map((model) => {
-      const tableReferenceResult = normalizeTableReference(
-        model.tableReference,
-        fallbackSchema,
-      );
-      const synthesizedTableReference =
-        tableReferenceResult.tableReference ||
-        buildTableReferenceFromDboModelName(
-          model.name,
-          fallbackCatalog,
-          fallbackSchema,
-        ) ||
-        buildTableReferenceFromDboRefSql(
-          model.refSql,
-          fallbackCatalog,
-          fallbackSchema,
-        );
-
-      if (!synthesizedTableReference) {
-        return model;
-      }
-
-      const normalizedModel = {
-        ...model,
-        tableReference: synthesizedTableReference,
-      };
-
-      if (
-        tableReferenceResult.changed ||
-        isDboPrefixedModelName(model.name) ||
-        containsDboPhysicalReference(model.refSql)
-      ) {
-        delete normalizedModel.refSql;
-      }
-
-      return normalizedModel;
-    }),
-  };
-};
-
-const normalizeNonMssqlGeneratedSqlSyntax = (
-  sql: string,
-  dataSource: DataSourceName,
-): string => {
-  if (dataSource === DataSourceName.MSSQL) {
-    return sql;
-  }
-
-  return rewriteGeneratedDateDiff(sql);
-};
-
-const rewriteGeneratedDateDiff = (sql: string): string => {
-  const dateDiffPattern =
-    /\bdate_?diff\s*\(\s*'?([A-Za-z]+)'?\s*,\s*([^,()]+(?:\([^)]*\))?[^,()]*)\s*,\s*([^()]+(?:\([^)]*\))?[^()]*)\)/gi;
-
-  return sql.replace(
-    dateDiffPattern,
-    (_match, unit: string, startExpression: string, endExpression: string) => {
-      const normalizedUnit = unit.toLowerCase();
-      const start = startExpression.trim();
-      const end = endExpression.trim();
-
-      if (['day', 'dd', 'd'].includes(normalizedUnit)) {
-        return `EXTRACT(DAY FROM (${end} - ${start}))`;
-      }
-
-      if (['month', 'mm', 'm'].includes(normalizedUnit)) {
-        return `((EXTRACT(YEAR FROM ${end}) - EXTRACT(YEAR FROM ${start})) * 12 + (EXTRACT(MONTH FROM ${end}) - EXTRACT(MONTH FROM ${start})))`;
-      }
-
-      if (['year', 'yy', 'yyyy'].includes(normalizedUnit)) {
-        return `(EXTRACT(YEAR FROM ${end}) - EXTRACT(YEAR FROM ${start}))`;
-      }
-
-      return `EXTRACT(DAY FROM (${end} - ${start}))`;
-    },
-  );
-};
-
-const normalizeTableReference = (
-  tableReference: TableReference | undefined,
-  fallbackSchema: string | null,
-): { tableReference?: TableReference; changed: boolean } => {
-  if (!tableReference?.table) {
-    return { tableReference, changed: false };
-  }
-
-  const normalizedTableName = normalizeDboPrefixedTableName(
-    tableReference.table,
-  );
-  const shouldReplaceDboSchema =
-    tableReference.schema?.toLowerCase() === 'dbo' && fallbackSchema;
-
-  if (
-    normalizedTableName === tableReference.table &&
-    !shouldReplaceDboSchema
-  ) {
-    return { tableReference, changed: false };
-  }
-
-  return {
-    tableReference: {
-      ...tableReference,
-      schema: shouldReplaceDboSchema ? fallbackSchema : tableReference.schema,
-      table: normalizedTableName,
-    },
-    changed: true,
-  };
-};
-
-const normalizeDboPrefixedTableName = (tableName: string): string => {
-  const match = tableName.match(/^dbo_(.+)$/i);
-  return match ? match[1] : tableName;
-};
-
-const buildTableReferenceFromDboModelName = (
-  modelName: string | undefined,
-  fallbackCatalog: string | null,
-  fallbackSchema: string | null,
-): TableReference | undefined => {
-  if (!modelName || !isDboPrefixedModelName(modelName)) {
-    return undefined;
-  }
-
-  return {
-    catalog: fallbackCatalog,
-    schema: fallbackSchema,
-    table: normalizeDboPrefixedTableName(modelName),
-  };
-};
-
-const buildTableReferenceFromDboRefSql = (
-  refSql: string | undefined,
-  fallbackCatalog: string | null,
-  fallbackSchema: string | null,
-): TableReference | undefined => {
-  if (!refSql || !containsDboPhysicalReference(refSql)) {
-    return undefined;
-  }
-
-  const tableName =
-    extractDboPrefixedTableName(refSql) || extractDboSchemaTableName(refSql);
-  if (!tableName) {
-    return undefined;
-  }
-
-  return {
-    catalog: fallbackCatalog,
-    schema: fallbackSchema,
-    table: normalizeDboPrefixedTableName(tableName),
-  };
-};
-
-const isDboPrefixedModelName = (modelName: string | undefined): boolean =>
-  !!modelName && /^dbo_.+/i.test(modelName);
-
-const containsDboPhysicalReference = (sql: string | undefined): boolean =>
-  !!sql && /(?:^|[.\s"])(?:dbo_[\w]+|dbo\.[\w"]+)/i.test(sql);
-
-const extractDboPrefixedTableName = (sql: string): string | undefined => {
-  const match = sql.match(/\bdbo_([A-Za-z0-9_]+)\b/i);
-  return match ? `dbo_${match[1]}` : undefined;
-};
-
-const extractDboSchemaTableName = (sql: string): string | undefined => {
-  const match = sql.match(/\bdbo\.("?)([A-Za-z0-9_]+)\1/i);
-  return match ? match[2] : undefined;
-};
-
-const SQL_IDENTIFIER_PATTERN =
-  String.raw`(?:"[^"]+"|` +
-  '`[^`]+`' +
-  String.raw`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_$]*)`;
-
-const normalizeSqlIdentifier = (identifier: string) => {
-  const trimmed = identifier.trim();
-  if (
-    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-    (trimmed.startsWith('`') && trimmed.endsWith('`')) ||
-    (trimmed.startsWith('[') && trimmed.endsWith(']'))
-  ) {
-    return trimmed.slice(1, -1);
-  }
-  return trimmed;
-};
-
-const splitTableReference = (tableReference: string) => {
-  const trimmed = tableReference.trim();
-  if (!trimmed) {
-    return [];
-  }
-
-  const isMultipartQuotedReference =
-    /"\s*\.\s*"|\]\s*\.\s*\[|`\s*\.\s*`/.test(trimmed);
-  if (
-    !isMultipartQuotedReference &&
-    ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-      (trimmed.startsWith('`') && trimmed.endsWith('`')) ||
-      (trimmed.startsWith('[') && trimmed.endsWith(']')))
-  ) {
-    const normalized = normalizeSqlIdentifier(trimmed);
-    if (normalized.includes('.')) {
-      return normalized.split(/\s*\.\s*/).filter(Boolean);
-    }
-  }
-
-  return trimmed
-    .split(/\s*\.\s*/)
-    .map(normalizeSqlIdentifier)
-    .filter(Boolean);
-};
-
-const quoteSqlIdentifier = (identifier: string) =>
-  `"${identifier.replace(/"/g, '""')}"`;
-
-const quoteTableReference = (tableReference: string) =>
-  splitTableReference(tableReference).map(quoteSqlIdentifier).join('.');
-
-const escapeRegExp = (value: string) =>
-  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-const extractSqlTableReferences = (sql: string) => {
-  const references: string[] = [];
-  const tablePattern = new RegExp(
-    String.raw`\b(?:FROM|JOIN)\s+(${SQL_IDENTIFIER_PATTERN}(?:\s*\.\s*${SQL_IDENTIFIER_PATTERN})*)`,
-    'gi',
-  );
-  let match: RegExpExecArray | null;
-  while ((match = tablePattern.exec(sql))) {
-    references.push(splitTableReference(match[1]).join('.'));
-  }
-  return references;
-};
-
-const addModelReferenceAlias = (
-  aliases: Map<string, string>,
-  parts: Array<string | null | undefined>,
-  modelName?: string,
-) => {
-  if (!modelName) {
-    return;
-  }
-
-  const normalizedParts = parts
-    .filter((part): part is string => Boolean(part))
-    .map((part) => part.toLowerCase());
-  if (!normalizedParts.length) {
-    return;
-  }
-
-  for (let index = 0; index < normalizedParts.length; index += 1) {
-    aliases.set(normalizedParts.slice(index).join('.'), modelName);
-  }
-};
-
-const getManifestTableReferenceAliases = (manifest?: Manifest) => {
-  const aliases = new Map<string, string>();
-  for (const model of manifest?.models || []) {
-    if (!model.name) {
-      continue;
-    }
-
-    aliases.set(model.name.toLowerCase(), model.name);
-    const dboModelMatch = model.name.match(/^dbo_(.+)$/i);
-    if (dboModelMatch?.[1]) {
-      aliases.set(`dbo.${dboModelMatch[1]}`.toLowerCase(), model.name);
-    }
-    const basePatternMatch = model.name.match(/^(.+)_patterns$/i);
-    if (basePatternMatch?.[1]) {
-      aliases.set(basePatternMatch[1].toLowerCase(), model.name);
-      const dboBasePatternMatch = basePatternMatch[1].match(/^dbo_(.+)$/i);
-      if (dboBasePatternMatch?.[1]) {
-        aliases.set(`dbo.${dboBasePatternMatch[1]}`.toLowerCase(), model.name);
-      }
-    }
-    if (model.tableReference?.table) {
-      addModelReferenceAlias(
-        aliases,
-        [
-          model.tableReference.catalog,
-          model.tableReference.schema,
-          model.tableReference.table,
-        ],
-        model.name,
-      );
-    }
-  }
-  return aliases;
-};
-
-const tableReferencePatternFor = (tableReference: string) => {
-  const parts = splitTableReference(tableReference);
-  if (!parts.length) {
-    return undefined;
-  }
-
-  const multipartQuoted = parts
-    .map(quoteSqlIdentifier)
-    .map(escapeRegExp)
-    .join(String.raw`\s*\.\s*`);
-  const bare = parts.map(escapeRegExp).join(String.raw`\s*\.\s*`);
-  const singleQuoted = escapeRegExp(quoteSqlIdentifier(tableReference));
-  const bracketed = escapeRegExp(`[${tableReference}]`);
-  const backticked = escapeRegExp(`\`${tableReference}\``);
-  return new RegExp(
-    String.raw`(?<![A-Za-z0-9_$])(?:${multipartQuoted}|${singleQuoted}|${bracketed}|${backticked}|${bare})(?![A-Za-z0-9_$])`,
-    'gi',
-  );
-};
-
-const normalizeSqlReferencesToManifest = (sql: string, manifest?: Manifest) => {
-  const aliases = getManifestTableReferenceAliases(manifest);
-  if (!aliases.size) {
-    return sql;
-  }
-
-  let normalizedSql = sql;
-  const replacements = new Map<string, string>();
-  for (const reference of extractSqlTableReferences(sql)) {
-    const canonicalName = aliases.get(reference.toLowerCase());
-    if (canonicalName && canonicalName.toLowerCase() !== reference.toLowerCase()) {
-      replacements.set(reference, canonicalName);
-    }
-  }
-
-  for (const [reference, canonicalName] of [...replacements.entries()].sort(
-    ([left], [right]) => right.length - left.length,
-  )) {
-    const pattern = tableReferencePatternFor(reference);
-    if (!pattern) {
-      continue;
-    }
-    normalizedSql = normalizedSql.replace(pattern, quoteTableReference(canonicalName));
-  }
-
-  return normalizedSql;
-};
-
 export class QueryService implements IQueryService {
   private readonly ibisAdaptor: IIbisAdaptor;
   private readonly wrenEngineAdaptor: IWrenEngineAdaptor;
@@ -486,34 +101,27 @@ export class QueryService implements IQueryService {
   ): Promise<IbisResponse | PreviewDataResponse | boolean> {
     const {
       project,
-      manifest: rawMdl,
+      manifest: mdl,
       limit,
       dryRun,
       refresh,
       cacheEnabled,
     } = options;
-    const mdl = normalizeDeployedManifestForDatasource(rawMdl, project);
     const { type: dataSource, connectionInfo } = project;
-    const manifestNormalizedSql = normalizeSqlReferencesToManifest(sql, mdl);
-    const normalizedPreview = normalizePreviewSqlForIbis(
-      manifestNormalizedSql,
-      dataSource,
-      limit,
-    );
     if (this.useEngine(dataSource)) {
       if (dryRun) {
         logger.debug('Using wren engine to dry run');
-        await this.wrenEngineAdaptor.dryRun(normalizedPreview.sql, {
+        await this.wrenEngineAdaptor.dryRun(sql, {
           manifest: mdl,
-          limit: normalizedPreview.limit,
+          limit,
         });
         return true;
       } else {
         logger.debug('Using wren engine to preview');
         const data = await this.wrenEngineAdaptor.previewData(
-          normalizedPreview.sql,
+          sql,
           mdl,
-          normalizedPreview.limit,
+          limit,
         );
         return data as PreviewDataResponse;
       }
@@ -522,18 +130,18 @@ export class QueryService implements IQueryService {
       logger.debug('Use ibis adaptor to preview');
       if (dryRun) {
         return await this.ibisDryRun(
-          normalizedPreview.sql,
+          sql,
           dataSource,
           connectionInfo,
           mdl,
         );
       } else {
         return await this.ibisQuery(
-          normalizedPreview.sql,
+          sql,
           dataSource,
           connectionInfo,
           mdl,
-          normalizedPreview.limit,
+          limit,
           refresh,
           cacheEnabled,
         );
@@ -563,12 +171,11 @@ export class QueryService implements IQueryService {
     parameters: Record<string, any>,
   ): Promise<ValidateResponse> {
     const { type: dataSource, connectionInfo } = project;
-    const mdl = normalizeDeployedManifestForDatasource(manifest, project);
     const res = await this.ibisAdaptor.validate(
       dataSource,
       rule,
       connectionInfo,
-      mdl,
+      manifest,
       parameters,
     );
     return res;
@@ -596,22 +203,21 @@ export class QueryService implements IQueryService {
     connectionInfo: any,
     mdl: Manifest,
   ): Promise<IbisResponse> {
-    const normalizedQuery = normalizePreviewSqlForIbis(sql, dataSource).sql;
     const event = TelemetryEvent.IBIS_DRY_RUN;
     try {
-      const res = await this.ibisAdaptor.dryRun(normalizedQuery, {
+      const res = await this.ibisAdaptor.dryRun(sql, {
         dataSource,
         connectionInfo,
         mdl,
       });
-      this.sendIbisEvent(event, res, { dataSource, sql: normalizedQuery });
+      this.sendIbisEvent(event, res, { dataSource, sql });
       return {
         correlationId: res.correlationId,
       };
     } catch (err: any) {
       this.sendIbisFailedEvent(event, err, {
         dataSource,
-        sql: normalizedQuery,
+        sql,
       });
       throw err;
     }
@@ -626,20 +232,19 @@ export class QueryService implements IQueryService {
     refresh?: boolean,
     cacheEnabled?: boolean,
   ): Promise<PreviewDataResponse> {
-    const normalizedPreview = normalizePreviewSqlForIbis(sql, dataSource, limit);
     const event = TelemetryEvent.IBIS_QUERY;
     try {
-      const res = await this.ibisAdaptor.query(normalizedPreview.sql, {
+      const res = await this.ibisAdaptor.query(sql, {
         dataSource,
         connectionInfo,
         mdl,
-        limit: normalizedPreview.limit,
+        limit,
         refresh,
         cacheEnabled,
       });
       this.sendIbisEvent(event, res, {
         dataSource,
-        sql: normalizedPreview.sql,
+        sql,
       });
       const data = this.transformDataType(res);
       return {

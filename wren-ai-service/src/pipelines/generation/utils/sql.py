@@ -553,6 +553,10 @@ def construct_instructions(
     return _instructions
 
 
+def normalize_generation_result_sql(sql: str, data_source: str | None = None) -> str:
+    return " ".join(sql.replace('\\"', '"').split())
+
+
 def construct_ask_history_messages(
     histories: list[AskHistory] | list[dict],
 ) -> list[ChatMessage]:

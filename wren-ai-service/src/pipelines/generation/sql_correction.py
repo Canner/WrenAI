@@ -178,10 +178,9 @@ class SQLCorrection(BasicPipeline):
     ):
         logger.info("SQLCorrection pipeline is running...")
 
-        if use_dry_plan:
-            metadata = await retrieve_metadata(project_id or "", self._retriever)
-        else:
-            metadata = {}
+        metadata = (
+            await retrieve_metadata(project_id, self._retriever) if project_id else {}
+        )
 
         return await self._pipe.execute(
             ["post_process"],
