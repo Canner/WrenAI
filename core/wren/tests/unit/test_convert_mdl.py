@@ -11,6 +11,7 @@ import yaml
 from wren.context import (
     _AGENTS_MD_TEMPLATE,
     _CAMEL_TO_SNAKE_MAP,
+    ProjectFile,
     _camel_to_snake,
     _snake_to_camel,
     build_json,
@@ -226,6 +227,63 @@ def test_write_project_files_force_overwrites(tmp_path: Path):
     write_project_files(files, tmp_path, force=True)
     project = yaml.safe_load((tmp_path / "wren_project.yml").read_text())
     assert project["schema_version"] == 2
+
+
+def test_write_project_files_force_invalid_path_preserves_existing_files(
+    tmp_path: Path,
+):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    sentinel = models_dir / "keep.txt"
+    sentinel.write_text("important")
+    escaped_path = tmp_path.parent / f"{tmp_path.name}-escape.txt"
+
+    files = [
+        ProjectFile(relative_path=f"../{escaped_path.name}", content="invalid"),
+    ]
+
+    with pytest.raises(SystemExit, match="invalid output path"):
+        write_project_files(files, tmp_path, force=True)
+
+    assert sentinel.read_text() == "important"
+    assert not escaped_path.exists()
+
+
+def test_write_project_files_preflights_all_paths_before_writing(tmp_path: Path):
+    escaped_path = tmp_path.parent / f"{tmp_path.name}-escape.txt"
+    files = [
+        ProjectFile(relative_path="models/orders/metadata.yml", content="valid"),
+        ProjectFile(relative_path=f"../{escaped_path.name}", content="invalid"),
+    ]
+
+    with pytest.raises(SystemExit, match="invalid output path"):
+        write_project_files(files, tmp_path)
+
+    assert not (tmp_path / "models").exists()
+    assert not escaped_path.exists()
+
+
+@pytest.mark.parametrize("relative_path", ["", ".", "models/.."])
+def test_write_project_files_force_root_target_preserves_existing_files(
+    tmp_path: Path,
+    relative_path: str,
+):
+    models_dir = tmp_path / "models"
+    models_dir.mkdir()
+    sentinel = models_dir / "keep.txt"
+    sentinel.write_text("important")
+
+    with pytest.raises(SystemExit) as exc_info:
+        write_project_files(
+            [ProjectFile(relative_path=relative_path, content="invalid")],
+            tmp_path,
+            force=True,
+        )
+
+    assert str(exc_info.value) == f"Error: invalid output path: {relative_path!r}"
+    assert tmp_path.is_dir()
+    assert sentinel.read_text() == "important"
+    assert set(tmp_path.rglob("*")) == {models_dir, sentinel}
 
 
 # ── Round-trip: convert → build ────────────────────────────────────────────

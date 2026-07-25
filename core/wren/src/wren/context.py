@@ -317,6 +317,18 @@ def write_project_files(
         force: If False, raise SystemExit if any target file already exists.
     """
     output_dir = Path(output_dir)
+    root = output_dir.resolve()
+    resolved_files: list[tuple[ProjectFile, Path]] = []
+
+    for file in files:
+        target = (output_dir / file.relative_path).resolve()
+        try:
+            target.relative_to(root)
+        except ValueError:
+            raise SystemExit(f"Error: invalid output path: {file.relative_path!r}")
+        if target == root:
+            raise SystemExit(f"Error: invalid output path: {file.relative_path!r}")
+        resolved_files.append((file, target))
 
     if force and output_dir.exists():
         import shutil  # noqa: PLC0415
@@ -341,7 +353,7 @@ def write_project_files(
 
     if not force:
         conflicts = [
-            f.relative_path for f in files if (output_dir / f.relative_path).exists()
+            file.relative_path for file, target in resolved_files if target.exists()
         ]
         if conflicts:
             names = ", ".join(f"'{Path(p).name}'" for p in conflicts)
@@ -349,15 +361,9 @@ def write_project_files(
                 f"Error: {names} already exists. Use --force to overwrite."
             )
 
-    for f in files:
-        root = output_dir.resolve()
-        path = (output_dir / f.relative_path).resolve()
-        try:
-            path.relative_to(root)
-        except ValueError:
-            raise SystemExit(f"Error: invalid output path: {f.relative_path!r}")
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(f.content)
+    for file, target in resolved_files:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(file.content)
 
 
 # ── Project discovery ─────────────────────────────────────────────────────
