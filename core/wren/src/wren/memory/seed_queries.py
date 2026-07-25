@@ -31,13 +31,18 @@ SEED_TAG = "source:seed"
 def generate_seed_queries(manifest: dict) -> list[dict]:
     """Return a list of {"nl": ..., "sql": ...} seed pairs."""
     pairs: list[dict] = []
+    models = [
+        model
+        for model in manifest.get("models", [])
+        if isinstance(model, dict) and model.get("name")
+    ]
     model_layers = {
         model["name"]: _prop_value(model, "dbtLayer", "dbt_layer")
-        for model in manifest.get("models", [])
+        for model in models
     }
     relationship_keys = _relationship_key_columns(manifest)
 
-    for model in manifest.get("models", []):
+    for model in models:
         if model_layers.get(model["name"]) == "raw":
             continue
         pairs.extend(
@@ -47,6 +52,8 @@ def generate_seed_queries(manifest: dict) -> list[dict]:
         )
 
     for rel in manifest.get("relationships", []):
+        if not isinstance(rel, dict):
+            continue
         pair = _relationship_seed(rel, model_layers)
         if pair:
             pairs.append(pair)
@@ -167,6 +174,8 @@ def _relationship_key_columns(manifest: dict) -> dict[str, frozenset[str]]:
     """
     accum: dict[str, set[str]] = {}
     for rel in manifest.get("relationships", []):
+        if not isinstance(rel, dict):
+            continue
         condition = rel.get("condition") or ""
         try:
             tree = sqlglot.parse_one(condition)
