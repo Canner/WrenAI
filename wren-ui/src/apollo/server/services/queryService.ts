@@ -258,7 +258,7 @@ export class QueryService implements IQueryService {
     } catch (err: any) {
       this.sendIbisFailedEvent(event, err, {
         dataSource,
-        sql: normalizedPreview.sql,
+        sql,
       });
       throw err;
     }

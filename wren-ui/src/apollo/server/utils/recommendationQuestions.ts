@@ -140,7 +140,7 @@ export const buildFastRecommendationQuestions = (
     addQuestion({
       category: label,
       question: `Show the first 10 rows from ${label}.`,
-      sql: `SELECT TOP 10 ${previewColumns.join(', ')} FROM ${modelRef}`,
+      sql: `SELECT ${previewColumns.join(', ')} FROM ${modelRef} LIMIT 10`,
     });
   }
 
