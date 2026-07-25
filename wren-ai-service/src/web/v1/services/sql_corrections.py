@@ -60,7 +60,6 @@ class SqlCorrectionService:
         event_id: str
         sql: str
         error: str
-        query: Optional[str] = None
         retrieved_tables: Optional[List[str]] = None
         use_dry_plan: bool = False
         allow_dry_plan_fallback: bool = True
@@ -77,7 +76,6 @@ class SqlCorrectionService:
         event_id = request.event_id
         sql = request.sql
         error = request.error
-        query = request.query
         project_id = request.project_id
         retrieved_tables = request.retrieved_tables
         use_dry_plan = request.use_dry_plan
@@ -116,7 +114,6 @@ class SqlCorrectionService:
 
             res = await self._pipelines["sql_correction"].run(
                 contexts=table_ddls,
-                query=query,
                 invalid_generation_result=_invalid,
                 project_id=project_id,
                 use_dry_plan=use_dry_plan,

@@ -25,94 +25,9 @@ from src.pipelines.indexing.utils import helper
 
 logger = logging.getLogger("wren-ai-service")
 
-MAX_DB_SCHEMA_COMMENT_LENGTH = 4000
-MAX_DB_SCHEMA_STATEMENT_LENGTH = 8000
-MAX_DB_SCHEMA_DOCUMENT_LENGTH = 12000
-
 
 @component
 class DDLChunker:
-    def _normalize_text(self, value: Any) -> str:
-        return "" if value is None else str(value)
-
-    def _truncate_text(self, text: Any, max_length: int) -> str:
-        normalized_text = self._normalize_text(text)
-        if len(normalized_text) <= max_length:
-            return normalized_text
-
-        return normalized_text[:max_length].rstrip() + "..."
-
-    def _serialize_table_columns_payload(self, columns: List[dict]) -> str:
-        return str({"type": "TABLE_COLUMNS", "columns": columns})
-
-    def _fit_table_column_command(self, command: dict) -> dict:
-        if (
-            len(self._serialize_table_columns_payload([command]))
-            <= MAX_DB_SCHEMA_DOCUMENT_LENGTH
-        ):
-            return command
-
-        fitted_command = {**command}
-        comment = fitted_command.get("comment", "")
-        if comment:
-            base_length = len(
-                self._serialize_table_columns_payload(
-                    [{**fitted_command, "comment": ""}]
-                )
-            )
-            available_comment_length = max(
-                MAX_DB_SCHEMA_COMMENT_LENGTH // 8,
-                MAX_DB_SCHEMA_DOCUMENT_LENGTH - base_length - 3,
-            )
-            fitted_command["comment"] = self._truncate_text(
-                comment,
-                available_comment_length,
-            )
-
-        if (
-            len(self._serialize_table_columns_payload([fitted_command]))
-            <= MAX_DB_SCHEMA_DOCUMENT_LENGTH
-        ):
-            return fitted_command
-
-        fitted_command["comment"] = ""
-        return fitted_command
-
-    def _build_table_column_payloads(
-        self,
-        model_name: str,
-        commands: List[dict],
-        column_batch_size: int,
-    ) -> List[Dict[str, str]]:
-        batches: List[List[dict]] = []
-        current_batch: List[dict] = []
-        effective_batch_size = max(column_batch_size, 1)
-
-        for command in [self._fit_table_column_command(command) for command in commands]:
-            candidate_batch = current_batch + [command]
-            candidate_payload = self._serialize_table_columns_payload(candidate_batch)
-
-            if current_batch and (
-                len(current_batch) >= effective_batch_size
-                or len(candidate_payload) > MAX_DB_SCHEMA_DOCUMENT_LENGTH
-            ):
-                batches.append(current_batch)
-                current_batch = [command]
-                continue
-
-            current_batch = candidate_batch
-
-        if current_batch:
-            batches.append(current_batch)
-
-        return [
-            {
-                "name": model_name,
-                "payload": self._serialize_table_columns_payload(batch),
-            }
-            for batch in batches
-        ]
-
     @component.output_types(documents=List[Document])
     async def run(
         self,
@@ -178,13 +93,9 @@ class DDLChunker:
                 for column in model.get("columns", [])
                 if column.get("isHidden") is not True
             ]
-            properties = model.get("properties")
-            if not isinstance(properties, dict):
-                properties = {}
-
             return {
                 "name": model.get("name", ""),
-                "properties": properties,
+                "properties": model.get("properties", {}),
                 "columns": columns,
                 "primaryKey": model.get("primaryKey", ""),
             }
@@ -220,23 +131,12 @@ class DDLChunker:
     ) -> List[Dict[str, str]]:
         def _model_command(model: Dict[str, Any]) -> dict:
             properties = model.get("properties", {})
-            if not isinstance(properties, dict):
-                properties = {}
 
-            display_name = properties.get("displayName", "")
             model_properties = {
-                "alias": clean_display_name(
-                    "" if display_name is None else str(display_name)
-                ),
-                "description": self._truncate_text(
-                    properties.get("description", ""),
-                    MAX_DB_SCHEMA_COMMENT_LENGTH,
-                ),
+                "alias": clean_display_name(properties.get("displayName", "")),
+                "description": properties.get("description", ""),
             }
-            comment = self._truncate_text(
-                f"\n/* {str(model_properties)} */\n",
-                MAX_DB_SCHEMA_COMMENT_LENGTH,
-            )
+            comment = f"\n/* {str(model_properties)} */\n"
 
             table_name = model["name"]
             payload = {
@@ -255,14 +155,10 @@ class DDLChunker:
                 for helper in helper.COLUMN_COMMENT_HELPERS.values()
                 if helper.condition(column)
             ]
-            comment = self._truncate_text(
-                "".join(comments),
-                MAX_DB_SCHEMA_COMMENT_LENGTH,
-            )
 
             return {
                 "type": "COLUMN",
-                "comment": comment,
+                "comment": "".join(comments),
                 "name": column["name"],
                 "data_type": column["type"],
                 "is_primary_key": column["name"] == model["primaryKey"],
@@ -297,10 +193,7 @@ class DDLChunker:
 
             return {
                 "type": "FOREIGN_KEY",
-                "comment": self._truncate_text(
-                    f'-- {{"condition": {condition}, "joinType": {join_type}}}\n  ',
-                    MAX_DB_SCHEMA_COMMENT_LENGTH,
-                ),
+                "comment": f'-- {{"condition": {condition}, "joinType": {join_type}}}\n  ',
                 "constraint": fk_constraint,
                 "tables": models,
             }
@@ -317,11 +210,18 @@ class DDLChunker:
 
             filtered = [command for command in commands if command is not None]
 
-            return self._build_table_column_payloads(
-                model["name"],
-                filtered,
-                column_batch_size,
-            )
+            return [
+                {
+                    "name": model["name"],
+                    "payload": str(
+                        {
+                            "type": "TABLE_COLUMNS",
+                            "columns": filtered[i : i + column_batch_size],
+                        }
+                    ),
+                }
+                for i in range(0, len(filtered), column_batch_size)
+            ]
 
         # A map to store model primary keys for foreign key relationships
         primary_keys_map = {model["name"]: model["primaryKey"] for model in models}
@@ -335,21 +235,13 @@ class DDLChunker:
 
     def _convert_views(self, views: List[Dict[str, Any]]) -> List[Dict[str, str]]:
         def _payload(view: Dict[str, Any]) -> dict:
-            properties = view.get("properties")
-            if not isinstance(properties, dict):
-                properties = {}
-
             return {
                 "type": "VIEW",
-                "comment": self._truncate_text(
-                    f"/* {properties} */\n" if properties else "",
-                    MAX_DB_SCHEMA_COMMENT_LENGTH,
-                ),
+                "comment": f"/* {view['properties']} */\n"
+                if "properties" in view
+                else "",
                 "name": view["name"],
-                "statement": self._truncate_text(
-                    view["statement"],
-                    MAX_DB_SCHEMA_STATEMENT_LENGTH,
-                ),
+                "statement": view["statement"],
             }
 
         return [
@@ -360,7 +252,7 @@ class DDLChunker:
         def _create_column(name: str, data_type: str, comment: str) -> dict:
             return {
                 "type": "COLUMN",
-                "comment": self._truncate_text(comment, MAX_DB_SCHEMA_COMMENT_LENGTH),
+                "comment": comment,
                 "name": name,
                 "data_type": data_type,
             }
@@ -423,9 +315,6 @@ async def chunk(
 
 @observe(capture_input=False, capture_output=False)
 async def embedding(chunk: Dict[str, Any], embedder: Any) -> Dict[str, Any]:
-    if not chunk["documents"]:
-        return chunk
-
     return await embedder.run(documents=chunk["documents"])
 
 

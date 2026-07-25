@@ -32,12 +32,6 @@ Please answer the user's question in concise and clear manner in Markdown format
 6. Answer must be in the same language user specified.
 7. Do not include ```markdown or ``` in the answer.
 8. If the user provides a custom instruction, it should be followed strictly and you should use it to change the style of response.
-9. Always produce a narrative answer. Never return an empty response.
-10. If the user asks for a chart or trend, still summarize the result in words and mention the chart-ready fields.
-11. If the data contains only raw rows or a single column, summarize what those rows show, mention the visible date/category range when possible, and state that the result table contains the detailed rows.
-12. If Data rows are present, answer from those rows only. Never say you do not have access to the database, system, records, or source data after rows are provided.
-13. Do not give generic instructions about how the user can find the data when SQL results are present. Summarize the returned rows instead.
-14. If Data rows are empty, say the SQL ran but returned no rows and briefly mention the selected columns, filters, or grouping visible in the SQL.
 
 ### OUTPUT FORMAT
 
@@ -45,16 +39,6 @@ Please provide your response in proper Markdown stringformat.
 """
 
 sql_to_answer_user_prompt_template = """
-{% if documents %}
-### Active Datasource Metadata ###
-This is the complete deployed metadata for the active datasource. Use it to
-understand the schema, tables, columns, metrics, views, and relationships behind
-the SQL before answering.
-{% for document in documents %}
-    {{ document }}
-{% endfor %}
-{% endif %}
-
 ### Inputs ###
 User's question: {{ query }}
 SQL: {{ sql }}
@@ -67,7 +51,6 @@ Current Time: {{ current_time }}
 Custom Instruction: {{ custom_instruction }}
 
 Please think step by step and answer the user's question.
-If rows are present in Data, summarize those rows directly and do not claim that the data is unavailable.
 """
 
 
@@ -81,7 +64,6 @@ def prompt(
     current_time: str,
     custom_instruction: str,
     prompt_builder: PromptBuilder,
-    documents: list[str] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
@@ -90,7 +72,6 @@ def prompt(
         language=language,
         current_time=current_time,
         custom_instruction=custom_instruction,
-        documents=documents or [],
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
@@ -175,7 +156,6 @@ class SQLAnswer(BasicPipeline):
         current_time: str = Configuration().show_current_time(),
         query_id: Optional[str] = None,
         custom_instruction: Optional[str] = None,
-        contexts: Optional[list[str]] = None,
     ) -> dict:
         logger.info("Sql_Answer Generation pipeline is running...")
         return await self._pipe.execute(
@@ -188,7 +168,6 @@ class SQLAnswer(BasicPipeline):
                 "current_time": current_time,
                 "query_id": query_id,
                 "custom_instruction": custom_instruction or "",
-                "documents": contexts or [],
                 **self._components,
             },
         )

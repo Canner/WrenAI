@@ -12,10 +12,6 @@ from src.web.v1.services import BaseRequest, SSEEvent
 
 logger = logging.getLogger("wren-ai-service")
 
-NO_RELEVANT_ACTIVE_DATASOURCE_MESSAGE = (
-    "No relevant data found in the active datasource for this question."
-)
-
 
 # POST /v1/sql-answers
 class SqlAnswerRequest(BaseRequest):
@@ -57,33 +53,6 @@ class SqlAnswerService:
             maxsize=maxsize, ttl=ttl
         )
 
-    async def _load_active_schema_contexts(
-        self, project_id: Optional[str]
-    ) -> list[str]:
-        retrieval_pipeline = self._pipelines.get("db_schema_retrieval")
-        if not retrieval_pipeline:
-            return []
-
-        retrieval_result = await retrieval_pipeline.run(
-            query="",
-            histories=[],
-            project_id=project_id,
-            enable_column_pruning=False,
-        )
-        documents = retrieval_result.get("construct_retrieval_results", {}).get(
-            "retrieval_results", []
-        )
-        return [
-            document["table_ddl"]
-            for document in documents
-            if isinstance(document, dict) and document.get("table_ddl")
-        ]
-
-    def _normalize_and_validate_sql(
-        self, sql: str, schema_contexts: list[str]
-    ) -> str | None:
-        return sql
-
     @observe(name="SQL Answer")
     @trace_metadata
     async def sql_answer(
@@ -110,28 +79,6 @@ class SqlAnswerService:
                 trace_id=trace_id,
             )
 
-            schema_contexts = await self._load_active_schema_contexts(
-                sql_answer_request.project_id,
-            )
-            normalized_sql = self._normalize_and_validate_sql(
-                sql_answer_request.sql,
-                schema_contexts,
-            )
-            if not normalized_sql:
-                self._sql_answer_results[query_id] = SqlAnswerResultResponse(
-                    status="failed",
-                    error=SqlAnswerResultResponse.SqlAnswerError(
-                        code="OTHERS",
-                        message=NO_RELEVANT_ACTIVE_DATASOURCE_MESSAGE,
-                    ),
-                    trace_id=trace_id,
-                )
-                results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
-                results["metadata"]["error_message"] = (
-                    NO_RELEVANT_ACTIVE_DATASOURCE_MESSAGE
-                )
-                return results
-
             preprocessed_sql_data = self._pipelines["preprocess_sql_data"].run(
                 sql_data=sql_answer_request.sql_data,
             )["preprocess"]
@@ -149,13 +96,12 @@ class SqlAnswerService:
             asyncio.create_task(
                 self._pipelines["sql_answer"].run(
                     query=sql_answer_request.query,
-                    sql=normalized_sql,
+                    sql=sql_answer_request.sql,
                     sql_data=preprocessed_sql_data.get("sql_data", {}),
                     language=sql_answer_request.configurations.language,
                     current_time=sql_answer_request.configurations.show_current_time(),
                     query_id=query_id,
                     custom_instruction=sql_answer_request.custom_instruction,
-                    contexts=schema_contexts,
                 )
             )
 

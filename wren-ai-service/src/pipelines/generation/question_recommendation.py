@@ -16,13 +16,6 @@ from src.utils import trace_cost
 
 logger = logging.getLogger("wren-ai-service")
 
-DEFAULT_QUESTION_CATEGORIES = [
-    "Descriptive Questions",
-    "Segmentation Questions",
-    "Comparative Questions",
-    "Data Quality/Accuracy Questions",
-]
-
 
 system_prompt = """
 You are an expert in data analysis and SQL query generation. Given a data model specification, optionally a user's question, and a list of categories, your task is to generate insightful, specific questions that can be answered using the provided data model. Each question should be accompanied by a brief explanation of its relevance or importance.
@@ -73,9 +66,6 @@ Output all questions in the following JSON format:
 
 5. **General Guidelines for All Questions:**
    - Ensure questions can be answered using the data model.
-   - Use only the tables, fields, and relationships that are explicitly present in the provided database schema.
-   - Do not invent tables, columns, business entities, or time dimensions that are not present in the schema.
-   - Keep the question grounded in the deployed database domain shown by the schema context.
    - Mix simple and complex questions.
    - Avoid open-ended questions - each should have a definite answer.
    - Incorporate time-based analysis where relevant.
@@ -160,10 +150,7 @@ Categories: {{categories}}
 {% endif %}
 
 {% if documents %}
-### ACTIVE DATASOURCE METADATA ###
-Use only this latest deployed metadata from the active datasource when generating
-recommended questions. Do not reuse tables, columns, or business terms from prior
-questions unless they are answerable from this metadata.
+### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
 {% endfor %}
@@ -183,6 +170,12 @@ def prompt(
     max_categories: int,
     prompt_builder: PromptBuilder,
 ) -> dict:
+    """
+    If previous_questions is provided, the MDL is omitted to allow the LLM to focus on
+    generating recommendations based on the question history. This helps provide more
+    contextually relevant questions that build on previous questions.
+    """
+
     _prompt = prompt_builder.run(
         documents=documents,
         previous_questions=previous_questions,

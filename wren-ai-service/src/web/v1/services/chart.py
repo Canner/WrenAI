@@ -6,15 +6,10 @@ from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
-from src.pipelines.generation.utils.chart import build_fallback_chart_result
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest
 
 logger = logging.getLogger("wren-ai-service")
-
-NO_RELEVANT_ACTIVE_DATASOURCE_MESSAGE = (
-    "No relevant data found in the active datasource for this question."
-)
 
 
 # POST /v1/charts
@@ -84,33 +79,6 @@ class ChartService:
 
         return False
 
-    async def _load_active_schema_contexts(
-        self, project_id: Optional[str], sql: str
-    ) -> list[str]:
-        retrieval_pipeline = self._pipelines.get("db_schema_retrieval")
-        if not retrieval_pipeline:
-            return []
-
-        retrieval_result = await retrieval_pipeline.run(
-            query="",
-            histories=[],
-            project_id=project_id,
-            enable_column_pruning=False,
-        )
-        documents = retrieval_result.get("construct_retrieval_results", {}).get(
-            "retrieval_results", []
-        )
-        return [
-            document["table_ddl"]
-            for document in documents
-            if isinstance(document, dict) and document.get("table_ddl")
-        ]
-
-    def _normalize_and_validate_sql(
-        self, sql: str, schema_contexts: list[str]
-    ) -> str | None:
-        return sql
-
     @observe(name="Generate Chart")
     @trace_metadata
     async def chart(
@@ -131,28 +99,6 @@ class ChartService:
         try:
             query_id = chart_request.query_id
             execute_sql_error_message = None
-            schema_contexts = await self._load_active_schema_contexts(
-                chart_request.project_id,
-                chart_request.sql,
-            )
-            normalized_sql = self._normalize_and_validate_sql(
-                chart_request.sql,
-                schema_contexts,
-            )
-            if not normalized_sql:
-                self._chart_results[query_id] = ChartResultResponse(
-                    status="failed",
-                    error=ChartError(
-                        code="OTHERS",
-                        message=NO_RELEVANT_ACTIVE_DATASOURCE_MESSAGE,
-                    ),
-                    trace_id=trace_id,
-                )
-                results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
-                results["metadata"]["error_message"] = (
-                    NO_RELEVANT_ACTIVE_DATASOURCE_MESSAGE
-                )
-                return results
 
             if not chart_request.data:
                 self._chart_results[query_id] = ChartResultResponse(
@@ -162,7 +108,7 @@ class ChartService:
 
                 execute_sql_result = (
                     await self._pipelines["sql_executor"].run(
-                        sql=normalized_sql,
+                        sql=chart_request.sql,
                         project_id=chart_request.project_id,
                     )
                 )["execute_sql"]
@@ -180,19 +126,12 @@ class ChartService:
                     status="failed",
                     error=ChartError(
                         code="OTHERS",
-                        message=NO_RELEVANT_ACTIVE_DATASOURCE_MESSAGE,
+                        message=execute_sql_error_message,
                     ),
                     trace_id=trace_id,
                 )
-                logger.info(
-                    "Suppressed chart SQL execution failure for query_id %s: %s",
-                    query_id,
-                    execute_sql_error_message,
-                )
-                results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
-                results["metadata"]["error_message"] = (
-                    NO_RELEVANT_ACTIVE_DATASOURCE_MESSAGE
-                )
+                results["metadata"]["error_type"] = "OTHERS"
+                results["metadata"]["error_message"] = execute_sql_error_message
                 return results
 
             self._chart_results[query_id] = ChartResultResponse(
@@ -200,28 +139,13 @@ class ChartService:
                 trace_id=trace_id,
             )
 
-            deterministic_chart_result = build_fallback_chart_result(
-                chart_request.query,
-                sql_data,
-                chart_request.remove_data_from_chart_schema,
-            )
-            if deterministic_chart_result.get("chart_schema"):
-                self._chart_results[query_id] = ChartResultResponse(
-                    status="finished",
-                    response=ChartResult(**deterministic_chart_result),
-                    trace_id=trace_id,
-                )
-                results["chart_result"] = deterministic_chart_result
-                return results
-
             chart_generation_result = await self._pipelines["chart_generation"].run(
                 query=chart_request.query,
-                sql=normalized_sql,
+                sql=chart_request.sql,
                 data=sql_data,
                 language=chart_request.configurations.language,
                 remove_data_from_chart_schema=chart_request.remove_data_from_chart_schema,
                 custom_instruction=chart_request.custom_instruction,
-                contexts=schema_contexts,
             )
             chart_result = chart_generation_result["post_process"]["results"]
 

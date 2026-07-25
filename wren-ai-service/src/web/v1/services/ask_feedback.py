@@ -239,7 +239,6 @@ class AskFeedbackService:
                             "sql_correction"
                         ].run(
                             contexts=table_ddls,
-                            query=ask_feedback_request.question,
                             instructions=instructions,
                             invalid_generation_result={
                                 "original_sql": original_sql,
