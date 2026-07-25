@@ -103,13 +103,20 @@ def remove_app(project_path: Path, name: str) -> bool:
 
 def get_app(project_path: Path, name: str) -> dict | None:
     """Return the entry for ``name`` or None if not registered."""
-    return load_index(project_path)["apps"].get(name)
+    entry = load_index(project_path)["apps"].get(name)
+    # Hand-edited apps.yml may put a scalar/list under an app key; treat as
+    # unregistered rather than letting callers AttributeError on .get keys.
+    if entry is not None and not isinstance(entry, dict):
+        return None
+    return entry
 
 
 def update_app(project_path: Path, name: str, **fields) -> dict:
     """Merge ``fields`` into the entry for ``name`` and persist."""
     index = load_index(project_path)
-    entry = index["apps"][name]
+    entry = index["apps"].get(name)
+    if not isinstance(entry, dict):
+        raise KeyError(name)
     entry.update(fields)
     save_index(project_path, index)
     return entry
