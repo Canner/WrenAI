@@ -37,16 +37,13 @@ class Settings(BaseSettings):
     instructions_top_k: int = Field(default=10)
 
     # generation config
-    allow_intent_classification: bool = Field(default=False)
+    allow_intent_classification: bool = Field(default=True)
     allow_sql_generation_reasoning: bool = Field(default=True)
     allow_sql_functions_retrieval: bool = Field(default=True)
     allow_sql_diagnosis: bool = Field(default=True)
     allow_sql_knowledge_retrieval: bool = Field(default=False)
     max_histories: int = Field(default=5)
     max_sql_correction_retries: int = Field(default=3)
-    max_sql_generation_tables: int = Field(default=0)
-    pipeline_timeout_seconds: int = Field(default=0)
-    schema_retrieval_timeout_seconds: int = Field(default=0)
 
     # engine config
     engine_timeout: float = Field(default=30.0)

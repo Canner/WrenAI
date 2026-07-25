@@ -120,14 +120,6 @@ def _build_view_ddl(content: dict) -> str:
     )
 
 
-def _table_names_from_retrieval(table_retrieval: dict) -> list[str]:
-    table_names = []
-    for table in table_retrieval.get("documents", []):
-        content = ast.literal_eval(table.content)
-        table_names.append(content["name"])
-    return table_names
-
-
 ## Start of Pipeline
 @observe(capture_input=False, capture_output=False)
 async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> dict:
@@ -180,7 +172,11 @@ async def table_retrieval(
 async def dbschema_retrieval(
     table_retrieval: dict, project_id: str, dbschema_retriever: Any
 ) -> list[Document]:
-    table_names = _table_names_from_retrieval(table_retrieval)
+    tables = table_retrieval.get("documents", [])
+    table_names = []
+    for table in tables:
+        content = ast.literal_eval(table.content)
+        table_names.append(content["name"])
 
     table_name_conditions = [
         {"field": "name", "operator": "==", "value": table_name}
@@ -208,9 +204,7 @@ async def dbschema_retrieval(
 
 
 @observe()
-def construct_db_schemas(
-    dbschema_retrieval: list[Document], table_retrieval: dict
-) -> list[dict]:
+def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[dict]:
     db_schemas = {}
     for document in dbschema_retrieval:
         content = ast.literal_eval(document.content)
@@ -234,19 +228,7 @@ def construct_db_schemas(
     # remove incomplete schemas
     db_schemas = {k: v for k, v in db_schemas.items() if "type" in v and "columns" in v}
 
-    ranked_table_names = _table_names_from_retrieval(table_retrieval)
-    ranked_schemas = [
-        db_schemas[table_name]
-        for table_name in ranked_table_names
-        if table_name in db_schemas
-    ]
-    remaining_schemas = [
-        table_schema
-        for table_name, table_schema in db_schemas.items()
-        if table_name not in set(ranked_table_names)
-    ]
-
-    return ranked_schemas + remaining_schemas
+    return list(db_schemas.values())
 
 
 @observe(capture_input=False)
