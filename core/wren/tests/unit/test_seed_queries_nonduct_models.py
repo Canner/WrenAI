@@ -22,6 +22,8 @@ def test_generate_seed_queries_skips_nonduct_entries() -> None:
                 ],
             },
             {"columns": [{"name": "x", "type": "int"}]},  # no name
+            {"name": "   "},  # whitespace-only name
+            {"name": 123},  # non-string name
         ],
         "relationships": [
             "bad-rel",
@@ -34,5 +36,7 @@ def test_generate_seed_queries_skips_nonduct_entries() -> None:
     pairs = generate_seed_queries(manifest)
     nls = [p["nl"] for p in pairs]
     assert any("orders" in nl for nl in nls)
-    #relationship pair may appear if both model names exist in layers
+    # relationship pair may appear if both model names exist in layers
     assert all(isinstance(p, dict) and "sql" in p for p in pairs)
+    # whitespace-only and non-string model names are dropped
+    assert not any("123" in nl for nl in nls)

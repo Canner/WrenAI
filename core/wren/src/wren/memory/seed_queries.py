@@ -34,11 +34,12 @@ def generate_seed_queries(manifest: dict) -> list[dict]:
     models = [
         model
         for model in manifest.get("models", [])
-        if isinstance(model, dict) and model.get("name")
+        if isinstance(model, dict)
+        and isinstance(model.get("name"), str)
+        and model["name"].strip()
     ]
     model_layers = {
-        model["name"]: _prop_value(model, "dbtLayer", "dbt_layer")
-        for model in models
+        model["name"]: _prop_value(model, "dbtLayer", "dbt_layer") for model in models
     }
     relationship_keys = _relationship_key_columns(manifest)
 
