@@ -35,6 +35,13 @@ def resolve_token(env_var: str, project_path: Path) -> str | None:
     if token := _as_token(os.environ.get(env_var)):
         return token
 
+    # A blank/whitespace-only shell value (`VERCEL_TOKEN=`) must not block a
+    # valid token from the .env files below: `load_dotenv(override=False)`
+    # skips keys already present in ``os.environ``, so drop the blank entry
+    # first. Nonblank values returned above already took precedence.
+    if env_var in os.environ:
+        del os.environ[env_var]
+
     # 2. Standard .env discovery (cwd → cwd-walk project root → ~/.wren/.env).
     from wren.profile import _ensure_env_loaded  # noqa: PLC0415
 
