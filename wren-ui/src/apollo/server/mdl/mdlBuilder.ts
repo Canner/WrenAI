@@ -637,13 +637,10 @@ export class MDLBuilder implements IMDLBuilder {
       /^([^.]+)\.([^.]+)\.([^.]+)$/,
     );
     if (catalogQualifiedMatch) {
-      const normalizedTableName = this.normalizeDboPrefixedTableName(
-        catalogQualifiedMatch[3],
-      );
       return {
         catalog: catalogQualifiedMatch[1],
-        schema: normalizedTableName.schema || catalogQualifiedMatch[2],
-        table: normalizedTableName.table,
+        schema: catalogQualifiedMatch[2],
+        table: catalogQualifiedMatch[3],
       };
     }
 
@@ -656,37 +653,7 @@ export class MDLBuilder implements IMDLBuilder {
       };
     }
 
-    const underscoreQualifiedMatch = sourceTableName.match(/^(dbo)_(.+)$/i);
-    if (underscoreQualifiedMatch) {
-      return {
-        catalog: null,
-        schema:
-          this.project.type === DataSourceName.MSSQL
-            ? underscoreQualifiedMatch[1]
-            : null,
-        table: underscoreQualifiedMatch[2],
-      };
-    }
-
     return null;
-  }
-
-  private normalizeDboPrefixedTableName(tableName: string): {
-    schema: string | null;
-    table: string;
-  } {
-    const underscoreQualifiedMatch = tableName.match(/^(dbo)_(.+)$/i);
-    if (!underscoreQualifiedMatch) {
-      return { schema: null, table: tableName };
-    }
-
-    return {
-      schema:
-        this.project.type === DataSourceName.MSSQL
-          ? underscoreQualifiedMatch[1]
-          : null,
-      table: underscoreQualifiedMatch[2],
-    };
   }
   private hasDuplicateSourceColumns(modelId: number): boolean {
     const sourceColumnNames = new Set<string>();

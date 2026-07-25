@@ -585,7 +585,7 @@ describe('MDLBuilder', () => {
     expect(manifest.models[0].refSql).toBeUndefined();
   });
 
-  it('should split mssql schema-normalized source table names in rust engine table reference fallback.', () => {
+  it('should preserve unqualified source table names in rust engine table reference fallback.', () => {
     const project = {
       id: 1,
       type: DataSourceName.MSSQL,
@@ -625,13 +625,13 @@ describe('MDLBuilder', () => {
 
     expect(manifest.models[0].tableReference).toEqual({
       catalog: null,
-      schema: 'dbo',
-      table: 'tickets',
+      schema: null,
+      table: 'dbo_tickets',
     });
     expect(manifest.models[0].refSql).toBeUndefined();
   });
 
-  it('should strip dbo-prefixed source table names for non-mssql projects.', () => {
+  it('should preserve dbo-prefixed source table names for non-mssql projects.', () => {
     const project = {
       id: 1,
       type: DataSourceName.POSTGRES,
@@ -672,12 +672,12 @@ describe('MDLBuilder', () => {
     expect(manifest.models[0].tableReference).toEqual({
       catalog: null,
       schema: null,
-      table: 'search_queries',
+      table: 'dbo_search_queries',
     });
     expect(manifest.models[0].refSql).toBeUndefined();
   });
 
-  it('should strip dbo-prefixed property table names before project schema fallback.', () => {
+  it('should preserve dbo-prefixed property table names before project schema fallback.', () => {
     const project = {
       id: 1,
       type: DataSourceName.POSTGRES,
@@ -721,12 +721,12 @@ describe('MDLBuilder', () => {
     expect(manifest.models[0].tableReference).toEqual({
       catalog: null,
       schema: 'public',
-      table: 'search_queries',
+      table: 'dbo_search_queries',
     });
     expect(manifest.models[0].refSql).toBeUndefined();
   });
 
-  it('should strip dbo-prefixed table names from catalog-qualified non-mssql table references.', () => {
+  it('should preserve catalog-qualified non-mssql table references.', () => {
     const project = {
       id: 1,
       type: DataSourceName.POSTGRES,
@@ -769,7 +769,7 @@ describe('MDLBuilder', () => {
     expect(manifest.models[0].tableReference).toEqual({
       catalog: 'wrenai',
       schema: 'public',
-      table: 'search_queries',
+      table: 'dbo_search_queries',
     });
     expect(manifest.models[0].refSql).toBeUndefined();
   });

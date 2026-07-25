@@ -39,6 +39,10 @@ generate one SQL query to best answer user's question.
     {{ document }}
 {% endfor %}
 
+Use this DATABASE SCHEMA as the complete allowed identifier set for this query.
+Only generate SQL with table, column, schema, model, and datasource names present above.
+Do not infer identifiers from the follow-up question, previous SQL, summary, SQL samples, user instructions, or prior examples.
+
 {% if calculated_field_instructions %}
 {{ calculated_field_instructions }}
 {% endif %}

@@ -5,7 +5,6 @@ import {
   AskCandidateType,
   RecommendationQuestionsResult,
   RecommendationQuestionsInput,
-  RecommendationQuestion,
   WrenAIError,
   RecommendationQuestionStatus,
   ChartStatus,
@@ -43,7 +42,6 @@ import {
   TrackedAdjustmentResult,
 } from '../backgrounds';
 import { getConfig } from '@server/config';
-import { buildFastRecommendationQuestions } from '../utils/recommendationQuestions';
 import { TextBasedAnswerBackgroundTracker } from '../backgrounds/textBasedAnswerBackgroundTracker';
 import { IAskingTaskTracker, TrackedAskingResult } from './askingTaskTracker';
 
@@ -447,10 +445,6 @@ export class AskingService implements IAskingService {
   private askingTaskRepository: IAskingTaskRepository;
   private adjustmentBackgroundTracker: AdjustmentBackgroundTaskTracker;
   private instantRecommendationJobs = new Map<string, Promise<Task>>();
-  private instantRecommendationResults = new Map<
-    string,
-    RecommendationQuestionsResult
-  >();
   private threadRecommendationJobs = new Map<number, Promise<void>>();
   private initialized = false;
 
@@ -611,26 +605,6 @@ export class AskingService implements IAskingService {
       .sort((a, b) => b.id - a.id)
       .slice(0, 5);
     const questions = slicedThreadResponses.map(({ question }) => question);
-    const fastQuestions = await this.filterExecutableRecommendationQuestions(
-      buildFastRecommendationQuestions(
-        manifest,
-        this.getThreadRecommendationQuestionsConfig(project).maxQuestions,
-        questions,
-      ),
-      project,
-      manifest,
-      this.getThreadRecommendationQuestionsConfig(project).maxQuestions,
-    );
-    if (fastQuestions.length) {
-      await this.threadRepository.updateOne(threadId, {
-        queryId: `fast-thread-${threadId}-${Date.now()}`,
-        questionsStatus: RecommendationQuestionStatus.FINISHED,
-        questions: fastQuestions,
-        questionsError: null,
-      });
-      return;
-    }
-
     const recommendQuestionData: RecommendationQuestionsInput = {
       manifest,
       projectId: project.id.toString(),
@@ -1243,31 +1217,6 @@ export class AskingService implements IAskingService {
       currentProject.id,
     );
 
-    const fastQuestions = await this.filterExecutableRecommendationQuestions(
-      buildFastRecommendationQuestions(
-        manifest,
-        this.getThreadRecommendationQuestionsConfig(currentProject).maxQuestions,
-        input.previousQuestions || [],
-      ),
-      currentProject,
-      manifest,
-      this.getThreadRecommendationQuestionsConfig(currentProject).maxQuestions,
-    );
-    if (fastQuestions.length) {
-      const queryId = `fast-instant-${currentProject.id}-${Date.now()}`;
-      this.instantRecommendationResults.set(queryId, {
-        status: RecommendationQuestionStatus.FINISHED,
-        type: null,
-        response: { questions: fastQuestions },
-        error: null,
-      });
-      setTimeout(
-        () => this.instantRecommendationResults.delete(queryId),
-        5 * 60 * 1000,
-      );
-      return { id: queryId };
-    }
-
     const response = await this.wrenAIAdaptor.generateRecommendationQuestions({
       manifest,
       projectId: currentProject.id.toString(),
@@ -1280,45 +1229,9 @@ export class AskingService implements IAskingService {
   public async getInstantRecommendedQuestions(
     queryId: string,
   ): Promise<RecommendationQuestionsResult> {
-    const localResult = this.instantRecommendationResults.get(queryId);
-    if (localResult) {
-      return localResult;
-    }
-
     const response =
       await this.wrenAIAdaptor.getRecommendationQuestionsResult(queryId);
     return response;
-  }
-
-  private async filterExecutableRecommendationQuestions(
-    questions: RecommendationQuestion[],
-    project: Project,
-    manifest: any,
-    maxQuestions: number,
-  ): Promise<RecommendationQuestion[]> {
-    const validQuestions: RecommendationQuestion[] = [];
-    for (const question of questions) {
-      try {
-        const result = (await this.queryService.preview(question.sql, {
-          project,
-          manifest,
-          modelingOnly: false,
-          limit: 1,
-          cacheEnabled: false,
-        })) as PreviewDataResponse;
-        if (result?.data?.length) {
-          validQuestions.push(question);
-          if (validQuestions.length >= maxQuestions) {
-            break;
-          }
-        }
-      } catch (error) {
-        logger.warn(
-          `Skipping recommended question because SQL preview failed: ${question.question}. ${error}`,
-        );
-      }
-    }
-    return validQuestions;
   }
 
   public async deleteAllByProjectId(projectId: number): Promise<void> {

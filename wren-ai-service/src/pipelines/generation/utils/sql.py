@@ -437,14 +437,16 @@ otherwise, you will put the relative timeframe in the SQL query.
 4. For the ranking problem(e.g. "top x", "bottom x", "first x", "last x"), you must add the ranking column to the final SELECT clause.
 5. If USER INSTRUCTIONS section is provided, make sure to consider them in the reasoning plan.
 6. If SQL SAMPLES section is provided, make sure to consider them in the reasoning plan.
-7. Give a step by step reasoning plan in order to answer user's question.
-8. The reasoning plan should be in the language same as the language user provided in the input.
-9. Don't include SQL in the reasoning plan.
-10. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
-11. Do not include ```markdown or ``` in the answer.
-12. A table name in the reasoning plan must be in this format: `table: <table_name>`.
-13. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
-14. ONLY SHOWING the reasoning plan in bullet points.
+7. Use DATABASE SCHEMA as the complete and only source of valid table, column, schema, model, and datasource names.
+8. Do not introduce, infer, or copy any identifier from the question, SQL samples, user instructions, or query history unless it also appears in DATABASE SCHEMA.
+9. Give a step by step reasoning plan in order to answer user's question.
+10. The reasoning plan should be in the language same as the language user provided in the input.
+11. Don't include SQL in the reasoning plan.
+12. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
+13. Do not include ```markdown or ``` in the answer.
+14. A table name in the reasoning plan must be in this format: `table: <table_name>`.
+15. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
+16. ONLY SHOWING the reasoning plan in bullet points.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
@@ -510,10 +512,13 @@ Given user's question, database schema, etc., you should think deeply and carefu
 ### GENERAL RULES ###
 
 1. YOU MUST FOLLOW the instructions strictly to generate the SQL query if the section of USER INSTRUCTIONS is available in user's input.
-2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
-3. YOU MUST REFER to the sql samples and learn the usage of the schema structures and how SQL is written based on them if the section of SQL SAMPLES is available in user's input.
-4. YOU MUST FOLLOW the reasoning plan step by step strictly to generate the SQL query if the section of REASONING PLAN is available in user's input.
-5. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
+2. The DATABASE SCHEMA section is the complete and only source of valid table, column, schema, model, and datasource names for this request.
+3. YOU MUST NOT introduce, infer, copy, or repair any table, column, schema, model, or datasource name that is absent from DATABASE SCHEMA.
+4. SQL SAMPLES and USER INSTRUCTIONS are usage guidance only. Do not copy identifiers from them unless those identifiers also appear in DATABASE SCHEMA.
+5. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
+6. YOU MUST REFER to the sql samples and learn the usage of the schema structures and how SQL is written based on them if the section of SQL SAMPLES is available in user's input.
+7. YOU MUST FOLLOW the reasoning plan step by step strictly to generate the SQL query if the section of REASONING PLAN is available in user's input.
+8. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {text_to_sql_rules}
 
@@ -551,10 +556,6 @@ def construct_instructions(
         ]
 
     return _instructions
-
-
-def normalize_generation_result_sql(sql: str, data_source: str | None = None) -> str:
-    return " ".join(sql.replace('\\"', '"').split())
 
 
 def construct_ask_history_messages(
