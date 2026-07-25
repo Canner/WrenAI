@@ -31,6 +31,12 @@ _MAX_SLUG_LEN = 60
 
 def slugify(text: str) -> str:
     """Normalize NL text into a filesystem-safe, deterministic slug."""
+    # Callers (CLI / memory store) may pass None or non-str NL text from
+    # partially-filled frontmatter; coerce rather than AttributeError.
+    if text is None:
+        return "query"
+    if not isinstance(text, str):
+        text = str(text)
     text = re.sub(r"[^a-z0-9]+", "-", text.strip().lower()).strip("-")
     if len(text) > _MAX_SLUG_LEN:
         text = text[:_MAX_SLUG_LEN].rstrip("-")
