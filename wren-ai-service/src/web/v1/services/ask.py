@@ -200,129 +200,137 @@ class AskService:
                 ).get("documents", [])[:1]
 
                 if historical_question_result:
+                    api_results = [
+                        AskResult(
+                            **{
+                                "sql": result.get("statement"),
+                                "type": "view" if result.get("viewId") else "llm",
+                                "viewId": result.get("viewId"),
+                            }
+                        )
+                        for result in historical_question_result
+                    ]
                     sql_generation_reasoning = ""
-
-                # Run both pipeline operations concurrently. The retrieved samples
-                # and instructions are passed through the same reasoning,
-                # generation, and correction flow as legacy/v1.
-                sql_samples_task, instructions_task = await asyncio.gather(
-                    self._pipelines["sql_pairs_retrieval"].run(
-                        query=user_query,
-                        project_id=ask_request.project_id,
-                    ),
-                    self._pipelines["instructions_retrieval"].run(
-                        query=user_query,
-                        project_id=ask_request.project_id,
-                        scope="sql",
-                    ),
-                )
-
-                # Extract results from completed tasks
-                sql_samples = sql_samples_task["formatted_output"].get("documents", [])
-                instructions = instructions_task["formatted_output"].get(
-                    "documents", []
-                )
-
-                if self._allow_intent_classification:
-                    intent_classification_result = (
-                        await self._pipelines["intent_classification"].run(
+                else:
+                    sql_samples_task, instructions_task = await asyncio.gather(
+                        self._pipelines["sql_pairs_retrieval"].run(
                             query=user_query,
-                            histories=histories,
-                            sql_samples=sql_samples,
-                            instructions=instructions,
                             project_id=ask_request.project_id,
-                            configuration=ask_request.configurations,
-                        )
-                    ).get("post_process", {})
-                    intent = intent_classification_result.get("intent")
-                    rephrased_question = intent_classification_result.get(
-                        "rephrased_question"
+                        ),
+                        self._pipelines["instructions_retrieval"].run(
+                            query=user_query,
+                            project_id=ask_request.project_id,
+                            scope="sql",
+                        ),
                     )
-                    intent_reasoning = intent_classification_result.get("reasoning")
 
-                    if rephrased_question:
-                        user_query = rephrased_question
+                    sql_samples = sql_samples_task["formatted_output"].get(
+                        "documents", []
+                    )
+                    instructions = instructions_task["formatted_output"].get(
+                        "documents", []
+                    )
 
-                    if intent == "MISLEADING_QUERY":
-                        asyncio.create_task(
-                            self._pipelines["misleading_assistance"].run(
+                    if self._allow_intent_classification:
+                        intent_classification_result = (
+                            await self._pipelines["intent_classification"].run(
                                 query=user_query,
                                 histories=histories,
-                                db_schemas=intent_classification_result.get(
-                                    "db_schemas"
-                                ),
-                                language=ask_request.configurations.language,
-                                query_id=ask_request.query_id,
-                                custom_instruction=ask_request.custom_instruction,
+                                sql_samples=sql_samples,
+                                instructions=instructions,
+                                project_id=ask_request.project_id,
+                                configuration=ask_request.configurations,
                             )
+                        ).get("post_process", {})
+                        intent = intent_classification_result.get("intent")
+                        rephrased_question = intent_classification_result.get(
+                            "rephrased_question"
                         )
+                        intent_reasoning = intent_classification_result.get("reasoning")
 
-                        self._ask_results[query_id] = AskResultResponse(
-                            status="finished",
-                            type="GENERAL",
-                            rephrased_question=rephrased_question,
-                            intent_reasoning=intent_reasoning,
-                            trace_id=trace_id,
-                            is_followup=True if histories else False,
-                            general_type="MISLEADING_QUERY",
-                        )
-                        results["metadata"]["type"] = "MISLEADING_QUERY"
-                        return results
-                    elif intent == "GENERAL":
-                        asyncio.create_task(
-                            self._pipelines["data_assistance"].run(
-                                query=user_query,
-                                histories=histories,
-                                db_schemas=intent_classification_result.get(
-                                    "db_schemas"
-                                ),
-                                language=ask_request.configurations.language,
-                                query_id=ask_request.query_id,
-                                custom_instruction=ask_request.custom_instruction,
+                        if rephrased_question:
+                            user_query = rephrased_question
+
+                        if intent == "MISLEADING_QUERY":
+                            asyncio.create_task(
+                                self._pipelines["misleading_assistance"].run(
+                                    query=user_query,
+                                    histories=histories,
+                                    db_schemas=intent_classification_result.get(
+                                        "db_schemas"
+                                    ),
+                                    language=ask_request.configurations.language,
+                                    query_id=ask_request.query_id,
+                                    custom_instruction=ask_request.custom_instruction,
+                                )
                             )
-                        )
 
-                        self._ask_results[query_id] = AskResultResponse(
-                            status="finished",
-                            type="GENERAL",
-                            rephrased_question=rephrased_question,
-                            intent_reasoning=intent_reasoning,
-                            trace_id=trace_id,
-                            is_followup=True if histories else False,
-                            general_type="DATA_ASSISTANCE",
-                        )
-                        results["metadata"]["type"] = "GENERAL"
-                        return results
-                    elif intent == "USER_GUIDE":
-                        asyncio.create_task(
-                            self._pipelines["user_guide_assistance"].run(
-                                query=user_query,
-                                language=ask_request.configurations.language,
-                                query_id=ask_request.query_id,
-                                custom_instruction=ask_request.custom_instruction,
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="GENERAL",
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                                general_type="MISLEADING_QUERY",
                             )
-                        )
+                            results["metadata"]["type"] = "MISLEADING_QUERY"
+                            return results
+                        elif intent == "GENERAL":
+                            asyncio.create_task(
+                                self._pipelines["data_assistance"].run(
+                                    query=user_query,
+                                    histories=histories,
+                                    db_schemas=intent_classification_result.get(
+                                        "db_schemas"
+                                    ),
+                                    language=ask_request.configurations.language,
+                                    query_id=ask_request.query_id,
+                                    custom_instruction=ask_request.custom_instruction,
+                                )
+                            )
 
-                        self._ask_results[query_id] = AskResultResponse(
-                            status="finished",
-                            type="GENERAL",
-                            rephrased_question=rephrased_question,
-                            intent_reasoning=intent_reasoning,
-                            trace_id=trace_id,
-                            is_followup=True if histories else False,
-                            general_type="USER_GUIDE",
-                        )
-                        results["metadata"]["type"] = "GENERAL"
-                        return results
-                    else:
-                        self._ask_results[query_id] = AskResultResponse(
-                            status="understanding",
-                            type="TEXT_TO_SQL",
-                            rephrased_question=rephrased_question,
-                            intent_reasoning=intent_reasoning,
-                            trace_id=trace_id,
-                            is_followup=True if histories else False,
-                        )
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="GENERAL",
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                                general_type="DATA_ASSISTANCE",
+                            )
+                            results["metadata"]["type"] = "GENERAL"
+                            return results
+                        elif intent == "USER_GUIDE":
+                            asyncio.create_task(
+                                self._pipelines["user_guide_assistance"].run(
+                                    query=user_query,
+                                    language=ask_request.configurations.language,
+                                    query_id=ask_request.query_id,
+                                    custom_instruction=ask_request.custom_instruction,
+                                )
+                            )
+
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="GENERAL",
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                                general_type="USER_GUIDE",
+                            )
+                            results["metadata"]["type"] = "GENERAL"
+                            return results
+                        else:
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="understanding",
+                                type="TEXT_TO_SQL",
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                            )
             if not self._is_stopped(query_id, self._ask_results) and not api_results:
                 self._ask_results[query_id] = AskResultResponse(
                     status="searching",

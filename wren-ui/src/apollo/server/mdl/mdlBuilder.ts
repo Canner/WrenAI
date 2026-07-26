@@ -583,78 +583,16 @@ export class MDLBuilder implements IMDLBuilder {
       model.properties && typeof model.properties === 'string'
         ? this.parseProperties(model.properties)
         : {};
-    const propertyTableReference =
-      typeof modelProps.table === 'string'
-        ? this.buildTableReferenceFromTableName(modelProps.table)
-        : null;
-    const fallbackTableReference = this.buildFallbackTableReference(model);
-    const table =
-      propertyTableReference?.table ||
-      modelProps.table ||
-      fallbackTableReference?.table;
-    if (!table) {
+    if (!modelProps.table) {
       return null;
     }
     return {
-      catalog:
-        propertyTableReference?.catalog ||
-        modelProps.catalog ||
-        fallbackTableReference?.catalog ||
-        null,
-      schema:
-        propertyTableReference?.schema ||
-        modelProps.schema ||
-        fallbackTableReference?.schema ||
-        null,
-      table,
+      catalog: modelProps.catalog || null,
+      schema: modelProps.schema || null,
+      table: modelProps.table,
     };
   }
 
-  private buildFallbackTableReference(model: Model): TableReference | null {
-    if (!this.useRustWrenEngine() || !model.sourceTableName) {
-      return null;
-    }
-
-    const sourceTableName = model.sourceTableName.trim();
-    const normalizedTableReference =
-      this.buildTableReferenceFromTableName(sourceTableName);
-    if (normalizedTableReference) {
-      return normalizedTableReference;
-    }
-
-    return {
-      catalog: null,
-      schema: null,
-      table: sourceTableName,
-    };
-  }
-
-  private buildTableReferenceFromTableName(
-    tableName: string,
-  ): TableReference | null {
-    const sourceTableName = tableName.trim();
-    const catalogQualifiedMatch = sourceTableName.match(
-      /^([^.]+)\.([^.]+)\.([^.]+)$/,
-    );
-    if (catalogQualifiedMatch) {
-      return {
-        catalog: catalogQualifiedMatch[1],
-        schema: catalogQualifiedMatch[2],
-        table: catalogQualifiedMatch[3],
-      };
-    }
-
-    const dotQualifiedMatch = sourceTableName.match(/^([^.]+)\.([^.]+)$/);
-    if (dotQualifiedMatch) {
-      return {
-        catalog: null,
-        schema: dotQualifiedMatch[1],
-        table: dotQualifiedMatch[2],
-      };
-    }
-
-    return null;
-  }
   private hasDuplicateSourceColumns(modelId: number): boolean {
     const sourceColumnNames = new Set<string>();
     for (const column of this.columns.filter(
