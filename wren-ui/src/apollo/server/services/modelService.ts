@@ -260,7 +260,7 @@ export class ModelService implements IModelService {
       projectId: id,
     });
 
-    await Promise.all([
+    await Promise.all(
       tables.map(async (table) => {
         const model = models.find((m) => m.sourceTableName === table.tableName);
         if (!model) {
@@ -275,7 +275,7 @@ export class ModelService implements IModelService {
           properties: JSON.stringify(properties),
         });
       }),
-    ]);
+    );
   }
 
   public async batchUpdateColumnProperties(tables: SampleDatasetTable[]) {
@@ -298,7 +298,7 @@ export class ModelService implements IModelService {
       return acc;
     }, []);
 
-    await Promise.all([
+    await Promise.all(
       transformedColumns.map(async (column) => {
         if (!column.properties) {
           return;
@@ -327,7 +327,7 @@ export class ModelService implements IModelService {
           properties: JSON.stringify(properties),
         });
       }),
-    ]);
+    );
   }
 
   public generateReferenceName(data: GenerateReferenceNameData): string {

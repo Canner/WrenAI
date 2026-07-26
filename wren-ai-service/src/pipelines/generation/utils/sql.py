@@ -198,8 +198,10 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
     - answer: "SELECT SUM(r.PriceSum) FROM Revenue r WHERE CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) >= CAST('2024-11-01 00:00:00' AS TIMESTAMP WITH TIME ZONE) AND CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) < CAST('2024-11-02 00:00:00' AS TIMESTAMP WITH TIME ZONE)"
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
-- ONLY USE table/column alias in the final SELECT clause; don't use table/columnalias in the other clauses.
-- Refer to the value of alias from the comment section of the corresponding table or column in the DATABASE SCHEMA section for reference when using alias in the final SELECT clause.
+- Table/column aliases in schema comments are display labels only. Never use an alias as an executable table or column identifier.
+- Use only table and column names from the CREATE TABLE statements as identifiers in SELECT, FROM, JOIN, WHERE, GROUP BY, HAVING, ORDER BY, and expressions.
+- You may use aliases from schema comments only after AS in the final SELECT clause.
+- Refer to the value of alias from the comment section of the corresponding table or column in the DATABASE SCHEMA section only for final SELECT output labels.
   - EXAMPLE
     DATABASE SCHEMA
     /* {"alias":"_orders","description":"A model representing the orders data."} */

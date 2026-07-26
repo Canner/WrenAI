@@ -94,6 +94,12 @@ const SAVE_MODELING_RELATIONSHIPS = gql`
   }
 `;
 
+const SAVE_MODELING_SEMANTICS = gql`
+  mutation SaveModelingSemantics($data: [SaveModelingSemanticInput!]!) {
+    saveModelingSemantics(data: $data)
+  }
+`;
+
 const Diagram = dynamic(() => import('@/components/diagram'), { ssr: false });
 // https://github.com/vercel/next.js/issues/4957#issuecomment-413841689
 const ForwardDiagram = forwardRef(function ForwardDiagram(props: any, ref) {
@@ -400,6 +406,7 @@ export default function Modeling() {
   const [generateModelingRelationships] = useMutation(
     GENERATE_MODELING_RELATIONSHIPS,
   );
+  const [saveModelingSemantics] = useMutation(SAVE_MODELING_SEMANTICS);
   const [saveModelingRelationships] = useMutation(SAVE_MODELING_RELATIONSHIPS);
 
   const diagramData = useMemo(() => {
@@ -854,34 +861,40 @@ export default function Modeling() {
       if (!diagramData) return;
       setAssistantLoading(true);
       if (assistantMode === 'semantics') {
-        for (const model of semanticResult) {
+        const data = semanticResult.flatMap((model) => {
           const diagramModel = diagramData.models.find(
             (item) => item.referenceName === model.name,
           );
-          if (!diagramModel) continue;
-          await updateModelMetadata({
-            variables: {
-              where: { id: diagramModel.modelId },
-              data: {
-                description: model.description,
-                columns: (model.columns || [])
-                  .map((column) => {
-                    const field = diagramModel.fields.find(
-                      (item) => item.referenceName === column.name,
-                    );
-                    return field
-                      ? {
-                          id: field.columnId,
-                          displayName: field.displayName,
-                          description: column.description,
-                        }
-                      : null;
-                  })
-                  .filter(Boolean),
-              },
-            },
-          });
+          if (!diagramModel) return [];
+          return {
+            modelId: diagramModel.modelId,
+            description: model.description,
+            columns: (model.columns || [])
+              .map((column) => {
+                const field = diagramModel.fields.find(
+                  (item) => item.referenceName === column.name,
+                );
+                return field
+                  ? {
+                      id: field.columnId,
+                      displayName: field.displayName,
+                      description: column.description,
+                    }
+                  : null;
+              })
+              .filter(Boolean),
+          };
+        });
+
+        if (!data.length) {
+          throw new Error('No semantic descriptions to save.');
         }
+
+        await saveModelingSemantics({
+          variables: { data },
+          refetchQueries,
+          awaitRefetchQueries: true,
+        });
       }
       if (assistantMode === 'relationships') {
         const res = await saveModelingRelationships({

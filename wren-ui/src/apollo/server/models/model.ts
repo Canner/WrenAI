@@ -11,44 +11,50 @@ export interface UpdateModelData {
 
 export interface NestedColumnMetadataInput {
   id: number;
-  displayName: string;
-  description: string;
+  displayName?: string;
+  description?: string;
 }
 
 export interface ColumnMetadataInput {
   id: number;
-  displayName: string;
-  description: string;
+  displayName?: string;
+  description?: string;
 }
 
 export interface CalculatedFieldMetadataInput {
   id: number;
-  description: string;
+  description?: string;
 }
 
 export interface RelationshipMetadataInput {
   id: number;
-  description: string;
+  description?: string;
 }
 
 export interface ViewColumnMetadataInput {
   referenceName: string;
-  description: string;
+  description?: string;
 }
 
 export interface UpdateModelMetadataInput {
-  displayName: string;
-  description: string;
+  displayName?: string;
+  description?: string;
+  columns?: Array<ColumnMetadataInput>;
+  nestedColumns?: Array<NestedColumnMetadataInput>;
+  calculatedFields?: Array<CalculatedFieldMetadataInput>;
+  relationships?: Array<RelationshipMetadataInput>;
+}
+
+export interface SaveModelingSemanticInput {
+  modelId: number;
+  description?: string;
   columns: Array<ColumnMetadataInput>;
-  nestedColumns: Array<NestedColumnMetadataInput>;
-  calculatedFields: Array<CalculatedFieldMetadataInput>;
-  relationships: Array<RelationshipMetadataInput>;
 }
 
 export interface UpdateViewMetadataInput {
-  displayName: string;
-  description: string;
-  columns: Array<ViewColumnMetadataInput>;
+  displayName?: string;
+  description?: string;
+  columns?: Array<ViewColumnMetadataInput>;
 }
 
 export enum ExpressionName {

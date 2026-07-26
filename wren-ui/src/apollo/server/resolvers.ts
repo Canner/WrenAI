@@ -152,6 +152,7 @@ const resolvers = {
     validateView: modelResolver.validateView,
     updateViewMetadata: modelResolver.updateViewMetadata,
     generateModelingSemantics: modelResolver.generateModelingSemantics,
+    saveModelingSemantics: modelResolver.saveModelingSemantics,
     generateModelingRelationships: modelResolver.generateModelingRelationships,
     saveModelingRelationships: modelResolver.saveModelingRelationships,
 

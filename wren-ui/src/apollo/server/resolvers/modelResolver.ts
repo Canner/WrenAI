@@ -2,6 +2,7 @@ import {
   CreateModelData,
   UpdateModelData,
   UpdateModelMetadataInput,
+  SaveModelingSemanticInput,
   CreateCalculatedFieldData,
   UpdateCalculatedFieldData,
   UpdateViewMetadataInput,
@@ -61,6 +62,7 @@ export class ModelResolver {
     this.generateModelingSemantics = this.generateModelingSemantics.bind(this);
     this.getModelingSemanticsResult =
       this.getModelingSemanticsResult.bind(this);
+    this.saveModelingSemantics = this.saveModelingSemantics.bind(this);
     this.generateModelingRelationships =
       this.generateModelingRelationships.bind(this);
     this.getModelingRelationshipsResult =
@@ -463,12 +465,61 @@ export class ModelResolver {
   ) {
     const project = await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
+    const dataSamples = await this.collectModelingDataSamples(
+      args.data.selectedModels,
+      project,
+      manifest,
+      ctx,
+    );
     return await ctx.wrenAIAdaptor.generateSemanticsDescription({
       manifest,
       selectedModels: args.data.selectedModels,
       userPrompt: args.data.userPrompt,
       projectId: project.id,
+      dataSamples,
     });
+  }
+
+  private async collectModelingDataSamples(
+    selectedModels: string[],
+    project: Project,
+    manifest: any,
+    ctx: IContext,
+  ): Promise<Record<string, any>> {
+    const samples: Record<string, any> = {};
+    const selectedModelNames = new Set(selectedModels);
+    const models = (manifest.models || []).filter((model) =>
+      selectedModelNames.has(model.name),
+    );
+
+    await Promise.all(
+      models.map(async (model) => {
+        try {
+          const preview = (await ctx.queryService.preview(
+            `SELECT * FROM "${model.name}"`,
+            {
+              project,
+              modelingOnly: false,
+              manifest,
+              limit: 5,
+              refresh: true,
+              cacheEnabled: false,
+            },
+          )) as PreviewDataResponse;
+
+          samples[model.name] = {
+            columns: preview.columns || [],
+            rows: (preview.data || []).slice(0, 5),
+          };
+        } catch (err: any) {
+          logger.warn(
+            `Failed to collect semantic sample data for model "${model.name}": ${err.message}`,
+          );
+        }
+      }),
+    );
+
+    return samples;
   }
 
   public async getModelingSemanticsResult(
@@ -477,6 +528,58 @@ export class ModelResolver {
     ctx: IContext,
   ) {
     return await ctx.wrenAIAdaptor.getSemanticsDescriptionResult(args.queryId);
+  }
+
+  public async saveModelingSemantics(
+    _root: any,
+    args: { data: SaveModelingSemanticInput[] },
+    ctx: IContext,
+  ) {
+    const project = await ctx.projectService.getCurrentProject();
+    const models = await ctx.modelRepository.findAllBy({
+      projectId: project.id,
+    });
+    const modelById = new Map(models.map((model) => [model.id, model]));
+
+    await Promise.all(
+      (args.data || []).map(async (item) => {
+        const model = modelById.get(item.modelId);
+        if (!model) {
+          throw new Error(`Model not found: ${item.modelId}`);
+        }
+
+        await this.handleUpdateModelMetadata(
+          {
+            displayName: undefined,
+            description: item.description,
+            columns: [],
+            nestedColumns: [],
+            calculatedFields: [],
+            relationships: [],
+          },
+          model,
+          ctx,
+          item.modelId,
+        );
+
+        if (!isEmpty(item.columns)) {
+          await this.handleUpdateColumnMetadata(
+            {
+              displayName: undefined,
+              description: undefined,
+              columns: item.columns,
+              nestedColumns: [],
+              calculatedFields: [],
+              relationships: [],
+            },
+            ctx,
+          );
+        }
+      }),
+    );
+
+    this.markProjectDirty(project.id);
+    return { savedCount: args.data?.length || 0 };
   }
 
   public async generateModelingRelationships(

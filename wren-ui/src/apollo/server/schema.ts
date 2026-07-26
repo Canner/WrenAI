@@ -379,6 +379,12 @@ export const typeDefs = gql`
     userPrompt: String!
   }
 
+  input SaveModelingSemanticInput {
+    modelId: Int!
+    description: String
+    columns: [UpdateColumnMetadataInput!]!
+  }
+
   type NestedFieldInfo {
     id: Int!
     displayName: String!
@@ -1338,6 +1344,7 @@ export const typeDefs = gql`
       data: UpdateViewMetadataInput!
     ): Boolean!
     generateModelingSemantics(data: GenerateModelingSemanticsInput!): JSON!
+    saveModelingSemantics(data: [SaveModelingSemanticInput!]!): JSON!
     generateModelingRelationships: JSON!
     saveModelingRelationships(data: [ModelingRelationshipInput!]!): JSON!
 
