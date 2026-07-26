@@ -121,3 +121,8 @@ def test_format_list_models_normalizes_non_dict_properties() -> None:
         }
     )
     assert "| customers | 1 | fallback desc |" in out
+
+
+def test_format_recall_coerces_non_str_nl_sql() -> None:
+    out = format_recall_content([{"nl": 123, "sql": None}])
+    assert '1. "123"' in out
