@@ -588,6 +588,50 @@ describe('MDLBuilder', () => {
     expect(manifest.models[0].refSql).toBeUndefined();
   });
 
+  it('should preserve refSql when a model has no tableReference.', () => {
+    const project = {
+      id: 1,
+      type: DataSourceName.POSTGRES,
+      displayName: 'wren ai project',
+      connectionInfo: {},
+      catalog: 'wrenai',
+      schema: 'public',
+      sampleDataset: null,
+    } as Project;
+    const models = [
+      {
+        id: 1,
+        projectId: 1,
+        displayName: 'Semantic Model',
+        sourceTableName: 'physical_table',
+        referenceName: 'semantic_model',
+        refSql: 'SELECT * FROM physical_schema.physical_table',
+        cached: false,
+        refreshTime: null,
+        properties: null,
+      },
+    ] as Model[];
+    const builderOptions = {
+      project,
+      models,
+      columns: [],
+      nestedColumns: [],
+      relations: [],
+      views: [],
+      relatedModels: [],
+      relatedColumns: [],
+      relatedRelations: [],
+    } as MDLBuilderBuildFromOptions;
+    mdlBuilder = new MDLBuilder(builderOptions);
+
+    const manifest = mdlBuilder.build();
+
+    expect(manifest.models[0].tableReference).toBeFalsy();
+    expect(manifest.models[0].refSql).toEqual(
+      'SELECT * FROM physical_schema.physical_table',
+    );
+  });
+
   it('should return correct expression in calculated field.', () => {
     const models = [
       // customer model

@@ -147,11 +147,7 @@ export class MDLBuilder implements IMDLBuilder {
         columns: [],
         tableReference,
         // can only have one of refSql or tableReference
-        refSql: this.useRustWrenEngine()
-          ? null
-          : tableReference
-            ? null
-            : model.refSql,
+        refSql: tableReference ? null : model.refSql,
         cached: model.cached ? true : false,
         refreshTime: model.refreshTime,
         properties: {
