@@ -539,7 +539,7 @@ describe('MDLBuilder', () => {
     expect(manifest.views).toEqual(expectedViews);
   });
 
-  it('should preserve dbo-prefixed property table names.', () => {
+  it('should use tableReference when a model has no refSql.', () => {
     const project = {
       id: 1,
       type: DataSourceName.POSTGRES,
@@ -554,14 +554,14 @@ describe('MDLBuilder', () => {
         id: 1,
         projectId: 1,
         displayName: 'Search Queries',
-        sourceTableName: 'dbo_search_queries',
-        referenceName: 'dbo_search_queries',
-        refSql: 'SELECT * FROM dbo.search_queries',
+        sourceTableName: 'search_queries',
+        referenceName: 'search_queries',
+        refSql: null,
         cached: false,
         refreshTime: null,
         properties: JSON.stringify({
           schema: 'public',
-          table: 'dbo_search_queries',
+          table: 'search_queries',
         }),
       },
     ] as Model[];
@@ -583,9 +583,56 @@ describe('MDLBuilder', () => {
     expect(manifest.models[0].tableReference).toEqual({
       catalog: null,
       schema: 'public',
-      table: 'dbo_search_queries',
+      table: 'search_queries',
     });
-    expect(manifest.models[0].refSql).toBeUndefined();
+    expect(manifest.models[0].refSql).toBeFalsy();
+  });
+
+  it('should prefer refSql over tableReference when both are present.', () => {
+    const project = {
+      id: 1,
+      type: DataSourceName.POSTGRES,
+      displayName: 'wren ai project',
+      connectionInfo: {},
+      catalog: 'wrenai',
+      schema: 'public',
+      sampleDataset: null,
+    } as Project;
+    const models = [
+      {
+        id: 1,
+        projectId: 1,
+        displayName: 'Semantic Model',
+        sourceTableName: 'physical_table',
+        referenceName: 'semantic_model',
+        refSql: 'SELECT * FROM physical_schema.physical_table',
+        cached: false,
+        refreshTime: null,
+        properties: JSON.stringify({
+          schema: 'public',
+          table: 'semantic_model',
+        }),
+      },
+    ] as Model[];
+    const builderOptions = {
+      project,
+      models,
+      columns: [],
+      nestedColumns: [],
+      relations: [],
+      views: [],
+      relatedModels: [],
+      relatedColumns: [],
+      relatedRelations: [],
+    } as MDLBuilderBuildFromOptions;
+    mdlBuilder = new MDLBuilder(builderOptions);
+
+    const manifest = mdlBuilder.build();
+
+    expect(manifest.models[0].tableReference).toBeFalsy();
+    expect(manifest.models[0].refSql).toEqual(
+      'SELECT * FROM physical_schema.physical_table',
+    );
   });
 
   it('should preserve refSql when a model has no tableReference.', () => {

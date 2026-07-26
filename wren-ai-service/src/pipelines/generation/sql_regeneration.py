@@ -29,7 +29,6 @@ logger = logging.getLogger("wren-ai-service")
 
 def get_sql_regeneration_system_prompt(
     sql_knowledge: SqlKnowledge | None = None,
-    data_source: str | None = None,
 ) -> str:
     text_to_sql_rules = get_text_to_sql_rules(sql_knowledge)
 
@@ -52,17 +51,10 @@ The final answer must be a ANSI SQL query in JSON format:
 
 
 sql_regeneration_user_prompt_template = """
-### TARGET DATA SOURCE ###
-{{ data_source }}
-
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
 {% endfor %}
-
-Use this DATABASE SCHEMA as the complete allowed identifier set for the regenerated SQL.
-Only regenerate SQL with table, column, schema, model, and datasource names present above.
-Do not infer identifiers from the original SQL, reasoning, SQL samples, user instructions, or prior examples.
 
 {% if calculated_field_instructions %}
 {{ calculated_field_instructions }}
@@ -115,7 +107,6 @@ def prompt(
     sql_generation_reasoning: str,
     sql: str,
     prompt_builder: PromptBuilder,
-    data_source: str,
     sql_samples: list[dict] | None = None,
     instructions: list[dict] | None = None,
     has_calculated_field: bool = False,
@@ -126,7 +117,6 @@ def prompt(
 ) -> dict:
     _prompt = prompt_builder.run(
         sql=sql,
-        data_source=data_source,
         documents=documents,
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
@@ -155,13 +145,9 @@ async def regenerate_sql(
     prompt: dict,
     generator: Any,
     generator_name: str,
-    data_source: str,
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
-    current_system_prompt = get_sql_regeneration_system_prompt(
-        sql_knowledge,
-        data_source=data_source,
-    )
+    current_system_prompt = get_sql_regeneration_system_prompt(sql_knowledge)
     return await generator(
         prompt=prompt.get("prompt"), current_system_prompt=current_system_prompt
     ), generator_name
@@ -171,14 +157,11 @@ async def regenerate_sql(
 async def post_process(
     regenerate_sql: dict,
     post_processor: SQLGenPostProcessor,
-    documents: list[str],
-    data_source: str,
     project_id: str | None = None,
 ) -> dict:
     return await post_processor.run(
         regenerate_sql.get("replies"),
         project_id=project_id,
-        data_source=data_source,
     )
 
 
@@ -214,7 +197,6 @@ class SQLRegeneration(BasicPipeline):
         contexts: list[str],
         sql_generation_reasoning: str,
         sql: str,
-        data_source: str = "local_file",
         sql_samples: list[dict] | None = None,
         instructions: list[dict] | None = None,
         project_id: str | None = None,
@@ -240,7 +222,6 @@ class SQLRegeneration(BasicPipeline):
                 "has_json_field": has_json_field,
                 "sql_functions": sql_functions,
                 "sql_knowledge": sql_knowledge,
-                "data_source": data_source,
                 **self._components,
             },
         )

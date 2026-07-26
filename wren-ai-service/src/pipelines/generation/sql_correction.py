@@ -57,10 +57,6 @@ sql_correction_user_prompt_template = """
 {% for document in documents %}
     {{ document }}
 {% endfor %}
-
-Use this DATABASE SCHEMA as the complete allowed identifier set for the corrected SQL.
-Only correct SQL with table, column, schema, model, and datasource names present above.
-Do not infer identifiers from the original SQL, error message, user instructions, or prior examples.
 {% endif %}
 
 {% if sql_functions %}
@@ -182,9 +178,10 @@ class SQLCorrection(BasicPipeline):
     ):
         logger.info("SQLCorrection pipeline is running...")
 
-        metadata = (
-            await retrieve_metadata(project_id, self._retriever) if project_id else {}
-        )
+        if use_dry_plan:
+            metadata = await retrieve_metadata(project_id or "", self._retriever)
+        else:
+            metadata = {}
 
         return await self._pipe.execute(
             ["post_process"],

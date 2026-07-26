@@ -141,13 +141,14 @@ export class MDLBuilder implements IMDLBuilder {
       if (model.displayName) {
         properties.displayName = model.displayName;
       }
-      const tableReference = this.buildTableReference(model);
+      const refSql = model.refSql || null;
+      const tableReference = refSql ? null : this.buildTableReference(model);
       const modelMdl = {
         name: model.referenceName,
         columns: [],
         tableReference,
         // can only have one of refSql or tableReference
-        refSql: tableReference ? null : model.refSql,
+        refSql,
         cached: model.cached ? true : false,
         refreshTime: model.refreshTime,
         properties: {

@@ -33,10 +33,6 @@ sql_generation_user_prompt_template = """
     {{ document }}
 {% endfor %}
 
-Use this DATABASE SCHEMA as the complete allowed identifier set for this query.
-Only generate SQL with table, column, schema, model, and datasource names present above.
-Do not infer identifiers from the question, SQL samples, user instructions, or prior examples.
-
 {% if calculated_field_instructions %}
 {{ calculated_field_instructions }}
 {% endif %}
@@ -209,9 +205,10 @@ class SQLGeneration(BasicPipeline):
     ):
         logger.info("SQL Generation pipeline is running...")
 
-        metadata = (
-            await retrieve_metadata(project_id, self._retriever) if project_id else {}
-        )
+        if use_dry_plan:
+            metadata = await retrieve_metadata(project_id or "", self._retriever)
+        else:
+            metadata = {}
 
         return await self._pipe.execute(
             ["post_process"],

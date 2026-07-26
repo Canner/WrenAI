@@ -27,10 +27,6 @@ sql_generation_reasoning_user_prompt_template = """
     {{ document }}
 {% endfor %}
 
-Use this DATABASE SCHEMA as the complete allowed identifier set for the reasoning plan.
-Only refer to table, column, schema, model, and datasource names present above.
-Do not infer identifiers from the question, SQL samples, user instructions, or prior examples.
-
 {% if sql_samples %}
 ### SQL SAMPLES ###
 {% for sql_sample in sql_samples %}
