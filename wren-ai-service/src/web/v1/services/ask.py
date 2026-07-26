@@ -212,6 +212,8 @@ class AskService:
                     ]
                     sql_generation_reasoning = ""
                 else:
+                    # Run both retrievals for intent classification. Executable SQL
+                    # generation is grounded only by the schema DDL retrieved below.
                     sql_samples_task, instructions_task = await asyncio.gather(
                         self._pipelines["sql_pairs_retrieval"].run(
                             query=user_query,
@@ -394,8 +396,8 @@ class AskService:
                             query=user_query,
                             contexts=table_ddls,
                             histories=histories,
-                            sql_samples=sql_samples,
-                            instructions=instructions,
+                            sql_samples=[],
+                            instructions=[],
                             configuration=ask_request.configurations,
                             query_id=query_id,
                         )
@@ -405,8 +407,8 @@ class AskService:
                         await self._pipelines["sql_generation_reasoning"].run(
                             query=user_query,
                             contexts=table_ddls,
-                            sql_samples=sql_samples,
-                            instructions=instructions,
+                            sql_samples=[],
+                            instructions=[],
                             configuration=ask_request.configurations,
                             query_id=query_id,
                         )
@@ -466,8 +468,8 @@ class AskService:
                         sql_generation_reasoning=sql_generation_reasoning,
                         histories=histories,
                         project_id=ask_request.project_id,
-                        sql_samples=sql_samples,
-                        instructions=instructions,
+                        sql_samples=[],
+                        instructions=[],
                         has_calculated_field=has_calculated_field,
                         has_metric=has_metric,
                         has_json_field=has_json_field,
@@ -484,8 +486,8 @@ class AskService:
                         contexts=table_ddls,
                         sql_generation_reasoning=sql_generation_reasoning,
                         project_id=ask_request.project_id,
-                        sql_samples=sql_samples,
-                        instructions=instructions,
+                        sql_samples=[],
+                        instructions=[],
                         has_calculated_field=has_calculated_field,
                         has_metric=has_metric,
                         has_json_field=has_json_field,
@@ -547,7 +549,7 @@ class AskService:
                             "sql_correction"
                         ].run(
                             contexts=table_ddls,
-                            instructions=instructions,
+                            instructions=[],
                             invalid_generation_result={
                                 "sql": original_sql,
                                 "error": sql_diagnosis_reasoning
