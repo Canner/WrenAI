@@ -45,12 +45,21 @@ def test_query_strips_trailing_semicolon_before_subquery_wrap() -> None:
     assert ";)" not in sent
 
 
-def test_query_without_limit_is_unwrapped() -> None:
+def test_query_without_limit_strips_trailing_semicolon() -> None:
     connector, ctx = _make_mock_connector()
     connector.query("SELECT 1;")
     (sent,), _ = ctx.query.call_args
-    # No limit -> no subquery wrapping; passed through verbatim.
-    assert sent == "SELECT 1;"
+    # No limit -> no subquery wrapping, but terminating ``;`` is still stripped
+    # so LocalRuntime single-statement execution accepts client SQL.
+    assert sent == "SELECT 1"
+    assert not sent.endswith(";")
+
+
+def test_query_without_limit_strips_semicolon_and_whitespace() -> None:
+    connector, ctx = _make_mock_connector()
+    connector.query("SELECT 1;  \n")
+    (sent,), _ = ctx.query.call_args
+    assert sent == "SELECT 1"
 
 
 def test_helper_preserves_semicolon_inside_string_literal() -> None:

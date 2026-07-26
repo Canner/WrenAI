@@ -29,11 +29,14 @@ class DataFusionConnector(ConnectorABC):
         self._register_tables()
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
+        # Always strip terminating ``;`` / whitespace. Limited path needs it
+        # for the subquery wrap; unlimited ``ctx.query`` also rejects a trailing
+        # statement terminator on single-statement LocalRuntime execution.
+        cleaned = strip_trailing_semicolon(sql)
         if limit is not None:
-            sql = (
-                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) "
-                f"AS _q LIMIT {int(limit)}"
-            )
+            sql = f"SELECT * FROM ({cleaned}) AS _q LIMIT {int(limit)}"
+        else:
+            sql = cleaned
         ipc_bytes = self.ctx.query(sql)
         reader = ipc.open_stream(io.BytesIO(bytes(ipc_bytes)))
         return reader.read_all()
