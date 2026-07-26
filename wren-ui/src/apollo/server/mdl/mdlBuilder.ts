@@ -141,8 +141,17 @@ export class MDLBuilder implements IMDLBuilder {
       if (model.displayName) {
         properties.displayName = model.displayName;
       }
-      const refSql = model.refSql || null;
-      const tableReference = refSql ? null : this.buildTableReference(model);
+      const sourceTableReference = this.buildTableReference(model);
+      const refSql =
+        model.refSql ||
+        (sourceTableReference
+          ? this.buildTableReferenceSql(
+              model.id,
+              { name: model.referenceName, columns: [] },
+              sourceTableReference,
+            )
+          : null);
+      const tableReference = refSql ? null : sourceTableReference;
       const modelMdl = {
         name: model.referenceName,
         columns: [],
@@ -157,21 +166,6 @@ export class MDLBuilder implements IMDLBuilder {
         },
         primaryKey: '', // will be modified in addColumn
       } as ModelMDL;
-
-      if (tableReference && this.hasDuplicateSourceColumns(model.id)) {
-        const refSql = this.buildDedupedTableReferenceSql(
-          model.id,
-          modelMdl,
-          tableReference,
-        );
-        if (refSql) {
-          logger.debug(
-            `Using deduped explicit projection for model "${model.referenceName}" because its source table contains duplicate column names.`,
-          );
-          modelMdl.tableReference = null;
-          modelMdl.refSql = refSql;
-        }
-      }
 
       return modelMdl;
     });
@@ -590,23 +584,7 @@ export class MDLBuilder implements IMDLBuilder {
     };
   }
 
-  private hasDuplicateSourceColumns(modelId: number): boolean {
-    const sourceColumnNames = new Set<string>();
-    for (const column of this.columns.filter(
-      ({ isCalculated, modelId: columnModelId }) =>
-        !isCalculated && columnModelId === modelId,
-    )) {
-      const sourceColumnName = (
-        column.sourceColumnName || column.referenceName
-      ).toLowerCase();
-      if (sourceColumnNames.has(sourceColumnName)) {
-        return true;
-      }
-      sourceColumnNames.add(sourceColumnName);
-    }
-    return false;
-  }
-  private buildDedupedTableReferenceSql(
+  private buildTableReferenceSql(
     modelId: number,
     model: Partial<ModelMDL>,
     tableReference: TableReference,

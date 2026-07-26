@@ -635,6 +635,80 @@ describe('MDLBuilder', () => {
     );
   });
 
+  it('should build refSql from tableReference metadata when a model has columns but no refSql.', () => {
+    const project = {
+      id: 1,
+      type: DataSourceName.POSTGRES,
+      displayName: 'wren ai project',
+      connectionInfo: {},
+      catalog: 'wrenai',
+      schema: 'public',
+      sampleDataset: null,
+    } as Project;
+    const models = [
+      {
+        id: 1,
+        projectId: 1,
+        displayName: 'Imported Model',
+        sourceTableName: 'imported_model',
+        referenceName: 'imported_model',
+        refSql: null,
+        cached: false,
+        refreshTime: null,
+        properties: JSON.stringify({
+          catalog: 'physical_catalog',
+          schema: 'physical_schema',
+          table: 'physical_table',
+        }),
+      },
+    ] as Model[];
+    const columns = [
+      {
+        id: 1,
+        modelId: 1,
+        isCalculated: false,
+        displayName: 'Source Name',
+        referenceName: 'SourceName',
+        sourceColumnName: 'Source Name',
+        type: 'VARCHAR',
+        notNull: false,
+        isPk: false,
+        properties: null,
+      },
+      {
+        id: 2,
+        modelId: 1,
+        isCalculated: false,
+        displayName: 'Source Type',
+        referenceName: 'SourceType',
+        sourceColumnName: 'Source Type',
+        type: 'VARCHAR',
+        notNull: false,
+        isPk: false,
+        properties: null,
+      },
+    ] as ModelColumn[];
+    const builderOptions = {
+      project,
+      models,
+      columns,
+      nestedColumns: [],
+      relations: [],
+      views: [],
+      relatedModels: [],
+      relatedColumns: [],
+      relatedRelations: [],
+    } as MDLBuilderBuildFromOptions;
+    mdlBuilder = new MDLBuilder(builderOptions);
+
+    const manifest = mdlBuilder.build();
+
+    expect(manifest.models[0].tableReference).toBeFalsy();
+    expect(manifest.models[0].refSql).toEqual(
+      'SELECT "Source Name" AS "SourceName", "Source Type" AS "SourceType" FROM "physical_catalog"."physical_schema"."physical_table"',
+    );
+  });
+
   it('should preserve refSql when a model has no tableReference.', () => {
     const project = {
       id: 1,
