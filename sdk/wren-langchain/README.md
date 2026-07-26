@@ -86,9 +86,9 @@ pip install wren-langchain
   - `wren_store_query` — persist a confirmed NL→SQL pair for future recall
 - **Direct Python API**:
   ```python
-  toolkit.query("SELECT ...")             # → pyarrow.Table
-  toolkit.dry_plan("SELECT ...")           # → str (target-dialect SQL)
-  toolkit.dry_run("SELECT ...")            # → None (validation only)
+  toolkit.query("SELECT ...")  # → pyarrow.Table
+  toolkit.dry_plan("SELECT ...")  # → str (target-dialect SQL)
+  toolkit.dry_run("SELECT ...")  # → None (validation only)
   toolkit.memory.fetch("revenue trends")
   toolkit.memory.recall("top customers")
   toolkit.memory.store(nl="...", sql="...", tags=["..."])
@@ -99,13 +99,13 @@ pip install wren-langchain
 
 ```python
 WrenToolkit.from_project(
-    path,                # required — path to your prepared Wren project
-    profile="prod",      # optional — picks a named profile (default: active)
+    path,  # required — path to your prepared Wren project
+    profile="prod",  # optional — picks a named profile (default: active)
 )
 
 toolkit.get_tools(
-    include_memory_write=True,   # set False to keep memory read-only
-    raise_on_error=False,        # set True to surface exceptions to LangChain retry
+    include_memory_write=True,  # set False to keep memory read-only
+    raise_on_error=False,  # set True to surface exceptions to LangChain retry
 )
 ```
 
