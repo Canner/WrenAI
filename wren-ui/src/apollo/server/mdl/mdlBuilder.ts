@@ -141,23 +141,17 @@ export class MDLBuilder implements IMDLBuilder {
       if (model.displayName) {
         properties.displayName = model.displayName;
       }
-      const sourceTableReference = this.buildTableReference(model);
-      const refSql =
-        model.refSql ||
-        (sourceTableReference
-          ? this.buildTableReferenceSql(
-              model.id,
-              { name: model.referenceName, columns: [] },
-              sourceTableReference,
-            )
-          : null);
-      const tableReference = refSql ? null : sourceTableReference;
+      const tableReference = this.buildTableReference(model);
       const modelMdl = {
         name: model.referenceName,
         columns: [],
         tableReference,
         // can only have one of refSql or tableReference
-        refSql,
+        refSql: this.useRustWrenEngine()
+          ? null
+          : tableReference
+            ? null
+            : model.refSql,
         cached: model.cached ? true : false,
         refreshTime: model.refreshTime,
         properties: {
@@ -584,57 +578,6 @@ export class MDLBuilder implements IMDLBuilder {
     };
   }
 
-  private buildTableReferenceSql(
-    modelId: number,
-    model: Partial<ModelMDL>,
-    tableReference: TableReference,
-  ): string | null {
-    const sourceColumnNames = new Map<string, string>();
-    const projections: string[] = [];
-
-    this.columns
-      .filter(
-        ({ isCalculated, modelId: columnModelId }) =>
-          !isCalculated && columnModelId === modelId,
-      )
-      .forEach((column) => {
-        const sourceColumnName = column.sourceColumnName || column.referenceName;
-        const normalizedSourceColumnName = sourceColumnName.toLowerCase();
-        const existingColumnName = sourceColumnNames.get(
-          normalizedSourceColumnName,
-        );
-
-        if (existingColumnName) {
-          this.columnNameAliases.set(column.id, existingColumnName);
-          return;
-        }
-
-        const columnName = this.getManifestColumnName(column, model);
-        sourceColumnNames.set(normalizedSourceColumnName, columnName);
-        const sourceExpression = this.quoteSqlIdentifier(sourceColumnName);
-        projections.push(
-          sourceColumnName === columnName
-            ? sourceExpression
-            : `${sourceExpression} AS ${this.quoteSqlIdentifier(columnName)}`,
-        );
-      });
-
-    if (!projections.length) {
-      return null;
-    }
-
-    const tableParts = [
-      tableReference.catalog,
-      tableReference.schema,
-      tableReference.table,
-    ].filter((part): part is string => Boolean(part));
-    return `SELECT ${projections.join(', ')} FROM ${tableParts
-      .map((part) => this.quoteSqlIdentifier(part))
-      .join('.')}`;
-  }
-  private quoteSqlIdentifier(identifier: string): string {
-    return `"${identifier.replace(/"/g, '""')}"`;
-  }
   private parseLineage(lineage?: string): number[] {
     if (!lineage) {
       return [];

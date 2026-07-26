@@ -182,5 +182,8 @@ const config = {
 };
 
 export function getConfig(): IConfig {
-  return { ...defaultConfig, ...pickBy(config) };
+  return {
+    ...defaultConfig,
+    ...pickBy(config, (value) => value !== undefined && value !== null),
+  };
 }
