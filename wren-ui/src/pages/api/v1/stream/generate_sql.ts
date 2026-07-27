@@ -91,6 +91,7 @@ export default async function handler(
     const askTask = await wrenAIAdaptor.ask({
       query: question,
       deployId: lastDeploy.hash,
+      projectId: project.id.toString(),
       histories: transformHistoryInput(histories) as any,
       configurations: {
         language:

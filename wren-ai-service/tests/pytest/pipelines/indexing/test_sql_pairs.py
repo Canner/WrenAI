@@ -3,7 +3,7 @@ import pytest
 from src.config import settings
 from src.core.provider import DocumentStoreProvider
 from src.pipelines.indexing import SqlPairs
-from src.pipelines.indexing.sql_pairs import SqlPairsCleaner
+from src.pipelines.indexing.sql_pairs import SqlPairsCleaner, sql_pairs
 from src.providers import generate_components
 
 
@@ -30,6 +30,16 @@ async def test_sql_pairs_cleaner_delete_all_uses_project_scope():
             ],
         }
     ]
+
+
+def test_sql_pairs_can_skip_default_pairs():
+    pairs = sql_pairs(
+        boilerplates={"default"},
+        external_pairs={},
+        include_default_pairs=False,
+    )
+
+    assert pairs == []
 
 
 @pytest.mark.asyncio

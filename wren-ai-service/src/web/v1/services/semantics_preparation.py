@@ -87,7 +87,13 @@ class SemanticsPreparationService:
                     "project_meta",
                 ]
             ]
-            tasks.append(self._pipelines["sql_pairs"].run(**input, delete_all=True))
+            tasks.append(
+                self._pipelines["sql_pairs"].run(
+                    **input,
+                    delete_all=True,
+                    include_default_pairs=False,
+                )
+            )
 
             await asyncio.gather(*tasks)
 
