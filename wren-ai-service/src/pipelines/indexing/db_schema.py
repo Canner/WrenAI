@@ -4,7 +4,6 @@ import sys
 import uuid
 from typing import Any, Dict, List, Optional
 
-import orjson
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from hamilton.function_modifiers import extract_fields
@@ -132,17 +131,14 @@ class DDLChunker:
     ) -> List[Dict[str, str]]:
         def _model_command(model: Dict[str, Any]) -> dict:
             properties = model.get("properties", {})
-            table_name = model["name"]
 
             model_properties = {
-                "identifier": table_name,
-                "display_label": clean_display_name(
-                    properties.get("displayName", "")
-                ),
+                "alias": clean_display_name(properties.get("displayName", "")),
                 "description": properties.get("description", ""),
             }
-            comment = f"\n/* {orjson.dumps(model_properties).decode('utf-8')} */\n"
+            comment = f"\n/* {str(model_properties)} */\n"
 
+            table_name = model["name"]
             payload = {
                 "type": "TABLE",
                 "comment": comment,
