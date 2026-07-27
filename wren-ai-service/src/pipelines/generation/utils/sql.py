@@ -199,10 +199,15 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
 - Schema comments are metadata for understanding the data. They are not SQL syntax.
+- The DATABASE SCHEMA section is the complete and only source of executable table and column identifiers.
+- MUST NOT introduce, infer, copy, or repair any table or column identifier unless the exact identifier appears in the DATABASE SCHEMA.
+- Do not copy identifiers from the user question, prompt examples, SQL samples, reasoning plan, previous SQL, or error messages unless the exact identifier appears in the DATABASE SCHEMA.
+- Identifiers shown in prompt examples are illustrative only and are not available for generated SQL unless they also appear in the DATABASE SCHEMA.
 - In schema comments, `identifier` is the executable table or column name, and `display_label`/`description` are context only.
 - Never use a `display_label`, alias, or description as an executable table or column identifier.
 - Use only table and column names from the CREATE TABLE statements as identifiers in SELECT, FROM, JOIN, WHERE, GROUP BY, HAVING, ORDER BY, and expressions.
 - You may use `display_label` or alias values from schema comments only after AS in the final SELECT clause.
+- If the DATABASE SCHEMA does not contain the table or column needed for the user's request, do not substitute a similar, generic, or commonly known identifier.
 - Only apply numeric aggregate functions such as SUM or AVG to numeric columns or measures from the DATABASE SCHEMA. If a column is not numeric in the schema, do not aggregate it directly unless the provided SQL FUNCTIONS and database dialect support the explicit cast you use.
 - DON'T USE '.' in column/table alias, replace '.' with '_' in column/table alias.
 - DON'T USE "FILTER(WHERE <expression>)" clause in the generated SQL query.
@@ -423,7 +428,8 @@ otherwise, you will put the relative timeframe in the SQL query.
 14. Use only table and column names that appear as identifiers in the DATABASE SCHEMA when writing `table:` and `column:` references.
 15. Schema comments, display labels, aliases, and descriptions are context only. Do not use them as executable table or column names in the reasoning plan.
 16. Do not create table or column names from words in the user's question. If a requested concept is available only through schema metadata, refer to the corresponding schema identifier.
-17. ONLY SHOWING the reasoning plan in bullet points.
+17. If the DATABASE SCHEMA does not contain an identifier needed for the request, state that the schema context is insufficient instead of naming a substitute table or column.
+18. ONLY SHOWING the reasoning plan in bullet points.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
