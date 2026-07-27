@@ -36,7 +36,7 @@ I have a data model represented in JSON format, with the following structure:
 ```
 
 Your task is to update this JSON structure by adding a `description` field inside both the `properties` attribute of each `column` and the `model` itself.
-Each `description` should be derived from the user-provided dataset context, the full schema, relationships, model names, column names, data types, aliases, existing descriptions, and provided sample rows.
+Each `description` should be derived from the user-provided dataset context, the full schema, relationships, model names, column names, data types, aliases, and existing descriptions.
 Follow these steps:
 1. **For the `model`**: Write a clear natural language business description of the model's purpose and what real-world records it represents. Insert this description in the `properties` field of the `model`.
 2. **For each `column`**: Write a clear natural language business description of the column's meaning, not just its technical name. Each column's description should be added under its respective `properties` field in the format: `'description': 'business description'`.
@@ -89,9 +89,7 @@ User's prompt: {{ user_prompt }}
 Picked models: {{ picked_models }}
 Localization Language: {{ language }}
 
-Sample data for picked models: {{ data_samples }}
-
-Please provide business-friendly semantic descriptions for every picked model and every column based on the user's prompt, schema context, and sample data.
+Please provide business-friendly semantic descriptions for every picked model and every column based on the user's prompt and schema context.
 Do not omit selected models or columns. Do not copy the table or column name as the description.
 Use simple language that explains the business purpose, meaning, and analytical use of each field.
 """
@@ -153,13 +151,11 @@ def prompt(
     user_prompt: str,
     prompt_builder: PromptBuilder,
     language: str,
-    data_samples: dict[str, Any],
 ) -> dict:
     _prompt = prompt_builder.run(
         picked_models=picked_models,
         user_prompt=user_prompt,
         language=language,
-        data_samples=data_samples,
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
@@ -270,7 +266,6 @@ class SemanticsDescription(BasicPipeline):
         selected_models: list[str],
         mdl: dict,
         language: str = "en",
-        data_samples: dict[str, Any] | None = None,
     ) -> dict:
         logger.info("Semantics Description Generation pipeline is running...")
         return await self._pipe.execute(
@@ -280,7 +275,6 @@ class SemanticsDescription(BasicPipeline):
                 "selected_models": selected_models,
                 "mdl": mdl,
                 "language": language,
-                "data_samples": data_samples or {},
                 **self._components,
             },
         )

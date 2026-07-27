@@ -465,61 +465,12 @@ export class ModelResolver {
   ) {
     const project = await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-    const dataSamples = await this.collectModelingDataSamples(
-      args.data.selectedModels,
-      project,
-      manifest,
-      ctx,
-    );
     return await ctx.wrenAIAdaptor.generateSemanticsDescription({
       manifest,
       selectedModels: args.data.selectedModels,
       userPrompt: args.data.userPrompt,
       projectId: project.id,
-      dataSamples,
     });
-  }
-
-  private async collectModelingDataSamples(
-    selectedModels: string[],
-    project: Project,
-    manifest: any,
-    ctx: IContext,
-  ): Promise<Record<string, any>> {
-    const samples: Record<string, any> = {};
-    const selectedModelNames = new Set(selectedModels);
-    const models = (manifest.models || []).filter((model) =>
-      selectedModelNames.has(model.name),
-    );
-
-    await Promise.all(
-      models.map(async (model) => {
-        try {
-          const preview = (await ctx.queryService.preview(
-            `SELECT * FROM "${model.name}"`,
-            {
-              project,
-              modelingOnly: false,
-              manifest,
-              limit: 5,
-              refresh: true,
-              cacheEnabled: false,
-            },
-          )) as PreviewDataResponse;
-
-          samples[model.name] = {
-            columns: preview.columns || [],
-            rows: (preview.data || []).slice(0, 5),
-          };
-        } catch (err: any) {
-          logger.warn(
-            `Failed to collect semantic sample data for model "${model.name}": ${err.message}`,
-          );
-        }
-      }),
-    );
-
-    return samples;
   }
 
   public async getModelingSemanticsResult(

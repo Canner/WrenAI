@@ -3,7 +3,7 @@ from dataclasses import asdict
 from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from src.globals import (
     ServiceContainer,
@@ -20,7 +20,6 @@ class PostRequest(BaseRequest):
     selected_models: list[str]
     user_prompt: str
     mdl: str
-    data_samples: dict = Field(default_factory=dict)
 
 
 class PostResponse(BaseModel):

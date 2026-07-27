@@ -88,7 +88,6 @@ export interface IWrenAIAdaptor {
     selectedModels: string[];
     userPrompt: string;
     projectId: number;
-    dataSamples?: Record<string, any>;
   }): Promise<AsyncQueryResponse>;
   getSemanticsDescriptionResult(queryId: string): Promise<any>;
   generateRelationshipRecommendations(input: {
@@ -433,7 +432,6 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     selectedModels: string[];
     userPrompt: string;
     projectId: number;
-    dataSamples?: Record<string, any>;
   }): Promise<AsyncQueryResponse> {
     try {
       const res = await axios.post(
@@ -443,7 +441,6 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
           selected_models: input.selectedModels,
           user_prompt: input.userPrompt,
           project_id: String(input.projectId),
-          data_samples: input.dataSamples || {},
         },
       );
       return { queryId: res.data.id };

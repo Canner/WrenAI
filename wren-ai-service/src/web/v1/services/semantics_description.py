@@ -1,11 +1,11 @@
 import asyncio
 import logging
-from typing import Any, Dict, Literal, Optional
+from typing import Dict, Literal, Optional
 
 import orjson
 from cachetools import TTLCache
 from langfuse.decorators import observe
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
@@ -58,7 +58,6 @@ class SemanticsDescription:
         selected_models: list[str]
         user_prompt: str
         mdl: str
-        data_samples: dict[str, Any] = Field(default_factory=dict)
 
     def _chunking(
         self, mdl_dict: dict, request: GenerateRequest, chunk_size: int = 50
@@ -66,7 +65,6 @@ class SemanticsDescription:
         template = {
             "user_prompt": request.user_prompt,
             "language": request.configurations.language,
-            "data_samples": request.data_samples,
         }
 
         chunks = [
@@ -84,20 +82,15 @@ class SemanticsDescription:
                 **template,
                 "mdl": {"models": [chunk]},
                 "selected_models": [chunk["name"]],
-                "data_samples": {
-                    chunk["name"]: request.data_samples.get(chunk["name"])
-                }
-                if chunk["name"] in request.data_samples
-                else {},
             }
             for chunk in chunks
         ]
 
     async def _generate_task(self, request_id: str, chunk: dict):
         resp = await self._pipelines["semantics_description"].run(**chunk)
-        output = resp.get("output")
-        if not isinstance(output, dict) or not output:
-            raise ValueError("Semantics description pipeline returned no output")
+        output = resp.get("output") or {}
+        if not isinstance(output, dict):
+            raise ValueError("Semantics description pipeline returned invalid output")
 
         current = self[request_id]
         current.response = current.response or {}
