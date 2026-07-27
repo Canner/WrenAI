@@ -15,6 +15,7 @@ from tqdm import tqdm
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
 from src.pipelines.indexing import AsyncDocumentWriter, DocumentCleaner, MDLValidator
+from src.pipelines.indexing import clean_display_name
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -54,18 +55,34 @@ class TableDescriptionChunker:
         }
 
     def _get_table_descriptions(self, mdl: Dict[str, Any]) -> List[Dict[str, Any]]:
+        def _text(value: Any) -> str:
+            return "" if value is None else str(value).strip()
+
+        def _column_summary(column: Dict[str, Any]) -> Dict[str, str]:
+            properties = self._properties(column)
+            return {
+                "identifier": _text(column.get("name", "")),
+                "display_label": clean_display_name(
+                    _text(properties.get("displayName", ""))
+                ),
+                "description": _text(properties.get("description", "")),
+            }
+
         def _structure_data(mdl_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
             properties = self._properties(payload)
 
             return {
                 "mdl_type": mdl_type,
                 "name": payload.get("name"),
+                "display_label": clean_display_name(
+                    _text(properties.get("displayName", ""))
+                ),
+                "description": _text(properties.get("description", "")),
                 "columns": [
-                    column.get("name", "") or ""
+                    _column_summary(column)
                     for column in payload.get("columns", [])
                     if isinstance(column, dict)
                 ],
-                "properties": properties,
             }
 
         resources = (
@@ -77,8 +94,16 @@ class TableDescriptionChunker:
         return [
             {
                 "name": resource["name"],
-                "description": resource["properties"].get("description", "") or "",
-                "columns": ", ".join(resource["columns"]),
+                "display_label": resource["display_label"],
+                "description": resource["description"],
+                "columns": ", ".join(
+                    column["identifier"] for column in resource["columns"]
+                ),
+                "column_details": [
+                    column
+                    for column in resource["columns"]
+                    if column["display_label"] or column["description"]
+                ],
             }
             for resource in resources
             if resource["name"] is not None
