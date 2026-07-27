@@ -157,10 +157,12 @@ async def regenerate_sql(
 async def post_process(
     regenerate_sql: dict,
     post_processor: SQLGenPostProcessor,
+    documents: list[str] | None = None,
     project_id: str | None = None,
 ) -> dict:
     return await post_processor.run(
         regenerate_sql.get("replies"),
+        contexts=documents,
         project_id=project_id,
     )
 
