@@ -1,5 +1,4 @@
 import logging
-import re
 from typing import Any, Dict, List
 
 import aiohttp
@@ -16,306 +15,6 @@ from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
-
-
-_IDENTIFIER_ATOM_PATTERN = (
-    r'"[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_$]*'
-)
-_QUALIFIED_IDENTIFIER_PATTERN = (
-    rf"(?:{_IDENTIFIER_ATOM_PATTERN})(?:\s*\.\s*(?:{_IDENTIFIER_ATOM_PATTERN}))*"
-)
-_CREATE_TABLE_RE = re.compile(
-    rf"\bCREATE\s+TABLE\s+(?P<table>{_QUALIFIED_IDENTIFIER_PATTERN})\s*\((?P<body>.*?)\n\);",
-    re.IGNORECASE | re.DOTALL,
-)
-_CREATE_VIEW_RE = re.compile(
-    rf"\bCREATE\s+VIEW\s+(?P<table>{_QUALIFIED_IDENTIFIER_PATTERN})\b",
-    re.IGNORECASE,
-)
-_TABLE_REFERENCE_RE = re.compile(
-    rf"\b(?:FROM|JOIN)\s+(?P<table>{_QUALIFIED_IDENTIFIER_PATTERN})(?:\s+(?:AS\s+)?(?P<alias>[A-Za-z_][A-Za-z0-9_$]*))?",
-    re.IGNORECASE,
-)
-_CTE_RE = re.compile(
-    rf"(?:\bWITH|,)\s+(?P<name>{_IDENTIFIER_ATOM_PATTERN})\s+AS\s*\(",
-    re.IGNORECASE,
-)
-_QUALIFIED_COLUMN_RE = re.compile(
-    rf"(?P<qualifier>{_QUALIFIED_IDENTIFIER_PATTERN})\s*\.\s*(?P<column>{_IDENTIFIER_ATOM_PATTERN})",
-    re.IGNORECASE,
-)
-_STRING_LITERAL_RE = re.compile(r"'(?:''|[^'])*'")
-_COMMENT_RE = re.compile(r"--.*?$|/\*.*?\*/", re.MULTILINE | re.DOTALL)
-
-_SQL_STOP_WORDS = {
-    "AND",
-    "AS",
-    "ASC",
-    "BETWEEN",
-    "BY",
-    "CASE",
-    "CAST",
-    "CURRENT_DATE",
-    "CURRENT_TIMESTAMP",
-    "DATE",
-    "DATE_TRUNC",
-    "DAY",
-    "DESC",
-    "DISTINCT",
-    "ELSE",
-    "END",
-    "EXISTS",
-    "FALSE",
-    "FROM",
-    "FULL",
-    "GROUP",
-    "HAVING",
-    "IN",
-    "INNER",
-    "INTERVAL",
-    "IS",
-    "JOIN",
-    "LEFT",
-    "LIKE",
-    "LIMIT",
-    "LOWER",
-    "MONTH",
-    "NOT",
-    "NULL",
-    "ON",
-    "OR",
-    "ORDER",
-    "OUTER",
-    "PARTITION",
-    "RIGHT",
-    "SELECT",
-    "THEN",
-    "TRUE",
-    "UNION",
-    "WHEN",
-    "WHERE",
-    "WITH",
-    "YEAR",
-}
-_NON_COLUMN_STARTS = {
-    "CONSTRAINT",
-    "FOREIGN",
-    "PRIMARY",
-    "UNIQUE",
-}
-
-
-def _strip_identifier_quotes(identifier: str) -> str:
-    identifier = identifier.strip()
-    if (
-        (identifier.startswith('"') and identifier.endswith('"'))
-        or (identifier.startswith("`") and identifier.endswith("`"))
-        or (identifier.startswith("[") and identifier.endswith("]"))
-    ):
-        return identifier[1:-1]
-
-    return identifier
-
-
-def _identifier_parts(identifier: str) -> list[str]:
-    return [
-        _strip_identifier_quotes(match.group(0))
-        for match in re.finditer(_IDENTIFIER_ATOM_PATTERN, identifier)
-    ]
-
-
-def _normalize_identifier(identifier: str) -> str:
-    return ".".join(_identifier_parts(identifier)).lower()
-
-
-def _schema_catalog_from_contexts(
-    schema_contexts: list[Any] | None,
-) -> dict[str, set[str]]:
-    catalog: dict[str, set[str]] = {}
-
-    for context in schema_contexts or []:
-        context = getattr(context, "content", context)
-        context = "" if context is None else str(context)
-
-        for match in _CREATE_TABLE_RE.finditer(context):
-            table_name = ".".join(_identifier_parts(match.group("table")))
-            columns: set[str] = set()
-            for line in match.group("body").splitlines():
-                stripped = line.strip().rstrip(",")
-                if not stripped or stripped.startswith(("--", "/*", "*")):
-                    continue
-
-                token_match = re.match(_IDENTIFIER_ATOM_PATTERN, stripped)
-                if not token_match:
-                    continue
-
-                column_name = _strip_identifier_quotes(token_match.group(0))
-                if column_name.upper() in _NON_COLUMN_STARTS:
-                    continue
-
-                columns.add(column_name)
-
-            catalog[table_name] = columns
-
-        for match in _CREATE_VIEW_RE.finditer(context):
-            table_name = ".".join(_identifier_parts(match.group("table")))
-            catalog.setdefault(table_name, set())
-
-    return catalog
-
-
-def _cte_names(sql: str) -> set[str]:
-    return {_normalize_identifier(match.group("name")) for match in _CTE_RE.finditer(sql)}
-
-
-def _referenced_tables(
-    sql: str, catalog_by_name: dict[str, str], ctes: set[str]
-) -> tuple[set[str], dict[str, str | None], list[str]]:
-    referenced: set[str] = set()
-    qualifiers: dict[str, str | None] = {}
-    unknown_tables: list[str] = []
-
-    for match in _TABLE_REFERENCE_RE.finditer(sql):
-        table_ref = match.group("table")
-        normalized_ref = _normalize_identifier(table_ref)
-        table_parts = _identifier_parts(table_ref)
-        normalized_last_part = table_parts[-1].lower() if table_parts else ""
-
-        if normalized_ref in ctes:
-            qualifiers[normalized_ref] = None
-            continue
-
-        if normalized_ref in catalog_by_name:
-            table_name = catalog_by_name[normalized_ref]
-        elif len(table_parts) == 1 and normalized_last_part in catalog_by_name:
-            table_name = catalog_by_name[normalized_last_part]
-        else:
-            unknown_tables.append(table_ref)
-            continue
-
-        referenced.add(table_name)
-        qualifiers[table_name.lower()] = table_name
-        qualifiers[table_parts[-1].lower()] = table_name
-
-        alias = match.group("alias")
-        if alias and alias.upper() not in _SQL_STOP_WORDS:
-            qualifiers[alias.lower()] = table_name
-
-    return referenced, qualifiers, unknown_tables
-
-
-def _clause_texts(sql: str) -> list[str]:
-    cleaned_sql = _COMMENT_RE.sub(" ", _STRING_LITERAL_RE.sub(" ", sql))
-    clause_pattern = re.compile(
-        r"\b(?:WHERE|ON|GROUP\s+BY|ORDER\s+BY|HAVING|PARTITION\s+BY)\b(?P<body>.*?)(?=\b(?:WHERE|GROUP\s+BY|ORDER\s+BY|HAVING|LIMIT|UNION|JOIN|LEFT\s+JOIN|RIGHT\s+JOIN|INNER\s+JOIN|FULL\s+JOIN)\b|$)",
-        re.IGNORECASE | re.DOTALL,
-    )
-    return [match.group("body") for match in clause_pattern.finditer(cleaned_sql)]
-
-
-def _select_aliases(sql: str) -> set[str]:
-    cleaned_sql = _COMMENT_RE.sub(" ", _STRING_LITERAL_RE.sub(" ", sql))
-    return {
-        _normalize_identifier(match.group("alias"))
-        for match in re.finditer(
-            rf"\bAS\s+(?P<alias>{_IDENTIFIER_ATOM_PATTERN})\b",
-            cleaned_sql,
-            re.IGNORECASE,
-        )
-    }
-
-
-def _unqualified_clause_identifiers(sql: str) -> set[str]:
-    identifiers: set[str] = set()
-    aliases = _select_aliases(sql)
-
-    for clause in _clause_texts(sql):
-        for match in re.finditer(_IDENTIFIER_ATOM_PATTERN, clause):
-            name = _strip_identifier_quotes(match.group(0))
-            upper_name = name.upper()
-            if upper_name in _SQL_STOP_WORDS or name.lower() in aliases:
-                continue
-
-            previous_char = clause[match.start() - 1] if match.start() > 0 else ""
-            next_char = clause[match.end()] if match.end() < len(clause) else ""
-            if previous_char == "." or next_char in ".(":
-                continue
-
-            identifiers.add(name)
-
-    return identifiers
-
-
-def _format_schema_validation_error(
-    unknown_tables: list[str], unknown_columns: list[str]
-) -> str:
-    parts = [
-        "Generated SQL references identifiers that are not present in the retrieved DATABASE SCHEMA.",
-    ]
-
-    if unknown_tables:
-        parts.append(f"Unknown table identifiers: {', '.join(sorted(set(unknown_tables)))}.")
-
-    if unknown_columns:
-        parts.append(f"Unknown column identifiers: {', '.join(sorted(set(unknown_columns)))}.")
-
-    parts.append(
-        "Use only exact table and column identifiers from the retrieved CREATE TABLE/CREATE VIEW statements; do not use physical schema prefixes, display labels, examples, or names from the user question unless they appear in the schema."
-    )
-    return " ".join(parts)
-
-
-def _validate_sql_against_schema_contexts(
-    sql: str, schema_contexts: list[Any] | None
-) -> str | None:
-    catalog = _schema_catalog_from_contexts(schema_contexts)
-    if not catalog:
-        return None
-
-    catalog_by_name = {table.lower(): table for table in catalog}
-    catalog_by_name.update({table.split(".")[-1].lower(): table for table in catalog})
-
-    referenced_tables, qualifiers, unknown_tables = _referenced_tables(
-        sql, catalog_by_name, _cte_names(sql)
-    )
-
-    if unknown_tables:
-        return _format_schema_validation_error(unknown_tables, [])
-
-    if not referenced_tables:
-        return None
-
-    columns_by_qualifier = {
-        qualifier: {column.lower() for column in catalog[table_name]}
-        for qualifier, table_name in qualifiers.items()
-        if table_name in catalog
-    }
-    columns_in_referenced_tables = {
-        column.lower()
-        for table_name in referenced_tables
-        for column in catalog[table_name]
-    }
-
-    unknown_columns: list[str] = []
-    for match in _QUALIFIED_COLUMN_RE.finditer(sql):
-        qualifier = _normalize_identifier(match.group("qualifier"))
-        column = _strip_identifier_quotes(match.group("column"))
-        if qualifier not in columns_by_qualifier:
-            continue
-
-        if column.lower() not in columns_by_qualifier[qualifier]:
-            unknown_columns.append(f"{match.group('qualifier')}.{column}")
-
-    has_cte_reference = any(table_name is None for table_name in qualifiers.values())
-    if not has_cte_reference:
-        for column in _unqualified_clause_identifiers(sql):
-            if column.lower() not in columns_in_referenced_tables:
-                unknown_columns.append(column)
-
-    if unknown_columns:
-        return _format_schema_validation_error([], unknown_columns)
-
-    return None
 
 
 @component
@@ -335,7 +34,6 @@ class SQLGenPostProcessor:
         allow_dry_plan_fallback: bool = True,
         data_source: str = "",
         allow_data_preview: bool = False,
-        schema_contexts: list[Any] | None = None,
     ) -> dict:
         try:
             cleaned_generation_result = clean_generation_result(replies[0])
@@ -345,22 +43,6 @@ class SQLGenPostProcessor:
                 cleaned_generation_result = orjson.loads(cleaned_generation_result)[
                     "sql"
                 ]
-
-            schema_validation_error = _validate_sql_against_schema_contexts(
-                cleaned_generation_result,
-                schema_contexts,
-            )
-            if schema_validation_error:
-                return {
-                    "valid_generation_result": {},
-                    "invalid_generation_result": {
-                        "sql": cleaned_generation_result,
-                        "original_sql": cleaned_generation_result,
-                        "type": "SCHEMA_VALIDATION",
-                        "error": schema_validation_error,
-                        "correlation_id": "",
-                    },
-                }
 
             (
                 valid_generation_result,
@@ -416,7 +98,6 @@ class SQLGenPostProcessor:
                 else:
                     invalid_generation_result = {
                         "sql": generation_result,
-                        "original_sql": generation_result,
                         "type": "TIME_OUT"
                         if error_message.startswith("Request timed out")
                         else "DRY_PLAN",
@@ -518,17 +199,12 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
 - Schema comments are metadata for understanding the data. They are not SQL syntax.
-- The DATABASE SCHEMA section is the complete and only source of executable table and column identifiers.
-- MUST NOT introduce, infer, copy, or repair any table or column identifier unless the exact identifier appears in the DATABASE SCHEMA.
-- Do not copy identifiers from the user question, prompt examples, SQL samples, reasoning plan, previous SQL, or error messages unless the exact identifier appears in the DATABASE SCHEMA.
-- Identifiers shown in prompt examples are illustrative only and are not available for generated SQL unless they also appear in the DATABASE SCHEMA.
 - In schema comments, `identifier` is the executable table or column name, and `display_label`/`description` are context only.
 - Never use a `display_label`, alias, or description as an executable table or column identifier.
 - Use `display_label` and `description` only to understand which executable `identifier` matches the user's business term.
 - When a schema comment contains an `identifier`, generated SQL must use that exact identifier for the table or column.
 - Use only table and column names from the CREATE TABLE statements as identifiers in SELECT, FROM, JOIN, WHERE, GROUP BY, HAVING, ORDER BY, and expressions.
 - You may use `display_label` or alias values from schema comments only after AS in the final SELECT clause.
-- If the DATABASE SCHEMA does not contain the table or column needed for the user's request, do not substitute a similar, generic, or commonly known identifier.
 - Only apply numeric aggregate functions such as SUM or AVG to numeric columns or measures from the DATABASE SCHEMA. If a column is not numeric in the schema, do not aggregate it directly unless the provided SQL FUNCTIONS and database dialect support the explicit cast you use.
 - DON'T USE '.' in column/table alias, replace '.' with '_' in column/table alias.
 - DON'T USE "FILTER(WHERE <expression>)" clause in the generated SQL query.
@@ -749,8 +425,7 @@ otherwise, you will put the relative timeframe in the SQL query.
 14. Use only table and column names that appear as identifiers in the DATABASE SCHEMA when writing `table:` and `column:` references.
 15. Schema comments, display labels, aliases, and descriptions are context only. Do not use them as executable table or column names in the reasoning plan.
 16. Do not create table or column names from words in the user's question. If a requested concept is available only through schema metadata, refer to the corresponding schema identifier.
-17. If the DATABASE SCHEMA does not contain an identifier needed for the request, state that the schema context is insufficient instead of naming a substitute table or column.
-18. ONLY SHOWING the reasoning plan in bullet points.
+17. ONLY SHOWING the reasoning plan in bullet points.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
