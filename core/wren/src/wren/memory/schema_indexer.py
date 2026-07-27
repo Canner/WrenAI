@@ -51,13 +51,16 @@ def describe_schema(manifest: dict) -> str:
         lines.append("")
 
     for model in manifest.get("models", []):
-        _describe_model(model, lines)
+        if isinstance(model, dict) and model.get("name"):
+            _describe_model(model, lines)
 
     for rel in manifest.get("relationships", []):
-        _describe_relationship(rel, lines)
+        if isinstance(rel, dict):
+            _describe_relationship(rel, lines)
 
     for view in manifest.get("views", []):
-        _describe_view(view, lines)
+        if isinstance(view, dict) and view.get("name"):
+            _describe_view(view, lines)
 
     cubes = manifest.get("cubes", []) or []
     if isinstance(cubes, list):
@@ -233,6 +236,8 @@ def extract_schema_items(manifest: dict) -> list[dict]:
     items: list[dict] = []
 
     for model in manifest.get("models", []):
+        if not isinstance(model, dict) or not model.get("name"):
+            continue
         items.append(_model_record(model, mdl_h, now))
         for col in model.get("columns", []) or []:
             if not isinstance(col, dict) or not col.get("name"):
@@ -240,9 +245,13 @@ def extract_schema_items(manifest: dict) -> list[dict]:
             items.append(_column_record(col, model["name"], mdl_h, now))
 
     for rel in manifest.get("relationships", []):
+        if not isinstance(rel, dict):
+            continue
         items.append(_relationship_record(rel, mdl_h, now))
 
     for view in manifest.get("views", []):
+        if not isinstance(view, dict):
+            continue
         items.append(_view_record(view, mdl_h, now))
 
     cubes = manifest.get("cubes", []) or []
@@ -305,9 +314,8 @@ def _model_record(model: dict, mdl_h: str, now: datetime) -> dict:
 
 
 def _column_record(col: dict, model_name: str, mdl_h: str, now: datetime) -> dict:
-    name = col.get("name") or ""
-    if not name:
-        raise ValueError("column record requires name")
+    # Caller (extract_schema_items) already guarantees a truthy name.
+    name = col["name"]
     dtype = col.get("type", "")
     expr = col.get("expression") or None
     is_calc = col.get("isCalculated", False)
