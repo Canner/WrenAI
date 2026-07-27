@@ -194,16 +194,14 @@ def test_table_description_excludes_generated_column_descriptions():
     assert "Generic generated" not in document.content
 
 
-def test_table_description_truncates_long_column_lists():
+def test_table_description_keeps_complete_column_lists():
     chunker = TableDescriptionChunker()
+    columns = [{"name": f"column_{index}"} for index in range(205)]
     mdl = {
         "models": [
             {
                 "name": "user",
-                "columns": [
-                    {"name": f"column_{index}"}
-                    for index in range(205)
-                ],
+                "columns": columns,
             }
         ],
         "views": [],
@@ -215,7 +213,13 @@ def test_table_description_truncates_long_column_lists():
 
     assert len(actual["documents"]) == 1
     document: Document = actual["documents"][0]
-    assert "... (+5 more columns)" in document.content
+    assert document.content == str(
+        {
+            "name": "user",
+            "description": "",
+            "columns": ", ".join(column["name"] for column in columns),
+        }
+    )
 
 
 @pytest.mark.asyncio
