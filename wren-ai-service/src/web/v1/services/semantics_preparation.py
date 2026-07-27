@@ -91,7 +91,6 @@ class SemanticsPreparationService:
                 self._pipelines["sql_pairs"].run(
                     **input,
                     delete_all=True,
-                    include_default_pairs=False,
                 )
             )
 
