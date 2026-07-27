@@ -29,18 +29,10 @@ class Helper:
 
 
 def _properties_comment(column: Dict[str, Any], **_) -> str:
-    props = column.get("properties")
-    if not isinstance(props, dict):
-        props = {}
-
-    display_name = props.get("displayName", "")
-    description = props.get("description", "")
+    props = column["properties"]
     column_properties = {
-        "identifier": column.get("name", ""),
-        "display_label": clean_display_name(
-            "" if display_name is None else str(display_name)
-        ),
-        "description": "" if description is None else str(description),
+        "alias": clean_display_name(props.get("displayName", "")),
+        "description": props.get("description", ""),
     }
 
     # Add any nested columns if they exist
@@ -64,8 +56,8 @@ def _properties_comment(column: Dict[str, Any], **_) -> str:
 
 COLUMN_PREPROCESSORS = {
     "properties": Helper(
-        condition=lambda column, **_: isinstance(column.get("properties"), dict),
-        helper=lambda column, **_: column.get("properties", {}),
+        condition=lambda column, **_: "properties" in column,
+        helper=lambda column, **_: column.get("properties"),
     ),
     "relationship": Helper(
         condition=lambda column, **_: "relationship" in column,
@@ -83,7 +75,7 @@ COLUMN_PREPROCESSORS = {
 
 COLUMN_COMMENT_HELPERS = {
     "properties": Helper(
-        condition=lambda column, **_: isinstance(column.get("properties"), dict),
+        condition=lambda column, **_: "properties" in column,
         helper=_properties_comment,
     ),
     "isCalculated": Helper(
