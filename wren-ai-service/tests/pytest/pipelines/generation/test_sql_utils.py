@@ -1,9 +1,5 @@
-import pytest
-
 from src.pipelines.generation.utils.sql import (
-    SQLGenPostProcessor,
     construct_instructions,
-    find_unavailable_sql_tables,
     get_json_field_instructions,
     get_metric_instructions,
     get_sql_generation_system_prompt,
@@ -51,65 +47,3 @@ def test_sql_generation_system_prompt_grounding_contract():
     assert "DATABASE SCHEMA section is the complete and only source" in prompt
     assert "MUST NOT introduce, infer, copy, or repair" in prompt
     assert "Do not copy identifiers" in prompt
-
-
-def test_find_unavailable_sql_tables_rejects_non_retrieved_table():
-    contexts = [
-        """
-        CREATE TABLE dbo_dimCustomers (
-          CustomerID VARCHAR
-        );
-        """
-    ]
-
-    assert find_unavailable_sql_tables(
-        "SELECT * FROM dbo_tblPayments ORDER BY PaymentDate DESC",
-        contexts,
-    ) == ["dbo_tblPayments"]
-
-
-def test_find_unavailable_sql_tables_allows_retrieved_table_and_cte():
-    contexts = [
-        """
-        CREATE TABLE "dbo_tblPayments" (
-          PaymentDate TIMESTAMP
-        );
-        """
-    ]
-
-    assert (
-        find_unavailable_sql_tables(
-            """
-            WITH recent_payments AS (
-              SELECT * FROM "dbo_tblPayments"
-            )
-            SELECT * FROM recent_payments
-            """,
-            contexts,
-        )
-        == []
-    )
-
-
-@pytest.mark.asyncio
-async def test_sql_post_processor_blocks_sql_using_non_retrieved_table():
-    class Engine:
-        async def execute_sql(self, *_args, **_kwargs):
-            raise AssertionError("engine should not be called")
-
-    post_processor = SQLGenPostProcessor(Engine())
-
-    result = await post_processor.run(
-        ['{"sql": "SELECT * FROM dbo_tblPayments"}'],
-        contexts=[
-            """
-            CREATE TABLE dbo_dimCustomers (
-              CustomerID VARCHAR
-            );
-            """
-        ],
-    )
-
-    assert result["valid_generation_result"] == {}
-    assert result["invalid_generation_result"]["type"] == "SCHEMA_GROUNDING"
-    assert "dbo_tblPayments" in result["invalid_generation_result"]["error"]

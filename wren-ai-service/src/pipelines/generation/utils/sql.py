@@ -1,5 +1,4 @@
 import logging
-import re
 from typing import Any, Dict, List
 
 import aiohttp
@@ -17,158 +16,6 @@ from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
 
-_SQL_IDENTIFIER = (
-    r'(?:"[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][\w$]*)'
-    r'(?:\s*\.\s*(?:"[^"]+"|`[^`]+`|\[[^\]]+\]|[A-Za-z_][\w$]*))*'
-)
-_DDL_TABLE_PATTERN = re.compile(
-    rf"\bCREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW)\s+(?P<identifier>{_SQL_IDENTIFIER})",
-    re.IGNORECASE,
-)
-_SQL_TABLE_REFERENCE_PATTERN = re.compile(
-    rf"\b(?:FROM|JOIN)\s+(?P<identifier>{_SQL_IDENTIFIER})",
-    re.IGNORECASE,
-)
-_SQL_CTE_PATTERN = re.compile(
-    rf"(?:\bWITH\s+(?:RECURSIVE\s+)?|,)\s*(?P<identifier>{_SQL_IDENTIFIER})\s+AS\s*\(",
-    re.IGNORECASE,
-)
-
-
-def _split_identifier_parts(identifier: str) -> list[str]:
-    parts = []
-    current = []
-    quote = ""
-    bracket_depth = 0
-
-    for char in identifier.strip():
-        if quote:
-            current.append(char)
-            if char == quote:
-                quote = ""
-            continue
-
-        if bracket_depth:
-            current.append(char)
-            if char == "]":
-                bracket_depth = 0
-            continue
-
-        if char in {'"', "`"}:
-            quote = char
-            current.append(char)
-            continue
-
-        if char == "[":
-            bracket_depth = 1
-            current.append(char)
-            continue
-
-        if char == ".":
-            part = "".join(current).strip()
-            if part:
-                parts.append(part)
-            current = []
-            continue
-
-        current.append(char)
-
-    part = "".join(current).strip()
-    if part:
-        parts.append(part)
-
-    return parts
-
-
-def _normalize_identifier_part(identifier: str) -> str:
-    identifier = identifier.strip()
-    if (
-        len(identifier) >= 2
-        and (
-            (identifier[0] == identifier[-1] and identifier[0] in {'"', "`"})
-            or (identifier[0] == "[" and identifier[-1] == "]")
-        )
-    ):
-        identifier = identifier[1:-1]
-
-    return identifier.strip().lower()
-
-
-def _normalize_identifier(identifier: str) -> str:
-    return ".".join(
-        part
-        for part in (
-            _normalize_identifier_part(part)
-            for part in _split_identifier_parts(identifier)
-        )
-        if part
-    )
-
-
-def _identifier_leaf(identifier: str) -> str:
-    normalized_parts = [
-        _normalize_identifier_part(part) for part in _split_identifier_parts(identifier)
-    ]
-    return normalized_parts[-1] if normalized_parts else ""
-
-
-def _allowed_table_names(contexts: list[str] | None) -> set[str]:
-    allowed = set()
-    for context in contexts or []:
-        for match in _DDL_TABLE_PATTERN.finditer(str(context)):
-            identifier = match.group("identifier")
-            normalized = _normalize_identifier(identifier)
-            leaf = _identifier_leaf(identifier)
-            if normalized:
-                allowed.add(normalized)
-            if leaf:
-                allowed.add(leaf)
-
-    return allowed
-
-
-def _cte_names(sql: str) -> set[str]:
-    ctes = set()
-    for match in _SQL_CTE_PATTERN.finditer(sql):
-        identifier = match.group("identifier")
-        normalized = _normalize_identifier(identifier)
-        leaf = _identifier_leaf(identifier)
-        if normalized:
-            ctes.add(normalized)
-        if leaf:
-            ctes.add(leaf)
-
-    return ctes
-
-
-def _is_table_function_reference(sql: str, end_position: int) -> bool:
-    remainder = sql[end_position:].lstrip()
-    return remainder.startswith("(")
-
-
-def find_unavailable_sql_tables(sql: str, contexts: list[str] | None) -> list[str]:
-    allowed_tables = _allowed_table_names(contexts)
-    if not allowed_tables:
-        return []
-
-    ctes = _cte_names(sql)
-    unavailable = []
-    for match in _SQL_TABLE_REFERENCE_PATTERN.finditer(sql):
-        identifier = match.group("identifier")
-        if _is_table_function_reference(sql, match.end("identifier")):
-            continue
-
-        normalized = _normalize_identifier(identifier)
-        leaf = _identifier_leaf(identifier)
-        if normalized in allowed_tables or leaf in allowed_tables:
-            continue
-        if normalized in ctes or leaf in ctes:
-            continue
-
-        unavailable.append(identifier)
-
-    return sorted(set(unavailable))
-
 
 @component
 class SQLGenPostProcessor:
@@ -182,7 +29,6 @@ class SQLGenPostProcessor:
     async def run(
         self,
         replies: List[str] | List[List[str]],
-        contexts: list[str] | None = None,
         project_id: str | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
@@ -197,26 +43,6 @@ class SQLGenPostProcessor:
                 cleaned_generation_result = orjson.loads(cleaned_generation_result)[
                     "sql"
                 ]
-
-            unavailable_tables = find_unavailable_sql_tables(
-                cleaned_generation_result,
-                contexts,
-            )
-            if unavailable_tables:
-                return {
-                    "valid_generation_result": {},
-                    "invalid_generation_result": {
-                        "sql": cleaned_generation_result,
-                        "original_sql": cleaned_generation_result,
-                        "type": "SCHEMA_GROUNDING",
-                        "error": (
-                            "Generated SQL references table(s) not present in the "
-                            "retrieved schema: "
-                            + ", ".join(unavailable_tables)
-                        ),
-                        "correlation_id": "",
-                    },
-                }
 
             (
                 valid_generation_result,
@@ -341,9 +167,6 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 ### SQL RULES ###
 - ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
 - ONLY USE the tables and columns mentioned in the database schema.
-- The DATABASE SCHEMA section is the complete and only source of executable table and column identifiers.
-- MUST NOT introduce, infer, copy, or repair table or column identifiers from the user question, reasoning plan, SQL samples, failed SQL, or error messages unless the same identifiers appear in the DATABASE SCHEMA section.
-- Do not copy identifiers from failed SQL into corrected SQL unless they are present in the DATABASE SCHEMA section.
 - ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - DON'T INCLUDE comments in the generated SQL query.

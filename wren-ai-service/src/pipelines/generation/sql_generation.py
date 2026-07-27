@@ -139,7 +139,6 @@ async def post_process(
     generate_sql: dict,
     post_processor: SQLGenPostProcessor,
     data_source: str,
-    documents: list[str] | None = None,
     project_id: str | None = None,
     use_dry_plan: bool = False,
     allow_dry_plan_fallback: bool = True,
@@ -147,7 +146,6 @@ async def post_process(
 ) -> dict:
     return await post_processor.run(
         generate_sql.get("replies"),
-        contexts=documents,
         project_id=project_id,
         use_dry_plan=use_dry_plan,
         data_source=data_source,
