@@ -51,7 +51,6 @@ export enum WrenAILanguage {
 export interface DeployData {
   manifest: Manifest;
   hash: string;
-  projectId: number;
 }
 
 // ask
@@ -74,7 +73,6 @@ export interface ProjectConfigurations {
 export interface AskInput {
   query: string;
   deployId: string;
-  projectId?: string;
   histories?: ThreadResponse[];
   configurations?: ProjectConfigurations;
 }

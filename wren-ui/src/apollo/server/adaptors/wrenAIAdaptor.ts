@@ -247,18 +247,12 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
 
   public async ask(input: AskInput): Promise<AsyncQueryResponse> {
     try {
-      const body: Record<string, any> = {
+      const res = await axios.post(`${this.wrenAIBaseEndpoint}/v1/asks`, {
         query: input.query,
         id: input.deployId,
         histories: this.transformHistoryInput(input.histories),
         configurations: input.configurations,
-      };
-
-      if (input.projectId) {
-        body['project_id'] = String(input.projectId);
-      }
-
-      const res = await axios.post(`${this.wrenAIBaseEndpoint}/v1/asks`, body);
+      });
       return { queryId: res.data.query_id };
     } catch (err: any) {
       logger.debug(`Got error when asking wren AI: ${getAIServiceError(err)}`);
@@ -352,14 +346,13 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   }
 
   public async deploy(deployData: DeployData): Promise<WrenAIDeployResponse> {
-    const { manifest, hash, projectId } = deployData;
+    const { manifest, hash } = deployData;
     try {
       const res = await axios.post(
         `${this.wrenAIBaseEndpoint}/v1/semantics-preparations`,
         {
           mdl: JSON.stringify(manifest),
           id: hash,
-          project_id: projectId.toString(),
         },
       );
       const deployId = res.data.id;
