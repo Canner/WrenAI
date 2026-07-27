@@ -56,19 +56,24 @@ class SqlPairsCleaner:
 
     @component.output_types()
     async def run(
-        self, sql_pair_ids: List[str], project_id: Optional[str] = None
+        self,
+        sql_pair_ids: List[str],
+        project_id: Optional[str] = None,
+        delete_all: bool = False,
     ) -> None:
-        filter = {
-            "operator": "AND",
-            "conditions": [
-                {"field": "sql_pair_id", "operator": "in", "value": sql_pair_ids},
-            ],
-        }
+        conditions = []
+
+        if not delete_all:
+            conditions.append(
+                {"field": "sql_pair_id", "operator": "in", "value": sql_pair_ids}
+            )
 
         if project_id:
-            filter["conditions"].append(
+            conditions.append(
                 {"field": "project_id", "operator": "==", "value": project_id}
             )
+
+        filter = {"operator": "AND", "conditions": conditions} if conditions else None
 
         return await self.store.delete_documents(filter)
 
@@ -131,7 +136,11 @@ async def clean(
 ) -> Dict[str, Any]:
     sql_pair_ids = [sql_pair.id for sql_pair in sql_pairs]
     if sql_pair_ids or delete_all:
-        await cleaner.run(sql_pair_ids=sql_pair_ids, project_id=project_id)
+        await cleaner.run(
+            sql_pair_ids=sql_pair_ids,
+            project_id=project_id,
+            delete_all=delete_all,
+        )
 
     return embedding
 
@@ -195,6 +204,7 @@ class SqlPairs(BasicPipeline):
         mdl_str: str,
         project_id: str = "",
         external_pairs: Optional[Dict[str, Any]] = None,
+        delete_all: bool = False,
     ) -> Dict[str, Any]:
         logger.info(
             f"Project ID: {project_id} SQL Pairs Indexing pipeline is running..."
@@ -207,6 +217,7 @@ class SqlPairs(BasicPipeline):
                 **self._external_pairs,
                 **(external_pairs or {}),
             },
+            "delete_all": delete_all,
             **self._components,
         }
 

@@ -84,10 +84,10 @@ class SemanticsPreparationService:
                     "db_schema",
                     "historical_question",
                     "table_description",
-                    "sql_pairs",
                     "project_meta",
                 ]
             ]
+            tasks.append(self._pipelines["sql_pairs"].run(**input, delete_all=True))
 
             await asyncio.gather(*tasks)
 

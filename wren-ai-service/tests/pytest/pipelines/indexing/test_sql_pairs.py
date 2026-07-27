@@ -3,7 +3,33 @@ import pytest
 from src.config import settings
 from src.core.provider import DocumentStoreProvider
 from src.pipelines.indexing import SqlPairs
+from src.pipelines.indexing.sql_pairs import SqlPairsCleaner
 from src.providers import generate_components
+
+
+class _RecordingStore:
+    def __init__(self):
+        self.filters = []
+
+    async def delete_documents(self, filter):
+        self.filters.append(filter)
+
+
+@pytest.mark.asyncio
+async def test_sql_pairs_cleaner_delete_all_uses_project_scope():
+    store = _RecordingStore()
+    cleaner = SqlPairsCleaner(store)
+
+    await cleaner.run(sql_pair_ids=[], project_id="project-id", delete_all=True)
+
+    assert store.filters == [
+        {
+            "operator": "AND",
+            "conditions": [
+                {"field": "project_id", "operator": "==", "value": "project-id"},
+            ],
+        }
+    ]
 
 
 @pytest.mark.asyncio
@@ -94,3 +120,6 @@ async def test_sql_pairs_deletion():
 
     await pipe.clean(sql_pairs=[], project_id="fake-id")
     assert await store.count_documents() == 2
+
+    await pipe.clean(sql_pairs=[], project_id="fake-id", delete_all=True)
+    assert await store.count_documents() == 0
