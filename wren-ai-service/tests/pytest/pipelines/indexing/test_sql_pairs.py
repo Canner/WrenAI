@@ -3,7 +3,7 @@ import pytest
 from src.config import settings
 from src.core.provider import DocumentStoreProvider
 from src.pipelines.indexing import SqlPairs
-from src.pipelines.indexing.sql_pairs import SqlPairsCleaner, sql_pairs
+from src.pipelines.indexing.sql_pairs import SqlPairsCleaner, embedding, sql_pairs, write
 from src.providers import generate_components
 
 
@@ -40,6 +40,32 @@ def test_sql_pairs_can_skip_default_pairs():
     )
 
     assert pairs == []
+
+
+@pytest.mark.asyncio
+async def test_empty_sql_pairs_skip_embedding_and_write():
+    class Embedder:
+        called = False
+
+        async def run(self, documents):
+            self.called = True
+            return {"documents": documents}
+
+    class Writer:
+        called = False
+
+        async def run(self, documents):
+            self.called = True
+
+    embedder = Embedder()
+    writer = Writer()
+
+    result = await embedding({"documents": []}, embedder)
+    await write(result, writer)
+
+    assert result == {"documents": []}
+    assert embedder.called is False
+    assert writer.called is False
 
 
 @pytest.mark.asyncio

@@ -127,6 +127,9 @@ async def embedding(
     to_documents: Dict[str, Any],
     embedder: Any,
 ) -> Dict[str, Any]:
+    if not to_documents["documents"]:
+        return to_documents
+
     return await embedder.run(documents=to_documents["documents"])
 
 
@@ -154,6 +157,9 @@ async def write(
     clean: Dict[str, Any],
     writer: AsyncDocumentWriter,
 ) -> None:
+    if not clean["documents"]:
+        return None
+
     return await writer.run(documents=clean["documents"])
 
 
