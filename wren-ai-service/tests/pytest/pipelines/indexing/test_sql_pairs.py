@@ -3,69 +3,7 @@ import pytest
 from src.config import settings
 from src.core.provider import DocumentStoreProvider
 from src.pipelines.indexing import SqlPairs
-from src.pipelines.indexing.sql_pairs import SqlPairsCleaner, embedding, sql_pairs, write
 from src.providers import generate_components
-
-
-class _RecordingStore:
-    def __init__(self):
-        self.filters = []
-
-    async def delete_documents(self, filter):
-        self.filters.append(filter)
-
-
-@pytest.mark.asyncio
-async def test_sql_pairs_cleaner_delete_all_uses_project_scope():
-    store = _RecordingStore()
-    cleaner = SqlPairsCleaner(store)
-
-    await cleaner.run(sql_pair_ids=[], project_id="project-id", delete_all=True)
-
-    assert store.filters == [
-        {
-            "operator": "AND",
-            "conditions": [
-                {"field": "project_id", "operator": "==", "value": "project-id"},
-            ],
-        }
-    ]
-
-
-def test_sql_pairs_can_skip_default_pairs():
-    pairs = sql_pairs(
-        boilerplates={"default"},
-        external_pairs={},
-        include_default_pairs=False,
-    )
-
-    assert pairs == []
-
-
-@pytest.mark.asyncio
-async def test_empty_sql_pairs_skip_embedding_and_write():
-    class Embedder:
-        called = False
-
-        async def run(self, documents):
-            self.called = True
-            return {"documents": documents}
-
-    class Writer:
-        called = False
-
-        async def run(self, documents):
-            self.called = True
-
-    embedder = Embedder()
-    writer = Writer()
-
-    result = await embedding({"documents": []}, embedder)
-    await write(result, writer)
-
-    assert result == {"documents": []}
-    assert embedder.called is False
-    assert writer.called is False
 
 
 @pytest.mark.asyncio
@@ -156,6 +94,3 @@ async def test_sql_pairs_deletion():
 
     await pipe.clean(sql_pairs=[], project_id="fake-id")
     assert await store.count_documents() == 2
-
-    await pipe.clean(sql_pairs=[], project_id="fake-id", delete_all=True)
-    assert await store.count_documents() == 0

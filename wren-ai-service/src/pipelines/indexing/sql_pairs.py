@@ -96,11 +96,7 @@ def boilerplates(
 def sql_pairs(
     boilerplates: Set[str],
     external_pairs: Dict[str, Any],
-    include_default_pairs: bool = True,
 ) -> List[SqlPair]:
-    if not include_default_pairs and not external_pairs:
-        return []
-
     return [
         SqlPair(
             id=pair.get("id"),
@@ -215,14 +211,13 @@ class SqlPairs(BasicPipeline):
         project_id: str = "",
         external_pairs: Optional[Dict[str, Any]] = None,
         delete_all: bool = False,
-        include_default_pairs: bool = True,
     ) -> Dict[str, Any]:
         logger.info(
             f"Project ID: {project_id} SQL Pairs Indexing pipeline is running..."
         )
 
         pairs = {
-            **(self._external_pairs if include_default_pairs else {}),
+            **self._external_pairs,
             **(external_pairs or {}),
         }
 
@@ -231,7 +226,6 @@ class SqlPairs(BasicPipeline):
             "project_id": project_id,
             "external_pairs": pairs,
             "delete_all": delete_all,
-            "include_default_pairs": include_default_pairs,
             **self._components,
         }
 
