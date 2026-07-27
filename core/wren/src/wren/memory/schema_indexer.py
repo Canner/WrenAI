@@ -234,7 +234,9 @@ def _describe_cube(cube: dict, lines: list[str]) -> None:
             if expr and expr != dname:
                 line += f": {expr}"
             lines.append(line)
-    tdims = [td for td in (_as_list(cube.get("timeDimensions"))) if isinstance(td, dict)]
+    tdims = [
+        td for td in (_as_list(cube.get("timeDimensions"))) if isinstance(td, dict)
+    ]
     if tdims:
         lines.append("  Time dimensions:")
         for td in tdims:
@@ -320,7 +322,9 @@ def extract_schema_items(manifest: dict) -> list[dict]:
 def _model_record(model: dict, mdl_h: str, now: datetime) -> dict:
     name = model["name"]
     cols = [
-        c for c in (_as_list(model.get("columns"))) if isinstance(c, dict) and c.get("name")
+        c
+        for c in (_as_list(model.get("columns")))
+        if isinstance(c, dict) and c.get("name")
     ]
     col_summaries = ", ".join(f"{c['name']} ({c.get('type', '?')})" for c in cols[:20])
     pk = model.get("primaryKey") or ""
@@ -450,10 +454,14 @@ def _cube_record(cube: dict, mdl_h: str, now: datetime) -> dict:
     name = cube.get("name", "")
     base = cube.get("baseObject", "?")
     measures = ", ".join(
-        m.get("name", "") for m in (_as_list(cube.get("measures"))) if isinstance(m, dict)
+        m.get("name", "")
+        for m in (_as_list(cube.get("measures")))
+        if isinstance(m, dict)
     )
     dims = ", ".join(
-        d.get("name", "") for d in (_as_list(cube.get("dimensions"))) if isinstance(d, dict)
+        d.get("name", "")
+        for d in (_as_list(cube.get("dimensions")))
+        if isinstance(d, dict)
     )
     time_dims = ", ".join(
         td.get("name", "")
