@@ -151,6 +151,49 @@ def test_table_description_null_description():
     )
 
 
+def test_table_description_excludes_generated_column_descriptions():
+    chunker = TableDescriptionChunker()
+    mdl = {
+        "models": [
+            {
+                "name": "orders",
+                "properties": {"description": "Customer purchase transactions."},
+                "columns": [
+                    {
+                        "name": "Division",
+                        "type": "varchar",
+                        "properties": {
+                            "description": "Generic generated division description."
+                        },
+                    },
+                    {
+                        "name": "SalesAmount",
+                        "type": "float",
+                        "properties": {
+                            "description": "Generic generated sales amount description."
+                        },
+                    },
+                ],
+            }
+        ],
+        "views": [],
+        "relationships": [],
+        "metrics": [],
+    }
+
+    actual = chunker.run(mdl)
+
+    document: Document = actual["documents"][0]
+    assert document.content == str(
+        {
+            "name": "orders",
+            "description": "Customer purchase transactions.",
+            "columns": "Division, SalesAmount",
+        }
+    )
+    assert "Generic generated" not in document.content
+
+
 def test_table_description_truncates_long_column_lists():
     chunker = TableDescriptionChunker()
     mdl = {

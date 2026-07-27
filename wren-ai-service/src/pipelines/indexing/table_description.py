@@ -18,9 +18,40 @@ from src.pipelines.indexing import AsyncDocumentWriter, DocumentCleaner, MDLVali
 
 logger = logging.getLogger("wren-ai-service")
 
+MAX_TABLE_DESCRIPTION_COLUMNS = 200
+MAX_TABLE_DESCRIPTION_DESCRIPTION_LENGTH = 4000
+
 
 @component
 class TableDescriptionChunker:
+    def _normalize_text(self, value: Any) -> str:
+        return "" if value is None else str(value)
+
+    def _truncate_description(self, description: Any) -> str:
+        normalized_description = self._normalize_text(description)
+        if len(normalized_description) <= MAX_TABLE_DESCRIPTION_DESCRIPTION_LENGTH:
+            return normalized_description
+
+        return (
+            normalized_description[:MAX_TABLE_DESCRIPTION_DESCRIPTION_LENGTH].rstrip()
+            + "..."
+        )
+
+    def _format_columns(self, columns: List[Any]) -> str:
+        normalized_columns = [self._normalize_text(column) for column in columns]
+        if len(normalized_columns) <= MAX_TABLE_DESCRIPTION_COLUMNS:
+            return ", ".join(normalized_columns)
+
+        remaining_columns = len(normalized_columns) - MAX_TABLE_DESCRIPTION_COLUMNS
+        truncated_columns = normalized_columns[:MAX_TABLE_DESCRIPTION_COLUMNS] + [
+            f"... (+{remaining_columns} more columns)"
+        ]
+        return ", ".join(truncated_columns)
+
+    def _properties(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        properties = payload.get("properties")
+        return properties if isinstance(properties, dict) else {}
+
     @component.output_types(documents=List[Document])
     def run(self, mdl: Dict[str, Any], project_id: Optional[str] = None):
         def _additional_meta() -> Dict[str, Any]:
@@ -49,13 +80,19 @@ class TableDescriptionChunker:
             ]
         }
 
-    def _get_table_descriptions(self, mdl: Dict[str, Any]) -> List[str]:
+    def _get_table_descriptions(self, mdl: Dict[str, Any]) -> List[Dict[str, Any]]:
         def _structure_data(mdl_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+            properties = self._properties(payload)
+
             return {
                 "mdl_type": mdl_type,
                 "name": payload.get("name"),
-                "columns": [column["name"] for column in payload.get("columns", [])],
-                "properties": payload.get("properties", {}),
+                "columns": [
+                    self._normalize_text(column.get("name", ""))
+                    for column in payload.get("columns", [])
+                    if isinstance(column, dict)
+                ],
+                "properties": properties,
             }
 
         resources = (
@@ -67,8 +104,10 @@ class TableDescriptionChunker:
         return [
             {
                 "name": resource["name"],
-                "description": resource["properties"].get("description", ""),
-                "columns": ", ".join(resource["columns"]),
+                "description": self._truncate_description(
+                    resource["properties"].get("description", "")
+                ),
+                "columns": self._format_columns(resource["columns"]),
             }
             for resource in resources
             if resource["name"] is not None
