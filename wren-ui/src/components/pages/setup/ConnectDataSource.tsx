@@ -33,7 +33,7 @@ export default function ConnectDataSource(props: Props) {
 
   useEffect(() => {
     if (typeof router.query.projectName === 'string') {
-      form.setFieldValue('displayName', router.query.projectName);
+      form.setFieldsValue({ displayName: router.query.projectName });
     }
   }, [form, router.query.projectName]);
 
