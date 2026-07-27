@@ -1,24 +1,18 @@
-import { camelCase, differenceWith, isEmpty, uniqBy } from 'lodash';
+import { camelCase, differenceWith, isEmpty, isEqual, uniqBy } from 'lodash';
 import { IContext } from '@server/types';
 import { getLogger } from 'log4js';
 import { SchemaChange } from '@server/repositories/schemaChangeRepository';
 import { Model, ModelColumn, RelationInfo } from '../repositories';
-import type {
-  CompactColumn,
-  CompactTable,
-} from '@server/services/metadataService';
-import {
-  handleNestedColumns,
-  replaceInvalidReferenceName,
-  transformUniqueInvalidColumnName,
-} from '@server/utils/model';
 
 const logger = getLogger('DataSourceSchemaDetector');
 logger.level = 'debug';
 
 export type DataSourceSchema = {
   name: string;
-  columns: Array<Pick<CompactColumn, 'name' | 'type'> & Partial<CompactColumn>>;
+  columns: {
+    name: string;
+    type: string;
+  }[];
 };
 
 export type DataSourceSchemaChange = {
@@ -62,7 +56,6 @@ interface AffectedResources {
 
 export interface IDataSourceSchemaDetector {
   detectSchemaChange(): Promise<boolean>;
-  syncLatestSchemaMetadata(): Promise<boolean>;
   resolveSchemaChange(type: string): Promise<void>;
   getAffectedResources(
     changes: DataSourceSchema[],
@@ -90,10 +83,7 @@ export default class DataSourceSchemaDetector
   }
 
   public async detectSchemaChange() {
-    logger.info('Start to detect Data Source Schema changes.');
-    const currentSchema = await this.getCurrentSchema();
-    const latestSchema = await this.getLatestSchema();
-    const diffSchema = this.getDiffSchema(currentSchema, latestSchema);
+    const diffSchema = await this.getDiffSchema();
     if (diffSchema) {
       await this.addSchemaChange(diffSchema);
     } else {
@@ -115,180 +105,7 @@ export default class DataSourceSchemaDetector
       }
     }
 
-    const hasMissingModelSync = await this.syncLatestSchemaMetadata();
-    const hasSchemaMetadataSync =
-      await this.syncExistingModelsWithLatestSchema(latestSchema);
-
-    return !!diffSchema || hasMissingModelSync || hasSchemaMetadataSync;
-  }
-
-  public async syncLatestSchemaMetadata() {
-    logger.info('Start to sync latest datasource schema metadata.');
-    const project = await this.ctx.projectRepository.findOneBy({
-      id: this.projectId,
-    });
-    const latestTables =
-      await this.ctx.projectService.getProjectDataSourceTables(project);
-    const models = await this.ctx.modelRepository.findAllBy({
-      projectId: this.projectId,
-    });
-    const createdModels = await this.createMissingModels(latestTables, models);
-    await this.createColumnsForModels(latestTables, createdModels);
-    logger.info('Finished syncing latest datasource schema metadata.');
-    return createdModels.length > 0;
-  }
-
-  private async createMissingModels(
-    latestTables: CompactTable[],
-    models: Model[],
-  ): Promise<Model[]> {
-    const existingSourceTableNames = new Set(
-      models.map((model) => model.sourceTableName),
-    );
-    const usedReferenceNames = new Set(
-      models.map((model) => model.referenceName.toLowerCase()),
-    );
-    const missingTables = latestTables.filter(
-      (table) => !existingSourceTableNames.has(table.name),
-    );
-
-    if (!missingTables.length) {
-      return [];
-    }
-
-    const modelValues = missingTables.map((table) => {
-      const referenceName = this.getUniqueModelReferenceName(
-        replaceInvalidReferenceName(table.name),
-        usedReferenceNames,
-      );
-      return {
-        projectId: this.projectId,
-        displayName: table.name,
-        referenceName,
-        sourceTableName: table.name,
-        cached: false,
-        refreshTime: null,
-        properties: table.properties ? JSON.stringify(table.properties) : null,
-      } as Partial<Model>;
-    });
-
-    logger.info(
-      `Creating ${modelValues.length} missing model(s): ${missingTables
-        .map((table) => table.name)
-        .join(', ')}`,
-    );
-    return await this.ctx.modelRepository.createMany(modelValues);
-  }
-
-  private async createColumnsForModels(
-    latestTables: CompactTable[],
-    models: Model[],
-  ): Promise<ModelColumn[]> {
-    if (!models.length) {
-      return [];
-    }
-
-    const columnValues = models.flatMap((model) => {
-      const table = latestTables.find(
-        (table) => table.name === model.sourceTableName,
-      );
-      if (!table) {
-        return [];
-      }
-      const usedReferenceNames = new Set<string>();
-      return this.buildColumnValues(model, table.columns, table.primaryKey, {
-        usedReferenceNames,
-      });
-    });
-
-    if (!columnValues.length) {
-      return [];
-    }
-
-    const columns = await this.ctx.modelColumnRepository.createMany(
-      columnValues,
-    );
-    await this.createNestedColumns(latestTables, models, columns);
-    return columns;
-  }
-
-  private buildColumnValues(
-    model: Model,
-    columns: CompactColumn[],
-    primaryKey: string | undefined,
-    { usedReferenceNames }: { usedReferenceNames: Set<string> },
-  ): Partial<ModelColumn>[] {
-    return columns.map(
-      (column) =>
-        ({
-          modelId: model.id,
-          isCalculated: false,
-          displayName: column.name,
-          referenceName: transformUniqueInvalidColumnName(
-            column.name,
-            usedReferenceNames,
-          ),
-          sourceColumnName: column.name,
-          type: column.type || 'string',
-          notNull: !!column.notNull,
-          isPk: primaryKey === column.name,
-          properties: column.properties
-            ? JSON.stringify(column.properties)
-            : null,
-        }) as Partial<ModelColumn>,
-    );
-  }
-
-  private async createNestedColumns(
-    latestTables: CompactTable[],
-    models: Model[],
-    columns: ModelColumn[],
-  ) {
-    const nestedColumnValues = models.flatMap((model) => {
-      const table = latestTables.find(
-        (table) => table.name === model.sourceTableName,
-      );
-      if (!table) {
-        return [];
-      }
-      const modelColumns = columns.filter(
-        (column) => column.modelId === model.id,
-      );
-      return table.columns.flatMap((compactColumn) => {
-        const column = modelColumns.find(
-          (column) => column.sourceColumnName === compactColumn.name,
-        );
-        if (!column) {
-          return [];
-        }
-        return handleNestedColumns(compactColumn, {
-          modelId: column.modelId,
-          columnId: column.id,
-          sourceColumnName: column.sourceColumnName,
-        });
-      });
-    });
-
-    if (nestedColumnValues.length) {
-      await this.ctx.modelNestedColumnRepository.createMany(nestedColumnValues);
-    }
-  }
-
-  private getUniqueModelReferenceName(
-    referenceName: string,
-    usedReferenceNames: Set<string>,
-  ) {
-    const baseName = referenceName || 'model';
-    let uniqueName = baseName;
-    let suffix = 2;
-
-    while (usedReferenceNames.has(uniqueName.toLowerCase())) {
-      uniqueName = `${baseName}_${suffix}`;
-      suffix += 1;
-    }
-
-    usedReferenceNames.add(uniqueName.toLowerCase());
-    return uniqueName;
+    return !!diffSchema;
   }
 
   public async resolveSchemaChange(type: string) {
@@ -296,7 +113,6 @@ export default class DataSourceSchemaDetector
     const supportedTypes = [
       SchemaChangeType.DELETED_TABLES,
       SchemaChangeType.DELETED_COLUMNS,
-      SchemaChangeType.MODIFIED_COLUMNS,
     ];
     if (!supportedTypes.includes(schemaChangeType)) {
       throw new Error('Resolved scheme change type is not supported.');
@@ -335,11 +151,10 @@ export default class DataSourceSchemaDetector
     });
 
     /**
-     * Handle resolve scheme change for DELETED_TABLES / DELETED_COLUMNS / MODIFIED_COLUMNS
+     * Handle resolve scheme change for DELETED_TABLES / DELETED_COLUMNS
      *  1. Remove all affected calculated fields
      *  2. Remove all affected columns if DELETED_COLUMNS
-     *  3. Update all affected column types if MODIFIED_COLUMNS
-     *  4. Remove all affected tables if DELETED_TABLES
+     *  3. Remove all affected tables if DELETED_TABLES
      *
      *  Considering that we have set up foreign keys, some data will be automatically deleted in cascade,
      *  so there is no need to perform additional deletions. (E.g., relationships, model's column)
@@ -369,27 +184,6 @@ export default class DataSourceSchemaDetector
           await this.ctx.modelColumnRepository.deleteAllBySourceColumnNames(
             resource.modelId,
             affectedColumnNames,
-          );
-        }
-        if (schemaChangeType === SchemaChangeType.MODIFIED_COLUMNS) {
-          await Promise.all(
-            resource.columns.map(async (column) => {
-              const modelColumn = modelColumns.find(
-                (modelColumn) =>
-                  modelColumn.modelId === resource.modelId &&
-                  modelColumn.sourceColumnName === column.sourceColumnName &&
-                  !modelColumn.isCalculated,
-              );
-              if (!modelColumn || modelColumn.type === column.type) {
-                return;
-              }
-              logger.debug(
-                `Updating column "${column.sourceColumnName}" type from "${modelColumn.type}" to "${column.type}" in model "${resource.referenceName}".`,
-              );
-              await this.ctx.modelColumnRepository.updateOne(modelColumn.id, {
-                type: column.type,
-              });
-            }),
           );
         }
         return;
@@ -542,10 +336,11 @@ export default class DataSourceSchemaDetector
     return affectedResources;
   }
 
-  private getDiffSchema(
-    currentSchema: DataSourceSchema[],
-    latestSchema: DataSourceSchema[],
-  ) {
+  private async getDiffSchema() {
+    logger.info('Start to detect Data Source Schema changes.');
+    const currentSchema = await this.getCurrentSchema();
+    const latestSchema = await this.getLatestSchema();
+
     const diffSchema = currentSchema.reduce((result, currentTable) => {
       const lastestTable = latestSchema.find(
         (table) => table.name === currentTable.name,
@@ -563,7 +358,7 @@ export default class DataSourceSchemaDetector
       const diffColumns = differenceWith(
         currentTable.columns,
         lastestTable.columns,
-        this.isSameSchemaColumn,
+        isEqual,
       );
       if (diffColumns.length > 0) {
         const deletedColumnChange = { name: currentTable.name, columns: [] };
@@ -674,157 +469,15 @@ export default class DataSourceSchemaDetector
     const result = latestDataSourceTables.map((table) => {
       return {
         name: table.name,
-        columns: table.columns,
+        columns: table.columns.map((column) => {
+          return {
+            name: column.name,
+            type: column.type,
+          };
+        }),
       };
     });
     return result;
-  }
-
-  private isSameSchemaColumn(
-    currentColumn: DataSourceSchema['columns'][number],
-    latestColumn: DataSourceSchema['columns'][number],
-  ) {
-    return (
-      currentColumn.name === latestColumn.name &&
-      currentColumn.type === latestColumn.type
-    );
-  }
-
-  private async syncExistingModelsWithLatestSchema(
-    latestSchema: DataSourceSchema[],
-  ): Promise<boolean> {
-    let hasSyncedMetadata = false;
-    const models = await this.ctx.modelRepository.findAllBy({
-      projectId: this.projectId,
-    });
-    if (models.length === 0) {
-      return false;
-    }
-
-    const modelIds = models.map((model) => model.id);
-    const modelColumns =
-      await this.ctx.modelColumnRepository.findColumnsByModelIds(modelIds);
-
-    for (const model of models) {
-      const latestTable = latestSchema.find(
-        (table) => table.name === model.sourceTableName,
-      );
-      if (!latestTable) {
-        continue;
-      }
-
-      const existingColumns = modelColumns.filter(
-        (column) => column.modelId === model.id && !column.isCalculated,
-      );
-      const latestColumnNames = new Set(
-        latestTable.columns.map((column) => column.name),
-      );
-      const staleColumnNames = existingColumns
-        .filter((column) => !latestColumnNames.has(column.sourceColumnName))
-        .map((column) => column.sourceColumnName);
-      if (staleColumnNames.length) {
-        logger.info(
-          `Removing stale datasource column metadata "${staleColumnNames.join(
-            ', ',
-          )}" from model "${model.referenceName}".`,
-        );
-        await this.ctx.modelColumnRepository.deleteAllBySourceColumnNames(
-          model.id,
-          staleColumnNames,
-        );
-        hasSyncedMetadata = true;
-      }
-
-      const usedReferenceNames = new Set(
-        modelColumns
-          .filter(
-            (column) =>
-              column.modelId === model.id &&
-              !staleColumnNames.includes(column.sourceColumnName),
-          )
-          .map((column) => column.referenceName.toLowerCase()),
-      );
-
-      for (const latestColumn of latestTable.columns) {
-        const existingColumn = existingColumns.find(
-          (column) => column.sourceColumnName === latestColumn.name,
-        );
-
-        if (!existingColumn) {
-          const column = await this.ctx.modelColumnRepository.createOne({
-            modelId: model.id,
-            isCalculated: false,
-            displayName: latestColumn.name,
-            referenceName: transformUniqueInvalidColumnName(
-              latestColumn.name,
-              usedReferenceNames,
-            ),
-            sourceColumnName: latestColumn.name,
-            type: latestColumn.type || 'string',
-            notNull: latestColumn.notNull || false,
-            isPk: false,
-            properties: latestColumn.properties
-              ? JSON.stringify(latestColumn.properties)
-              : null,
-          });
-
-          await this.ctx.modelNestedColumnRepository.createMany(
-            handleNestedColumns(latestColumn as CompactColumn, {
-              modelId: column.modelId,
-              columnId: column.id,
-              sourceColumnName: column.sourceColumnName,
-            }),
-          );
-          hasSyncedMetadata = true;
-          continue;
-        }
-
-        const updateData: Partial<ModelColumn> = {};
-        const latestType = latestColumn.type || 'string';
-        const latestNotNull = latestColumn.notNull || false;
-        if (existingColumn.type !== latestType) {
-          updateData.type = latestType;
-        }
-        if (existingColumn.notNull !== latestNotNull) {
-          updateData.notNull = latestNotNull;
-        }
-        if (latestColumn.properties) {
-          const existingProperties = existingColumn.properties
-            ? JSON.parse(existingColumn.properties)
-            : {};
-          const mergedProperties = {
-            ...latestColumn.properties,
-            ...existingProperties,
-          };
-          const nextProperties = JSON.stringify(mergedProperties);
-          if ((existingColumn.properties || null) !== nextProperties) {
-            updateData.properties = nextProperties;
-          }
-        }
-
-        if (!isEmpty(updateData)) {
-          const column = await this.ctx.modelColumnRepository.updateOne(
-            existingColumn.id,
-            updateData,
-          );
-          hasSyncedMetadata = true;
-
-          if (latestType.includes('STRUCT')) {
-            await this.ctx.modelNestedColumnRepository.deleteAllBy({
-              columnId: column.id,
-            });
-            await this.ctx.modelNestedColumnRepository.createMany(
-              handleNestedColumns(latestColumn as CompactColumn, {
-                modelId: column.modelId,
-                columnId: column.id,
-                sourceColumnName: column.sourceColumnName,
-              }),
-            );
-          }
-        }
-      }
-    }
-    return hasSyncedMetadata;
   }
 
   private async updateResolveToSchemaChange(

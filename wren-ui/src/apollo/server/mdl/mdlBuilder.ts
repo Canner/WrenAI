@@ -8,7 +8,6 @@ import {
   View,
 } from '../repositories';
 import {
-  ColumnMDL,
   Manifest,
   ModelMDL,
   TableReference,
@@ -17,30 +16,11 @@ import {
 import { getLogger } from '@server/utils';
 import { getConfig } from '@server/config';
 import { DataSourceName } from '../types';
-import { getUniqueReferenceName } from '../utils/model';
 
 const logger = getLogger('MDLBuilder');
 logger.level = 'debug';
 
 const config = getConfig();
-const DOCUMENTED_CALCULATED_FIELD_FUNCTIONS = new Map<string, string>([
-  ['ABS', 'abs'],
-  ['AVG', 'avg'],
-  ['COUNT', 'count'],
-  ['MAX', 'max'],
-  ['MIN', 'min'],
-  ['SUM', 'sum'],
-  ['CBRT', 'cbrt'],
-  ['CEIL', 'ceil'],
-  ['EXP', 'exp'],
-  ['FLOOR', 'floor'],
-  ['LN', 'ln'],
-  ['LOG10', 'log10'],
-  ['ROUND', 'round'],
-  ['SIGN', 'sign'],
-  ['LENGTH', 'length'],
-  ['REVERSE', 'reverse'],
-]);
 
 export interface MDLBuilderBuildFromOptions {
   project: Project;
@@ -61,11 +41,6 @@ export interface IMDLBuilder {
 // responsible to generate a valid manifest json
 export class MDLBuilder implements IMDLBuilder {
   private manifest: Manifest;
-  private invalidCalculatedFields: Array<{
-    modelId: number;
-    columnId: number;
-    reason: string;
-  }> = [];
 
   private project: Project;
   private readonly models: Model[];
@@ -81,12 +56,6 @@ export class MDLBuilder implements IMDLBuilder {
   private readonly relatedColumns: ModelColumn[];
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private readonly relatedRelations: RelationInfo[];
-  private readonly columnNameAliases = new Map<number, string>();
-  private readonly manifestColumnNamesByModel = new Map<string, Set<string>>();
-  private readonly manifestColumnNameBySourceByModel = new Map<
-    string,
-    Map<string, string>
-  >();
 
   constructor(builderOptions: MDLBuilderBuildFromOptions) {
     const {
@@ -115,7 +84,6 @@ export class MDLBuilder implements IMDLBuilder {
   }
 
   public build(): Manifest {
-    this.invalidCalculatedFields = [];
     this.addProject();
     this.addModel();
     this.addNormalField();
@@ -123,7 +91,6 @@ export class MDLBuilder implements IMDLBuilder {
     this.addCalculatedField();
     this.addView();
     this.postProcessManifest();
-    this.logInvalidCalculatedFieldSummary();
     return this.getManifest();
   }
 
@@ -136,13 +103,14 @@ export class MDLBuilder implements IMDLBuilder {
       return;
     }
     this.manifest.models = this.models.map((model: Model) => {
-      const properties = this.parseProperties(model.properties);
+      const properties = model.properties ? JSON.parse(model.properties) : {};
       // put displayName in properties
       if (model.displayName) {
         properties.displayName = model.displayName;
       }
       const tableReference = this.buildTableReference(model);
-      const modelMdl = {
+
+      return {
         name: model.referenceName,
         columns: [],
         tableReference,
@@ -160,8 +128,6 @@ export class MDLBuilder implements IMDLBuilder {
         },
         primaryKey: '', // will be modified in addColumn
       } as ModelMDL;
-
-      return modelMdl;
     });
   }
 
@@ -170,7 +136,7 @@ export class MDLBuilder implements IMDLBuilder {
       return;
     }
     this.manifest.views = this.views.map((view: View) => {
-      const properties = this.parseProperties(view.properties);
+      const properties = JSON.parse(view.properties) || {};
 
       // filter out properties that are not null or undefined
       // and are in the list of properties that are allowed
@@ -218,11 +184,18 @@ export class MDLBuilder implements IMDLBuilder {
           (model: any) => model.name === modelRefName,
         );
 
+        // modify model primary key
+        if (column.isPk) {
+          model.primaryKey = column.referenceName;
+        }
+
         // add column into model
         if (!model.columns) {
           model.columns = [];
         }
-        const properties = this.parseProperties(column.properties);
+        const properties = column.properties
+          ? JSON.parse(column.properties)
+          : {};
         // put displayName in properties
         if (column.displayName) {
           properties.displayName = column.displayName;
@@ -243,32 +216,9 @@ export class MDLBuilder implements IMDLBuilder {
             }
           }, {});
         }
-        const sourceColumnName = column.sourceColumnName || column.referenceName;
-        const sourceColumnNames = this.getManifestSourceColumnNameMap(model);
-        const existingColumnName = sourceColumnNames.get(
-          sourceColumnName.toLowerCase(),
-        );
-        if (existingColumnName) {
-          this.columnNameAliases.set(column.id, existingColumnName);
-          if (column.isPk) {
-            model.primaryKey = existingColumnName;
-          }
-          logger.debug(
-            `Skipping duplicate source column "${sourceColumnName}" for model "${model.name}". Reusing manifest column "${existingColumnName}".`,
-          );
-          return;
-        }
-
-        const columnName = this.getManifestColumnName(column, model);
-        sourceColumnNames.set(sourceColumnName.toLowerCase(), columnName);
-        // modify model primary key
-        if (column.isPk) {
-          model.primaryKey = columnName;
-        }
-
-        const expression = this.getColumnExpression(column, model, columnName);
+        const expression = this.getColumnExpression(column, model);
         model.columns.push({
-          name: columnName,
+          name: column.referenceName,
           type: column.type,
           isCalculated: column.isCalculated ? true : false,
           notNull: column.notNull ? true : false,
@@ -287,56 +237,29 @@ export class MDLBuilder implements IMDLBuilder {
     this.columns
       .filter(({ isCalculated }) => isCalculated)
       .forEach((column: ModelColumn) => {
-        try {
-          // validate manifest.model exist
-          const relatedModel = this.relatedModels.find(
-            (model: any) => model.id === column.modelId,
+        // validate manifest.model exist
+        const relatedModel = this.relatedModels.find(
+          (model: any) => model.id === column.modelId,
+        );
+        const model = this.manifest.models.find(
+          (model: any) => model.name === relatedModel.referenceName,
+        );
+        if (!model) {
+          logger.debug(
+            `Build MDL Column Error: can not find model, modelId "${column.modelId}", columnId: "${column.id}"`,
           );
-          if (!relatedModel) {
-            this.recordInvalidCalculatedField(
-              column.modelId,
-              column.id,
-              'can not find related model',
-            );
-            return;
-          }
-          const model = this.manifest.models.find(
-            (model: any) => model.name === relatedModel.referenceName,
-          );
-          if (!model) {
-            this.recordInvalidCalculatedField(
-              column.modelId,
-              column.id,
-              'can not find model',
-            );
-            return;
-          }
-          const columnName = this.getManifestColumnName(column, model);
-          const expression = this.getColumnExpression(column, model, columnName);
-          if (expression === null) {
-            this.recordInvalidCalculatedField(
-              column.modelId,
-              column.id,
-              'invalid calculated field metadata',
-            );
-            return;
-          }
-          const columnValue = {
-            name: columnName,
-            type: column.type,
-            isCalculated: true,
-            expression,
-            notNull: column.notNull ? true : false,
-            properties: this.parseProperties(column.properties),
-          };
-          model.columns.push(columnValue);
-        } catch (error: any) {
-          this.recordInvalidCalculatedField(
-            column.modelId,
-            column.id,
-            `failed to add calculated field: ${error.message}`,
-          );
+          return;
         }
+        const expression = this.getColumnExpression(column, model);
+        const columnValue = {
+          name: column.referenceName,
+          type: column.type,
+          isCalculated: true,
+          expression,
+          notNull: column.notNull ? true : false,
+          properties: JSON.parse(column.properties),
+        };
+        model.columns.push(columnValue);
       });
   }
 
@@ -344,44 +267,31 @@ export class MDLBuilder implements IMDLBuilder {
     modelName: string,
     calculatedField: ModelColumn,
   ) {
-    try {
-      const model = this.manifest.models.find(
-        (model: any) => model.name === modelName,
-      );
-      if (!model) {
-        logger.debug(`Can not find model "${modelName}" to add calculated field`);
-        return;
-      }
-      const columnName = this.getManifestColumnName(calculatedField, model);
-      const expression = this.getColumnExpression(
-        calculatedField,
-        model,
-        columnName,
-      );
-      if (expression === null) {
-        this.recordInvalidCalculatedField(
-          calculatedField.modelId,
-          calculatedField.id,
-          `insert skipped because metadata is invalid for "${calculatedField.referenceName}"`,
-        );
-        return;
-      }
-      const columnValue = {
-        name: columnName,
-        type: calculatedField.type,
-        isCalculated: true,
-        expression,
-        notNull: calculatedField.notNull ? true : false,
-        properties: this.parseProperties(calculatedField.properties),
-      };
-      model.columns.push(columnValue);
-    } catch (error: any) {
-      this.recordInvalidCalculatedField(
-        calculatedField.modelId,
-        calculatedField.id,
-        `insert failed for "${calculatedField.referenceName}": ${error.message}`,
-      );
+    const model = this.manifest.models.find(
+      (model: any) => model.name === modelName,
+    );
+    if (!model) {
+      logger.debug(`Can not find model "${modelName}" to add calculated field`);
+      return;
     }
+    // if calculated field is already in the model, skip
+    if (
+      model.columns.find(
+        (column: any) => column.name === calculatedField.referenceName,
+      )
+    ) {
+      return;
+    }
+    const expression = this.getColumnExpression(calculatedField, model);
+    const columnValue = {
+      name: calculatedField.referenceName,
+      type: calculatedField.type,
+      isCalculated: true,
+      expression,
+      notNull: calculatedField.notNull ? true : false,
+      properties: JSON.parse(calculatedField.properties),
+    };
+    model.columns.push(columnValue);
   }
 
   public addRelation(): void {
@@ -392,26 +302,24 @@ export class MDLBuilder implements IMDLBuilder {
           joinType,
           fromModelName,
           fromColumnName,
-          fromColumnId,
           toModelName,
           toColumnName,
-          toColumnId,
         } = relation;
         const condition = this.getRelationCondition(relation);
         this.addRelationColumn(fromModelName, {
           modelReferenceName: toModelName,
-          columnReferenceName:
-            this.columnNameAliases.get(toColumnId) || toColumnName,
+          columnReferenceName: toColumnName,
           relation: name,
         });
         this.addRelationColumn(toModelName, {
           modelReferenceName: fromModelName,
-          columnReferenceName:
-            this.columnNameAliases.get(fromColumnId) || fromColumnName,
+          columnReferenceName: fromColumnName,
           relation: name,
         });
 
-        const properties = this.parseProperties(relation.properties);
+        const properties = relation.properties
+          ? JSON.parse(relation.properties)
+          : {};
 
         return {
           name: name,
@@ -452,18 +360,13 @@ export class MDLBuilder implements IMDLBuilder {
       model.columns = [];
     }
     // check if the modelReferenceName is already in the model column
-    const modelColumnNames = this.getManifestColumnNames(model);
-    const modelNameDuplicated = modelColumnNames.has(
-      columnData.modelReferenceName.toLowerCase(),
-    );
-    const columnName = getUniqueReferenceName(
-      modelNameDuplicated
-        ? `${columnData.modelReferenceName}_${columnData.columnReferenceName}`
-        : columnData.modelReferenceName,
-      modelColumnNames,
+    const modelNameDuplicated = model.columns.find(
+      (column: any) => column.name === columnData.modelReferenceName,
     );
     const column = {
-      name: columnName,
+      name: modelNameDuplicated
+        ? `${columnData.modelReferenceName}_${columnData.columnReferenceName}`
+        : columnData.modelReferenceName,
       type: columnData.modelReferenceName,
       properties: null,
       relationship: columnData.relation,
@@ -476,97 +379,64 @@ export class MDLBuilder implements IMDLBuilder {
   protected getColumnExpression(
     column: ModelColumn,
     currentModel?: Partial<ModelMDL>,
-    columnReferenceName = column.referenceName,
-  ): string | null {
+  ): string {
     if (!column.isCalculated) {
       // columns existed in the data source.
       // Provide original column name in expression to MDL if referenceName has converted.
-      if (column.sourceColumnName !== columnReferenceName) {
+      if (column.sourceColumnName !== column.referenceName) {
         return `"${column.sourceColumnName}"`;
       }
       return '';
     }
     // calculated field
-    const lineage = this.parseLineage(column.lineage);
-    if (isEmpty(lineage) || !column.aggregation) {
-      return null;
-    }
+    const lineage = JSON.parse(column.lineage) as number[];
     // lineage = [relationId1, relationId2, ..., columnId]
-    const fieldExpression = lineage.reduce<string[]>((acc, id, index) => {
-      const isLast = index === lineage.length - 1;
-      if (isLast) {
-        // id is columnId
-        const relatedColumn = this.relatedColumns.find(
-          (relatedColumn) => relatedColumn.id === id,
-        );
-        const columnReferenceName = relatedColumn
-          ? this.columnNameAliases.get(relatedColumn.id) ||
-            relatedColumn.referenceName
-          : null;
-        if (!columnReferenceName) {
+    const fieldExpression = Object.entries<number>(lineage).reduce(
+      (acc, [index, id]) => {
+        const isLast = parseInt(index) == lineage.length - 1;
+        if (isLast) {
+          // id is columnId
+          const columnReferenceName = this.relatedColumns.find(
+            (relatedColumn) => relatedColumn.id === id,
+          )?.referenceName;
+          acc.push(`\"${columnReferenceName}\"`);
           return acc;
         }
-        acc.push(`\"${columnReferenceName}\"`);
+        // id is relationId
+        const usedRelation = this.relatedRelations.find(
+          (relatedRelation) => relatedRelation.id === id,
+        );
+        const relationColumnName = currentModel!.columns.find(
+          (c) => c.relationship === usedRelation.name,
+        ).name;
+        // move to next model
+        const nextModelName =
+          currentModel.name === usedRelation.fromModelName
+            ? usedRelation.toModelName
+            : usedRelation.fromModelName;
+        const nextModel = this.manifest.models.find(
+          (model) => model.name === nextModelName,
+        );
+        currentModel = nextModel;
+        acc.push(relationColumnName);
         return acc;
-      }
-      // id is relationId
-      const usedRelation = this.relatedRelations.find(
-        (relatedRelation) => relatedRelation.id === id,
-      );
-      if (!usedRelation || !currentModel?.columns) {
-        return acc;
-      }
-      const relationColumnName = currentModel.columns.find(
-        (c) => c.relationship === usedRelation.name,
-      )?.name;
-      if (!relationColumnName) {
-        return acc;
-      }
-      // move to next model
-      const nextModelName =
-        currentModel.name === usedRelation.fromModelName
-          ? usedRelation.toModelName
-          : usedRelation.fromModelName;
-      const nextModel = this.manifest.models.find(
-        (model) => model.name === nextModelName,
-      );
-      currentModel = nextModel;
-      acc.push(relationColumnName);
-      return acc;
-    }, []);
-    if (fieldExpression.length !== lineage.length) {
-      return null;
-    }
-    const functionName = DOCUMENTED_CALCULATED_FIELD_FUNCTIONS.get(
-      String(column.aggregation).toUpperCase(),
+      },
+      [],
     );
-    if (!functionName) {
-      return null;
-    }
-    return `${functionName}(${fieldExpression.join('.')})`;
+    return `${column.aggregation}(${fieldExpression.join('.')})`;
   }
 
   protected getRelationCondition(relation: RelationInfo): string {
     //TODO phase2: implement the expression for relation condition
-    const {
-      fromColumnId,
-      fromColumnName,
-      toColumnId,
-      toColumnName,
-      fromModelName,
-      toModelName,
-    } = relation;
-    const fromColumnReferenceName =
-      this.columnNameAliases.get(fromColumnId) || fromColumnName;
-    const toColumnReferenceName =
-      this.columnNameAliases.get(toColumnId) || toColumnName;
-    return `"${fromModelName}".${fromColumnReferenceName} = "${toModelName}".${toColumnReferenceName}`;
+    const { fromColumnName, toColumnName, fromModelName, toModelName } =
+      relation;
+    return `"${fromModelName}".${fromColumnName} = "${toModelName}".${toColumnName}`;
   }
 
   private buildTableReference(model: Model): TableReference | null {
     const modelProps =
       model.properties && typeof model.properties === 'string'
-        ? this.parseProperties(model.properties)
+        ? JSON.parse(model.properties)
         : {};
     if (!modelProps.table) {
       return null;
@@ -577,91 +447,6 @@ export class MDLBuilder implements IMDLBuilder {
       table: modelProps.table,
     };
   }
-
-  private parseLineage(lineage?: string): number[] {
-    if (!lineage) {
-      return [];
-    }
-    try {
-      const parsedLineage = JSON.parse(lineage);
-      return Array.isArray(parsedLineage) ? parsedLineage : [];
-    } catch (error) {
-      logger.debug(`Can not parse calculated field lineage "${lineage}"`);
-      return [];
-    }
-  }
-  private parseProperties(properties?: string | null): Record<string, any> {
-    if (!properties) {
-      return {};
-    }
-    try {
-      const parsed = JSON.parse(properties);
-      return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (error) {
-      logger.debug(`Can not parse properties "${properties}"`);
-      return {};
-    }
-  }
-  private recordInvalidCalculatedField(
-    modelId: number,
-    columnId: number,
-    reason: string,
-  ) {
-    this.invalidCalculatedFields.push({ modelId, columnId, reason });
-  }
-  private logInvalidCalculatedFieldSummary() {
-    if (this.invalidCalculatedFields.length === 0) {
-      return;
-    }
-    const preview = this.invalidCalculatedFields
-      .slice(0, 10)
-      .map(
-        ({ modelId, columnId, reason }) =>
-          `modelId="${modelId}", columnId="${columnId}", reason="${reason}"`,
-      )
-      .join('; ');
-    logger.warn(
-      `Skipped ${this.invalidCalculatedFields.length} invalid calculated field(s) while building MDL. ${preview}${this.invalidCalculatedFields.length > 10 ? '; ...' : ''}`,
-    );
-  }
-
-  private getManifestColumnName(
-    column: ModelColumn,
-    model: Partial<ModelMDL>,
-  ): string {
-    if (this.columnNameAliases.has(column.id)) {
-      return this.columnNameAliases.get(column.id)!;
-    }
-    const columnName = getUniqueReferenceName(
-      column.referenceName,
-      this.getManifestColumnNames(model),
-    );
-    this.columnNameAliases.set(column.id, columnName);
-    return columnName;
-  }
-
-  private getManifestColumnNames(model: Partial<ModelMDL>): Set<string> {
-    const modelName = model.name || '';
-    if (!this.manifestColumnNamesByModel.has(modelName)) {
-      const existingColumns = (model.columns || []) as ColumnMDL[];
-      this.manifestColumnNamesByModel.set(
-        modelName,
-        new Set(existingColumns.map((column) => column.name.toLowerCase())),
-      );
-    }
-    return this.manifestColumnNamesByModel.get(modelName)!;
-  }
-
-  private getManifestSourceColumnNameMap(
-    model: Partial<ModelMDL>,
-  ): Map<string, string> {
-    const modelName = model.name || '';
-    if (!this.manifestColumnNameBySourceByModel.has(modelName)) {
-      this.manifestColumnNameBySourceByModel.set(modelName, new Map());
-    }
-    return this.manifestColumnNameBySourceByModel.get(modelName)!;
-  }
-
   private postProcessManifest() {
     if (this.useRustWrenEngine()) {
       // 1. remove all the key that the value is null
