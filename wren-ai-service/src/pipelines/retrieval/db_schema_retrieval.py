@@ -79,9 +79,11 @@ Please provide your response as a JSON object, structured as follows:
 - Provide a reasoning list (`chain_of_thought_reasoning`) for each table, explaining why each column is necessary.
 - Provide the reason of selecting the table in (`table_selection_reason`) for each table.
 - Be logical, concise, and ensure the output strictly follows the required JSON format.
-- Use table name used in the "Create Table" statement, don't use "alias".
-- Match Column names with the definition in the "Create Table" statement.
-- Match Table names with the definition in the "Create Table" statement.
+- Schema comments are metadata for understanding the data. They are not SQL syntax.
+- In schema comments, `identifier` is the executable table or column name, and `display_label`/`description` are context only.
+- Use table names from the "Create Table" statements, not display labels, aliases, or descriptions.
+- Match column names exactly with the definitions in the "Create Table" statements.
+- Match table names exactly with the definitions in the "Create Table" statements.
 
 Good luck!
 

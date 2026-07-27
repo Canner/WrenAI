@@ -4,11 +4,21 @@ from typing import Any, List, Optional, Tuple
 from haystack import Document, component
 
 
+def normalize_data_type(data_type: Any) -> str:
+    if data_type is None:
+        return ""
+    return str(data_type).strip()
+
+
 def get_engine_supported_data_type(data_type: str) -> str:
     """
     This function makes sure downstream ai pipeline get column data types in a format that is supported by the data engine.
     """
-    match data_type.upper():
+    normalized_data_type = normalize_data_type(data_type)
+    if not normalized_data_type:
+        return "UNKNOWN"
+
+    match normalized_data_type.upper():
         case "BPCHAR" | "NAME" | "UUID" | "INET":
             return "VARCHAR"
         case "OID":
@@ -24,7 +34,7 @@ def get_engine_supported_data_type(data_type: str) -> str:
         case "INT64":
             return "BIGINT"
         case _:
-            return data_type.upper()
+            return normalized_data_type.upper()
 
 
 def build_table_ddl(
@@ -36,16 +46,17 @@ def build_table_ddl(
 
     for column in content["columns"]:
         if column["type"] == "COLUMN":
+            column_data_type = normalize_data_type(column.get("data_type"))
             if (
                 (not columns or (columns and column["name"] in columns))
-                and column["data_type"].lower()
+                and column_data_type.lower()
                 != "unknown"  # quick fix: filtering out UNKNOWN column type
             ):
                 if "This column is a Calculated Field" in column["comment"]:
                     has_calculated_field = True
-                if column["data_type"].lower() == "json":
+                if column_data_type.lower() == "json":
                     has_json_field = True
-                column_ddl = f"{column['comment']}{column['name']} {get_engine_supported_data_type(column['data_type'])}"
+                column_ddl = f"{column['comment']}{column['name']} {get_engine_supported_data_type(column_data_type)}"
                 if column["is_primary_key"]:
                     column_ddl += " PRIMARY KEY"
                 columns_ddl.append(column_ddl)
