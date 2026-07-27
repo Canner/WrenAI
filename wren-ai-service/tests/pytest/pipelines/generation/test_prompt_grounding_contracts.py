@@ -36,3 +36,21 @@ def test_sql_reasoning_contract_rejects_substitute_identifiers():
     assert "instead of naming a substitute table or column" in source
     assert "prompt examples" in source
     assert "Identifiers shown in prompt examples are illustrative only" in source
+    assert "Use `display_label` and `description` only to understand" in source
+    assert "generated SQL must use that exact identifier" in source
+
+
+def test_sql_correction_receives_raw_wren_engine_validation_error():
+    source = _read_source("src/web/v1/services/ask.py")
+
+    assert "_build_sql_correction_error" in source
+    assert "Original Wren Engine validation error" in source
+    assert "error_message" in source
+
+
+def test_sql_correction_unknown_identifier_contract():
+    source = _read_source("src/pipelines/generation/sql_correction.py")
+
+    assert "If the error reports an unknown table or field" in source
+    assert "replace it only with an exact executable identifier" in source
+    assert "Do not retry the same unknown identifier" in source

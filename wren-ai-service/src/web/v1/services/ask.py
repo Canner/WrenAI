@@ -130,6 +130,21 @@ class AskService:
 
         return False
 
+    @staticmethod
+    def _build_sql_correction_error(
+        diagnosis_reasoning: Optional[str], engine_error: Optional[str]
+    ) -> str:
+        diagnosis_reasoning = (diagnosis_reasoning or "").strip()
+        engine_error = (engine_error or "").strip()
+
+        if diagnosis_reasoning and engine_error:
+            return (
+                f"{diagnosis_reasoning}\n\n"
+                f"Original Wren Engine validation error:\n{engine_error}"
+            )
+
+        return diagnosis_reasoning or engine_error
+
     @observe(name="Ask Question")
     @trace_metadata
     async def ask(
@@ -543,6 +558,8 @@ class AskService:
                             sql_diagnosis_reasoning = sql_diagnosis_results[
                                 "post_process"
                             ].get("reasoning")
+                        else:
+                            sql_diagnosis_reasoning = ""
 
                         sql_correction_results = await self._pipelines[
                             "sql_correction"
@@ -551,9 +568,10 @@ class AskService:
                             instructions=instructions,
                             invalid_generation_result={
                                 "sql": original_sql,
-                                "error": sql_diagnosis_reasoning
-                                if allow_sql_diagnosis
-                                else error_message,
+                                "error": self._build_sql_correction_error(
+                                    sql_diagnosis_reasoning,
+                                    error_message,
+                                ),
                             },
                             project_id=ask_request.project_id,
                             use_dry_plan=use_dry_plan,

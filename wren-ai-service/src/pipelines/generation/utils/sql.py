@@ -205,6 +205,8 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - Identifiers shown in prompt examples are illustrative only and are not available for generated SQL unless they also appear in the DATABASE SCHEMA.
 - In schema comments, `identifier` is the executable table or column name, and `display_label`/`description` are context only.
 - Never use a `display_label`, alias, or description as an executable table or column identifier.
+- Use `display_label` and `description` only to understand which executable `identifier` matches the user's business term.
+- When a schema comment contains an `identifier`, generated SQL must use that exact identifier for the table or column.
 - Use only table and column names from the CREATE TABLE statements as identifiers in SELECT, FROM, JOIN, WHERE, GROUP BY, HAVING, ORDER BY, and expressions.
 - You may use `display_label` or alias values from schema comments only after AS in the final SELECT clause.
 - If the DATABASE SCHEMA does not contain the table or column needed for the user's request, do not substitute a similar, generic, or commonly known identifier.
