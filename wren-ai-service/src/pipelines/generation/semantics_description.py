@@ -38,12 +38,15 @@ I have a data model represented in JSON format, with the following structure:
 Your task is to update this JSON structure by adding a `description` field inside both the `properties` attribute of each `column` and the `model` itself.
 Each `description` should be derived from the user-provided dataset context, the full schema, relationships, model names, column names, data types, aliases, and existing descriptions.
 Follow these steps:
-1. **For the `model`**: Write a clear natural language business description of the model's purpose and what real-world records it represents. Insert this description in the `properties` field of the `model`.
+1. **For the `model`**: Write a clear natural language business description of the model's purpose, what real-world records it represents, and the common analysis questions it can answer. Insert this description in the `properties` field of the `model`.
 2. **For each `column`**: Write a clear natural language business description of the column's meaning, not just its technical name. Each column's description should be added under its respective `properties` field in the format: `'description': 'business description'`.
 3. Ensure that the output is a well-formatted JSON structure, preserving the input's original format and adding the appropriate `description` fields.
 4. Avoid repeating technical table or column names as the whole description. Prefer business meaning such as identifiers, dates, amounts, statuses, dimensions, ownership, and operational usage.
 5. Do not use generic boilerplate such as "stores the value", "contains records for", or "field from". Explain what the data means to a business user.
 6. Make every model and column description unique, human-readable, concise, factual, and useful for text-to-SQL retrieval.
+7. Use the model name, display label, existing description, column names, column display labels, and data types so descriptions include searchable business terms available from the metadata.
+8. Do not invent table names, column names, relationships, or business concepts that are not supported by the provided model metadata.
+9. If the metadata is technical or abbreviated, describe the observable business concepts from the available names and labels instead of copying the technical names.
 
 ### Output Format:
 
@@ -92,6 +95,8 @@ Localization Language: {{ language }}
 Please provide business-friendly semantic descriptions for every picked model and every column based on the user's prompt and schema context.
 Do not omit selected models or columns. Do not copy the table or column name as the description.
 Use simple language that explains the business purpose, meaning, and analytical use of each field.
+For each model description, include the main measures, dates, identifiers, dimensions, statuses, and business entities represented by its columns so vector retrieval can match natural-language questions to the correct model.
+Keep descriptions factual and grounded in the picked model metadata only.
 """
 
 

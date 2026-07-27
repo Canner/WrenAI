@@ -198,20 +198,12 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
     - answer: "SELECT SUM(r.PriceSum) FROM Revenue r WHERE CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) >= CAST('2024-11-01 00:00:00' AS TIMESTAMP WITH TIME ZONE) AND CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) < CAST('2024-11-02 00:00:00' AS TIMESTAMP WITH TIME ZONE)"
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
-- Table/column aliases in schema comments are display labels only. Never use an alias as an executable table or column identifier.
+- Schema comments are metadata for understanding the data. They are not SQL syntax.
+- In schema comments, `identifier` is the executable table or column name, and `display_label`/`description` are context only.
+- Never use a `display_label`, alias, or description as an executable table or column identifier.
 - Use only table and column names from the CREATE TABLE statements as identifiers in SELECT, FROM, JOIN, WHERE, GROUP BY, HAVING, ORDER BY, and expressions.
-- You may use aliases from schema comments only after AS in the final SELECT clause.
-- Refer to the value of alias from the comment section of the corresponding table or column in the DATABASE SCHEMA section only for final SELECT output labels.
-  - EXAMPLE
-    DATABASE SCHEMA
-    /* {"alias":"_orders","description":"A model representing the orders data."} */
-    CREATE TABLE orders (
-      -- {"description":"A column that represents the timestamp when the order was approved.","alias":"_timestamp"}
-      ApprovedTimestamp TIMESTAMP
-    }
-
-    SQL
-    SELECT "_orders"."ApprovedTimestamp" AS "_timestamp" FROM "orders" AS "_orders";
+- You may use `display_label` or alias values from schema comments only after AS in the final SELECT clause.
+- Only apply numeric aggregate functions such as SUM or AVG to numeric columns or measures from the DATABASE SCHEMA. If a column is not numeric in the schema, do not aggregate it directly unless the provided SQL FUNCTIONS and database dialect support the explicit cast you use.
 - DON'T USE '.' in column/table alias, replace '.' with '_' in column/table alias.
 - DON'T USE "FILTER(WHERE <expression>)" clause in the generated SQL query.
 - DON'T USE "EXTRACT(EPOCH FROM <expression>)" clause in the generated SQL query.
@@ -371,29 +363,11 @@ _DEFAULT_JSON_FIELD_INSTRUCTIONS = """
       - LAX_FLOAT64 for double and float fields
       - LAX_INT64 for bigint fields
       - LAX_STRING for varchar fields
-    - For Example:
-      DATA SCHEMA:
-        `/* {"alias":"users","description":"A model representing the users data."} */
-        CREATE TABLE users (
-            -- {"alias":"address","description":"A JSON object that represents address information of this user.","json_type":"JSON","json_fields":{"json_type":"JSON","address.json.city":{"name":"city","type":"varchar","path":"$.city","properties":{"alias":"city","description":"City Name."}},"address.json.state":{"name":"state","type":"varchar","path":"$.state","properties":{"alias":"state","description":"ISO code or name of the state, province or district."}},"address.json.postcode":{"name":"postcode","type":"varchar","path":"$.postcode","properties":{"alias":"postcode","description":"Postal code."}},"address.json.country":{"name":"country","type":"varchar","path":"$.country","properties":{"alias":"country","description":"ISO code of the country."}}}}
-            address JSON
-        )`
-      To get the city of address in user table use SQL:
-      `SELECT LAX_STRING(JSON_QUERY(u.address, '$.city')) FROM user as u`
 - ONLY USE JSON_QUERY_ARRAY for querying "json_type":"JSON_ARRAY" is identified in the comment of the column, NOT the deprecated JSON_EXTRACT_ARRAY.
     - USE UNNEST to analysis each item individually in the ARRAY. YOU MUST SELECT FROM the parent table ahead of the UNNEST ARRAY.
     - The alias of the UNNEST(ARRAY) should be in the format `unnest_table_alias(individual_item_alias)`
       - For Example: `SELECT item FROM UNNEST(ARRAY[1,2,3]) as my_unnested_table(item)`
     - If the items in the ARRAY are JSON objects, use JSON_QUERY to query the fields inside each JSON item.
-      - For Example:
-      DATA SCHEMA
-        `/* {"alias":"my_table","description":"A test my_table"} */
-        CREATE TABLE my_table (
-            -- {"alias":"elements","description":"elements column","json_type":"JSON_ARRAY","json_fields":{"json_type":"JSON_ARRAY","elements.json_array.id":{"name":"id","type":"bigint","path":"$.id","properties":{"alias":"id","description":"data ID."}},"elements.json_array.key":{"name":"key","type":"varchar","path":"$.key","properties":{"alias":"key","description":"data Key."}},"elements.json_array.value":{"name":"value","type":"varchar","path":"$.value","properties":{"alias":"value","description":"data Value."}}}}
-            elements JSON
-        )`
-        To get the number of elements in my_table table use SQL:
-        `SELECT LAX_INT64(JSON_QUERY(element, '$.number')) FROM my_table as t, UNNEST(JSON_QUERY_ARRAY(elements)) AS my_unnested_table(element) WHERE LAX_FLOAT64(JSON_QUERY(element, '$.value')) > 3.5`
     - To JOIN ON the fields inside UNNEST(ARRAY), YOU MUST SELECT FROM the parent table ahead of the UNNEST syntax, and the alias of the UNNEST(ARRAY) SHOULD BE IN THE FORMAT unnest_table_alias(individual_item_alias)
       - For Example: `SELECT p.column_1, j.column_2 FROM parent_table AS p, join_table AS j JOIN UNNEST(p.array_column) AS unnested(array_item) ON j.id = array_item.id`
 - DON'T USE JSON_QUERY and JSON_QUERY_ARRAY when "json_type":"".
@@ -446,7 +420,10 @@ otherwise, you will put the relative timeframe in the SQL query.
 11. Do not include ```markdown or ``` in the answer.
 12. A table name in the reasoning plan must be in this format: `table: <table_name>`.
 13. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
-14. ONLY SHOWING the reasoning plan in bullet points.
+14. Use only table and column names that appear as identifiers in the DATABASE SCHEMA when writing `table:` and `column:` references.
+15. Schema comments, display labels, aliases, and descriptions are context only. Do not use them as executable table or column names in the reasoning plan.
+16. Do not create table or column names from words in the user's question. If a requested concept is available only through schema metadata, refer to the corresponding schema identifier.
+17. ONLY SHOWING the reasoning plan in bullet points.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format

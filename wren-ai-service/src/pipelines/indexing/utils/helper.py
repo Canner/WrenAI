@@ -36,7 +36,10 @@ def _properties_comment(column: Dict[str, Any], **_) -> str:
     display_name = props.get("displayName", "")
     description = props.get("description", "")
     column_properties = {
-        "alias": clean_display_name("" if display_name is None else str(display_name)),
+        "identifier": column.get("name", ""),
+        "display_label": clean_display_name(
+            "" if display_name is None else str(display_name)
+        ),
         "description": "" if description is None else str(description),
     }
 
