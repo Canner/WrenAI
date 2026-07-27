@@ -73,8 +73,8 @@ def test_generation_paths_pass_retrieved_schema_to_post_processor():
         "src/pipelines/generation/sql_correction.py",
     ]:
         source = _read_source(relative_path)
-        assert "documents: list[str] | None = None" in source
-        assert "schema_contexts=documents" in source
+        assert "schema_contexts: list[Any] | None = None" in source
+        assert '"schema_contexts": contexts' in source
 
 
 def test_table_description_retrieval_indexes_business_metadata():

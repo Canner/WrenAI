@@ -129,11 +129,14 @@ def _normalize_identifier(identifier: str) -> str:
 
 
 def _schema_catalog_from_contexts(
-    schema_contexts: list[str] | None,
+    schema_contexts: list[Any] | None,
 ) -> dict[str, set[str]]:
     catalog: dict[str, set[str]] = {}
 
     for context in schema_contexts or []:
+        context = getattr(context, "content", context)
+        context = "" if context is None else str(context)
+
         for match in _CREATE_TABLE_RE.finditer(context):
             table_name = ".".join(_identifier_parts(match.group("table")))
             columns: set[str] = set()
@@ -263,7 +266,7 @@ def _format_schema_validation_error(
 
 
 def _validate_sql_against_schema_contexts(
-    sql: str, schema_contexts: list[str] | None
+    sql: str, schema_contexts: list[Any] | None
 ) -> str | None:
     catalog = _schema_catalog_from_contexts(schema_contexts)
     if not catalog:
@@ -332,7 +335,7 @@ class SQLGenPostProcessor:
         allow_dry_plan_fallback: bool = True,
         data_source: str = "",
         allow_data_preview: bool = False,
-        schema_contexts: list[str] | None = None,
+        schema_contexts: list[Any] | None = None,
     ) -> dict:
         try:
             cleaned_generation_result = clean_generation_result(replies[0])
