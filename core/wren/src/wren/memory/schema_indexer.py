@@ -36,6 +36,27 @@ def manifest_hash(manifest: dict) -> str:
 SCHEMA_DESCRIBE_THRESHOLD = 30_000
 
 
+def _iter_section(manifest: dict, key: str) -> list:
+    """Return ``manifest[key]`` as a list, raising if it is the wrong type.
+
+    A missing or null section is treated as empty (``[]``). A section whose
+    value is present but *not* a list (e.g. a hand-edited manifest that typos
+    ``"models"`` into an object) is a structural error in the manifest, not
+    per-element junk: silently dropping it would wipe the corresponding index
+    and report success. Raising ``ValueError`` surfaces the malformed manifest
+    while keeping this module dependency-free; the CLI already catches such
+    errors and exits non-zero.
+    """
+    section = manifest.get(key)
+    if section is None:
+        return []
+    if not isinstance(section, list):
+        raise ValueError(
+            f"manifest[{key!r}] must be a list, got {type(section).__name__}"
+        )
+    return section
+
+
 def describe_schema(manifest: dict) -> str:
     """Generate a structured plain-text description of the full MDL schema.
 
@@ -50,20 +71,21 @@ def describe_schema(manifest: dict) -> str:
         lines.append(f"Catalog: {catalog}, Schema: {schema}")
         lines.append("")
 
-    for model in manifest.get("models", []):
-        _describe_model(model, lines)
+    for model in _iter_section(manifest, "models"):
+        if isinstance(model, dict) and model.get("name"):
+            _describe_model(model, lines)
 
-    for rel in manifest.get("relationships", []):
-        _describe_relationship(rel, lines)
+    for rel in _iter_section(manifest, "relationships"):
+        if isinstance(rel, dict) and rel.get("name"):
+            _describe_relationship(rel, lines)
 
-    for view in manifest.get("views", []):
-        _describe_view(view, lines)
+    for view in _iter_section(manifest, "views"):
+        if isinstance(view, dict) and view.get("name"):
+            _describe_view(view, lines)
 
-    cubes = manifest.get("cubes", []) or []
-    if isinstance(cubes, list):
-        for cube in cubes:
-            if isinstance(cube, dict):
-                _describe_cube(cube, lines)
+    for cube in _iter_section(manifest, "cubes"):
+        if isinstance(cube, dict):
+            _describe_cube(cube, lines)
 
     return "\n".join(lines)
 
@@ -87,10 +109,11 @@ def _describe_model(model: dict, lines: list[str]) -> None:
     if data_scope:
         lines.append(f"  Data scope: {data_scope}")
 
-    cols = model.get("columns", [])
-    if cols:
+    cols = model.get("columns", []) or []
+    described = [c for c in cols if isinstance(c, dict) and c.get("name")]
+    if described:
         lines.append("  Columns:")
-        for col in cols:
+        for col in described:
             _describe_column(col, lines)
     lines.append("")
 
@@ -228,33 +251,37 @@ def extract_schema_items(manifest: dict) -> list[dict]:
     mdl_h = manifest_hash(manifest)
     items: list[dict] = []
 
-    for model in manifest.get("models", []):
+    for model in _iter_section(manifest, "models"):
+        if not isinstance(model, dict) or not model.get("name"):
+            continue
         items.append(_model_record(model, mdl_h, now))
-        for col in model.get("columns", []):
+        for col in model.get("columns") or []:
+            if not isinstance(col, dict) or not col.get("name"):
+                continue
             items.append(_column_record(col, model["name"], mdl_h, now))
 
-    for rel in manifest.get("relationships", []):
-        items.append(_relationship_record(rel, mdl_h, now))
+    for rel in _iter_section(manifest, "relationships"):
+        if isinstance(rel, dict) and rel.get("name"):
+            items.append(_relationship_record(rel, mdl_h, now))
 
-    for view in manifest.get("views", []):
-        items.append(_view_record(view, mdl_h, now))
+    for view in _iter_section(manifest, "views"):
+        if isinstance(view, dict) and view.get("name"):
+            items.append(_view_record(view, mdl_h, now))
 
-    cubes = manifest.get("cubes", []) or []
-    if isinstance(cubes, list):
-        for cube in cubes:
-            if not isinstance(cube, dict):
-                continue
-            items.append(_cube_record(cube, mdl_h, now))
-            cube_name = cube.get("name", "")
-            for measure in cube.get("measures", []) or []:
-                if isinstance(measure, dict):
-                    items.append(_measure_record(measure, cube_name, mdl_h, now))
-            for dim in cube.get("dimensions", []) or []:
-                if isinstance(dim, dict):
-                    items.append(_cube_dimension_record(dim, cube_name, mdl_h, now))
-            for tdim in cube.get("timeDimensions", []) or []:
-                if isinstance(tdim, dict):
-                    items.append(_time_dimension_record(tdim, cube_name, mdl_h, now))
+    for cube in _iter_section(manifest, "cubes"):
+        if not isinstance(cube, dict):
+            continue
+        items.append(_cube_record(cube, mdl_h, now))
+        cube_name = cube.get("name", "")
+        for measure in cube.get("measures", []) or []:
+            if isinstance(measure, dict):
+                items.append(_measure_record(measure, cube_name, mdl_h, now))
+        for dim in cube.get("dimensions", []) or []:
+            if isinstance(dim, dict):
+                items.append(_cube_dimension_record(dim, cube_name, mdl_h, now))
+        for tdim in cube.get("timeDimensions", []) or []:
+            if isinstance(tdim, dict):
+                items.append(_time_dimension_record(tdim, cube_name, mdl_h, now))
 
     return items
 
@@ -264,7 +291,9 @@ def extract_schema_items(manifest: dict) -> list[dict]:
 
 def _model_record(model: dict, mdl_h: str, now: datetime) -> dict:
     name = model["name"]
-    cols = model.get("columns", [])
+    cols = [
+        c for c in (model.get("columns") or []) if isinstance(c, dict) and c.get("name")
+    ]
     col_summaries = ", ".join(f"{c['name']} ({c.get('type', '?')})" for c in cols[:20])
     pk = model.get("primaryKey") or ""
 
