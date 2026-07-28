@@ -33,11 +33,23 @@ def build_table_ddl(
     columns_ddl = []
     has_calculated_field = False
     has_json_field = False
+    relationship_columns = {
+        column.get("column")
+        for column in content["columns"]
+        if column["type"] == "FOREIGN_KEY"
+        and (not tables or set(column.get("tables", [])).issubset(tables))
+    }
+    relationship_columns.discard(None)
 
     for column in content["columns"]:
         if column["type"] == "COLUMN":
             if (
-                (not columns or (columns and column["name"] in columns))
+                (
+                    not columns
+                    or column["name"] in columns
+                    or column["name"] in relationship_columns
+                    or column["is_primary_key"]
+                )
                 and column["data_type"].lower()
                 != "unknown"  # quick fix: filtering out UNKNOWN column type
             ):
@@ -50,7 +62,7 @@ def build_table_ddl(
                     column_ddl += " PRIMARY KEY"
                 columns_ddl.append(column_ddl)
         elif column["type"] == "FOREIGN_KEY":
-            if not tables or (tables and set(column["tables"]).issubset(tables)):
+            if not tables or (tables and set(column.get("tables", [])).issubset(tables)):
                 columns_ddl.append(f"{column['comment']}{column['constraint']}")
 
     return (

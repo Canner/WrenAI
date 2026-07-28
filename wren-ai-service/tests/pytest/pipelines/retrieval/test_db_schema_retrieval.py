@@ -1,6 +1,7 @@
 import pytest
 from haystack import Document
 
+from src.pipelines.common import build_table_ddl
 from src.pipelines.retrieval.db_schema_retrieval import (
     check_using_db_schemas_without_pruning,
     dbschema_retrieval,
@@ -229,3 +230,52 @@ def test_check_using_db_schemas_without_pruning_keeps_explicit_table_fast_path()
     )
 
     assert [schema["table_name"] for schema in result["db_schemas"]] == ["activity"]
+
+
+def test_build_table_ddl_preserves_join_columns_when_pruned():
+    ddl, _, _ = build_table_ddl(
+        {
+            "type": "TABLE",
+            "name": "detail",
+            "comment": "",
+            "columns": [
+                {
+                    "type": "COLUMN",
+                    "name": "detail_id",
+                    "data_type": "INTEGER",
+                    "comment": "",
+                    "is_primary_key": True,
+                },
+                {
+                    "type": "COLUMN",
+                    "name": "parent_id",
+                    "data_type": "INTEGER",
+                    "comment": "",
+                    "is_primary_key": False,
+                },
+                {
+                    "type": "COLUMN",
+                    "name": "amount",
+                    "data_type": "DOUBLE",
+                    "comment": "",
+                    "is_primary_key": False,
+                },
+                {
+                    "type": "FOREIGN_KEY",
+                    "comment": "",
+                    "constraint": "FOREIGN KEY (parent_id) REFERENCES parent(parent_id)",
+                    "tables": ["parent", "detail"],
+                    "column": "parent_id",
+                    "referenced_table": "parent",
+                    "referenced_column": "parent_id",
+                },
+            ],
+        },
+        columns={"amount"},
+        tables={"parent", "detail"},
+    )
+
+    assert "detail_id INTEGER PRIMARY KEY" in ddl
+    assert "parent_id INTEGER" in ddl
+    assert "amount DOUBLE" in ddl
+    assert "FOREIGN KEY (parent_id) REFERENCES parent(parent_id)" in ddl

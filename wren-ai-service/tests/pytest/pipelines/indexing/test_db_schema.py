@@ -384,7 +384,7 @@ async def test_column_with_relationship():
     }
 
     actual = await chunker.run(mdl, column_batch_size=1)
-    assert len(actual["documents"]) == 6
+    assert len(actual["documents"]) == 5
 
     document_0: Document = actual["documents"][0]
     assert document_0.meta == {"type": "TABLE_SCHEMA", "name": "user"}
@@ -403,33 +403,20 @@ async def test_column_with_relationship():
         }
     )
 
-    document_1: Document = actual["documents"][1]
-    assert document_1.meta == {"type": "TABLE_SCHEMA", "name": "user"}
-    assert document_1.content == str(
+    document_3: Document = actual["documents"][3]
+    assert document_3.meta == {"type": "TABLE_SCHEMA", "name": "order"}
+    assert document_3.content == str(
         {
             "type": "TABLE_COLUMNS",
             "columns": [
                 {
                     "type": "FOREIGN_KEY",
-                    "comment": '-- {"condition": user.id = order.user_id, "joinType": ONE_TO_MANY}\n  ',
-                    "constraint": "FOREIGN KEY (id) REFERENCES order(user_id)",
-                    "tables": ["user", "order"],
-                }
-            ],
-        }
-    )
-
-    document_4: Document = actual["documents"][4]
-    assert document_4.meta == {"type": "TABLE_SCHEMA", "name": "order"}
-    assert document_4.content == str(
-        {
-            "type": "TABLE_COLUMNS",
-            "columns": [
-                {
-                    "type": "FOREIGN_KEY",
-                    "comment": '-- {"condition": user.id = order.user_id, "joinType": ONE_TO_MANY}\n  ',
+                    "comment": "-- {'name': 'relationship_1', 'condition': 'user.id = order.user_id', 'joinType': 'ONE_TO_MANY', 'description': '', 'from': 'order.user_id', 'to': 'user.id'}\n  ",
                     "constraint": "FOREIGN KEY (user_id) REFERENCES user(id)",
                     "tables": ["user", "order"],
+                    "column": "user_id",
+                    "referenced_table": "user",
+                    "referenced_column": "id",
                 }
             ],
         }

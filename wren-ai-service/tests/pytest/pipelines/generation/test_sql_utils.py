@@ -67,7 +67,9 @@ def test_sql_generation_system_prompt_grounding_contract():
     assert "Never generate SQL from assumptions" in prompt
     assert "ignore those parts" in prompt
     assert "answer the user's intent" in prompt
-    assert 'SELECT "_orders"."ApprovedTimestamp" AS "_timestamp"' in prompt
+    assert "Wren SQL query" in prompt
+    assert "use a normal equality or LIKE comparison" in prompt
+    assert "unless the user explicitly asks for rank values" in prompt
 
 
 def test_sql_regeneration_system_prompt_uses_question_as_intent_source():

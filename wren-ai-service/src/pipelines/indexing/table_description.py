@@ -122,12 +122,15 @@ class TableDescriptionChunker:
                 if len(models) != 2:
                     continue
 
+                properties = self._properties(relationship)
                 summary = " ".join(
                     part
                     for part in [
                         _text(relationship.get("name", "")),
                         _text(relationship.get("joinType", "")),
                         _text(relationship.get("condition", "")),
+                        _text(properties.get("description", "")),
+                        f"models {' <-> '.join(_text(model) for model in models)}",
                     ]
                     if part
                 )
