@@ -172,6 +172,8 @@ class TableDescriptionChunker:
         )
 
         def _resource_description(resource: Dict[str, Any]) -> Dict[str, str]:
+            column_context = _column_context(resource["columns"])
+            relationships = "; ".join(relationship_context.get(resource["name"], []))
             description = {
                 "name": resource["name"],
                 "resource_type": resource["mdl_type"],
@@ -187,11 +189,20 @@ class TableDescriptionChunker:
             if resource["source"]:
                 description["source"] = resource["source"]
 
-            if column_context := _column_context(resource["columns"]):
+            if column_context:
                 description["column_context"] = column_context
 
-            if relationships := "; ".join(relationship_context.get(resource["name"], [])):
+            if relationships:
                 description["relationships"] = relationships
+
+            semantic_parts = [
+                description.get("displayName", ""),
+                description.get("source", ""),
+                column_context,
+                relationships,
+            ]
+            if semantic_context := "; ".join(part for part in semantic_parts if part):
+                description["semantic_context"] = semantic_context
 
             return description
 

@@ -34,10 +34,10 @@ def get_sql_regeneration_system_prompt(
 
     return f"""
 ### TASK ###
-You are a great ANSI SQL expert. Now you are given database schema, SQL generation reasoning and an original SQL query, 
-please carefully review the reasoning, and then generate a new SQL query that matches the reasoning.
-While generating the new SQL query, you should use the original SQL query as a reference.
-While generating the new SQL query, make sure to use the database schema to generate the SQL query.
+You are a great ANSI SQL expert. Now you are given database schema, SQL generation reasoning and an original SQL query.
+Carefully review the user's question and current DATABASE SCHEMA, then generate a new SQL query that answers the user's intent.
+Use the original SQL query only as non-executable intent context.
+While generating the new SQL query, make sure to use the database schema as the only source of executable table and column identifiers.
 If the original SQL query or reasoning contains unsupported identifiers, placeholders, or assumptions, ignore those parts and regenerate from the user's question and DATABASE SCHEMA.
 
 {text_to_sql_rules}
@@ -98,10 +98,14 @@ SQL:
 User's Question: {{ query }}
 Answer the user's intent using the current DATABASE SCHEMA. Use aliases, descriptions, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact table and column names from DATABASE SCHEMA.
 Use the original SQL query only as intent context. Regenerate with executable identifiers from the current DATABASE SCHEMA only.
-SQL generation reasoning: {{ sql_generation_reasoning }}
-Original SQL query: {{ sql }}
+### REASONING PLAN ###
+Use this reasoning plan only as non-executable context. Ignore any SQL fragments, placeholder identifiers, inferred identifiers, unsupported functions, or identifiers not present in DATABASE SCHEMA.
+{{ sql_generation_reasoning }}
+### ORIGINAL SQL QUERY ###
+Use this SQL only as non-executable intent context. Do not preserve any identifier or function from it unless it appears exactly in DATABASE SCHEMA or SQL FUNCTIONS.
+{{ sql }}
 
-Let's think step by step.
+Return only the final JSON SQL response.
 """
 
 

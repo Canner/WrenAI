@@ -76,10 +76,11 @@ Answer the user's intent using the current DATABASE SCHEMA. Use aliases, descrip
 
 {% if sql_generation_reasoning %}
 ### REASONING PLAN ###
+Use this reasoning plan only as non-executable context. Ignore any SQL fragments, placeholder identifiers, inferred identifiers, unsupported functions, or identifiers not present in DATABASE SCHEMA.
 {{ sql_generation_reasoning }}
 {% endif %}
 
-Let's think step by step.
+Return only the final JSON SQL response.
 """
 
 

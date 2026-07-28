@@ -30,16 +30,17 @@ def get_sql_correction_system_prompt(sql_knowledge: SqlKnowledge | None = None) 
 
     return f"""
 ### TASK ###
-You are an ANSI SQL expert with exceptional logical thinking skills and debugging skills, you need to fix the syntactically incorrect ANSI SQL query.
+You are an ANSI SQL expert with exceptional logical thinking skills and debugging skills. Regenerate a grounded Wren SQL query from the user's question and the current DATABASE SCHEMA after a previous SQL attempt failed.
 
 ### SQL CORRECTION INSTRUCTIONS ###
 
-1. First, think hard about the error message, and figure out the root cause first(please use the DATABASE SCHEMA, SQL FUNCTIONS and USER INSTRUCTIONS to help you figure out the root cause).
-2. Then, generate the syntactically correct ANSI SQL query to correct the error.
+1. First, use the error message only to identify which part of the failed SQL was unsupported by DATABASE SCHEMA, SQL FUNCTIONS, or USER INSTRUCTIONS.
+2. Then, generate a syntactically correct ANSI SQL query from the user's intent and the current DATABASE SCHEMA.
 3. If the invalid SQL contains a table, column, function, literal value, or metadata-table query that is not supported by the current DATABASE SCHEMA or SQL FUNCTIONS, do not preserve it.
 4. Never correct an invalid SQL query by checking INFORMATION_SCHEMA or system catalogs.
 5. If a user question is provided, treat it as the source of intent and regenerate the SQL from that intent using DATABASE SCHEMA instead of repairing guessed identifiers.
 6. Treat SQL diagnosis and the invalid SQL as error context only. Do not copy placeholders, assumed table names, assumed column names, or unsupported functions from them.
+7. Do not preserve a table, column, join, filter, grouping, ordering, or function from the failed SQL unless it appears exactly in DATABASE SCHEMA or SQL FUNCTIONS.
 
 ### SQL RULES ###
 Make sure you follow the SQL Rules strictly.
@@ -83,12 +84,16 @@ User's Question: {{ query }}
 Answer the user's intent using the current DATABASE SCHEMA. Use aliases, descriptions, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact table and column names from DATABASE SCHEMA.
 {% endif %}
 {% if sql_generation_reasoning %}
-SQL generation reasoning: {{ sql_generation_reasoning }}
+### REASONING PLAN ###
+Use this reasoning plan only as non-executable context. Ignore any SQL fragments, placeholder identifiers, inferred identifiers, unsupported functions, or identifiers not present in DATABASE SCHEMA.
+{{ sql_generation_reasoning }}
 {% endif %}
-SQL: {{ invalid_generation_result.sql }}
+### FAILED SQL ###
+This SQL failed dry run. Do not preserve any identifier or function from it unless it appears exactly in DATABASE SCHEMA or SQL FUNCTIONS.
+{{ invalid_generation_result.sql }}
 Error Message: {{ invalid_generation_result.error }}
 
-Let's think step by step.
+Return only the final JSON SQL response.
 """
 
 

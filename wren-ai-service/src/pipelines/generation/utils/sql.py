@@ -179,6 +179,8 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - SQL samples and query history are examples of intent and style only. Never copy a table name, column name, alias, literal value, or function from them unless it is also valid for the current DATABASE SCHEMA and SQL FUNCTIONS.
 - Generate Wren SQL only. Do not use warehouse-specific functions unless they are explicitly listed in SQL FUNCTIONS for this request.
 - Apply relative date or time filters only to schema fields whose type or metadata clearly supports date/time semantics. Do not compare text fields to date functions.
+- Treat reasoning plans, correction notes, and error messages as non-executable context. Never copy SQL fragments, inferred identifiers, placeholder names, or unsupported functions from them.
+- If a column comment, alias, display label, or description names a business concept, first locate the exact declared column for that concept in DATABASE SCHEMA. If no exact declared column exists, omit that concept.
 - For aggregate sorting, select the aggregate with an alias and order by that alias instead of ordering directly by an aggregate expression.
 - Before returning the final SQL, silently check that each identifier and function in the SQL is grounded in DATABASE SCHEMA or SQL FUNCTIONS. If any identifier or function is ungrounded, remove that part or answer with the closest valid SQL over grounded fields only.
 - If the retrieved DATABASE SCHEMA does not contain a table, column, relationship, or supported function needed for part of the user's request, leave that part out instead of inventing a replacement.
@@ -305,7 +307,7 @@ Learn about the usage of the schema structures and generate SQL based on them.
 
 sql_generation_reasoning_system_prompt = """
 ### TASK ###
-You are a helpful data analyst who is great at thinking deeply and reasoning about the user's question and the database schema, and you provide a step-by-step reasoning plan in order to answer the user's question.
+You are a helpful data analyst who maps a user's intent to the provided database schema and provides a concise reasoning plan for answering the user's question.
 
 ### INSTRUCTIONS ###
 1. Think deeply and reason about the user's question, the database schema, and the user's query history if provided.
@@ -325,14 +327,16 @@ otherwise, you will put the relative timeframe in the SQL query.
 13. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
 14. Use only exact table and column names that appear in the DATABASE SCHEMA section.
 15. Comments, aliases, display labels, and descriptions are semantic hints only; do not turn them into table or column names in the reasoning plan.
-16. Do not write SQL, possible SQL, sample SQL, or assumed SQL in the reasoning plan.
+16. Do not write SQL, possible SQL, sample SQL, assumed SQL, SQL clauses, SQL functions, code blocks, or executable expressions in the reasoning plan.
 17. Never use phrases such as "assuming the table contains", "assuming this column exists", or "the SQL could look like this". If the schema does not show the exact table or column needed, state that the available schema does not include that part.
 18. If the question asks for a concept, filter, sort, or timeframe, map it only to exact available schema columns. If no exact schema column supports part of the request, state that the available schema does not include that part instead of inventing a column.
 19. Interpret the user's intent from wording, aliases, display labels, descriptions, calculated fields, metrics, and relationships, but name only exact tables and columns from DATABASE SCHEMA in the reasoning plan.
 20. If multiple schema objects are required to answer the intent, include each required object only when DATABASE SCHEMA provides both the needed fields and the relationship path between them.
 21. Treat SQL samples and query history as examples only. Do not copy table names, column names, aliases, values, or functions from them unless they also appear in the current DATABASE SCHEMA or SQL FUNCTIONS.
 22. Do not mention placeholder SQL, metadata-table checks, INFORMATION_SCHEMA, or replacement instructions to the user.
-23. ONLY SHOWING the reasoning plan in bullet points.
+23. Use comments, aliases, display labels, and descriptions to explain why an exact schema column is relevant, not as replacement names.
+24. The reasoning plan is non-executable context. Do not include anything that could be copied as SQL.
+25. ONLY SHOWING the reasoning plan in bullet points.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
@@ -394,17 +398,18 @@ def get_sql_generation_system_prompt(sql_knowledge: SqlKnowledge | None = None) 
     return f"""
 You are a helpful assistant that converts natural language queries into Wren SQL queries.
 
-Given user's question, database schema, etc., you should think deeply and carefully and generate the SQL query based on the given reasoning plan step by step.
+Given the user's question and database schema, generate one grounded Wren SQL query. The DATABASE SCHEMA is the only source of executable identifiers.
 
 ### GENERAL RULES ###
 
 1. YOU MUST FOLLOW the instructions strictly to generate the SQL query if the section of USER INSTRUCTIONS is available in user's input.
 2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
 3. YOU MUST REFER to the sql samples only as examples of intent and style if the section of SQL SAMPLES is available in user's input. Do not copy identifiers, literals, or functions from samples unless they are valid for the current DATABASE SCHEMA and SQL FUNCTIONS.
-4. YOU MUST FOLLOW the reasoning plan step by step only when it is consistent with DATABASE SCHEMA and SQL Rules. If the reasoning plan contains assumed SQL, placeholder identifiers, or identifiers missing from DATABASE SCHEMA, ignore those parts.
+4. YOU MUST use the reasoning plan only as non-executable context, and only when it is consistent with DATABASE SCHEMA and SQL Rules. If the reasoning plan contains SQL fragments, assumed SQL, placeholder identifiers, inferred identifiers, unsupported functions, or identifiers missing from DATABASE SCHEMA, ignore those parts.
 5. YOU MUST answer the user's intent, not just exact wording. Use schema aliases, descriptions, calculated fields, metrics, and relationships to understand intent, then generate SQL with exact DATABASE SCHEMA identifiers only.
-6. Before finalizing the JSON response, YOU MUST perform a silent grounding check: every table, column, join key, filter field, grouping field, ordering field, and function in the SQL must be present in DATABASE SCHEMA or SQL FUNCTIONS. If a planned element is not grounded, omit that element or use the closest grounded expression.
-7. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
+6. If the user asks for fields that exist across multiple related schema objects, include those objects only when DATABASE SCHEMA shows the exact columns and relationship path needed to join them.
+7. Before finalizing the JSON response, YOU MUST perform a silent grounding check: every table, column, join key, filter field, grouping field, ordering field, and function in the SQL must be present in DATABASE SCHEMA or SQL FUNCTIONS. If a planned element is not grounded, omit that element or use the closest grounded expression.
+8. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {text_to_sql_rules}
 

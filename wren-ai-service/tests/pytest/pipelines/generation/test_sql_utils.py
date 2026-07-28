@@ -4,6 +4,7 @@ from src.pipelines.generation.utils.sql import (
     get_metric_instructions,
     get_sql_generation_system_prompt,
     get_text_to_sql_rules,
+    sql_generation_reasoning_system_prompt,
 )
 from src.pipelines.generation.sql_correction import get_sql_correction_system_prompt
 from src.pipelines.generation.sql_regeneration import get_sql_regeneration_system_prompt
@@ -38,6 +39,11 @@ def test_get_text_to_sql_rules_uses_default_metadata_grounding_rules():
     assert "use all required related tables" in rules
     assert "silently check that each identifier and function" in rules
     assert "instead of inventing a replacement" in rules
+    assert (
+        "Treat reasoning plans, correction notes, and error messages as non-executable context"
+        in rules
+    )
+    assert "first locate the exact declared column" in rules
 
 
 def test_get_text_to_sql_rules_keeps_mandatory_rules_with_sql_knowledge():
@@ -74,6 +80,9 @@ def test_sql_generation_system_prompt_grounding_contract():
     assert "unless the user explicitly asks for rank values" in prompt
     assert "perform a silent grounding check" in prompt
     assert "closest grounded expression" in prompt
+    assert "DATABASE SCHEMA is the only source of executable identifiers" in prompt
+    assert "reasoning plan only as non-executable context" in prompt
+    assert "include those objects only when DATABASE SCHEMA shows" in prompt
 
 
 def test_json_field_instructions_do_not_include_placeholder_identifiers():
@@ -91,6 +100,11 @@ def test_sql_regeneration_system_prompt_uses_question_as_intent_source():
 
     assert "regenerate from the user's question" in prompt
     assert "unsupported identifiers" in prompt
+    assert "Use the original SQL query only as non-executable intent context" in prompt
+    assert (
+        "database schema as the only source of executable table and column identifiers"
+        in prompt
+    )
 
 
 def test_sql_correction_system_prompt_discards_invalid_identifier_context():
@@ -98,3 +112,16 @@ def test_sql_correction_system_prompt_discards_invalid_identifier_context():
 
     assert "treat it as the source of intent" in prompt
     assert "Do not copy placeholders" in prompt
+    assert "Regenerate a grounded Wren SQL query" in prompt
+    assert (
+        "Do not preserve a table, column, join, filter, grouping, ordering, or function"
+        in prompt
+    )
+
+
+def test_sql_reasoning_prompt_forbids_executable_sql_context():
+    prompt = sql_generation_reasoning_system_prompt
+
+    assert "Do not write SQL, possible SQL, sample SQL, assumed SQL" in prompt
+    assert "SQL clauses, SQL functions, code blocks, or executable expressions" in prompt
+    assert "The reasoning plan is non-executable context" in prompt

@@ -60,7 +60,7 @@ User's Question: {{ query }}
 Language: {{ language }}
 Current Time: {{ current_time }}
 
-Let's think step by step.
+Return only the reasoning plan described by the system instructions. Do not include SQL or SQL-like expressions.
 """
 
 

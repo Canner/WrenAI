@@ -81,10 +81,11 @@ User's Follow-up Question: {{ query }}
 Answer the user's intent using the current DATABASE SCHEMA. Use aliases, descriptions, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact table and column names from DATABASE SCHEMA.
 
 ### REASONING PLAN ###
-Use this reasoning plan only where it is consistent with the current DATABASE SCHEMA and SQL RULES.
+Use this reasoning plan only as non-executable context and only where it is consistent with the current DATABASE SCHEMA and SQL RULES.
+Ignore any SQL fragments, placeholder identifiers, inferred identifiers, unsupported functions, or identifiers not present in DATABASE SCHEMA.
 {{ sql_generation_reasoning }}
 
-Let's think step by step.
+Return only the final JSON SQL response.
 """
 
 
