@@ -76,7 +76,7 @@ Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliase
 
 {% if sql_generation_reasoning %}
 ### REASONING PLAN ###
-Use this reasoning plan only as non-executable intent context. Do not copy table names, column names, aliases, source names, physical names, lineage names, SQL fragments, date expressions, or functions from it. Choose every executable identifier only from DATABASE SCHEMA and every function only from SQL FUNCTIONS.
+Use this reasoning plan only as non-executable context. Ignore any SQL fragments, placeholder identifiers, inferred identifiers, source/physical/lineage names, unsupported functions, or identifiers not present in DATABASE SCHEMA.
 {{ sql_generation_reasoning }}
 {% endif %}
 

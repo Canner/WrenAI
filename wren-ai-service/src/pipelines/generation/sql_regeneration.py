@@ -100,7 +100,7 @@ User's Question: {{ query }}
 Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, or inferred names into executable SQL. If a needed table, column, relation, date field, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, omit that unsupported part instead of inventing or substituting a similar name.
 Use the original SQL query only as intent context. Regenerate with executable identifiers from the current DATABASE SCHEMA only.
 ### REASONING PLAN ###
-Use this reasoning plan only as non-executable intent context. Do not copy table names, column names, aliases, source names, physical names, lineage names, SQL fragments, date expressions, or functions from it. Choose every executable identifier only from DATABASE SCHEMA and every function only from SQL FUNCTIONS.
+Use this reasoning plan only as non-executable context. Ignore any SQL fragments, placeholder identifiers, inferred identifiers, source/physical/lineage names, unsupported functions, or identifiers not present in DATABASE SCHEMA.
 {{ sql_generation_reasoning }}
 ### ORIGINAL SQL QUERY ###
 Use this SQL only as non-executable intent context. Do not preserve any identifier, source/physical/lineage name, or function from it unless it appears exactly in DATABASE SCHEMA or SQL FUNCTIONS.
