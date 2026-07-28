@@ -553,9 +553,12 @@ class AskService:
                             instructions=instructions,
                             invalid_generation_result={
                                 "sql": original_sql,
-                                "error": sql_diagnosis_reasoning
-                                if allow_sql_diagnosis
-                                else error_message,
+                                "error": (
+                                    f"{sql_diagnosis_reasoning}\nDry run error: {error_message}"
+                                    if allow_sql_diagnosis
+                                    and sql_diagnosis_reasoning
+                                    else error_message
+                                ),
                             },
                             project_id=ask_request.project_id,
                             use_dry_plan=use_dry_plan,
