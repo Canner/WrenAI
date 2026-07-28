@@ -29,7 +29,7 @@ classifiers = [
 ]
 dependencies = [
   # Core: provides WrenEngine, MemoryStore, profile resolution, MDL handling.
-  "wrenai>=0.7.0",
+  "wrenai>=0.13.1",
   # langchain >=1.0 ships the recommended `langchain.agents.create_agent`
   # entrypoint. Older `langgraph.prebuilt.create_react_agent` still works
   # but emits deprecation warnings and is scheduled for removal in
@@ -50,18 +50,18 @@ dependencies = [
 #   pip install "wren-langchain[mysql,memory]"
 #
 # DuckDB is built into wrenai — no extra needed.
-postgres   = ["wrenai[postgres]>=0.7.0"]
-mysql      = ["wrenai[mysql]>=0.7.0"]
-bigquery   = ["wrenai[bigquery]>=0.7.0"]
-snowflake  = ["wrenai[snowflake]>=0.7.0"]
-clickhouse = ["wrenai[clickhouse]>=0.7.0"]
-trino      = ["wrenai[trino]>=0.7.0"]
-mssql      = ["wrenai[mssql]>=0.7.0"]
-databricks = ["wrenai[databricks]>=0.7.0"]
-redshift   = ["wrenai[redshift]>=0.7.0"]
-spark      = ["wrenai[spark]>=0.7.0"]
-athena     = ["wrenai[athena]>=0.7.0"]
-oracle     = ["wrenai[oracle]>=0.7.0"]
+postgres   = ["wrenai[postgres]>=0.13.1"]
+mysql      = ["wrenai[mysql]>=0.13.1"]
+bigquery   = ["wrenai[bigquery]>=0.13.1"]
+snowflake  = ["wrenai[snowflake]>=0.13.1"]
+clickhouse = ["wrenai[clickhouse]>=0.13.1"]
+trino      = ["wrenai[trino]>=0.13.1"]
+mssql      = ["wrenai[mssql]>=0.13.1"]
+databricks = ["wrenai[databricks]>=0.13.1"]
+redshift   = ["wrenai[redshift]>=0.13.1"]
+spark      = ["wrenai[spark]>=0.13.1"]
+athena     = ["wrenai[athena]>=0.13.1"]
+oracle     = ["wrenai[oracle]>=0.13.1"]
 
 # ── Memory extra ──────────────────────────────────────────────────────────
 # Required to use the three memory tools (wren_fetch_context,
@@ -70,12 +70,12 @@ oracle     = ["wrenai[oracle]>=0.7.0"]
 #
 # Without this, the toolkit auto-detects no memory and exposes only the
 # three runtime tools.
-memory = ["wrenai[memory]>=0.7.0"]
+memory = ["wrenai[memory]>=0.13.1"]
 
 # ── Convenience aggregate ─────────────────────────────────────────────────
 # Installs every datasource + memory at once. Useful for CI / examples,
 # heavyweight for production where you usually want only one datasource.
-all = ["wrenai[all]>=0.7.0"]
+all = ["wrenai[all]>=0.13.1"]
 
 # ── Dev / test deps ───────────────────────────────────────────────────────
 dev = [
@@ -83,7 +83,7 @@ dev = [
   "pytest-mock>=3",
   "ruff>=0.4",
   # Tests run real DuckDB + LanceDB integrations, so memory deps are required.
-  "wrenai[memory]>=0.7.0",
+  "wrenai[memory]>=0.13.1",
 ]
 
 [project.urls]
