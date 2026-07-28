@@ -162,9 +162,26 @@ def _describe_column(col: dict, lines: list[str]) -> None:
     lines.append("".join(parts))
 
 
+def _relationship_models(rel: dict) -> list:
+    """Return relationship endpoint models; raise on wrong-typed ``models``.
+
+    Missing/null ``models`` is empty. A present non-list is structural error
+    (same policy as :func:`_require_list_section` for top-level sections).
+    """
+    models = rel.get("models")
+    if models is None:
+        return []
+    if not isinstance(models, list):
+        raise ValueError(
+            f"relationship {rel.get('name')!r}: 'models' must be a list, "
+            f"got {type(models).__name__}"
+        )
+    return models
+
+
 def _describe_relationship(rel: dict, lines: list[str]) -> None:
     name = rel["name"]
-    models = rel.get("models") or []
+    models = _relationship_models(rel)
     left = models[0] if len(models) > 0 else "?"
     right = models[1] if len(models) > 1 else "?"
     join_type = rel.get("joinType", "")
@@ -374,7 +391,7 @@ def _column_record(col: dict, model_name: str, mdl_h: str, now: datetime) -> dic
 
 def _relationship_record(rel: dict, mdl_h: str, now: datetime) -> dict:
     name = rel["name"]
-    models = rel.get("models") or []
+    models = _relationship_models(rel)
     join_type = rel.get("joinType", "")
     condition = rel.get("condition", "")
 
