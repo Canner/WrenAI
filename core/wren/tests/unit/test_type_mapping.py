@@ -454,6 +454,18 @@ def test_cli_parse_types_skip_report_truncates_past_limit() -> None:
     assert "... and 2 more" in result.stderr
 
 
+def test_cli_parse_types_corrupt_value_repr_is_bounded() -> None:
+    # A few large corrupt values must not flood stderr just because there are
+    # fewer of them than _SKIP_REPORT_LIMIT.
+    columns = [{"column": "id", "raw_type": "int8"}, "x" * 5000]
+    result = _run_wren(
+        "utils", "parse-types", "--dialect", "postgres", stdin=json.dumps(columns)
+    )
+    _assert_success(result)
+    line = next(ln for ln in result.stderr.splitlines() if ln.startswith("  [1]"))
+    assert len(line) < 200
+
+
 def test_cli_translate_types_strict_exits_nonzero_on_corrupt_row() -> None:
     columns = [{"column": "id", "raw_type": "int8"}, "not-a-dict"]
     result = _run_wren(

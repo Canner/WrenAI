@@ -53,7 +53,7 @@ def _report_skipped(skipped: list[tuple[int, object]]) -> None:
             err=True,
         )
         for i, v in corrupt[:_SKIP_REPORT_LIMIT]:
-            typer.echo(f"  [{i}] {type(v).__name__}: {v!r}", err=True)
+            typer.echo(f"  [{i}] {type(v).__name__}: {v!r:.120}", err=True)
         remaining = len(corrupt) - _SKIP_REPORT_LIMIT
         if remaining > 0:
             typer.echo(f"  ... and {remaining} more", err=True)
@@ -126,6 +126,10 @@ def parse_types_cmd(
 
     skipped = _skipped_rows(data)
     results = parse_types(data, dialect, type_field=type_field)
+    assert len(results) + len(skipped) == len(data), (
+        "parse_types dropped a different set of rows than _skipped_rows predicted; "
+        "the mirrored Mapping guard in utils_cli.py has drifted from type_mapping.py"
+    )
     _report_skipped(skipped)
     typer.echo(json.dumps(results, indent=2))
     if strict and _has_corrupt_skips(skipped):
@@ -200,6 +204,10 @@ def translate_types_cmd(
 
     skipped = _skipped_rows(data)
     results = translate_types(data, source, target, type_field=type_field)
+    assert len(results) + len(skipped) == len(data), (
+        "translate_types dropped a different set of rows than _skipped_rows predicted; "
+        "the mirrored Mapping guard in utils_cli.py has drifted from type_mapping.py"
+    )
     _report_skipped(skipped)
     typer.echo(json.dumps(results, indent=2))
     if strict and _has_corrupt_skips(skipped):
