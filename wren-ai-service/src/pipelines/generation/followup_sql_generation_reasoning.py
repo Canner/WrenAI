@@ -30,12 +30,10 @@ sql_generation_reasoning_user_prompt_template = """
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
-These samples are examples of intent and style only. Use table names, column names, values, and functions only if they are present in the current DATABASE SCHEMA or SQL FUNCTIONS.
+These samples are examples of intent and style only. Their SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 {% for sql_sample in sql_samples %}
 Question:
 {{sql_sample.question}}
-SQL:
-{{sql_sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -47,12 +45,10 @@ SQL:
 {% endif %}
 
 ### User's QUERY HISTORY ###
-Query history is context only. Do not reuse prior table names, column names, values, or functions unless they are present in the current DATABASE SCHEMA or SQL FUNCTIONS.
+Query history is intent context only. Prior SQL is intentionally omitted so it cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 {% for history in histories %}
 Question:
 {{ history.question }}
-SQL:
-{{ history.sql }}
 {% endfor %}
 
 ### QUESTION ###
@@ -60,7 +56,7 @@ User's Question: {{ query }}
 Language: {{ language }}
 Current Time: {{ current_time }}
 
-Return only the reasoning plan described by the system instructions. Do not include SQL or SQL-like expressions.
+Return only the reasoning plan described by the system instructions. Do not include SQL, SQL-like expressions, table names, column names, aliases, source names, physical names, lineage names, schema names, database names, literal values, placeholders, functions, or identifier-like labels.
 """
 
 

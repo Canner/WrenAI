@@ -54,12 +54,10 @@ sql_generation_user_prompt_template = """
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
-These samples are examples of intent and style only. Use executable table names, column names, literals, and functions from the current DATABASE SCHEMA and SQL FUNCTIONS only. Treat physical/source/lineage names in samples as non-executable unless the exact same identifier is declared in DATABASE SCHEMA.
+These samples are examples of intent and style only. Their SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 {% for sample in sql_samples %}
 Question:
 {{sample.question}}
-SQL:
-{{sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -76,7 +74,7 @@ Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliase
 
 {% if sql_generation_reasoning %}
 ### REASONING PLAN ###
-Use this reasoning plan only as non-executable context. Ignore any SQL fragments, placeholder identifiers, inferred identifiers, source/physical/lineage names, unsupported functions, or identifiers not present in DATABASE SCHEMA.
+Use this reasoning plan only as non-executable intent context. Do not copy table names, column names, aliases, source names, physical names, lineage names, SQL fragments, date expressions, literal values, placeholders, or functions from it. Choose every executable identifier only from DATABASE SCHEMA and every function only from SQL FUNCTIONS.
 {{ sql_generation_reasoning }}
 {% endif %}
 

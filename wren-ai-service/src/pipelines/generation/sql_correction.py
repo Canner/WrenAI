@@ -87,12 +87,11 @@ Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliase
 {% endif %}
 {% if sql_generation_reasoning %}
 ### REASONING PLAN ###
-Use this reasoning plan only as non-executable context. Ignore any SQL fragments, placeholder identifiers, inferred identifiers, source/physical/lineage names, unsupported functions, or identifiers not present in DATABASE SCHEMA.
+Use this reasoning plan only as non-executable intent context. Do not copy table names, column names, aliases, source names, physical names, lineage names, SQL fragments, date expressions, literal values, placeholders, or functions from it. Choose every executable identifier only from DATABASE SCHEMA and every function only from SQL FUNCTIONS.
 {{ sql_generation_reasoning }}
 {% endif %}
 ### FAILED SQL ###
-This SQL failed dry run. Do not preserve any identifier, source/physical/lineage name, or function from it unless it appears exactly in DATABASE SCHEMA or SQL FUNCTIONS. Do not use the failed SQL or error message as a source for alternate similar names; regenerate from the question and current schema.
-{{ invalid_generation_result.sql }}
+The failed SQL is intentionally omitted so it cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns. Use the error message only to understand why the previous attempt failed.
 Error Message: {{ invalid_generation_result.error }}
 
 Return only the final JSON SQL response.
