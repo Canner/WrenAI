@@ -599,7 +599,12 @@ def _load_views_v1(project_path: Path) -> list[dict]:
     if not views_file.exists():
         return []
     data = yaml.safe_load(views_file.read_text(encoding="utf-8")) or {}
-    views = data.get("views", []) if isinstance(data, dict) else []
+    views = data.get("views") if isinstance(data, dict) else None
+    # A bare ``views:`` parses to None and means "no views", same as a missing
+    # key. Any other non-list value is malformed; return nothing here and let
+    # ``validate_project`` be the one to report it.
+    if not isinstance(views, list):
+        return []
     return [v for v in views if isinstance(v, dict)]
 
 
@@ -1105,8 +1110,18 @@ def validate_project(project_path: Path) -> list[ValidationError]:
         views_file = project_path / "views.yml"
         if views_file.exists():
             raw = yaml.safe_load(views_file.read_text(encoding="utf-8")) or {}
-            raw_views = raw.get("views", []) if isinstance(raw, dict) else []
-            for i, v in enumerate(raw_views):
+            raw_views = raw.get("views") if isinstance(raw, dict) else None
+            if raw_views is not None and not isinstance(raw_views, list):
+                # A bare ``views:`` (None) legitimately means "no views"; a
+                # scalar or mapping there does not.
+                errors.append(
+                    ValidationError(
+                        "error",
+                        "views.yml > views",
+                        f"'views' must be a list, got {type(raw_views).__name__}",
+                    )
+                )
+            for i, v in enumerate(raw_views if isinstance(raw_views, list) else []):
                 if not isinstance(v, dict):
                     errors.append(
                         ValidationError(

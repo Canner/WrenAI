@@ -1398,9 +1398,38 @@ def test_validate_project_reports_v1_views_yml_non_mapping_entries(tmp_path):
     _corrupt_v1_views_yml(tmp_path)
     errors = validate_project(tmp_path)
     hard = [e for e in errors if e.level == "error"]
-    assert any("must be a mapping" in e.message for e in hard)
+    # Both malformed entries are reported, each at its own index.
+    entry_errors = [e for e in hard if "must be a mapping" in e.message]
+    assert {e.path for e in entry_errors} == {
+        "views.yml > views[0]",
+        "views.yml > views[1]",
+    }
+    assert any("NoneType" in e.message for e in entry_errors)
+    assert any("str" in e.message for e in entry_errors)
     # The well-formed sibling entry is unaffected.
     assert not any("summary" in e.message for e in errors)
+
+
+def test_validate_project_accepts_empty_v1_views_key(tmp_path):
+    """A bare ``views:`` means "no views" and must not be reported."""
+    _make_v1_project(tmp_path)
+    (tmp_path / "views.yml").write_text("views:\n")
+    assert build_manifest(tmp_path)["views"] == []
+    assert not [e for e in validate_project(tmp_path) if "views" in e.path]
+
+
+def test_validate_project_reports_non_list_v1_views_container(tmp_path):
+    """A scalar under ``views:`` is malformed — report it, don't crash."""
+    _make_v1_project(tmp_path)
+    (tmp_path / "views.yml").write_text("views: junk\n")
+    hard = [e for e in validate_project(tmp_path) if e.level == "error"]
+    container = [e for e in hard if e.path == "views.yml > views"]
+    assert len(container) == 1
+    assert "must be a list" in container[0].message
+    # Not additionally reported once per character of the scalar.
+    assert not [e for e in hard if "must be a mapping" in e.message]
+    # And the build path degrades to no views rather than raising.
+    assert build_manifest(tmp_path)["views"] == []
 
 
 def test_build_manifest_drops_v1_views_yml_non_mapping_entries(tmp_path):
@@ -1421,7 +1450,8 @@ def test_plan_upgrade_v1_to_v2_does_not_crash_on_non_mapping_view(tmp_path):
     _make_v1_project(tmp_path)
     _corrupt_v1_views_yml(tmp_path)
     result = plan_upgrade(tmp_path, target_version=2)
-    assert any("views/summary/metadata.yml" in f for f in result.files_created)
+    view_files = [f for f in result.files_created if f.startswith("views/")]
+    assert view_files == ["views/summary/metadata.yml"]
 
 
 def test_apply_upgrade_v1_to_v2_does_not_crash_on_non_mapping_view(tmp_path):
@@ -1431,6 +1461,8 @@ def test_apply_upgrade_v1_to_v2_does_not_crash_on_non_mapping_view(tmp_path):
     apply_upgrade(tmp_path, result)
     assert (tmp_path / "views" / "summary" / "metadata.yml").exists()
     assert not (tmp_path / "views.yml").exists()
+    # Only the well-formed view became a directory — no junk siblings.
+    assert [d.name for d in (tmp_path / "views").iterdir()] == ["summary"]
 
 
 def test_apply_upgrade_v2_to_v3(tmp_path):
