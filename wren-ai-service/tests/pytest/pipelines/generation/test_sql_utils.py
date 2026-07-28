@@ -6,8 +6,16 @@ from src.pipelines.generation.utils.sql import (
     get_text_to_sql_rules,
     sql_generation_reasoning_system_prompt,
 )
-from src.pipelines.generation.sql_correction import get_sql_correction_system_prompt
+from src.pipelines.generation.followup_sql_generation import (
+    text_to_sql_with_followup_user_prompt_template,
+)
+from src.pipelines.generation.sql_correction import (
+    get_sql_correction_system_prompt,
+    sql_correction_user_prompt_template,
+)
+from src.pipelines.generation.sql_generation import sql_generation_user_prompt_template
 from src.pipelines.generation.sql_regeneration import get_sql_regeneration_system_prompt
+from src.pipelines.generation.sql_regeneration import sql_regeneration_user_prompt_template
 
 
 class _SqlKnowledge:
@@ -46,6 +54,9 @@ def test_get_text_to_sql_rules_uses_default_metadata_grounding_rules():
         in rules
     )
     assert "first locate the exact declared source column" in rules
+    assert "Physical datasource names, source database names" in rules
+    assert "Do not replace an invalid identifier with a similar-looking physical" in rules
+    assert "source/lineage names from metadata may guide meaning" in rules
 
 
 def test_get_text_to_sql_rules_keeps_mandatory_rules_with_sql_knowledge():
@@ -86,6 +97,8 @@ def test_sql_generation_system_prompt_grounding_contract():
     assert "reasoning plan only as non-executable context" in prompt
     assert "include those objects only when DATABASE SCHEMA shows" in prompt
     assert "Use the exact supported syntax shown there" in prompt
+    assert "source database/schema/table names" in prompt
+    assert "appears only in SQL samples, reasoning, failed SQL" in prompt
 
 
 def test_json_field_instructions_do_not_include_placeholder_identifiers():
@@ -108,6 +121,7 @@ def test_sql_regeneration_system_prompt_uses_question_as_intent_source():
         "database schema as the only source of executable table and column identifiers"
         in prompt
     )
+    assert "Treat physical/source/lineage names from the original SQL" in prompt
 
 
 def test_sql_correction_system_prompt_discards_invalid_identifier_context():
@@ -120,6 +134,8 @@ def test_sql_correction_system_prompt_discards_invalid_identifier_context():
         "Do not preserve a table, column, join, filter, grouping, ordering, or function"
         in prompt
     )
+    assert "Treat physical/source/lineage names from the failed SQL" in prompt
+    assert "do not try a similar replacement from source metadata" in prompt
 
 
 def test_sql_reasoning_prompt_forbids_executable_sql_context():
@@ -129,3 +145,16 @@ def test_sql_reasoning_prompt_forbids_executable_sql_context():
     assert "SQL clauses, SQL functions, code blocks, or executable expressions" in prompt
     assert "The reasoning plan is non-executable context" in prompt
     assert "Only cite exact declared names from DATABASE SCHEMA" in prompt
+    assert "source metadata, physical datasource names, or lineage names" in prompt
+
+
+def test_user_prompt_templates_keep_source_metadata_non_executable():
+    for prompt in (
+        sql_generation_user_prompt_template,
+        text_to_sql_with_followup_user_prompt_template,
+        sql_regeneration_user_prompt_template,
+        sql_correction_user_prompt_template,
+    ):
+        assert "source/physical/lineage names" in prompt
+        assert "omit that unsupported part instead of inventing" in prompt
+        assert "exact declared table and column names from DATABASE SCHEMA" in prompt

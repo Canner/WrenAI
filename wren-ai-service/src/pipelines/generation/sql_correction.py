@@ -41,6 +41,8 @@ You are an ANSI SQL expert with exceptional logical thinking skills and debuggin
 5. If a user question is provided, treat it as the source of intent and regenerate the SQL from that intent using DATABASE SCHEMA instead of repairing guessed identifiers.
 6. Treat SQL diagnosis and the invalid SQL as error context only. Do not copy placeholders, assumed table names, assumed column names, or unsupported functions from them.
 7. Do not preserve a table, column, join, filter, grouping, ordering, or function from the failed SQL unless it appears exactly in DATABASE SCHEMA or SQL FUNCTIONS.
+8. Treat physical/source/lineage names from the failed SQL, error message, reasoning, comments, aliases, descriptions, or samples as semantic context only; never use them as executable identifiers unless the exact same identifier appears in DATABASE SCHEMA.
+9. If the error is an invalid object, invalid column, unsupported function, or date/type failure, do not try a similar replacement from source metadata. Regenerate from the user's intent and current DATABASE SCHEMA, and omit unsupported parts instead of substituting non-schema identifiers.
 
 ### SQL RULES ###
 Make sure you follow the SQL Rules strictly.
@@ -81,15 +83,15 @@ sql_correction_user_prompt_template = """
 ### QUESTION ###
 {% if query %}
 User's Question: {{ query }}
-Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels or inferred names into executable SQL.
+Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, or inferred names into executable SQL. If a needed table, column, relation, date field, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, omit that unsupported part instead of inventing or substituting a similar name.
 {% endif %}
 {% if sql_generation_reasoning %}
 ### REASONING PLAN ###
-Use this reasoning plan only as non-executable context. Ignore any SQL fragments, placeholder identifiers, inferred identifiers, unsupported functions, or identifiers not present in DATABASE SCHEMA.
+Use this reasoning plan only as non-executable context. Ignore any SQL fragments, placeholder identifiers, inferred identifiers, source/physical/lineage names, unsupported functions, or identifiers not present in DATABASE SCHEMA.
 {{ sql_generation_reasoning }}
 {% endif %}
 ### FAILED SQL ###
-This SQL failed dry run. Do not preserve any identifier or function from it unless it appears exactly in DATABASE SCHEMA or SQL FUNCTIONS.
+This SQL failed dry run. Do not preserve any identifier, source/physical/lineage name, or function from it unless it appears exactly in DATABASE SCHEMA or SQL FUNCTIONS. Do not use the failed SQL or error message as a source for alternate similar names; regenerate from the question and current schema.
 {{ invalid_generation_result.sql }}
 Error Message: {{ invalid_generation_result.error }}
 

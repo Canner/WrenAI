@@ -39,6 +39,7 @@ Carefully review the user's question and current DATABASE SCHEMA, then generate 
 Use the original SQL query only as non-executable intent context.
 While generating the new SQL query, make sure to use the database schema as the only source of executable table and column identifiers.
 If the original SQL query or reasoning contains unsupported identifiers, placeholders, or assumptions, ignore those parts and regenerate from the user's question and DATABASE SCHEMA.
+Treat physical/source/lineage names from the original SQL, reasoning, samples, comments, or descriptions as semantic context only; never use them as executable identifiers unless the exact same identifier appears in DATABASE SCHEMA.
 
 {text_to_sql_rules}
 
@@ -78,7 +79,7 @@ sql_regeneration_user_prompt_template = """
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
-These samples are examples of intent and style only. Use executable table names, column names, literals, and functions from the current DATABASE SCHEMA and SQL FUNCTIONS only.
+These samples are examples of intent and style only. Use executable table names, column names, literals, and functions from the current DATABASE SCHEMA and SQL FUNCTIONS only. Treat physical/source/lineage names in samples as non-executable unless the exact same identifier is declared in DATABASE SCHEMA.
 {% for sample in sql_samples %}
 Question:
 {{sample.question}}
@@ -96,13 +97,13 @@ SQL:
 
 ### QUESTION ###
 User's Question: {{ query }}
-Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels or inferred names into executable SQL.
+Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, or inferred names into executable SQL. If a needed table, column, relation, date field, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, omit that unsupported part instead of inventing or substituting a similar name.
 Use the original SQL query only as intent context. Regenerate with executable identifiers from the current DATABASE SCHEMA only.
 ### REASONING PLAN ###
-Use this reasoning plan only as non-executable context. Ignore any SQL fragments, placeholder identifiers, inferred identifiers, unsupported functions, or identifiers not present in DATABASE SCHEMA.
+Use this reasoning plan only as non-executable context. Ignore any SQL fragments, placeholder identifiers, inferred identifiers, source/physical/lineage names, unsupported functions, or identifiers not present in DATABASE SCHEMA.
 {{ sql_generation_reasoning }}
 ### ORIGINAL SQL QUERY ###
-Use this SQL only as non-executable intent context. Do not preserve any identifier or function from it unless it appears exactly in DATABASE SCHEMA or SQL FUNCTIONS.
+Use this SQL only as non-executable intent context. Do not preserve any identifier, source/physical/lineage name, or function from it unless it appears exactly in DATABASE SCHEMA or SQL FUNCTIONS.
 {{ sql }}
 
 Return only the final JSON SQL response.
