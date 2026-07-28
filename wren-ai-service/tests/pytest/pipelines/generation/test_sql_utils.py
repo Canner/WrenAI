@@ -27,10 +27,11 @@ def test_get_text_to_sql_rules_uses_default_metadata_grounding_rules():
 
     assert "ONLY USE the tables and columns mentioned in the database schema" in rules
     assert 'ONLY USE "*" if the user query asks for all the columns' in rules
-    assert "Do not use them as executable table or column identifiers" in rules
+    assert "They are never source table or source column identifiers" in rules
     assert "do not invent a field" in rules
     assert "join only through the FOREIGN KEY relationships shown" in rules
     assert "Never generate SQL from assumptions" in rules
+    assert "Do not derive executable identifiers" in rules
     assert "Do not query INFORMATION_SCHEMA" in rules
     assert "SQL samples and query history are examples of intent and style only" in rules
     assert "order by that alias" in rules
@@ -39,11 +40,12 @@ def test_get_text_to_sql_rules_uses_default_metadata_grounding_rules():
     assert "use all required related tables" in rules
     assert "silently check that each identifier and function" in rules
     assert "instead of inventing a replacement" in rules
+    assert "exact date/time schema column and required SQL FUNCTIONS-supported operation" in rules
     assert (
         "Treat reasoning plans, correction notes, and error messages as non-executable context"
         in rules
     )
-    assert "first locate the exact declared column" in rules
+    assert "first locate the exact declared source column" in rules
 
 
 def test_get_text_to_sql_rules_keeps_mandatory_rules_with_sql_knowledge():
@@ -69,8 +71,8 @@ def test_get_json_field_instructions_uses_sql_knowledge_override():
 def test_sql_generation_system_prompt_grounding_contract():
     prompt = get_sql_generation_system_prompt()
 
-    assert "ONLY USE table/column alias in the final SELECT clause" in prompt
-    assert "Refer to the value of alias from the comment section" in prompt
+    assert "Output aliases are labels for result columns only" in prompt
+    assert "must not be copied into FROM, JOIN, WHERE, GROUP BY, HAVING, or ORDER BY" in prompt
     assert "source of executable table and column identifiers" in prompt
     assert "Never generate SQL from assumptions" in prompt
     assert "ignore those parts" in prompt
@@ -83,6 +85,7 @@ def test_sql_generation_system_prompt_grounding_contract():
     assert "DATABASE SCHEMA is the only source of executable identifiers" in prompt
     assert "reasoning plan only as non-executable context" in prompt
     assert "include those objects only when DATABASE SCHEMA shows" in prompt
+    assert "Use the exact supported syntax shown there" in prompt
 
 
 def test_json_field_instructions_do_not_include_placeholder_identifiers():
@@ -125,3 +128,4 @@ def test_sql_reasoning_prompt_forbids_executable_sql_context():
     assert "Do not write SQL, possible SQL, sample SQL, assumed SQL" in prompt
     assert "SQL clauses, SQL functions, code blocks, or executable expressions" in prompt
     assert "The reasoning plan is non-executable context" in prompt
+    assert "Only cite exact declared names from DATABASE SCHEMA" in prompt

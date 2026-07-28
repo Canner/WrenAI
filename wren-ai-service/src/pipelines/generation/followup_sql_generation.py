@@ -78,7 +78,7 @@ SQL:
 
 ### QUESTION ###
 User's Follow-up Question: {{ query }}
-Answer the user's intent using the current DATABASE SCHEMA. Use aliases, descriptions, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact table and column names from DATABASE SCHEMA.
+Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels or inferred names into executable SQL.
 
 ### REASONING PLAN ###
 Use this reasoning plan only as non-executable context and only where it is consistent with the current DATABASE SCHEMA and SQL RULES.

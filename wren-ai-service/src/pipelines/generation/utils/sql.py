@@ -167,9 +167,10 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 ### MANDATORY SQL GROUNDING RULES ###
 - Treat the DATABASE SCHEMA section as the only source of executable table and column identifiers.
 - Every table and column referenced in SELECT, FROM, JOIN, WHERE, GROUP BY, HAVING, and ORDER BY must appear exactly in the CREATE TABLE, CREATE VIEW, or metric schema text provided in DATABASE SCHEMA.
-- Comments, aliases, display labels, descriptions, reasoning text, SQL samples, and user wording are semantic hints only. Do not use them as executable table or column identifiers, except as aliases in the final SELECT clause.
+- Comments, aliases, display labels, descriptions, reasoning text, SQL samples, and user wording are semantic hints only. They are never source table or source column identifiers.
 - Interpret the user's intent from the question wording, schema descriptions, aliases, display labels, calculated fields, metrics, and relationships, then express that intent with exact executable identifiers from DATABASE SCHEMA.
 - When a business term is represented by a column alias, display label, or description, use the corresponding real table and column name from DATABASE SCHEMA in the SQL, not the display text.
+- The executable identifier is the name in the CREATE TABLE, CREATE VIEW, or metric field declaration. Do not derive executable identifiers by rewriting, translating, singularizing, pluralizing, spacing, casing, or abbreviating natural language, comments, aliases, display labels, or descriptions.
 - Never generate SQL from assumptions such as "assuming the table contains", "assuming this column exists", or "a possible table/column". Use only schema-confirmed identifiers.
 - If a requested concept, filter, sort, join, or time field is not represented by an exact table or column in DATABASE SCHEMA, do not invent a field for it. Generate the closest valid SQL using only available schema fields.
 - When a dry run error reports an invalid object name or invalid column name, remove that identifier unless it appears exactly in DATABASE SCHEMA. Correct it only to an exact schema identifier.
@@ -178,9 +179,9 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - Do not query INFORMATION_SCHEMA, system catalogs, metadata tables, or table-existence checks to answer the user. Query only the business tables, views, and metrics in DATABASE SCHEMA.
 - SQL samples and query history are examples of intent and style only. Never copy a table name, column name, alias, literal value, or function from them unless it is also valid for the current DATABASE SCHEMA and SQL FUNCTIONS.
 - Generate Wren SQL only. Do not use warehouse-specific functions unless they are explicitly listed in SQL FUNCTIONS for this request.
-- Apply relative date or time filters only to schema fields whose type or metadata clearly supports date/time semantics. Do not compare text fields to date functions.
+- Apply relative date or time filters only when DATABASE SCHEMA contains an exact date/time field for the requested time concept and SQL FUNCTIONS contains the exact date/time operation needed. Do not compare text fields to date functions.
 - Treat reasoning plans, correction notes, and error messages as non-executable context. Never copy SQL fragments, inferred identifiers, placeholder names, or unsupported functions from them.
-- If a column comment, alias, display label, or description names a business concept, first locate the exact declared column for that concept in DATABASE SCHEMA. If no exact declared column exists, omit that concept.
+- If a column comment, alias, display label, or description names a business concept, first locate the exact declared source column for that concept in DATABASE SCHEMA. If no exact declared source column exists, omit that concept.
 - For aggregate sorting, select the aggregate with an alias and order by that alias instead of ordering directly by an aggregate expression.
 - Before returning the final SQL, silently check that each identifier and function in the SQL is grounded in DATABASE SCHEMA or SQL FUNCTIONS. If any identifier or function is ungrounded, remove that part or answer with the closest valid SQL over grounded fields only.
 - If the retrieved DATABASE SCHEMA does not contain a table, column, relationship, or supported function needed for part of the user's request, leave that part out instead of inventing a replacement.
@@ -201,13 +202,13 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
     - Put single quotes around string literals.
     - Never quote numeric literals.
 - For case-insensitive comparisons, use only functions or operators that are supported by SQL FUNCTIONS for this request. If SQL FUNCTIONS does not provide a safe case-insensitive function, use a normal equality or LIKE comparison on an exact schema column.
-- For date/time questions, first choose an exact schema column whose type or metadata clearly represents the requested time concept. Use only SQL FUNCTIONS-supported date/time functions and casts for the active datasource.
-- If the question asks for a specific date, generate a bounded date/time filter on an exact date/time schema column when supported by SQL FUNCTIONS. If no exact date/time schema column is available, do not invent one.
+- For date/time questions, first choose an exact schema column whose type or metadata clearly represents the requested time concept. Use only date/time functions and casts whose exact syntax is provided in SQL FUNCTIONS for this request.
+- If the question asks for a specific or relative date, generate a bounded date/time filter only when both the exact date/time schema column and required SQL FUNCTIONS-supported operation are available. If either is missing, do not invent a field or function.
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
-- ONLY USE table/column alias in the final SELECT clause; don't use table/columnalias in the other clauses.
-- Refer to the value of alias from the comment section of the corresponding table or column in the DATABASE SCHEMA section for reference when using alias in the final SELECT clause.
-- DON'T USE '.' in column/table alias, replace '.' with '_' in column/table alias.
+- Output aliases may be used only to name expressions in the final SELECT list. Output aliases are labels for result columns only; they are not source identifiers.
+- Comments, aliases, display labels, and descriptions from DATABASE SCHEMA may guide which exact source column to select, but they must not be copied into FROM, JOIN, WHERE, GROUP BY, HAVING, or ORDER BY as table or column names.
+- DON'T USE '.' in output aliases, replace '.' with '_' in output aliases.
 - DON'T USE "FILTER(WHERE <expression>)" clause in the generated SQL query.
 - DON'T USE "EXTRACT(EPOCH FROM <expression>)" clause in the generated SQL query.
 - DON'T USE "EXTRACT()" function with INTERVAL data types as arguments
@@ -311,9 +312,9 @@ You are a helpful data analyst who maps a user's intent to the provided database
 
 ### INSTRUCTIONS ###
 1. Think deeply and reason about the user's question, the database schema, and the user's query history if provided.
-2. Explicitly state the following information in the reasoning plan: 
-if the user puts any specific timeframe(e.g. YYYY-MM-DD) in the user's question(excluding the value of the current time), you will put the absolute time frame in the SQL query; 
-otherwise, you will put the relative timeframe in the SQL query.
+2. Explicitly state the following information in the reasoning plan:
+if the user puts any specific timeframe(e.g. YYYY-MM-DD) in the user's question(excluding the value of the current time), you will use that absolute time frame only with an exact date/time schema column and supported SQL FUNCTIONS;
+otherwise, you will use a relative timeframe only when an exact date/time schema column and supported SQL FUNCTIONS are available. If they are not available, state that the available schema/functions do not support that time filter.
 3. For top, bottom, first, last, highest, or lowest requests, plan to sort by an exact selected column or aggregate alias and limit the result. Include a ranking column only when the user explicitly asks for rank values.
 4. Do not plan to use a SQL function unless it appears in SQL FUNCTIONS for this request or is already part of a valid metric/calculated-field definition in DATABASE SCHEMA.
 5. If USER INSTRUCTIONS section is provided, make sure to consider them in the reasoning plan.
@@ -336,7 +337,8 @@ otherwise, you will put the relative timeframe in the SQL query.
 22. Do not mention placeholder SQL, metadata-table checks, INFORMATION_SCHEMA, or replacement instructions to the user.
 23. Use comments, aliases, display labels, and descriptions to explain why an exact schema column is relevant, not as replacement names.
 24. The reasoning plan is non-executable context. Do not include anything that could be copied as SQL.
-25. ONLY SHOWING the reasoning plan in bullet points.
+25. Do not derive executable table or column names from natural language, comments, aliases, display labels, or descriptions. Only cite exact declared names from DATABASE SCHEMA.
+26. ONLY SHOWING the reasoning plan in bullet points.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
@@ -403,7 +405,7 @@ Given the user's question and database schema, generate one grounded Wren SQL qu
 ### GENERAL RULES ###
 
 1. YOU MUST FOLLOW the instructions strictly to generate the SQL query if the section of USER INSTRUCTIONS is available in user's input.
-2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
+2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input. Use the exact supported syntax shown there; otherwise omit the function-dependent part of the request.
 3. YOU MUST REFER to the sql samples only as examples of intent and style if the section of SQL SAMPLES is available in user's input. Do not copy identifiers, literals, or functions from samples unless they are valid for the current DATABASE SCHEMA and SQL FUNCTIONS.
 4. YOU MUST use the reasoning plan only as non-executable context, and only when it is consistent with DATABASE SCHEMA and SQL Rules. If the reasoning plan contains SQL fragments, assumed SQL, placeholder identifiers, inferred identifiers, unsupported functions, or identifiers missing from DATABASE SCHEMA, ignore those parts.
 5. YOU MUST answer the user's intent, not just exact wording. Use schema aliases, descriptions, calculated fields, metrics, and relationships to understand intent, then generate SQL with exact DATABASE SCHEMA identifiers only.

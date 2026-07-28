@@ -96,7 +96,7 @@ SQL:
 
 ### QUESTION ###
 User's Question: {{ query }}
-Answer the user's intent using the current DATABASE SCHEMA. Use aliases, descriptions, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact table and column names from DATABASE SCHEMA.
+Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels or inferred names into executable SQL.
 Use the original SQL query only as intent context. Regenerate with executable identifiers from the current DATABASE SCHEMA only.
 ### REASONING PLAN ###
 Use this reasoning plan only as non-executable context. Ignore any SQL fragments, placeholder identifiers, inferred identifiers, unsupported functions, or identifiers not present in DATABASE SCHEMA.
