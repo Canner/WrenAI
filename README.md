@@ -218,7 +218,7 @@ We build in the open. Issues, PRs, connector contributions, SDK integrations, do
 
 - [Contributor guide](./CONTRIBUTING.md)
 - [Connector ecosystem program](./docs/contributing-a-connector.md): three-tier ownership (official, community-blessed, community-owned)
-- [Architecture map](./docs/architecture.md): find the right place to land your change
+- [Architecture map](./docs/core/reference/architecture.md): find the right place to land your change
 - Looking for somewhere to start? Try the [`good first issue`](https://github.com/Canner/WrenAI/labels/good%20first%20issue) label.
 
 <details>

@@ -220,7 +220,11 @@ def index(
             pass  # instructions are optional; never fail index because of them
 
     mem_store = _get_store(path)
-    result = mem_store.index_schema(manifest, seed_queries=not no_seed)
+    try:
+        result = mem_store.index_schema(manifest, seed_queries=not no_seed)
+    except ValueError as e:
+        typer.echo(f"Malformed manifest: {e}", err=True)
+        raise typer.Exit(1) from e
     typer.echo(
         f"Indexed {result['schema_items']} schema items"
         + (f", {result['seed_queries']} seed queries" if result["seed_queries"] else "")
