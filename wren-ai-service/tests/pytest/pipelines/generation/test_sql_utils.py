@@ -36,6 +36,8 @@ def test_get_text_to_sql_rules_uses_default_metadata_grounding_rules():
     assert "Interpret the user's intent" in rules
     assert "schema descriptions, aliases, display labels" in rules
     assert "use all required related tables" in rules
+    assert "silently check that each identifier and function" in rules
+    assert "instead of inventing a replacement" in rules
 
 
 def test_get_text_to_sql_rules_keeps_mandatory_rules_with_sql_knowledge():
@@ -70,6 +72,18 @@ def test_sql_generation_system_prompt_grounding_contract():
     assert "Wren SQL query" in prompt
     assert "use a normal equality or LIKE comparison" in prompt
     assert "unless the user explicitly asks for rank values" in prompt
+    assert "perform a silent grounding check" in prompt
+    assert "closest grounded expression" in prompt
+
+
+def test_json_field_instructions_do_not_include_placeholder_identifiers():
+    prompt = get_json_field_instructions()
+
+    assert "json_fields metadata" in prompt
+    assert "Do not copy JSON examples" in prompt
+    assert "CREATE TABLE users" not in prompt
+    assert "my_table" not in prompt
+    assert "parent_table" not in prompt
 
 
 def test_sql_regeneration_system_prompt_uses_question_as_intent_source():

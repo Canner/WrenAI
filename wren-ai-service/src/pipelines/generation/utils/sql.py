@@ -180,6 +180,8 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - Generate Wren SQL only. Do not use warehouse-specific functions unless they are explicitly listed in SQL FUNCTIONS for this request.
 - Apply relative date or time filters only to schema fields whose type or metadata clearly supports date/time semantics. Do not compare text fields to date functions.
 - For aggregate sorting, select the aggregate with an alias and order by that alias instead of ordering directly by an aggregate expression.
+- Before returning the final SQL, silently check that each identifier and function in the SQL is grounded in DATABASE SCHEMA or SQL FUNCTIONS. If any identifier or function is ungrounded, remove that part or answer with the closest valid SQL over grounded fields only.
+- If the retrieved DATABASE SCHEMA does not contain a table, column, relationship, or supported function needed for part of the user's request, leave that part out instead of inventing a replacement.
 """
 
 
@@ -263,31 +265,13 @@ _DEFAULT_JSON_FIELD_INSTRUCTIONS = """
       - LAX_FLOAT64 for double and float fields
       - LAX_INT64 for bigint fields
       - LAX_STRING for varchar fields
-    - For Example:
-      DATA SCHEMA:
-        `/* {"alias":"users","description":"A model representing the users data."} */
-        CREATE TABLE users (
-            -- {"alias":"address","description":"A JSON object that represents address information of this user.","json_type":"JSON","json_fields":{"json_type":"JSON","address.json.city":{"name":"city","type":"varchar","path":"$.city","properties":{"alias":"city","description":"City Name."}},"address.json.state":{"name":"state","type":"varchar","path":"$.state","properties":{"alias":"state","description":"ISO code or name of the state, province or district."}},"address.json.postcode":{"name":"postcode","type":"varchar","path":"$.postcode","properties":{"alias":"postcode","description":"Postal code."}},"address.json.country":{"name":"country","type":"varchar","path":"$.country","properties":{"alias":"country","description":"ISO code of the country."}}}}
-            address JSON
-        )`
-      To get the city of address in user table use SQL:
-      `SELECT LAX_STRING(JSON_QUERY(u.address, '$.city')) FROM user as u`
+    - JSON paths and nested field names must come from the json_fields metadata attached to the exact JSON column in DATABASE SCHEMA.
 - ONLY USE JSON_QUERY_ARRAY for querying "json_type":"JSON_ARRAY" is identified in the comment of the column, NOT the deprecated JSON_EXTRACT_ARRAY.
     - USE UNNEST to analysis each item individually in the ARRAY. YOU MUST SELECT FROM the parent table ahead of the UNNEST ARRAY.
     - The alias of the UNNEST(ARRAY) should be in the format `unnest_table_alias(individual_item_alias)`
-      - For Example: `SELECT item FROM UNNEST(ARRAY[1,2,3]) as my_unnested_table(item)`
     - If the items in the ARRAY are JSON objects, use JSON_QUERY to query the fields inside each JSON item.
-      - For Example:
-      DATA SCHEMA
-        `/* {"alias":"my_table","description":"A test my_table"} */
-        CREATE TABLE my_table (
-            -- {"alias":"elements","description":"elements column","json_type":"JSON_ARRAY","json_fields":{"json_type":"JSON_ARRAY","elements.json_array.id":{"name":"id","type":"bigint","path":"$.id","properties":{"alias":"id","description":"data ID."}},"elements.json_array.key":{"name":"key","type":"varchar","path":"$.key","properties":{"alias":"key","description":"data Key."}},"elements.json_array.value":{"name":"value","type":"varchar","path":"$.value","properties":{"alias":"value","description":"data Value."}}}}
-            elements JSON
-        )`
-        To get the number of elements in my_table table use SQL:
-        `SELECT LAX_INT64(JSON_QUERY(element, '$.number')) FROM my_table as t, UNNEST(JSON_QUERY_ARRAY(elements)) AS my_unnested_table(element) WHERE LAX_FLOAT64(JSON_QUERY(element, '$.value')) > 3.5`
     - To JOIN ON the fields inside UNNEST(ARRAY), YOU MUST SELECT FROM the parent table ahead of the UNNEST syntax, and the alias of the UNNEST(ARRAY) SHOULD BE IN THE FORMAT unnest_table_alias(individual_item_alias)
-      - For Example: `SELECT p.column_1, j.column_2 FROM parent_table AS p, join_table AS j JOIN UNNEST(p.array_column) AS unnested(array_item) ON j.id = array_item.id`
+    - Do not copy JSON examples, placeholder aliases, or nested paths from prior context. Use only the current table name, JSON column name, and json_fields metadata in DATABASE SCHEMA.
 - DON'T USE JSON_QUERY and JSON_QUERY_ARRAY when "json_type":"".
 - DON'T USE LAX_BOOL, LAX_FLOAT64, LAX_INT64, LAX_STRING when "json_type":"".
 """
@@ -419,7 +403,8 @@ Given user's question, database schema, etc., you should think deeply and carefu
 3. YOU MUST REFER to the sql samples only as examples of intent and style if the section of SQL SAMPLES is available in user's input. Do not copy identifiers, literals, or functions from samples unless they are valid for the current DATABASE SCHEMA and SQL FUNCTIONS.
 4. YOU MUST FOLLOW the reasoning plan step by step only when it is consistent with DATABASE SCHEMA and SQL Rules. If the reasoning plan contains assumed SQL, placeholder identifiers, or identifiers missing from DATABASE SCHEMA, ignore those parts.
 5. YOU MUST answer the user's intent, not just exact wording. Use schema aliases, descriptions, calculated fields, metrics, and relationships to understand intent, then generate SQL with exact DATABASE SCHEMA identifiers only.
-6. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
+6. Before finalizing the JSON response, YOU MUST perform a silent grounding check: every table, column, join key, filter field, grouping field, ordering field, and function in the SQL must be present in DATABASE SCHEMA or SQL FUNCTIONS. If a planned element is not grounded, omit that element or use the closest grounded expression.
+7. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {text_to_sql_rules}
 
