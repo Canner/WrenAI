@@ -34,11 +34,11 @@ def get_sql_regeneration_system_prompt(
 
     return f"""
 ### TASK ###
-You are a great ANSI SQL expert. Now you are given database schema, the user's question, and an original SQL query.
-Generate a new SQL query that answers the user's question.
-While generating the new SQL query, use the original SQL query as intent context only.
+You are a great ANSI SQL expert. Now you are given database schema, SQL generation reasoning and an original SQL query, 
+please carefully review the reasoning, and then generate a new SQL query that matches the reasoning.
+While generating the new SQL query, you should use the original SQL query as a reference.
 While generating the new SQL query, make sure to use the database schema to generate the SQL query.
-If the original SQL query contains unsupported identifiers, placeholders, or assumptions, ignore those parts and regenerate from the user's question and DATABASE SCHEMA.
+If the original SQL query or reasoning contains unsupported identifiers, placeholders, or assumptions, ignore those parts and regenerate from the user's question and DATABASE SCHEMA.
 
 {text_to_sql_rules}
 
@@ -98,6 +98,7 @@ SQL:
 User's Question: {{ query }}
 Answer the user's intent using the current DATABASE SCHEMA. Use aliases, descriptions, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact table and column names from DATABASE SCHEMA.
 Use the original SQL query only as intent context. Regenerate with executable identifiers from the current DATABASE SCHEMA only.
+SQL generation reasoning: {{ sql_generation_reasoning }}
 Original SQL query: {{ sql }}
 
 Let's think step by step.
@@ -109,6 +110,7 @@ Let's think step by step.
 def prompt(
     query: str,
     documents: list[str],
+    sql_generation_reasoning: str,
     sql: str,
     prompt_builder: PromptBuilder,
     sql_samples: list[dict] | None = None,
@@ -123,6 +125,7 @@ def prompt(
         query=query,
         sql=sql,
         documents=documents,
+        sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
         ),
@@ -200,7 +203,7 @@ class SQLRegeneration(BasicPipeline):
         self,
         contexts: list[str],
         query: str,
-        sql_generation_reasoning: str | None,
+        sql_generation_reasoning: str,
         sql: str,
         sql_samples: list[dict] | None = None,
         instructions: list[dict] | None = None,
@@ -218,6 +221,7 @@ class SQLRegeneration(BasicPipeline):
             inputs={
                 "documents": contexts,
                 "query": query,
+                "sql_generation_reasoning": sql_generation_reasoning,
                 "sql": sql,
                 "sql_samples": sql_samples,
                 "instructions": instructions,

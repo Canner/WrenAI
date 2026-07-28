@@ -80,6 +80,10 @@ SQL:
 User's Follow-up Question: {{ query }}
 Answer the user's intent using the current DATABASE SCHEMA. Use aliases, descriptions, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact table and column names from DATABASE SCHEMA.
 
+### REASONING PLAN ###
+Use this reasoning plan only where it is consistent with the current DATABASE SCHEMA and SQL RULES.
+{{ sql_generation_reasoning }}
+
 Let's think step by step.
 """
 
@@ -89,6 +93,7 @@ Let's think step by step.
 def prompt(
     query: str,
     documents: list[str],
+    sql_generation_reasoning: str,
     prompt_builder: PromptBuilder,
     sql_samples: list[dict] | None = None,
     instructions: list[dict] | None = None,
@@ -101,6 +106,7 @@ def prompt(
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
+        sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
         ),
@@ -193,7 +199,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         self,
         query: str,
         contexts: list[str],
-        sql_generation_reasoning: str | None,
+        sql_generation_reasoning: str,
         histories: list[AskHistory],
         sql_samples: list[dict] | None = None,
         instructions: list[dict] | None = None,
@@ -218,6 +224,7 @@ class FollowUpSQLGeneration(BasicPipeline):
             inputs={
                 "query": query,
                 "documents": contexts,
+                "sql_generation_reasoning": sql_generation_reasoning,
                 "histories": histories,
                 "project_id": project_id,
                 "sql_samples": sql_samples,

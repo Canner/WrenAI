@@ -120,6 +120,7 @@ class AskFeedbackService:
                     instructions_task,
                 ) = await asyncio.gather(
                     self._pipelines["db_schema_retrieval"].run(
+                        tables=ask_feedback_request.tables,
                         project_id=ask_feedback_request.project_id,
                     ),
                     self._pipelines["sql_pairs_retrieval"].run(
@@ -176,7 +177,7 @@ class AskFeedbackService:
                 ].run(
                     contexts=table_ddls,
                     query=ask_feedback_request.question,
-                    sql_generation_reasoning=None,
+                    sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
                     sql=ask_feedback_request.sql,
                     project_id=ask_feedback_request.project_id,
                     sql_samples=sql_samples,
@@ -240,11 +241,11 @@ class AskFeedbackService:
                         ].run(
                             contexts=table_ddls,
                             query=ask_feedback_request.question,
-                            sql_generation_reasoning=None,
+                            sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
                             instructions=instructions,
                             invalid_generation_result={
                                 "original_sql": original_sql,
-                                "sql": original_sql,
+                                "sql": invalid_sql,
                                 "error": correction_error_message,
                             },
                             project_id=ask_feedback_request.project_id,

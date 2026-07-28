@@ -464,7 +464,7 @@ class AskService:
                     ].run(
                         query=user_query,
                         contexts=table_ddls,
-                        sql_generation_reasoning=None,
+                        sql_generation_reasoning=sql_generation_reasoning,
                         histories=histories,
                         project_id=ask_request.project_id,
                         sql_samples=sql_samples,
@@ -483,7 +483,7 @@ class AskService:
                     ].run(
                         query=user_query,
                         contexts=table_ddls,
-                        sql_generation_reasoning=None,
+                        sql_generation_reasoning=sql_generation_reasoning,
                         project_id=ask_request.project_id,
                         sql_samples=sql_samples,
                         instructions=instructions,
@@ -549,7 +549,7 @@ class AskService:
                         ].run(
                             contexts=table_ddls,
                             query=user_query,
-                            sql_generation_reasoning=None,
+                            sql_generation_reasoning=sql_generation_reasoning,
                             instructions=instructions,
                             invalid_generation_result={
                                 "sql": original_sql,

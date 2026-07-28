@@ -74,6 +74,11 @@ SQL:
 User's Question: {{ query }}
 Answer the user's intent using the current DATABASE SCHEMA. Use aliases, descriptions, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact table and column names from DATABASE SCHEMA.
 
+{% if sql_generation_reasoning %}
+### REASONING PLAN ###
+{{ sql_generation_reasoning }}
+{% endif %}
+
 Let's think step by step.
 """
 
@@ -84,6 +89,7 @@ def prompt(
     query: str,
     documents: list[str],
     prompt_builder: PromptBuilder,
+    sql_generation_reasoning: str | None = None,
     sql_samples: list[dict] | None = None,
     instructions: list[dict] | None = None,
     has_calculated_field: bool = False,
@@ -95,6 +101,7 @@ def prompt(
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
+        sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
         ),
@@ -210,6 +217,7 @@ class SQLGeneration(BasicPipeline):
             inputs={
                 "query": query,
                 "documents": contexts,
+                "sql_generation_reasoning": sql_generation_reasoning,
                 "sql_samples": sql_samples,
                 "instructions": instructions,
                 "project_id": project_id,
