@@ -47,6 +47,8 @@ build-backend = "maturin"
 line-length = 88
 target-version = "py311"
 exclude = ["tools/"]
+# ruff 0.16+ formats Markdown code blocks by default; docs are hand-formatted.
+extend-exclude = ["*.md"]
 
 [tool.ruff.lint]
 select = [
