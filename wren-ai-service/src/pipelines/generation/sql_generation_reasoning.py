@@ -29,6 +29,7 @@ sql_generation_reasoning_user_prompt_template = """
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
+These samples are examples of intent and style only. Use table names, column names, values, and functions only if they are present in the current DATABASE SCHEMA or SQL FUNCTIONS.
 {% for sql_sample in sql_samples %}
 Question:
 {{sql_sample.question}}

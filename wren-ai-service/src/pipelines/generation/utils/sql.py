@@ -172,6 +172,11 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - If a requested concept, filter, sort, join, or time field is not represented by an exact table or column in DATABASE SCHEMA, do not invent a field for it. Generate the closest valid SQL using only available schema fields.
 - When a dry run error reports an invalid object name or invalid column name, remove that identifier unless it appears exactly in DATABASE SCHEMA. Correct it only to an exact schema identifier.
 - When using multiple tables, join only through the FOREIGN KEY relationships shown in DATABASE SCHEMA. If no relationship is shown for the needed tables, prefer a single table, view, or metric that already contains the requested fields.
+- Do not query INFORMATION_SCHEMA, system catalogs, metadata tables, or table-existence checks to answer the user. Query only the business tables, views, and metrics in DATABASE SCHEMA.
+- SQL samples and query history are examples of intent and style only. Never copy a table name, column name, alias, literal value, or function from them unless it is also valid for the current DATABASE SCHEMA and SQL FUNCTIONS.
+- Generate Wren SQL only. Do not use warehouse-specific functions unless they are explicitly listed in SQL FUNCTIONS for this request.
+- Apply relative date or time filters only to schema fields whose type or metadata clearly supports date/time semantics. Do not compare text fields to date functions.
+- For aggregate sorting, select the aggregate with an alias and order by that alias instead of ordering directly by an aggregate expression.
 """
 
 
@@ -421,8 +426,9 @@ For each sample, you should:
    - Table structures and relationships used
    - Specific functions and operators employed
    - Query patterns and techniques demonstrated
-3. Use these samples as reference patterns when generating similar queries
+3. Use these samples as reference patterns when generating similar queries, but treat the DATABASE SCHEMA as the only valid source of executable table and column names
 4. Adapt the techniques shown in the samples to match new query requirements while maintaining consistent style and approach
+5. Never copy table names, column names, aliases, literal values, or functions from samples unless they also appear in the current DATABASE SCHEMA or SQL FUNCTIONS
 
 The samples will help you understand:
 - Preferred table join patterns
@@ -461,7 +467,9 @@ otherwise, you will put the relative timeframe in the SQL query.
 16. Do not write SQL, possible SQL, sample SQL, or assumed SQL in the reasoning plan.
 17. Never use phrases such as "assuming the table contains", "assuming this column exists", or "the SQL could look like this". If the schema does not show the exact table or column needed, state that the available schema does not include that part.
 18. If the question asks for a concept, filter, sort, or timeframe, map it only to exact available schema columns. If no exact schema column supports part of the request, state that the available schema does not include that part instead of inventing a column.
-19. ONLY SHOWING the reasoning plan in bullet points.
+19. Treat SQL samples and query history as examples only. Do not copy table names, column names, aliases, values, or functions from them unless they also appear in the current DATABASE SCHEMA or SQL FUNCTIONS.
+20. Do not mention placeholder SQL, metadata-table checks, INFORMATION_SCHEMA, or replacement instructions to the user.
+21. ONLY SHOWING the reasoning plan in bullet points.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
@@ -529,8 +537,8 @@ Given user's question, database schema, etc., you should think deeply and carefu
 
 1. YOU MUST FOLLOW the instructions strictly to generate the SQL query if the section of USER INSTRUCTIONS is available in user's input.
 2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
-3. YOU MUST REFER to the sql samples and learn the usage of the schema structures and how SQL is written based on them if the section of SQL SAMPLES is available in user's input.
-4. YOU MUST FOLLOW the reasoning plan step by step strictly to generate the SQL query if the section of REASONING PLAN is available in user's input.
+3. YOU MUST REFER to the sql samples only as examples of intent and style if the section of SQL SAMPLES is available in user's input. Do not copy identifiers, literals, or functions from samples unless they are valid for the current DATABASE SCHEMA and SQL FUNCTIONS.
+4. YOU MUST FOLLOW the reasoning plan step by step only when it is consistent with DATABASE SCHEMA and SQL Rules. If the reasoning plan contains assumed SQL, placeholder identifiers, or identifiers missing from DATABASE SCHEMA, ignore those parts.
 5. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {text_to_sql_rules}

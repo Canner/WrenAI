@@ -36,6 +36,8 @@ You are an ANSI SQL expert with exceptional logical thinking skills and debuggin
 
 1. First, think hard about the error message, and figure out the root cause first(please use the DATABASE SCHEMA, SQL FUNCTIONS and USER INSTRUCTIONS to help you figure out the root cause).
 2. Then, generate the syntactically correct ANSI SQL query to correct the error.
+3. If the invalid SQL contains a table, column, function, literal value, or metadata-table query that is not supported by the current DATABASE SCHEMA or SQL FUNCTIONS, do not preserve it.
+4. Never correct an invalid SQL query by checking INFORMATION_SCHEMA or system catalogs.
 
 ### SQL RULES ###
 Make sure you follow the SQL Rules strictly.

@@ -54,6 +54,7 @@ sql_generation_user_prompt_template = """
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
+These samples are examples of intent and style only. Use executable table names, column names, literals, and functions from the current DATABASE SCHEMA and SQL FUNCTIONS only.
 {% for sample in sql_samples %}
 Question:
 {{sample.question}}

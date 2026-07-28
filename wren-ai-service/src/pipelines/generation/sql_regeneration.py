@@ -77,6 +77,7 @@ sql_regeneration_user_prompt_template = """
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
+These samples are examples of intent and style only. Use executable table names, column names, literals, and functions from the current DATABASE SCHEMA and SQL FUNCTIONS only.
 {% for sample in sql_samples %}
 Question:
 {{sample.question}}
@@ -93,6 +94,7 @@ SQL:
 {% endif %}
 
 ### QUESTION ###
+Use the original SQL query only as intent context. Regenerate with executable identifiers from the current DATABASE SCHEMA only.
 SQL generation reasoning: {{ sql_generation_reasoning }}
 Original SQL query: {{ sql }}
 

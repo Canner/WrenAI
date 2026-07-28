@@ -60,6 +60,7 @@ generate one SQL query to best answer user's question.
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
+These samples are examples of intent and style only. Use executable table names, column names, literals, and functions from the current DATABASE SCHEMA and SQL FUNCTIONS only.
 {% for sample in sql_samples %}
 Summary:
 {{sample.summary}}
@@ -79,6 +80,7 @@ SQL:
 User's Follow-up Question: {{ query }}
 
 ### REASONING PLAN ###
+Use this reasoning plan only where it is consistent with the current DATABASE SCHEMA and SQL RULES.
 {{ sql_generation_reasoning }}
 
 Let's think step by step.
