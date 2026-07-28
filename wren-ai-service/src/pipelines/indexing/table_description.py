@@ -57,16 +57,51 @@ class TableDescriptionChunker:
         def _text(value: Any) -> str:
             return "" if value is None else str(value)
 
+        def _source_context(payload: Dict[str, Any]) -> str:
+            table_reference = payload.get("tableReference")
+            if isinstance(table_reference, dict):
+                reference_parts = [
+                    _text(table_reference.get("catalog", "")),
+                    _text(table_reference.get("schema", "")),
+                    _text(table_reference.get("table", "")),
+                ]
+                return ".".join(part for part in reference_parts if part)
+
+            return _text(payload.get("baseObject", ""))
+
+        def _columns(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+            columns = payload.get("columns", [])
+            if columns:
+                return [
+                    {**column, "role": _text(column.get("role", ""))}
+                    for column in columns
+                    if isinstance(column, dict)
+                ]
+
+            metric_columns = []
+            for role, key in [("dimension", "dimension"), ("measure", "measure")]:
+                metric_columns += [
+                    {**column, "role": role}
+                    for column in payload.get(key, []) or []
+                    if isinstance(column, dict)
+                ]
+
+            return metric_columns
+
         def _structure_data(mdl_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
             properties = self._properties(payload)
 
             return {
                 "mdl_type": mdl_type,
                 "name": payload.get("name"),
+                "displayName": _text(properties.get("displayName", "")),
+                "source": _source_context(payload),
                 "columns": [
                     {
                         "name": _text(column.get("name", "")),
                         "type": _text(column.get("type", "")),
+                        "role": _text(column.get("role", "")),
+                        "expression": _text(column.get("expression", "")),
                         "description": _text(
                             self._properties(column).get("description", "")
                         ),
@@ -74,8 +109,7 @@ class TableDescriptionChunker:
                             self._properties(column).get("displayName", "")
                         ),
                     }
-                    for column in payload.get("columns", [])
-                    if isinstance(column, dict)
+                    for column in _columns(payload)
                 ],
                 "properties": properties,
             }
@@ -111,8 +145,10 @@ class TableDescriptionChunker:
             for column in columns:
                 semantic_parts = [
                     column["type"],
+                    column["role"],
                     column["displayName"],
                     column["description"],
+                    column["expression"],
                 ]
                 if not any(semantic_parts):
                     continue
@@ -135,11 +171,18 @@ class TableDescriptionChunker:
         def _resource_description(resource: Dict[str, Any]) -> Dict[str, str]:
             description = {
                 "name": resource["name"],
+                "resource_type": resource["mdl_type"],
                 "description": resource["properties"].get("description", "") or "",
                 "columns": ", ".join(
                     column["name"] for column in resource["columns"]
                 ),
             }
+
+            if resource["displayName"]:
+                description["displayName"] = resource["displayName"]
+
+            if resource["source"]:
+                description["source"] = resource["source"]
 
             if column_context := _column_context(resource["columns"]):
                 description["column_context"] = column_context

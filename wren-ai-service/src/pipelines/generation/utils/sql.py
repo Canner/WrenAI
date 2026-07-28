@@ -163,19 +163,26 @@ class SQLGenPostProcessor:
         return valid_generation_result, invalid_generation_result
 
 
+_MANDATORY_SQL_GROUNDING_RULES = """
+### MANDATORY SQL GROUNDING RULES ###
+- Treat the DATABASE SCHEMA section as the only source of executable table and column identifiers.
+- Every table and column referenced in SELECT, FROM, JOIN, WHERE, GROUP BY, HAVING, and ORDER BY must appear exactly in the CREATE TABLE, CREATE VIEW, or metric schema text provided in DATABASE SCHEMA.
+- Comments, aliases, display labels, descriptions, reasoning text, SQL samples, and user wording are semantic hints only. Do not use them as executable table or column identifiers, except as aliases in the final SELECT clause.
+- Never generate SQL from assumptions such as "assuming the table contains", "assuming this column exists", or "a possible table/column". Use only schema-confirmed identifiers.
+- If a requested concept, filter, sort, join, or time field is not represented by an exact table or column in DATABASE SCHEMA, do not invent a field for it. Generate the closest valid SQL using only available schema fields.
+- When a dry run error reports an invalid object name or invalid column name, remove that identifier unless it appears exactly in DATABASE SCHEMA. Correct it only to an exact schema identifier.
+- When using multiple tables, join only through the FOREIGN KEY relationships shown in DATABASE SCHEMA. If no relationship is shown for the needed tables, prefer a single table, view, or metric that already contains the requested fields.
+"""
+
+
 _DEFAULT_TEXT_TO_SQL_RULES = """
 ### SQL RULES ###
 - ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
 - ONLY USE the tables and columns mentioned in the database schema.
 - ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
-- Treat the DATABASE SCHEMA section as the only source of executable table and column identifiers.
-- Comments, aliases, display labels, and descriptions are only semantic context. Do not use them as executable table or column identifiers, except as aliases in the final SELECT clause.
-- Every table and column referenced in SELECT, FROM, JOIN, WHERE, GROUP BY, HAVING, and ORDER BY must appear exactly in the CREATE TABLE, CREATE VIEW, or metric schema text provided in DATABASE SCHEMA.
-- If a requested concept, filter, sort, or time field is not represented by an exact table or column in DATABASE SCHEMA, do not invent a field for it. Generate the closest valid SQL using only available schema fields.
 - DON'T INCLUDE comments in the generated SQL query.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
-- When using multiple tables, join only through the FOREIGN KEY relationships shown in DATABASE SCHEMA. If no relationship is shown for the needed tables, prefer a single table, view, or metric that already contains the requested fields.
 - PREFER USING CTEs over subqueries.
 - When generating SQL query, always:
     - Put double quotes around column and table names.
@@ -451,8 +458,10 @@ otherwise, you will put the relative timeframe in the SQL query.
 13. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
 14. Use only exact table and column names that appear in the DATABASE SCHEMA section.
 15. Comments, aliases, display labels, and descriptions are semantic hints only; do not turn them into table or column names in the reasoning plan.
-16. If the question asks for a concept such as recent, latest, status, amount, customer, supplier, order, payment, or market, map it only to exact available schema columns. If no exact schema column supports part of the request, state that the available schema does not include that part instead of inventing a column.
-17. ONLY SHOWING the reasoning plan in bullet points.
+16. Do not write SQL, possible SQL, sample SQL, or assumed SQL in the reasoning plan.
+17. Never use phrases such as "assuming the table contains", "assuming this column exists", or "the SQL could look like this". If the schema does not show the exact table or column needed, state that the available schema does not include that part.
+18. If the question asks for a concept, filter, sort, or timeframe, map it only to exact available schema columns. If no exact schema column supports part of the request, state that the available schema does not include that part instead of inventing a column.
+19. ONLY SHOWING the reasoning plan in bullet points.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
@@ -470,12 +479,13 @@ def _extract_from_sql_knowledge(
 
 
 def get_text_to_sql_rules(sql_knowledge: SqlKnowledge | None = None) -> str:
+    rules = _DEFAULT_TEXT_TO_SQL_RULES
     if sql_knowledge is not None:
-        return _extract_from_sql_knowledge(
+        rules = _extract_from_sql_knowledge(
             sql_knowledge, "text_to_sql_rule", _DEFAULT_TEXT_TO_SQL_RULES
         )
 
-    return _DEFAULT_TEXT_TO_SQL_RULES
+    return f"{rules}\n\n{_MANDATORY_SQL_GROUNDING_RULES}"
 
 
 def get_calculated_field_instructions(sql_knowledge: SqlKnowledge | None = None) -> str:

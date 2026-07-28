@@ -27,10 +27,15 @@ def test_get_text_to_sql_rules_uses_default_metadata_grounding_rules():
     assert "Do not use them as executable table or column identifiers" in rules
     assert "do not invent a field" in rules
     assert "join only through the FOREIGN KEY relationships shown" in rules
+    assert "Never generate SQL from assumptions" in rules
 
 
-def test_get_text_to_sql_rules_uses_sql_knowledge_override():
-    assert get_text_to_sql_rules(_SqlKnowledge()) == _SqlKnowledge.text_to_sql_rule
+def test_get_text_to_sql_rules_keeps_mandatory_rules_with_sql_knowledge():
+    rules = get_text_to_sql_rules(_SqlKnowledge())
+
+    assert _SqlKnowledge.text_to_sql_rule in rules
+    assert "MANDATORY SQL GROUNDING RULES" in rules
+    assert "Every table and column referenced" in rules
 
 
 def test_get_metric_instructions_uses_sql_knowledge_override():
@@ -50,4 +55,5 @@ def test_sql_generation_system_prompt_grounding_contract():
     assert "ONLY USE table/column alias in the final SELECT clause" in prompt
     assert "Refer to the value of alias from the comment section" in prompt
     assert "source of executable table and column identifiers" in prompt
+    assert "Never generate SQL from assumptions" in prompt
     assert 'SELECT "_orders"."ApprovedTimestamp" AS "_timestamp"' in prompt

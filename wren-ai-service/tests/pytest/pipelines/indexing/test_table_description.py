@@ -24,8 +24,8 @@ def test_single_table_description():
     mdl = {
         "models": [
             {
-                "name": "user",
-                "properties": {"description": "A table containing user information."},
+                "name": "entity",
+                "properties": {"description": "A generic entity resource."},
             }
         ],
         "views": [],
@@ -37,11 +37,12 @@ def test_single_table_description():
     assert len(actual["documents"]) == 1
 
     document: Document = actual["documents"][0]
-    assert document.meta == {"type": "TABLE_DESCRIPTION", "name": "user"}
+    assert document.meta == {"type": "TABLE_DESCRIPTION", "name": "entity"}
     assert document.content == str(
         {
-            "name": "user",
-            "description": "A table containing user information.",
+            "name": "entity",
+            "resource_type": "MODEL",
+            "description": "A generic entity resource.",
             "columns": "",
         }
     )
@@ -52,12 +53,12 @@ def test_multiple_table_descriptions():
     mdl = {
         "models": [
             {
-                "name": "user",
-                "properties": {"description": "A table containing user information."},
+                "name": "entity",
+                "properties": {"description": "A generic entity resource."},
             },
             {
-                "name": "order",
-                "properties": {"description": "A table containing order details."},
+                "name": "activity",
+                "properties": {"description": "A generic activity resource."},
             },
         ],
         "views": [],
@@ -71,22 +72,24 @@ def test_multiple_table_descriptions():
     document_1: Document = actual["documents"][0]
     assert document_1.meta == {
         "type": "TABLE_DESCRIPTION",
-        "name": "user",
+        "name": "entity",
     }
     assert document_1.content == str(
         {
-            "name": "user",
-            "description": "A table containing user information.",
+            "name": "entity",
+            "resource_type": "MODEL",
+            "description": "A generic entity resource.",
             "columns": "",
         }
     )
 
     document_2: Document = actual["documents"][1]
-    assert document_2.meta == {"type": "TABLE_DESCRIPTION", "name": "order"}
+    assert document_2.meta == {"type": "TABLE_DESCRIPTION", "name": "activity"}
     assert document_2.content == str(
         {
-            "name": "order",
-            "description": "A table containing order details.",
+            "name": "activity",
+            "resource_type": "MODEL",
+            "description": "A generic activity resource.",
             "columns": "",
         }
     )
@@ -112,7 +115,7 @@ def test_table_description_missing_name():
 def test_table_description_missing_description():
     chunker = TableDescriptionChunker()
     mdl = {
-        "models": [{"name": "user"}],
+        "models": [{"name": "entity"}],
         "views": [],
         "relationships": [],
         "metrics": [],
@@ -122,8 +125,10 @@ def test_table_description_missing_description():
     assert len(actual["documents"]) == 1
 
     document: Document = actual["documents"][0]
-    assert document.meta == {"type": "TABLE_DESCRIPTION", "name": "user"}
-    assert document.content == str({"name": "user", "description": "", "columns": ""})
+    assert document.meta == {"type": "TABLE_DESCRIPTION", "name": "entity"}
+    assert document.content == str(
+        {"name": "entity", "resource_type": "MODEL", "description": "", "columns": ""}
+    )
 
 
 def test_table_description_null_description():
@@ -131,7 +136,7 @@ def test_table_description_null_description():
     mdl = {
         "models": [
             {
-                "name": "user",
+                "name": "entity",
                 "properties": {"description": None, "displayName": None},
                 "columns": [{"name": "id"}, {"name": None}],
             }
@@ -145,9 +150,14 @@ def test_table_description_null_description():
     assert len(actual["documents"]) == 1
 
     document: Document = actual["documents"][0]
-    assert document.meta == {"type": "TABLE_DESCRIPTION", "name": "user"}
+    assert document.meta == {"type": "TABLE_DESCRIPTION", "name": "entity"}
     assert document.content == str(
-        {"name": "user", "description": "", "columns": "id, "}
+        {
+            "name": "entity",
+            "resource_type": "MODEL",
+            "description": "",
+            "columns": "id, ",
+        }
     )
 
 
@@ -156,21 +166,24 @@ def test_table_description_includes_column_semantic_context():
     mdl = {
         "models": [
             {
-                "name": "orders",
-                "properties": {"description": "Customer purchase transactions."},
+                "name": "resource",
+                "properties": {
+                    "description": "A generic described resource.",
+                    "displayName": "Resource",
+                },
                 "columns": [
                     {
-                        "name": "Division",
+                        "name": "AttributeOne",
                         "type": "varchar",
                         "properties": {
-                            "description": "Generic generated division description."
+                            "description": "Generic generated attribute description."
                         },
                     },
                     {
-                        "name": "SalesAmount",
+                        "name": "MeasureOne",
                         "type": "float",
                         "properties": {
-                            "description": "Generic generated sales amount description."
+                            "description": "Generic generated measure description."
                         },
                     },
                 ],
@@ -186,12 +199,14 @@ def test_table_description_includes_column_semantic_context():
     document: Document = actual["documents"][0]
     assert document.content == str(
         {
-            "name": "orders",
-            "description": "Customer purchase transactions.",
-            "columns": "Division, SalesAmount",
+            "name": "resource",
+            "resource_type": "MODEL",
+            "description": "A generic described resource.",
+            "columns": "AttributeOne, MeasureOne",
+            "displayName": "Resource",
             "column_context": (
-                "Division varchar Generic generated division description.; "
-                "SalesAmount float Generic generated sales amount description."
+                "AttributeOne varchar Generic generated attribute description.; "
+                "MeasureOne float Generic generated measure description."
             ),
         }
     )
@@ -233,7 +248,7 @@ def test_table_description_keeps_complete_column_lists():
     mdl = {
         "models": [
             {
-                "name": "user",
+                "name": "entity",
                 "columns": columns,
             }
         ],
@@ -248,7 +263,8 @@ def test_table_description_keeps_complete_column_lists():
     document: Document = actual["documents"][0]
     assert document.content == str(
         {
-            "name": "user",
+            "name": "entity",
+            "resource_type": "MODEL",
             "description": "",
             "columns": ", ".join(column["name"] for column in columns),
         }
@@ -260,12 +276,12 @@ async def test_pipeline_run(mocker: MockFixture):
     test_mdl = {
         "models": [
             {
-                "name": "user",
-                "properties": {"description": "A table containing user information."},
+                "name": "entity",
+                "properties": {"description": "A generic entity resource."},
             },
             {
-                "name": "order",
-                "properties": {"description": "A table containing order details."},
+                "name": "activity",
+                "properties": {"description": "A generic activity resource."},
             },
         ],
         "views": [],
