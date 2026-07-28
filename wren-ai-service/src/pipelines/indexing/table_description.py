@@ -54,6 +54,9 @@ class TableDescriptionChunker:
         }
 
     def _get_table_descriptions(self, mdl: Dict[str, Any]) -> List[Dict[str, Any]]:
+        def _text(value: Any) -> str:
+            return "" if value is None else str(value)
+
         def _structure_data(mdl_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
             properties = self._properties(payload)
 
@@ -61,25 +64,93 @@ class TableDescriptionChunker:
                 "mdl_type": mdl_type,
                 "name": payload.get("name"),
                 "columns": [
-                    column.get("name", "") or ""
+                    {
+                        "name": _text(column.get("name", "")),
+                        "type": _text(column.get("type", "")),
+                        "description": _text(
+                            self._properties(column).get("description", "")
+                        ),
+                        "displayName": _text(
+                            self._properties(column).get("displayName", "")
+                        ),
+                    }
                     for column in payload.get("columns", [])
                     if isinstance(column, dict)
                 ],
                 "properties": properties,
             }
 
+        def _relationship_context_by_model() -> Dict[str, List[str]]:
+            relationships = {model.get("name"): [] for model in mdl.get("models", [])}
+
+            for relationship in mdl.get("relationships", []) or []:
+                models = relationship.get("models", [])
+                if len(models) != 2:
+                    continue
+
+                summary = " ".join(
+                    part
+                    for part in [
+                        _text(relationship.get("name", "")),
+                        _text(relationship.get("joinType", "")),
+                        _text(relationship.get("condition", "")),
+                    ]
+                    if part
+                )
+                if not summary:
+                    continue
+
+                for model_name in models:
+                    relationships.setdefault(model_name, []).append(summary)
+
+            return relationships
+
+        def _column_context(columns: List[Dict[str, Any]]) -> str:
+            details = []
+
+            for column in columns:
+                semantic_parts = [
+                    column["type"],
+                    column["displayName"],
+                    column["description"],
+                ]
+                if not any(semantic_parts):
+                    continue
+
+                details.append(
+                    " ".join(
+                        part for part in [column["name"], *semantic_parts] if part
+                    )
+                )
+
+            return "; ".join(detail for detail in details if detail)
+
+        relationship_context = _relationship_context_by_model()
         resources = (
             [_structure_data("MODEL", model) for model in mdl["models"]]
             + [_structure_data("METRIC", metric) for metric in mdl["metrics"]]
             + [_structure_data("VIEW", view) for view in mdl["views"]]
         )
 
-        return [
-            {
+        def _resource_description(resource: Dict[str, Any]) -> Dict[str, str]:
+            description = {
                 "name": resource["name"],
                 "description": resource["properties"].get("description", "") or "",
-                "columns": ", ".join(resource["columns"]),
+                "columns": ", ".join(
+                    column["name"] for column in resource["columns"]
+                ),
             }
+
+            if column_context := _column_context(resource["columns"]):
+                description["column_context"] = column_context
+
+            if relationships := "; ".join(relationship_context.get(resource["name"], [])):
+                description["relationships"] = relationships
+
+            return description
+
+        return [
+            _resource_description(resource)
             for resource in resources
             if resource["name"] is not None
         ]

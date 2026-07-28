@@ -151,7 +151,7 @@ def test_table_description_null_description():
     )
 
 
-def test_table_description_excludes_generated_column_descriptions():
+def test_table_description_includes_column_semantic_context():
     chunker = TableDescriptionChunker()
     mdl = {
         "models": [
@@ -189,9 +189,42 @@ def test_table_description_excludes_generated_column_descriptions():
             "name": "orders",
             "description": "Customer purchase transactions.",
             "columns": "Division, SalesAmount",
+            "column_context": (
+                "Division varchar Generic generated division description.; "
+                "SalesAmount float Generic generated sales amount description."
+            ),
         }
     )
-    assert "Generic generated" not in document.content
+
+
+def test_table_description_includes_relationship_context():
+    chunker = TableDescriptionChunker()
+    mdl = {
+        "models": [
+            {"name": "source", "columns": [{"name": "source_id"}]},
+            {"name": "target", "columns": [{"name": "source_id"}]},
+        ],
+        "views": [],
+        "relationships": [
+            {
+                "name": "source_to_target",
+                "models": ["source", "target"],
+                "joinType": "ONE_TO_MANY",
+                "condition": "source.source_id = target.source_id",
+            }
+        ],
+        "metrics": [],
+    }
+
+    actual = chunker.run(mdl)
+
+    assert len(actual["documents"]) == 2
+    for document in actual["documents"]:
+        assert document.meta["type"] == "TABLE_DESCRIPTION"
+        assert (
+            "source_to_target ONE_TO_MANY source.source_id = target.source_id"
+            in document.content
+        )
 
 
 def test_table_description_keeps_complete_column_lists():

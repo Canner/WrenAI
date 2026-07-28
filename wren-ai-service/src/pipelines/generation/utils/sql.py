@@ -169,8 +169,13 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - ONLY USE the tables and columns mentioned in the database schema.
 - ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
+- Treat the DATABASE SCHEMA section as the only source of executable table and column identifiers.
+- Comments, aliases, display labels, and descriptions are only semantic context. Do not use them as executable table or column identifiers, except as aliases in the final SELECT clause.
+- Every table and column referenced in SELECT, FROM, JOIN, WHERE, GROUP BY, HAVING, and ORDER BY must appear exactly in the CREATE TABLE, CREATE VIEW, or metric schema text provided in DATABASE SCHEMA.
+- If a requested concept, filter, sort, or time field is not represented by an exact table or column in DATABASE SCHEMA, do not invent a field for it. Generate the closest valid SQL using only available schema fields.
 - DON'T INCLUDE comments in the generated SQL query.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
+- When using multiple tables, join only through the FOREIGN KEY relationships shown in DATABASE SCHEMA. If no relationship is shown for the needed tables, prefer a single table, view, or metric that already contains the requested fields.
 - PREFER USING CTEs over subqueries.
 - When generating SQL query, always:
     - Put double quotes around column and table names.
@@ -444,7 +449,10 @@ otherwise, you will put the relative timeframe in the SQL query.
 11. Do not include ```markdown or ``` in the answer.
 12. A table name in the reasoning plan must be in this format: `table: <table_name>`.
 13. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
-14. ONLY SHOWING the reasoning plan in bullet points.
+14. Use only exact table and column names that appear in the DATABASE SCHEMA section.
+15. Comments, aliases, display labels, and descriptions are semantic hints only; do not turn them into table or column names in the reasoning plan.
+16. If the question asks for a concept such as recent, latest, status, amount, customer, supplier, order, payment, or market, map it only to exact available schema columns. If no exact schema column supports part of the request, state that the available schema does not include that part instead of inventing a column.
+17. ONLY SHOWING the reasoning plan in bullet points.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
