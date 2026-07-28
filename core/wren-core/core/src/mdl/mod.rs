@@ -677,6 +677,47 @@ mod test {
         ColumnLevelOperator, DataSource, JoinType, RelationshipBuilder, SessionProperty,
     };
 
+    /// An aliased model scan should build its `ModelPlanNode` once, not once as a
+    /// discarded wildcard build and once for real.
+    #[tokio::test]
+    async fn test_aliased_model_scan_builds_model_plan_node_once() -> Result<()> {
+        let test_data: PathBuf =
+            [env!("CARGO_MANIFEST_DIR"), "tests", "data", "mdl.json"]
+                .iter()
+                .collect();
+        let mdl_json = fs::read_to_string(test_data.as_path())?;
+        let mdl = match serde_json::from_str::<Manifest>(&mdl_json) {
+            Ok(mdl) => mdl,
+            Err(e) => return not_impl_err!("Failed to parse mdl json: {}", e),
+        };
+        let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+            mdl,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        )?);
+
+        crate::logical_plan::analyze::model_anlayze::BUILD_MODEL_PLAN_NODE_CALLS
+            .with(|c| c.set(0));
+        let actual = mdl::transform_sql_with_ctx(
+            &create_wren_ctx(None, analyzed_mdl.wren_mdl().data_source().as_ref()),
+            Arc::clone(&analyzed_mdl),
+            &[],
+            Arc::new(HashMap::new()),
+            "select e.c_custkey from test.test.customer e",
+        )
+        .await?;
+        assert_eq!(
+            crate::logical_plan::analyze::model_anlayze::BUILD_MODEL_PLAN_NODE_CALLS
+                .with(|c| c.get()),
+            1,
+            "an aliased model scan should build its ModelPlanNode once, not build a \
+             throwaway wildcard node first"
+        );
+        assert_sql_valid_executable(&actual).await?;
+
+        Ok(())
+    }
+
     #[cfg(feature = "multi-thread")]
     #[test]
     fn test_sync_transform() -> Result<()> {
