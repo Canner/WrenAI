@@ -262,11 +262,15 @@ def _register_context_tools(mcp: FastMCP, ctx: ServeContext) -> None:
             for col in model.get("columns", []) or []
         ]
 
-        relationships = [
-            rel
-            for rel in load_relationships(ctx.project)
-            if name in (rel.get("models") or [])
-        ]
+        relationships = []
+        for rel in load_relationships(ctx.project):
+            if not isinstance(rel, dict):
+                continue
+            rel_models = rel.get("models")
+            if not isinstance(rel_models, list):
+                continue
+            if name in rel_models:
+                relationships.append(rel)
 
         return {
             "name": model.get("name"),

@@ -405,3 +405,26 @@ def test_query_cube_negative_limit_rejected_consistently():
             limit=-1,
             sql_only=True,
         )
+
+
+def test_describe_model_skips_non_list_relationship_models(tmp_path, monkeypatch):
+    """String relationship models must not match via substring membership."""
+    ctx = _make_ctx(tmp_path)
+    mcp = build_server(ctx)
+    describe_model = _get_tool(mcp, "describe_model")
+
+    monkeypatch.setattr(
+        "wren.context.load_models",
+        lambda project: [{"name": "orders", "columns": [], "primary_key": None}],
+    )
+    monkeypatch.setattr(
+        "wren.context.load_relationships",
+        lambda project: [
+            {"name": "bad", "models": "orders_customers"},
+            {"name": "good", "models": ["orders", "customers"]},
+        ],
+    )
+
+    out = describe_model(name="orders")
+    names = {r.get("name") for r in out["relationships"]}
+    assert names == {"good"}
