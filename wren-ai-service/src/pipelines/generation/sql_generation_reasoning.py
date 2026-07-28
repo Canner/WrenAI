@@ -50,7 +50,7 @@ User's Question: {{ query }}
 Language: {{ language }}
 Current Time: {{ current_time }}
 
-Return only the reasoning plan described by the system instructions. Do not include SQL or SQL-like expressions.
+Return only the reasoning plan described by the system instructions. Do not include SQL, SQL-like expressions, table names, column names, aliases, source names, physical names, lineage names, schema names, database names, functions, or identifier-like labels.
 """
 
 
