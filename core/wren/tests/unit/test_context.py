@@ -1377,6 +1377,62 @@ def test_apply_upgrade_v1_to_v2(tmp_path):
     assert cubes[0]["name"] == "order_metrics"
 
 
+# ── Regression: v1 views.yml with non-mapping entries (issue #2597) ────────
+#
+# A hand-edited legacy views.yml can contain a non-mapping list entry (e.g.
+# `- null`). _load_views_v1 must drop it, matching the other v1/v2 loaders,
+# so every consumer below still works instead of crashing with a bare
+# AttributeError — and validate_project must additionally report it rather
+# than silently ignore it.
+
+
+def _corrupt_v1_views_yml(tmp_path: Path) -> None:
+    """Overwrite views.yml with a non-mapping entry alongside a valid one."""
+    (tmp_path / "views.yml").write_text(
+        'views:\n  - null\n  - "junk"\n  - name: summary\n    statement: SELECT 1\n'
+    )
+
+
+def test_validate_project_reports_v1_views_yml_non_mapping_entries(tmp_path):
+    _make_v1_project(tmp_path)
+    _corrupt_v1_views_yml(tmp_path)
+    errors = validate_project(tmp_path)
+    hard = [e for e in errors if e.level == "error"]
+    assert any("must be a mapping" in e.message for e in hard)
+    # The well-formed sibling entry is unaffected.
+    assert not any("summary" in e.message for e in errors)
+
+
+def test_build_manifest_drops_v1_views_yml_non_mapping_entries(tmp_path):
+    _make_v1_project(tmp_path)
+    _corrupt_v1_views_yml(tmp_path)
+    manifest = build_manifest(tmp_path)
+    assert [v["name"] for v in manifest["views"]] == ["summary"]
+
+
+def test_build_json_does_not_crash_on_v1_views_yml_non_mapping_entries(tmp_path):
+    _make_v1_project(tmp_path)
+    _corrupt_v1_views_yml(tmp_path)
+    manifest = build_json(tmp_path)
+    assert [v["name"] for v in manifest["views"]] == ["summary"]
+
+
+def test_plan_upgrade_v1_to_v2_does_not_crash_on_non_mapping_view(tmp_path):
+    _make_v1_project(tmp_path)
+    _corrupt_v1_views_yml(tmp_path)
+    result = plan_upgrade(tmp_path, target_version=2)
+    assert any("views/summary/metadata.yml" in f for f in result.files_created)
+
+
+def test_apply_upgrade_v1_to_v2_does_not_crash_on_non_mapping_view(tmp_path):
+    _make_v1_project(tmp_path)
+    _corrupt_v1_views_yml(tmp_path)
+    result = plan_upgrade(tmp_path, target_version=2)
+    apply_upgrade(tmp_path, result)
+    assert (tmp_path / "views" / "summary" / "metadata.yml").exists()
+    assert not (tmp_path / "views.yml").exists()
+
+
 def test_apply_upgrade_v2_to_v3(tmp_path):
     _make_v2_project(tmp_path)
     result = plan_upgrade(tmp_path, target_version=3)
