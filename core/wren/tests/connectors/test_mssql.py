@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import datetime as dtlib
+import re
 from decimal import Decimal as PyDecimal
 
 import duckdb
@@ -305,3 +306,75 @@ def test_url_connection(mssql_container: SqlServerContainer) -> None:
         cur.close()
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# _flatten_pagination_limit unit tests (no container needed)
+# ---------------------------------------------------------------------------
+
+
+def _has_exact_limit(sql: str, n: int) -> bool:
+    """True if the rendered SQL limits to exactly ``n`` rows (TOP or FETCH form).
+
+    Token-boundary aware so ``TOP 3`` does not match ``TOP 30``.
+    """
+    return bool(
+        re.search(rf"\bTOP {n}\b", sql, re.IGNORECASE)
+        or re.search(rf"\bNEXT {n} ROWS\b", sql, re.IGNORECASE)
+    )
+
+
+def test_flatten_pagination_preserves_outer_cte() -> None:
+    """Flattening must not drop an outer WITH — the inner select would then
+    reference a CTE that no longer exists (e.g. semantic-layer model CTEs)."""
+    sql = (
+        "WITH m AS (SELECT a, b FROM dbo.t) "
+        "SELECT TOP 3 * FROM (SELECT a, SUM(b) AS s FROM m GROUP BY a) AS _c"
+    )
+    out = MSSqlConnector._flatten_pagination_limit(None, sql)
+    assert "WITH" in out.upper()
+    assert "FROM m" in out or "FROM [m]" in out
+
+
+def test_flatten_pagination_preserves_outer_order_by() -> None:
+    """Flattening must not drop an outer ORDER BY — TOP-n without the ordering
+    silently returns arbitrary rows."""
+    sql = (
+        "SELECT TOP 3 * FROM "
+        "(SELECT a, SUM(b) AS s FROM dbo.t GROUP BY a) AS _c ORDER BY s DESC"
+    )
+    out = MSSqlConnector._flatten_pagination_limit(None, sql)
+    assert "ORDER BY" in out.upper()
+
+
+def test_flatten_pagination_still_collapses_bare_wrap() -> None:
+    """The plain paginate-wrap shape (no WITH, no ORDER BY) keeps collapsing."""
+    sql = "SELECT * FROM (SELECT a FROM dbo.t) AS w LIMIT 5"
+    out = MSSqlConnector._flatten_pagination_limit(None, sql)
+    assert "(SELECT" not in out.upper().replace(" ", "")
+    assert _has_exact_limit(out, 5)
+
+
+def test_flatten_pagination_limit_keyword_with_cte_becomes_tsql() -> None:
+    """A literal LIMIT on the guarded path must still be rewritten to valid
+    T-SQL (TOP/FETCH) while the outer WITH survives."""
+    sql = (
+        "WITH m AS (SELECT a, b FROM dbo.t) "
+        "SELECT * FROM (SELECT a, SUM(b) AS s FROM m GROUP BY a) AS _c LIMIT 3"
+    )
+    out = MSSqlConnector._flatten_pagination_limit(None, sql)
+    assert "WITH" in out.upper()
+    assert "LIMIT" not in out.upper()
+    assert _has_exact_limit(out, 3)
+
+
+def test_flatten_pagination_limit_keyword_with_order_by_becomes_tsql() -> None:
+    """LIMIT + outer ORDER BY: ordering survives and LIMIT is rewritten."""
+    sql = (
+        "SELECT * FROM (SELECT a, SUM(b) AS s FROM dbo.t GROUP BY a) AS _c "
+        "ORDER BY s DESC LIMIT 3"
+    )
+    out = MSSqlConnector._flatten_pagination_limit(None, sql)
+    assert "ORDER BY" in out.upper()
+    assert "LIMIT" not in out.upper()
+    assert _has_exact_limit(out, 3)
