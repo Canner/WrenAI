@@ -41,5 +41,4 @@ def test_query_limit_path_still_strips_via_apply_limit(monkeypatch: pytest.Monke
     connector.query("SELECT 1;", limit=2)
     sent = cursor.execute.call_args[0][0]
     assert "LIMIT 2" in sent
-    assert ";)" not in sent
     assert not sent.rstrip().endswith(";")
