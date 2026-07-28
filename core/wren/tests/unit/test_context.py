@@ -1418,18 +1418,35 @@ def test_validate_project_accepts_empty_v1_views_key(tmp_path):
     assert not [e for e in validate_project(tmp_path) if "views" in e.path]
 
 
-def test_validate_project_reports_non_list_v1_views_container(tmp_path):
-    """A scalar under ``views:`` is malformed — report it, don't crash."""
+@pytest.mark.parametrize(
+    ("views_yml", "expected_type"),
+    [
+        ("views: junk\n", "str"),
+        ("views: 3\n", "int"),
+        ("views:\n  a: 1\n", "dict"),
+    ],
+)
+def test_validate_project_reports_non_list_v1_views_container(
+    tmp_path, views_yml, expected_type
+):
+    """A non-list under ``views:`` is malformed — report it once, don't crash."""
     _make_v1_project(tmp_path)
-    (tmp_path / "views.yml").write_text("views: junk\n")
+    (tmp_path / "views.yml").write_text(views_yml)
+
     hard = [e for e in validate_project(tmp_path) if e.level == "error"]
     container = [e for e in hard if e.path == "views.yml > views"]
     assert len(container) == 1
-    assert "must be a list" in container[0].message
-    # Not additionally reported once per character of the scalar.
+    assert f"must be a list, got {expected_type}" in container[0].message
+    # Not additionally reported once per character/key of the container.
     assert not [e for e in hard if "must be a mapping" in e.message]
-    # And the build path degrades to no views rather than raising.
+
+    # Every consumer degrades to "no views" rather than raising.
     assert build_manifest(tmp_path)["views"] == []
+    assert build_json(tmp_path)["views"] == []
+    plan = plan_upgrade(tmp_path, target_version=2)
+    assert not [f for f in plan.files_created if f.startswith("views/")]
+    apply_upgrade(tmp_path, plan)
+    assert not (tmp_path / "views").exists()
 
 
 def test_build_manifest_drops_v1_views_yml_non_mapping_entries(tmp_path):
