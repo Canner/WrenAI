@@ -4,7 +4,9 @@ use crate::logical_plan::utils::{belong_to_mdl, expr_to_columns};
 use crate::mdl::context::SessionPropertiesRef;
 use crate::mdl::utils::quoted;
 use crate::mdl::{AnalyzedWrenMDL, Dataset, SessionStateRef};
-use datafusion::common::tree_node::{Transformed, TransformedResult, TreeNode};
+use datafusion::common::tree_node::{
+    Transformed, TransformedResult, TreeNode, TreeNodeRecursion, TreeNodeRewriter,
+};
 use datafusion::common::{internal_err, plan_err, Column, DFSchemaRef, Result, Spans};
 use datafusion::config::ConfigOptions;
 use datafusion::error::DataFusionError;
@@ -20,6 +22,15 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::sync::Arc;
+
+#[cfg(test)]
+thread_local! {
+    /// Counts [`ModelAnalyzeRule::build_model_plan_node`] calls; thread-local because
+    /// `#[tokio::test]`'s default current-thread runtime keeps caller and counter on
+    /// the same thread (a `flavor = "multi_thread"` test would need something else).
+    pub(crate) static BUILD_MODEL_PLAN_NODE_CALLS: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
 
 /// [ModelAnalyzeRule] responsible for analyzing the model plan node. Turn TableScan from a model to a ModelPlanNode.
 /// We collect the required fields from the projection, filter, aggregation, and join,
@@ -55,6 +66,73 @@ struct ModelStackGuard<'a> {
 impl Drop for ModelStackGuard<'_> {
     fn drop(&mut self) {
         self.stack.borrow_mut().remove(&self.name);
+    }
+}
+
+/// Drives [`ModelAnalyzeRule::analyze_model`], trying
+/// [`ModelAnalyzeRule::shortcut_aliased_table_scan`] before the original
+/// [`ModelAnalyzeRule::analyze_model_internal`] pass.
+struct ModelRewriter<'a> {
+    rule: &'a ModelAnalyzeRule,
+    scope_manager: &'a mut ScopeManager,
+    current_scope_id: ScopeId,
+    cycle_stack: &'a ModelStack,
+    /// Set by `f_down` when the pre-order shortcut fires, so `f_up` skips the
+    /// bottom-up pass for that node. Correct only because a `Jump` from `f_down`
+    /// still runs `f_up` for the same node (`transform_children` turns `Jump` into `Continue`).
+    shortcut_taken: bool,
+}
+
+impl TreeNodeRewriter for ModelRewriter<'_> {
+    type Node = LogicalPlan;
+
+    fn f_down(&mut self, plan: LogicalPlan) -> Result<Transformed<LogicalPlan>> {
+        let result = self.rule.shortcut_aliased_table_scan(
+            plan,
+            self.scope_manager,
+            self.current_scope_id,
+            self.cycle_stack,
+        )?;
+        self.shortcut_taken = result.tnr == TreeNodeRecursion::Jump;
+        Ok(result)
+    }
+
+    fn f_up(&mut self, plan: LogicalPlan) -> Result<Transformed<LogicalPlan>> {
+        let plan = if std::mem::take(&mut self.shortcut_taken) {
+            plan
+        } else {
+            self.rule
+                .analyze_model_internal(
+                    plan,
+                    self.scope_manager,
+                    self.current_scope_id,
+                    self.cycle_stack,
+                )?
+                .data
+        };
+        // If the plan contains subquery, we should analyze the subquery recursively
+        plan.map_subqueries(|plan| {
+            if let LogicalPlan::Subquery(subquery) = &plan {
+                let root_scope =
+                    self.scope_manager.get_scope_mut(self.current_scope_id)?;
+                let Some(child_scope_id) = root_scope.pop_child_scope() else {
+                    return internal_err!("No child scope found for subquery");
+                };
+                let transformed = self
+                    .rule
+                    .analyze_model(
+                        Arc::unwrap_or_clone(Arc::clone(&subquery.subquery)),
+                        self.scope_manager,
+                        child_scope_id,
+                        self.cycle_stack,
+                    )?
+                    .data;
+                return Ok(Transformed::yes(LogicalPlan::Subquery(
+                    subquery.with_plan(Arc::new(transformed)),
+                )));
+            }
+            Ok(Transformed::no(plan))
+        })
     }
 }
 
@@ -352,37 +430,14 @@ impl ModelAnalyzeRule {
         current_scope_id: ScopeId,
         cycle_stack: &ModelStack,
     ) -> Result<Transformed<LogicalPlan>> {
-        plan.transform_up(&mut |plan| -> Result<Transformed<LogicalPlan>> {
-            let plan = self
-                .analyze_model_internal(
-                    plan,
-                    scope_manager,
-                    current_scope_id,
-                    cycle_stack,
-                )?
-                .data;
-            // If the plan contains subquery, we should analyze the subquery recursively
-            plan.map_subqueries(|plan| {
-                if let LogicalPlan::Subquery(subquery) = &plan {
-                    let root_scope = scope_manager.get_scope_mut(current_scope_id)?;
-                    let Some(child_scope_id) = root_scope.pop_child_scope() else {
-                        return internal_err!("No child scope found for subquery");
-                    };
-                    let transformed = self
-                        .analyze_model(
-                            Arc::unwrap_or_clone(Arc::clone(&subquery.subquery)),
-                            scope_manager,
-                            child_scope_id,
-                            cycle_stack,
-                        )?
-                        .data;
-                    return Ok(Transformed::yes(LogicalPlan::Subquery(
-                        subquery.with_plan(Arc::new(transformed)),
-                    )));
-                }
-                Ok(Transformed::no(plan))
-            })
-        })
+        let mut rewriter = ModelRewriter {
+            rule: self,
+            scope_manager,
+            current_scope_id,
+            cycle_stack,
+            shortcut_taken: false,
+        };
+        plan.rewrite(&mut rewriter)
     }
 
     /// Analyze the model and generate the ModelPlanNode
@@ -499,6 +554,8 @@ impl ModelAnalyzeRule {
         original_table_scan: Option<LogicalPlan>,
         cycle_stack: &ModelStack,
     ) -> Result<ModelPlanNode> {
+        #[cfg(test)]
+        BUILD_MODEL_PLAN_NODE_CALLS.with(|c| c.set(c.get() + 1));
         let model_name = model.name().to_string();
         // Keep the mutation in its own scope: recursive analysis and
         // `ModelStackGuard::drop` both borrow the `RefCell` again, so extending
@@ -621,6 +678,77 @@ impl ModelAnalyzeRule {
             .data()
     }
 
+    /// Resolve the required fields for `table_ref` in `current_scope_id`: the
+    /// recorded required columns if any, `vec![]` if the table was only visited
+    /// (e.g. `count(*)`), or an error if neither is present.
+    fn resolve_required_fields(
+        &self,
+        scope_manager: &ScopeManager,
+        current_scope_id: ScopeId,
+        table_ref: &TableReference,
+    ) -> Result<Vec<Expr>> {
+        if let Some(used_columns) =
+            scope_manager.try_get_required_columns(current_scope_id, table_ref)
+        {
+            Ok(used_columns.iter().cloned().collect())
+        } else if scope_manager
+            .try_get_visited_dataset(current_scope_id, table_ref)
+            .is_some()
+        {
+            Ok(vec![])
+        } else {
+            internal_err!(
+                "Table {} not found in the visited dataset and required columns map",
+                table_ref
+            )
+        }
+    }
+
+    /// Pre-order shortcut for `SubqueryAlias -> TableScan` (e.g. `FROM a_model AS alias`).
+    /// Builds the `ModelPlanNode` directly with the alias's own required columns,
+    /// mirroring [`Self::analyze_subquery_alias_model`], instead of the bottom-up pass.
+    fn shortcut_aliased_table_scan(
+        &self,
+        plan: LogicalPlan,
+        scope_manager: &mut ScopeManager,
+        current_scope_id: ScopeId,
+        cycle_stack: &ModelStack,
+    ) -> Result<Transformed<LogicalPlan>> {
+        let LogicalPlan::SubqueryAlias(SubqueryAlias { input, alias, .. }) = &plan else {
+            return Ok(Transformed::no(plan));
+        };
+        let LogicalPlan::TableScan(scan) = input.as_ref() else {
+            return Ok(Transformed::no(plan));
+        };
+        if !belong_to_mdl(
+            &self.analyzed_wren_mdl.wren_mdl(),
+            scan.table_name.clone(),
+            Arc::clone(&self.session_state),
+        ) {
+            return Ok(Transformed::no(plan));
+        }
+        let Some(model) = self
+            .analyzed_wren_mdl
+            .wren_mdl
+            .get_model(scan.table_name.table())
+        else {
+            return Ok(Transformed::no(plan));
+        };
+        // original_table_scan is None below, so `input` is never consumed: clone just
+        // the alias instead of re-matching `plan` to take ownership of it.
+        let alias = alias.clone();
+
+        let field =
+            self.resolve_required_fields(scope_manager, current_scope_id, &alias)?;
+        let model_plan_node =
+            self.build_model_plan_node(model, field, None, cycle_stack)?;
+        let model_plan = LogicalPlan::Extension(Extension {
+            node: Arc::new(model_plan_node),
+        });
+        let subquery = LogicalPlanBuilder::from(model_plan).alias(alias)?.build()?;
+        Ok(Transformed::new(subquery, true, TreeNodeRecursion::Jump))
+    }
+
     fn analyze_table_scan(
         &self,
         table_scan: TableScan,
@@ -637,24 +765,11 @@ impl ModelAnalyzeRule {
             let table_name = table_scan.table_name.table();
             if let Some(model) = self.analyzed_wren_mdl.wren_mdl.get_model(table_name) {
                 let table_ref = alias.unwrap_or(table_scan.table_name.clone());
-                let field: Vec<Expr> = if let Some(used_columns) =
-                    scope_manager.try_get_required_columns(current_scope_id, &table_ref)
-                {
-                    used_columns.iter().cloned().collect()
-                } else {
-                    // If the required columns are not found in the current scope but the table is visited,
-                    // it could be a count(*) query
-                    if scope_manager
-                        .try_get_visited_dataset(current_scope_id, &table_ref)
-                        .is_none()
-                    {
-                        return internal_err!(
-                            "Table {} not found in the visited dataset and required columns map",
-                            table_ref
-                        );
-                    };
-                    vec![]
-                };
+                let field = self.resolve_required_fields(
+                    scope_manager,
+                    current_scope_id,
+                    &table_ref,
+                )?;
                 let model_plan_node = self.build_model_plan_node(
                     Arc::clone(&model),
                     field,
@@ -698,23 +813,11 @@ impl ModelAnalyzeRule {
                     .wren_mdl()
                     .get_model(model_node.plan_name())
                 {
-                    let field: Vec<Expr> = if let Some(used_columns) =
-                        scope_manager.try_get_required_columns(current_scope_id, &alias)
-                    {
-                        used_columns.iter().cloned().collect()
-                    } else {
-                        // If the required columns are not found in the current scope but the table is visited,
-                        // it could be a count(*) query
-                        if scope_manager
-                            .try_get_visited_dataset(current_scope_id, &alias)
-                            .is_none()
-                        {
-                            return internal_err!(
-                                    "Table {} not found in the visited dataset and required columns map",
-                                    alias);
-                        };
-                        vec![]
-                    };
+                    let field = self.resolve_required_fields(
+                        scope_manager,
+                        current_scope_id,
+                        &alias,
+                    )?;
                     let model_plan_node = self.build_model_plan_node(
                         Arc::clone(&model),
                         field,
