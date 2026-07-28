@@ -1628,3 +1628,18 @@ def test_validate_manifest_invalid_datasource():
     manifest = {**_SEM_BASE_MANIFEST, "views": [_VALID_VIEW]}
     result = validate_manifest(_b64(manifest), "not-a-datasource")
     assert len(result["errors"]) == 1
+
+
+def test_validate_relationship_models_must_be_list(tmp_path):
+    """Non-list relationship models is a structural error, not iterated as chars."""
+    _make_valid_project(tmp_path)
+    (tmp_path / "relationships.yml").write_text(
+        "relationships:\n"
+        "  - name: bad\n"
+        "    models: orders\n"
+        "    condition: a.id = b.id\n"
+        "    join_type: MANY_TO_ONE\n"
+    )
+    errors = validate_project(tmp_path)
+    hard = [e for e in errors if e.level == "error"]
+    assert any("must be a list" in e.message for e in hard)

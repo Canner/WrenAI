@@ -1155,7 +1155,18 @@ def validate_project(project_path: Path) -> list[ValidationError]:
             )
             continue
         rel_name = rel.get("name", f"relationships[{i}]")
-        ref_models = rel.get("models") or []
+        ref_models = rel.get("models")
+        if ref_models is None:
+            ref_models = []
+        if not isinstance(ref_models, list):
+            errors.append(
+                ValidationError(
+                    "error",
+                    f"relationships > {rel_name}",
+                    f"'models' must be a list, got {type(ref_models).__name__}",
+                )
+            )
+            ref_models = []
         for m in ref_models:
             if m not in all_entity_names:
                 errors.append(
