@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.3](https://github.com/Canner/WrenAI/compare/wren-core-py-v0.7.2...wren-core-py-v0.7.3) (2026-07-28)
+
+
+### Bug Fixes
+
+* **core-py:** serialize query results with the execution stream schema ([#2577](https://github.com/Canner/WrenAI/issues/2577)) ([1c9ae18](https://github.com/Canner/WrenAI/commit/1c9ae18c543020b43df974d7ad01189e5814ce07))
+
 ## [0.7.2](https://github.com/Canner/WrenAI/compare/wren-core-py-v0.7.1...wren-core-py-v0.7.2) (2026-07-20)
 
 
