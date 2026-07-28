@@ -113,3 +113,57 @@ SQL query
 - **DataFusion**: upstream `datafusion` v53 from crates.io (no longer the Canner fork).
 - **Snapshot testing**: wren-core uses `insta` for Rust snapshot tests.
 - **CI**: Per-module path-filtered workflows trigger only on changes inside that module.
+
+## Contribution Bar
+
+Read this before opening a pull request. These rules exist because a large share of
+incoming PRs fail them; a PR that violates one will be closed rather than iterated on.
+
+### Prove the problem before fixing it
+
+- **Do not assert the behaviour of an external system you have not observed.** If you
+  claim an engine, driver, or library rejects some input, reproduce it and paste the
+  actual error into the description. Unevidenced claims — "the parser rejects a trailing
+  semicolon", "some clients reject this" — are rejected on sight; several such claims
+  have turned out to be false when tested.
+- **Do not add a guard for a state you have not shown to be reachable.** Trace the call
+  path and say in the description how the bad value gets there. Where the repo already
+  validates (see "Validation boundaries" in `core/wren/.claude/CLAUDE.md`), re-validating
+  downstream is dead code.
+- If you cannot reproduce a failure, you have a hypothesis, not a bug. **Open an issue
+  with the reproduction attempt, not a PR.**
+
+### Label honestly
+
+- `fix:` requires a reproducible failure that the change repairs. A change with no
+  observable difference in behaviour is `refactor:` or `chore:`.
+- The description must say what changes for a user. "Improves robustness" and
+  "hardens X" are not answers.
+
+### Tests must exercise the code you changed
+
+- A test that reads a source file as text and asserts on substrings tests nothing. Call
+  the function; assert on what it returns, or on what it passes downstream.
+- Every assertion must be capable of failing. An assertion about a condition the code
+  cannot produce is noise.
+- Confirm the test actually runs in CI. Some test files are gated behind optional extras
+  or containers and are skipped by the default jobs — a service-free test placed in one
+  of those files never executes.
+
+### One change, once
+
+- Search open PRs before opening a new one. Duplicate PRs against the same file are
+  closed without review.
+- A mechanical change repeated across several files or connectors belongs in **one** PR,
+  not one PR per file. Reviewers need to see the resulting convention in a single diff.
+
+### Respect decisions already recorded
+
+- If a comment or a test documents a deliberate choice, do not silently reverse it.
+  Quote it in the description and argue why it should change.
+
+### Keep the branch current
+
+- Rebase onto the target branch before requesting review. A branch whose last CI run was
+  against an old base can merge cleanly and still be broken — a textually clean merge is
+  not a semantically correct one.
