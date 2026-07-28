@@ -1,0 +1,175 @@
+From 20c40106e6de7a5696fe25d6d2d8ff88eb9221ed Mon Sep 17 00:00:00 2001
+From: Harshitha <hbalasubramanya@etag.in>
+Date: Wed, 29 Jul 2026 02:23:00 +0530
+Subject: [PATCH] Fix MSSQL date transpilation
+
+---
+ ibis-server/app/mdl/rewriter.py               | 99 ++++++++++++++++++-
+ .../tests/model/test_mssql_connector.py       | 15 +++
+ 2 files changed, 113 insertions(+), 1 deletion(-)
+
+diff --git a/ibis-server/app/mdl/rewriter.py b/ibis-server/app/mdl/rewriter.py
+index 3fe7e8af..6515c9de 100644
+--- a/ibis-server/app/mdl/rewriter.py
++++ b/ibis-server/app/mdl/rewriter.py
+@@ -2,6 +2,7 @@ import importlib
+ 
+ import httpx
+ import sqlglot
++from sqlglot import exp
+ from anyio import to_thread
+ from loguru import logger
+ from opentelemetry import trace
+@@ -27,6 +28,97 @@ importlib.import_module("app.custom_sqlglot.dialects")
+ tracer = trace.get_tracer(__name__)
+ 
+ 
++def rewrite_mssql_date_operations(sql: str) -> str:
++    ast = sqlglot.parse_one(sql, dialect="tsql")
++    ast = ast.transform(_rewrite_mssql_interval_arithmetic)
++    ast = ast.transform(_rewrite_mssql_date_trunc)
++    return ast.sql(dialect="tsql")
++
++
++def _rewrite_mssql_interval_arithmetic(node: exp.Expression) -> exp.Expression:
++    if isinstance(node, exp.Sub) and isinstance(node.expression, exp.Interval):
++        return _mssql_dateadd(
++            node.expression,
++            node.this.copy(),
++            negative=True,
++        ) or node
++
++    if isinstance(node, exp.Add):
++        if isinstance(node.expression, exp.Interval):
++            return _mssql_dateadd(node.expression, node.this.copy()) or node
++        if isinstance(node.this, exp.Interval):
++            return _mssql_dateadd(node.this, node.expression.copy()) or node
++
++    return node
++
++
++def _rewrite_mssql_date_trunc(node: exp.Expression) -> exp.Expression:
++    if not isinstance(node, (exp.DateTrunc, exp.TimestampTrunc)):
++        return node
++
++    unit = _mssql_interval_unit(node.args.get("unit"))
++    if unit is None:
++        return node
++
++    value = node.this.this.copy() if isinstance(node.this, exp.Paren) else node.this.copy()
++    return exp.Anonymous(
++        this="DATEADD",
++        expressions=[
++            unit,
++            exp.Anonymous(
++                this="DATEDIFF",
++                expressions=[
++                    unit.copy(),
++                    exp.Literal.number(0),
++                    value,
++                ],
++            ),
++            exp.Literal.number(0),
++        ],
++    )
++
++
++def _mssql_dateadd(
++    interval: exp.Interval, date_expression: exp.Expression, *, negative: bool = False
++) -> exp.Expression | None:
++    amount = _mssql_interval_amount(interval)
++    if negative:
++        amount = exp.Neg(this=amount)
++
++    unit = _mssql_interval_unit(interval.args.get("unit"))
++    if unit is None:
++        return None
++
++    return exp.Anonymous(
++        this="DATEADD",
++        expressions=[
++            unit,
++            amount,
++            date_expression,
++        ],
++    )
++
++
++def _mssql_interval_amount(interval: exp.Interval) -> exp.Expression:
++    amount = interval.this.copy()
++    if isinstance(amount, exp.Literal) and amount.is_string:
++        text = str(amount.this).strip()
++        try:
++            return exp.Literal.number(int(text))
++        except ValueError:
++            try:
++                return exp.Literal.number(float(text))
++            except ValueError:
++                return amount
++    return amount
++
++
++def _mssql_interval_unit(unit: exp.Expression | None) -> exp.Var | None:
++    if unit is None:
++        return None
++    return exp.Var(this=unit.name.upper())
++
++
+ class Rewriter:
+     def __init__(
+         self,
+@@ -53,7 +145,10 @@ class Rewriter:
+         try:
+             read = self._get_read_dialect(self.experiment)
+             write = self._get_write_dialect(self.data_source)
+-            return sqlglot.transpile(planned_sql, read=read, write=write)[0]
++            dialect_sql = sqlglot.transpile(planned_sql, read=read, write=write)[0]
++            if self.data_source == DataSource.mssql:
++                return rewrite_mssql_date_operations(dialect_sql)
++            return dialect_sql
+         except Exception as e:
+             raise WrenError(
+                 ErrorCode.SQLGLOT_ERROR,
+@@ -99,6 +194,8 @@ class Rewriter:
+             DataSource.gcs_file,
+         }:
+             return "duckdb"
++        elif data_source == DataSource.mssql:
++            return "tsql"
+         return data_source.name
+ 
+ 
+diff --git a/ibis-server/tests/model/test_mssql_connector.py b/ibis-server/tests/model/test_mssql_connector.py
+index e1d5d204..f26332e7 100644
+--- a/ibis-server/tests/model/test_mssql_connector.py
++++ b/ibis-server/tests/model/test_mssql_connector.py
+@@ -1,4 +1,6 @@
++from app.mdl.rewriter import Rewriter, rewrite_mssql_date_operations
+ from app.model.connector import MSSqlConnector
++from app.model.data_source import DataSource
+ from app.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
+ 
+ 
+@@ -44,6 +46,19 @@ def _connector(connection):
+     return connector
+ 
+ 
++def test_mssql_rewriter_uses_tsql_dialect():
++    assert Rewriter._get_write_dialect(DataSource.mssql) == "tsql"
++
++
++def test_rewrite_mssql_date_operations_uses_tsql_dateadd():
++    assert rewrite_mssql_date_operations(
++        "SELECT TIMESTAMP_TRUNC((GETDATE() - INTERVAL '1' MONTH), MONTH)"
++    ) == (
++        "SELECT DATEADD(MONTH, DATEDIFF(MONTH, 0, "
++        "DATEADD(MONTH, -1, GETDATE())), 0)"
++    )
++
++
+ def test_query_uses_raw_sql_for_grouped_aggregate_results():
+     connection = FakeConnection(
+         [
+-- 
+2.53.0.windows.2
+
