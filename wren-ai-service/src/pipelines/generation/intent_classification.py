@@ -189,10 +189,7 @@ async def table_retrieval(
             {"field": "project_id", "operator": "==", "value": project_id}
         )
 
-    return await table_retriever.run(
-        query_embedding=embedding.get("embedding"),
-        filters=filters,
-    )
+    return await table_retriever.run(query_embedding=[], filters=filters)
 
 
 @observe(capture_input=False)
@@ -212,6 +209,9 @@ async def dbschema_retrieval(
         for table_name in table_names
     ]
 
+    if not table_name_conditions:
+        return []
+
     filters = {
         "operator": "AND",
         "conditions": [
@@ -225,9 +225,7 @@ async def dbschema_retrieval(
             {"field": "project_id", "operator": "==", "value": project_id}
         )
 
-    results = await dbschema_retriever.run(
-        query_embedding=embedding.get("embedding"), filters=filters
-    )
+    results = await dbschema_retriever.run(query_embedding=[], filters=filters)
     return results["documents"]
 
 

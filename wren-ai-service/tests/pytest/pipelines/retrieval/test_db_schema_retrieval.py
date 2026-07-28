@@ -38,6 +38,37 @@ async def test_table_retrieval_fetches_explicit_table_descriptions():
 
 
 @pytest.mark.asyncio
+async def test_table_retrieval_fetches_current_project_table_descriptions():
+    class Retriever:
+        def __init__(self):
+            self.query_embedding = None
+            self.filters = None
+
+        async def run(self, query_embedding, filters):
+            self.query_embedding = query_embedding
+            self.filters = filters
+            return {"documents": []}
+
+    retriever = Retriever()
+
+    await table_retrieval(
+        embedding={"embedding": [0.1, 0.2]},
+        project_id="project-1",
+        tables=None,
+        table_retriever=retriever,
+    )
+
+    assert retriever.query_embedding == []
+    assert retriever.filters == {
+        "operator": "AND",
+        "conditions": [
+            {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
+            {"field": "project_id", "operator": "==", "value": "project-1"},
+        ],
+    }
+
+
+@pytest.mark.asyncio
 async def test_dbschema_retrieval_loads_selected_active_project_schema():
     class Retriever:
         def __init__(self):

@@ -82,9 +82,6 @@ sql_correction_user_prompt_template = """
 User's Question: {{ query }}
 Answer the user's intent using the current DATABASE SCHEMA. Use aliases, descriptions, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact table and column names from DATABASE SCHEMA.
 {% endif %}
-{% if sql_generation_reasoning %}
-SQL generation reasoning: {{ sql_generation_reasoning }}
-{% endif %}
 SQL: {{ invalid_generation_result.sql }}
 Error Message: {{ invalid_generation_result.error }}
 
@@ -99,7 +96,6 @@ def prompt(
     invalid_generation_result: Dict,
     prompt_builder: PromptBuilder,
     query: str | None = None,
-    sql_generation_reasoning: str | None = None,
     instructions: list[dict] | None = None,
     sql_functions: list[SqlFunction] | None = None,
 ) -> dict:
@@ -107,7 +103,6 @@ def prompt(
         query=query,
         documents=documents,
         invalid_generation_result=invalid_generation_result,
-        sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
         ),
@@ -206,7 +201,6 @@ class SQLCorrection(BasicPipeline):
                 "invalid_generation_result": invalid_generation_result,
                 "query": query,
                 "documents": contexts,
-                "sql_generation_reasoning": sql_generation_reasoning,
                 "instructions": instructions,
                 "sql_functions": sql_functions,
                 "project_id": project_id,
