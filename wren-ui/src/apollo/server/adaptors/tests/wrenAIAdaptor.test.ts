@@ -34,6 +34,33 @@ describe('WrenAIAdaptor', () => {
     jest.clearAllMocks();
   });
 
+  describe('deploy', () => {
+    it('should send the project id to scope indexed semantics', async () => {
+      const mockInput = {
+        manifest: sampleManifest,
+        hash: 'deploy-hash',
+        projectId: 123,
+      };
+      mockedAxios.post.mockResolvedValueOnce({
+        data: { id: mockInput.hash },
+      });
+      mockedAxios.get.mockResolvedValueOnce({
+        data: { status: 'finished' },
+      });
+
+      await adaptor.deploy(mockInput);
+
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        `${baseEndpoint}/v1/semantics-preparations`,
+        {
+          mdl: JSON.stringify(mockInput.manifest),
+          id: mockInput.hash,
+          project_id: mockInput.projectId.toString(),
+        },
+      );
+    });
+  });
+
   describe('ask', () => {
     const mockInput: AskInput = {
       query: 'Show active records',
