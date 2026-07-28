@@ -89,7 +89,7 @@ class TestBuildConnectionParams:
 class TestSnowflakeConnector:
     def _make_connector(self, mock_connection: MagicMock) -> SnowflakeConnector:
         with patch(
-            "wren.connector.snowflake.snowflake.connector.connect",
+            "snowflake.connector.connect",
             return_value=mock_connection,
         ):
             return SnowflakeConnector(_password_info())
@@ -97,7 +97,7 @@ class TestSnowflakeConnector:
     def test_init_uses_password_auth(self):
         mock_conn = MagicMock()
         with patch(
-            "wren.connector.snowflake.snowflake.connector.connect",
+            "snowflake.connector.connect",
             return_value=mock_conn,
         ) as connect:
             connector = SnowflakeConnector(_password_info(warehouse="WH"))
@@ -110,7 +110,7 @@ class TestSnowflakeConnector:
     def test_init_uses_private_key_auth(self):
         mock_conn = MagicMock()
         with patch(
-            "wren.connector.snowflake.snowflake.connector.connect",
+            "snowflake.connector.connect",
             return_value=mock_conn,
         ) as connect:
             SnowflakeConnector(_private_key_info())
@@ -121,7 +121,7 @@ class TestSnowflakeConnector:
     def test_create_connector_returns_snowflake_connector(self):
         mock_conn = MagicMock()
         with patch(
-            "wren.connector.snowflake.snowflake.connector.connect",
+            "snowflake.connector.connect",
             return_value=mock_conn,
         ):
             connector = create_connector(_password_info())
@@ -146,17 +146,23 @@ class TestSnowflakeConnector:
         cursor.execute.assert_called_once_with("SELECT a FROM t")
         assert result.equals(expected)
 
-    def test_query_with_limit_slices_result(self):
-        expected = pa.table({"a": [1, 2, 3, 4, 5]})
+    def test_query_with_limit_pushes_limit_into_sql(self):
+        # LIMIT is pushed into the SQL sent to Snowflake rather than applied in
+        # Python. The cursor deliberately returns more rows than the limit — a
+        # real Snowflake would honour the pushed-down LIMIT — so the last
+        # assertion fails if a client-side slice is ever reintroduced.
+        returned = pa.table({"a": [1, 2, 3, 4, 5]})
         mock_conn = MagicMock()
-        cursor = self._build_cursor(expected)
+        cursor = self._build_cursor(returned)
         mock_conn.cursor.return_value = cursor
 
         connector = self._make_connector(mock_conn)
         result = connector.query("SELECT a FROM t", limit=2)
 
-        assert result.num_rows == 2
-        assert result["a"].to_pylist() == [1, 2]
+        executed_sql = cursor.execute.call_args.args[0]
+        assert "SELECT a FROM t" in executed_sql
+        assert "LIMIT 2" in executed_sql
+        assert result.equals(returned)
 
     def test_query_handles_none_arrow_result(self):
         mock_conn = MagicMock()
