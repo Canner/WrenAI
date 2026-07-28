@@ -57,7 +57,10 @@ class SSEEvent(BaseModel):
 # for POST, PATCH, UPDATE, DELETE requests
 class BaseRequest(BaseModel):
     query_id: Optional[str] = Field(default=None, exclude=True)
-    project_id: Optional[str] = None
+    project_id: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("project_id", "projectId"),
+    )
     thread_id: Optional[str] = None
     configurations: Configuration = Field(
         default_factory=Configuration,

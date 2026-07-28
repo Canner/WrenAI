@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { WrenAIAdaptor } from '../wrenAIAdaptor';
 import {
+  AskInput,
   RecommendationQuestionsInput,
   RecommendationQuestionStatus,
 } from '@server/models/adaptor';
@@ -31,6 +32,36 @@ describe('WrenAIAdaptor', () => {
   beforeEach(() => {
     adaptor = new WrenAIAdaptor({ wrenAIBaseEndpoint: baseEndpoint });
     jest.clearAllMocks();
+  });
+
+  describe('ask', () => {
+    const mockInput: AskInput = {
+      query: 'Show active records',
+      deployId: 'deploy-hash',
+      projectId: 'project-123',
+      histories: [],
+      configurations: {
+        language: 'English',
+      },
+    };
+
+    it('should send the project id to scope AI retrieval', async () => {
+      const mockQueryId = 'query-123';
+      mockedAxios.post.mockResolvedValueOnce({
+        data: { query_id: mockQueryId },
+      });
+
+      const result = await adaptor.ask(mockInput);
+
+      expect(result).toEqual({ queryId: mockQueryId });
+      expect(mockedAxios.post).toHaveBeenCalledWith(`${baseEndpoint}/v1/asks`, {
+        query: mockInput.query,
+        id: mockInput.deployId,
+        project_id: mockInput.projectId,
+        histories: [],
+        configurations: mockInput.configurations,
+      });
+    });
   });
 
   describe('generateRecommendationQuestions', () => {
