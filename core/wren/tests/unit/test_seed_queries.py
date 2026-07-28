@@ -814,3 +814,29 @@ def test_skips_non_dict_columns():
     sqls = [p["sql"] for p in pairs]
     assert "SELECT * FROM orders LIMIT 100" in sqls
     assert "SELECT SUM(amount) FROM orders" in sqls
+
+
+@pytest.mark.unit
+class TestRelationshipSeedModelsType:
+    def test_string_models_raises(self):
+        manifest = {
+            "models": [_model("orders", "id", [_col("id", "int")])],
+            "relationships": [
+                {
+                    "name": "bad",
+                    "models": "orders",
+                    "condition": "a.id = b.id",
+                }
+            ],
+        }
+        with pytest.raises(ValueError, match="models"):
+            generate_seed_queries(manifest)
+
+    def test_dict_models_raises(self):
+        manifest = {
+            "relationships": [
+                {"name": "bad", "models": {"a": 1}, "condition": "x = y"}
+            ]
+        }
+        with pytest.raises(ValueError, match="models"):
+            generate_seed_queries(manifest)

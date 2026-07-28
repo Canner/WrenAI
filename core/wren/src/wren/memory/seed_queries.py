@@ -142,7 +142,14 @@ def _relationship_seed(rel: dict, model_layers: dict[str, str]) -> dict | None:
     # "condition": null in the manifest) does not slip a None past `.get()`'s
     # default and crash `len(None)` / `None.strip()`. Mirrors the defensive
     # `rel.get("condition") or ""` in `_relationship_key_columns`.
-    models = rel.get("models") or []
+    models = rel.get("models")
+    if models is None:
+        models = []
+    if not isinstance(models, list):
+        raise ValueError(
+            f"relationship {rel.get('name')!r}: 'models' must be a list, "
+            f"got {type(models).__name__}"
+        )
     condition = (rel.get("condition") or "").strip()
 
     if len(models) < 2 or not condition:
