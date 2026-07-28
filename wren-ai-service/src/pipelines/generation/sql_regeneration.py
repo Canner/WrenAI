@@ -38,6 +38,7 @@ You are a great ANSI SQL expert. Now you are given database schema, SQL generati
 please carefully review the reasoning, and then generate a new SQL query that matches the reasoning.
 While generating the new SQL query, you should use the original SQL query as a reference.
 While generating the new SQL query, make sure to use the database schema to generate the SQL query.
+If the original SQL query or reasoning contains unsupported identifiers, placeholders, or assumptions, ignore those parts and regenerate from the user's question and DATABASE SCHEMA.
 
 {text_to_sql_rules}
 
@@ -94,6 +95,8 @@ SQL:
 {% endif %}
 
 ### QUESTION ###
+User's Question: {{ query }}
+Answer the user's intent using the current DATABASE SCHEMA. Use aliases, descriptions, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact table and column names from DATABASE SCHEMA.
 Use the original SQL query only as intent context. Regenerate with executable identifiers from the current DATABASE SCHEMA only.
 SQL generation reasoning: {{ sql_generation_reasoning }}
 Original SQL query: {{ sql }}
@@ -105,6 +108,7 @@ Let's think step by step.
 ## Start of Pipeline
 @observe(capture_input=False)
 def prompt(
+    query: str,
     documents: list[str],
     sql_generation_reasoning: str,
     sql: str,
@@ -118,6 +122,7 @@ def prompt(
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
+        query=query,
         sql=sql,
         documents=documents,
         sql_generation_reasoning=sql_generation_reasoning,
@@ -197,6 +202,7 @@ class SQLRegeneration(BasicPipeline):
     async def run(
         self,
         contexts: list[str],
+        query: str,
         sql_generation_reasoning: str,
         sql: str,
         sql_samples: list[dict] | None = None,
@@ -214,6 +220,7 @@ class SQLRegeneration(BasicPipeline):
             ["post_process"],
             inputs={
                 "documents": contexts,
+                "query": query,
                 "sql_generation_reasoning": sql_generation_reasoning,
                 "sql": sql,
                 "sql_samples": sql_samples,

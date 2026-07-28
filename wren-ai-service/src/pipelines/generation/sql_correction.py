@@ -38,6 +38,8 @@ You are an ANSI SQL expert with exceptional logical thinking skills and debuggin
 2. Then, generate the syntactically correct ANSI SQL query to correct the error.
 3. If the invalid SQL contains a table, column, function, literal value, or metadata-table query that is not supported by the current DATABASE SCHEMA or SQL FUNCTIONS, do not preserve it.
 4. Never correct an invalid SQL query by checking INFORMATION_SCHEMA or system catalogs.
+5. If a user question is provided, treat it as the source of intent and regenerate the SQL from that intent using DATABASE SCHEMA instead of repairing guessed identifiers.
+6. Treat SQL diagnosis and the invalid SQL as error context only. Do not copy placeholders, assumed table names, assumed column names, or unsupported functions from them.
 
 ### SQL RULES ###
 Make sure you follow the SQL Rules strictly.
@@ -76,6 +78,13 @@ sql_correction_user_prompt_template = """
 {% endif %}
 
 ### QUESTION ###
+{% if query %}
+User's Question: {{ query }}
+Answer the user's intent using the current DATABASE SCHEMA. Use aliases, descriptions, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact table and column names from DATABASE SCHEMA.
+{% endif %}
+{% if sql_generation_reasoning %}
+SQL generation reasoning: {{ sql_generation_reasoning }}
+{% endif %}
 SQL: {{ invalid_generation_result.sql }}
 Error Message: {{ invalid_generation_result.error }}
 
@@ -89,12 +98,16 @@ def prompt(
     documents: List[Document],
     invalid_generation_result: Dict,
     prompt_builder: PromptBuilder,
+    query: str | None = None,
+    sql_generation_reasoning: str | None = None,
     instructions: list[dict] | None = None,
     sql_functions: list[SqlFunction] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
+        query=query,
         documents=documents,
         invalid_generation_result=invalid_generation_result,
+        sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
         ),
@@ -171,6 +184,8 @@ class SQLCorrection(BasicPipeline):
         self,
         contexts: List[Document],
         invalid_generation_result: Dict[str, str],
+        query: str | None = None,
+        sql_generation_reasoning: str | None = None,
         instructions: list[dict] | None = None,
         sql_functions: list[SqlFunction] | None = None,
         project_id: str | None = None,
@@ -189,7 +204,9 @@ class SQLCorrection(BasicPipeline):
             ["post_process"],
             inputs={
                 "invalid_generation_result": invalid_generation_result,
+                "query": query,
                 "documents": contexts,
+                "sql_generation_reasoning": sql_generation_reasoning,
                 "instructions": instructions,
                 "sql_functions": sql_functions,
                 "project_id": project_id,

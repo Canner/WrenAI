@@ -168,10 +168,13 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - Treat the DATABASE SCHEMA section as the only source of executable table and column identifiers.
 - Every table and column referenced in SELECT, FROM, JOIN, WHERE, GROUP BY, HAVING, and ORDER BY must appear exactly in the CREATE TABLE, CREATE VIEW, or metric schema text provided in DATABASE SCHEMA.
 - Comments, aliases, display labels, descriptions, reasoning text, SQL samples, and user wording are semantic hints only. Do not use them as executable table or column identifiers, except as aliases in the final SELECT clause.
+- Interpret the user's intent from the question wording, schema descriptions, aliases, display labels, calculated fields, metrics, and relationships, then express that intent with exact executable identifiers from DATABASE SCHEMA.
+- When a business term is represented by a column alias, display label, or description, use the corresponding real table and column name from DATABASE SCHEMA in the SQL, not the display text.
 - Never generate SQL from assumptions such as "assuming the table contains", "assuming this column exists", or "a possible table/column". Use only schema-confirmed identifiers.
 - If a requested concept, filter, sort, join, or time field is not represented by an exact table or column in DATABASE SCHEMA, do not invent a field for it. Generate the closest valid SQL using only available schema fields.
 - When a dry run error reports an invalid object name or invalid column name, remove that identifier unless it appears exactly in DATABASE SCHEMA. Correct it only to an exact schema identifier.
 - When using multiple tables, join only through the FOREIGN KEY relationships shown in DATABASE SCHEMA. If no relationship is shown for the needed tables, prefer a single table, view, or metric that already contains the requested fields.
+- If the question requires fields that are spread across multiple schema objects, use all required related tables, views, or metrics only when the DATABASE SCHEMA provides the needed columns and relationship path.
 - Do not query INFORMATION_SCHEMA, system catalogs, metadata tables, or table-existence checks to answer the user. Query only the business tables, views, and metrics in DATABASE SCHEMA.
 - SQL samples and query history are examples of intent and style only. Never copy a table name, column name, alias, literal value, or function from them unless it is also valid for the current DATABASE SCHEMA and SQL FUNCTIONS.
 - Generate Wren SQL only. Do not use warehouse-specific functions unless they are explicitly listed in SQL FUNCTIONS for this request.
@@ -467,9 +470,11 @@ otherwise, you will put the relative timeframe in the SQL query.
 16. Do not write SQL, possible SQL, sample SQL, or assumed SQL in the reasoning plan.
 17. Never use phrases such as "assuming the table contains", "assuming this column exists", or "the SQL could look like this". If the schema does not show the exact table or column needed, state that the available schema does not include that part.
 18. If the question asks for a concept, filter, sort, or timeframe, map it only to exact available schema columns. If no exact schema column supports part of the request, state that the available schema does not include that part instead of inventing a column.
-19. Treat SQL samples and query history as examples only. Do not copy table names, column names, aliases, values, or functions from them unless they also appear in the current DATABASE SCHEMA or SQL FUNCTIONS.
-20. Do not mention placeholder SQL, metadata-table checks, INFORMATION_SCHEMA, or replacement instructions to the user.
-21. ONLY SHOWING the reasoning plan in bullet points.
+19. Interpret the user's intent from wording, aliases, display labels, descriptions, calculated fields, metrics, and relationships, but name only exact tables and columns from DATABASE SCHEMA in the reasoning plan.
+20. If multiple schema objects are required to answer the intent, include each required object only when DATABASE SCHEMA provides both the needed fields and the relationship path between them.
+21. Treat SQL samples and query history as examples only. Do not copy table names, column names, aliases, values, or functions from them unless they also appear in the current DATABASE SCHEMA or SQL FUNCTIONS.
+22. Do not mention placeholder SQL, metadata-table checks, INFORMATION_SCHEMA, or replacement instructions to the user.
+23. ONLY SHOWING the reasoning plan in bullet points.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
@@ -539,7 +544,8 @@ Given user's question, database schema, etc., you should think deeply and carefu
 2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
 3. YOU MUST REFER to the sql samples only as examples of intent and style if the section of SQL SAMPLES is available in user's input. Do not copy identifiers, literals, or functions from samples unless they are valid for the current DATABASE SCHEMA and SQL FUNCTIONS.
 4. YOU MUST FOLLOW the reasoning plan step by step only when it is consistent with DATABASE SCHEMA and SQL Rules. If the reasoning plan contains assumed SQL, placeholder identifiers, or identifiers missing from DATABASE SCHEMA, ignore those parts.
-5. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
+5. YOU MUST answer the user's intent, not just exact wording. Use schema aliases, descriptions, calculated fields, metrics, and relationships to understand intent, then generate SQL with exact DATABASE SCHEMA identifiers only.
+6. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {text_to_sql_rules}
 

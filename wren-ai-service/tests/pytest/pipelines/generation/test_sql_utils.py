@@ -5,6 +5,8 @@ from src.pipelines.generation.utils.sql import (
     get_sql_generation_system_prompt,
     get_text_to_sql_rules,
 )
+from src.pipelines.generation.sql_correction import get_sql_correction_system_prompt
+from src.pipelines.generation.sql_regeneration import get_sql_regeneration_system_prompt
 
 
 class _SqlKnowledge:
@@ -31,6 +33,9 @@ def test_get_text_to_sql_rules_uses_default_metadata_grounding_rules():
     assert "Do not query INFORMATION_SCHEMA" in rules
     assert "SQL samples and query history are examples of intent and style only" in rules
     assert "order by that alias" in rules
+    assert "Interpret the user's intent" in rules
+    assert "schema descriptions, aliases, display labels" in rules
+    assert "use all required related tables" in rules
 
 
 def test_get_text_to_sql_rules_keeps_mandatory_rules_with_sql_knowledge():
@@ -61,4 +66,19 @@ def test_sql_generation_system_prompt_grounding_contract():
     assert "source of executable table and column identifiers" in prompt
     assert "Never generate SQL from assumptions" in prompt
     assert "ignore those parts" in prompt
+    assert "answer the user's intent" in prompt
     assert 'SELECT "_orders"."ApprovedTimestamp" AS "_timestamp"' in prompt
+
+
+def test_sql_regeneration_system_prompt_uses_question_as_intent_source():
+    prompt = get_sql_regeneration_system_prompt()
+
+    assert "regenerate from the user's question" in prompt
+    assert "unsupported identifiers" in prompt
+
+
+def test_sql_correction_system_prompt_discards_invalid_identifier_context():
+    prompt = get_sql_correction_system_prompt()
+
+    assert "treat it as the source of intent" in prompt
+    assert "Do not copy placeholders" in prompt

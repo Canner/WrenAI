@@ -72,6 +72,7 @@ SQL:
 
 ### QUESTION ###
 User's Question: {{ query }}
+Answer the user's intent using the current DATABASE SCHEMA. Use aliases, descriptions, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact table and column names from DATABASE SCHEMA.
 
 {% if sql_generation_reasoning %}
 ### REASONING PLAN ###

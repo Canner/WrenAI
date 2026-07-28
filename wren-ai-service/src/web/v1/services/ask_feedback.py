@@ -176,6 +176,7 @@ class AskFeedbackService:
                     "sql_regeneration"
                 ].run(
                     contexts=table_ddls,
+                    query=ask_feedback_request.question,
                     sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
                     sql=ask_feedback_request.sql,
                     project_id=ask_feedback_request.project_id,
@@ -239,6 +240,8 @@ class AskFeedbackService:
                             "sql_correction"
                         ].run(
                             contexts=table_ddls,
+                            query=ask_feedback_request.question,
+                            sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
                             instructions=instructions,
                             invalid_generation_result={
                                 "original_sql": original_sql,
