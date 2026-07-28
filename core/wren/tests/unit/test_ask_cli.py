@@ -58,6 +58,24 @@ def test_render_unknown_mode_raises():
         ask_mod.render("auto", "anything")
 
 
+def test_guided_recall_step_uses_a_real_cli_option():
+    # The guided template's step 2 must emit an option `wren memory recall`
+    # actually accepts. Regression for #2503: the template said `--nl`, an
+    # option that belongs to `wren memory store`, not `recall`.
+    result = runner.invoke(app, ["ask", "x", "--guided"])
+    assert "--nl" not in result.output
+
+    recall_line = next(
+        line for line in result.output.splitlines() if "wren memory recall" in line
+    )
+    args = recall_line.split("wren memory recall", 1)[1].split("#", 1)[0].split()
+    recall_result = runner.invoke(app, ["memory", "recall", *args])
+    # A bad option is a click usage error (exit code 2, "No such option").
+    # Any other exit code means the option parsed and the command moved on
+    # to its own logic (e.g. failing later for lacking a wren project).
+    assert recall_result.exit_code != 2, recall_result.output
+
+
 def test_user_prompt_with_template_placeholder_substring_is_safe():
     # Prompt containing the literal placeholder shouldn't break rendering;
     # we only do one replacement of the bundled-template placeholder.
