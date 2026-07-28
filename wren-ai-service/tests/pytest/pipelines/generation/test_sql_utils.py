@@ -44,6 +44,6 @@ def test_get_json_field_instructions_uses_sql_knowledge_override():
 def test_sql_generation_system_prompt_grounding_contract():
     prompt = get_sql_generation_system_prompt()
 
-    assert "DATABASE SCHEMA section is the complete and only source" in prompt
-    assert "MUST NOT introduce, infer, copy, or repair" in prompt
-    assert "Do not copy identifiers" in prompt
+    assert "ONLY USE table/column alias in the final SELECT clause" in prompt
+    assert "Refer to the value of alias from the comment section" in prompt
+    assert 'SELECT "_orders"."ApprovedTimestamp" AS "_timestamp"' in prompt
