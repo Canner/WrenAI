@@ -92,6 +92,10 @@ class MySqlConnector(ConnectorABC):
         limit = _coerce_limit(limit)
         if limit is not None:
             sql = _apply_limit(sql, limit)
+        else:
+            # Unlimited path: strip trailing terminators so client-pasted SQL
+            # matches EXPLAIN / limit composition.
+            sql = strip_trailing_semicolon(sql)
         with closing(self.connection.cursor()) as cursor:
             cursor.execute(sql)
             return _build_mysql_arrow_table(cursor)
