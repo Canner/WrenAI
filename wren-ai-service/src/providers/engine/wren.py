@@ -28,7 +28,6 @@ class WrenUI(Engine):
         sql: str,
         session: aiohttp.ClientSession,
         project_id: str | None = None,
-        mdl_hash: str | None = None,
         dry_run: bool = True,
         timeout: float = settings.engine_timeout,
         limit: int = 500,
@@ -37,7 +36,6 @@ class WrenUI(Engine):
         data = {
             "sql": remove_limit_statement(sql),
             "projectId": project_id,
-            "hash": mdl_hash,
         }
         if dry_run:
             data["dryRun"] = True

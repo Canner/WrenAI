@@ -236,16 +236,19 @@ export class ModelResolver {
   public async checkModelSync(_root: any, _args: any, ctx: IContext) {
     try {
       const { id } = await ctx.projectService.getCurrentProject();
-      const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-      const currentHash = ctx.deployService.createMDLHash(manifest, id);
-      const lastDeploy = await ctx.deployService.getLastDeployment(id);
-      const lastDeployHash = lastDeploy?.hash;
       const inProgressDeployment =
         await ctx.deployService.getInProgressDeployment(id);
       if (inProgressDeployment) {
         return { status: SyncStatusEnum.IN_PROGRESS };
       }
-      return currentHash == lastDeployHash
+
+      const project = await ctx.projectService.getCurrentProject();
+      if (dirtyProjectIds.has(project.id)) {
+        return { status: SyncStatusEnum.UNSYNCRONIZED };
+      }
+
+      const lastDeploy = await ctx.deployService.getLastDeployment(project.id);
+      return lastDeploy
         ? { status: SyncStatusEnum.SYNCRONIZED }
         : { status: SyncStatusEnum.UNSYNCRONIZED };
     } catch (err: any) {
@@ -1204,7 +1207,7 @@ export class ModelResolver {
 
     // create view
     const project = await ctx.projectService.getCurrentProject();
-    const manifest = await this.getDeployedManifest(ctx, project.id);
+    const manifest = await this.getLastDeployedManifest(ctx, project.id);
 
     // get sql statement of a response
     const response = await ctx.askingService.getResponse(responseId);
@@ -1331,11 +1334,11 @@ export class ModelResolver {
     args: { data: PreviewSQLData },
     ctx: IContext,
   ) {
-    const { sql, projectId, hash, limit, dryRun } = args.data;
+    const { sql, projectId, limit, dryRun } = args.data;
     const project = projectId
       ? await ctx.projectService.getProjectById(parseInt(projectId))
       : await ctx.projectService.getCurrentProject();
-    const manifest = await this.getDeployedManifest(ctx, project.id, hash);
+    const manifest = await this.getLastDeployedManifest(ctx, project.id);
     return await ctx.queryService.preview(sql, {
       project,
       limit: limit,
@@ -1484,14 +1487,8 @@ export class ModelResolver {
     };
   }
 
-  private async getDeployedManifest(
-    ctx: IContext,
-    projectId: number,
-    hash?: string,
-  ) {
-    const deployment = hash
-      ? await ctx.deployLogRepository.findOneBy({ projectId, hash })
-      : await ctx.deployService.getLastDeployment(projectId);
+  private async getLastDeployedManifest(ctx: IContext, projectId: number) {
+    const deployment = await ctx.deployService.getLastDeployment(projectId);
     if (!deployment?.manifest) {
       throw new Error(
         'Project has not been deployed successfully yet. Deploy the model before previewing or validating SQL.',

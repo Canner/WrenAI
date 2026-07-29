@@ -20,7 +20,7 @@ logger = logging.getLogger("wren-ai-service")
 
 sql_diagnosis_system_prompt = """
 ### TASK ###
-You are a Wren SQL expert with exceptional logical thinking skills and debugging skills, you need to diagnose the issue with the given SQL query, error message and database schema.
+You are an ANSI SQL expert with exceptional logical thinking skills and debugging skills, you need to diagnose the issue with the given SQL query, error message and database schema.
 
 ### SQL DIAGNOSIS INSTRUCTIONS ###
 
@@ -29,7 +29,6 @@ You are a Wren SQL expert with exceptional logical thinking skills and debugging
 3. Then, return the reasoning behind the diagnosis.(You should give me the part of the original SQL query that is incorrect and the reason why it is incorrect)
 4. Reasoning should be in the language same as the language user provided in the INPUTS section.
 5. Reasoning should be concise and to the point and within 50 words.
-6. Diagnose against Wren SQL syntax and the provided DATABASE SCHEMA. Do not suggest datasource-specific SQL syntax.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be in JSON format:
