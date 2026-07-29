@@ -20,8 +20,8 @@ class PostRequest(BaseRequest):
     sql: str
     error: str
     retrieved_tables: Optional[List[str]] = None
-    use_dry_plan: bool = False
-    allow_dry_plan_fallback: bool = True
+    use_dry_plan: bool = True
+    allow_dry_plan_fallback: bool = False
 
 
 class PostResponse(BaseModel):
