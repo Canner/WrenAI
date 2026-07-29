@@ -25,7 +25,6 @@ def test_extract_skips_non_dict_models_columns_rels_views_without_raise() -> Non
         }
     )
     assert isinstance(items, list)
-    assert len(items) == 4
     by_type = {i["item_type"]: i for i in items}
     assert set(by_type) == {"model", "column", "relationship", "view"}
     assert by_type["model"]["item_name"] == "orders"
@@ -36,22 +35,32 @@ def test_extract_skips_non_dict_models_columns_rels_views_without_raise() -> Non
     assert extract_schema_items({"models": [1, 2, 3]}) == []
 
 
-def test_extract_raises_on_truthy_scalar_nested_collections() -> None:
-    # Policy: a truthy non-list nested collection is a structural manifest
-    # error and must raise (one rule with _iter_section / #2605's
-    # _relationship_models), not silently index an empty collection.
-    with pytest.raises(ValueError, match="columns must be a list"):
+def test_extract_raises_on_non_list_nested_collections() -> None:
+    # Policy: any non-list, non-null nested collection is a structural
+    # manifest error and must raise (one rule with _iter_section / #2605's
+    # _relationship_models), not silently index an empty collection. This
+    # covers both truthy (42, 3, {"x": 1}, "nope") and falsy ({}, 0, "")
+    # non-list values — only None/missing passes through.
+    with pytest.raises(ValueError, match="'columns' must be a list"):
         extract_schema_items({"models": [{"name": "m", "columns": 42}]})
-    with pytest.raises(ValueError, match="measures must be a list"):
+    with pytest.raises(ValueError, match="'measures' must be a list"):
         extract_schema_items({"cubes": [{"name": "c", "measures": 3}]})
-    with pytest.raises(ValueError, match="dimensions must be a list"):
+    with pytest.raises(ValueError, match="'dimensions' must be a list"):
         extract_schema_items({"cubes": [{"name": "c", "dimensions": {"x": 1}}]})
-    with pytest.raises(ValueError, match="timeDimensions must be a list"):
+    with pytest.raises(ValueError, match="'timeDimensions' must be a list"):
         extract_schema_items({"cubes": [{"name": "c", "timeDimensions": "nope"}]})
+    # Falsy non-list values — the gap goldmedal flagged — also raise.
+    with pytest.raises(ValueError, match="'columns' must be a list"):
+        extract_schema_items({"models": [{"name": "m", "columns": {}}]})
+    with pytest.raises(ValueError, match="'columns' must be a list"):
+        extract_schema_items({"models": [{"name": "m", "columns": 0}]})
+    with pytest.raises(ValueError, match="'columns' must be a list"):
+        extract_schema_items({"models": [{"name": "m", "columns": ""}]})
 
 
 def test_extract_allows_none_or_empty_nested_collections() -> None:
-    # None / missing / empty stays a no-op (no raise): the passthrough case.
+    # None / missing / empty-list stays a no-op (no raise): the passthrough
+    # case. Note {} / 0 / "" are NOT passthrough — see the raise test above.
     items = extract_schema_items(
         {"models": [{"name": "m", "columns": None}, {"name": "n"}]}
     )

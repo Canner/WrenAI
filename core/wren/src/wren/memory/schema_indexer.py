@@ -23,22 +23,24 @@ def manifest_hash(manifest: dict) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
-def _as_list(value: object, field: str = "field") -> list:
-    """Return ``value`` as a list, raising on a truthy non-list.
+def _as_list(value: object, field: str) -> list:
+    """Return ``value`` as a list, raising on any non-list, non-null value.
 
     Nested collection fields (columns, measures, dimensions, timeDimensions)
-    use this helper. A missing/null/empty value is treated as an empty list;
-    a *truthy* non-list (e.g. a hand-edited ``columns: 42``) is a structural
-    error in the manifest, so we raise ``ValueError`` rather than silently
-    indexing a model with zero columns. This matches :func:`_iter_section`
-    for top-level sections and the same-file ``_relationship_models`` policy
-    (see #2605): one rule across the module. The CLI already catches
-    ``ValueError`` and exits with ``Malformed manifest: {e}``.
+    use this helper. Only a missing/null value is treated as an empty list;
+    an empty list stays ``[]`` via the ``isinstance`` check below. Any other
+    non-list value — truthy (``columns: 42``) or falsy (``columns: {}``,
+    ``columns: 0``, ``columns: ""``) — is a structural error in the manifest,
+    so we raise ``ValueError`` rather than silently indexing a model with zero
+    columns. This matches :func:`_iter_section` for top-level sections and the
+    same-file ``_relationship_models`` policy (see #2605): one rule across the
+    module — ``None`` passes, everything non-list raises. The CLI already
+    catches ``ValueError`` and exits with ``Malformed manifest: {e}``.
     """
-    if value is None or not value:
+    if value is None:
         return []
     if not isinstance(value, list):
-        raise ValueError(f"manifest {field} must be a list, got {type(value).__name__}")
+        raise ValueError(f"manifest[{field!r}] must be a list, got {type(value).__name__}")
     return value
 
 
