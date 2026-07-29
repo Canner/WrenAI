@@ -174,7 +174,11 @@ def list_cubes(mdl: _MdlOpt = None) -> None:
             raw = cube.get(key, []) or []
             if not isinstance(raw, list):
                 return ""
-            return ", ".join(m.get("name", "") for m in raw if isinstance(m, dict))
+            return ", ".join(
+                m["name"]
+                for m in raw
+                if isinstance(m, dict) and isinstance(m.get("name"), str)
+            )
 
         measures = _names("measures")
         dims = _names("dimensions")

@@ -27,5 +27,7 @@ def test_list_cubes_skips_bad_rows(capsys):
     assert result.exit_code == 0
     out = result.stdout
     assert "orders" in out
+    assert "bad" not in out
+    assert "measures:" not in out
     assert "dimensions: id" in out
     assert "time dimensions: ts" in out
