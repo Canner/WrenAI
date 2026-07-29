@@ -296,19 +296,28 @@ def _register_context_tools(mcp: FastMCP, ctx: ServeContext) -> None:
         from wren.context import load_cubes  # noqa: PLC0415
 
         cubes = load_cubes(ctx.project)
+        if not isinstance(cubes, list):
+            cubes = []
         result = []
         for cube in cubes:
+            if not isinstance(cube, dict):
+                continue
+
+            def _member_names(key: str) -> list:
+                raw = cube.get(key, []) or []
+                if not isinstance(raw, list):
+                    return []
+                return [
+                    m.get("name") for m in raw if isinstance(m, dict)
+                ]
+
             result.append(
                 {
                     "name": cube.get("name"),
                     "base_object": cube.get("base_object"),
-                    "measures": [m.get("name") for m in cube.get("measures", []) or []],
-                    "dimensions": [
-                        d.get("name") for d in cube.get("dimensions", []) or []
-                    ],
-                    "time_dimensions": [
-                        td.get("name") for td in cube.get("time_dimensions", []) or []
-                    ],
+                    "measures": _member_names("measures"),
+                    "dimensions": _member_names("dimensions"),
+                    "time_dimensions": _member_names("time_dimensions"),
                 }
             )
         return {"cubes": result}

@@ -405,3 +405,35 @@ def test_query_cube_negative_limit_rejected_consistently():
             limit=-1,
             sql_only=True,
         )
+
+
+def test_list_cubes_skips_non_dict_members(tmp_path, monkeypatch):
+    ctx = _make_ctx(tmp_path)
+    mcp = build_server(ctx)
+    list_cubes = _get_tool(mcp, "list_cubes")
+
+    def fake_load_cubes(project):
+        return [
+            "bad",
+            {
+                "name": "orders",
+                "base_object": "o",
+                "measures": "nope",
+                "dimensions": [{"name": "id"}, "x"],
+                "time_dimensions": [{"name": "ts"}],
+            },
+        ]
+
+    monkeypatch.setattr("wren.context.load_cubes", fake_load_cubes)
+    out = list_cubes()
+    assert out == {
+        "cubes": [
+            {
+                "name": "orders",
+                "base_object": "o",
+                "measures": [],
+                "dimensions": ["id"],
+                "time_dimensions": ["ts"],
+            }
+        ]
+    }
