@@ -48,7 +48,7 @@ User's Question: {{ query }}
 Language: {{ language }}
 Current Time: {{ current_time }}
 
-Return only the reasoning plan described by the system instructions. Do not include SQL, SQL-like expressions, table names, column names, aliases, source names, physical names, lineage names, schema names, database names, literal values, placeholders, functions, or identifier-like labels.
+Return only the reasoning plan described by the system instructions. Ground the plan with exact `table: <table_name>` and `column: <table_name>.<column_name>` references from DATABASE SCHEMA when they are relevant. Do not include SQL, SQL-like expressions, aliases, source names, physical names, lineage names, schema names, database names, literal values, placeholders, functions, or identifier-like labels.
 """
 
 

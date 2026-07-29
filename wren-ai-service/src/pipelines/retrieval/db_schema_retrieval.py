@@ -178,10 +178,51 @@ def _format_semantic_context(context: dict) -> str:
         "/*\n"
         "WREN RETRIEVED SEMANTIC CONTEXT\n"
         f"{orjson.dumps(context).decode('utf-8')}\n"
+        f"{_format_identifier_contract(context)}"
         "Only values in sql_identifier_contract, sql_column_name_use_exactly, and identifiers declared in the following DDL are executable in Wren SQL.\n"
         "Values under semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier explain meaning only and must not be copied, combined, or rewritten as executable SQL identifiers.\n"
         "*/\n"
     )
+
+
+def _format_identifier_contract(context: dict) -> str:
+    contract = context.get("sql_identifier_contract", {})
+    table_name = contract.get("sql_table_name_use_exactly")
+    column_names = contract.get("sql_column_names_use_exactly") or [
+        column["sql_column_name_use_exactly"]
+        for column in context.get("columns", [])
+        if column.get("sql_column_name_use_exactly")
+    ]
+    relationship_constraints = contract.get("relationship_constraints_use_exactly") or [
+        relationship["sql_relationship_constraint_use_exactly"]
+        for relationship in context.get("relationships", [])
+        if relationship.get("sql_relationship_constraint_use_exactly")
+    ]
+
+    lines = [
+        "WREN SQL IDENTIFIER CONTRACT",
+        f"object_type: {context.get('object_type', '')}",
+    ]
+    if table_name:
+        lines.append(f"sql_table_name_use_exactly: {table_name}")
+    if column_names:
+        lines.append("sql_column_names_use_exactly:")
+        lines.extend(f"- {column_name}" for column_name in column_names)
+    if relationship_constraints:
+        lines.append("relationship_constraints_use_exactly:")
+        lines.extend(
+            f"- {relationship_constraint}"
+            for relationship_constraint in relationship_constraints
+        )
+    lines.extend(
+        [
+            "Only the identifiers listed in this contract and the identifiers declared in the following DDL are executable.",
+            "Semantic descriptions, source names, aliases, examples, and user wording are not executable identifiers.",
+            "END WREN SQL IDENTIFIER CONTRACT",
+            "",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def _included_relationship_columns(content: dict, tables: Optional[set[str]]) -> set:

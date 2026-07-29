@@ -87,7 +87,8 @@ Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliase
 {% endif %}
 {% if sql_generation_reasoning %}
 ### REASONING PLAN ###
-The UI planning text is intentionally omitted from this executable SQL prompt so it cannot provide table names, column names, aliases, source names, physical names, lineage names, SQL fragments, date expressions, literal values, placeholders, or functions.
+Use this plan as the legacy grounding handoff only when each referenced table or column appears exactly in DATABASE SCHEMA.
+{{ sql_generation_reasoning }}
 {% endif %}
 ### FAILED SQL ###
 The failed SQL is intentionally omitted so it cannot provide executable identifiers, literal values, placeholders, functions, SQL patterns, or unsupported object names.
@@ -121,7 +122,7 @@ def prompt(
         query=query,
         documents=documents,
         invalid_generation_result=invalid_generation_result,
-        sql_generation_reasoning=bool(sql_generation_reasoning),
+        sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
         ),

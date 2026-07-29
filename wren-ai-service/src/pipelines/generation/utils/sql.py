@@ -171,6 +171,7 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - Physical datasource names, source database names, source schema names, source table names, source column names, lineage names, and names embedded inside descriptions or comments are semantic context only. Never use them as executable Wren table or column identifiers unless the exact same identifier is declared in DATABASE SCHEMA.
 - Interpret the user's intent from the question wording, schema descriptions, aliases, display labels, calculated fields, metrics, and relationships, then express that intent with exact executable identifiers from DATABASE SCHEMA.
 - When DATABASE SCHEMA contains WREN RETRIEVED SEMANTIC CONTEXT blocks, first use those blocks to understand each retrieved object's exact SQL identifier contract, semantic meaning, relationships, views, metrics, and calculated fields.
+- When DATABASE SCHEMA contains WREN SQL IDENTIFIER CONTRACT sections, treat them as the compact authoritative list of executable identifiers for each retrieved object before reading semantic descriptions.
 - In WREN RETRIEVED SEMANTIC CONTEXT, copy executable identifiers only from sql_table_name_use_exactly, sql_column_name_use_exactly, sql_column_names_use_exactly, relationship_constraints_use_exactly, or the following DDL declarations.
 - Values under semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier are meaning only. Do not combine words, labels, ordinals, prefixes, suffixes, abbreviations, comments, or descriptions from those values into a table or column identifier.
 - When a business term is represented by a column alias, display label, or description, use the corresponding real table and column name from DATABASE SCHEMA in the SQL, not the display text.
@@ -315,8 +316,8 @@ You are a helpful data analyst who explains the user's analytical intent and pro
 
 ### INSTRUCTIONS ###
 1. Think deeply and reason about the user's question, the database schema, and the user's query history if provided.
-2. Explicitly state requested timeframes in natural language only. Do not name date columns, functions, expressions, or SQL clauses.
-3. For top, bottom, first, last, highest, or lowest requests, describe the requested ordering and limit in natural language only. Do not name columns, aliases, aggregate expressions, or SQL clauses.
+2. Explicitly state requested timeframes in natural language only. Mention exact date/time columns only when they are declared in DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT.
+3. For top, bottom, first, last, highest, or lowest requests, describe the requested ordering and limit in natural language. Mention exact ordering columns or measures only when they are declared in DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT.
 4. Do not mention SQL functions, operators, or expression syntax in the reasoning plan.
 5. If USER INSTRUCTIONS section is provided, make sure to consider them in the reasoning plan.
 6. If SQL SAMPLES section is provided, make sure to consider them in the reasoning plan.
@@ -325,17 +326,18 @@ You are a helpful data analyst who explains the user's analytical intent and pro
 9. Don't include SQL in the reasoning plan.
 10. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
 11. Do not include ```markdown or ``` in the answer.
-12. Do not mention table names, view names, metric names, column names, aliases, source names, physical names, lineage names, schema names, database names, literal values, placeholders, or identifier-like labels in the reasoning plan.
-13. Do not write SQL, possible SQL, sample SQL, assumed SQL, SQL clauses, SQL functions, code blocks, or executable expressions in the reasoning plan. Do not write date/time expressions in the reasoning plan.
-14. Never use phrases such as "assuming the table contains", "assuming this column exists", or "the SQL could look like this". If the available metadata does not clearly support part of the request, state that the available metadata does not support that part without naming missing objects.
-15. If the question asks for a concept, filter, sort, or timeframe, describe the requested operation in business language only.
-16. Interpret the user's intent from wording, aliases, display labels, descriptions, calculated fields, metrics, and relationships, but do not name the underlying schema objects in the reasoning plan.
-17. Only cite exact declared names from DATABASE SCHEMA if an internal grounding note requires it; do not expose table names, column names, source metadata, physical datasource names, or lineage names in the reasoning plan.
-18. If multiple schema objects may be required to answer the intent, describe the need to combine related data in natural language only.
-19. Treat SQL samples and query history as examples only. Do not copy table names, column names, aliases, values, placeholders, functions, or SQL patterns from them into the reasoning plan.
-20. Do not mention placeholder SQL, metadata-table checks, INFORMATION_SCHEMA, or replacement instructions to the user.
-21. The reasoning plan is non-executable context. Do not include anything that could be copied as SQL.
-22. ONLY SHOWING the reasoning plan in bullet points.
+12. Mention table names only in this exact format: `table: <table_name>`, and only when `<table_name>` is declared in DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT.
+13. Mention column names only in this exact format: `column: <table_name>.<column_name>`, and only when both `<table_name>` and `<column_name>` are declared together in DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT.
+14. Do not mention aliases, source names, physical names, lineage names, schema names, database names, literal values, placeholders, or identifier-like labels from comments, SQL samples, failed SQL, or user wording as executable identifiers.
+15. Do not write SQL, possible SQL, sample SQL, assumed SQL, SQL clauses, SQL functions, code blocks, or executable expressions in the reasoning plan. Do not write date/time expressions in the reasoning plan.
+16. Never use phrases such as "assuming the table contains", "assuming this column exists", or "the SQL could look like this". If the available metadata does not clearly support part of the request, state that the available metadata does not support that part without naming missing objects.
+17. If the question asks for a concept, filter, sort, or timeframe, describe the requested operation in business language and cite exact declared tables or columns only when they are grounded by DATABASE SCHEMA.
+18. Interpret the user's intent from wording, aliases, display labels, descriptions, calculated fields, metrics, and relationships, then ground the plan in exact declared schema identifiers.
+19. If multiple schema objects are required, identify the exact declared relationship path from DATABASE SCHEMA. If no relationship path is declared, say that the retrieved metadata does not provide a join path.
+20. Treat SQL samples and query history as examples only. Do not copy table names, column names, aliases, values, placeholders, functions, or SQL patterns from them into the reasoning plan unless they also appear exactly in DATABASE SCHEMA.
+21. Do not mention placeholder SQL, metadata-table checks, INFORMATION_SCHEMA, or replacement instructions to the user.
+22. The reasoning plan is a grounding handoff for SQL generation, not SQL. Do not include executable SQL.
+23. ONLY SHOWING the reasoning plan in bullet points.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
@@ -404,13 +406,13 @@ Given the user's question and database schema, generate one grounded Wren SQL qu
 1. YOU MUST FOLLOW the instructions strictly to generate the SQL query if the section of USER INSTRUCTIONS is available in user's input.
 2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input. Use the exact supported syntax shown there; otherwise omit the function-dependent part of the request.
 3. YOU MUST REFER to the sql samples only as examples of intent and style if the section of SQL SAMPLES is available in user's input. Do not copy identifiers, literals, placeholders, SQL patterns, or functions from samples.
-4. YOU MUST use the reasoning plan only as non-executable context, and only when it is consistent with DATABASE SCHEMA and SQL Rules. Do not copy table names, column names, aliases, source names, physical names, lineage names, SQL fragments, date expressions, literal values, placeholders, or functions from the reasoning plan. Choose every executable identifier only from DATABASE SCHEMA and every function only from SQL FUNCTIONS.
+4. YOU MUST use the reasoning plan as the legacy grounding handoff only when it is consistent with DATABASE SCHEMA and SQL Rules. Table and column references in the reasoning plan are executable only when they also appear exactly in DATABASE SCHEMA. Choose every executable identifier only from DATABASE SCHEMA and every function only from SQL FUNCTIONS.
 5. YOU MUST answer the user's intent, not just exact wording. Use schema aliases, descriptions, calculated fields, metrics, and relationships to understand intent, then generate SQL with exact DATABASE SCHEMA identifiers only.
-6. YOU MUST first read any WREN RETRIEVED SEMANTIC CONTEXT block attached to each schema object. Use sql_table_name_use_exactly, sql_column_name_use_exactly, sql_column_names_use_exactly, relationship_constraints_use_exactly, and the following DDL declarations as executable grounding. Use semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier only to understand business meaning.
+6. YOU MUST first read any WREN SQL IDENTIFIER CONTRACT and WREN RETRIEVED SEMANTIC CONTEXT block attached to each schema object. Use sql_table_name_use_exactly, sql_column_name_use_exactly, sql_column_names_use_exactly, relationship_constraints_use_exactly, and the following DDL declarations as executable grounding. Use semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier only to understand business meaning.
 7. If the user asks for fields that exist across multiple related schema objects, include those objects only when DATABASE SCHEMA shows the exact columns and relationship path needed to join them.
 8. Before finalizing the JSON response, YOU MUST perform a silent grounding check: every table, column, join key, filter field, grouping field, ordering field, and function in the SQL must be present in DATABASE SCHEMA or SQL FUNCTIONS. If a planned element is not grounded, omit that element or use the closest grounded expression.
 9. YOU MUST treat source database/schema/table names, physical datasource names, lineage names, comments, aliases, and display labels as semantic context only. Never use them as executable identifiers unless the exact same identifier appears in DATABASE SCHEMA.
-10. If an identifier, literal value, placeholder, or function appears only in SQL samples, reasoning, failed SQL, descriptions, lineage, or error messages, it is not executable for this request; ignore those parts when generating executable SQL.
+10. If an identifier, literal value, placeholder, or function appears only in SQL samples, failed SQL, descriptions, lineage, or error messages, it is not executable for this request; ignore those parts when generating executable SQL. Reasoning-plan identifiers are usable only when they exactly match DATABASE SCHEMA.
 11. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {text_to_sql_rules}

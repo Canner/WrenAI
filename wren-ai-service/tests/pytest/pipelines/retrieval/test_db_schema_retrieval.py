@@ -457,6 +457,10 @@ def test_check_using_db_schemas_without_pruning_keeps_context_when_within_window
         for schema in result["db_schemas"]
     )
     assert all(
+        "WREN SQL IDENTIFIER CONTRACT" in schema["table_ddl"]
+        for schema in result["db_schemas"]
+    )
+    assert all(
         "sql_table_name_use_exactly" in schema["table_ddl"]
         for schema in result["db_schemas"]
     )
@@ -506,6 +510,10 @@ def test_retrieved_schema_separates_exact_sql_names_from_semantic_context():
 
     assert '"sql_table_name_use_exactly":"modeled_dataset"' in table_ddl
     assert '"sql_column_name_use_exactly":"stored_attribute"' in table_ddl
+    assert "WREN SQL IDENTIFIER CONTRACT" in table_ddl
+    assert "sql_table_name_use_exactly: modeled_dataset" in table_ddl
+    assert "sql_column_names_use_exactly:\n- stored_attribute" in table_ddl
+    assert "END WREN SQL IDENTIFIER CONTRACT" in table_ddl
     assert (
         '"semantic_context_not_sql_identifier":"Business-facing attribute label."'
         in table_ddl

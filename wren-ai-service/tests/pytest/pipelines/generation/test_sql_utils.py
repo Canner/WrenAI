@@ -60,6 +60,8 @@ def test_get_text_to_sql_rules_uses_default_metadata_grounding_rules():
     assert "Interpret the user's intent" in rules
     assert "schema descriptions, aliases, display labels" in rules
     assert "WREN RETRIEVED SEMANTIC CONTEXT" in rules
+    assert "WREN SQL IDENTIFIER CONTRACT" in rules
+    assert "compact authoritative list of executable identifiers" in rules
     assert "sql_table_name_use_exactly" in rules
     assert "sql_column_name_use_exactly" in rules
     assert "semantic_context_not_sql_identifier" in rules
@@ -114,15 +116,16 @@ def test_sql_generation_system_prompt_grounding_contract():
     assert "perform a silent grounding check" in prompt
     assert "closest grounded expression" in prompt
     assert "DATABASE SCHEMA is the only source of executable identifiers" in prompt
-    assert "reasoning plan only as non-executable context" in prompt
+    assert "reasoning plan as the legacy grounding handoff" in prompt
     assert "include those objects only when DATABASE SCHEMA shows" in prompt
     assert "Use the exact supported syntax shown there" in prompt
+    assert "WREN SQL IDENTIFIER CONTRACT" in prompt
     assert "Use sql_table_name_use_exactly" in prompt
     assert "sql_column_names_use_exactly" in prompt
     assert "semantic_context_not_sql_identifiers" in prompt
     assert "Use Wren SQL identifier quoting with double quotes only" in prompt
     assert "source database/schema/table names" in prompt
-    assert "appears only in SQL samples, reasoning, failed SQL" in prompt
+    assert "appears only in SQL samples, failed SQL" in prompt
 
 
 def test_json_field_instructions_do_not_include_placeholder_identifiers():
@@ -140,7 +143,8 @@ def test_sql_regeneration_system_prompt_uses_question_as_intent_source():
 
     assert "regenerate from the user's question" in prompt
     assert "unsupported identifiers" in prompt
-    assert "original SQL query and UI planning text are intentionally omitted" in prompt
+    assert "original SQL query" in prompt
+    assert "intentionally omitted" in prompt
     assert (
         "database schema as the only source of executable table and column identifiers"
         in prompt
@@ -162,14 +166,16 @@ def test_sql_correction_system_prompt_discards_invalid_identifier_context():
     assert "do not try a similar replacement from source metadata" in prompt
 
 
-def test_sql_reasoning_prompt_forbids_executable_sql_context():
+def test_sql_reasoning_prompt_uses_legacy_schema_grounding_handoff():
     prompt = sql_generation_reasoning_system_prompt
 
     assert "Do not write SQL, possible SQL, sample SQL, assumed SQL" in prompt
     assert "SQL clauses, SQL functions, code blocks, or executable expressions" in prompt
-    assert "The reasoning plan is non-executable context" in prompt
-    assert "Only cite exact declared names from DATABASE SCHEMA" in prompt
-    assert "source metadata, physical datasource names, or lineage names" in prompt
+    assert "table: <table_name>" in prompt
+    assert "column: <table_name>.<column_name>" in prompt
+    assert "The reasoning plan is a grounding handoff" in prompt
+    assert "declared in DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT" in prompt
+    assert "source names, physical names, lineage names" in prompt
 
 
 def test_user_prompt_templates_keep_source_metadata_non_executable():
@@ -191,9 +197,10 @@ def test_followup_sql_prompt_does_not_expect_previous_sql_context():
     )
 
 
-def test_executable_prompt_templates_omit_planning_error_and_original_sql_context():
+def test_executable_prompt_templates_include_grounded_reasoning_but_omit_sql_context():
     reasoning_marker = "UNTRUSTED_REASONING_CONTEXT_MARKER"
     diagnostic_marker = "UNTRUSTED_DIAGNOSTIC_CONTEXT_MARKER"
+    original_sql_marker = "UNTRUSTED_ORIGINAL_SQL_MARKER"
 
     generation_prompt = PromptBuilder(template=sql_generation_user_prompt_template).run(
         query="Question",
@@ -234,7 +241,7 @@ def test_executable_prompt_templates_omit_planning_error_and_original_sql_contex
         template=sql_regeneration_user_prompt_template
     ).run(
         query="Question",
-        sql=reasoning_marker,
+        sql=original_sql_marker,
         documents=["SCHEMA_CONTEXT"],
         sql_generation_reasoning=reasoning_marker,
         instructions=[],
@@ -251,9 +258,11 @@ def test_executable_prompt_templates_omit_planning_error_and_original_sql_contex
         correction_prompt,
         regeneration_prompt,
     ):
-        assert reasoning_marker not in prompt
-        assert "intentionally omitted" in prompt
+        assert reasoning_marker in prompt
+        assert "legacy grounding handoff" in prompt
 
+    assert original_sql_marker not in regeneration_prompt
+    assert "original SQL is intentionally omitted" in regeneration_prompt
     assert diagnostic_marker in correction_prompt
     assert "Use the diagnostic text only to understand the failure category" in (
         correction_prompt
