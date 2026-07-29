@@ -495,3 +495,42 @@ def test_cli_translate_types_none_row_is_benign_note() -> None:
     )
     _assert_success(result)
     assert "Note: skipped 1 None row(s) (benign padding)" in result.stderr
+
+
+def test_cli_parse_types_rejects_non_list_object_payload() -> None:
+    # Canner/WrenAI#2570 review: a top-level JSON object used to reach
+    # parse_types() directly, which iterates a dict as its keys and trips the
+    # skip-count invariant with an AssertionError instead of a clean error.
+    result = _run_wren(
+        "utils",
+        "parse-types",
+        "--dialect",
+        "postgres",
+        stdin=json.dumps({"column": "id", "raw_type": "int8"}),
+    )
+    assert result.returncode == 1
+    assert "Error: input must be a JSON array (got dict)" in result.stderr
+    assert "AssertionError" not in result.stderr
+
+
+def test_cli_parse_types_rejects_non_list_string_payload() -> None:
+    result = _run_wren(
+        "utils", "parse-types", "--dialect", "postgres", stdin=json.dumps("not-a-list")
+    )
+    assert result.returncode == 1
+    assert "Error: input must be a JSON array (got str)" in result.stderr
+
+
+def test_cli_translate_types_rejects_non_list_object_payload() -> None:
+    result = _run_wren(
+        "utils",
+        "translate-types",
+        "--source",
+        "postgres",
+        "--target",
+        "bigquery",
+        stdin=json.dumps({"column": "id", "raw_type": "int8"}),
+    )
+    assert result.returncode == 1
+    assert "Error: input must be a JSON array (got dict)" in result.stderr
+    assert "AssertionError" not in result.stderr

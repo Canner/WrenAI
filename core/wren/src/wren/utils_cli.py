@@ -63,6 +63,24 @@ def _has_corrupt_skips(skipped: list[tuple[int, object]]) -> bool:
     return any(v is not None for _, v in skipped)
 
 
+def _require_list(data: object) -> list:
+    """Reject a non-list top-level JSON value with a clean error, not a crash.
+
+    ``_skipped_rows`` only recognizes non-mapping *rows*; a non-list *payload*
+    (an object, string, number, ...) slips past it silently and reaches
+    parse_types/translate_types, which iterate it directly (yielding dict keys
+    or string characters instead of rows) and trip the skip-count invariant
+    below with a confusing AssertionError instead of a clean input error.
+    """
+    if not isinstance(data, list):
+        typer.echo(
+            f"Error: input must be a JSON array (got {type(data).__name__})",
+            err=True,
+        )
+        raise typer.Exit(1)
+    return data
+
+
 @utils_app.command(name="parse-type")
 def parse_type_cmd(
     type_str: Annotated[str, typer.Option("--type", "-t", help="Raw SQL type string")],
@@ -124,6 +142,7 @@ def parse_types_cmd(
         typer.echo(f"Error: invalid JSON input: {e}", err=True)
         raise typer.Exit(1)
 
+    data = _require_list(data)
     skipped = _skipped_rows(data)
     results = parse_types(data, dialect, type_field=type_field)
     assert len(results) + len(skipped) == len(data), (
@@ -202,6 +221,7 @@ def translate_types_cmd(
         typer.echo(f"Error: invalid JSON input: {e}", err=True)
         raise typer.Exit(1)
 
+    data = _require_list(data)
     skipped = _skipped_rows(data)
     results = translate_types(data, source, target, type_field=type_field)
     assert len(results) + len(skipped) == len(data), (
