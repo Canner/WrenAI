@@ -41,20 +41,20 @@ def test_extract_raises_on_non_list_nested_collections() -> None:
     # _relationship_models), not silently index an empty collection. This
     # covers both truthy (42, 3, {"x": 1}, "nope") and falsy ({}, 0, "")
     # non-list values — only None/missing passes through.
-    with pytest.raises(ValueError, match=r"manifest\['columns'\] must be a list"):
+    with pytest.raises(ValueError, match=r"model 'm': 'columns' must be a list"):
         extract_schema_items({"models": [{"name": "m", "columns": 42}]})
-    with pytest.raises(ValueError, match=r"manifest\['measures'\] must be a list"):
+    with pytest.raises(ValueError, match=r"cube 'c': 'measures' must be a list"):
         extract_schema_items({"cubes": [{"name": "c", "measures": 3}]})
-    with pytest.raises(ValueError, match=r"manifest\['dimensions'\] must be a list"):
+    with pytest.raises(ValueError, match=r"cube 'c': 'dimensions' must be a list"):
         extract_schema_items({"cubes": [{"name": "c", "dimensions": {"x": 1}}]})
-    with pytest.raises(ValueError, match=r"manifest\['timeDimensions'\] must be a list"):
+    with pytest.raises(ValueError, match=r"cube 'c': 'timeDimensions' must be a list"):
         extract_schema_items({"cubes": [{"name": "c", "timeDimensions": "nope"}]})
     # Falsy non-list values — the gap goldmedal flagged — also raise.
-    with pytest.raises(ValueError, match=r"manifest\['columns'\] must be a list"):
+    with pytest.raises(ValueError, match=r"model 'm': 'columns' must be a list"):
         extract_schema_items({"models": [{"name": "m", "columns": {}}]})
-    with pytest.raises(ValueError, match=r"manifest\['columns'\] must be a list"):
+    with pytest.raises(ValueError, match=r"model 'm': 'columns' must be a list"):
         extract_schema_items({"models": [{"name": "m", "columns": 0}]})
-    with pytest.raises(ValueError, match=r"manifest\['columns'\] must be a list"):
+    with pytest.raises(ValueError, match=r"model 'm': 'columns' must be a list"):
         extract_schema_items({"models": [{"name": "m", "columns": ""}]})
 
 

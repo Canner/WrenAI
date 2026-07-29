@@ -23,7 +23,7 @@ def manifest_hash(manifest: dict) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
-def _as_list(value: object, field: str) -> list:
+def _as_list(value: object, kind: str, name: str, field: str) -> list:
     """Return ``value`` as a list, raising on any non-list, non-null value.
 
     Nested collection fields (columns, measures, dimensions, timeDimensions)
@@ -41,7 +41,7 @@ def _as_list(value: object, field: str) -> list:
         return []
     if not isinstance(value, list):
         raise ValueError(
-            f"manifest[{field!r}] must be a list, got {type(value).__name__}"
+            f"{kind} {name!r}: {field!r} must be a list, got {type(value).__name__}"
         )
     return value
 
@@ -132,7 +132,7 @@ def _describe_model(model: dict, lines: list[str]) -> None:
     if data_scope:
         lines.append(f"  Data scope: {data_scope}")
 
-    cols = _as_list(model.get("columns"), "columns")
+    cols = _as_list(model.get("columns"), "model", name, "columns")
     described = [c for c in cols if isinstance(c, dict) and c.get("name")]
     if described:
         lines.append("  Columns:")
@@ -221,7 +221,7 @@ def _describe_cube(cube: dict, lines: list[str]) -> None:
     base = cube.get("baseObject", "?")
     lines.append(f"### Cube: {name} (base: {base})")
     measures = [
-        m for m in (_as_list(cube.get("measures"), "measures")) if isinstance(m, dict)
+        m for m in (_as_list(cube.get("measures"), "cube", name, "measures")) if isinstance(m, dict)
     ]
     if measures:
         lines.append("  Measures:")
@@ -237,7 +237,7 @@ def _describe_cube(cube: dict, lines: list[str]) -> None:
             lines.append(line)
     dims = [
         d
-        for d in (_as_list(cube.get("dimensions"), "dimensions"))
+        for d in (_as_list(cube.get("dimensions"), "cube", name, "dimensions"))
         if isinstance(d, dict)
     ]
     if dims:
@@ -254,7 +254,7 @@ def _describe_cube(cube: dict, lines: list[str]) -> None:
             lines.append(line)
     tdims = [
         td
-        for td in (_as_list(cube.get("timeDimensions"), "timeDimensions"))
+        for td in (_as_list(cube.get("timeDimensions"), "cube", name, "timeDimensions"))
         if isinstance(td, dict)
     ]
     if tdims:
@@ -305,7 +305,7 @@ def extract_schema_items(manifest: dict) -> list[dict]:
         if not isinstance(model, dict) or not model.get("name"):
             continue
         items.append(_model_record(model, mdl_h, now))
-        for col in _as_list(model.get("columns"), "columns"):
+        for col in _as_list(model.get("columns"), "model", model["name"], "columns"):
             if not isinstance(col, dict) or not col.get("name"):
                 continue
             items.append(_column_record(col, model["name"], mdl_h, now))
@@ -323,13 +323,13 @@ def extract_schema_items(manifest: dict) -> list[dict]:
             continue
         items.append(_cube_record(cube, mdl_h, now))
         cube_name = cube.get("name", "")
-        for measure in _as_list(cube.get("measures"), "measures"):
+        for measure in _as_list(cube.get("measures"), "cube", cube_name, "measures"):
             if isinstance(measure, dict):
                 items.append(_measure_record(measure, cube_name, mdl_h, now))
-        for dim in _as_list(cube.get("dimensions"), "dimensions"):
+        for dim in _as_list(cube.get("dimensions"), "cube", cube_name, "dimensions"):
             if isinstance(dim, dict):
                 items.append(_cube_dimension_record(dim, cube_name, mdl_h, now))
-        for tdim in _as_list(cube.get("timeDimensions"), "timeDimensions"):
+        for tdim in _as_list(cube.get("timeDimensions"), "cube", cube_name, "timeDimensions"):
             if isinstance(tdim, dict):
                 items.append(_time_dimension_record(tdim, cube_name, mdl_h, now))
 
@@ -343,7 +343,7 @@ def _model_record(model: dict, mdl_h: str, now: datetime) -> dict:
     name = model["name"]
     cols = [
         c
-        for c in (_as_list(model.get("columns"), "columns"))
+        for c in (_as_list(model.get("columns"), "model", name, "columns"))
         if isinstance(c, dict) and c.get("name")
     ]
     col_summaries = ", ".join(f"{c['name']} ({c.get('type', '?')})" for c in cols[:20])
@@ -475,17 +475,17 @@ def _cube_record(cube: dict, mdl_h: str, now: datetime) -> dict:
     base = cube.get("baseObject", "?")
     measures = ", ".join(
         m.get("name", "")
-        for m in (_as_list(cube.get("measures"), "measures"))
+        for m in (_as_list(cube.get("measures"), "cube", name, "measures"))
         if isinstance(m, dict)
     )
     dims = ", ".join(
         d.get("name", "")
-        for d in (_as_list(cube.get("dimensions"), "dimensions"))
+        for d in (_as_list(cube.get("dimensions"), "cube", name, "dimensions"))
         if isinstance(d, dict)
     )
     time_dims = ", ".join(
         td.get("name", "")
-        for td in (_as_list(cube.get("timeDimensions"), "timeDimensions"))
+        for td in (_as_list(cube.get("timeDimensions"), "cube", name, "timeDimensions"))
         if isinstance(td, dict)
     )
 
