@@ -258,22 +258,11 @@ export class ModelResolver {
     ctx: IContext,
   ): Promise<DeployResponse> {
     const project = await this.prepareProjectForDeploy(ctx);
-    const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-    const lastDeploy = await ctx.deployService.getLastDeployment(project.id);
-    const hasModelingChangesAfterDeploy =
-      !(await this.isLastDeployNewerThanModelingChanges(
-        ctx,
-        project.id,
-        lastDeploy,
-      ));
-    const shouldForceDeploy =
-      args.force ||
-      hasModelingChangesAfterDeploy ||
-      !ctx.deployService.isSameDeployment(manifest, project.id, lastDeploy);
+    const { manifest } = await ctx.mdlService.makeModelMDL(project);
     const deployRes = await ctx.deployService.deploy(
       manifest,
       project.id,
-      shouldForceDeploy,
+      args.force,
     );
     if (deployRes.status === 'SUCCESS') {
       dirtyProjectIds.delete(project.id);
@@ -299,105 +288,6 @@ export class ModelResolver {
     await this.resolveModifiedSchemaChanges(ctx, project.id);
     project = await this.refreshProjectDataSourceVersion(ctx, project);
     return project;
-  }
-
-  private async isLastDeployNewerThanModelingChanges(
-    ctx: IContext,
-    projectId: number,
-    lastDeploy?: { createdAt?: Date; updatedAt?: Date } | null,
-  ): Promise<boolean> {
-    if (!lastDeploy) {
-      return false;
-    }
-
-    const deployedAt = this.toTime(lastDeploy.updatedAt || lastDeploy.createdAt);
-    if (!deployedAt) {
-      return false;
-    }
-
-    const models = await ctx.modelRepository.findAllBy({ projectId });
-    const modelIds = models.map((model) => model.id);
-    const [columns, nestedColumns, relations, views] = await Promise.all([
-      modelIds.length
-        ? ctx.modelColumnRepository.findColumnsByModelIds(modelIds)
-        : Promise.resolve([]),
-      modelIds.length
-        ? ctx.modelNestedColumnRepository.findNestedColumnsByModelIds(modelIds)
-        : Promise.resolve([]),
-      ctx.relationRepository.findRelationInfoBy({ projectId }),
-      ctx.viewRepository.findAllBy({ projectId }),
-    ]);
-
-    const latestModelingChangeAt = [
-      ...models,
-      ...columns,
-      ...nestedColumns,
-      ...relations,
-      ...views,
-    ].reduce((latest, item: any) => {
-      return Math.max(latest, this.toTime(item.updatedAt || item.createdAt));
-    }, 0);
-
-    return deployedAt >= latestModelingChangeAt;
-  }
-
-  private toTime(value?: Date | string | null): number {
-    if (!value) {
-      return 0;
-    }
-    const time = new Date(value).getTime();
-    return Number.isFinite(time) ? time : 0;
-  }
-
-  private isSameDeploymentIgnoringColumnNullability(
-    manifest: any,
-    lastDeploy?: { manifest?: any } | null,
-  ): boolean {
-    if (!lastDeploy?.manifest) {
-      return false;
-    }
-
-    return (
-      this.stableStringify(this.omitColumnNullability(lastDeploy.manifest)) ===
-      this.stableStringify(this.omitColumnNullability(manifest))
-    );
-  }
-
-  private omitColumnNullability(value: any): any {
-    if (Array.isArray(value)) {
-      return value.map((item) => this.omitColumnNullability(item));
-    }
-    if (!value || typeof value !== 'object') {
-      return value;
-    }
-
-    const result: Record<string, any> = {};
-    for (const key of Object.keys(value)) {
-      if (key === 'notNull') {
-        continue;
-      }
-      result[key] = this.omitColumnNullability(value[key]);
-    }
-    return result;
-  }
-
-  private stableStringify(value: any): string {
-    if (Array.isArray(value)) {
-      const serializedItems = value.map((item) => this.stableStringify(item));
-      if (value.every((item) => item && typeof item === 'object')) {
-        serializedItems.sort();
-      }
-      return `[${serializedItems.join(',')}]`;
-    }
-
-    if (value && typeof value === 'object') {
-      return `{${Object.keys(value)
-        .sort()
-        .map((key) => `${JSON.stringify(key)}:${this.stableStringify(value[key])}`)
-        .join(',')}}`;
-    }
-
-    return JSON.stringify(value);
   }
 
   private markProjectDirty(projectId: number) {

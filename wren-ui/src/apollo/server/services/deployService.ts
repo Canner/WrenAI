@@ -215,9 +215,15 @@ export class DeployService implements IDeployService {
     );
   }
 
-  private canonicalStringify(value: any): string {
+  private canonicalStringify(value: any): string | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+
     if (Array.isArray(value)) {
-      const serializedItems = value.map((item) => this.canonicalStringify(item));
+      const serializedItems = value.map(
+        (item) => this.canonicalStringify(item) ?? 'null',
+      );
       if (value.every((item) => item && typeof item === 'object')) {
         serializedItems.sort();
       }
@@ -225,10 +231,16 @@ export class DeployService implements IDeployService {
     }
 
     if (value && typeof value === 'object') {
-      return `{${Object.keys(value)
+      const serializedProperties = Object.keys(value)
         .sort()
-        .map((key) => `${JSON.stringify(key)}:${this.canonicalStringify(value[key])}`)
-        .join(',')}}`;
+        .map((key) => {
+          const serializedValue = this.canonicalStringify(value[key]);
+          return serializedValue === undefined
+            ? undefined
+            : `${JSON.stringify(key)}:${serializedValue}`;
+        })
+        .filter((property): property is string => property !== undefined);
+      return `{${serializedProperties.join(',')}}`;
     }
 
     return JSON.stringify(value);
