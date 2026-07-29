@@ -1150,7 +1150,7 @@ def _finalize_column_tests(imported_models: list[dict[str, Any]]) -> None:
         if not isinstance(columns, list):
             continue
         for column in columns:
-            if not isinstance(column, dict):
+            if not isinstance(column, dict) or column.get("name") is None:
                 continue
             props = column.setdefault("properties", {})
             tests = sorted(set(props.pop("_dbt_tests", [])))
@@ -1291,7 +1291,11 @@ def _seed_model_payload(model: dict[str, Any]) -> dict[str, Any]:
                 "isCalculated": column.get("is_calculated", False),
                 "properties": _camelize_props(column.get("properties", {})),
             }
-            for column in (model.get("columns", []) or [])
+            for column in (
+                model.get("columns", [])
+                if isinstance(model.get("columns"), list)
+                else []
+            )
             if isinstance(column, dict) and column.get("name") is not None
         ],
     }
