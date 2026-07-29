@@ -359,14 +359,22 @@ async def table_retrieval(
 
 @observe(capture_input=False)
 async def dbschema_retrieval(
-    table_retrieval: dict, project_id: str, dbschema_retriever: Any
+    table_retrieval: dict, project_id: str, dbschema_retriever: Any, embedding: dict
 ) -> list[Document]:
     table_names = _table_names_from_description_documents(
         table_retrieval.get("documents", [])
     )
+    documents = []
+    if embedding:
+        documents = await _retrieve_semantic_schema_documents(
+            embedding, project_id, dbschema_retriever
+        )
+        table_names = _merge_names(
+            table_names,
+            _table_names_from_schema_documents(documents),
+        )
 
     if table_names:
-        documents = []
         retrieved_table_names = set()
         pending_table_names = table_names
 
@@ -385,6 +393,59 @@ async def dbschema_retrieval(
         return documents
 
     return []
+
+
+async def _retrieve_semantic_schema_documents(
+    embedding: dict, project_id: str, dbschema_retriever: Any
+) -> list[Document]:
+    filters = {
+        "operator": "AND",
+        "conditions": [
+            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+        ],
+    }
+
+    if project_id:
+        filters["conditions"].append(
+            {"field": "project_id", "operator": "==", "value": project_id}
+        )
+
+    results = await dbschema_retriever.run(
+        query_embedding=embedding.get("embedding"),
+        filters=filters,
+    )
+    return results["documents"]
+
+
+def _table_names_from_schema_documents(documents: list[Document]) -> list[str]:
+    table_names = []
+    seen = set()
+
+    for document in documents:
+        table_name = document.meta.get("name")
+        if not table_name:
+            content = ast.literal_eval(document.content)
+            table_name = content.get("name")
+
+        if table_name and table_name not in seen:
+            table_names.append(table_name)
+            seen.add(table_name)
+
+    return table_names
+
+
+def _merge_names(*name_groups: list[str]) -> list[str]:
+    merged = []
+    seen = set()
+
+    for names in name_groups:
+        for name in names:
+            if name in seen:
+                continue
+            merged.append(name)
+            seen.add(name)
+
+    return merged
 
 
 def _table_names_from_description_documents(documents: list[Document]) -> list[str]:

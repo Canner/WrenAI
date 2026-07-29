@@ -50,10 +50,10 @@ Make sure you follow the SQL Rules strictly.
 {text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be in JSON format:
+The final answer must be JSON. Return a SQL string only when it is fully grounded in DATABASE SCHEMA and SQL FUNCTIONS. If no fully grounded SQL can be generated, return null for sql.
 
 {{
-    "sql": "corrected SQL query string using only identifiers declared in DATABASE SCHEMA"
+    "sql": "corrected SQL query string using only identifiers declared in DATABASE SCHEMA, or null"
 }}
 """
 

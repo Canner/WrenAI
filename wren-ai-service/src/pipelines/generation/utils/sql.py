@@ -40,9 +40,9 @@ class SQLGenPostProcessor:
 
             # test if cleaned_generation_result in string format is actually a dictionary with key 'sql'
             if cleaned_generation_result.startswith("{"):
-                cleaned_generation_result = orjson.loads(cleaned_generation_result)[
+                cleaned_generation_result = orjson.loads(cleaned_generation_result).get(
                     "sql"
-                ]
+                )
 
             (
                 valid_generation_result,
@@ -70,7 +70,7 @@ class SQLGenPostProcessor:
 
     async def _classify_generation_result(
         self,
-        generation_result: str,
+        generation_result: str | None,
         project_id: str | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
@@ -80,6 +80,15 @@ class SQLGenPostProcessor:
         valid_generation_result = {}
         invalid_generation_result = {}
         use_dry_run = not allow_data_preview
+
+        if not generation_result:
+            return valid_generation_result, {
+                "sql": "",
+                "original_sql": "",
+                "type": "NO_RELEVANT_SQL",
+                "error": "No grounded SQL was generated from the current schema.",
+                "correlation_id": "",
+            }
 
         async with aiohttp.ClientSession() as session:
             if use_dry_plan:
@@ -446,16 +455,16 @@ Given the user's question and database schema, generate one grounded Wren SQL qu
 {text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be a Wren SQL query in JSON format:
+The final answer must be JSON. Return a SQL string only when it is fully grounded in DATABASE SCHEMA and SQL FUNCTIONS. If no fully grounded SQL can be generated, return null for sql.
 
 {{
-    "sql": "SQL query string using only identifiers declared in DATABASE SCHEMA"
+    "sql": "SQL query string using only identifiers declared in DATABASE SCHEMA, or null"
 }}
 """
 
 
 class SqlGenerationResult(BaseModel):
-    sql: str
+    sql: str | None
 
 
 SQL_GENERATION_MODEL_KWARGS = {

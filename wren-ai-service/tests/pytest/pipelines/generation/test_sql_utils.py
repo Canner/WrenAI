@@ -2,6 +2,7 @@ import pytest
 from haystack.components.builders.prompt_builder import PromptBuilder
 
 from src.pipelines.generation.utils.sql import (
+    SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
     construct_ask_history_messages,
     construct_instructions,
@@ -103,6 +104,19 @@ async def test_sql_postprocessor_does_not_keep_valid_result_when_dry_run_fails()
     assert result["invalid_generation_result"]["type"] == "DRY_RUN"
 
 
+@pytest.mark.asyncio
+async def test_sql_postprocessor_rejects_null_sql_generation_result():
+    result = await SQLGenPostProcessor(_DryPlanEngine()).run(
+        replies=['{"sql": null}'],
+        use_dry_plan=True,
+        data_source="source",
+    )
+
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "NO_RELEVANT_SQL"
+    assert result["invalid_generation_result"]["sql"] == ""
+
+
 def test_construct_instructions_uses_instruction_text():
     assert construct_instructions(
         [{"instruction": "First rule."}, {"instruction": "Second rule."}]
@@ -167,6 +181,12 @@ def test_get_text_to_sql_rules_keeps_mandatory_rules_with_sql_knowledge():
     assert "MANDATORY SQL GROUNDING RULES" in rules
     assert "Every table and column referenced" in rules
     assert "Do not query INFORMATION_SCHEMA" in rules
+
+
+def test_sql_generation_schema_allows_null_when_sql_cannot_be_grounded():
+    schema = SQL_GENERATION_MODEL_KWARGS["response_format"]["json_schema"]["schema"]
+
+    assert {"type": "null"} in schema["properties"]["sql"]["anyOf"]
 
 
 def test_get_metric_instructions_uses_sql_knowledge_override():

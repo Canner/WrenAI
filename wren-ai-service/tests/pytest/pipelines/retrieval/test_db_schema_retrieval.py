@@ -153,6 +153,7 @@ async def test_dbschema_retrieval_loads_selected_active_project_schema():
         },
         project_id="project-1",
         dbschema_retriever=retriever,
+        embedding={},
     )
 
     assert [document.meta["name"] for document in documents] == ["orders", "customers"]
@@ -288,6 +289,7 @@ async def test_dbschema_retrieval_expands_declared_relationships():
         },
         project_id="project-1",
         dbschema_retriever=retriever,
+        embedding={},
     )
 
     assert retriever.calls == [[selected_model], [related_model], [downstream_model]]
@@ -301,14 +303,61 @@ async def test_dbschema_retrieval_expands_declared_relationships():
 
 
 @pytest.mark.asyncio
-async def test_dbschema_retrieval_does_not_load_full_schema_for_unmatched_question():
+async def test_dbschema_retrieval_uses_semantic_schema_hits_when_table_retrieval_misses():
+    semantic_model = "semantic_dataset"
+
     class Retriever:
         def __init__(self):
-            self.called = False
+            self.calls = []
 
         async def run(self, query_embedding, filters):
-            self.called = True
-            return {"documents": []}
+            self.calls.append(
+                {
+                    "query_embedding": query_embedding,
+                    "filters": filters,
+                }
+            )
+
+            if query_embedding:
+                return {
+                    "documents": [
+                        Document(
+                            content=str(
+                                {
+                                    "type": "TABLE_COLUMNS",
+                                    "columns": [
+                                        {
+                                            "type": "COLUMN",
+                                            "name": "semantic_measure",
+                                            "data_type": "DOUBLE",
+                                            "comment": "",
+                                            "is_primary_key": False,
+                                        }
+                                    ],
+                                }
+                            ),
+                            meta={"type": "TABLE_SCHEMA", "name": semantic_model},
+                        )
+                    ]
+                }
+
+            return {
+                "documents": [
+                    Document(
+                        content=str(
+                            {
+                                "type": "TABLE",
+                                "name": semantic_model,
+                                "comment": "",
+                                "columns": [],
+                                "properties": {},
+                                "primaryKey": "",
+                            }
+                        ),
+                        meta={"type": "TABLE_SCHEMA", "name": semantic_model},
+                    )
+                ]
+            }
 
     retriever = Retriever()
 
@@ -316,10 +365,37 @@ async def test_dbschema_retrieval_does_not_load_full_schema_for_unmatched_questi
         table_retrieval={"documents": []},
         project_id="project-1",
         dbschema_retriever=retriever,
+        embedding={"embedding": [0.25]},
     )
 
-    assert documents == []
-    assert not retriever.called
+    assert retriever.calls[0] == {
+        "query_embedding": [0.25],
+        "filters": {
+            "operator": "AND",
+            "conditions": [
+                {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+                {"field": "project_id", "operator": "==", "value": "project-1"},
+            ],
+        },
+    }
+    assert retriever.calls[1]["query_embedding"] == []
+    assert retriever.calls[1]["filters"] == {
+        "operator": "AND",
+        "conditions": [
+            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+            {
+                "operator": "OR",
+                "conditions": [
+                    {"field": "name", "operator": "==", "value": semantic_model},
+                ],
+            },
+            {"field": "project_id", "operator": "==", "value": "project-1"},
+        ],
+    }
+    assert [document.meta["name"] for document in documents] == [
+        semantic_model,
+        semantic_model,
+    ]
 
 
 def test_check_using_db_schemas_without_pruning_triggers_legacy_column_pruning():
