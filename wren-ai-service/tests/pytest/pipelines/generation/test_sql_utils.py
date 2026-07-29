@@ -48,6 +48,10 @@ def test_get_text_to_sql_rules_uses_default_metadata_grounding_rules():
     assert "Interpret the user's intent" in rules
     assert "schema descriptions, aliases, display labels" in rules
     assert "WREN RETRIEVED SEMANTIC CONTEXT" in rules
+    assert "sql_table_name_use_exactly" in rules
+    assert "sql_column_name_use_exactly" in rules
+    assert "semantic_context_not_sql_identifier" in rules
+    assert "Do not combine words, labels, ordinals" in rules
     assert "Never generate placeholder identifiers" in rules
     assert "use all required related tables" in rules
     assert "silently check that each identifier and function" in rules
@@ -101,7 +105,10 @@ def test_sql_generation_system_prompt_grounding_contract():
     assert "reasoning plan only as non-executable context" in prompt
     assert "include those objects only when DATABASE SCHEMA shows" in prompt
     assert "Use the exact supported syntax shown there" in prompt
-    assert "Use executable_name values and the following DDL declarations" in prompt
+    assert "Use sql_table_name_use_exactly" in prompt
+    assert "sql_column_names_use_exactly" in prompt
+    assert "semantic_context_not_sql_identifiers" in prompt
+    assert "Use Wren SQL identifier quoting with double quotes only" in prompt
     assert "source database/schema/table names" in prompt
     assert "appears only in SQL samples, reasoning, failed SQL" in prompt
 

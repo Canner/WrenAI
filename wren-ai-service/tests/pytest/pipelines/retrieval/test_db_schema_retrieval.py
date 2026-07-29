@@ -329,7 +329,59 @@ def test_check_using_db_schemas_without_pruning_keeps_context_when_within_window
         "WREN RETRIEVED SEMANTIC CONTEXT" in schema["table_ddl"]
         for schema in result["db_schemas"]
     )
+    assert all(
+        "sql_table_name_use_exactly" in schema["table_ddl"]
+        for schema in result["db_schemas"]
+    )
+    assert all(
+        "sql_column_name_use_exactly" in schema["table_ddl"]
+        for schema in result["db_schemas"]
+    )
+    assert all(
+        "semantic_context_not_sql_identifier" in schema["table_ddl"]
+        for schema in result["db_schemas"]
+    )
     assert result["tokens"] > 0
+
+
+def test_retrieved_schema_separates_exact_sql_names_from_semantic_context():
+    class Encoding:
+        def encode(self, value):
+            return value.split()
+
+    result = check_using_db_schemas_without_pruning(
+        construct_db_schemas=[
+            {
+                "type": "TABLE",
+                "name": "modeled_dataset",
+                "comment": "Business-facing dataset description.",
+                "columns": [
+                    {
+                        "type": "COLUMN",
+                        "name": "stored_attribute",
+                        "data_type": "VARCHAR",
+                        "comment": "Business-facing attribute label.",
+                        "is_primary_key": False,
+                    }
+                ],
+                "properties": {},
+                "primaryKey": "",
+            }
+        ],
+        dbschema_retrieval=[],
+        encoding=Encoding(),
+        enable_column_pruning=False,
+        context_window_size=1000,
+    )
+
+    table_ddl = result["db_schemas"][0]["table_ddl"]
+
+    assert '"sql_table_name_use_exactly":"modeled_dataset"' in table_ddl
+    assert '"sql_column_name_use_exactly":"stored_attribute"' in table_ddl
+    assert (
+        '"semantic_context_not_sql_identifier":"Business-facing attribute label."'
+        in table_ddl
+    )
 
 
 def test_check_using_db_schemas_without_pruning_keeps_explicit_table_fast_path():

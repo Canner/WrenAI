@@ -51,6 +51,8 @@ The database schema includes structural, semantic, and business modeling metadat
 11. Reuse calculated fields and metric measures or dimensions when they already represent the requested business concept.
 12. Follow only the relationships shown in the provided schema when selecting columns across datasets.
 13. Do not stop at a single top candidate when the question needs multiple related datasets.
+14. If WREN RETRIEVED SEMANTIC CONTEXT is present, use sql_table_name_use_exactly and sql_column_name_use_exactly values as the exact names to return.
+15. Use semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier only to understand meaning. Do not return descriptions, labels, source metadata, or rewritten variants as table or column names.
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:
@@ -112,19 +114,31 @@ table_columns_selection_user_prompt_template = """
 
 
 def _build_metric_ddl(content: dict) -> str:
+    columns = [
+        column
+        for column in content["columns"]
+        if column["data_type"].lower() != "unknown"
+    ]
     context = _format_semantic_context(
         {
             "object_type": "metric",
-            "executable_name": content["name"],
-            "semantic_role": "stable analytical aggregation interface",
+            "sql_identifier_contract": {
+                "sql_table_name_use_exactly": content["name"],
+                "sql_column_names_use_exactly": [
+                    column["name"] for column in columns
+                ],
+            },
+            "semantic_context_not_sql_identifiers": {
+                "role": "stable analytical aggregation interface",
+                "description": content["comment"],
+            },
             "columns": [
                 {
-                    "executable_name": column["name"],
+                    "sql_column_name_use_exactly": column["name"],
                     "data_type": get_engine_supported_data_type(column["data_type"]),
-                    "semantic_metadata": column["comment"],
+                    "semantic_context_not_sql_identifier": column["comment"],
                 }
-                for column in content["columns"]
-                if column["data_type"].lower() != "unknown"
+                for column in columns
             ],
         }
     )
@@ -146,9 +160,14 @@ def _build_view_ddl(content: dict) -> str:
     context = _format_semantic_context(
         {
             "object_type": "view",
-            "executable_name": content["name"],
-            "semantic_role": "stable virtual table interface",
-            "definition_is_semantic_context": True,
+            "sql_identifier_contract": {
+                "sql_table_name_use_exactly": content["name"],
+            },
+            "semantic_context_not_sql_identifiers": {
+                "role": "stable virtual table interface",
+                "description": content["comment"],
+                "definition_is_semantic_context": True,
+            },
         }
     )
     return (
@@ -161,7 +180,8 @@ def _format_semantic_context(context: dict) -> str:
         "/*\n"
         "WREN RETRIEVED SEMANTIC CONTEXT\n"
         f"{orjson.dumps(context).decode('utf-8')}\n"
-        "Only executable_name values in this retrieved context and identifiers declared in the following DDL are executable in Wren SQL. Semantic metadata explains meaning but is not an executable identifier.\n"
+        "Only values in sql_identifier_contract, sql_column_name_use_exactly, and identifiers declared in the following DDL are executable in Wren SQL.\n"
+        "Values under semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier explain meaning only and must not be copied, combined, or rewritten as executable SQL identifiers.\n"
         "*/\n"
     )
 
@@ -210,27 +230,42 @@ def _build_table_retrieval_context(
     ddl, has_calculated_field, has_json_field = build_table_ddl(
         content, columns=columns, tables=tables
     )
+    included_columns = _included_columns(content, columns, tables)
+    included_relationships = _included_relationships(content, tables)
     context = _format_semantic_context(
         {
             "object_type": "model",
-            "executable_name": content["name"],
-            "semantic_metadata": content["comment"],
+            "sql_identifier_contract": {
+                "sql_table_name_use_exactly": content["name"],
+                "sql_column_names_use_exactly": [
+                    column["name"] for column in included_columns
+                ],
+                "relationship_constraints_use_exactly": [
+                    relationship["constraint"]
+                    for relationship in included_relationships
+                ],
+            },
+            "semantic_context_not_sql_identifiers": {
+                "description": content["comment"],
+            },
             "columns": [
                 {
-                    "executable_name": column["name"],
+                    "sql_column_name_use_exactly": column["name"],
                     "data_type": get_engine_supported_data_type(column["data_type"]),
                     "is_primary_key": column["is_primary_key"],
-                    "semantic_metadata": column["comment"],
+                    "semantic_context_not_sql_identifier": column["comment"],
                 }
-                for column in _included_columns(content, columns, tables)
+                for column in included_columns
             ],
             "relationships": [
                 {
-                    "semantic_metadata": relationship["comment"],
-                    "constraint": relationship["constraint"],
-                    "related_models": relationship.get("tables", []),
+                    "semantic_context_not_sql_identifier": relationship["comment"],
+                    "sql_relationship_constraint_use_exactly": relationship[
+                        "constraint"
+                    ],
+                    "related_models_use_exactly": relationship.get("tables", []),
                 }
-                for relationship in _included_relationships(content, tables)
+                for relationship in included_relationships
             ],
         }
     )
