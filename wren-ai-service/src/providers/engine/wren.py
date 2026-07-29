@@ -138,6 +138,44 @@ class WrenUI(Engine):
                 {"error_message": f"Request timed out: {timeout} seconds"},
             )
 
+    async def dry_plan(
+        self,
+        session: aiohttp.ClientSession,
+        sql: str,
+        data_source: str,
+        project_id: str | None = None,
+        timeout: float = settings.engine_timeout,
+        allow_fallback: bool = True,
+        **kwargs,
+    ) -> Tuple[bool, str]:
+        data = {
+            "sql": sql,
+            "projectId": project_id,
+            "allowFallback": allow_fallback,
+        }
+
+        try:
+            async with session.post(
+                f"{self._endpoint}/api/graphql",
+                json={
+                    "query": "mutation DryPlanSql($data: DryPlanSQLDataInput) { dryPlanSql(data: $data) }",
+                    "variables": {"data": data},
+                },
+                timeout=aiohttp.ClientTimeout(total=timeout),
+            ) as response:
+                res_json = await response.json()
+                if res_data := res_json.get("data"):
+                    return bool(res_data.get("dryPlanSql")), ""
+
+                error_message = res_json.get("errors", [{}])[0].get(
+                    "message", "Unknown error"
+                )
+                logger.error(f"Error dry planning SQL: {error_message}")
+                return False, error_message
+        except asyncio.TimeoutError:
+            logger.error(f"Request timed out: {timeout} seconds")
+            return False, f"Request timed out: {timeout} seconds"
+
 
 @provider("wren_ibis")
 class WrenIbis(Engine):
@@ -348,3 +386,33 @@ class WrenEngine(Engine):
                 )
         except asyncio.TimeoutError:
             return False, None, f"Request timed out: {timeout} seconds"
+
+    async def dry_plan(
+        self,
+        session: aiohttp.ClientSession,
+        sql: str,
+        timeout: float = settings.engine_timeout,
+        **kwargs,
+    ) -> Tuple[bool, str]:
+        api_endpoint = f"{self._endpoint}/v1/mdl/dry-plan"
+
+        try:
+            async with session.get(
+                api_endpoint,
+                json={
+                    "manifest": orjson.loads(base64.b64decode(self._manifest))
+                    if self._manifest
+                    else {},
+                    "sql": sql,
+                },
+                timeout=aiohttp.ClientTimeout(total=timeout),
+            ) as response:
+                res = await response.text()
+
+                if response.status == 200:
+                    return True, ""
+
+                return False, res
+        except asyncio.TimeoutError:
+            logger.error(f"Request timed out: {timeout} seconds")
+            return False, f"Request timed out: {timeout} seconds"

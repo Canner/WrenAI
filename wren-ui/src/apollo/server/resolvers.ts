@@ -163,6 +163,7 @@ const resolvers = {
 
     // preview
     previewSql: modelResolver.previewSql,
+    dryPlanSql: modelResolver.dryPlanSql,
 
     // Learning
     saveLearningRecord: learningResolver.saveLearningRecord,

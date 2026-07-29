@@ -6,6 +6,7 @@ import {
   CreateCalculatedFieldData,
   UpdateCalculatedFieldData,
   UpdateViewMetadataInput,
+  DryPlanSQLData,
   PreviewSQLData,
 } from '../models';
 import {
@@ -82,6 +83,7 @@ export class ModelResolver {
     this.previewModelData = this.previewModelData.bind(this);
     this.previewViewData = this.previewViewData.bind(this);
     this.previewSql = this.previewSql.bind(this);
+    this.dryPlanSql = this.dryPlanSql.bind(this);
     this.getNativeSql = this.getNativeSql.bind(this);
 
     // calculated field
@@ -1346,6 +1348,34 @@ export class ModelResolver {
       manifest,
       dryRun,
     });
+  }
+
+  public async dryPlanSql(
+    _root: any,
+    args: { data: DryPlanSQLData },
+    ctx: IContext,
+  ): Promise<boolean> {
+    const { sql, projectId, allowFallback } = args.data;
+    const project = projectId
+      ? await ctx.projectService.getProjectById(parseInt(projectId))
+      : await ctx.projectService.getCurrentProject();
+    const manifest = await this.getLastDeployedManifest(ctx, project.id);
+
+    if (project.type === DataSourceName.DUCKDB) {
+      await ctx.wrenEngineAdaptor.getNativeSQL(sql, {
+        manifest,
+        modelingOnly: false,
+      });
+    } else {
+      await ctx.ibisServerAdaptor.getNativeSql({
+        dataSource: project.type,
+        sql,
+        mdl: manifest,
+        allowFallback,
+      });
+    }
+
+    return true;
   }
 
   public async getNativeSql(

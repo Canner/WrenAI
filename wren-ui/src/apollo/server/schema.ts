@@ -927,6 +927,12 @@ export const typeDefs = gql`
     dryRun: Boolean
   }
 
+  input DryPlanSQLDataInput {
+    sql: String!
+    projectId: String
+    allowFallback: Boolean
+  }
+
   # Schema Change
   type SchemaChange {
     deletedTables: [DetailedChangeTable!]
@@ -1425,6 +1431,7 @@ export const typeDefs = gql`
 
     # preview
     previewSql(data: PreviewSQLDataInput): JSON!
+    dryPlanSql(data: DryPlanSQLDataInput): Boolean!
 
     # Learning
     saveLearningRecord(data: SaveLearningRecordInput!): LearningRecord!

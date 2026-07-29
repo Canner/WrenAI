@@ -87,6 +87,7 @@ class SQLGenPostProcessor:
                     session,
                     generation_result,
                     data_source,
+                    project_id=project_id,
                     allow_fallback=allow_dry_plan_fallback,
                 )
 

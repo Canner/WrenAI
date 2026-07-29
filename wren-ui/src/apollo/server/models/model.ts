@@ -101,3 +101,9 @@ export interface PreviewSQLData {
   limit?: number;
   dryRun?: boolean;
 }
+
+export interface DryPlanSQLData {
+  sql: string;
+  projectId?: string;
+  allowFallback?: boolean;
+}

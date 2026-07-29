@@ -1,6 +1,8 @@
+import pytest
 from haystack.components.builders.prompt_builder import PromptBuilder
 
 from src.pipelines.generation.utils.sql import (
+    SQLGenPostProcessor,
     construct_ask_history_messages,
     construct_instructions,
     get_json_field_instructions,
@@ -25,6 +27,32 @@ class _SqlKnowledge:
     text_to_sql_rule = "Use the supplied model context only."
     metric_instructions = "Use the supplied metric definitions only."
     json_field_instructions = "Use the supplied JSON field definitions only."
+
+
+class _DryPlanEngine:
+    def __init__(self):
+        self.calls = []
+
+    async def dry_plan(self, *args, **kwargs):
+        self.calls.append((args, kwargs))
+        return True, ""
+
+
+@pytest.mark.asyncio
+async def test_sql_postprocessor_passes_project_context_to_dry_plan():
+    engine = _DryPlanEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        replies=["SELECT 1"],
+        project_id="project-id",
+        use_dry_plan=True,
+        allow_dry_plan_fallback=False,
+        data_source="source",
+    )
+
+    assert result["valid_generation_result"]["sql"] == "SELECT 1"
+    assert engine.calls[0][1]["project_id"] == "project-id"
+    assert engine.calls[0][1]["allow_fallback"] is False
 
 
 def test_construct_instructions_uses_instruction_text():
