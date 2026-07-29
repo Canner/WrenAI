@@ -101,6 +101,33 @@ describe('DeployService', () => {
     });
   });
 
+  it('should skip deployment if an existing deployment has the same manifest with a different hash', async () => {
+    const manifest = {
+      models: [
+        {
+          name: 'orders',
+          columns: [{ name: 'id' }, { name: 'amount' }],
+        },
+      ],
+    };
+    const projectId = 1;
+
+    mockDeployLogRepository.findLastProjectDeployLog.mockResolvedValue({
+      id: 123,
+      hash: 'legacy-hash',
+      manifest,
+    });
+
+    const response = await deployService.deploy(manifest, projectId);
+
+    expect(response.status).toEqual(DeployStatusEnum.SUCCESS);
+    expect(mockWrenAIAdaptor.deploy).not.toHaveBeenCalled();
+    expect(mockDeployLogRepository.updateOne).toHaveBeenCalledWith(123, {
+      status: DeployStatusEnum.SUCCESS,
+      error: null,
+    });
+  });
+
   it('should create the same deployment hash for equivalent manifests', () => {
     const manifest = {
       models: [

@@ -107,7 +107,7 @@ export class DeployService implements IDeployService {
         // check if the model current deployment
         const lastDeploy =
           await this.deployLogRepository.findLastProjectDeployLog(projectId);
-        if (lastDeploy && lastDeploy.hash === hash) {
+        if (this.isSameDeployment(manifest, projectId, lastDeploy)) {
           logger.log(`Model has been deployed, hash: ${hash}`);
           await this.deployLogRepository.updateOne(lastDeploy.id, {
             status: DeployStatusEnum.SUCCESS,
