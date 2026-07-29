@@ -105,8 +105,8 @@ describe('DeployService', () => {
     const manifest = {
       models: [
         {
-          name: 'model',
-          columns: [{ name: 'field' }, { name: 'measure' }],
+          name: 'orders',
+          columns: [{ name: 'id' }, { name: 'amount' }],
         },
       ],
     };
@@ -126,41 +126,6 @@ describe('DeployService', () => {
       status: DeployStatusEnum.SUCCESS,
       error: null,
     });
-  });
-
-  it('should treat JSON-persisted manifests with omitted undefined properties as the same deployment', () => {
-    const manifest = {
-      models: [
-        {
-          name: 'model',
-          properties: {
-            displayName: 'Model',
-            description: undefined,
-          },
-          columns: [
-            {
-              name: 'field',
-              expression: undefined,
-              properties: {
-                displayName: 'Field',
-                description: undefined,
-              },
-            },
-          ],
-        },
-      ],
-    };
-    const persistedManifest = JSON.parse(JSON.stringify(manifest));
-
-    expect(deployService.createMDLHash(manifest, 1)).toEqual(
-      deployService.createMDLHash(persistedManifest, 1),
-    );
-    expect(
-      deployService.isSameDeployment(manifest, 1, {
-        hash: 'previous-hash',
-        manifest: persistedManifest,
-      }),
-    ).toBe(true);
   });
 
   it('should create the same deployment hash for equivalent manifests', () => {

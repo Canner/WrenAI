@@ -75,7 +75,7 @@ export interface IContext {
   modelNestedColumnRepository: IModelNestedColumnRepository;
   relationRepository: IRelationRepository;
   viewRepository: IViewRepository;
-  deployLogRepository: IDeployLogRepository;
+  deployRepository: IDeployLogRepository;
   schemaChangeRepository: ISchemaChangeRepository;
   learningRepository: ILearningRepository;
   dashboardRepository: IDashboardRepository;
