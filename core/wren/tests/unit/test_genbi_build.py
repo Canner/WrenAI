@@ -94,6 +94,29 @@ def test_build_includes_model_inventory(tmp_path: Path) -> None:
     assert "duckdb" in result.output
 
 
+def test_build_inventory_tolerates_non_list_columns(tmp_path: Path) -> None:
+    """YAML may set columns: to a string; inventory formatting must not crash."""
+    from wren.genbi.composer import compose_build_instruction
+
+    models = [
+        {"name": "orders", "columns": "id, customer_id"},
+        {"name": "customers", "columns": [{"name": "id"}, "bare", 3]},
+    ]
+    text = compose_build_instruction(
+        app_name="demo",
+        data_mode="snapshot",
+        user_prompt="hi",
+        mdl_path=tmp_path / "mdl.json",
+        app_dir=tmp_path / "app",
+        models=models,
+        data_source="duckdb",
+    )
+    assert "**orders**" in text
+    assert "**customers**" in text
+    assert "id" in text
+
+
+
 def test_build_includes_wasm_wiring_and_final_steps(tmp_path: Path) -> None:
     project = _make_project(tmp_path)
 
