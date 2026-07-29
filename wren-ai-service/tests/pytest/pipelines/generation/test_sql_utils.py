@@ -68,6 +68,14 @@ class _FailingDryPlanEngine:
         return False, "planner failed"
 
 
+class _FailingDryRunAfterDryPlanEngine:
+    async def dry_plan(self, *args, **kwargs):
+        return True, ""
+
+    async def execute_sql(self, *args, **kwargs):
+        return False, {}, {"error_message": "dry run failed"}
+
+
 @pytest.mark.asyncio
 async def test_sql_postprocessor_returns_original_sql_when_dry_plan_fails():
     result = await SQLGenPostProcessor(_FailingDryPlanEngine()).run(
@@ -79,6 +87,20 @@ async def test_sql_postprocessor_returns_original_sql_when_dry_plan_fails():
     assert result["invalid_generation_result"]["sql"] == "SELECT 1"
     assert result["invalid_generation_result"]["original_sql"] == "SELECT 1"
     assert result["invalid_generation_result"]["type"] == "DRY_PLAN"
+
+
+@pytest.mark.asyncio
+async def test_sql_postprocessor_does_not_keep_valid_result_when_dry_run_fails():
+    result = await SQLGenPostProcessor(_FailingDryRunAfterDryPlanEngine()).run(
+        replies=["SELECT 1"],
+        use_dry_plan=True,
+        data_source="source",
+    )
+
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["sql"] == "SELECT 1"
+    assert result["invalid_generation_result"]["original_sql"] == "SELECT 1"
+    assert result["invalid_generation_result"]["type"] == "DRY_RUN"
 
 
 def test_construct_instructions_uses_instruction_text():

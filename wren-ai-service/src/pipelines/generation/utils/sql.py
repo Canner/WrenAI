@@ -91,12 +91,7 @@ class SQLGenPostProcessor:
                     allow_fallback=allow_dry_plan_fallback,
                 )
 
-                if dry_plan_result:
-                    valid_generation_result = {
-                        "sql": generation_result,
-                        "correlation_id": "",
-                    }
-                else:
+                if not dry_plan_result:
                     invalid_generation_result = {
                         "sql": generation_result,
                         "original_sql": generation_result,

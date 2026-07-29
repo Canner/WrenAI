@@ -189,29 +189,7 @@ class AskService:
                     is_followup=True if histories else False,
                 )
 
-                historical_question = await self._pipelines["historical_question"].run(
-                    query=user_query,
-                    project_id=ask_request.project_id,
-                )
-
-                # we only return top 1 result
-                historical_question_result = historical_question.get(
-                    "formatted_output", {}
-                ).get("documents", [])[:1]
-
-                if historical_question_result:
-                    api_results = [
-                        AskResult(
-                            **{
-                                "sql": result.get("statement"),
-                                "type": "view" if result.get("viewId") else "llm",
-                                "viewId": result.get("viewId"),
-                            }
-                        )
-                        for result in historical_question_result
-                    ]
-                    sql_generation_reasoning = ""
-                else:
+                if not api_results:
                     # Run both pipeline operations concurrently
                     sql_samples_task, instructions_task = await asyncio.gather(
                         self._pipelines["sql_pairs_retrieval"].run(
