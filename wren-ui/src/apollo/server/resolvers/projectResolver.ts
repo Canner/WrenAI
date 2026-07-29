@@ -40,6 +40,7 @@ import { TelemetryEvent } from '../telemetry/telemetry';
 
 const logger = getLogger('DataSourceResolver');
 logger.level = 'debug';
+const DEFAULT_PROJECT_LANGUAGE = 'EN';
 
 export enum OnboardingStatusEnum {
   NOT_STARTED = 'NOT_STARTED',
@@ -84,7 +85,7 @@ export class ProjectResolver {
         } as DataSourceProperties,
         sampleDataset: project.sampleDataset,
       },
-      language: project.language,
+      language: project.language || DEFAULT_PROJECT_LANGUAGE,
     };
   }
 
