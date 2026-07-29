@@ -188,6 +188,9 @@ def _format_semantic_context(context: dict) -> str:
 
 
 def _format_identifier_contract(context: dict) -> str:
+    def _one_line(value: Any) -> str:
+        return " ".join(str(value or "").split())
+
     contract = context.get("sql_identifier_contract", {})
     table_name = contract.get("sql_table_name_use_exactly")
     column_names = contract.get("sql_column_names_use_exactly") or [
@@ -210,6 +213,17 @@ def _format_identifier_contract(context: dict) -> str:
     if column_names:
         lines.append("sql_column_names_use_exactly:")
         lines.extend(f"- {column_name}" for column_name in column_names)
+    if context.get("columns"):
+        lines.append("sql_column_semantic_context:")
+        for column in context["columns"]:
+            lines.append(
+                f"- sql_column_name_use_exactly: {column['sql_column_name_use_exactly']}"
+            )
+            lines.append(f"  data_type: {column.get('data_type', '')}")
+            lines.append(
+                "  semantic_context_not_sql_identifier: "
+                f"{_one_line(column.get('semantic_context_not_sql_identifier'))}"
+            )
     if relationship_constraints:
         lines.append("relationship_constraints_use_exactly:")
         lines.extend(
@@ -263,15 +277,6 @@ def _included_relationships(content: dict, tables: Optional[set[str]]) -> list[d
         if column["type"] == "FOREIGN_KEY"
         and (not tables or set(column.get("tables", [])).issubset(tables))
     ]
-
-
-def _selected_columns_are_executable(content: dict, columns: set[str]) -> bool:
-    executable_columns = {
-        column["name"]
-        for column in content["columns"]
-        if column["type"] == "COLUMN" and column["data_type"].lower() != "unknown"
-    }
-    return bool(columns) and columns.issubset(executable_columns)
 
 
 def _build_table_retrieval_context(
@@ -695,20 +700,10 @@ def construct_retrieval_results(
 
         for table_schema in construct_db_schemas:
             if table_schema["type"] == "TABLE" and table_schema["name"] in tables:
-                selected_columns = set(
-                    columns_and_tables_needed[table_schema["name"]]["columns"]
-                )
-                columns = (
-                    selected_columns
-                    if _selected_columns_are_executable(
-                        table_schema, selected_columns
-                    )
-                    else None
-                )
                 ddl, _has_calculated_field, _has_json_field = (
                     _build_table_retrieval_context(
                         table_schema,
-                        columns=columns,
+                        columns=None,
                         tables=tables,
                     )
                 )

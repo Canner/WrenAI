@@ -500,6 +500,64 @@ def test_construct_retrieval_results_preserves_retrieved_metric_when_pruning():
     assert result["has_metric"] is True
 
 
+def test_construct_retrieval_results_keeps_full_table_schema_after_table_selection():
+    result = construct_retrieval_results(
+        check_using_db_schemas_without_pruning={},
+        filter_columns_in_tables={
+            "replies": [
+                """
+                {
+                    "results": [
+                        {
+                            "table_name": "modeled_dataset",
+                            "table_selection_reason": "Selected for the current request.",
+                            "table_contents": {
+                                "chain_of_thought_reasoning": ["Needed field."],
+                                "columns": ["stored_measure"]
+                            }
+                        }
+                    ]
+                }
+                """
+            ]
+        },
+        construct_db_schemas=[
+            {
+                "type": "TABLE",
+                "name": "modeled_dataset",
+                "comment": "",
+                "columns": [
+                    {
+                        "type": "COLUMN",
+                        "name": "stored_role",
+                        "data_type": "VARCHAR",
+                        "comment": "Semantic role label.",
+                        "is_primary_key": False,
+                    },
+                    {
+                        "type": "COLUMN",
+                        "name": "stored_measure",
+                        "data_type": "DOUBLE",
+                        "comment": "Semantic measure label.",
+                        "is_primary_key": False,
+                    },
+                ],
+                "properties": {},
+                "primaryKey": "",
+            }
+        ],
+        dbschema_retrieval=[],
+    )
+
+    table_ddl = result["retrieval_results"][0]["table_ddl"]
+
+    assert "stored_role VARCHAR" in table_ddl
+    assert "stored_measure DOUBLE" in table_ddl
+    assert "sql_column_names_use_exactly:\n- stored_role\n- stored_measure" in (
+        table_ddl
+    )
+
+
 def test_construct_retrieval_results_keeps_schema_when_pruner_returns_unknown_columns():
     result = construct_retrieval_results(
         check_using_db_schemas_without_pruning={},
@@ -717,6 +775,11 @@ def test_retrieved_schema_separates_exact_sql_names_from_semantic_context():
     assert "WREN SQL IDENTIFIER CONTRACT" in table_ddl
     assert "sql_table_name_use_exactly: modeled_dataset" in table_ddl
     assert "sql_column_names_use_exactly:\n- stored_attribute" in table_ddl
+    assert "sql_column_semantic_context:" in table_ddl
+    assert "- sql_column_name_use_exactly: stored_attribute" in table_ddl
+    assert "semantic_context_not_sql_identifier: Business-facing attribute label." in (
+        table_ddl
+    )
     assert "END WREN SQL IDENTIFIER CONTRACT" in table_ddl
     assert (
         '"semantic_context_not_sql_identifier":"Business-facing attribute label."'
