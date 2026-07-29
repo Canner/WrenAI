@@ -26,7 +26,7 @@ def _request(*, method: str, url: str, headers: dict, payload: dict) -> dict:
         data = resp.json()
     except ValueError as exc:
         raise DeployError(
-            f"Vercel API returned non-JSON body (HTTP {resp.status_code}): {resp.text[:200]!r}"
+            f"Vercel API returned non-JSON body (HTTP {resp.status_code}): {resp.text[:500]!r}"
         ) from exc
     if not isinstance(data, dict):
         raise DeployError(
