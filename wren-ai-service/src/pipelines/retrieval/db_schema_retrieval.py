@@ -277,13 +277,6 @@ def _build_table_retrieval_context(
 @observe(capture_input=False, capture_output=False)
 async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> dict:
     if query:
-        if histories:
-            previous_query_summaries = [history.question for history in histories]
-        else:
-            previous_query_summaries = []
-
-        query = "\n".join(previous_query_summaries) + "\n" + query
-
         return await embedder.run(query)
     else:
         return {}
@@ -544,12 +537,6 @@ def prompt(
             for construct_db_schema in construct_db_schemas
         ]
 
-        previous_query_summaries = (
-            [history.question for history in histories] if histories else []
-        )
-
-        query = "\n".join(previous_query_summaries) + "\n" + query
-
         _prompt = prompt_builder.run(question=query, db_schemas=db_schemas)
         return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
     else:
@@ -688,7 +675,7 @@ class DbSchemaRetrieval(BasicPipeline):
         llm_provider: LLMProvider,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
-        table_retrieval_size: int = 10,
+        table_retrieval_size: int = 50,
         table_column_retrieval_size: int = 100,
         **kwargs,
     ):

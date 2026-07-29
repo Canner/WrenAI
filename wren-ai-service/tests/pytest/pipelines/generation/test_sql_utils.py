@@ -1,6 +1,7 @@
 from haystack.components.builders.prompt_builder import PromptBuilder
 
 from src.pipelines.generation.utils.sql import (
+    construct_ask_history_messages,
     construct_instructions,
     get_json_field_instructions,
     get_metric_instructions,
@@ -30,6 +31,17 @@ def test_construct_instructions_uses_instruction_text():
     assert construct_instructions(
         [{"instruction": "First rule."}, {"instruction": "Second rule."}]
     ) == ["First rule.", "Second rule."]
+
+
+def test_construct_ask_history_messages_omits_executable_history_context():
+    histories = [
+        {
+            "question": "previous natural language request",
+            "sql": "SELECT * FROM previous_model",
+        }
+    ]
+
+    assert construct_ask_history_messages(histories) == []
 
 
 def test_get_text_to_sql_rules_uses_default_metadata_grounding_rules():

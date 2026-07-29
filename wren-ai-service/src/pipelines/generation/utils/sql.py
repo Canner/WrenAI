@@ -454,18 +454,4 @@ def construct_instructions(
 def construct_ask_history_messages(
     histories: list[AskHistory] | list[dict],
 ) -> list[ChatMessage]:
-    messages = []
-    for history in histories:
-        messages.append(
-            ChatMessage.from_user(
-                history.question
-                if hasattr(history, "question")
-                else history["question"]
-            )
-        )
-        messages.append(
-            ChatMessage.from_assistant(
-                "Previous SQL omitted. Use only the current DATABASE SCHEMA and SQL FUNCTIONS for executable SQL."
-            )
-        )
-    return messages
+    return []

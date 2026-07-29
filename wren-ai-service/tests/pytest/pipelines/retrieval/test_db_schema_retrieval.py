@@ -1,12 +1,70 @@
 import pytest
 from haystack import Document
+from haystack.components.builders.prompt_builder import PromptBuilder
 
 from src.pipelines.common import build_table_ddl
 from src.pipelines.retrieval.db_schema_retrieval import (
     check_using_db_schemas_without_pruning,
     dbschema_retrieval,
+    embedding,
+    prompt as build_column_selection_prompt,
     table_retrieval,
+    table_columns_selection_user_prompt_template,
 )
+
+
+@pytest.mark.asyncio
+async def test_embedding_uses_current_query_without_history_text():
+    class Embedder:
+        def __init__(self):
+            self.query = None
+
+        async def run(self, query):
+            self.query = query
+            return {"embedding": [1.0]}
+
+    embedder = Embedder()
+
+    result = await embedding(
+        query="current request",
+        embedder=embedder,
+        histories=[{"question": "previous request"}],
+    )
+
+    assert result == {"embedding": [1.0]}
+    assert embedder.query == "current request"
+
+
+def test_column_pruning_prompt_uses_current_query_without_history_text():
+    result = build_column_selection_prompt(
+        query="current request",
+        construct_db_schemas=[
+            {
+                "type": "TABLE",
+                "name": "modeled_dataset",
+                "comment": "",
+                "columns": [
+                    {
+                        "type": "COLUMN",
+                        "name": "stored_attribute",
+                        "data_type": "VARCHAR",
+                        "comment": "",
+                        "is_primary_key": False,
+                    }
+                ],
+                "properties": {},
+                "primaryKey": "",
+            }
+        ],
+        prompt_builder=PromptBuilder(
+            template=table_columns_selection_user_prompt_template
+        ),
+        check_using_db_schemas_without_pruning={"db_schemas": []},
+        histories=[{"question": "previous request"}],
+    )
+
+    assert "current request" in result["prompt"]
+    assert "previous request" not in result["prompt"]
 
 
 @pytest.mark.asyncio

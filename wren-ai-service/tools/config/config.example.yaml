@@ -186,7 +186,7 @@ settings:
   is_oss: true
   engine_timeout: 30
   column_indexing_batch_size: 50
-  table_retrieval_size: 10
+  table_retrieval_size: 50
   table_column_retrieval_size: 100
   allow_intent_classification: false
   allow_sql_generation_reasoning: true
