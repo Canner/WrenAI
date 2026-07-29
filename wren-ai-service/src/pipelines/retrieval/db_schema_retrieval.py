@@ -29,7 +29,13 @@ table_columns_selection_system_prompt = """
 ### TASK ###
 You are a highly skilled data analyst. Your goal is to examine the provided database schema, interpret the posed question, and identify the specific columns from the relevant tables required to construct an accurate SQL query.
 
-The database schema includes tables, columns, primary keys, foreign keys, relationships, and any relevant constraints.
+The database schema includes structural, semantic, and business modeling metadata:
+- Models are logical datasets backed by physical tables or SQL definitions.
+- Columns are exposed fields, including renamed fields, expressions, primary keys, and calculated fields.
+- Relationships are reusable join logic between models.
+- Calculated fields are business logic defined once and reused across queries.
+- Views are named SQL statements that behave like stable virtual tables.
+- Metrics are structured aggregation objects with measures and dimensions.
 
 ### INSTRUCTIONS ###
 1. Carefully analyze the schema and identify the essential tables and columns needed to answer the question.
@@ -39,6 +45,12 @@ The database schema includes tables, columns, primary keys, foreign keys, relati
 5. The number of columns chosen must match the number of reasoning.
 6. Final chosen columns must be only column names, don't prefix it with table names.
 7. If the chosen column is a child column of a STRUCT type column, choose the parent column instead of the child column.
+8. Map the business question to the modeled datasets whose descriptions, aliases, columns, calculated fields, views, metrics, and relationships support the intent.
+9. Prefer modeled analytical interfaces such as views and metrics when they expose the fields needed to answer the question.
+10. If the answer needs fields, filters, time dimensions, ordering, aggregations, or relationship keys from multiple related datasets, include every required related dataset and the columns needed from each one.
+11. Reuse calculated fields and metric measures or dimensions when they already represent the requested business concept.
+12. Follow only the relationships shown in the provided schema when selecting columns across datasets.
+13. Do not stop at a single top candidate when the question needs multiple related datasets.
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:
@@ -172,35 +184,111 @@ async def table_retrieval(
 async def dbschema_retrieval(
     table_retrieval: dict, project_id: str, dbschema_retriever: Any
 ) -> list[Document]:
-    tables = table_retrieval.get("documents", [])
-    table_names = []
-    for table in tables:
-        content = ast.literal_eval(table.content)
-        table_names.append(content["name"])
+    table_names = _table_names_from_description_documents(
+        table_retrieval.get("documents", [])
+    )
 
+    if table_names:
+        documents = []
+        retrieved_table_names = set()
+        pending_table_names = table_names
+
+        while pending_table_names:
+            retrieved_table_names.update(pending_table_names)
+            retrieved_documents = await _retrieve_schema_documents(
+                pending_table_names, project_id, dbschema_retriever
+            )
+            documents = _dedupe_documents(documents + retrieved_documents)
+            pending_table_names = [
+                table_name
+                for table_name in _related_table_names(documents)
+                if table_name not in retrieved_table_names
+            ]
+
+        return documents
+
+    return []
+
+
+def _table_names_from_description_documents(documents: list[Document]) -> list[str]:
+    table_names = []
+    seen = set()
+
+    for document in documents:
+        content = ast.literal_eval(document.content)
+        table_name = content["name"]
+        if table_name not in seen:
+            table_names.append(table_name)
+            seen.add(table_name)
+
+    return table_names
+
+
+async def _retrieve_schema_documents(
+    table_names: list[str], project_id: str, dbschema_retriever: Any
+) -> list[Document]:
     table_name_conditions = [
         {"field": "name", "operator": "==", "value": table_name}
         for table_name in table_names
     ]
 
-    if table_name_conditions:
-        filters = {
-            "operator": "AND",
-            "conditions": [
-                {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-                {"operator": "OR", "conditions": table_name_conditions},
-            ],
-        }
+    if not table_name_conditions:
+        return []
 
-        if project_id:
-            filters["conditions"].append(
-                {"field": "project_id", "operator": "==", "value": project_id}
-            )
+    filters = {
+        "operator": "AND",
+        "conditions": [
+            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+            {"operator": "OR", "conditions": table_name_conditions},
+        ],
+    }
 
-        results = await dbschema_retriever.run(query_embedding=[], filters=filters)
-        return results["documents"]
+    if project_id:
+        filters["conditions"].append(
+            {"field": "project_id", "operator": "==", "value": project_id}
+        )
 
-    return []
+    results = await dbschema_retriever.run(query_embedding=[], filters=filters)
+    return results["documents"]
+
+
+def _related_table_names(documents: list[Document]) -> list[str]:
+    related_table_names = []
+    seen = set()
+
+    for document in documents:
+        content = ast.literal_eval(document.content)
+        if content.get("type") != "TABLE_COLUMNS":
+            continue
+
+        for column in content.get("columns", []):
+            if column.get("type") != "FOREIGN_KEY":
+                continue
+
+            for table_name in column.get("tables", []):
+                if table_name not in seen:
+                    related_table_names.append(table_name)
+                    seen.add(table_name)
+
+    return related_table_names
+
+
+def _dedupe_documents(documents: list[Document]) -> list[Document]:
+    deduped = []
+    seen = set()
+
+    for document in documents:
+        identity = (
+            document.meta.get("type"),
+            document.meta.get("name"),
+            document.content,
+        )
+        if identity in seen:
+            continue
+        deduped.append(document)
+        seen.add(identity)
+
+    return deduped
 
 
 @observe()

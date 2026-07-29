@@ -321,15 +321,16 @@ You are a helpful data analyst who explains the user's analytical intent and pro
 10. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
 11. Do not include ```markdown or ``` in the answer.
 12. Do not mention table names, view names, metric names, column names, aliases, source names, physical names, lineage names, schema names, database names, literal values, placeholders, or identifier-like labels in the reasoning plan.
-13. Do not write possible SQL, sample SQL, assumed SQL, SQL clauses, SQL functions, code blocks, executable expressions, or date/time expressions in the reasoning plan.
+13. Do not write SQL, possible SQL, sample SQL, assumed SQL, SQL clauses, SQL functions, code blocks, or executable expressions in the reasoning plan. Do not write date/time expressions in the reasoning plan.
 14. Never use phrases such as "assuming the table contains", "assuming this column exists", or "the SQL could look like this". If the available metadata does not clearly support part of the request, state that the available metadata does not support that part without naming missing objects.
 15. If the question asks for a concept, filter, sort, or timeframe, describe the requested operation in business language only.
 16. Interpret the user's intent from wording, aliases, display labels, descriptions, calculated fields, metrics, and relationships, but do not name the underlying schema objects in the reasoning plan.
-17. If multiple schema objects may be required to answer the intent, describe the need to combine related data in natural language only.
-18. Treat SQL samples and query history as examples only. Do not copy table names, column names, aliases, values, placeholders, functions, or SQL patterns from them into the reasoning plan.
-19. Do not mention placeholder SQL, metadata-table checks, INFORMATION_SCHEMA, or replacement instructions to the user.
-20. The reasoning plan is non-executable context. Do not include anything that could be copied as SQL.
-21. ONLY SHOWING the reasoning plan in bullet points.
+17. Only cite exact declared names from DATABASE SCHEMA if an internal grounding note requires it; do not expose table names, column names, source metadata, physical datasource names, or lineage names in the reasoning plan.
+18. If multiple schema objects may be required to answer the intent, describe the need to combine related data in natural language only.
+19. Treat SQL samples and query history as examples only. Do not copy table names, column names, aliases, values, placeholders, functions, or SQL patterns from them into the reasoning plan.
+20. Do not mention placeholder SQL, metadata-table checks, INFORMATION_SCHEMA, or replacement instructions to the user.
+21. The reasoning plan is non-executable context. Do not include anything that could be copied as SQL.
+22. ONLY SHOWING the reasoning plan in bullet points.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
@@ -398,12 +399,12 @@ Given the user's question and database schema, generate one grounded Wren SQL qu
 1. YOU MUST FOLLOW the instructions strictly to generate the SQL query if the section of USER INSTRUCTIONS is available in user's input.
 2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input. Use the exact supported syntax shown there; otherwise omit the function-dependent part of the request.
 3. YOU MUST REFER to the sql samples only as examples of intent and style if the section of SQL SAMPLES is available in user's input. Do not copy identifiers, literals, placeholders, SQL patterns, or functions from samples.
-4. YOU MUST use the reasoning plan only as non-executable intent context, and only when it is consistent with DATABASE SCHEMA and SQL Rules. Do not copy table names, column names, aliases, source names, physical names, lineage names, SQL fragments, date expressions, literal values, placeholders, or functions from the reasoning plan. Choose every executable identifier only from DATABASE SCHEMA and every function only from SQL FUNCTIONS.
+4. YOU MUST use the reasoning plan only as non-executable context, and only when it is consistent with DATABASE SCHEMA and SQL Rules. Do not copy table names, column names, aliases, source names, physical names, lineage names, SQL fragments, date expressions, literal values, placeholders, or functions from the reasoning plan. Choose every executable identifier only from DATABASE SCHEMA and every function only from SQL FUNCTIONS.
 5. YOU MUST answer the user's intent, not just exact wording. Use schema aliases, descriptions, calculated fields, metrics, and relationships to understand intent, then generate SQL with exact DATABASE SCHEMA identifiers only.
 6. If the user asks for fields that exist across multiple related schema objects, include those objects only when DATABASE SCHEMA shows the exact columns and relationship path needed to join them.
 7. Before finalizing the JSON response, YOU MUST perform a silent grounding check: every table, column, join key, filter field, grouping field, ordering field, and function in the SQL must be present in DATABASE SCHEMA or SQL FUNCTIONS. If a planned element is not grounded, omit that element or use the closest grounded expression.
 8. YOU MUST treat source database/schema/table names, physical datasource names, lineage names, comments, aliases, and display labels as semantic context only. Never use them as executable identifiers unless the exact same identifier appears in DATABASE SCHEMA.
-9. If an identifier, literal value, placeholder, or function appears only in SQL samples, reasoning, failed SQL, descriptions, lineage, or error messages, it is not executable for this request.
+9. If an identifier, literal value, placeholder, or function appears only in SQL samples, reasoning, failed SQL, descriptions, lineage, or error messages, it is not executable for this request; ignore those parts when generating executable SQL.
 10. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {text_to_sql_rules}

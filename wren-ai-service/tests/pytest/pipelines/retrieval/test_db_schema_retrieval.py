@@ -103,6 +103,135 @@ async def test_dbschema_retrieval_loads_selected_active_project_schema():
 
 
 @pytest.mark.asyncio
+async def test_dbschema_retrieval_expands_declared_relationships():
+    selected_model = "model_a"
+    related_model = "model_b"
+    downstream_model = "model_c"
+
+    class Retriever:
+        def __init__(self):
+            self.calls = []
+
+        async def run(self, query_embedding, filters):
+            names = [
+                condition["value"]
+                for condition in filters["conditions"][1]["conditions"]
+            ]
+            self.calls.append(names)
+
+            if names == [selected_model]:
+                return {
+                    "documents": [
+                        Document(
+                            content=str(
+                                {
+                                    "type": "TABLE",
+                                    "name": selected_model,
+                                }
+                            ),
+                            meta={"type": "TABLE_SCHEMA", "name": selected_model},
+                        ),
+                        Document(
+                            content=str(
+                                {
+                                    "type": "TABLE_COLUMNS",
+                                    "columns": [
+                                        {
+                                            "type": "FOREIGN_KEY",
+                                            "tables": [
+                                                selected_model,
+                                                related_model,
+                                            ],
+                                            "column": "model_b_id",
+                                            "referenced_table": related_model,
+                                            "referenced_column": "id",
+                                        }
+                                    ],
+                                }
+                            ),
+                            meta={"type": "TABLE_SCHEMA", "name": selected_model},
+                        ),
+                    ]
+                }
+
+            if names == [related_model]:
+                return {
+                    "documents": [
+                        Document(
+                            content=str(
+                                {
+                                    "type": "TABLE",
+                                    "name": related_model,
+                                }
+                            ),
+                            meta={"type": "TABLE_SCHEMA", "name": related_model},
+                        ),
+                        Document(
+                            content=str(
+                                {
+                                    "type": "TABLE_COLUMNS",
+                                    "columns": [
+                                        {
+                                            "type": "FOREIGN_KEY",
+                                            "tables": [
+                                                related_model,
+                                                downstream_model,
+                                            ],
+                                            "column": "model_c_id",
+                                            "referenced_table": downstream_model,
+                                            "referenced_column": "id",
+                                        }
+                                    ],
+                                }
+                            ),
+                            meta={"type": "TABLE_SCHEMA", "name": related_model},
+                        ),
+                    ]
+                }
+
+            if names == [downstream_model]:
+                return {
+                    "documents": [
+                        Document(
+                            content=str(
+                                {
+                                    "type": "TABLE",
+                                    "name": downstream_model,
+                                }
+                            ),
+                            meta={"type": "TABLE_SCHEMA", "name": downstream_model},
+                        )
+                    ]
+                }
+
+            return {"documents": []}
+
+    retriever = Retriever()
+
+    documents = await dbschema_retrieval(
+        table_retrieval={
+            "documents": [
+                Document(
+                    content=str({"name": selected_model}),
+                    meta={"type": "TABLE_DESCRIPTION", "name": selected_model},
+                )
+            ]
+        },
+        project_id="project-1",
+        dbschema_retriever=retriever,
+    )
+
+    assert retriever.calls == [[selected_model], [related_model], [downstream_model]]
+    assert [document.meta["name"] for document in documents] == [
+        selected_model,
+        selected_model,
+        related_model,
+        related_model,
+        downstream_model,
+    ]
+
+
+@pytest.mark.asyncio
 async def test_dbschema_retrieval_does_not_load_full_schema_for_unmatched_question():
     class Retriever:
         def __init__(self):
