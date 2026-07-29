@@ -184,6 +184,13 @@ def test_user_prompt_templates_keep_source_metadata_non_executable():
         assert "exact declared table and column names from DATABASE SCHEMA" in prompt
 
 
+def test_followup_sql_prompt_does_not_expect_previous_sql_context():
+    assert "previous SQL query" not in text_to_sql_with_followup_user_prompt_template
+    assert "current retrieved DATABASE SCHEMA" in (
+        text_to_sql_with_followup_user_prompt_template
+    )
+
+
 def test_executable_prompt_templates_omit_planning_error_and_original_sql_context():
     reasoning_marker = "UNTRUSTED_REASONING_CONTEXT_MARKER"
     diagnostic_marker = "UNTRUSTED_DIAGNOSTIC_CONTEXT_MARKER"

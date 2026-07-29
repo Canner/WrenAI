@@ -31,8 +31,8 @@ logger = logging.getLogger("wren-ai-service")
 
 text_to_sql_with_followup_user_prompt_template = """
 ### TASK ###
-Given the following user's follow-up question and previous SQL query and summary,
-generate one SQL query to best answer user's question.
+Given the user's current follow-up question and the current retrieved DATABASE SCHEMA,
+generate one SQL query to best answer the user's question.
 
 ### DATABASE SCHEMA ###
 {% for document in documents %}

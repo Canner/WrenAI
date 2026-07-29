@@ -5,6 +5,7 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 from src.pipelines.common import build_table_ddl
 from src.pipelines.retrieval.db_schema_retrieval import (
     check_using_db_schemas_without_pruning,
+    construct_retrieval_results,
     dbschema_retrieval,
     embedding,
     prompt as build_column_selection_prompt,
@@ -343,6 +344,74 @@ def test_check_using_db_schemas_without_pruning_triggers_legacy_column_pruning()
 
     assert result["db_schemas"] == []
     assert result["tokens"] > 0
+
+
+def test_construct_retrieval_results_preserves_retrieved_metric_when_pruning():
+    result = construct_retrieval_results(
+        check_using_db_schemas_without_pruning={},
+        filter_columns_in_tables={
+            "replies": [
+                """
+                {
+                    "results": [
+                        {
+                            "table_name": "modeled_dataset",
+                            "table_selection_reason": "Selected for the current request.",
+                            "table_contents": {
+                                "chain_of_thought_reasoning": ["Needed field."],
+                                "columns": ["stored_attribute"]
+                            }
+                        }
+                    ]
+                }
+                """
+            ]
+        },
+        construct_db_schemas=[
+            {
+                "type": "TABLE",
+                "name": "modeled_dataset",
+                "comment": "",
+                "columns": [
+                    {
+                        "type": "COLUMN",
+                        "name": "stored_attribute",
+                        "data_type": "VARCHAR",
+                        "comment": "",
+                        "is_primary_key": False,
+                    }
+                ],
+                "properties": {},
+                "primaryKey": "",
+            }
+        ],
+        dbschema_retrieval=[
+            Document(
+                content=str(
+                    {
+                        "type": "METRIC",
+                        "comment": "",
+                        "name": "semantic_metric",
+                        "columns": [
+                            {
+                                "type": "COLUMN",
+                                "name": "metric_value",
+                                "data_type": "DOUBLE",
+                                "comment": "",
+                            }
+                        ],
+                    }
+                ),
+                meta={"type": "TABLE_SCHEMA", "name": "semantic_metric"},
+            )
+        ],
+    )
+
+    assert [item["table_name"] for item in result["retrieval_results"]] == [
+        "modeled_dataset",
+        "semantic_metric",
+    ]
+    assert result["has_metric"] is True
 
 
 def test_check_using_db_schemas_without_pruning_keeps_context_when_within_window():

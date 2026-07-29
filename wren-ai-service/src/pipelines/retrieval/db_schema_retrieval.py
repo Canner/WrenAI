@@ -604,24 +604,23 @@ def construct_retrieval_results(
                 )
 
         for document in dbschema_retrieval:
-            if document.meta["name"] in columns_and_tables_needed:
-                content = ast.literal_eval(document.content)
+            content = ast.literal_eval(document.content)
 
-                if content["type"] == "METRIC":
-                    retrieval_results.append(
-                        {
-                            "table_name": content["name"],
-                            "table_ddl": _build_metric_ddl(content),
-                        }
-                    )
-                    has_metric = True
-                elif content["type"] == "VIEW":
-                    retrieval_results.append(
-                        {
-                            "table_name": content["name"],
-                            "table_ddl": _build_view_ddl(content),
-                        }
-                    )
+            if content["type"] == "METRIC":
+                retrieval_results.append(
+                    {
+                        "table_name": content["name"],
+                        "table_ddl": _build_metric_ddl(content),
+                    }
+                )
+                has_metric = True
+            elif content["type"] == "VIEW":
+                retrieval_results.append(
+                    {
+                        "table_name": content["name"],
+                        "table_ddl": _build_view_ddl(content),
+                    }
+                )
 
         return {
             "retrieval_results": retrieval_results,
