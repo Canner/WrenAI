@@ -36,22 +36,27 @@ def test_extract_skips_non_dict_models_columns_rels_views_without_raise() -> Non
     assert extract_schema_items({"models": [1, 2, 3]}) == []
 
 
-def test_extract_handles_truthy_scalar_nested_collections_without_raise() -> None:
-    items = extract_schema_items({"models": [{"name": "m", "columns": 42}]})
-    assert [i["item_type"] for i in items] == ["model"]
+def test_extract_raises_on_truthy_scalar_nested_collections() -> None:
+    # Policy: a truthy non-list nested collection is a structural manifest
+    # error and must raise (one rule with _iter_section / #2605's
+    # _relationship_models), not silently index an empty collection.
+    with pytest.raises(ValueError, match="columns must be a list"):
+        extract_schema_items({"models": [{"name": "m", "columns": 42}]})
+    with pytest.raises(ValueError, match="measures must be a list"):
+        extract_schema_items({"cubes": [{"name": "c", "measures": 3}]})
+    with pytest.raises(ValueError, match="dimensions must be a list"):
+        extract_schema_items({"cubes": [{"name": "c", "dimensions": {"x": 1}}]})
+    with pytest.raises(ValueError, match="timeDimensions must be a list"):
+        extract_schema_items({"cubes": [{"name": "c", "timeDimensions": "nope"}]})
+
+
+def test_extract_allows_none_or_empty_nested_collections() -> None:
+    # None / missing / empty stays a no-op (no raise): the passthrough case.
     items = extract_schema_items(
-        {
-            "cubes": [
-                {
-                    "name": "c",
-                    "measures": 3,
-                    "dimensions": {"x": 1},
-                    "timeDimensions": "nope",
-                }
-            ]
-        }
+        {"models": [{"name": "m", "columns": None}, {"name": "n"}]}
     )
-    assert any(i["item_type"] == "cube" for i in items)
+    assert [i["item_type"] for i in items] == ["model", "model"]
+    assert extract_schema_items({"models": [{"name": "m", "columns": []}]})
 
 
 def test_top_level_non_list_section_raises() -> None:
