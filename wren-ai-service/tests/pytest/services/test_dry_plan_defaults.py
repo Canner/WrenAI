@@ -30,6 +30,12 @@ def test_ask_request_allows_explicit_planner_override():
     assert request.allow_dry_plan_fallback is True
 
 
+def test_ask_service_defaults_to_column_pruning():
+    service = AskService({})
+
+    assert service._enable_column_pruning is True
+
+
 def test_sql_correction_router_defaults_to_planner_validation_without_fallback():
     request = SqlCorrectionPostRequest(sql="SELECT 1", error="dry run failed")
 

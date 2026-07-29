@@ -72,12 +72,6 @@ Question:
 User's Question: {{ query }}
 Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, or inferred names into executable SQL. If a needed table, column, relation, date field, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, omit that unsupported part instead of inventing or substituting a similar name.
 
-{% if sql_generation_reasoning %}
-### REASONING PLAN ###
-Use this plan as semantic context for the user's intent only. Do not copy identifiers, literal values, functions, SQL fragments, template markers, or placeholders from it. Before using any table, column, relationship, metric, view, or function mentioned by the plan, re-read DATABASE SCHEMA, WREN SQL IDENTIFIER CONTRACT, and SQL FUNCTIONS, then copy only exact declared identifiers from those sections.
-{{ sql_generation_reasoning }}
-{% endif %}
-
 Return only the final JSON SQL response.
 """
 

@@ -103,7 +103,7 @@ class AskService:
         allow_sql_functions_retrieval: bool = True,
         allow_sql_diagnosis: bool = True,
         allow_sql_knowledge_retrieval: bool = True,
-        enable_column_pruning: bool = False,
+        enable_column_pruning: bool = True,
         max_sql_correction_retries: int = 3,
         max_histories: int = 5,
         maxsize: int = 1_000_000,

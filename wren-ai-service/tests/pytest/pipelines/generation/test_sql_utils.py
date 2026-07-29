@@ -300,7 +300,7 @@ def test_followup_sql_prompt_does_not_expect_previous_sql_context():
     )
 
 
-def test_executable_prompt_templates_include_grounded_reasoning_but_omit_sql_context():
+def test_executable_prompt_templates_omit_untrusted_reasoning_and_sql_context():
     reasoning_marker = "UNTRUSTED_REASONING_CONTEXT_MARKER"
     diagnostic_marker = "UNTRUSTED_DIAGNOSTIC_CONTEXT_MARKER"
     original_sql_marker = "UNTRUSTED_ORIGINAL_SQL_MARKER"
@@ -361,10 +361,8 @@ def test_executable_prompt_templates_include_grounded_reasoning_but_omit_sql_con
         correction_prompt,
         regeneration_prompt,
     ):
-        assert reasoning_marker in prompt
-        assert "semantic context for the user's intent only" in prompt
-        assert "Do not copy identifiers, literal values, functions" in prompt
-        assert "copy only exact declared identifiers" in prompt
+        assert reasoning_marker not in prompt
+        assert "REASONING PLAN" not in prompt
         assert "<SQL_QUERY_STRING>" not in prompt
         assert "<CORRECTED_SQL_QUERY_STRING>" not in prompt
 
