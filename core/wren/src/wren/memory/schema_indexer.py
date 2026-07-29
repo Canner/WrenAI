@@ -38,9 +38,7 @@ def _as_list(value: object, field: str = "field") -> list:
     if value is None or not value:
         return []
     if not isinstance(value, list):
-        raise ValueError(
-            f"manifest {field} must be a list, got {type(value).__name__}"
-        )
+        raise ValueError(f"manifest {field} must be a list, got {type(value).__name__}")
     return value
 
 
@@ -218,7 +216,9 @@ def _describe_cube(cube: dict, lines: list[str]) -> None:
     name = cube.get("name", "")
     base = cube.get("baseObject", "?")
     lines.append(f"### Cube: {name} (base: {base})")
-    measures = [m for m in (_as_list(cube.get("measures"), "measures")) if isinstance(m, dict)]
+    measures = [
+        m for m in (_as_list(cube.get("measures"), "measures")) if isinstance(m, dict)
+    ]
     if measures:
         lines.append("  Measures:")
         for m in measures:
@@ -231,7 +231,11 @@ def _describe_cube(cube: dict, lines: list[str]) -> None:
             if expr:
                 line += f": {expr}"
             lines.append(line)
-    dims = [d for d in (_as_list(cube.get("dimensions"), "dimensions")) if isinstance(d, dict)]
+    dims = [
+        d
+        for d in (_as_list(cube.get("dimensions"), "dimensions"))
+        if isinstance(d, dict)
+    ]
     if dims:
         lines.append("  Dimensions:")
         for d in dims:
@@ -245,7 +249,9 @@ def _describe_cube(cube: dict, lines: list[str]) -> None:
                 line += f": {expr}"
             lines.append(line)
     tdims = [
-        td for td in (_as_list(cube.get("timeDimensions"), "timeDimensions")) if isinstance(td, dict)
+        td
+        for td in (_as_list(cube.get("timeDimensions"), "timeDimensions"))
+        if isinstance(td, dict)
     ]
     if tdims:
         lines.append("  Time dimensions:")
