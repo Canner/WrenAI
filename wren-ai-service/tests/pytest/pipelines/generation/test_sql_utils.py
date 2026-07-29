@@ -119,7 +119,8 @@ def test_sql_generation_system_prompt_grounding_contract():
     assert "perform a silent grounding check" in prompt
     assert "closest grounded expression" in prompt
     assert "DATABASE SCHEMA is the only source of executable identifiers" in prompt
-    assert "reasoning plan as the legacy grounding handoff" in prompt
+    assert "reasoning plan as semantic context for intent only" in prompt
+    assert "Do not copy identifiers, functions, literal values" in prompt
     assert "include those objects only when DATABASE SCHEMA shows" in prompt
     assert "Use the exact supported syntax shown there" in prompt
     assert "WREN SQL IDENTIFIER CONTRACT" in prompt
@@ -129,6 +130,7 @@ def test_sql_generation_system_prompt_grounding_contract():
     assert "Use Wren SQL identifier quoting with double quotes only" in prompt
     assert "source database/schema/table names" in prompt
     assert "appears only in SQL samples, failed SQL" in prompt
+    assert "<SQL_QUERY_STRING>" not in prompt
 
 
 def test_json_field_instructions_do_not_include_placeholder_identifiers():
@@ -169,16 +171,18 @@ def test_sql_correction_system_prompt_discards_invalid_identifier_context():
     assert "do not try a similar replacement from source metadata" in prompt
 
 
-def test_sql_reasoning_prompt_uses_legacy_schema_grounding_handoff():
+def test_sql_reasoning_prompt_keeps_reasoning_non_executable():
     prompt = sql_generation_reasoning_system_prompt
 
     assert "Do not write SQL, possible SQL, sample SQL, assumed SQL" in prompt
     assert "SQL clauses, SQL functions, code blocks, or executable expressions" in prompt
-    assert "table: <table_name>" in prompt
-    assert "column: <table_name>.<column_name>" in prompt
-    assert "The reasoning plan is a grounding handoff" in prompt
+    assert "literal prefix `table:`" in prompt
+    assert "literal prefix `column:`" in prompt
+    assert "reasoning plan is semantic context for intent only" in prompt
     assert "declared in DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT" in prompt
     assert "source names, physical names, lineage names" in prompt
+    assert "<table_name>" not in prompt
+    assert "<column_name>" not in prompt
 
 
 def test_user_prompt_templates_keep_source_metadata_non_executable():
@@ -262,7 +266,11 @@ def test_executable_prompt_templates_include_grounded_reasoning_but_omit_sql_con
         regeneration_prompt,
     ):
         assert reasoning_marker in prompt
-        assert "legacy grounding handoff" in prompt
+        assert "semantic context for the user's intent only" in prompt
+        assert "Do not copy identifiers, literal values, functions" in prompt
+        assert "copy only exact declared identifiers" in prompt
+        assert "<SQL_QUERY_STRING>" not in prompt
+        assert "<CORRECTED_SQL_QUERY_STRING>" not in prompt
 
     assert original_sql_marker not in regeneration_prompt
     assert "original SQL is intentionally omitted" in regeneration_prompt

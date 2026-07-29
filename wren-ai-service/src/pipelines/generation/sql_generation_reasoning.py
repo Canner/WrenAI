@@ -48,7 +48,7 @@ User's Question: {{ query }}
 Language: {{ language }}
 Current Time: {{ current_time }}
 
-Return only the reasoning plan described by the system instructions. Ground the plan with exact `table: <table_name>` and `column: <table_name>.<column_name>` references from DATABASE SCHEMA when they are relevant. Do not include SQL, SQL-like expressions, aliases, source names, physical names, lineage names, schema names, database names, literal values, placeholders, functions, or identifier-like labels.
+Return only the reasoning plan described by the system instructions. When relevant, ground the plan by using the literal prefix `table:` followed by an exact declared table name from DATABASE SCHEMA, or the literal prefix `column:` followed by an exact declared table name, a dot, and an exact declared column name. Do not include SQL, SQL-like expressions, aliases, source names, physical names, lineage names, schema names, database names, literal values, placeholders, template markers, functions, or identifier-like labels.
 """
 
 

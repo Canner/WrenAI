@@ -37,8 +37,8 @@ Output all questions in the following JSON format:
 {
     "questions": [
         {
-            "question": "<generated question>",
-            "category": "<category of the question>"
+            "question": "schema-grounded question text",
+            "category": "question category"
         },
         ...
     ]

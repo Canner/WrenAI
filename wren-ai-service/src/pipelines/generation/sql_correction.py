@@ -53,7 +53,7 @@ Make sure you follow the SQL Rules strictly.
 The final answer must be in JSON format:
 
 {{
-    "sql": <CORRECTED_SQL_QUERY_STRING>
+    "sql": "corrected SQL query string using only identifiers declared in DATABASE SCHEMA"
 }}
 """
 
@@ -87,7 +87,7 @@ Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliase
 {% endif %}
 {% if sql_generation_reasoning %}
 ### REASONING PLAN ###
-Use this plan as the legacy grounding handoff only when each referenced table or column appears exactly in DATABASE SCHEMA.
+Use this plan as semantic context for the user's intent only. Do not copy identifiers, literal values, functions, SQL fragments, template markers, or placeholders from it. Before using any table, column, relationship, metric, view, or function mentioned by the plan, re-read DATABASE SCHEMA, WREN SQL IDENTIFIER CONTRACT, and SQL FUNCTIONS, then copy only exact declared identifiers from those sections.
 {{ sql_generation_reasoning }}
 {% endif %}
 ### FAILED SQL ###
