@@ -33,16 +33,21 @@ def _as_list(value: object, kind: str, name: str, field: str) -> list:
     ``columns: 0``, ``columns: ""``) — is a structural error in the manifest,
     so we raise ``ValueError`` rather than silently indexing a model with zero
     columns. This matches :func:`_iter_section` for top-level sections and the
-    same-file ``_relationship_models`` policy (see #2605): one rule across the
-    module — ``None`` passes, everything non-list raises. The CLI already
-    catches ``ValueError`` and exits with ``Malformed manifest: {e}``.
+    same-file ``_relationship_models`` policy (see #2605, now on ``main``): one
+    rule across the module — ``None`` passes, everything non-list raises. Nested
+    fields name the offending entity (``model 'orders': 'columns' must be a
+    list, got dict``) so the diagnosis points at one row rather than every model
+    in the project; top-level sections keep the ``manifest['models']`` form.
+    Cubes are not required to have a name, so an empty name falls back to the
+    top-level ``manifest[field]`` form rather than emitting a bare ``''``. The
+    CLI already catches ``ValueError`` and exits with ``Malformed manifest:
+    {e}``.
     """
     if value is None:
         return []
     if not isinstance(value, list):
-        raise ValueError(
-            f"{kind} {name!r}: {field!r} must be a list, got {type(value).__name__}"
-        )
+        where = f"{kind} {name!r}: {field!r}" if name else f"manifest[{field!r}]"
+        raise ValueError(f"{where} must be a list, got {type(value).__name__}")
     return value
 
 
@@ -221,7 +226,9 @@ def _describe_cube(cube: dict, lines: list[str]) -> None:
     base = cube.get("baseObject", "?")
     lines.append(f"### Cube: {name} (base: {base})")
     measures = [
-        m for m in (_as_list(cube.get("measures"), "cube", name, "measures")) if isinstance(m, dict)
+        m
+        for m in (_as_list(cube.get("measures"), "cube", name, "measures"))
+        if isinstance(m, dict)
     ]
     if measures:
         lines.append("  Measures:")
@@ -329,7 +336,9 @@ def extract_schema_items(manifest: dict) -> list[dict]:
         for dim in _as_list(cube.get("dimensions"), "cube", cube_name, "dimensions"):
             if isinstance(dim, dict):
                 items.append(_cube_dimension_record(dim, cube_name, mdl_h, now))
-        for tdim in _as_list(cube.get("timeDimensions"), "cube", cube_name, "timeDimensions"):
+        for tdim in _as_list(
+            cube.get("timeDimensions"), "cube", cube_name, "timeDimensions"
+        ):
             if isinstance(tdim, dict):
                 items.append(_time_dimension_record(tdim, cube_name, mdl_h, now))
 

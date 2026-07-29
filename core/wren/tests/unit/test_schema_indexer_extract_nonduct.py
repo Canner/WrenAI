@@ -58,6 +58,34 @@ def test_extract_raises_on_non_list_nested_collections() -> None:
         extract_schema_items({"models": [{"name": "m", "columns": ""}]})
 
 
+def test_extract_unnamed_cube_falls_back_to_manifest_form() -> None:
+    # Cubes are not required to have a name; a nameless cube with a non-list
+    # collection must not emit a bare ``cube '':`` — it falls back to the
+    # top-level ``manifest['measures']`` form (goldmedal's edge case).
+    with pytest.raises(ValueError, match=r"manifest\['measures'\] must be a list"):
+        extract_schema_items({"cubes": [{"measures": 3}]})
+
+
+def test_extract_skips_columns_missing_name() -> None:
+    # Dict columns without a usable name are skipped, not indexed with ''.
+    items = extract_schema_items(
+        {
+            "models": [
+                {
+                    "name": "orders",
+                    "columns": [
+                        {"type": "int"},
+                        {"name": "", "type": "int"},
+                        {"name": "id", "type": "int"},
+                    ],
+                }
+            ]
+        }
+    )
+    cols = [i for i in items if i["item_type"] == "column"]
+    assert [c["item_name"] for c in cols] == ["id"]
+
+
 def test_extract_allows_none_or_empty_nested_collections() -> None:
     # None / missing / empty-list stays a no-op (no raise): the passthrough
     # case. Note {} / 0 / "" are NOT passthrough — see the raise test above.
@@ -79,8 +107,11 @@ def test_describe_skips_non_dict_rows() -> None:
     text = describe_schema(
         {
             "models": [None, {"name": "t", "columns": [{"name": "a", "type": "int"}]}],
-            "relationships": ["x"],
-            "views": [1],
+            "relationships": ["REL_SENTINEL_ZZZ"],
+            "views": ["VIEW_SENTINEL_ZZZ"],
         }
     )
     assert "t" in text
+    # Malformed non-dict rows contribute nothing to the rendered text.
+    assert "REL_SENTINEL_ZZZ" not in text
+    assert "VIEW_SENTINEL_ZZZ" not in text
