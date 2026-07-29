@@ -236,14 +236,18 @@ export class ModelResolver {
   public async checkModelSync(_root: any, _args: any, ctx: IContext) {
     try {
       const { id } = await ctx.projectService.getCurrentProject();
-      const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
-      const lastDeploy = await ctx.deployService.getLastDeployment(id);
       const inProgressDeployment =
         await ctx.deployService.getInProgressDeployment(id);
       if (inProgressDeployment) {
         return { status: SyncStatusEnum.IN_PROGRESS };
       }
-      return ctx.deployService.isSameDeployment(manifest, id, lastDeploy)
+
+      if (dirtyProjectIds.has(id)) {
+        return { status: SyncStatusEnum.UNSYNCRONIZED };
+      }
+
+      const lastDeploy = await ctx.deployService.getLastDeployment(id);
+      return lastDeploy
         ? { status: SyncStatusEnum.SYNCRONIZED }
         : { status: SyncStatusEnum.UNSYNCRONIZED };
     } catch (err: any) {
