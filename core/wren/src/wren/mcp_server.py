@@ -307,9 +307,7 @@ def _register_context_tools(mcp: FastMCP, ctx: ServeContext) -> None:
                 raw = cube.get(key, []) or []
                 if not isinstance(raw, list):
                     return []
-                return [
-                    m.get("name") for m in raw if isinstance(m, dict)
-                ]
+                return [m.get("name") for m in raw if isinstance(m, dict)]
 
             result.append(
                 {
