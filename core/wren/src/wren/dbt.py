@@ -1059,7 +1059,12 @@ def _infer_attached_node(node: dict[str, Any]) -> str | None:
 
 
 def _find_column(model: dict[str, Any], column_name: str) -> dict[str, Any] | None:
-    for column in model.get("columns", []):
+    columns = model.get("columns", []) or []
+    if not isinstance(columns, list):
+        return None
+    for column in columns:
+        if not isinstance(column, dict):
+            continue
         if column.get("name") == column_name:
             return column
     return None
@@ -1138,8 +1143,15 @@ def _infer_join_type(model: dict[str, Any], target_model: dict[str, Any]) -> str
 
 def _finalize_column_tests(imported_models: list[dict[str, Any]]) -> None:
     for model in imported_models:
+        if not isinstance(model, dict):
+            continue
         primary_key = model.get("primary_key")
-        for column in model.get("columns", []):
+        columns = model.get("columns", []) or []
+        if not isinstance(columns, list):
+            continue
+        for column in columns:
+            if not isinstance(column, dict):
+                continue
             props = column.setdefault("properties", {})
             tests = sorted(set(props.pop("_dbt_tests", [])))
             statuses = props.pop("_dbt_test_statuses", [])
@@ -1279,7 +1291,8 @@ def _seed_model_payload(model: dict[str, Any]) -> dict[str, Any]:
                 "isCalculated": column.get("is_calculated", False),
                 "properties": _camelize_props(column.get("properties", {})),
             }
-            for column in model.get("columns", [])
+            for column in (model.get("columns", []) or [])
+            if isinstance(column, dict) and column.get("name") is not None
         ],
     }
 
