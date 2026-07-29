@@ -166,7 +166,7 @@ def _relationship_models(rel: dict, name: str) -> list:
     """Return relationship endpoint models; raise on wrong-typed ``models``.
 
     Missing/null ``models`` is empty. A present non-list is structural error
-    (same policy as :func:`_require_list_section` for top-level sections).
+    (same policy as :func:`_iter_section` for top-level sections).
     """
     models = rel.get("models")
     if models is None:
