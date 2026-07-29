@@ -90,7 +90,17 @@ Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliase
 The UI planning text is intentionally omitted from this executable SQL prompt so it cannot provide table names, column names, aliases, source names, physical names, lineage names, SQL fragments, date expressions, literal values, placeholders, or functions.
 {% endif %}
 ### FAILED SQL ###
-The failed SQL and raw dry-run error are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, SQL patterns, or unsupported object names. Regenerate from the user question and current DATABASE SCHEMA.
+The failed SQL is intentionally omitted so it cannot provide executable identifiers, literal values, placeholders, functions, SQL patterns, or unsupported object names.
+
+### DRY-RUN DIAGNOSTIC ###
+{% if invalid_generation_result and invalid_generation_result.error %}
+Diagnostic text:
+{{ invalid_generation_result.error }}
+{% else %}
+No diagnostic text was provided.
+{% endif %}
+
+Use the diagnostic text only to understand the failure category. Do not copy identifiers, literal values, functions, SQL snippets, physical names, source names, or replacement candidates from the diagnostic text. Regenerate from the user question and current DATABASE SCHEMA.
 
 Return only the final JSON SQL response.
 """

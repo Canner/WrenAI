@@ -4,10 +4,13 @@ from typing import Any, List, Optional, Tuple
 from haystack import Document, component
 
 
-def get_engine_supported_data_type(data_type: str) -> str:
+def get_engine_supported_data_type(data_type: str | None) -> str:
     """
     This function makes sure downstream ai pipeline get column data types in a format that is supported by the data engine.
     """
+    if not data_type:
+        return "UNKNOWN"
+
     match data_type.upper():
         case "BPCHAR" | "NAME" | "UUID" | "INET":
             return "VARCHAR"
@@ -28,7 +31,10 @@ def get_engine_supported_data_type(data_type: str) -> str:
 
 
 def build_table_ddl(
-    content: dict, columns: Optional[set[str]] = None, tables: Optional[set[str]] = None
+    content: dict,
+    columns: Optional[set[str]] = None,
+    tables: Optional[set[str]] = None,
+    include_semantic_comments: bool = True,
 ) -> Tuple[str, bool, bool]:
     columns_ddl = []
     has_calculated_field = False
@@ -43,6 +49,8 @@ def build_table_ddl(
 
     for column in content["columns"]:
         if column["type"] == "COLUMN":
+            raw_data_type = column["data_type"]
+            supported_data_type = get_engine_supported_data_type(raw_data_type)
             if (
                 (
                     not columns
@@ -50,24 +58,32 @@ def build_table_ddl(
                     or column["name"] in relationship_columns
                     or column["is_primary_key"]
                 )
-                and column["data_type"].lower()
-                != "unknown"  # quick fix: filtering out UNKNOWN column type
+                and (
+                    raw_data_type is None
+                    or supported_data_type.lower()
+                    != "unknown"  # quick fix: filtering out UNKNOWN column type
+                )
             ):
                 if "This column is a Calculated Field" in column["comment"]:
                     has_calculated_field = True
-                if column["data_type"].lower() == "json":
+                if supported_data_type.lower() == "json":
                     has_json_field = True
-                column_ddl = f"{column['comment']}{column['name']} {get_engine_supported_data_type(column['data_type'])}"
+                column_comment = column["comment"] if include_semantic_comments else ""
+                column_ddl = f"{column_comment}{column['name']} {supported_data_type}"
                 if column["is_primary_key"]:
                     column_ddl += " PRIMARY KEY"
                 columns_ddl.append(column_ddl)
         elif column["type"] == "FOREIGN_KEY":
             if not tables or (tables and set(column.get("tables", [])).issubset(tables)):
-                columns_ddl.append(f"{column['comment']}{column['constraint']}")
+                relationship_comment = (
+                    column["comment"] if include_semantic_comments else ""
+                )
+                columns_ddl.append(f"{relationship_comment}{column['constraint']}")
 
+    table_comment = content["comment"] if include_semantic_comments else ""
     return (
         (
-            f"{content['comment']}CREATE TABLE {content['name']} (\n  "
+            f"{table_comment}CREATE TABLE {content['name']} (\n  "
             + ",\n  ".join(columns_ddl)
             + "\n);"
         ),

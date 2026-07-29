@@ -375,6 +375,7 @@ def test_retrieved_schema_separates_exact_sql_names_from_semantic_context():
     )
 
     table_ddl = result["db_schemas"][0]["table_ddl"]
+    executable_ddl = table_ddl.split("*/", maxsplit=1)[1]
 
     assert '"sql_table_name_use_exactly":"modeled_dataset"' in table_ddl
     assert '"sql_column_name_use_exactly":"stored_attribute"' in table_ddl
@@ -382,6 +383,33 @@ def test_retrieved_schema_separates_exact_sql_names_from_semantic_context():
         '"semantic_context_not_sql_identifier":"Business-facing attribute label."'
         in table_ddl
     )
+    assert "Business-facing attribute label." not in executable_ddl
+    assert "Business-facing dataset description." not in executable_ddl
+    assert "CREATE TABLE modeled_dataset" in executable_ddl
+    assert "stored_attribute VARCHAR" in executable_ddl
+
+
+def test_build_table_ddl_can_render_executable_schema_without_semantic_comments():
+    ddl, has_calculated_field, has_json_field = build_table_ddl(
+        {
+            "comment": "/* semantic table context */\n",
+            "name": "modeled_dataset",
+            "columns": [
+                {
+                    "type": "COLUMN",
+                    "comment": "-- semantic field context\n  ",
+                    "name": "stored_attribute",
+                    "data_type": "VARCHAR",
+                    "is_primary_key": False,
+                }
+            ],
+        },
+        include_semantic_comments=False,
+    )
+
+    assert ddl == "CREATE TABLE modeled_dataset (\n  stored_attribute VARCHAR\n);"
+    assert not has_calculated_field
+    assert not has_json_field
 
 
 def test_check_using_db_schemas_without_pruning_keeps_explicit_table_fast_path():

@@ -143,14 +143,12 @@ def _build_metric_ddl(content: dict) -> str:
         }
     )
     columns_ddl = [
-        f"{column['comment']}{column['name']} {get_engine_supported_data_type(column['data_type'])}"
-        for column in content["columns"]
-        if column["data_type"].lower()
-        != "unknown"  # quick fix: filtering out UNKNOWN column type
+        f"{column['name']} {get_engine_supported_data_type(column['data_type'])}"
+        for column in columns
     ]
 
     return (
-        f"{context}{content['comment']}CREATE TABLE {content['name']} (\n  "
+        f"{context}CREATE TABLE {content['name']} (\n  "
         + ",\n  ".join(columns_ddl)
         + "\n);"
     )
@@ -228,7 +226,10 @@ def _build_table_retrieval_context(
     content: dict, columns: Optional[set[str]] = None, tables: Optional[set[str]] = None
 ) -> tuple[str, bool, bool]:
     ddl, has_calculated_field, has_json_field = build_table_ddl(
-        content, columns=columns, tables=tables
+        content,
+        columns=columns,
+        tables=tables,
+        include_semantic_comments=False,
     )
     included_columns = _included_columns(content, columns, tables)
     included_relationships = _included_relationships(content, tables)
