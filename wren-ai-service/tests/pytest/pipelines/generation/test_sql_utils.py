@@ -35,6 +35,9 @@ def test_construct_instructions_uses_instruction_text():
 def test_get_text_to_sql_rules_uses_default_metadata_grounding_rules():
     rules = get_text_to_sql_rules()
 
+    assert "Generate Wren SQL that can be parsed by the Wren engine" in rules
+    assert "ORDER BY comes before LIMIT" in rules
+    assert "Datasource-specific SQL syntax is execution-target context only" in rules
     assert "ONLY USE the tables and columns mentioned in the database schema" in rules
     assert 'ONLY USE "*" if the user query asks for all the columns' in rules
     assert "They are never source table or source column identifiers" in rules
@@ -64,8 +67,12 @@ def test_get_text_to_sql_rules_uses_default_metadata_grounding_rules():
 def test_get_text_to_sql_rules_keeps_mandatory_rules_with_sql_knowledge():
     rules = get_text_to_sql_rules(_SqlKnowledge())
 
+    assert "ONLY USE the tables and columns mentioned in the database schema" in rules
+    assert "For top, bottom, highest, lowest, first, or last requests" in rules
     assert _SqlKnowledge.text_to_sql_rule in rules
+    assert "Use this section only when it is compatible with Wren SQL" in rules
     assert "MANDATORY SQL GROUNDING RULES" in rules
+    assert "Generate Wren SQL that can be parsed by the Wren engine" in rules
     assert "Every table and column referenced" in rules
     assert "Do not query INFORMATION_SCHEMA" in rules
 
@@ -116,6 +123,8 @@ def test_json_field_instructions_do_not_include_placeholder_identifiers():
 def test_sql_regeneration_system_prompt_uses_question_as_intent_source():
     prompt = get_sql_regeneration_system_prompt()
 
+    assert "Wren SQL query" in prompt
+    assert "ANSI SQL" not in prompt
     assert "regenerate from the user's question" in prompt
     assert "unsupported identifiers" in prompt
     assert "original SQL query and UI planning text are intentionally omitted" in prompt
@@ -129,15 +138,11 @@ def test_sql_regeneration_system_prompt_uses_question_as_intent_source():
 def test_sql_correction_system_prompt_discards_invalid_identifier_context():
     prompt = get_sql_correction_system_prompt()
 
-    assert "treat it as the source of intent" in prompt
-    assert "Do not copy placeholders" in prompt
-    assert "Regenerate a grounded Wren SQL query" in prompt
-    assert (
-        "Do not preserve a table, column, join, filter, grouping, ordering, or function"
-        in prompt
-    )
-    assert "Treat physical/source/lineage names from the failed SQL" in prompt
-    assert "do not try a similar replacement from source metadata" in prompt
+    assert "Wren SQL query" in prompt
+    assert "ANSI SQL" not in prompt
+    assert "fix the syntactically incorrect Wren SQL query" in prompt
+    assert "generate the syntactically correct Wren SQL query" in prompt
+    assert "Keep executable table and column identifiers grounded" in prompt
 
 
 def test_sql_reasoning_prompt_forbids_executable_sql_context():
@@ -155,14 +160,13 @@ def test_user_prompt_templates_keep_source_metadata_non_executable():
         sql_generation_user_prompt_template,
         text_to_sql_with_followup_user_prompt_template,
         sql_regeneration_user_prompt_template,
-        sql_correction_user_prompt_template,
     ):
         assert "source/physical/lineage names" in prompt
         assert "omit that unsupported part instead of inventing" in prompt
         assert "exact declared table and column names from DATABASE SCHEMA" in prompt
 
 
-def test_executable_prompt_templates_omit_planning_error_and_original_sql_context():
+def test_executable_prompt_templates_omit_planning_and_original_sql_context():
     marker = "UNTRUSTED_CONTEXT_MARKER"
 
     generation_prompt = PromptBuilder(template=sql_generation_user_prompt_template).run(
@@ -191,15 +195,6 @@ def test_executable_prompt_templates_omit_planning_error_and_original_sql_contex
         sql_functions=[],
     )["prompt"]
 
-    correction_prompt = PromptBuilder(template=sql_correction_user_prompt_template).run(
-        query="Question",
-        documents=["SCHEMA_CONTEXT"],
-        invalid_generation_result={"error": marker},
-        sql_generation_reasoning=marker,
-        instructions=[],
-        sql_functions=[],
-    )["prompt"]
-
     regeneration_prompt = PromptBuilder(
         template=sql_regeneration_user_prompt_template
     ).run(
@@ -218,8 +213,13 @@ def test_executable_prompt_templates_omit_planning_error_and_original_sql_contex
     for prompt in (
         generation_prompt,
         followup_prompt,
-        correction_prompt,
         regeneration_prompt,
     ):
         assert marker not in prompt
         assert "intentionally omitted" in prompt
+
+
+def test_sql_correction_user_prompt_follows_legacy_failed_sql_flow():
+    assert "SQL: {{ invalid_generation_result.sql }}" in sql_correction_user_prompt_template
+    assert "Error Message: {{ invalid_generation_result.error }}" in sql_correction_user_prompt_template
+    assert "Let's think step by step." in sql_correction_user_prompt_template

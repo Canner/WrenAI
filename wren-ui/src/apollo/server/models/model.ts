@@ -98,6 +98,7 @@ export interface CheckCalculatedFieldCanQueryData {
 export interface PreviewSQLData {
   sql: string;
   projectId?: string;
+  hash?: string;
   limit?: number;
   dryRun?: boolean;
 }

@@ -34,7 +34,7 @@ def get_sql_regeneration_system_prompt(
 
     return f"""
 ### TASK ###
-You are a great ANSI SQL expert. Now you are given database schema and a user's question.
+You are a great Wren SQL expert. Now you are given database schema, SQL generation reasoning and an original SQL query.
 Carefully review the user's question and current DATABASE SCHEMA, then generate a new SQL query that answers the user's intent.
 The original SQL query and UI planning text are intentionally omitted from the prompt and must not be used as executable context.
 While generating the new SQL query, make sure to use the database schema as the only source of executable table and column identifiers.
@@ -44,7 +44,7 @@ Treat physical/source/lineage names from the original SQL, reasoning, samples, c
 {text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be a ANSI SQL query in JSON format:
+The final answer must be a Wren SQL query in JSON format:
 
 {{
     "sql": <SQL_QUERY_STRING>
@@ -166,10 +166,12 @@ async def post_process(
     regenerate_sql: dict,
     post_processor: SQLGenPostProcessor,
     project_id: str | None = None,
+    mdl_hash: str | None = None,
 ) -> dict:
     return await post_processor.run(
         regenerate_sql.get("replies"),
         project_id=project_id,
+        mdl_hash=mdl_hash,
     )
 
 
@@ -209,6 +211,7 @@ class SQLRegeneration(BasicPipeline):
         sql_samples: list[dict] | None = None,
         instructions: list[dict] | None = None,
         project_id: str | None = None,
+        mdl_hash: str | None = None,
         has_calculated_field: bool = False,
         has_metric: bool = False,
         has_json_field: bool = False,
@@ -227,6 +230,7 @@ class SQLRegeneration(BasicPipeline):
                 "sql_samples": sql_samples,
                 "instructions": instructions,
                 "project_id": project_id,
+                "mdl_hash": mdl_hash,
                 "has_calculated_field": has_calculated_field,
                 "has_metric": has_metric,
                 "has_json_field": has_json_field,

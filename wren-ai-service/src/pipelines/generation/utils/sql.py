@@ -30,6 +30,7 @@ class SQLGenPostProcessor:
         self,
         replies: List[str] | List[List[str]],
         project_id: str | None = None,
+        mdl_hash: str | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
         data_source: str = "",
@@ -50,6 +51,7 @@ class SQLGenPostProcessor:
             ) = await self._classify_generation_result(
                 cleaned_generation_result,
                 project_id=project_id,
+                mdl_hash=mdl_hash,
                 use_dry_plan=use_dry_plan,
                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                 data_source=data_source,
@@ -72,6 +74,7 @@ class SQLGenPostProcessor:
         self,
         generation_result: str,
         project_id: str | None = None,
+        mdl_hash: str | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
         data_source: str = "",
@@ -109,6 +112,7 @@ class SQLGenPostProcessor:
                     generation_result,
                     session,
                     project_id=project_id,
+                    mdl_hash=mdl_hash,
                     limit=1,
                     dry_run=True,
                 )
@@ -134,6 +138,7 @@ class SQLGenPostProcessor:
                     generation_result,
                     session,
                     project_id=project_id,
+                    mdl_hash=mdl_hash,
                     limit=1,
                     dry_run=False,
                 )
@@ -165,6 +170,9 @@ class SQLGenPostProcessor:
 
 _MANDATORY_SQL_GROUNDING_RULES = """
 ### MANDATORY SQL GROUNDING RULES ###
+- Generate Wren SQL that can be parsed by the Wren engine before any datasource dialect rewrite happens.
+- Use the Wren SQL clause order for result limiting: ORDER BY comes before LIMIT, and LIMIT belongs at the end of the SELECT or final UNION result.
+- Datasource-specific SQL syntax is execution-target context only. Do not emit syntax that requires a datasource parser before the Wren engine rewrite step.
 - Treat the DATABASE SCHEMA section as the only source of executable table and column identifiers.
 - Every table and column referenced in SELECT, FROM, JOIN, WHERE, GROUP BY, HAVING, and ORDER BY must appear exactly in the CREATE TABLE, CREATE VIEW, or metric schema text provided in DATABASE SCHEMA.
 - Comments, aliases, display labels, descriptions, reasoning text, SQL samples, and user wording are semantic hints only. They are never source table or source column identifiers.
@@ -350,9 +358,16 @@ def _extract_from_sql_knowledge(
 def get_text_to_sql_rules(sql_knowledge: SqlKnowledge | None = None) -> str:
     rules = _DEFAULT_TEXT_TO_SQL_RULES
     if sql_knowledge is not None:
-        rules = _extract_from_sql_knowledge(
+        additional_rules = _extract_from_sql_knowledge(
             sql_knowledge, "text_to_sql_rule", _DEFAULT_TEXT_TO_SQL_RULES
         )
+        if additional_rules != _DEFAULT_TEXT_TO_SQL_RULES:
+            rules = (
+                f"{rules}\n\n"
+                "### ADDITIONAL SQL KNOWLEDGE ###\n"
+                "Use this section only when it is compatible with Wren SQL and the current SQL FUNCTIONS.\n"
+                f"{additional_rules}"
+            )
 
     return f"{rules}\n\n{_MANDATORY_SQL_GROUNDING_RULES}"
 

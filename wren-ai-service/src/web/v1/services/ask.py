@@ -467,6 +467,7 @@ class AskService:
                         sql_generation_reasoning=sql_generation_reasoning,
                         histories=histories,
                         project_id=ask_request.project_id,
+                        mdl_hash=ask_request.mdl_hash,
                         sql_samples=sql_samples,
                         instructions=instructions,
                         has_calculated_field=has_calculated_field,
@@ -485,6 +486,7 @@ class AskService:
                         contexts=table_ddls,
                         sql_generation_reasoning=sql_generation_reasoning,
                         project_id=ask_request.project_id,
+                        mdl_hash=ask_request.mdl_hash,
                         sql_samples=sql_samples,
                         instructions=instructions,
                         has_calculated_field=has_calculated_field,
@@ -548,19 +550,15 @@ class AskService:
                             "sql_correction"
                         ].run(
                             contexts=table_ddls,
-                            query=user_query,
-                            sql_generation_reasoning=sql_generation_reasoning,
                             instructions=instructions,
                             invalid_generation_result={
                                 "sql": original_sql,
-                                "error": (
-                                    f"{sql_diagnosis_reasoning}\nDry run error: {error_message}"
-                                    if allow_sql_diagnosis
-                                    and sql_diagnosis_reasoning
-                                    else error_message
-                                ),
+                                "error": sql_diagnosis_reasoning
+                                if allow_sql_diagnosis
+                                else error_message,
                             },
                             project_id=ask_request.project_id,
+                            mdl_hash=ask_request.mdl_hash,
                             use_dry_plan=use_dry_plan,
                             allow_dry_plan_fallback=allow_dry_plan_fallback,
                             sql_functions=sql_functions,
