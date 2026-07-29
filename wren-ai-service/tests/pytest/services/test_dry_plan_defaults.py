@@ -1,5 +1,9 @@
-from src.web.v1.routers.sql_corrections import PostRequest
+from src.web.v1.routers.question_recommendation import (
+    PostRequest as QuestionRecommendationPostRequest,
+)
+from src.web.v1.routers.sql_corrections import PostRequest as SqlCorrectionPostRequest
 from src.web.v1.services.ask import AskRequest
+from src.web.v1.services.question_recommendation import QuestionRecommendation
 from src.web.v1.services.sql_corrections import SqlCorrectionService
 
 
@@ -23,7 +27,7 @@ def test_ask_request_allows_explicit_planner_override():
 
 
 def test_sql_correction_router_defaults_to_planner_validation_without_fallback():
-    request = PostRequest(sql="SELECT 1", error="dry run failed")
+    request = SqlCorrectionPostRequest(sql="SELECT 1", error="dry run failed")
 
     assert request.use_dry_plan is True
     assert request.allow_dry_plan_fallback is False
@@ -36,5 +40,21 @@ def test_sql_correction_service_defaults_to_planner_validation_without_fallback(
         error="dry run failed",
     )
 
+    assert request.use_dry_plan is True
+    assert request.allow_dry_plan_fallback is False
+
+
+def test_question_recommendation_router_defaults_to_planner_validation_without_fallback():
+    request = QuestionRecommendationPostRequest(mdl='{"models":[]}')
+
+    assert request.allow_data_preview is False
+    assert request.use_dry_plan is True
+    assert request.allow_dry_plan_fallback is False
+
+
+def test_question_recommendation_service_defaults_to_planner_validation_without_fallback():
+    request = QuestionRecommendation.Request(event_id="event-id", mdl='{"models":[]}')
+
+    assert request.allow_data_preview is False
     assert request.use_dry_plan is True
     assert request.allow_dry_plan_fallback is False

@@ -99,11 +99,39 @@ class SQLGenPostProcessor:
                 else:
                     invalid_generation_result = {
                         "sql": generation_result,
+                        "original_sql": generation_result,
                         "type": "TIME_OUT"
                         if error_message.startswith("Request timed out")
                         else "DRY_PLAN",
                         "error": error_message,
                         "correlation_id": "",
+                    }
+                    return valid_generation_result, invalid_generation_result
+
+                success, _, addition = await self._engine.execute_sql(
+                    generation_result,
+                    session,
+                    project_id=project_id,
+                    limit=1,
+                    dry_run=True,
+                )
+                addition = addition if isinstance(addition, dict) else {}
+
+                if success:
+                    valid_generation_result = {
+                        "sql": generation_result,
+                        "correlation_id": addition.get("correlation_id", ""),
+                    }
+                else:
+                    error_message = addition.get("error_message", "")
+                    invalid_generation_result = {
+                        "sql": addition.get("error_sql", generation_result),
+                        "original_sql": generation_result,
+                        "type": "TIME_OUT"
+                        if error_message.startswith("Request timed out")
+                        else "DRY_RUN",
+                        "error": error_message,
+                        "correlation_id": addition.get("correlation_id", ""),
                     }
             elif use_dry_run:
                 success, _, addition = await self._engine.execute_sql(

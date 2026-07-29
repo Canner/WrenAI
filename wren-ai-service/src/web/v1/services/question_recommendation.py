@@ -67,7 +67,9 @@ class QuestionRecommendation:
         max_questions: int,
         max_categories: int,
         project_id: Optional[str] = None,
-        allow_data_preview: bool = True,
+        allow_data_preview: bool = False,
+        use_dry_plan: bool = True,
+        allow_dry_plan_fallback: bool = False,
     ):
         async def _document_retrieval() -> tuple[list[str], bool, bool, bool]:
             retrieval_result = await self._pipelines["db_schema_retrieval"].run(
@@ -131,6 +133,8 @@ class QuestionRecommendation:
                 has_metric=has_metric,
                 has_json_field=has_json_field,
                 sql_functions=sql_functions,
+                use_dry_plan=use_dry_plan,
+                allow_dry_plan_fallback=allow_dry_plan_fallback,
                 allow_data_preview=allow_data_preview,
                 sql_knowledge=sql_knowledge,
             )
@@ -172,7 +176,9 @@ class QuestionRecommendation:
         max_questions: int = 5
         max_categories: int = 3
         regenerate: bool = False
-        allow_data_preview: bool = True
+        allow_data_preview: bool = False
+        use_dry_plan: bool = True
+        allow_dry_plan_fallback: bool = False
 
     async def _recommend(self, request: dict):
         resp = await self._pipelines["question_recommendation"].run(**request)
@@ -185,6 +191,8 @@ class QuestionRecommendation:
                 request["max_categories"],
                 project_id=request["project_id"],
                 allow_data_preview=request["allow_data_preview"],
+                use_dry_plan=request["use_dry_plan"],
+                allow_dry_plan_fallback=request["allow_dry_plan_fallback"],
             )
             for question in questions
         ]
@@ -218,6 +226,8 @@ class QuestionRecommendation:
                 "project_id": input.project_id,
                 "event_id": input.event_id,
                 "allow_data_preview": input.allow_data_preview,
+                "use_dry_plan": input.use_dry_plan,
+                "allow_dry_plan_fallback": input.allow_dry_plan_fallback,
             }
 
             await self._recommend(request)

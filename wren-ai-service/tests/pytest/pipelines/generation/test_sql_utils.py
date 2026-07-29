@@ -31,15 +31,20 @@ class _SqlKnowledge:
 
 class _DryPlanEngine:
     def __init__(self):
-        self.calls = []
+        self.dry_plan_calls = []
+        self.execute_sql_calls = []
 
     async def dry_plan(self, *args, **kwargs):
-        self.calls.append((args, kwargs))
+        self.dry_plan_calls.append((args, kwargs))
         return True, ""
+
+    async def execute_sql(self, *args, **kwargs):
+        self.execute_sql_calls.append((args, kwargs))
+        return True, {}, {"correlation_id": "correlation-id"}
 
 
 @pytest.mark.asyncio
-async def test_sql_postprocessor_passes_project_context_to_dry_plan():
+async def test_sql_postprocessor_validates_with_dry_plan_then_dry_run():
     engine = _DryPlanEngine()
 
     result = await SQLGenPostProcessor(engine).run(
@@ -51,8 +56,29 @@ async def test_sql_postprocessor_passes_project_context_to_dry_plan():
     )
 
     assert result["valid_generation_result"]["sql"] == "SELECT 1"
-    assert engine.calls[0][1]["project_id"] == "project-id"
-    assert engine.calls[0][1]["allow_fallback"] is False
+    assert result["valid_generation_result"]["correlation_id"] == "correlation-id"
+    assert engine.dry_plan_calls[0][1]["project_id"] == "project-id"
+    assert engine.dry_plan_calls[0][1]["allow_fallback"] is False
+    assert engine.execute_sql_calls[0][1]["project_id"] == "project-id"
+    assert engine.execute_sql_calls[0][1]["dry_run"] is True
+
+
+class _FailingDryPlanEngine:
+    async def dry_plan(self, *args, **kwargs):
+        return False, "planner failed"
+
+
+@pytest.mark.asyncio
+async def test_sql_postprocessor_returns_original_sql_when_dry_plan_fails():
+    result = await SQLGenPostProcessor(_FailingDryPlanEngine()).run(
+        replies=["SELECT 1"],
+        use_dry_plan=True,
+        data_source="source",
+    )
+
+    assert result["invalid_generation_result"]["sql"] == "SELECT 1"
+    assert result["invalid_generation_result"]["original_sql"] == "SELECT 1"
+    assert result["invalid_generation_result"]["type"] == "DRY_PLAN"
 
 
 def test_construct_instructions_uses_instruction_text():

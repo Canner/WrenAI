@@ -22,7 +22,9 @@ class PostRequest(BaseRequest):
     max_questions: int = 5
     max_categories: int = 3
     regenerate: bool = False
-    allow_data_preview: bool = True
+    allow_data_preview: bool = False
+    use_dry_plan: bool = True
+    allow_dry_plan_fallback: bool = False
 
 
 class PostResponse(BaseModel):
