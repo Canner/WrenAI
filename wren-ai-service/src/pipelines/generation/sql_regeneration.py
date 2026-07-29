@@ -34,9 +34,9 @@ def get_sql_regeneration_system_prompt(
 
     return f"""
 ### TASK ###
-You are a great ANSI SQL expert. Now you are given database schema, SQL generation reasoning and an original SQL query.
+You are a great ANSI SQL expert. Now you are given database schema and a user's question.
 Carefully review the user's question and current DATABASE SCHEMA, then generate a new SQL query that answers the user's intent.
-Use the original SQL query only as non-executable intent context.
+The original SQL query and UI planning text are intentionally omitted from the prompt and must not be used as executable context.
 While generating the new SQL query, make sure to use the database schema as the only source of executable table and column identifiers.
 If the original SQL query or reasoning contains unsupported identifiers, placeholders, or assumptions, ignore those parts and regenerate from the user's question and DATABASE SCHEMA.
 Treat physical/source/lineage names from the original SQL, reasoning, samples, comments, or descriptions as semantic context only; never use them as executable identifiers unless the exact same identifier appears in DATABASE SCHEMA.
@@ -96,10 +96,9 @@ Question:
 ### QUESTION ###
 User's Question: {{ query }}
 Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, or inferred names into executable SQL. If a needed table, column, relation, date field, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, omit that unsupported part instead of inventing or substituting a similar name.
-Use the original SQL query only as intent context. Regenerate with executable identifiers from the current DATABASE SCHEMA only.
+Regenerate with executable identifiers from the current DATABASE SCHEMA only.
 ### REASONING PLAN ###
-Use this reasoning plan only as non-executable intent context. Do not copy table names, column names, aliases, source names, physical names, lineage names, SQL fragments, date expressions, literal values, placeholders, or functions from it. Choose every executable identifier only from DATABASE SCHEMA and every function only from SQL FUNCTIONS.
-{{ sql_generation_reasoning }}
+The UI planning text is intentionally omitted from this executable SQL prompt so it cannot provide table names, column names, aliases, source names, physical names, lineage names, SQL fragments, date expressions, literal values, placeholders, or functions.
 ### ORIGINAL SQL QUERY ###
 The original SQL is intentionally omitted so it cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 
@@ -127,7 +126,7 @@ def prompt(
         query=query,
         sql=sql,
         documents=documents,
-        sql_generation_reasoning=sql_generation_reasoning,
+        sql_generation_reasoning=bool(sql_generation_reasoning),
         instructions=construct_instructions(
             instructions=instructions,
         ),

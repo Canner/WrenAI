@@ -87,12 +87,10 @@ Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliase
 {% endif %}
 {% if sql_generation_reasoning %}
 ### REASONING PLAN ###
-Use this reasoning plan only as non-executable intent context. Do not copy table names, column names, aliases, source names, physical names, lineage names, SQL fragments, date expressions, literal values, placeholders, or functions from it. Choose every executable identifier only from DATABASE SCHEMA and every function only from SQL FUNCTIONS.
-{{ sql_generation_reasoning }}
+The UI planning text is intentionally omitted from this executable SQL prompt so it cannot provide table names, column names, aliases, source names, physical names, lineage names, SQL fragments, date expressions, literal values, placeholders, or functions.
 {% endif %}
 ### FAILED SQL ###
-The failed SQL is intentionally omitted so it cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns. Use the error message only to understand why the previous attempt failed.
-Error Message: {{ invalid_generation_result.error }}
+The failed SQL and raw dry-run error are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, SQL patterns, or unsupported object names. Regenerate from the user question and current DATABASE SCHEMA.
 
 Return only the final JSON SQL response.
 """
@@ -113,7 +111,7 @@ def prompt(
         query=query,
         documents=documents,
         invalid_generation_result=invalid_generation_result,
-        sql_generation_reasoning=sql_generation_reasoning,
+        sql_generation_reasoning=bool(sql_generation_reasoning),
         instructions=construct_instructions(
             instructions=instructions,
         ),

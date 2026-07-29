@@ -79,9 +79,7 @@ User's Follow-up Question: {{ query }}
 Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, or inferred names into executable SQL. If a needed table, column, relation, date field, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, omit that unsupported part instead of inventing or substituting a similar name.
 
 ### REASONING PLAN ###
-Use this reasoning plan only as non-executable intent context and only where it is consistent with the current DATABASE SCHEMA and SQL RULES.
-Do not copy table names, column names, aliases, source names, physical names, lineage names, SQL fragments, date expressions, literal values, placeholders, or functions from it. Choose every executable identifier only from DATABASE SCHEMA and every function only from SQL FUNCTIONS.
-{{ sql_generation_reasoning }}
+The UI planning text is intentionally omitted from this executable SQL prompt so it cannot provide table names, column names, aliases, source names, physical names, lineage names, SQL fragments, date expressions, literal values, placeholders, or functions.
 
 Return only the final JSON SQL response.
 """
@@ -105,7 +103,7 @@ def prompt(
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
-        sql_generation_reasoning=sql_generation_reasoning,
+        sql_generation_reasoning=bool(sql_generation_reasoning),
         instructions=construct_instructions(
             instructions=instructions,
         ),

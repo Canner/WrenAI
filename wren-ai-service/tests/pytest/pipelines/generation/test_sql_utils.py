@@ -1,3 +1,5 @@
+from haystack.components.builders.prompt_builder import PromptBuilder
+
 from src.pipelines.generation.utils.sql import (
     construct_instructions,
     get_json_field_instructions,
@@ -116,7 +118,7 @@ def test_sql_regeneration_system_prompt_uses_question_as_intent_source():
 
     assert "regenerate from the user's question" in prompt
     assert "unsupported identifiers" in prompt
-    assert "Use the original SQL query only as non-executable intent context" in prompt
+    assert "original SQL query and UI planning text are intentionally omitted" in prompt
     assert (
         "database schema as the only source of executable table and column identifiers"
         in prompt
@@ -158,3 +160,66 @@ def test_user_prompt_templates_keep_source_metadata_non_executable():
         assert "source/physical/lineage names" in prompt
         assert "omit that unsupported part instead of inventing" in prompt
         assert "exact declared table and column names from DATABASE SCHEMA" in prompt
+
+
+def test_executable_prompt_templates_omit_planning_error_and_original_sql_context():
+    marker = "UNTRUSTED_CONTEXT_MARKER"
+
+    generation_prompt = PromptBuilder(template=sql_generation_user_prompt_template).run(
+        query="Question",
+        documents=["SCHEMA_CONTEXT"],
+        sql_generation_reasoning=marker,
+        instructions=[],
+        calculated_field_instructions="",
+        metric_instructions="",
+        json_field_instructions="",
+        sql_samples=[],
+        sql_functions=[],
+    )["prompt"]
+
+    followup_prompt = PromptBuilder(
+        template=text_to_sql_with_followup_user_prompt_template
+    ).run(
+        query="Question",
+        documents=["SCHEMA_CONTEXT"],
+        sql_generation_reasoning=marker,
+        instructions=[],
+        calculated_field_instructions="",
+        metric_instructions="",
+        json_field_instructions="",
+        sql_samples=[],
+        sql_functions=[],
+    )["prompt"]
+
+    correction_prompt = PromptBuilder(template=sql_correction_user_prompt_template).run(
+        query="Question",
+        documents=["SCHEMA_CONTEXT"],
+        invalid_generation_result={"error": marker},
+        sql_generation_reasoning=marker,
+        instructions=[],
+        sql_functions=[],
+    )["prompt"]
+
+    regeneration_prompt = PromptBuilder(
+        template=sql_regeneration_user_prompt_template
+    ).run(
+        query="Question",
+        sql=marker,
+        documents=["SCHEMA_CONTEXT"],
+        sql_generation_reasoning=marker,
+        instructions=[],
+        calculated_field_instructions="",
+        metric_instructions="",
+        json_field_instructions="",
+        sql_samples=[],
+        sql_functions=[],
+    )["prompt"]
+
+    for prompt in (
+        generation_prompt,
+        followup_prompt,
+        correction_prompt,
+        regeneration_prompt,
+    ):
+        assert marker not in prompt
+        assert "intentionally omitted" in prompt
