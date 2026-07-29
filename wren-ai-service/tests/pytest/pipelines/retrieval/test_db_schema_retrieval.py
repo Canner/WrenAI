@@ -10,6 +10,7 @@ from src.pipelines.retrieval.db_schema_retrieval import (
     embedding,
     prompt as build_column_selection_prompt,
     table_retrieval,
+    table_columns_selection_system_prompt,
     table_columns_selection_user_prompt_template,
 )
 
@@ -66,6 +67,15 @@ def test_column_pruning_prompt_uses_current_query_without_history_text():
 
     assert "current request" in result["prompt"]
     assert "previous request" not in result["prompt"]
+
+
+def test_table_selection_prompt_keeps_multiple_relevant_datasets():
+    assert "same business concept is represented by multiple modeled datasets" in (
+        table_columns_selection_system_prompt
+    )
+    assert "compatible fields for the same requested result shape" in (
+        table_columns_selection_system_prompt
+    )
 
 
 @pytest.mark.asyncio

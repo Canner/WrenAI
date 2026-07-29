@@ -51,8 +51,10 @@ The database schema includes structural, semantic, and business modeling metadat
 11. Reuse calculated fields and metric measures or dimensions when they already represent the requested business concept.
 12. Follow only the relationships shown in the provided schema when selecting columns across datasets.
 13. Do not stop at a single top candidate when the question needs multiple related datasets.
-14. If WREN RETRIEVED SEMANTIC CONTEXT is present, use sql_table_name_use_exactly and sql_column_name_use_exactly values as the exact names to return.
-15. Use semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier only to understand meaning. Do not return descriptions, labels, source metadata, or rewritten variants as table or column names.
+14. If the same business concept is represented by multiple modeled datasets, select each relevant dataset and the fields needed to answer the shared intent.
+15. If multiple modeled datasets expose compatible fields for the same requested result shape, keep each relevant dataset available so SQL generation can combine them as separate result rows instead of discarding all but one.
+16. If WREN RETRIEVED SEMANTIC CONTEXT is present, use sql_table_name_use_exactly and sql_column_name_use_exactly values as the exact names to return.
+17. Use semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier only to understand meaning. Do not return descriptions, labels, source metadata, or rewritten variants as table or column names.
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:

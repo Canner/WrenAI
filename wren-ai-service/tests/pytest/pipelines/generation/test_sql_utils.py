@@ -79,6 +79,9 @@ def test_get_text_to_sql_rules_uses_default_metadata_grounding_rules():
     assert "Physical datasource names, source database names" in rules
     assert "Do not replace an invalid identifier with a similar-looking physical" in rules
     assert "source/lineage names from metadata may guide meaning" in rules
+    assert "combining separate result rows with UNION ALL" in rules
+    assert "independently valid from DATABASE SCHEMA" in rules
+    assert "do not translate it into a generic object name" in rules
 
 
 def test_get_text_to_sql_rules_keeps_mandatory_rules_with_sql_knowledge():

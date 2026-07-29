@@ -181,7 +181,9 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - If a requested concept, filter, sort, join, or time field is not represented by an exact table or column in DATABASE SCHEMA, do not invent a field for it. Generate the closest valid SQL using only available schema fields.
 - When a dry run error reports an invalid object name or invalid column name, remove that identifier unless it appears exactly in DATABASE SCHEMA. Correct it only to an exact schema identifier.
 - Do not replace an invalid identifier with a similar-looking physical, source, lineage, alias, display, description, sample, or error-message name. Regenerate from the user's intent and the current DATABASE SCHEMA, and omit unsupported parts instead of substituting non-schema identifiers.
-- When using multiple tables, join only through the FOREIGN KEY relationships shown in DATABASE SCHEMA. If no relationship is shown for the needed tables, prefer a single table, view, or metric that already contains the requested fields.
+- When using multiple tables to combine fields into the same output row, join only through the FOREIGN KEY relationships shown in DATABASE SCHEMA. If no relationship is shown for the needed tables, prefer a single table, view, or metric that already contains the requested fields.
+- When the same requested result can be answered from multiple schema objects with compatible columns or metrics, include all relevant schema objects by combining separate result rows with UNION ALL instead of choosing only one object.
+- Use UNION ALL only when each SELECT branch is independently valid from DATABASE SCHEMA and returns the same result shape. Do not use UNION ALL to combine unrelated concepts or to compensate for missing columns.
 - If the question requires fields that are spread across multiple schema objects, use all required related tables, views, or metrics only when the DATABASE SCHEMA provides the needed columns and relationship path.
 - Do not query INFORMATION_SCHEMA, system catalogs, metadata tables, or table-existence checks to answer the user. Query only the business tables, views, and metrics in DATABASE SCHEMA.
 - SQL samples and query history are examples of intent and style only. Never copy a table name, column name, alias, literal value, or function from them unless it is also valid for the current DATABASE SCHEMA and SQL FUNCTIONS.
@@ -192,6 +194,7 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - For aggregate sorting, select the aggregate with an alias and order by that alias instead of ordering directly by an aggregate expression.
 - Before returning the final SQL, silently check that each identifier and function in the SQL is grounded in DATABASE SCHEMA or SQL FUNCTIONS. If any identifier or function is ungrounded, remove that part or answer with the closest valid SQL over grounded fields only.
 - If the retrieved DATABASE SCHEMA does not contain a table, column, relationship, or supported function needed for part of the user's request, leave that part out instead of inventing a replacement.
+- If a requested noun, grouping, filter, or measure appears only in the user's wording and not in DATABASE SCHEMA, do not translate it into a generic object name. Use only schema-supported concepts and omit unsupported parts.
 """
 
 
@@ -410,10 +413,11 @@ Given the user's question and database schema, generate one grounded Wren SQL qu
 5. YOU MUST answer the user's intent, not just exact wording. Use schema aliases, descriptions, calculated fields, metrics, and relationships to understand intent, then generate SQL with exact DATABASE SCHEMA identifiers only.
 6. YOU MUST first read any WREN SQL IDENTIFIER CONTRACT and WREN RETRIEVED SEMANTIC CONTEXT block attached to each schema object. Use sql_table_name_use_exactly, sql_column_name_use_exactly, sql_column_names_use_exactly, relationship_constraints_use_exactly, and the following DDL declarations as executable grounding. Use semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier only to understand business meaning.
 7. If the user asks for fields that exist across multiple related schema objects, include those objects only when DATABASE SCHEMA shows the exact columns and relationship path needed to join them.
-8. Before finalizing the JSON response, YOU MUST perform a silent grounding check: every table, column, join key, filter field, grouping field, ordering field, and function in the SQL must be present in DATABASE SCHEMA or SQL FUNCTIONS. If a planned element is not grounded, omit that element or use the closest grounded expression.
-9. YOU MUST treat source database/schema/table names, physical datasource names, lineage names, comments, aliases, and display labels as semantic context only. Never use them as executable identifiers unless the exact same identifier appears in DATABASE SCHEMA.
-10. If an identifier, literal value, placeholder, or function appears only in SQL samples, failed SQL, descriptions, lineage, or error messages, it is not executable for this request; ignore those parts when generating executable SQL. Reasoning-plan identifiers are usable only when they exactly match DATABASE SCHEMA.
-11. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
+8. If the user asks for a result that is represented in multiple schema objects with compatible fields, include all relevant objects using independently valid SELECT branches combined with UNION ALL. Use joins only for relationship-backed row-level combinations.
+9. Before finalizing the JSON response, YOU MUST perform a silent grounding check: every table, column, join key, filter field, grouping field, ordering field, and function in the SQL must be present in DATABASE SCHEMA or SQL FUNCTIONS. If a planned element is not grounded, omit that element or use the closest grounded expression.
+10. YOU MUST treat source database/schema/table names, physical datasource names, lineage names, comments, aliases, and display labels as semantic context only. Never use them as executable identifiers unless the exact same identifier appears in DATABASE SCHEMA.
+11. If an identifier, literal value, placeholder, or function appears only in SQL samples, failed SQL, descriptions, lineage, or error messages, it is not executable for this request; ignore those parts when generating executable SQL. Reasoning-plan identifiers are usable only when they exactly match DATABASE SCHEMA.
+12. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {text_to_sql_rules}
 
