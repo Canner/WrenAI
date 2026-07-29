@@ -112,6 +112,22 @@ table_columns_selection_user_prompt_template = """
 
 
 def _build_metric_ddl(content: dict) -> str:
+    context = _format_semantic_context(
+        {
+            "object_type": "metric",
+            "executable_name": content["name"],
+            "semantic_role": "stable analytical aggregation interface",
+            "columns": [
+                {
+                    "executable_name": column["name"],
+                    "data_type": get_engine_supported_data_type(column["data_type"]),
+                    "semantic_metadata": column["comment"],
+                }
+                for column in content["columns"]
+                if column["data_type"].lower() != "unknown"
+            ],
+        }
+    )
     columns_ddl = [
         f"{column['comment']}{column['name']} {get_engine_supported_data_type(column['data_type'])}"
         for column in content["columns"]
@@ -120,16 +136,105 @@ def _build_metric_ddl(content: dict) -> str:
     ]
 
     return (
-        f"{content['comment']}CREATE TABLE {content['name']} (\n  "
+        f"{context}{content['comment']}CREATE TABLE {content['name']} (\n  "
         + ",\n  ".join(columns_ddl)
         + "\n);"
     )
 
 
 def _build_view_ddl(content: dict) -> str:
-    return (
-        f"{content['comment']}CREATE VIEW {content['name']}\nAS {content['statement']}"
+    context = _format_semantic_context(
+        {
+            "object_type": "view",
+            "executable_name": content["name"],
+            "semantic_role": "stable virtual table interface",
+            "definition_is_semantic_context": True,
+        }
     )
+    return (
+        f"{context}{content['comment']}CREATE VIEW {content['name']}\nAS {content['statement']}"
+    )
+
+
+def _format_semantic_context(context: dict) -> str:
+    return (
+        "/*\n"
+        "WREN RETRIEVED SEMANTIC CONTEXT\n"
+        f"{orjson.dumps(context).decode('utf-8')}\n"
+        "Only executable_name values in this retrieved context and identifiers declared in the following DDL are executable in Wren SQL. Semantic metadata explains meaning but is not an executable identifier.\n"
+        "*/\n"
+    )
+
+
+def _included_relationship_columns(content: dict, tables: Optional[set[str]]) -> set:
+    relationship_columns = {
+        column.get("column")
+        for column in content["columns"]
+        if column["type"] == "FOREIGN_KEY"
+        and (not tables or set(column.get("tables", [])).issubset(tables))
+    }
+    relationship_columns.discard(None)
+    return relationship_columns
+
+
+def _included_columns(
+    content: dict, columns: Optional[set[str]], tables: Optional[set[str]]
+) -> list[dict]:
+    relationship_columns = _included_relationship_columns(content, tables)
+    return [
+        column
+        for column in content["columns"]
+        if column["type"] == "COLUMN"
+        and (
+            not columns
+            or column["name"] in columns
+            or column["name"] in relationship_columns
+            or column["is_primary_key"]
+        )
+        and column["data_type"].lower() != "unknown"
+    ]
+
+
+def _included_relationships(content: dict, tables: Optional[set[str]]) -> list[dict]:
+    return [
+        column
+        for column in content["columns"]
+        if column["type"] == "FOREIGN_KEY"
+        and (not tables or set(column.get("tables", [])).issubset(tables))
+    ]
+
+
+def _build_table_retrieval_context(
+    content: dict, columns: Optional[set[str]] = None, tables: Optional[set[str]] = None
+) -> tuple[str, bool, bool]:
+    ddl, has_calculated_field, has_json_field = build_table_ddl(
+        content, columns=columns, tables=tables
+    )
+    context = _format_semantic_context(
+        {
+            "object_type": "model",
+            "executable_name": content["name"],
+            "semantic_metadata": content["comment"],
+            "columns": [
+                {
+                    "executable_name": column["name"],
+                    "data_type": get_engine_supported_data_type(column["data_type"]),
+                    "is_primary_key": column["is_primary_key"],
+                    "semantic_metadata": column["comment"],
+                }
+                for column in _included_columns(content, columns, tables)
+            ],
+            "relationships": [
+                {
+                    "semantic_metadata": relationship["comment"],
+                    "constraint": relationship["constraint"],
+                    "related_models": relationship.get("tables", []),
+                }
+                for relationship in _included_relationships(content, tables)
+            ],
+        }
+    )
+    return f"{context}{ddl}", has_calculated_field, has_json_field
 
 
 ## Start of Pipeline
@@ -334,7 +439,9 @@ def check_using_db_schemas_without_pruning(
 
     for table_schema in construct_db_schemas:
         if table_schema["type"] == "TABLE":
-            ddl, _has_calculated_field, _has_json_field = build_table_ddl(table_schema)
+            ddl, _has_calculated_field, _has_json_field = (
+                _build_table_retrieval_context(table_schema)
+            )
             retrieval_results.append(
                 {
                     "table_name": table_schema["name"],
@@ -397,7 +504,7 @@ def prompt(
 ) -> dict:
     if not check_using_db_schemas_without_pruning["db_schemas"]:
         db_schemas = [
-            build_table_ddl(construct_db_schema)[0]
+            _build_table_retrieval_context(construct_db_schema)[0]
             for construct_db_schema in construct_db_schemas
         ]
 
@@ -452,12 +559,14 @@ def construct_retrieval_results(
 
         for table_schema in construct_db_schemas:
             if table_schema["type"] == "TABLE" and table_schema["name"] in tables:
-                ddl, _has_calculated_field, _has_json_field = build_table_ddl(
-                    table_schema,
-                    columns=set(
-                        columns_and_tables_needed[table_schema["name"]]["columns"]
-                    ),
-                    tables=tables,
+                ddl, _has_calculated_field, _has_json_field = (
+                    _build_table_retrieval_context(
+                        table_schema,
+                        columns=set(
+                            columns_and_tables_needed[table_schema["name"]]["columns"]
+                        ),
+                        tables=tables,
+                    )
                 )
                 if _has_calculated_field:
                     has_calculated_field = True

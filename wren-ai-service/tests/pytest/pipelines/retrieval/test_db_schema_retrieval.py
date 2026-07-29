@@ -325,6 +325,10 @@ def test_check_using_db_schemas_without_pruning_keeps_context_when_within_window
         "activity",
         "account",
     ]
+    assert all(
+        "WREN RETRIEVED SEMANTIC CONTEXT" in schema["table_ddl"]
+        for schema in result["db_schemas"]
+    )
     assert result["tokens"] > 0
 
 

@@ -47,6 +47,8 @@ def test_get_text_to_sql_rules_uses_default_metadata_grounding_rules():
     assert "order by that alias" in rules
     assert "Interpret the user's intent" in rules
     assert "schema descriptions, aliases, display labels" in rules
+    assert "WREN RETRIEVED SEMANTIC CONTEXT" in rules
+    assert "Never generate placeholder identifiers" in rules
     assert "use all required related tables" in rules
     assert "silently check that each identifier and function" in rules
     assert "instead of inventing a replacement" in rules
@@ -99,6 +101,7 @@ def test_sql_generation_system_prompt_grounding_contract():
     assert "reasoning plan only as non-executable context" in prompt
     assert "include those objects only when DATABASE SCHEMA shows" in prompt
     assert "Use the exact supported syntax shown there" in prompt
+    assert "Use executable_name values and the following DDL declarations" in prompt
     assert "source database/schema/table names" in prompt
     assert "appears only in SQL samples, reasoning, failed SQL" in prompt
 
