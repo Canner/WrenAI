@@ -5,8 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from wren.genbi.providers.base import DeployError
 from wren.genbi.providers import vercel as vercel_mod
+from wren.genbi.providers.base import DeployError
 
 
 def _install_fake_requests(monkeypatch, response):
