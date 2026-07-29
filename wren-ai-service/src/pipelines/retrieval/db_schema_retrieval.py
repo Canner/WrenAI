@@ -265,13 +265,13 @@ def _included_relationships(content: dict, tables: Optional[set[str]]) -> list[d
     ]
 
 
-def _has_selected_executable_column(content: dict, columns: set[str]) -> bool:
-    return any(
-        column["type"] == "COLUMN"
-        and column["data_type"].lower() != "unknown"
-        and column["name"] in columns
+def _selected_columns_are_executable(content: dict, columns: set[str]) -> bool:
+    executable_columns = {
+        column["name"]
         for column in content["columns"]
-    )
+        if column["type"] == "COLUMN" and column["data_type"].lower() != "unknown"
+    }
+    return bool(columns) and columns.issubset(executable_columns)
 
 
 def _build_table_retrieval_context(
@@ -700,7 +700,9 @@ def construct_retrieval_results(
                 )
                 columns = (
                     selected_columns
-                    if _has_selected_executable_column(table_schema, selected_columns)
+                    if _selected_columns_are_executable(
+                        table_schema, selected_columns
+                    )
                     else None
                 )
                 ddl, _has_calculated_field, _has_json_field = (
