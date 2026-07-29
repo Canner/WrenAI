@@ -265,6 +265,15 @@ def _included_relationships(content: dict, tables: Optional[set[str]]) -> list[d
     ]
 
 
+def _has_selected_executable_column(content: dict, columns: set[str]) -> bool:
+    return any(
+        column["type"] == "COLUMN"
+        and column["data_type"].lower() != "unknown"
+        and column["name"] in columns
+        for column in content["columns"]
+    )
+
+
 def _build_table_retrieval_context(
     content: dict, columns: Optional[set[str]] = None, tables: Optional[set[str]] = None
 ) -> tuple[str, bool, bool]:
@@ -686,12 +695,18 @@ def construct_retrieval_results(
 
         for table_schema in construct_db_schemas:
             if table_schema["type"] == "TABLE" and table_schema["name"] in tables:
+                selected_columns = set(
+                    columns_and_tables_needed[table_schema["name"]]["columns"]
+                )
+                columns = (
+                    selected_columns
+                    if _has_selected_executable_column(table_schema, selected_columns)
+                    else None
+                )
                 ddl, _has_calculated_field, _has_json_field = (
                     _build_table_retrieval_context(
                         table_schema,
-                        columns=set(
-                            columns_and_tables_needed[table_schema["name"]]["columns"]
-                        ),
+                        columns=columns,
                         tables=tables,
                     )
                 )
