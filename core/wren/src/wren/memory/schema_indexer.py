@@ -40,7 +40,9 @@ def _as_list(value: object, field: str) -> list:
     if value is None:
         return []
     if not isinstance(value, list):
-        raise ValueError(f"manifest[{field!r}] must be a list, got {type(value).__name__}")
+        raise ValueError(
+            f"manifest[{field!r}] must be a list, got {type(value).__name__}"
+        )
     return value
 
 
