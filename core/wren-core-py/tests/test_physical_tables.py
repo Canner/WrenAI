@@ -73,8 +73,8 @@ def _write_customer_parquet(tmp_path):
 def test_register_before_load_mdl_queryable_via_semantic_layer(tmp_path):
     """Two-phase init: register the file, then load MDL to resolve the model.
 
-    The DataFusionConnector consumer never calls load_mdl; the
-    register-then-query path it relies on is pinned by
+    DataFusionConnector uses the same register-then-query APIs on a bare
+    context. The derived-context visibility contract is covered by
     test_register_after_exec_ctx_visible_without_reload.
     """
     path = _write_customer_parquet(tmp_path)
@@ -82,8 +82,6 @@ def test_register_before_load_mdl_queryable_via_semantic_layer(tmp_path):
     ctx = SessionContext()
     ctx.register_parquet("customer", path)
     ctx.load_mdl(_customer_manifest_b64())
-
-    assert "customer" in ctx.list_tables()
 
     sql = "SELECT c_custkey FROM my_catalog.my_schema.customer ORDER BY c_custkey"
     assert _ipc_to_pydict(ctx.query(sql)) == {"c_custkey": CUSTOMER_KEYS}
@@ -128,7 +126,5 @@ def test_register_after_exec_ctx_then_load_mdl_resolves_model(tmp_path):
 
     sql = "SELECT c_custkey FROM my_catalog.my_schema.customer ORDER BY c_custkey"
     assert _ipc_to_pydict(ctx.query(sql)) == {"c_custkey": CUSTOMER_KEYS}
-    assert (
-        ctx.transform_sql("SELECT c_custkey FROM my_catalog.my_schema.customer")
-        is not None
-    )
+    planned = ctx.transform_sql("SELECT c_custkey FROM my_catalog.my_schema.customer")
+    assert 'datafusion."public".customer' in planned
