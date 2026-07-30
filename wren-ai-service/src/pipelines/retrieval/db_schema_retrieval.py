@@ -374,14 +374,11 @@ async def dbschema_retrieval(
         table_retrieval.get("documents", [])
     )
     documents = []
-    if embedding:
+    if embedding and not table_names:
         documents = await _retrieve_semantic_schema_documents(
             embedding, project_id, dbschema_retriever
         )
-        table_names = _merge_names(
-            table_names,
-            _table_names_from_schema_documents(documents),
-        )
+        table_names = _table_names_from_schema_documents(documents)
 
     if table_names:
         retrieved_table_names = set()

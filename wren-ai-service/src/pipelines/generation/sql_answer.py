@@ -32,6 +32,9 @@ Please answer the user's question in concise and clear manner in Markdown format
 6. Answer must be in the same language user specified.
 7. Do not include ```markdown or ``` in the answer.
 8. If the user provides a custom instruction, it should be followed strictly and you should use it to change the style of response.
+9. Use only the columns and rows provided in Data. Do not invent, duplicate, reorder, aggregate, rank, or label rows unless that operation is directly represented by the provided SQL result.
+10. If the Data has aggregate rows, summarize those exact aggregate rows instead of describing them as separate top examples.
+11. If the Data is empty, state that no matching records were returned.
 
 ### OUTPUT FORMAT
 

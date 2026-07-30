@@ -19,6 +19,7 @@ from src.pipelines.generation.sql_correction import (
     get_sql_correction_system_prompt,
     sql_correction_user_prompt_template,
 )
+from src.pipelines.generation.sql_answer import sql_to_answer_system_prompt
 from src.pipelines.generation.sql_generation import sql_generation_user_prompt_template
 from src.pipelines.generation.sql_regeneration import get_sql_regeneration_system_prompt
 from src.pipelines.generation.sql_regeneration import sql_regeneration_user_prompt_template
@@ -302,6 +303,15 @@ def test_followup_sql_prompt_does_not_expect_previous_sql_context():
     assert "current retrieved DATABASE SCHEMA" in (
         text_to_sql_with_followup_user_prompt_template
     )
+
+
+def test_sql_answer_prompt_uses_only_returned_data_rows():
+    assert "Use only the columns and rows provided in Data" in sql_to_answer_system_prompt
+    assert "Do not invent, duplicate, reorder, aggregate, rank, or label rows" in (
+        sql_to_answer_system_prompt
+    )
+    assert "summarize those exact aggregate rows" in sql_to_answer_system_prompt
+    assert "If the Data is empty" in sql_to_answer_system_prompt
 
 
 def test_executable_prompt_templates_omit_untrusted_reasoning_and_sql_context():

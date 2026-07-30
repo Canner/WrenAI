@@ -398,6 +398,73 @@ async def test_dbschema_retrieval_uses_semantic_schema_hits_when_table_retrieval
     ]
 
 
+@pytest.mark.asyncio
+async def test_dbschema_retrieval_prefers_table_description_hits_over_schema_chunk_hits():
+    described_model = "described_dataset"
+
+    class Retriever:
+        def __init__(self):
+            self.calls = []
+
+        async def run(self, query_embedding, filters):
+            self.calls.append(
+                {
+                    "query_embedding": query_embedding,
+                    "filters": filters,
+                }
+            )
+
+            return {
+                "documents": [
+                    Document(
+                        content=str(
+                            {
+                                "type": "TABLE",
+                                "name": described_model,
+                                "comment": "",
+                                "columns": [],
+                                "properties": {},
+                                "primaryKey": "",
+                            }
+                        ),
+                        meta={"type": "TABLE_SCHEMA", "name": described_model},
+                    )
+                ]
+            }
+
+    retriever = Retriever()
+
+    documents = await dbschema_retrieval(
+        table_retrieval={
+            "documents": [
+                Document(
+                    content=str({"name": described_model}),
+                    meta={"type": "TABLE_DESCRIPTION", "name": described_model},
+                )
+            ]
+        },
+        project_id="project-1",
+        dbschema_retriever=retriever,
+        embedding={"embedding": [0.25]},
+    )
+
+    assert [call["query_embedding"] for call in retriever.calls] == [[]]
+    assert retriever.calls[0]["filters"] == {
+        "operator": "AND",
+        "conditions": [
+            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+            {
+                "operator": "OR",
+                "conditions": [
+                    {"field": "name", "operator": "==", "value": described_model},
+                ],
+            },
+            {"field": "project_id", "operator": "==", "value": "project-1"},
+        ],
+    }
+    assert [document.meta["name"] for document in documents] == [described_model]
+
+
 def test_check_using_db_schemas_without_pruning_triggers_legacy_column_pruning():
     class Encoding:
         def encode(self, value):
