@@ -916,6 +916,28 @@ def construct_instructions(
     return _instructions
 
 
+def construct_executable_identifier_catalog(
+    schema_manifest: dict[str, list[str]] | None,
+) -> str:
+    if not schema_manifest:
+        return ""
+
+    lines = [
+        "### EXECUTABLE WREN IDENTIFIER CATALOG ###",
+        "Use this catalog as the compact authoritative list of executable table and column identifiers for the generated SQL.",
+        "Copy identifiers exactly as written here. Do not derive, rebuild, or recombine table or column names from the user question or semantic descriptions.",
+    ]
+    for table_name, column_names in schema_manifest.items():
+        if not table_name:
+            continue
+        lines.append(f'Table: "{table_name}"')
+        if column_names:
+            lines.append("Columns:")
+            lines.extend(f'- "{column_name}"' for column_name in column_names)
+
+    return "\n".join(lines)
+
+
 def construct_ask_history_messages(
     histories: list[AskHistory] | list[dict],
 ) -> list[ChatMessage]:

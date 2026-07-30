@@ -15,6 +15,7 @@ from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
+    construct_executable_identifier_catalog,
     construct_instructions,
     get_text_to_sql_rules,
 )
@@ -65,6 +66,10 @@ sql_correction_user_prompt_template = """
 {% for document in documents %}
     {{ document }}
 {% endfor %}
+
+{% if executable_identifier_catalog %}
+{{ executable_identifier_catalog }}
+{% endif %}
 {% endif %}
 
 {% if sql_functions %}
@@ -117,10 +122,14 @@ def prompt(
     sql_generation_reasoning: str | None = None,
     instructions: list[dict] | None = None,
     sql_functions: list[SqlFunction] | None = None,
+    schema_manifest: dict[str, list[str]] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
+        executable_identifier_catalog=construct_executable_identifier_catalog(
+            schema_manifest
+        ),
         invalid_generation_result=invalid_generation_result,
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(

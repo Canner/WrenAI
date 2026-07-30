@@ -5,6 +5,7 @@ from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
     construct_ask_history_messages,
+    construct_executable_identifier_catalog,
     construct_instructions,
     get_json_field_instructions,
     get_metric_instructions,
@@ -434,6 +435,39 @@ def test_sql_generation_prompt_treats_identifiers_as_indivisible_strings():
     assert "Never splice, recombine, or transfer prefixes" in prompt
     assert "copy the entire identifier exactly as declared" in prompt
     assert "Do not rebuild it from the business meaning" in prompt
+
+
+def test_construct_executable_identifier_catalog_lists_manifest_identifiers():
+    catalog = construct_executable_identifier_catalog(
+        {"ObjectA": ["FieldA", "FieldB"], "ObjectB": ["FieldC"]}
+    )
+
+    assert "EXECUTABLE WREN IDENTIFIER CATALOG" in catalog
+    assert 'Table: "ObjectA"' in catalog
+    assert '- "FieldA"' in catalog
+    assert 'Table: "ObjectB"' in catalog
+    assert "Copy identifiers exactly as written here" in catalog
+
+
+def test_sql_generation_prompt_can_include_executable_identifier_catalog():
+    catalog = construct_executable_identifier_catalog({"ObjectA": ["FieldA"]})
+    prompt = PromptBuilder(template=sql_generation_user_prompt_template).run(
+        query="Question",
+        documents=["SCHEMA_CONTEXT"],
+        executable_identifier_catalog=catalog,
+        sql_generation_reasoning=None,
+        instructions=[],
+        calculated_field_instructions="",
+        metric_instructions="",
+        json_field_instructions="",
+        sql_samples=[],
+        sql_functions=[],
+    )["prompt"]
+
+    assert "SCHEMA_CONTEXT" in prompt
+    assert "EXECUTABLE WREN IDENTIFIER CATALOG" in prompt
+    assert 'Table: "ObjectA"' in prompt
+    assert '- "FieldA"' in prompt
 
 
 def test_sql_correction_prompt_includes_manifest_grounding_failure():

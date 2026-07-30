@@ -15,6 +15,7 @@ from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
     construct_ask_history_messages,
+    construct_executable_identifier_catalog,
     construct_instructions,
     get_calculated_field_instructions,
     get_json_field_instructions,
@@ -38,6 +39,10 @@ generate one SQL query to best answer the user's question.
 {% for document in documents %}
     {{ document }}
 {% endfor %}
+
+{% if executable_identifier_catalog %}
+{{ executable_identifier_catalog }}
+{% endif %}
 
 {% if calculated_field_instructions %}
 {{ calculated_field_instructions }}
@@ -99,10 +104,14 @@ def prompt(
     has_json_field: bool = False,
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
+    schema_manifest: dict[str, list[str]] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
+        executable_identifier_catalog=construct_executable_identifier_catalog(
+            schema_manifest
+        ),
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
