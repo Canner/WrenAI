@@ -99,6 +99,13 @@ The failed SQL is intentionally omitted so it cannot provide executable identifi
 ### DRY-RUN DIAGNOSTIC ###
 The dry-run diagnostic text is intentionally omitted because it may contain failed SQL, guessed identifiers, connector-specific syntax, source names, physical names, or invalid replacement candidates.
 
+{% if invalid_generation_result.get("type") == "MANIFEST_GROUNDING" %}
+### MANIFEST GROUNDING FAILURE ###
+The previous generated SQL was rejected before dry-run because it was not fully grounded in the retrieved Wren schema.
+{{ invalid_generation_result.get("error", "") }}
+Do not reuse rejected identifiers. Regenerate from the user question and the exact table and column identifiers in DATABASE SCHEMA only.
+{% endif %}
+
 Regenerate from the user question and current DATABASE SCHEMA only. Do not repair, preserve, or copy anything from the failed SQL or dry-run diagnostic.
 
 Return only the final JSON SQL response.
