@@ -456,6 +456,20 @@ def _import_trino():
         ) from e
 
 
+def _coerce_limit(limit: int | None) -> int | None:
+    """Validate and coerce a user-supplied ``limit`` to a non-negative ``int``.
+
+    ``int(limit)`` rejects strings like ``"5 OR 1=1"`` so the value can be
+    safely interpolated into SQL. Negative limits are also rejected.
+    """
+    if limit is None:
+        return None
+    coerced = int(limit)
+    if coerced < 0:
+        raise ValueError(f"limit must be non-negative, got {coerced}")
+    return coerced
+
+
 class TrinoConnector(ConnectorABC):
     """Native trino DB-API connector that bypasses ibis-project."""
 
@@ -482,6 +496,7 @@ class TrinoConnector(ConnectorABC):
         self._closed = False
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
+        limit = _coerce_limit(limit)
         trino = _import_trino()
 
         if limit is not None:
