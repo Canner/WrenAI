@@ -344,6 +344,14 @@ def _included_column_names(
     return [column["name"] for column in _included_columns(content, columns, tables)]
 
 
+def _executable_column_names(content: dict) -> list[str]:
+    return [
+        column["name"]
+        for column in content["columns"]
+        if column["type"] == "COLUMN" and column["data_type"].lower() != "unknown"
+    ]
+
+
 def _build_table_retrieval_context(
     content: dict,
     columns: Optional[set[str]] = None,
@@ -815,6 +823,9 @@ def construct_retrieval_results(
                         "table_ddl": ddl,
                         "column_names": _included_column_names(
                             table_schema, columns=columns, tables=tables
+                        ),
+                        "manifest_column_names": _executable_column_names(
+                            table_schema
                         ),
                     }
                 )

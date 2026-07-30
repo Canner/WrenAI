@@ -331,7 +331,10 @@ class AskService:
                 table_names = [document.get("table_name") for document in documents]
                 table_ddls = [document.get("table_ddl") for document in documents]
                 schema_manifest = {
-                    document.get("table_name"): document.get("column_names", [])
+                    document.get("table_name"): document.get(
+                        "manifest_column_names",
+                        document.get("column_names", []),
+                    )
                     for document in documents
                     if document.get("table_name")
                 }

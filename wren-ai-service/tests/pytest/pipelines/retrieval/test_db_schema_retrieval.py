@@ -706,6 +706,64 @@ def test_construct_retrieval_results_keeps_schema_when_pruner_mixes_known_and_un
     assert "columns:\n- stored_dimension\n- stored_measure" in table_ddl
 
 
+def test_construct_retrieval_results_uses_full_columns_for_grounding_manifest():
+    result = construct_retrieval_results(
+        check_using_db_schemas_without_pruning={},
+        filter_columns_in_tables={
+            "replies": [
+                """
+                {
+                    "results": [
+                        {
+                            "table_name": "modeled_dataset",
+                            "table_selection_reason": "Selected for the current request.",
+                            "table_contents": {
+                                "chain_of_thought_reasoning": ["Needed field."],
+                                "columns": ["stored_measure"]
+                            }
+                        }
+                    ]
+                }
+                """
+            ]
+        },
+        construct_db_schemas=[
+            {
+                "type": "TABLE",
+                "name": "modeled_dataset",
+                "comment": "",
+                "columns": [
+                    {
+                        "type": "COLUMN",
+                        "name": "stored_dimension",
+                        "data_type": "VARCHAR",
+                        "comment": "Semantic dimension label.",
+                        "is_primary_key": False,
+                    },
+                    {
+                        "type": "COLUMN",
+                        "name": "stored_measure",
+                        "data_type": "DOUBLE",
+                        "comment": "Semantic measure label.",
+                        "is_primary_key": False,
+                    },
+                ],
+                "properties": {},
+                "primaryKey": "",
+            }
+        ],
+        dbschema_retrieval=[],
+    )
+
+    retrieved = result["retrieval_results"][0]
+
+    assert retrieved["column_names"] == ["stored_measure"]
+    assert retrieved["manifest_column_names"] == [
+        "stored_dimension",
+        "stored_measure",
+    ]
+
+
 def test_check_using_db_schemas_without_pruning_keeps_context_when_within_window():
     class Encoding:
         def encode(self, value):
