@@ -238,6 +238,8 @@ def test_sql_generation_system_prompt_grounding_contract():
     assert "source database/schema/table names" in prompt
     assert "appears only in SQL samples, failed SQL" in prompt
     assert "retrieved schema does not ground the requested subject" in prompt
+    assert "If any planned SQL identifier cannot be copied exactly" in prompt
+    assert "Never create a table or column from the user's wording" in prompt
     assert "<SQL_QUERY_STRING>" not in prompt
 
 
@@ -296,6 +298,8 @@ def test_sql_reasoning_prompt_keeps_reasoning_non_executable():
     assert 'Do not use the words "assume", "assuming", "likely"' in prompt
     assert "retrieved metadata does not support that part" in prompt
     assert "Do not propose a replacement name" in prompt
+    assert "Do not write table names or column names from the user's wording" in prompt
+    assert "Do not include code blocks, inline SQL fragments" in prompt
     assert "<table_name>" not in prompt
     assert "<column_name>" not in prompt
 
