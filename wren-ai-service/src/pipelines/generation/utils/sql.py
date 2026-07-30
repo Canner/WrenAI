@@ -3,9 +3,19 @@ from typing import Any, Dict, List
 
 import aiohttp
 import orjson
+import sqlparse
 from haystack import component
 from haystack.dataclasses import ChatMessage
 from pydantic import BaseModel
+from sqlparse.sql import (
+    Function,
+    Identifier,
+    IdentifierList,
+    Parenthesis,
+    Statement,
+    TokenList,
+)
+from sqlparse.tokens import DML, Keyword, Name, Punctuation, Whitespace, Wildcard
 
 from src.core.engine import (
     Engine,
@@ -15,6 +25,470 @@ from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
+
+
+class SQLGroundingValidator:
+    def __init__(self, identifier_contracts: list[dict] | None = None):
+        self._tables = {
+            contract["table_name"]: (
+                set(contract["columns"])
+                if contract.get("columns") is not None
+                else None
+            )
+            for contract in identifier_contracts or []
+            if contract and contract.get("table_name")
+        }
+
+    def validate(self, sql: str) -> tuple[bool, str]:
+        if not self._tables:
+            return True, ""
+
+        try:
+            statements = sqlparse.parse(sql)
+        except Exception as exc:
+            return False, f"Unable to parse generated SQL for schema grounding: {exc}"
+
+        if not statements:
+            return False, "No SQL statement was generated."
+
+        for statement in statements:
+            context = _ValidationContext(schema_tables=self._tables)
+            valid, error = context.validate_statement(statement)
+            if not valid:
+                return False, error
+
+        return True, ""
+
+
+class _ValidationContext:
+    def __init__(
+        self,
+        schema_tables: dict[str, set[str] | None],
+        ctes: dict[str, set[str] | None] | None = None,
+    ):
+        self.schema_tables = schema_tables
+        self.ctes = ctes or {}
+
+    def validate_statement(self, statement: Statement | TokenList) -> tuple[bool, str]:
+        ctes = dict(self.ctes)
+        valid, error = self._collect_ctes(statement, ctes)
+        if not valid:
+            return False, error
+
+        scope: dict[str, set[str] | None] = {}
+        source_tokens: set[int] = set()
+        valid, error = self._collect_sources(statement, ctes, scope, source_tokens)
+        if not valid:
+            return False, error
+
+        output_columns = self._infer_select_output_columns(statement, scope)
+        return self._validate_expressions(
+            statement,
+            scope=scope,
+            source_tokens=source_tokens,
+            output_columns=output_columns,
+        )
+
+    def _collect_ctes(
+        self, statement: Statement | TokenList, ctes: dict[str, set[str] | None]
+    ) -> tuple[bool, str]:
+        tokens = _meaningful_tokens(statement)
+        if not tokens or not tokens[0].match(Keyword.CTE, "WITH"):
+            return True, ""
+
+        for token in tokens[1:]:
+            if token.ttype is DML and token.normalized == "SELECT":
+                break
+
+            identifiers = (
+                list(token.get_identifiers())
+                if isinstance(token, IdentifierList)
+                else [token]
+                if isinstance(token, Identifier)
+                else []
+            )
+            for identifier in identifiers:
+                cte_name = _identifier_name(identifier)
+                if not cte_name:
+                    continue
+                subquery = _subquery_from_identifier(identifier)
+                if subquery is None:
+                    continue
+                child_context = _ValidationContext(self.schema_tables, ctes=ctes)
+                valid, error = child_context.validate_statement(subquery)
+                if not valid:
+                    return False, error
+                ctes[cte_name] = child_context._infer_select_output_columns(
+                    subquery, child_context._collect_scope_for_inference(subquery, ctes)
+                )
+
+        return True, ""
+
+    def _collect_scope_for_inference(
+        self, statement: Statement | TokenList, ctes: dict[str, set[str] | None]
+    ) -> dict[str, set[str] | None]:
+        scope: dict[str, set[str] | None] = {}
+        self._collect_sources(statement, ctes, scope, set())
+        return scope
+
+    def _collect_sources(
+        self,
+        statement: Statement | TokenList,
+        ctes: dict[str, set[str] | None],
+        scope: dict[str, set[str] | None],
+        source_tokens: set[int],
+    ) -> tuple[bool, str]:
+        expect_source = False
+        for token in _meaningful_tokens(statement):
+            if token.ttype is DML and token.normalized == "SELECT":
+                expect_source = False
+                continue
+
+            if _starts_new_clause(token):
+                expect_source = False
+
+            if token.match(
+                Keyword,
+                (
+                    "FROM",
+                    "JOIN",
+                    "INNER JOIN",
+                    "LEFT JOIN",
+                    "LEFT OUTER JOIN",
+                    "RIGHT JOIN",
+                    "RIGHT OUTER JOIN",
+                    "FULL JOIN",
+                    "FULL OUTER JOIN",
+                    "CROSS JOIN",
+                ),
+            ):
+                expect_source = True
+                continue
+
+            if not expect_source:
+                continue
+
+            if isinstance(token, IdentifierList):
+                for identifier in token.get_identifiers():
+                    valid, error = self._add_source(identifier, ctes, scope)
+                    if not valid:
+                        return False, error
+                    source_tokens.add(id(identifier))
+                continue
+
+            if isinstance(token, Identifier):
+                valid, error = self._add_source(token, ctes, scope)
+                if not valid:
+                    return False, error
+                source_tokens.add(id(token))
+                continue
+
+            if isinstance(token, Parenthesis):
+                subquery = _statement_from_parenthesis(token)
+                if subquery is not None:
+                    child_context = _ValidationContext(self.schema_tables, ctes=ctes)
+                    valid, error = child_context.validate_statement(subquery)
+                    if not valid:
+                        return False, error
+                continue
+
+        return True, ""
+
+    def _add_source(
+        self,
+        identifier: Identifier,
+        ctes: dict[str, set[str] | None],
+        scope: dict[str, set[str] | None],
+    ) -> tuple[bool, str]:
+        alias = identifier.get_alias()
+        subquery = _subquery_from_identifier(identifier)
+        if subquery is not None:
+            child_context = _ValidationContext(self.schema_tables, ctes=ctes)
+            valid, error = child_context.validate_statement(subquery)
+            if not valid:
+                return False, error
+            if alias:
+                scope[alias] = child_context._infer_select_output_columns(
+                    subquery, child_context._collect_scope_for_inference(subquery, ctes)
+                )
+            return True, ""
+
+        table_name = identifier.get_real_name()
+        if not table_name:
+            return True, ""
+
+        if table_name in ctes:
+            columns = ctes[table_name]
+        elif table_name in self.schema_tables:
+            columns = self.schema_tables[table_name]
+        else:
+            return (
+                False,
+                "Generated SQL references a table that is not declared in the retrieved schema.",
+            )
+
+        scope[alias or table_name] = columns
+        scope[table_name] = columns
+        return True, ""
+
+    def _infer_select_output_columns(
+        self, statement: Statement | TokenList, scope: dict[str, set[str] | None]
+    ) -> set[str] | None:
+        columns: set[str] = set()
+        in_select = False
+
+        for token in _meaningful_tokens(statement):
+            if token.ttype is DML and token.normalized == "SELECT":
+                in_select = True
+                continue
+
+            if in_select and token.match(Keyword, "FROM"):
+                return columns
+
+            if not in_select:
+                continue
+
+            if token.ttype is Wildcard:
+                return None
+
+            identifiers = (
+                list(token.get_identifiers())
+                if isinstance(token, IdentifierList)
+                else [token]
+                if isinstance(token, Identifier)
+                else []
+            )
+            for identifier in identifiers:
+                if any(child.ttype is Wildcard for child in identifier.flatten()):
+                    return None
+                name = identifier.get_alias() or identifier.get_real_name()
+                if name:
+                    columns.add(name)
+
+        return columns
+
+    def _validate_expressions(
+        self,
+        token: TokenList,
+        scope: dict[str, set[str] | None],
+        source_tokens: set[int],
+        output_columns: set[str] | None,
+        in_order_by: bool = False,
+    ) -> tuple[bool, str]:
+        children = getattr(token, "tokens", [])
+        next_in_order_by = in_order_by
+
+        for child in children:
+            if child.is_whitespace or child.ttype in Whitespace:
+                continue
+
+            if id(child) in source_tokens:
+                continue
+
+            if child.match(Keyword, "ORDER BY"):
+                next_in_order_by = True
+                continue
+            if _starts_new_clause(child) and not child.match(Keyword, "ORDER BY"):
+                next_in_order_by = False
+
+            if isinstance(child, IdentifierList):
+                valid, error = self._validate_expressions(
+                    child, scope, source_tokens, output_columns, next_in_order_by
+                )
+                if not valid:
+                    return False, error
+                continue
+
+            if isinstance(child, Function):
+                valid, error = self._validate_function(
+                    child, scope, source_tokens, output_columns, next_in_order_by
+                )
+                if not valid:
+                    return False, error
+                continue
+
+            if isinstance(child, Identifier):
+                if any(isinstance(grandchild, Function) for grandchild in child.tokens):
+                    valid, error = self._validate_identifier_children(
+                        child, scope, source_tokens, output_columns, next_in_order_by
+                    )
+                    if not valid:
+                        return False, error
+                    continue
+
+                valid, error = self._validate_identifier(
+                    child, scope, output_columns, next_in_order_by
+                )
+                if not valid:
+                    return False, error
+                valid, error = self._validate_identifier_children(
+                    child, scope, source_tokens, output_columns, next_in_order_by
+                )
+                if not valid:
+                    return False, error
+                continue
+
+            if isinstance(child, Parenthesis):
+                subquery = _statement_from_parenthesis(child)
+                if subquery is not None:
+                    valid, error = _ValidationContext(
+                        self.schema_tables, self.ctes
+                    ).validate_statement(subquery)
+                    if not valid:
+                        return False, error
+                    continue
+
+            if isinstance(child, TokenList):
+                valid, error = self._validate_expressions(
+                    child, scope, source_tokens, output_columns, next_in_order_by
+                )
+                if not valid:
+                    return False, error
+                continue
+
+            if child.ttype is Name:
+                valid, error = self._validate_unqualified_column(
+                    str(child), scope, output_columns, next_in_order_by
+                )
+                if not valid:
+                    return False, error
+
+        return True, ""
+
+    def _validate_function(
+        self,
+        function: Function,
+        scope: dict[str, set[str] | None],
+        source_tokens: set[int],
+        output_columns: set[str] | None,
+        in_order_by: bool,
+    ) -> tuple[bool, str]:
+        for child in function.tokens:
+            if isinstance(child, Parenthesis):
+                return self._validate_expressions(
+                    child, scope, source_tokens, output_columns, in_order_by
+                )
+        return True, ""
+
+    def _validate_identifier_children(
+        self,
+        identifier: Identifier,
+        scope: dict[str, set[str] | None],
+        source_tokens: set[int],
+        output_columns: set[str] | None,
+        in_order_by: bool,
+    ) -> tuple[bool, str]:
+        for child in identifier.tokens:
+            if isinstance(child, Function):
+                return self._validate_function(
+                    child, scope, source_tokens, output_columns, in_order_by
+                )
+        return True, ""
+
+    def _validate_identifier(
+        self,
+        identifier: Identifier,
+        scope: dict[str, set[str] | None],
+        output_columns: set[str] | None,
+        in_order_by: bool,
+    ) -> tuple[bool, str]:
+        parent_name = identifier.get_parent_name()
+        column_name = identifier.get_real_name()
+
+        if not column_name:
+            return True, ""
+
+        if parent_name:
+            if parent_name not in scope:
+                return (
+                    False,
+                    "Generated SQL references a table alias that is not declared in the query scope.",
+                )
+            columns = scope[parent_name]
+            if columns is None or column_name in columns:
+                return True, ""
+            return (
+                False,
+                "Generated SQL references a column that is not declared in the retrieved schema.",
+            )
+
+        return self._validate_unqualified_column(
+            column_name, scope, output_columns, in_order_by
+        )
+
+    def _validate_unqualified_column(
+        self,
+        column_name: str,
+        scope: dict[str, set[str] | None],
+        output_columns: set[str] | None,
+        in_order_by: bool,
+    ) -> tuple[bool, str]:
+        if in_order_by and output_columns is not None and column_name in output_columns:
+            return True, ""
+
+        if column_name in scope:
+            return True, ""
+
+        for columns in scope.values():
+            if columns is None or column_name in columns:
+                return True, ""
+
+        return (
+            False,
+            "Generated SQL references a column that is not declared in the retrieved schema.",
+        )
+
+
+def _meaningful_tokens(token_list: TokenList) -> list:
+    return [
+        token
+        for token in token_list.tokens
+        if not token.is_whitespace
+        and token.ttype not in Whitespace
+        and token.ttype not in Punctuation
+    ]
+
+
+def _identifier_name(identifier: Identifier) -> str | None:
+    return identifier.get_real_name() or identifier.get_name()
+
+
+def _subquery_from_identifier(identifier: Identifier) -> Statement | None:
+    for token in identifier.tokens:
+        if isinstance(token, Parenthesis):
+            return _statement_from_parenthesis(token)
+    return None
+
+
+def _statement_from_parenthesis(parenthesis: Parenthesis) -> Statement | None:
+    inner_sql = str(parenthesis)[1:-1].strip()
+    if not inner_sql:
+        return None
+
+    parsed = sqlparse.parse(inner_sql)
+    if parsed and any(
+        token.ttype is DML and token.normalized == "SELECT"
+        for token in _meaningful_tokens(parsed[0])
+    ):
+        return parsed[0]
+    return None
+
+
+def _starts_new_clause(token) -> bool:
+    return token.match(
+        Keyword,
+        (
+            "WHERE",
+            "GROUP BY",
+            "HAVING",
+            "ORDER BY",
+            "LIMIT",
+            "UNION",
+            "UNION ALL",
+            "EXCEPT",
+            "INTERSECT",
+        ),
+    )
 
 
 @component
@@ -34,6 +508,7 @@ class SQLGenPostProcessor:
         allow_dry_plan_fallback: bool = True,
         data_source: str = "",
         allow_data_preview: bool = False,
+        identifier_contracts: list[dict] | None = None,
     ) -> dict:
         try:
             cleaned_generation_result = clean_generation_result(replies[0])
@@ -54,6 +529,7 @@ class SQLGenPostProcessor:
                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                 data_source=data_source,
                 allow_data_preview=allow_data_preview,
+                identifier_contracts=identifier_contracts,
             )
 
             return {
@@ -76,6 +552,7 @@ class SQLGenPostProcessor:
         allow_dry_plan_fallback: bool = True,
         data_source: str = "",
         allow_data_preview: bool = False,
+        identifier_contracts: list[dict] | None = None,
     ) -> Dict[str, str]:
         valid_generation_result = {}
         invalid_generation_result = {}
@@ -87,6 +564,18 @@ class SQLGenPostProcessor:
                 "original_sql": "",
                 "type": "NO_RELEVANT_SQL",
                 "error": "No grounded SQL was generated from the current schema.",
+                "correlation_id": "",
+            }
+
+        is_grounded, grounding_error = SQLGroundingValidator(
+            identifier_contracts
+        ).validate(generation_result)
+        if not is_grounded:
+            return valid_generation_result, {
+                "sql": generation_result,
+                "original_sql": generation_result,
+                "type": "SCHEMA_GROUNDING",
+                "error": grounding_error,
                 "correlation_id": "",
             }
 

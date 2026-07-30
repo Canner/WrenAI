@@ -4,6 +4,7 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
+    SQLGroundingValidator,
     construct_ask_history_messages,
     construct_instructions,
     get_json_field_instructions,
@@ -75,6 +76,99 @@ class _FailingDryRunAfterDryPlanEngine:
 
     async def execute_sql(self, *args, **kwargs):
         return False, {}, {"error_message": "dry run failed"}
+
+
+def test_sql_grounding_validator_accepts_retrieved_schema_identifiers():
+    contracts = [
+        {
+            "table_name": "retrieved_model",
+            "columns": ["retrieved_dimension", "retrieved_measure"],
+        }
+    ]
+
+    valid, error = SQLGroundingValidator(contracts).validate(
+        'SELECT t."retrieved_dimension", SUM(t."retrieved_measure") AS result_label '
+        'FROM "retrieved_model" t '
+        'WHERE t."retrieved_dimension" = \'filter_value\' '
+        'GROUP BY t."retrieved_dimension" '
+        "ORDER BY result_label"
+    )
+
+    assert valid is True
+    assert error == ""
+
+
+def test_sql_grounding_validator_rejects_unretrieved_table():
+    contracts = [
+        {
+            "table_name": "retrieved_model",
+            "columns": ["retrieved_column"],
+        }
+    ]
+
+    valid, error = SQLGroundingValidator(contracts).validate(
+        'SELECT * FROM "unretrieved_model" WHERE "unretrieved_column" = \'filter_value\''
+    )
+
+    assert valid is False
+    assert "table that is not declared" in error
+
+
+def test_sql_grounding_validator_rejects_unretrieved_column():
+    contracts = [
+        {
+            "table_name": "retrieved_model",
+            "columns": ["retrieved_column"],
+        }
+    ]
+
+    valid, error = SQLGroundingValidator(contracts).validate(
+        'SELECT * FROM "retrieved_model" WHERE "unretrieved_column" = \'filter_value\''
+    )
+
+    assert valid is False
+    assert "column that is not declared" in error
+
+
+def test_sql_grounding_validator_handles_cte_output_columns():
+    contracts = [
+        {
+            "table_name": "retrieved_model",
+            "columns": ["retrieved_column"],
+        }
+    ]
+
+    valid, error = SQLGroundingValidator(contracts).validate(
+        'WITH scoped_result AS (SELECT "retrieved_column" AS result_column FROM "retrieved_model") '
+        "SELECT * FROM scoped_result WHERE result_column = 'filter_value'"
+    )
+
+    assert valid is True
+    assert error == ""
+
+
+@pytest.mark.asyncio
+async def test_sql_postprocessor_rejects_ungrounded_sql_before_engine_validation():
+    engine = _DryPlanEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        replies=[
+            '{"sql": "SELECT * FROM \\"unretrieved_model\\" WHERE \\"unretrieved_column\\" = \'filter_value\'"}'
+        ],
+        use_dry_plan=True,
+        data_source="source",
+        identifier_contracts=[
+            {
+                "table_name": "retrieved_model",
+                "columns": ["retrieved_column"],
+            }
+        ],
+    )
+
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "SCHEMA_GROUNDING"
+    assert engine.dry_plan_calls == []
+    assert engine.execute_sql_calls == []
 
 
 @pytest.mark.asyncio

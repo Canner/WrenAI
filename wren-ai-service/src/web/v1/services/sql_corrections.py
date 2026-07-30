@@ -111,6 +111,11 @@ class SqlCorrectionService:
                 .get("retrieval_results", [])
             )
             table_ddls = [document.get("table_ddl") for document in documents]
+            identifier_contracts = [
+                document.get("identifier_contract")
+                for document in documents
+                if document.get("identifier_contract")
+            ]
 
             res = await self._pipelines["sql_correction"].run(
                 contexts=table_ddls,
@@ -119,6 +124,7 @@ class SqlCorrectionService:
                 use_dry_plan=use_dry_plan,
                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                 sql_knowledge=sql_knowledge,
+                identifier_contracts=identifier_contracts,
             )
 
             post_process = res["post_process"]
