@@ -23,6 +23,40 @@ def manifest_hash(manifest: dict) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
+def _as_list(value: object, kind: str, name: str, field: str) -> list:
+    """Return ``value`` as a list, raising on any non-list, non-null value.
+
+    Nested collection fields (columns, measures, dimensions, timeDimensions)
+    use this helper. Only a missing/null value is treated as an empty list;
+    an empty list stays ``[]`` via the ``isinstance`` check below. Any other
+    non-list value — truthy (``columns: 42``) or falsy (``columns: {}``,
+    ``columns: 0``, ``columns: ""``) — is a structural error in the manifest,
+    so we raise ``ValueError`` rather than silently indexing a model with zero
+    columns. This matches :func:`_iter_section` for top-level sections and the
+    same-file ``_relationship_models`` policy (see #2605, now on ``main``): one
+    rule across the module — ``None`` passes, everything non-list raises. Nested
+    fields name the offending entity (``model 'orders': 'columns' must be a
+    list, got dict``) so the diagnosis points at one row rather than every model
+    in the project; top-level sections keep the ``manifest['models']`` form.
+    Cubes are not required to have a name, so an empty name falls back to a
+    ``cube (unnamed): 'measures'`` form rather than a top-level
+    ``manifest['measures']`` form: ``measures`` is never a top-level manifest
+    key, so pointing there would send the reader hunting for something that
+    does not exist. ``(unnamed)`` keeps the message truthful about where the
+    field lives while signalling that the entity could not be identified. The
+    CLI already catches ``ValueError`` and exits with ``Malformed manifest:
+    {e}``.
+    """
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        where = (
+            f"{kind} {name!r}: {field!r}" if name else f"{kind} (unnamed): {field!r}"
+        )
+        raise ValueError(f"{where} must be a list, got {type(value).__name__}")
+    return value
+
+
 # ~30K chars ≈ ~8K tokens.  Below this threshold the full plain-text
 # description fits comfortably in a single LLM context window and
 # outperforms embedding search because the LLM sees the complete
@@ -109,7 +143,7 @@ def _describe_model(model: dict, lines: list[str]) -> None:
     if data_scope:
         lines.append(f"  Data scope: {data_scope}")
 
-    cols = model.get("columns", []) or []
+    cols = _as_list(model.get("columns"), "model", name, "columns")
     described = [c for c in cols if isinstance(c, dict) and c.get("name")]
     if described:
         lines.append("  Columns:")
@@ -197,7 +231,11 @@ def _describe_cube(cube: dict, lines: list[str]) -> None:
     name = cube.get("name", "")
     base = cube.get("baseObject", "?")
     lines.append(f"### Cube: {name} (base: {base})")
-    measures = [m for m in (cube.get("measures") or []) if isinstance(m, dict)]
+    measures = [
+        m
+        for m in (_as_list(cube.get("measures"), "cube", name, "measures"))
+        if isinstance(m, dict)
+    ]
     if measures:
         lines.append("  Measures:")
         for m in measures:
@@ -210,7 +248,11 @@ def _describe_cube(cube: dict, lines: list[str]) -> None:
             if expr:
                 line += f": {expr}"
             lines.append(line)
-    dims = [d for d in (cube.get("dimensions") or []) if isinstance(d, dict)]
+    dims = [
+        d
+        for d in (_as_list(cube.get("dimensions"), "cube", name, "dimensions"))
+        if isinstance(d, dict)
+    ]
     if dims:
         lines.append("  Dimensions:")
         for d in dims:
@@ -223,7 +265,11 @@ def _describe_cube(cube: dict, lines: list[str]) -> None:
             if expr and expr != dname:
                 line += f": {expr}"
             lines.append(line)
-    tdims = [td for td in (cube.get("timeDimensions") or []) if isinstance(td, dict)]
+    tdims = [
+        td
+        for td in (_as_list(cube.get("timeDimensions"), "cube", name, "timeDimensions"))
+        if isinstance(td, dict)
+    ]
     if tdims:
         lines.append("  Time dimensions:")
         for td in tdims:
@@ -272,7 +318,7 @@ def extract_schema_items(manifest: dict) -> list[dict]:
         if not isinstance(model, dict) or not model.get("name"):
             continue
         items.append(_model_record(model, mdl_h, now))
-        for col in model.get("columns") or []:
+        for col in _as_list(model.get("columns"), "model", model["name"], "columns"):
             if not isinstance(col, dict) or not col.get("name"):
                 continue
             items.append(_column_record(col, model["name"], mdl_h, now))
@@ -290,13 +336,15 @@ def extract_schema_items(manifest: dict) -> list[dict]:
             continue
         items.append(_cube_record(cube, mdl_h, now))
         cube_name = cube.get("name", "")
-        for measure in cube.get("measures", []) or []:
+        for measure in _as_list(cube.get("measures"), "cube", cube_name, "measures"):
             if isinstance(measure, dict):
                 items.append(_measure_record(measure, cube_name, mdl_h, now))
-        for dim in cube.get("dimensions", []) or []:
+        for dim in _as_list(cube.get("dimensions"), "cube", cube_name, "dimensions"):
             if isinstance(dim, dict):
                 items.append(_cube_dimension_record(dim, cube_name, mdl_h, now))
-        for tdim in cube.get("timeDimensions", []) or []:
+        for tdim in _as_list(
+            cube.get("timeDimensions"), "cube", cube_name, "timeDimensions"
+        ):
             if isinstance(tdim, dict):
                 items.append(_time_dimension_record(tdim, cube_name, mdl_h, now))
 
@@ -309,7 +357,9 @@ def extract_schema_items(manifest: dict) -> list[dict]:
 def _model_record(model: dict, mdl_h: str, now: datetime) -> dict:
     name = model["name"]
     cols = [
-        c for c in (model.get("columns") or []) if isinstance(c, dict) and c.get("name")
+        c
+        for c in (_as_list(model.get("columns"), "model", name, "columns"))
+        if isinstance(c, dict) and c.get("name")
     ]
     col_summaries = ", ".join(f"{c['name']} ({c.get('type', '?')})" for c in cols[:20])
     pk = model.get("primaryKey") or ""
@@ -439,14 +489,18 @@ def _cube_record(cube: dict, mdl_h: str, now: datetime) -> dict:
     name = cube.get("name", "")
     base = cube.get("baseObject", "?")
     measures = ", ".join(
-        m.get("name", "") for m in (cube.get("measures") or []) if isinstance(m, dict)
+        m.get("name", "")
+        for m in (_as_list(cube.get("measures"), "cube", name, "measures"))
+        if isinstance(m, dict)
     )
     dims = ", ".join(
-        d.get("name", "") for d in (cube.get("dimensions") or []) if isinstance(d, dict)
+        d.get("name", "")
+        for d in (_as_list(cube.get("dimensions"), "cube", name, "dimensions"))
+        if isinstance(d, dict)
     )
     time_dims = ", ".join(
         td.get("name", "")
-        for td in (cube.get("timeDimensions") or [])
+        for td in (_as_list(cube.get("timeDimensions"), "cube", name, "timeDimensions"))
         if isinstance(td, dict)
     )
 
