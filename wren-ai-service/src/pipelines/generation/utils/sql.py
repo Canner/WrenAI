@@ -8,7 +8,7 @@ import sqlparse
 from haystack import component
 from haystack.dataclasses import ChatMessage
 from pydantic import BaseModel
-from sqlparse.sql import Function, Identifier, IdentifierList, Parenthesis, TokenList
+from sqlparse.sql import Function, Identifier, IdentifierList, Parenthesis, TokenList, Where
 from sqlparse.tokens import DML, Keyword, Whitespace
 
 from src.core.engine import (
@@ -83,6 +83,9 @@ def _is_from_or_join_keyword(token) -> bool:
 
 
 def _is_clause_boundary(token) -> bool:
+    if isinstance(token, Where):
+        return True
+
     keyword = _keyword_value(token)
     return keyword in _CLAUSE_BOUNDARY_KEYWORDS or keyword.endswith(" JOIN")
 
@@ -317,7 +320,8 @@ def _validate_token_columns(
 
     if isinstance(token, IdentifierList):
         for identifier in token.get_identifiers():
-            _validate_identifier_columns(identifier, scope, manifest, issues)
+            if isinstance(identifier, Identifier):
+                _validate_identifier_columns(identifier, scope, manifest, issues)
         return
 
     if isinstance(token, Identifier):

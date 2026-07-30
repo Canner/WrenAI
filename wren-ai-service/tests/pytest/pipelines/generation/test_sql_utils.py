@@ -153,6 +153,50 @@ async def test_sql_postprocessor_rejects_column_outside_retrieved_manifest():
 
 
 @pytest.mark.asyncio
+async def test_sql_postprocessor_rejects_filter_column_outside_retrieved_manifest():
+    engine = _DryPlanEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        replies=[
+            (
+                '{"sql": "SELECT * FROM \\"RetrievedObject\\" '
+                'WHERE \\"UnretrievedDate\\" >= CURRENT_DATE"}'
+            )
+        ],
+        use_dry_plan=True,
+        data_source="source",
+        schema_manifest={"RetrievedObject": ["AvailableField"]},
+    )
+
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "MANIFEST_GROUNDING"
+    assert engine.dry_plan_calls == []
+    assert engine.execute_sql_calls == []
+
+
+@pytest.mark.asyncio
+async def test_sql_postprocessor_rejects_function_argument_column_outside_manifest():
+    engine = _DryPlanEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        replies=[
+            (
+                '{"sql": "SELECT * FROM \\"RetrievedObject\\" '
+                "WHERE DATE_TRUNC('month', \\\"UnretrievedDate\\\") = CURRENT_DATE\"}"
+            )
+        ],
+        use_dry_plan=True,
+        data_source="source",
+        schema_manifest={"RetrievedObject": ["AvailableField"]},
+    )
+
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "MANIFEST_GROUNDING"
+    assert engine.dry_plan_calls == []
+    assert engine.execute_sql_calls == []
+
+
+@pytest.mark.asyncio
 async def test_sql_postprocessor_allows_exact_retrieved_manifest_identifiers():
     engine = _DryPlanEngine()
 
