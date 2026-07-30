@@ -105,6 +105,7 @@ class AskFeedbackService:
         error_message = None
         invalid_sql = None
         sql_knowledge = None
+        schema_manifest = {}
         allow_sql_knowledge_retrieval = self._allow_sql_knowledge_retrieval
 
         try:
@@ -161,6 +162,11 @@ class AskFeedbackService:
                 has_json_field = _retrieval_result.get("has_json_field", False)
                 documents = _retrieval_result.get("retrieval_results", [])
                 table_ddls = [document.get("table_ddl") for document in documents]
+                schema_manifest = {
+                    document.get("table_name"): document.get("column_names", [])
+                    for document in documents
+                    if document.get("table_name")
+                }
                 sql_samples = sql_samples_task["formatted_output"].get("documents", [])
                 instructions = instructions_task["formatted_output"].get(
                     "documents", []
@@ -187,6 +193,7 @@ class AskFeedbackService:
                     has_json_field=has_json_field,
                     sql_functions=sql_functions,
                     sql_knowledge=sql_knowledge,
+                    schema_manifest=schema_manifest,
                 )
 
                 if sql_valid_result := text_to_sql_generation_results["post_process"][
@@ -251,6 +258,7 @@ class AskFeedbackService:
                             project_id=ask_feedback_request.project_id,
                             sql_functions=sql_functions,
                             sql_knowledge=sql_knowledge,
+                            schema_manifest=schema_manifest,
                         )
 
                         if valid_generation_result := sql_correction_results[

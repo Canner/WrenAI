@@ -118,6 +118,90 @@ async def test_sql_postprocessor_rejects_null_sql_generation_result():
     assert result["invalid_generation_result"]["sql"] == ""
 
 
+@pytest.mark.asyncio
+async def test_sql_postprocessor_rejects_table_outside_retrieved_manifest():
+    engine = _DryPlanEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        replies=['{"sql": "SELECT \\"AvailableField\\" FROM \\"UnretrievedObject\\""}'],
+        use_dry_plan=True,
+        data_source="source",
+        schema_manifest={"RetrievedObject": ["AvailableField"]},
+    )
+
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "MANIFEST_GROUNDING"
+    assert engine.dry_plan_calls == []
+    assert engine.execute_sql_calls == []
+
+
+@pytest.mark.asyncio
+async def test_sql_postprocessor_rejects_column_outside_retrieved_manifest():
+    engine = _DryPlanEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        replies=['{"sql": "SELECT \\"UnretrievedField\\" FROM \\"RetrievedObject\\""}'],
+        use_dry_plan=True,
+        data_source="source",
+        schema_manifest={"RetrievedObject": ["AvailableField"]},
+    )
+
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "MANIFEST_GROUNDING"
+    assert engine.dry_plan_calls == []
+    assert engine.execute_sql_calls == []
+
+
+@pytest.mark.asyncio
+async def test_sql_postprocessor_allows_exact_retrieved_manifest_identifiers():
+    engine = _DryPlanEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        replies=[
+            (
+                '{"sql": "SELECT SUM(\\"AvailableField\\") AS \\"TotalField\\" '
+                'FROM \\"RetrievedObject\\""}'
+            )
+        ],
+        use_dry_plan=True,
+        data_source="source",
+        schema_manifest={"RetrievedObject": ["AvailableField"]},
+    )
+
+    assert result["valid_generation_result"]["sql"] == (
+        'SELECT SUM("AvailableField") AS "TotalField" FROM "RetrievedObject"'
+    )
+    assert len(engine.dry_plan_calls) == 1
+    assert len(engine.execute_sql_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_sql_postprocessor_validates_join_predicate_columns():
+    engine = _DryPlanEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        replies=[
+            (
+                '{"sql": "SELECT a.\\"AvailableField\\" FROM \\"RetrievedObject\\" a '
+                'JOIN \\"RelatedObject\\" b ON a.\\"JoinField\\" = b.\\"JoinField\\""}'
+            )
+        ],
+        use_dry_plan=True,
+        data_source="source",
+        schema_manifest={
+            "RetrievedObject": ["AvailableField", "JoinField"],
+            "RelatedObject": ["JoinField"],
+        },
+    )
+
+    assert result["valid_generation_result"]["sql"] == (
+        'SELECT a."AvailableField" FROM "RetrievedObject" a JOIN '
+        '"RelatedObject" b ON a."JoinField" = b."JoinField"'
+    )
+    assert len(engine.dry_plan_calls) == 1
+    assert len(engine.execute_sql_calls) == 1
+
+
 def test_construct_instructions_uses_instruction_text():
     assert construct_instructions(
         [{"instruction": "First rule."}, {"instruction": "Second rule."}]

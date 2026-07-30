@@ -338,6 +338,12 @@ def _selected_columns_are_executable(content: dict, columns: set[str]) -> bool:
     return bool(columns) and columns.issubset(executable_columns)
 
 
+def _included_column_names(
+    content: dict, columns: Optional[set[str]] = None, tables: Optional[set[str]] = None
+) -> list[str]:
+    return [column["name"] for column in _included_columns(content, columns, tables)]
+
+
 def _build_table_retrieval_context(
     content: dict,
     columns: Optional[set[str]] = None,
@@ -655,6 +661,7 @@ def check_using_db_schemas_without_pruning(
                 {
                     "table_name": table_schema["name"],
                     "table_ddl": ddl,
+                    "column_names": _included_column_names(table_schema),
                 }
             )
             if _has_calculated_field:
@@ -673,6 +680,11 @@ def check_using_db_schemas_without_pruning(
                         content,
                         include_semantic_context=False,
                     ),
+                    "column_names": [
+                        column["name"]
+                        for column in content["columns"]
+                        if column["data_type"].lower() != "unknown"
+                    ],
                 }
             )
             has_metric = True
@@ -684,6 +696,12 @@ def check_using_db_schemas_without_pruning(
                         content,
                         include_semantic_context=False,
                     ),
+                    "column_names": [
+                        column["name"]
+                        for column in content.get("columns", [])
+                        if column.get("name")
+                        and column.get("data_type", "").lower() != "unknown"
+                    ],
                 }
             )
 
@@ -795,6 +813,9 @@ def construct_retrieval_results(
                     {
                         "table_name": table_schema["name"],
                         "table_ddl": ddl,
+                        "column_names": _included_column_names(
+                            table_schema, columns=columns, tables=tables
+                        ),
                     }
                 )
 
@@ -809,6 +830,11 @@ def construct_retrieval_results(
                             content,
                             include_semantic_context=False,
                         ),
+                        "column_names": [
+                            column["name"]
+                            for column in content["columns"]
+                            if column["data_type"].lower() != "unknown"
+                        ],
                     }
                 )
                 has_metric = True
@@ -820,6 +846,12 @@ def construct_retrieval_results(
                             content,
                             include_semantic_context=False,
                         ),
+                        "column_names": [
+                            column["name"]
+                            for column in content.get("columns", [])
+                            if column.get("name")
+                            and column.get("data_type", "").lower() != "unknown"
+                        ],
                     }
                 )
 

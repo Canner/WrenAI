@@ -1,11 +1,15 @@
 import logging
+from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 import aiohttp
 import orjson
+import sqlparse
 from haystack import component
 from haystack.dataclasses import ChatMessage
 from pydantic import BaseModel
+from sqlparse.sql import Function, Identifier, IdentifierList, Parenthesis, TokenList
+from sqlparse.tokens import DML, Keyword, Whitespace
 
 from src.core.engine import (
     Engine,
@@ -15,6 +19,380 @@ from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
+
+
+@dataclass
+class ManifestGroundingResult:
+    is_grounded: bool
+    error: str = ""
+
+
+@dataclass
+class _SqlScope:
+    table_aliases: dict[str, str] = field(default_factory=dict)
+    cte_names: set[str] = field(default_factory=set)
+    derived_aliases: set[str] = field(default_factory=set)
+    output_aliases: set[str] = field(default_factory=set)
+
+
+_CLAUSE_BOUNDARY_KEYWORDS = {
+    "ON",
+    "JOIN",
+    "WHERE",
+    "GROUP BY",
+    "HAVING",
+    "ORDER BY",
+    "LIMIT",
+    "UNION",
+    "UNION ALL",
+    "EXCEPT",
+    "INTERSECT",
+    "QUALIFY",
+    "WINDOW",
+}
+
+
+def _manifest_table_columns(
+    schema_manifest: dict[str, list[str]] | None,
+) -> dict[str, set[str]]:
+    if not schema_manifest:
+        return {}
+
+    return {
+        table_name: set(column_names or [])
+        for table_name, column_names in schema_manifest.items()
+        if table_name
+    }
+
+
+def _non_whitespace_tokens(token_list: TokenList) -> list:
+    return [
+        token
+        for token in token_list.tokens
+        if not token.is_whitespace and token.ttype is not Whitespace
+    ]
+
+
+def _keyword_value(token) -> str:
+    return token.normalized if token.ttype in Keyword else ""
+
+
+def _is_from_or_join_keyword(token) -> bool:
+    keyword = _keyword_value(token)
+    return keyword in {"FROM", "JOIN"} or keyword.endswith(" JOIN")
+
+
+def _is_clause_boundary(token) -> bool:
+    keyword = _keyword_value(token)
+    return keyword in _CLAUSE_BOUNDARY_KEYWORDS or keyword.endswith(" JOIN")
+
+
+def _identifier_name(identifier: Identifier | Function | None) -> str | None:
+    if identifier is None:
+        return None
+    return identifier.get_real_name() or identifier.get_name()
+
+
+def _select_parenthesis(parenthesis: Parenthesis):
+    for token in parenthesis.tokens:
+        if isinstance(token, TokenList):
+            for child in token.flatten():
+                if child.ttype is DML and child.normalized == "SELECT":
+                    return token
+    return None
+
+
+def _identifier_table_name(identifier: Identifier, manifest_tables: set[str]) -> str | None:
+    name = _identifier_name(identifier)
+    if name in manifest_tables:
+        return name
+
+    value_tokens = []
+    for token in identifier.tokens:
+        if token.is_whitespace or token.ttype is Whitespace:
+            break
+        if token.ttype in Keyword:
+            break
+        value_tokens.append(token.value)
+    full_name = "".join(value_tokens).strip('"')
+    return full_name if full_name in manifest_tables else name
+
+
+def _identifier_is_subquery(identifier: Identifier) -> bool:
+    return any(
+        isinstance(token, Parenthesis) and _select_parenthesis(token) is not None
+        for token in identifier.tokens
+    )
+
+
+def _subquery_from_identifier(identifier: Identifier):
+    for token in identifier.tokens:
+        if isinstance(token, Parenthesis):
+            statement = _select_parenthesis(token)
+            if statement is not None:
+                return statement
+    return None
+
+
+def _collect_ctes(
+    statement: TokenList, manifest: dict[str, set[str]], issues: list[str]
+) -> set[str]:
+    cte_names: set[str] = set()
+    tokens = _non_whitespace_tokens(statement)
+    if not tokens or _keyword_value(tokens[0]) != "WITH":
+        return cte_names
+
+    cte_token = tokens[1] if len(tokens) > 1 else None
+    cte_identifiers = (
+        list(cte_token.get_identifiers())
+        if isinstance(cte_token, IdentifierList)
+        else [cte_token]
+        if isinstance(cte_token, Identifier)
+        else []
+    )
+
+    for cte_identifier in cte_identifiers:
+        cte_name = _identifier_name(cte_identifier)
+        if cte_name:
+            cte_names.add(cte_name)
+        subquery = _subquery_from_identifier(cte_identifier)
+        if subquery is not None:
+            _validate_statement(subquery, manifest, issues, parent_ctes=cte_names)
+
+    return cte_names
+
+
+def _register_table_identifier(
+    identifier: Identifier,
+    scope: _SqlScope,
+    manifest: dict[str, set[str]],
+    issues: list[str],
+) -> None:
+    if _identifier_is_subquery(identifier):
+        subquery = _subquery_from_identifier(identifier)
+        if subquery is not None:
+            _validate_statement(subquery, manifest, issues, parent_ctes=scope.cte_names)
+        if alias := identifier.get_alias():
+            scope.derived_aliases.add(alias)
+        return
+
+    table_name = _identifier_table_name(identifier, set(manifest))
+    alias = identifier.get_alias()
+    if table_name in scope.cte_names:
+        if alias:
+            scope.derived_aliases.add(alias)
+        return
+
+    if table_name not in manifest:
+        issues.append("Generated SQL references a table outside the retrieved Wren schema.")
+        return
+
+    scope.table_aliases[alias or table_name] = table_name
+
+
+def _register_table_token(
+    token,
+    scope: _SqlScope,
+    manifest: dict[str, set[str]],
+    issues: list[str],
+) -> None:
+    if isinstance(token, IdentifierList):
+        for identifier in token.get_identifiers():
+            _register_table_identifier(identifier, scope, manifest, issues)
+    elif isinstance(token, Identifier):
+        _register_table_identifier(token, scope, manifest, issues)
+    elif isinstance(token, Parenthesis):
+        subquery = _select_parenthesis(token)
+        if subquery is not None:
+            _validate_statement(subquery, manifest, issues, parent_ctes=scope.cte_names)
+
+
+def _collect_tables(
+    statement: TokenList,
+    scope: _SqlScope,
+    manifest: dict[str, set[str]],
+    issues: list[str],
+) -> None:
+    tokens = _non_whitespace_tokens(statement)
+    index = 0
+
+    while index < len(tokens):
+        token = tokens[index]
+        if _is_from_or_join_keyword(token):
+            index += 1
+            while index < len(tokens) and not _is_clause_boundary(tokens[index]):
+                _register_table_token(tokens[index], scope, manifest, issues)
+                index += 1
+            continue
+
+        if isinstance(token, Parenthesis):
+            subquery = _select_parenthesis(token)
+            if subquery is not None:
+                _validate_statement(subquery, manifest, issues, parent_ctes=scope.cte_names)
+
+        index += 1
+
+
+def _collect_select_aliases(statement: TokenList, scope: _SqlScope) -> None:
+    tokens = _non_whitespace_tokens(statement)
+    in_select = False
+
+    for token in tokens:
+        if token.ttype is DML and token.normalized == "SELECT":
+            in_select = True
+            continue
+        if in_select and _keyword_value(token) == "FROM":
+            return
+        if not in_select:
+            continue
+
+        identifiers = (
+            token.get_identifiers()
+            if isinstance(token, IdentifierList)
+            else [token]
+            if isinstance(token, Identifier)
+            else []
+        )
+        for identifier in identifiers:
+            if alias := identifier.get_alias():
+                scope.output_aliases.add(alias)
+
+
+def _column_is_grounded(column_name: str, scope: _SqlScope, manifest: dict[str, set[str]]) -> bool:
+    manifest_tables = set(scope.table_aliases.values())
+    if not manifest_tables:
+        return True
+
+    return any(column_name in manifest[table_name] for table_name in manifest_tables)
+
+
+def _validate_identifier_columns(
+    identifier: Identifier,
+    scope: _SqlScope,
+    manifest: dict[str, set[str]],
+    issues: list[str],
+) -> None:
+    if isinstance(identifier, Function):
+        _validate_token_columns(identifier, scope, manifest, issues)
+        return
+
+    if any(isinstance(token, Function) for token in identifier.tokens):
+        for token in identifier.tokens:
+            if isinstance(token, Function):
+                _validate_token_columns(token, scope, manifest, issues)
+        return
+
+    column_name = _identifier_name(identifier)
+    if not column_name or column_name == "*":
+        return
+    if column_name in scope.output_aliases:
+        return
+
+    parent_name = identifier.get_parent_name()
+    if parent_name:
+        if parent_name in scope.derived_aliases or parent_name in scope.cte_names:
+            return
+        table_name = scope.table_aliases.get(parent_name, parent_name)
+        if table_name not in manifest or column_name not in manifest[table_name]:
+            issues.append(
+                "Generated SQL references a column outside the retrieved Wren schema."
+            )
+        return
+
+    if not _column_is_grounded(column_name, scope, manifest):
+        issues.append("Generated SQL references a column outside the retrieved Wren schema.")
+
+
+def _validate_token_columns(
+    token,
+    scope: _SqlScope,
+    manifest: dict[str, set[str]],
+    issues: list[str],
+) -> None:
+    if isinstance(token, Function):
+        for child in token.tokens:
+            if isinstance(child, Parenthesis):
+                _validate_token_columns(child, scope, manifest, issues)
+        return
+
+    if isinstance(token, IdentifierList):
+        for identifier in token.get_identifiers():
+            _validate_identifier_columns(identifier, scope, manifest, issues)
+        return
+
+    if isinstance(token, Identifier):
+        _validate_identifier_columns(token, scope, manifest, issues)
+        return
+
+    if isinstance(token, Parenthesis):
+        subquery = _select_parenthesis(token)
+        if subquery is not None:
+            _validate_statement(subquery, manifest, issues, parent_ctes=scope.cte_names)
+            return
+
+    if isinstance(token, TokenList):
+        for child in token.tokens:
+            _validate_token_columns(child, scope, manifest, issues)
+
+
+def _validate_columns(
+    statement: TokenList,
+    scope: _SqlScope,
+    manifest: dict[str, set[str]],
+    issues: list[str],
+) -> None:
+    tokens = _non_whitespace_tokens(statement)
+    index = 0
+
+    while index < len(tokens):
+        token = tokens[index]
+        if _keyword_value(token) == "WITH":
+            index += 2
+            continue
+
+        if _is_from_or_join_keyword(token):
+            index += 1
+            while index < len(tokens) and not _is_clause_boundary(tokens[index]):
+                index += 1
+            continue
+
+        _validate_token_columns(token, scope, manifest, issues)
+        index += 1
+
+
+def _validate_statement(
+    statement: TokenList,
+    manifest: dict[str, set[str]],
+    issues: list[str],
+    parent_ctes: set[str] | None = None,
+) -> None:
+    scope = _SqlScope(cte_names=set(parent_ctes or []))
+    scope.cte_names.update(_collect_ctes(statement, manifest, issues))
+    _collect_tables(statement, scope, manifest, issues)
+    _collect_select_aliases(statement, scope)
+    _validate_columns(statement, scope, manifest, issues)
+
+
+def validate_sql_grounded_in_manifest(
+    sql: str, schema_manifest: dict[str, list[str]] | None
+) -> ManifestGroundingResult:
+    manifest = _manifest_table_columns(schema_manifest)
+    if not manifest:
+        return ManifestGroundingResult(is_grounded=True)
+
+    statements = [statement for statement in sqlparse.parse(sql) if statement.tokens]
+    if len(statements) != 1:
+        return ManifestGroundingResult(
+            is_grounded=False,
+            error="Generated SQL must contain one grounded SELECT statement.",
+        )
+
+    issues: list[str] = []
+    _validate_statement(statements[0], manifest, issues)
+    if issues:
+        return ManifestGroundingResult(is_grounded=False, error=issues[0])
+
+    return ManifestGroundingResult(is_grounded=True)
 
 
 @component
@@ -34,6 +412,7 @@ class SQLGenPostProcessor:
         allow_dry_plan_fallback: bool = True,
         data_source: str = "",
         allow_data_preview: bool = False,
+        schema_manifest: dict[str, list[str]] | None = None,
     ) -> dict:
         try:
             cleaned_generation_result = clean_generation_result(replies[0])
@@ -54,6 +433,7 @@ class SQLGenPostProcessor:
                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                 data_source=data_source,
                 allow_data_preview=allow_data_preview,
+                schema_manifest=schema_manifest,
             )
 
             return {
@@ -76,6 +456,7 @@ class SQLGenPostProcessor:
         allow_dry_plan_fallback: bool = True,
         data_source: str = "",
         allow_data_preview: bool = False,
+        schema_manifest: dict[str, list[str]] | None = None,
     ) -> Dict[str, str]:
         valid_generation_result = {}
         invalid_generation_result = {}
@@ -87,6 +468,18 @@ class SQLGenPostProcessor:
                 "original_sql": "",
                 "type": "NO_RELEVANT_SQL",
                 "error": "No grounded SQL was generated from the current schema.",
+                "correlation_id": "",
+            }
+
+        grounding_result = validate_sql_grounded_in_manifest(
+            generation_result, schema_manifest
+        )
+        if not grounding_result.is_grounded:
+            return valid_generation_result, {
+                "sql": generation_result,
+                "original_sql": generation_result,
+                "type": "MANIFEST_GROUNDING",
+                "error": grounding_result.error,
                 "correlation_id": "",
             }
 

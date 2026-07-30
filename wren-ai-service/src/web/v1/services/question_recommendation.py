@@ -71,7 +71,9 @@ class QuestionRecommendation:
         use_dry_plan: bool = True,
         allow_dry_plan_fallback: bool = False,
     ):
-        async def _document_retrieval() -> tuple[list[str], bool, bool, bool]:
+        async def _document_retrieval() -> tuple[
+            list[str], dict[str, list[str]], bool, bool, bool
+        ]:
             retrieval_result = await self._pipelines["db_schema_retrieval"].run(
                 query=candidate["question"],
                 project_id=project_id,
@@ -79,10 +81,21 @@ class QuestionRecommendation:
             _retrieval_result = retrieval_result.get("construct_retrieval_results", {})
             documents = _retrieval_result.get("retrieval_results", [])
             table_ddls = [document.get("table_ddl") for document in documents]
+            schema_manifest = {
+                document.get("table_name"): document.get("column_names", [])
+                for document in documents
+                if document.get("table_name")
+            }
             has_calculated_field = _retrieval_result.get("has_calculated_field", False)
             has_metric = _retrieval_result.get("has_metric", False)
             has_json_field = _retrieval_result.get("has_json_field", False)
-            return table_ddls, has_calculated_field, has_metric, has_json_field
+            return (
+                table_ddls,
+                schema_manifest,
+                has_calculated_field,
+                has_metric,
+                has_json_field,
+            )
 
         async def _sql_pairs_retrieval() -> list[dict]:
             sql_pairs_result = await self._pipelines["sql_pairs_retrieval"].run(
@@ -107,7 +120,13 @@ class QuestionRecommendation:
                 _sql_pairs_retrieval(),
                 _instructions_retrieval(),
             )
-            table_ddls, has_calculated_field, has_metric, has_json_field = _document
+            (
+                table_ddls,
+                schema_manifest,
+                has_calculated_field,
+                has_metric,
+                has_json_field,
+            ) = _document
 
             if self._allow_sql_functions_retrieval:
                 sql_functions = await self._pipelines["sql_functions_retrieval"].run(
@@ -137,6 +156,7 @@ class QuestionRecommendation:
                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                 allow_data_preview=allow_data_preview,
                 sql_knowledge=sql_knowledge,
+                schema_manifest=schema_manifest,
             )
 
             post_process = generated_sql["post_process"]
