@@ -227,10 +227,7 @@ class AskFeedbackService:
                             trace_id=trace_id,
                         )
 
-                        if (
-                            allow_sql_diagnosis
-                            and error_type != "MANIFEST_GROUNDING"
-                        ):
+                        if allow_sql_diagnosis:
                             sql_diagnosis_results = await self._pipelines[
                                 "sql_diagnosis"
                             ].run(

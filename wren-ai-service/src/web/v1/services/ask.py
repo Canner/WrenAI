@@ -522,10 +522,7 @@ class AskService:
                             is_followup=True if histories else False,
                         )
 
-                        if (
-                            allow_sql_diagnosis
-                            and error_type != "MANIFEST_GROUNDING"
-                        ):
+                        if allow_sql_diagnosis:
                             sql_diagnosis_results = await self._pipelines[
                                 "sql_diagnosis"
                             ].run(
@@ -551,9 +548,7 @@ class AskService:
                                 "sql": original_sql,
                                 "error": (
                                     f"{sql_diagnosis_reasoning}\nDry run error: {error_message}"
-                                    if allow_sql_diagnosis
-                                    and error_type != "MANIFEST_GROUNDING"
-                                    and sql_diagnosis_reasoning
+                                    if allow_sql_diagnosis and sql_diagnosis_reasoning
                                     else error_message
                                 ),
                             },
