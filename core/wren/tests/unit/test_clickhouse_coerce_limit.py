@@ -30,6 +30,24 @@ def test_reject_fractional_negative_limit():
         c.query("SELECT 1", limit=-0.5)
 
 
+def test_reject_negative_decimal_limit():
+    # ``Decimal`` and ``Fraction`` are ``numbers.Number`` too; a negative
+    # fractional value must be rejected before ``int()`` truncation.
+    from decimal import Decimal
+
+    c = _connector()
+    with pytest.raises(ValueError, match="non-negative"):
+        c.query("SELECT 1", limit=Decimal("-0.5"))
+
+
+def test_reject_negative_fraction_limit():
+    from fractions import Fraction
+
+    c = _connector()
+    with pytest.raises(ValueError, match="non-negative"):
+        c.query("SELECT 1", limit=Fraction(-1, 2))
+
+
 def test_reject_injection_string():
     c = _connector()
     with pytest.raises(ValueError):

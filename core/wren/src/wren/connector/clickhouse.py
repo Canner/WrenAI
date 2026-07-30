@@ -10,6 +10,7 @@ column-by-column to that schema.
 from __future__ import annotations
 
 import json
+import numbers
 from decimal import Decimal as PyDecimal
 from typing import Any
 from urllib.parse import parse_qsl, unquote, urlparse
@@ -392,8 +393,12 @@ def _coerce_limit(limit: int | None) -> int | None:
     if limit is None:
         return None
     # Reject negatives *before* ``int()`` truncation so a fractional value like
-    # ``-0.5`` cannot slip through as ``LIMIT 0``.
-    if isinstance(limit, (int, float)) and not isinstance(limit, bool) and limit < 0:
+    # ``-0.5`` (float, Decimal, Fraction, ...) cannot slip through as ``LIMIT 0``.
+    if (
+        isinstance(limit, numbers.Number)
+        and not isinstance(limit, bool)
+        and limit < 0
+    ):
         raise ValueError(f"limit must be non-negative, got {limit}")
     coerced = int(limit)
     if coerced < 0:
