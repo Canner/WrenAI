@@ -172,6 +172,8 @@ def test_get_text_to_sql_rules_uses_default_metadata_grounding_rules():
     assert "combining separate result rows with UNION ALL" in rules
     assert "independently valid from DATABASE SCHEMA" in rules
     assert "do not translate it into a generic object name" in rules
+    assert "return null for sql instead of producing an approximate query" in rules
+    assert "A retrieved object is usable only when" in rules
 
 
 def test_get_text_to_sql_rules_keeps_mandatory_rules_with_sql_knowledge():
@@ -226,6 +228,7 @@ def test_sql_generation_system_prompt_grounding_contract():
     assert "Use Wren SQL identifier quoting with double quotes only" in prompt
     assert "source database/schema/table names" in prompt
     assert "appears only in SQL samples, failed SQL" in prompt
+    assert "retrieved schema does not ground the requested intent" in prompt
     assert "<SQL_QUERY_STRING>" not in prompt
 
 
@@ -291,6 +294,7 @@ def test_user_prompt_templates_keep_source_metadata_non_executable():
         assert "source/physical/lineage names" in prompt
         assert "omit that unsupported part instead of inventing" in prompt
         assert "exact declared table and column names from DATABASE SCHEMA" in prompt
+        assert "return null for sql instead of querying an unrelated object" in prompt
 
 
 def test_followup_sql_prompt_does_not_expect_previous_sql_context():

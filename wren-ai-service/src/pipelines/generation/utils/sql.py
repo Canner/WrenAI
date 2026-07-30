@@ -228,6 +228,8 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - Before returning the final SQL, silently check that each identifier and function in the SQL is grounded in DATABASE SCHEMA or SQL FUNCTIONS. If any identifier or function is ungrounded, remove that part or answer with the closest valid SQL over grounded fields only.
 - If the retrieved DATABASE SCHEMA does not contain a table, column, relationship, or supported function needed for part of the user's request, leave that part out instead of inventing a replacement.
 - If a requested noun, grouping, filter, or measure appears only in the user's wording and not in DATABASE SCHEMA, do not translate it into a generic object name. Use only schema-supported concepts and omit unsupported parts.
+- If the user's primary requested subject, timeframe, measure, or required relationship cannot be grounded by the retrieved DATABASE SCHEMA, return null for sql instead of producing an approximate query over unrelated schema objects.
+- Do not answer by selecting a nearby table only because it was retrieved. A retrieved object is usable only when its declared table, columns, relationships, or metric fields support the user's requested intent.
 """
 
 
@@ -455,7 +457,7 @@ Given the user's question and database schema, generate one grounded Wren SQL qu
 {text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be JSON. Return a SQL string only when it is fully grounded in DATABASE SCHEMA and SQL FUNCTIONS. If no fully grounded SQL can be generated, return null for sql.
+The final answer must be JSON. Return a SQL string only when it is fully grounded in DATABASE SCHEMA and SQL FUNCTIONS and it answers the user's requested intent. If the retrieved schema does not ground the requested intent, return null for sql.
 
 {{
     "sql": "SQL query string using only identifiers declared in DATABASE SCHEMA, or null"
