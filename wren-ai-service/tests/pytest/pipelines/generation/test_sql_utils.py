@@ -293,6 +293,9 @@ def test_sql_reasoning_prompt_keeps_reasoning_non_executable():
     assert "reasoning plan is semantic context for intent only" in prompt
     assert "declared in DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT" in prompt
     assert "source names, physical names, lineage names" in prompt
+    assert 'Do not use the words "assume", "assuming", "likely"' in prompt
+    assert "retrieved metadata does not support that part" in prompt
+    assert "Do not propose a replacement name" in prompt
     assert "<table_name>" not in prompt
     assert "<column_name>" not in prompt
 
@@ -395,8 +398,10 @@ def test_executable_prompt_templates_omit_untrusted_reasoning_and_sql_context():
 
     assert original_sql_marker not in regeneration_prompt
     assert "original SQL is intentionally omitted" in regeneration_prompt
-    assert diagnostic_marker in correction_prompt
-    assert "Use the diagnostic text only to understand the failure category" in (
+    assert diagnostic_marker not in correction_prompt
+    assert "dry-run diagnostic text is intentionally omitted" in (
         correction_prompt
     )
-    assert "Do not copy identifiers" in correction_prompt
+    assert "Regenerate from the user question and current DATABASE SCHEMA only" in (
+        correction_prompt
+    )

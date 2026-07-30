@@ -90,14 +90,9 @@ Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliase
 The failed SQL is intentionally omitted so it cannot provide executable identifiers, literal values, placeholders, functions, SQL patterns, or unsupported object names.
 
 ### DRY-RUN DIAGNOSTIC ###
-{% if invalid_generation_result and invalid_generation_result.error %}
-Diagnostic text:
-{{ invalid_generation_result.error }}
-{% else %}
-No diagnostic text was provided.
-{% endif %}
+The dry-run diagnostic text is intentionally omitted because it may contain failed SQL, guessed identifiers, connector-specific syntax, source names, physical names, or invalid replacement candidates.
 
-Use the diagnostic text only to understand the failure category. Do not copy identifiers, literal values, functions, SQL snippets, physical names, source names, or replacement candidates from the diagnostic text. Regenerate from the user question and current DATABASE SCHEMA.
+Regenerate from the user question and current DATABASE SCHEMA only. Do not repair, preserve, or copy anything from the failed SQL or dry-run diagnostic.
 
 Return only the final JSON SQL response.
 """
