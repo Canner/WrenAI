@@ -706,7 +706,7 @@ def test_construct_retrieval_results_keeps_schema_when_pruner_mixes_known_and_un
     assert "columns:\n- stored_dimension\n- stored_measure" in table_ddl
 
 
-def test_construct_retrieval_results_uses_full_columns_for_grounding_manifest():
+def test_construct_retrieval_results_uses_full_columns_for_sql_generation():
     result = construct_retrieval_results(
         check_using_db_schemas_without_pruning={},
         filter_columns_in_tables={
@@ -757,7 +757,12 @@ def test_construct_retrieval_results_uses_full_columns_for_grounding_manifest():
 
     retrieved = result["retrieval_results"][0]
 
-    assert retrieved["column_names"] == ["stored_measure"]
+    assert "stored_dimension VARCHAR" in retrieved["table_ddl"]
+    assert "stored_measure DOUBLE" in retrieved["table_ddl"]
+    assert retrieved["column_names"] == [
+        "stored_dimension",
+        "stored_measure",
+    ]
     assert retrieved["manifest_column_names"] == [
         "stored_dimension",
         "stored_measure",

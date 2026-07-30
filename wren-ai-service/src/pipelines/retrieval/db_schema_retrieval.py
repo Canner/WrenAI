@@ -329,15 +329,6 @@ def _included_relationships(content: dict, tables: Optional[set[str]]) -> list[d
     ]
 
 
-def _selected_columns_are_executable(content: dict, columns: set[str]) -> bool:
-    executable_columns = {
-        column["name"]
-        for column in content["columns"]
-        if column["type"] == "COLUMN" and column["data_type"].lower() != "unknown"
-    }
-    return bool(columns) and columns.issubset(executable_columns)
-
-
 def _included_column_names(
     content: dict, columns: Optional[set[str]] = None, tables: Optional[set[str]] = None
 ) -> list[str]:
@@ -794,20 +785,9 @@ def construct_retrieval_results(
 
         for table_schema in construct_db_schemas:
             if table_schema["type"] == "TABLE" and table_schema["name"] in tables:
-                selected_columns = set(
-                    columns_and_tables_needed[table_schema["name"]]["columns"]
-                )
-                columns = (
-                    selected_columns
-                    if _selected_columns_are_executable(
-                        table_schema, selected_columns
-                    )
-                    else None
-                )
                 ddl, _has_calculated_field, _has_json_field = (
                     _build_table_retrieval_context(
                         table_schema,
-                        columns=columns,
                         tables=tables,
                         include_semantic_context=False,
                     )
@@ -822,7 +802,7 @@ def construct_retrieval_results(
                         "table_name": table_schema["name"],
                         "table_ddl": ddl,
                         "column_names": _included_column_names(
-                            table_schema, columns=columns, tables=tables
+                            table_schema, tables=tables
                         ),
                         "manifest_column_names": _executable_column_names(
                             table_schema
