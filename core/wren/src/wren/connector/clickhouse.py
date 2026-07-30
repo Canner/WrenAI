@@ -394,11 +394,7 @@ def _coerce_limit(limit: int | None) -> int | None:
         return None
     # Reject negatives *before* ``int()`` truncation so a fractional value like
     # ``-0.5`` (float, Decimal, Fraction, ...) cannot slip through as ``LIMIT 0``.
-    if (
-        isinstance(limit, numbers.Number)
-        and not isinstance(limit, bool)
-        and limit < 0
-    ):
+    if isinstance(limit, numbers.Number) and not isinstance(limit, bool) and limit < 0:
         raise ValueError(f"limit must be non-negative, got {limit}")
     coerced = int(limit)
     if coerced < 0:
