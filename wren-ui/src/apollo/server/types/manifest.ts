@@ -31,6 +31,7 @@ export interface Measure {
 
 export interface CumulativeMetricProperties {
   description?: string;
+  sourceColumnName?: string;
 }
 
 export interface Window {

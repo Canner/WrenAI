@@ -707,6 +707,12 @@ describe('MDLBuilder', () => {
     expect(manifest.models[0].refSql).toEqual(
       'SELECT "Source Name" AS "SourceName", "Source Type" AS "SourceType" FROM "physical_catalog"."physical_schema"."physical_table"',
     );
+    expect(manifest.models[0].columns[0].properties.sourceColumnName).toEqual(
+      'Source Name',
+    );
+    expect(manifest.models[0].columns[1].properties.sourceColumnName).toEqual(
+      'Source Type',
+    );
   });
 
   it('should preserve refSql when a model has no tableReference.', () => {

@@ -200,6 +200,9 @@ export class MDLBuilder implements IMDLBuilder {
         if (column.displayName) {
           properties.displayName = column.displayName;
         }
+        if (column.sourceColumnName) {
+          properties.sourceColumnName = column.sourceColumnName;
+        }
         // put nested columns in properties
         if (column.type.includes('STRUCT')) {
           const nestedColumns = this.nestedColumns.filter(

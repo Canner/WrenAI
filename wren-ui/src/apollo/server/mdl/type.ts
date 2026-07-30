@@ -7,6 +7,7 @@ export interface ColumnMDL {
   properties?: {
     description?: string; // eg: "the key of each order"
     displayName?: string; // eg: "Order Key"
+    sourceColumnName?: string;
   };
   expression?: string; // eg: "SUM(orders.totalprice)"
 }
