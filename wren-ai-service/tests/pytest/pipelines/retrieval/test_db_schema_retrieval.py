@@ -4,6 +4,7 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 
 from src.pipelines.common import build_table_ddl
 from src.pipelines.retrieval.db_schema_retrieval import (
+    _build_view_ddl,
     check_using_db_schemas_without_pruning,
     construct_retrieval_results,
     dbschema_retrieval,
@@ -76,6 +77,30 @@ def test_table_selection_prompt_keeps_multiple_relevant_datasets():
     assert "compatible fields for the same requested result shape" in (
         table_columns_selection_system_prompt
     )
+
+
+def test_view_schema_context_uses_declared_view_columns_not_view_definition():
+    result = _build_view_ddl(
+        {
+            "type": "VIEW",
+            "comment": "Semantic description.",
+            "name": "retrieved_view",
+            "statement": "NON_EXECUTABLE_DEFINITION_TOKEN",
+            "columns": [
+                {
+                    "name": "visible_attribute",
+                    "data_type": "VARCHAR",
+                    "comment": "Semantic field.",
+                }
+            ],
+        }
+    )
+
+    assert "CREATE TABLE retrieved_view" in result
+    assert "visible_attribute VARCHAR" in result
+    assert "sql_column_names_use_exactly" in result
+    assert "definition_omitted_from_executable_schema" in result
+    assert "NON_EXECUTABLE_DEFINITION_TOKEN" not in result
 
 
 @pytest.mark.asyncio

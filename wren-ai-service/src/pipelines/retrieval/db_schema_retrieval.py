@@ -157,21 +157,46 @@ def _build_metric_ddl(content: dict) -> str:
 
 
 def _build_view_ddl(content: dict) -> str:
+    columns = [
+        column
+        for column in content.get("columns", [])
+        if column.get("name") and column.get("data_type", "").lower() != "unknown"
+    ]
     context = _format_semantic_context(
         {
             "object_type": "view",
             "sql_identifier_contract": {
                 "sql_table_name_use_exactly": content["name"],
+                "sql_column_names_use_exactly": [
+                    column["name"] for column in columns
+                ],
             },
             "semantic_context_not_sql_identifiers": {
                 "role": "stable virtual table interface",
                 "description": content["comment"],
-                "definition_is_semantic_context": True,
+                "definition_omitted_from_executable_schema": True,
             },
+            "columns": [
+                {
+                    "sql_column_name_use_exactly": column["name"],
+                    "data_type": get_engine_supported_data_type(
+                        column.get("data_type")
+                    ),
+                    "semantic_context_not_sql_identifier": column.get("comment", ""),
+                }
+                for column in columns
+            ],
         }
     )
+    columns_ddl = [
+        f"{column['name']} {get_engine_supported_data_type(column.get('data_type'))}"
+        for column in columns
+    ]
+
     return (
-        f"{context}{content['comment']}CREATE VIEW {content['name']}\nAS {content['statement']}"
+        f"{context}CREATE TABLE {content['name']} (\n  "
+        + ",\n  ".join(columns_ddl)
+        + "\n);"
     )
 
 

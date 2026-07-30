@@ -298,6 +298,18 @@ class DDLChunker:
         ]
 
     def _convert_views(self, views: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+        def _columns(view: Dict[str, Any]) -> List[dict]:
+            properties = view.get("properties", {}) or {}
+            return [
+                {
+                    "name": column.get("name", ""),
+                    "data_type": column.get("type", ""),
+                    "comment": column.get("description", ""),
+                }
+                for column in properties.get("columns", [])
+                if column.get("name")
+            ]
+
         def _payload(view: Dict[str, Any]) -> dict:
             return {
                 "type": "VIEW",
@@ -306,6 +318,7 @@ class DDLChunker:
                 else "",
                 "name": view["name"],
                 "statement": view["statement"],
+                "columns": _columns(view),
             }
 
         return [

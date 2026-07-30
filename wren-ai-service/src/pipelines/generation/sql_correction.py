@@ -42,7 +42,7 @@ You are a Wren SQL expert with exceptional logical thinking skills and debugging
 6. Treat SQL diagnosis and the invalid SQL as error context only. Do not copy placeholders, assumed table names, assumed column names, or unsupported functions from them.
 7. Do not preserve a table, column, join, filter, grouping, ordering, or function from the failed SQL unless it appears exactly in DATABASE SCHEMA or SQL FUNCTIONS.
 8. Treat physical/source/lineage names from the failed SQL, error message, reasoning, comments, aliases, descriptions, or samples as semantic context only; never use them as executable identifiers unless the exact same identifier appears in DATABASE SCHEMA.
-9. If the error is an invalid object, invalid column, unsupported function, or date/type failure, do not try a similar replacement from source metadata. Regenerate from the user's intent and current DATABASE SCHEMA, and omit unsupported parts instead of substituting non-schema identifiers.
+9. If the error is an invalid object, invalid column, unsupported function, or date/type failure, do not try a similar replacement from source metadata. Regenerate from the user's intent and current DATABASE SCHEMA. If the unsupported part is needed to answer the requested subject, output column, filter, grouping, measure, timeframe, or relationship, return null for sql instead of substituting non-schema identifiers.
 10. If the failed SQL used connector-specific syntax such as TOP, square-bracket identifiers, backticks, or non-Wren identifier quoting, discard that syntax and regenerate using Wren SQL syntax only.
 
 ### SQL RULES ###
@@ -51,7 +51,7 @@ Make sure you follow the SQL Rules strictly.
 {text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be JSON. Return a SQL string only when it is fully grounded in DATABASE SCHEMA and SQL FUNCTIONS. If no fully grounded SQL can be generated, return null for sql.
+The final answer must be JSON. Return a SQL string only when it is fully grounded in DATABASE SCHEMA and SQL FUNCTIONS and answers the user's requested intent. Do not create table or column identifiers from the user's wording. If no fully grounded SQL can be generated, return null for sql.
 
 {{
     "sql": "corrected SQL query string using only identifiers declared in DATABASE SCHEMA, or null"
@@ -84,7 +84,7 @@ sql_correction_user_prompt_template = """
 ### QUESTION ###
 {% if query %}
 User's Question: {{ query }}
-Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, or inferred names into executable SQL. If a needed table, column, relation, date field, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, omit that unsupported part instead of inventing or substituting a similar name. If the retrieved schema does not ground the user's primary requested intent, return null for sql instead of querying an unrelated object.
+Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, diagnostic text, user question words, or inferred names into executable SQL. If a needed table, output column, filter column, grouping column, relation, date field, measure, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, return null for sql instead of inventing, substituting, or approximating a similar name. If the retrieved schema does not ground the user's primary requested intent, return null for sql instead of querying an unrelated object.
 {% endif %}
 ### FAILED SQL ###
 The failed SQL is intentionally omitted so it cannot provide executable identifiers, literal values, placeholders, functions, SQL patterns, or unsupported object names.

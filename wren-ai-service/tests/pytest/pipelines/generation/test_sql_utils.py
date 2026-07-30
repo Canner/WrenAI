@@ -158,6 +158,7 @@ def test_get_text_to_sql_rules_uses_default_metadata_grounding_rules():
     assert "semantic_context_not_sql_identifier" in rules
     assert "Do not combine words, labels, ordinals" in rules
     assert "Never generate placeholder identifiers" in rules
+    assert "Never create an identifier from user question wording" in rules
     assert "use all required related tables" in rules
     assert "silently check that each identifier and function" in rules
     assert "instead of inventing a replacement" in rules
@@ -174,6 +175,7 @@ def test_get_text_to_sql_rules_uses_default_metadata_grounding_rules():
     assert "independently valid from DATABASE SCHEMA" in rules
     assert "do not translate it into a generic object name" in rules
     assert "return null for sql instead of producing an approximate query" in rules
+    assert "If that field is required to answer the request, return null for sql" in rules
     assert "A retrieved object is usable only when" in rules
     assert "Generate Wren SQL syntax only" in rules
     assert "Never use SELECT TOP" in rules
@@ -221,7 +223,8 @@ def test_sql_generation_system_prompt_grounding_contract():
     assert "use a normal equality or LIKE comparison" in prompt
     assert "unless the user explicitly asks for rank values" in prompt
     assert "perform a silent grounding check" in prompt
-    assert "closest grounded expression" in prompt
+    assert "return null for sql" in prompt
+    assert "Do not create table or column identifiers from the user's wording" in prompt
     assert "DATABASE SCHEMA is the only source of executable identifiers" in prompt
     assert "reasoning plan as semantic context for intent only" in prompt
     assert "Do not copy identifiers, functions, literal values" in prompt
@@ -234,7 +237,7 @@ def test_sql_generation_system_prompt_grounding_contract():
     assert "Use Wren SQL identifier quoting with double quotes only" in prompt
     assert "source database/schema/table names" in prompt
     assert "appears only in SQL samples, failed SQL" in prompt
-    assert "retrieved schema does not ground the requested intent" in prompt
+    assert "retrieved schema does not ground the requested subject" in prompt
     assert "<SQL_QUERY_STRING>" not in prompt
 
 
@@ -277,6 +280,7 @@ def test_sql_correction_system_prompt_discards_invalid_identifier_context():
     assert "Treat physical/source/lineage names from the failed SQL" in prompt
     assert "do not try a similar replacement from source metadata" in prompt
     assert "connector-specific syntax" in prompt
+    assert "return null for sql instead of substituting non-schema identifiers" in prompt
 
 
 def test_sql_reasoning_prompt_keeps_reasoning_non_executable():
@@ -301,8 +305,9 @@ def test_user_prompt_templates_keep_source_metadata_non_executable():
         sql_correction_user_prompt_template,
     ):
         assert "source/physical/lineage names" in prompt
-        assert "omit that unsupported part instead of inventing" in prompt
+        assert "return null for sql instead of inventing" in prompt
         assert "exact declared table and column names from DATABASE SCHEMA" in prompt
+        assert "user question words" in prompt
         assert "return null for sql instead of querying an unrelated object" in prompt
 
 

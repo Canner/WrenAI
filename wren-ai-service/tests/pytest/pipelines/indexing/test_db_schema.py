@@ -571,6 +571,7 @@ async def test_view():
             "comment": "",
             "name": "view_1",
             "statement": "SELECT * FROM user",
+            "columns": [],
         }
     )
 
@@ -601,6 +602,7 @@ async def test_view_with_properties():
             "comment": "/* {'description': 'A view containing user information.'} */\n",
             "name": "view_1",
             "statement": "SELECT * FROM user",
+            "columns": [],
         }
     )
 
