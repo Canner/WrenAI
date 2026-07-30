@@ -175,6 +175,11 @@ def test_get_text_to_sql_rules_uses_default_metadata_grounding_rules():
     assert "do not translate it into a generic object name" in rules
     assert "return null for sql instead of producing an approximate query" in rules
     assert "A retrieved object is usable only when" in rules
+    assert "Generate Wren SQL syntax only" in rules
+    assert "Never use SELECT TOP" in rules
+    assert "square-bracket identifiers" in rules
+    assert "Preserve every deployed table and column identifier exactly" in rules
+    assert "Do not convert deployed identifiers into display-friendly variants" in rules
 
 
 def test_get_text_to_sql_rules_keeps_mandatory_rules_with_sql_knowledge():
@@ -263,12 +268,15 @@ def test_sql_correction_system_prompt_discards_invalid_identifier_context():
     assert "treat it as the source of intent" in prompt
     assert "Do not copy placeholders" in prompt
     assert "Regenerate a grounded Wren SQL query" in prompt
+    assert "Wren SQL expert" in prompt
+    assert "syntactically correct Wren SQL query" in prompt
     assert (
         "Do not preserve a table, column, join, filter, grouping, ordering, or function"
         in prompt
     )
     assert "Treat physical/source/lineage names from the failed SQL" in prompt
     assert "do not try a similar replacement from source metadata" in prompt
+    assert "connector-specific syntax" in prompt
 
 
 def test_sql_reasoning_prompt_keeps_reasoning_non_executable():
