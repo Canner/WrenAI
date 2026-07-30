@@ -418,6 +418,24 @@ def test_sql_correction_system_prompt_discards_invalid_identifier_context():
     assert "return null for sql instead of substituting non-schema identifiers" in prompt
 
 
+def test_sql_generation_prompt_requires_schema_object_selection_before_sql():
+    prompt = get_sql_generation_system_prompt()
+
+    assert "Read every retrieved DATABASE SCHEMA object before choosing" in prompt
+    assert "Retrieval rank only lists candidates" in prompt
+    assert "Do not default to the first retrieved object" in prompt
+    assert "declared fields support the user's requested subject" in prompt
+
+
+def test_sql_generation_prompt_treats_identifiers_as_indivisible_strings():
+    prompt = get_sql_generation_system_prompt()
+
+    assert "Treat every declared table and column identifier as an indivisible string" in prompt
+    assert "Never splice, recombine, or transfer prefixes" in prompt
+    assert "copy the entire identifier exactly as declared" in prompt
+    assert "Do not rebuild it from the business meaning" in prompt
+
+
 def test_sql_correction_prompt_includes_manifest_grounding_failure():
     prompt = PromptBuilder(template=sql_correction_user_prompt_template).run(
         query="Question",
