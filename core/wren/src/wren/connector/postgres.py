@@ -220,6 +220,20 @@ def _build_pg_column(
     return pa.array(values, type=arrow_type, from_pandas=True)
 
 
+def _coerce_limit(limit: int | None) -> int | None:
+    """Validate and coerce a user-supplied ``limit`` to a non-negative ``int``.
+
+    ``int(limit)`` rejects strings like ``"5 OR 1=1"`` so the value can be
+    safely interpolated into SQL. Negative limits are also rejected.
+    """
+    if limit is None:
+        return None
+    coerced = int(limit)
+    if coerced < 0:
+        raise ValueError(f"limit must be non-negative, got {coerced}")
+    return coerced
+
+
 class PostgresConnector(ConnectorABC):
     """Native psycopg3 implementation of the Wren postgres connector."""
 
@@ -251,6 +265,7 @@ class PostgresConnector(ConnectorABC):
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         # Strip terminating ``;`` even when no LIMIT wrapper is applied so
         # client-pasted statements match dry_run / limited composition rules.
+        limit = _coerce_limit(limit)
         sql = strip_trailing_semicolon(sql)
         if limit is not None:
             sql = f"SELECT * FROM ({sql}) AS _sub LIMIT {limit}"
