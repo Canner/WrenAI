@@ -1,12 +1,31 @@
-"""Postgres query must coerce LIMIT before SQL interpolation."""
+"""Postgres query must coerce LIMIT before SQL interpolation.
+
+``postgres`` imports ``psycopg`` at module load. Unit CI does not install the
+``postgres`` extra, so stub ``psycopg`` in ``sys.modules`` before importing the
+connector module (same pattern as ``test_postgres_semicolon_unlimited``).
+"""
 
 from __future__ import annotations
 
+import sys
+import types
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from wren.connector import postgres as pg_mod
+
+def _ensure_psycopg_stub() -> None:
+    if "psycopg" in sys.modules:
+        return
+    mod = types.ModuleType("psycopg")
+    errors = types.ModuleType("psycopg.errors")
+    sys.modules["psycopg"] = mod
+    sys.modules["psycopg.errors"] = errors
+
+
+_ensure_psycopg_stub()
+
+from wren.connector import postgres as pg_mod  # noqa: E402
 
 
 def _connector():
