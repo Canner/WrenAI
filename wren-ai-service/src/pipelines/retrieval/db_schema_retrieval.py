@@ -209,7 +209,46 @@ def _format_semantic_context(context: dict) -> str:
         "Only values in sql_identifier_contract, sql_column_name_use_exactly, and identifiers declared in the following DDL are executable in Wren SQL.\n"
         "Values under semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier explain meaning only and must not be copied, combined, or rewritten as executable SQL identifiers.\n"
         "*/\n"
+        f"{_format_executable_identifier_catalog(context)}"
     )
+
+
+def _format_executable_identifier_catalog(context: dict) -> str:
+    contract = context.get("sql_identifier_contract", {})
+    table_name = contract.get("sql_table_name_use_exactly")
+    column_names = contract.get("sql_column_names_use_exactly") or [
+        column["sql_column_name_use_exactly"]
+        for column in context.get("columns", [])
+        if column.get("sql_column_name_use_exactly")
+    ]
+    relationship_constraints = contract.get("relationship_constraints_use_exactly") or [
+        relationship["sql_relationship_constraint_use_exactly"]
+        for relationship in context.get("relationships", [])
+        if relationship.get("sql_relationship_constraint_use_exactly")
+    ]
+
+    lines = [
+        "### EXECUTABLE WREN IDENTIFIER CATALOG ###",
+        "Copy SQL identifiers only from this catalog or the following DDL.",
+        "Do not create identifiers from user wording, semantic descriptions, display labels, source names, physical names, failed SQL, or reasoning text.",
+        f"object_type: {context.get('object_type', '')}",
+    ]
+    if table_name:
+        lines.append(f"table: {table_name}")
+    if column_names:
+        lines.append("columns:")
+        lines.extend(f"- {column_name}" for column_name in column_names)
+    if relationship_constraints:
+        lines.append("relationships:")
+        lines.extend(f"- {constraint}" for constraint in relationship_constraints)
+    lines.extend(
+        [
+            "If a needed table, column, or relationship is not listed here or declared in the following DDL, return null for sql.",
+            "### END EXECUTABLE WREN IDENTIFIER CATALOG ###",
+            "",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def _format_identifier_contract(context: dict) -> str:

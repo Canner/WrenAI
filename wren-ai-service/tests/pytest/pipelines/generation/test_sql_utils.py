@@ -231,6 +231,8 @@ def test_sql_generation_system_prompt_grounding_contract():
     assert "include those objects only when DATABASE SCHEMA shows" in prompt
     assert "Use the exact supported syntax shown there" in prompt
     assert "WREN SQL IDENTIFIER CONTRACT" in prompt
+    assert "EXECUTABLE WREN IDENTIFIER CATALOG" in prompt
+    assert "first and clearest list of allowed executable identifiers" in prompt
     assert "Use sql_table_name_use_exactly" in prompt
     assert "sql_column_names_use_exactly" in prompt
     assert "semantic_context_not_sql_identifiers" in prompt
