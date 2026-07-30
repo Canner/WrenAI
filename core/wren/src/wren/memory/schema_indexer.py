@@ -38,15 +38,21 @@ def _as_list(value: object, kind: str, name: str, field: str) -> list:
     fields name the offending entity (``model 'orders': 'columns' must be a
     list, got dict``) so the diagnosis points at one row rather than every model
     in the project; top-level sections keep the ``manifest['models']`` form.
-    Cubes are not required to have a name, so an empty name falls back to the
-    top-level ``manifest[field]`` form rather than emitting a bare ``''``. The
+    Cubes are not required to have a name, so an empty name falls back to a
+    ``cube (unnamed): 'measures'`` form rather than a top-level
+    ``manifest['measures']`` form: ``measures`` is never a top-level manifest
+    key, so pointing there would send the reader hunting for something that
+    does not exist. ``(unnamed)`` keeps the message truthful about where the
+    field lives while signalling that the entity could not be identified. The
     CLI already catches ``ValueError`` and exits with ``Malformed manifest:
     {e}``.
     """
     if value is None:
         return []
     if not isinstance(value, list):
-        where = f"{kind} {name!r}: {field!r}" if name else f"manifest[{field!r}]"
+        where = (
+            f"{kind} {name!r}: {field!r}" if name else f"{kind} (unnamed): {field!r}"
+        )
         raise ValueError(f"{where} must be a list, got {type(value).__name__}")
     return value
 

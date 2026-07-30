@@ -41,28 +41,46 @@ def test_extract_raises_on_non_list_nested_collections() -> None:
     # _relationship_models), not silently index an empty collection. This
     # covers both truthy (42, 3, {"x": 1}, "nope") and falsy ({}, 0, "")
     # non-list values — only None/missing passes through.
-    with pytest.raises(ValueError, match=r"model 'm': 'columns' must be a list"):
+    with pytest.raises(
+        ValueError, match=r"model 'm': 'columns' must be a list, got int"
+    ):
         extract_schema_items({"models": [{"name": "m", "columns": 42}]})
-    with pytest.raises(ValueError, match=r"cube 'c': 'measures' must be a list"):
+    with pytest.raises(
+        ValueError, match=r"cube 'c': 'measures' must be a list, got int"
+    ):
         extract_schema_items({"cubes": [{"name": "c", "measures": 3}]})
-    with pytest.raises(ValueError, match=r"cube 'c': 'dimensions' must be a list"):
+    with pytest.raises(
+        ValueError, match=r"cube 'c': 'dimensions' must be a list, got dict"
+    ):
         extract_schema_items({"cubes": [{"name": "c", "dimensions": {"x": 1}}]})
-    with pytest.raises(ValueError, match=r"cube 'c': 'timeDimensions' must be a list"):
+    with pytest.raises(
+        ValueError, match=r"cube 'c': 'timeDimensions' must be a list, got str"
+    ):
         extract_schema_items({"cubes": [{"name": "c", "timeDimensions": "nope"}]})
     # Falsy non-list values — the gap goldmedal flagged — also raise.
-    with pytest.raises(ValueError, match=r"model 'm': 'columns' must be a list"):
+    with pytest.raises(
+        ValueError, match=r"model 'm': 'columns' must be a list, got dict"
+    ):
         extract_schema_items({"models": [{"name": "m", "columns": {}}]})
-    with pytest.raises(ValueError, match=r"model 'm': 'columns' must be a list"):
+    with pytest.raises(
+        ValueError, match=r"model 'm': 'columns' must be a list, got int"
+    ):
         extract_schema_items({"models": [{"name": "m", "columns": 0}]})
-    with pytest.raises(ValueError, match=r"model 'm': 'columns' must be a list"):
+    with pytest.raises(
+        ValueError, match=r"model 'm': 'columns' must be a list, got str"
+    ):
         extract_schema_items({"models": [{"name": "m", "columns": ""}]})
 
 
-def test_extract_unnamed_cube_falls_back_to_manifest_form() -> None:
+def test_extract_unnamed_cube_falls_back_to_unnamed_form() -> None:
     # Cubes are not required to have a name; a nameless cube with a non-list
-    # collection must not emit a bare ``cube '':`` — it falls back to the
-    # top-level ``manifest['measures']`` form (goldmedal's edge case).
-    with pytest.raises(ValueError, match=r"manifest\['measures'\] must be a list"):
+    # collection must not emit a bare ``cube '':``. ``measures`` is never a
+    # top-level manifest key, so we say ``cube (unnamed):`` rather than
+    # ``manifest['measures']`` — truthful about where the field lives while
+    # signalling the entity could not be identified (goldmedal's edge case).
+    with pytest.raises(
+        ValueError, match=r"cube \(unnamed\): 'measures' must be a list, got int"
+    ):
         extract_schema_items({"cubes": [{"measures": 3}]})
 
 
