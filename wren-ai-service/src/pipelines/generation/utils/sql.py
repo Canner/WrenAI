@@ -8,7 +8,8 @@ import sqlparse
 from haystack import component
 from haystack.dataclasses import ChatMessage
 from pydantic import BaseModel
-from sqlparse.sql import Function, Identifier, IdentifierList, Parenthesis, TokenList, Where
+from sqlparse.sql import Function, Identifier, IdentifierList, Parenthesis, TokenList
+from sqlparse.sql import Where
 from sqlparse.tokens import DML, Keyword, Whitespace
 
 from src.core.engine import (
@@ -187,7 +188,9 @@ def _register_table_identifier(
         return
 
     if table_name not in manifest:
-        issues.append("Generated SQL references a table outside the retrieved Wren schema.")
+        issues.append(
+            f"Generated SQL references table `{table_name}` outside the retrieved Wren schema."
+        )
         return
 
     scope.table_aliases[alias or table_name] = table_name
@@ -298,12 +301,20 @@ def _validate_identifier_columns(
         table_name = scope.table_aliases.get(parent_name, parent_name)
         if table_name not in manifest or column_name not in manifest[table_name]:
             issues.append(
-                "Generated SQL references a column outside the retrieved Wren schema."
+                "Generated SQL references column "
+                f"`{column_name}` outside the retrieved Wren schema "
+                f"for table `{table_name}`."
             )
         return
 
     if not _column_is_grounded(column_name, scope, manifest):
-        issues.append("Generated SQL references a column outside the retrieved Wren schema.")
+        table_names = sorted(set(scope.table_aliases.values()))
+        table_context = (
+            f" for table `{table_names[0]}`" if len(table_names) == 1 else ""
+        )
+        issues.append(
+            f"Generated SQL references column `{column_name}` outside the retrieved Wren schema{table_context}."
+        )
 
 
 def _validate_token_columns(

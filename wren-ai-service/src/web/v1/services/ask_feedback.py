@@ -217,6 +217,7 @@ class AskFeedbackService:
                         original_sql = failed_dry_run_result["original_sql"]
                         invalid_sql = failed_dry_run_result["sql"]
                         error_message = failed_dry_run_result["error"]
+                        error_type = failed_dry_run_result["type"]
                         sql_diagnosis_reasoning = None
 
                         self._ask_feedback_results[
@@ -226,7 +227,10 @@ class AskFeedbackService:
                             trace_id=trace_id,
                         )
 
-                        if allow_sql_diagnosis:
+                        if (
+                            allow_sql_diagnosis
+                            and error_type != "MANIFEST_GROUNDING"
+                        ):
                             sql_diagnosis_results = await self._pipelines[
                                 "sql_diagnosis"
                             ].run(
@@ -254,6 +258,7 @@ class AskFeedbackService:
                             sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
                             instructions=instructions,
                             invalid_generation_result={
+                                "type": error_type,
                                 "original_sql": original_sql,
                                 "sql": invalid_sql,
                                 "error": correction_error_message,

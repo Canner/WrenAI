@@ -131,6 +131,7 @@ async def test_sql_postprocessor_rejects_table_outside_retrieved_manifest():
 
     assert result["valid_generation_result"] == {}
     assert result["invalid_generation_result"]["type"] == "MANIFEST_GROUNDING"
+    assert "UnretrievedObject" in result["invalid_generation_result"]["error"]
     assert engine.dry_plan_calls == []
     assert engine.execute_sql_calls == []
 
@@ -148,6 +149,8 @@ async def test_sql_postprocessor_rejects_column_outside_retrieved_manifest():
 
     assert result["valid_generation_result"] == {}
     assert result["invalid_generation_result"]["type"] == "MANIFEST_GROUNDING"
+    assert "UnretrievedField" in result["invalid_generation_result"]["error"]
+    assert "RetrievedObject" in result["invalid_generation_result"]["error"]
     assert engine.dry_plan_calls == []
     assert engine.execute_sql_calls == []
 
@@ -413,6 +416,28 @@ def test_sql_correction_system_prompt_discards_invalid_identifier_context():
     assert "do not try a similar replacement from source metadata" in prompt
     assert "connector-specific syntax" in prompt
     assert "return null for sql instead of substituting non-schema identifiers" in prompt
+
+
+def test_sql_correction_prompt_includes_manifest_grounding_failure():
+    prompt = PromptBuilder(template=sql_correction_user_prompt_template).run(
+        query="Question",
+        documents=["SCHEMA_CONTEXT"],
+        invalid_generation_result={
+            "type": "MANIFEST_GROUNDING",
+            "error": (
+                "Generated SQL references column `RejectedField` outside the "
+                "retrieved Wren schema for table `RetrievedObject`."
+            ),
+        },
+        sql_generation_reasoning=None,
+        instructions=[],
+        sql_functions=[],
+    )["prompt"]
+
+    assert "MANIFEST GROUNDING FAILURE" in prompt
+    assert "RejectedField" in prompt
+    assert "RetrievedObject" in prompt
+    assert "Do not reuse rejected identifiers" in prompt
 
 
 def test_sql_reasoning_prompt_keeps_reasoning_non_executable():

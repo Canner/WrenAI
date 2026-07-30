@@ -508,6 +508,7 @@ class AskService:
                         original_sql = failed_dry_run_result["original_sql"]
                         invalid_sql = failed_dry_run_result["sql"]
                         error_message = failed_dry_run_result["error"]
+                        error_type = failed_dry_run_result["type"]
                         current_sql_correction_retries += 1
 
                         self._ask_results[query_id] = AskResultResponse(
@@ -521,7 +522,10 @@ class AskService:
                             is_followup=True if histories else False,
                         )
 
-                        if allow_sql_diagnosis:
+                        if (
+                            allow_sql_diagnosis
+                            and error_type != "MANIFEST_GROUNDING"
+                        ):
                             sql_diagnosis_results = await self._pipelines[
                                 "sql_diagnosis"
                             ].run(
@@ -543,10 +547,12 @@ class AskService:
                             sql_generation_reasoning=sql_generation_reasoning,
                             instructions=instructions,
                             invalid_generation_result={
+                                "type": error_type,
                                 "sql": original_sql,
                                 "error": (
                                     f"{sql_diagnosis_reasoning}\nDry run error: {error_message}"
                                     if allow_sql_diagnosis
+                                    and error_type != "MANIFEST_GROUNDING"
                                     and sql_diagnosis_reasoning
                                     else error_message
                                 ),

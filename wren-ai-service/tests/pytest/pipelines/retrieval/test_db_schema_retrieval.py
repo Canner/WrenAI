@@ -759,6 +759,8 @@ def test_construct_retrieval_results_uses_full_columns_for_sql_generation():
 
     assert "stored_dimension VARCHAR" in retrieved["table_ddl"]
     assert "stored_measure DOUBLE" in retrieved["table_ddl"]
+    assert "WREN RETRIEVED SEMANTIC CONTEXT" in retrieved["table_ddl"]
+    assert "sql_column_name_use_exactly" in retrieved["table_ddl"]
     assert retrieved["column_names"] == [
         "stored_dimension",
         "stored_measure",

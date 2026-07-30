@@ -789,7 +789,7 @@ def construct_retrieval_results(
                     _build_table_retrieval_context(
                         table_schema,
                         tables=tables,
-                        include_semantic_context=False,
+                        include_semantic_context=True,
                     )
                 )
                 if _has_calculated_field:
