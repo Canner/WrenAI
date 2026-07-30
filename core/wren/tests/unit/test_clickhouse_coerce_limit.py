@@ -22,6 +22,14 @@ def test_reject_negative_limit():
         c.query("SELECT 1", limit=-1)
 
 
+def test_reject_fractional_negative_limit():
+    # ``int(-0.5)`` truncates to ``0``; ensure the fractional negative is
+    # rejected before truncation rather than silently becoming ``LIMIT 0``.
+    c = _connector()
+    with pytest.raises(ValueError, match="non-negative"):
+        c.query("SELECT 1", limit=-0.5)
+
+
 def test_reject_injection_string():
     c = _connector()
     with pytest.raises(ValueError):
