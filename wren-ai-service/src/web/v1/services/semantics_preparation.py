@@ -77,16 +77,31 @@ class SemanticsPreparationService:
                 "mdl_str": prepare_semantics_request.mdl,
                 "project_id": prepare_semantics_request.project_id,
             }
+            project_scoped_index_names = [
+                "db_schema",
+                "historical_question",
+                "table_description",
+                "sql_pairs",
+                "project_meta",
+            ]
+
+            await asyncio.gather(
+                *[
+                    self._pipelines[name].clean(
+                        project_id=prepare_semantics_request.project_id,
+                        delete_all=True,
+                    )
+                    if name == "sql_pairs"
+                    else self._pipelines[name].clean(
+                        project_id=prepare_semantics_request.project_id
+                    )
+                    for name in project_scoped_index_names
+                ]
+            )
 
             tasks = [
                 self._pipelines[name].run(**input)
-                for name in [
-                    "db_schema",
-                    "historical_question",
-                    "table_description",
-                    "sql_pairs",
-                    "project_meta",
-                ]
+                for name in project_scoped_index_names
             ]
 
             await asyncio.gather(*tasks)

@@ -61,19 +61,24 @@ class InstructionsCleaner:
 
     @component.output_types()
     async def run(
-        self, instruction_ids: List[str], project_id: Optional[str] = None
+        self,
+        instruction_ids: List[str],
+        project_id: Optional[str] = None,
+        delete_all: bool = False,
     ) -> None:
-        filter = {
-            "operator": "AND",
-            "conditions": [
-                {"field": "instruction_id", "operator": "in", "value": instruction_ids},
-            ],
-        }
+        conditions = []
+
+        if not delete_all:
+            conditions.append(
+                {"field": "instruction_id", "operator": "in", "value": instruction_ids}
+            )
 
         if project_id:
-            filter["conditions"].append(
+            conditions.append(
                 {"field": "project_id", "operator": "==", "value": project_id}
             )
+
+        filter = {"operator": "AND", "conditions": conditions} if conditions else None
 
         return await self.store.delete_documents(filter)
 
@@ -108,7 +113,11 @@ async def clean(
 ) -> Dict[str, Any]:
     instruction_ids = [instruction.id for instruction in instructions]
     if instruction_ids or delete_all:
-        await cleaner.run(instruction_ids=instruction_ids, project_id=project_id)
+        await cleaner.run(
+            instruction_ids=instruction_ids,
+            project_id=project_id,
+            delete_all=delete_all,
+        )
 
     return embedding
 
