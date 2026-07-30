@@ -1,0 +1,38 @@
+"""ClickHouse query must coerce LIMIT before SQL interpolation."""
+
+from __future__ import annotations
+
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from wren.connector import clickhouse as ch_mod
+
+
+def _connector():
+    c = object.__new__(ch_mod.ClickHouseConnector)
+    c.connection = MagicMock()
+    c._closed = False
+    return c
+
+
+def test_reject_negative_limit():
+    c = _connector()
+    with pytest.raises(ValueError, match="non-negative"):
+        c.query("SELECT 1", limit=-1)
+
+
+def test_reject_injection_string():
+    c = _connector()
+    with pytest.raises(ValueError):
+        c.query("SELECT 1", limit="1; DROP TABLE t")
+
+
+def test_numeric_string_limit_interpolated():
+    c = _connector()
+    with patch.object(ch_mod, "_build_clickhouse_arrow_table", return_value="tbl"):
+        out = c.query("SELECT 1", limit="7")
+    assert out == "tbl"
+    statement = c.connection.query.call_args[0][0]
+    assert "LIMIT 7" in statement
+    assert "DROP" not in statement

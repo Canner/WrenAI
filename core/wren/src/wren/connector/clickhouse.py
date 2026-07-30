@@ -383,6 +383,20 @@ def _build_clickhouse_client_kwargs(connection_info: Any) -> dict:
 # --------------------------------------------------------------------------
 
 
+def _coerce_limit(limit: int | None) -> int | None:
+    """Validate and coerce a user-supplied ``limit`` to a non-negative ``int``.
+
+    ``int(limit)`` rejects strings like ``"5 OR 1=1"`` so the value can be
+    safely interpolated into SQL. Negative limits are also rejected.
+    """
+    if limit is None:
+        return None
+    coerced = int(limit)
+    if coerced < 0:
+        raise ValueError(f"limit must be non-negative, got {coerced}")
+    return coerced
+
+
 class ClickHouseConnector(ConnectorABC):
     """Native ``clickhouse-connect`` connector that bypasses ``ibis-project``."""
 
@@ -395,6 +409,7 @@ class ClickHouseConnector(ConnectorABC):
         # Strip the terminating run of ``;`` / whitespace before wrapping —
         # ``SELECT * FROM (SELECT 1;) AS _wren_sub LIMIT N`` is invalid SQL.
         # Semicolons inside string literals are preserved.
+        limit = _coerce_limit(limit)
         stripped = strip_trailing_semicolon(sql)
         statement = stripped
         if limit is not None:
