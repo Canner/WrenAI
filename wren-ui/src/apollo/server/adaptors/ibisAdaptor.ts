@@ -186,6 +186,7 @@ export interface IbisQueryOptions extends IbisBaseOptions {
   limit?: number;
   refresh?: boolean;
   cacheEnabled?: boolean;
+  allowFallback?: boolean;
 }
 export interface IbisDryPlanOptions {
   dataSource: DataSourceName;
@@ -317,6 +318,10 @@ export class IbisAdaptor implements IIbisAdaptor {
           params: {
             limit: options.limit || DEFAULT_PREVIEW_LIMIT,
           },
+          headers: {
+            'x-wren-fallback_disable':
+              options.allowFallback === false ? 'true' : 'false',
+          },
         },
       );
       return {
@@ -357,6 +362,12 @@ export class IbisAdaptor implements IIbisAdaptor {
       const response = await axios.post(
         `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.DRY_RUN)}/connector/${dataSourceUrlMap[dataSource]}/query?dryRun=true`,
         body,
+        {
+          headers: {
+            'x-wren-fallback_disable':
+              options.allowFallback === false ? 'true' : 'false',
+          },
+        },
       );
       logger.debug(`Ibis server Dry run success`);
       return {

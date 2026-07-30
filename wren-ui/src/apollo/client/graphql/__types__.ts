@@ -1142,6 +1142,7 @@ export type PreviewItemSqlInput = {
 };
 
 export type PreviewSqlDataInput = {
+  allowFallback?: InputMaybe<Scalars['Boolean']>;
   dryRun?: InputMaybe<Scalars['Boolean']>;
   limit?: InputMaybe<Scalars['Int']>;
   projectId?: InputMaybe<Scalars['String']>;

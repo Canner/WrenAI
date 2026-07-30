@@ -60,6 +60,7 @@ class SqlCorrectionService:
         event_id: str
         sql: str
         error: str
+        query: Optional[str] = None
         retrieved_tables: Optional[List[str]] = None
         use_dry_plan: bool = True
         allow_dry_plan_fallback: bool = False
@@ -76,6 +77,7 @@ class SqlCorrectionService:
         event_id = request.event_id
         sql = request.sql
         error = request.error
+        query = request.query
         project_id = request.project_id
         retrieved_tables = request.retrieved_tables
         use_dry_plan = request.use_dry_plan
@@ -111,14 +113,21 @@ class SqlCorrectionService:
                 .get("retrieval_results", [])
             )
             table_ddls = [document.get("table_ddl") for document in documents]
+            identifier_contracts = [
+                document.get("identifier_contract")
+                for document in documents
+                if document.get("identifier_contract")
+            ]
 
             res = await self._pipelines["sql_correction"].run(
                 contexts=table_ddls,
+                query=query,
                 invalid_generation_result=_invalid,
                 project_id=project_id,
                 use_dry_plan=use_dry_plan,
                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                 sql_knowledge=sql_knowledge,
+                identifier_contracts=identifier_contracts,
             )
 
             post_process = res["post_process"]

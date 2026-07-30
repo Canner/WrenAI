@@ -42,6 +42,7 @@ export interface PreviewOptions {
   manifest: Manifest;
   limit?: number;
   dryRun?: boolean;
+  allowFallback?: boolean;
   refresh?: boolean;
   cacheEnabled?: boolean;
 }
@@ -104,6 +105,7 @@ export class QueryService implements IQueryService {
       manifest: mdl,
       limit,
       dryRun,
+      allowFallback,
       refresh,
       cacheEnabled,
     } = options;
@@ -134,6 +136,7 @@ export class QueryService implements IQueryService {
           dataSource,
           connectionInfo,
           mdl,
+          allowFallback,
         );
       } else {
         return await this.ibisQuery(
@@ -144,6 +147,7 @@ export class QueryService implements IQueryService {
           limit,
           refresh,
           cacheEnabled,
+          allowFallback,
         );
       }
     }
@@ -202,6 +206,7 @@ export class QueryService implements IQueryService {
     dataSource: DataSourceName,
     connectionInfo: any,
     mdl: Manifest,
+    allowFallback?: boolean,
   ): Promise<IbisResponse> {
     const event = TelemetryEvent.IBIS_DRY_RUN;
     try {
@@ -209,6 +214,7 @@ export class QueryService implements IQueryService {
         dataSource,
         connectionInfo,
         mdl,
+        allowFallback,
       });
       this.sendIbisEvent(event, res, { dataSource, sql });
       return {
@@ -231,6 +237,7 @@ export class QueryService implements IQueryService {
     limit: number,
     refresh?: boolean,
     cacheEnabled?: boolean,
+    allowFallback?: boolean,
   ): Promise<PreviewDataResponse> {
     const event = TelemetryEvent.IBIS_QUERY;
     try {
@@ -241,6 +248,7 @@ export class QueryService implements IQueryService {
         limit,
         refresh,
         cacheEnabled,
+        allowFallback,
       });
       this.sendIbisEvent(event, res, {
         dataSource,

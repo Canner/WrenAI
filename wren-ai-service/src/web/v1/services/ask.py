@@ -332,6 +332,11 @@ class AskService:
                 documents = _retrieval_result.get("retrieval_results", [])
                 table_names = [document.get("table_name") for document in documents]
                 table_ddls = [document.get("table_ddl") for document in documents]
+                identifier_contracts = [
+                    document.get("identifier_contract")
+                    for document in documents
+                    if document.get("identifier_contract")
+                ]
 
                 if not documents:
                     logger.exception(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
@@ -454,6 +459,7 @@ class AskService:
                         use_dry_plan=use_dry_plan,
                         allow_dry_plan_fallback=allow_dry_plan_fallback,
                         sql_knowledge=sql_knowledge,
+                        identifier_contracts=identifier_contracts,
                     )
                 else:
                     text_to_sql_generation_results = await self._pipelines[
@@ -472,6 +478,7 @@ class AskService:
                         use_dry_plan=use_dry_plan,
                         allow_dry_plan_fallback=allow_dry_plan_fallback,
                         sql_knowledge=sql_knowledge,
+                        identifier_contracts=identifier_contracts,
                     )
 
                 if sql_valid_result := text_to_sql_generation_results["post_process"][
@@ -501,6 +508,7 @@ class AskService:
                         invalid_sql = failed_dry_run_result["sql"]
                         error_message = failed_dry_run_result["error"]
                         current_sql_correction_retries += 1
+                        sql_diagnosis_reasoning = None
 
                         self._ask_results[query_id] = AskResultResponse(
                             status="correcting",
@@ -513,7 +521,10 @@ class AskService:
                             is_followup=True if histories else False,
                         )
 
-                        if allow_sql_diagnosis:
+                        if (
+                            allow_sql_diagnosis
+                            and failed_dry_run_result["type"] != "SCHEMA_GROUNDING"
+                        ):
                             sql_diagnosis_results = await self._pipelines[
                                 "sql_diagnosis"
                             ].run(
@@ -548,6 +559,7 @@ class AskService:
                             allow_dry_plan_fallback=allow_dry_plan_fallback,
                             sql_functions=sql_functions,
                             sql_knowledge=sql_knowledge,
+                            identifier_contracts=identifier_contracts,
                         )
 
                         if valid_generation_result := sql_correction_results[

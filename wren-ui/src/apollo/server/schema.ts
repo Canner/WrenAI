@@ -925,6 +925,7 @@ export const typeDefs = gql`
     projectId: String
     limit: Int
     dryRun: Boolean
+    allowFallback: Boolean
   }
 
   input DryPlanSQLDataInput {
