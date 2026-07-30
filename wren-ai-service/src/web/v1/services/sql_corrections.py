@@ -89,11 +89,13 @@ class SqlCorrectionService:
             }
 
             if not retrieved_tables:
-                retrieved_tables = (
-                    await self._pipelines["sql_tables_extraction"].run(
-                        sql=sql,
-                    )
-                )["post_process"]
+                self._handle_exception(
+                    event_id,
+                    "SQL correction requires retrieved table context from the original ask result.",
+                    trace_id=trace_id,
+                    request_from=request.request_from,
+                )
+                return self._cache[event_id].with_metadata()
 
             if self._allow_sql_knowledge_retrieval:
                 sql_knowledge = await self._pipelines["sql_knowledge_retrieval"].run(
@@ -131,7 +133,6 @@ class SqlCorrectionService:
                     event_id,
                     f"An error occurred during SQL correction: {error_message}",
                     trace_id=trace_id,
-                    invalid_sql=invalid["sql"],
                     request_from=request.request_from,
                 )
             else:
