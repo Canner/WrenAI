@@ -20,6 +20,21 @@ def strip_trailing_semicolon(sql: str) -> str:
     return _TRAILING_SEMICOLONS_RE.sub("", sql)
 
 
+def coerce_limit(limit: int | None) -> int | None:
+    """Validate and coerce a user-supplied ``limit`` to a non-negative ``int``.
+
+    Connectors train-plan LIMIT by interpolating the value into SQL. ``int()``
+    rejects injection strings like ``"5 OR 1=1"``; negatives are rejected so
+    engines never see ``LIMIT -1`` (undefined / dialect-dependent).
+    """
+    if limit is None:
+        return None
+    coerced = int(limit)
+    if coerced < 0:
+        raise ValueError(f"limit must be non-negative, got {coerced}")
+    return coerced
+
+
 class ConnectorABC(ABC):
     @abstractmethod
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
