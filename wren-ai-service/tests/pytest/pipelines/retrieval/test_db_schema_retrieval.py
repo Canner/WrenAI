@@ -69,45 +69,6 @@ def test_column_pruning_prompt_uses_current_query_without_history_text():
     assert "previous request" not in result["prompt"]
 
 
-def test_retrieval_results_include_exact_identifier_contract():
-    result = check_using_db_schemas_without_pruning(
-        construct_db_schemas=[
-            {
-                "type": "TABLE",
-                "name": "retrieved_model",
-                "comment": "",
-                "columns": [
-                    {
-                        "type": "COLUMN",
-                        "name": "retrieved_column_a",
-                        "data_type": "VARCHAR",
-                        "comment": "",
-                        "is_primary_key": False,
-                    },
-                    {
-                        "type": "COLUMN",
-                        "name": "retrieved_column_b",
-                        "data_type": "VARCHAR",
-                        "comment": "",
-                        "is_primary_key": False,
-                    },
-                ],
-                "properties": {},
-                "primaryKey": "",
-            }
-        ],
-        dbschema_retrieval=[],
-        encoding=type("Encoding", (), {"encode": lambda self, text: [1]})(),
-        enable_column_pruning=False,
-        context_window_size=100,
-    )
-
-    assert result["db_schemas"][0]["identifier_contract"] == {
-        "table_name": "retrieved_model",
-        "columns": ["retrieved_column_a", "retrieved_column_b"],
-    }
-
-
 def test_table_selection_prompt_keeps_multiple_relevant_datasets():
     assert "same business concept is represented by multiple modeled datasets" in (
         table_columns_selection_system_prompt
