@@ -115,34 +115,35 @@ table_columns_selection_user_prompt_template = """
 """
 
 
-def _build_metric_ddl(content: dict) -> str:
+def _build_metric_ddl(content: dict, include_semantic_context: bool = True) -> str:
     columns = [
         column
         for column in content["columns"]
         if column["data_type"].lower() != "unknown"
     ]
-    context = _format_semantic_context(
-        {
-            "object_type": "metric",
-            "sql_identifier_contract": {
-                "sql_table_name_use_exactly": content["name"],
-                "sql_column_names_use_exactly": [
-                    column["name"] for column in columns
-                ],
-            },
-            "semantic_context_not_sql_identifiers": {
-                "role": "stable analytical aggregation interface",
-                "description": content["comment"],
-            },
-            "columns": [
-                {
-                    "sql_column_name_use_exactly": column["name"],
-                    "data_type": get_engine_supported_data_type(column["data_type"]),
-                    "semantic_context_not_sql_identifier": column["comment"],
-                }
-                for column in columns
-            ],
-        }
+    context = {
+        "object_type": "metric",
+        "sql_identifier_contract": {
+            "sql_table_name_use_exactly": content["name"],
+            "sql_column_names_use_exactly": [column["name"] for column in columns],
+        },
+        "semantic_context_not_sql_identifiers": {
+            "role": "stable analytical aggregation interface",
+            "description": content["comment"],
+        },
+        "columns": [
+            {
+                "sql_column_name_use_exactly": column["name"],
+                "data_type": get_engine_supported_data_type(column["data_type"]),
+                "semantic_context_not_sql_identifier": column["comment"],
+            }
+            for column in columns
+        ],
+    }
+    schema_context = (
+        _format_semantic_context(context)
+        if include_semantic_context
+        else _format_executable_identifier_catalog(context)
     )
     columns_ddl = [
         f"{column['name']} {get_engine_supported_data_type(column['data_type'])}"
@@ -150,43 +151,42 @@ def _build_metric_ddl(content: dict) -> str:
     ]
 
     return (
-        f"{context}CREATE TABLE {content['name']} (\n  "
+        f"{schema_context}CREATE TABLE {content['name']} (\n  "
         + ",\n  ".join(columns_ddl)
         + "\n);"
     )
 
 
-def _build_view_ddl(content: dict) -> str:
+def _build_view_ddl(content: dict, include_semantic_context: bool = True) -> str:
     columns = [
         column
         for column in content.get("columns", [])
         if column.get("name") and column.get("data_type", "").lower() != "unknown"
     ]
-    context = _format_semantic_context(
-        {
-            "object_type": "view",
-            "sql_identifier_contract": {
-                "sql_table_name_use_exactly": content["name"],
-                "sql_column_names_use_exactly": [
-                    column["name"] for column in columns
-                ],
-            },
-            "semantic_context_not_sql_identifiers": {
-                "role": "stable virtual table interface",
-                "description": content["comment"],
-                "definition_omitted_from_executable_schema": True,
-            },
-            "columns": [
-                {
-                    "sql_column_name_use_exactly": column["name"],
-                    "data_type": get_engine_supported_data_type(
-                        column.get("data_type")
-                    ),
-                    "semantic_context_not_sql_identifier": column.get("comment", ""),
-                }
-                for column in columns
-            ],
-        }
+    context = {
+        "object_type": "view",
+        "sql_identifier_contract": {
+            "sql_table_name_use_exactly": content["name"],
+            "sql_column_names_use_exactly": [column["name"] for column in columns],
+        },
+        "semantic_context_not_sql_identifiers": {
+            "role": "stable virtual table interface",
+            "description": content["comment"],
+            "definition_omitted_from_executable_schema": True,
+        },
+        "columns": [
+            {
+                "sql_column_name_use_exactly": column["name"],
+                "data_type": get_engine_supported_data_type(column.get("data_type")),
+                "semantic_context_not_sql_identifier": column.get("comment", ""),
+            }
+            for column in columns
+        ],
+    }
+    schema_context = (
+        _format_semantic_context(context)
+        if include_semantic_context
+        else _format_executable_identifier_catalog(context)
     )
     columns_ddl = [
         f"{column['name']} {get_engine_supported_data_type(column.get('data_type'))}"
@@ -194,7 +194,7 @@ def _build_view_ddl(content: dict) -> str:
     ]
 
     return (
-        f"{context}CREATE TABLE {content['name']} (\n  "
+        f"{schema_context}CREATE TABLE {content['name']} (\n  "
         + ",\n  ".join(columns_ddl)
         + "\n);"
     )
@@ -339,7 +339,10 @@ def _selected_columns_are_executable(content: dict, columns: set[str]) -> bool:
 
 
 def _build_table_retrieval_context(
-    content: dict, columns: Optional[set[str]] = None, tables: Optional[set[str]] = None
+    content: dict,
+    columns: Optional[set[str]] = None,
+    tables: Optional[set[str]] = None,
+    include_semantic_context: bool = True,
 ) -> tuple[str, bool, bool]:
     ddl, has_calculated_field, has_json_field = build_table_ddl(
         content,
@@ -349,44 +352,44 @@ def _build_table_retrieval_context(
     )
     included_columns = _included_columns(content, columns, tables)
     included_relationships = _included_relationships(content, tables)
-    context = _format_semantic_context(
-        {
-            "object_type": "model",
-            "sql_identifier_contract": {
-                "sql_table_name_use_exactly": content["name"],
-                "sql_column_names_use_exactly": [
-                    column["name"] for column in included_columns
-                ],
-                "relationship_constraints_use_exactly": [
-                    relationship["constraint"]
-                    for relationship in included_relationships
-                ],
-            },
-            "semantic_context_not_sql_identifiers": {
-                "description": content["comment"],
-            },
-            "columns": [
-                {
-                    "sql_column_name_use_exactly": column["name"],
-                    "data_type": get_engine_supported_data_type(column["data_type"]),
-                    "is_primary_key": column["is_primary_key"],
-                    "semantic_context_not_sql_identifier": column["comment"],
-                }
-                for column in included_columns
+    context = {
+        "object_type": "model",
+        "sql_identifier_contract": {
+            "sql_table_name_use_exactly": content["name"],
+            "sql_column_names_use_exactly": [
+                column["name"] for column in included_columns
             ],
-            "relationships": [
-                {
-                    "semantic_context_not_sql_identifier": relationship["comment"],
-                    "sql_relationship_constraint_use_exactly": relationship[
-                        "constraint"
-                    ],
-                    "related_models_use_exactly": relationship.get("tables", []),
-                }
-                for relationship in included_relationships
+            "relationship_constraints_use_exactly": [
+                relationship["constraint"] for relationship in included_relationships
             ],
-        }
+        },
+        "semantic_context_not_sql_identifiers": {
+            "description": content["comment"],
+        },
+        "columns": [
+            {
+                "sql_column_name_use_exactly": column["name"],
+                "data_type": get_engine_supported_data_type(column["data_type"]),
+                "is_primary_key": column["is_primary_key"],
+                "semantic_context_not_sql_identifier": column["comment"],
+            }
+            for column in included_columns
+        ],
+        "relationships": [
+            {
+                "semantic_context_not_sql_identifier": relationship["comment"],
+                "sql_relationship_constraint_use_exactly": relationship["constraint"],
+                "related_models_use_exactly": relationship.get("tables", []),
+            }
+            for relationship in included_relationships
+        ],
+    }
+    schema_context = (
+        _format_semantic_context(context)
+        if include_semantic_context
+        else _format_executable_identifier_catalog(context)
     )
-    return f"{context}{ddl}", has_calculated_field, has_json_field
+    return f"{schema_context}{ddl}", has_calculated_field, has_json_field
 
 
 ## Start of Pipeline
@@ -643,7 +646,10 @@ def check_using_db_schemas_without_pruning(
     for table_schema in construct_db_schemas:
         if table_schema["type"] == "TABLE":
             ddl, _has_calculated_field, _has_json_field = (
-                _build_table_retrieval_context(table_schema)
+                _build_table_retrieval_context(
+                    table_schema,
+                    include_semantic_context=False,
+                )
             )
             retrieval_results.append(
                 {
@@ -663,7 +669,10 @@ def check_using_db_schemas_without_pruning(
             retrieval_results.append(
                 {
                     "table_name": content["name"],
-                    "table_ddl": _build_metric_ddl(content),
+                    "table_ddl": _build_metric_ddl(
+                        content,
+                        include_semantic_context=False,
+                    ),
                 }
             )
             has_metric = True
@@ -671,7 +680,10 @@ def check_using_db_schemas_without_pruning(
             retrieval_results.append(
                 {
                     "table_name": content["name"],
-                    "table_ddl": _build_view_ddl(content),
+                    "table_ddl": _build_view_ddl(
+                        content,
+                        include_semantic_context=False,
+                    ),
                 }
             )
 
@@ -771,6 +783,7 @@ def construct_retrieval_results(
                         table_schema,
                         columns=columns,
                         tables=tables,
+                        include_semantic_context=False,
                     )
                 )
                 if _has_calculated_field:
@@ -792,7 +805,10 @@ def construct_retrieval_results(
                 retrieval_results.append(
                     {
                         "table_name": content["name"],
-                        "table_ddl": _build_metric_ddl(content),
+                        "table_ddl": _build_metric_ddl(
+                            content,
+                            include_semantic_context=False,
+                        ),
                     }
                 )
                 has_metric = True
@@ -800,7 +816,10 @@ def construct_retrieval_results(
                 retrieval_results.append(
                     {
                         "table_name": content["name"],
-                        "table_ddl": _build_view_ddl(content),
+                        "table_ddl": _build_view_ddl(
+                            content,
+                            include_semantic_context=False,
+                        ),
                     }
                 )
 

@@ -104,7 +104,7 @@ class AskService:
         allow_sql_diagnosis: bool = True,
         allow_sql_knowledge_retrieval: bool = True,
         enable_column_pruning: bool = True,
-        max_sql_correction_retries: int = 0,
+        max_sql_correction_retries: int = 3,
         max_histories: int = 5,
         maxsize: int = 1_000_000,
         ttl: int = 120,
@@ -168,7 +168,7 @@ class AskService:
         allow_sql_functions_retrieval = self._allow_sql_functions_retrieval
         allow_sql_diagnosis = self._allow_sql_diagnosis
         allow_sql_knowledge_retrieval = self._allow_sql_knowledge_retrieval
-        max_sql_correction_retries = 0
+        max_sql_correction_retries = self._max_sql_correction_retries
         current_sql_correction_retries = 0
         use_dry_plan = ask_request.use_dry_plan
         allow_dry_plan_fallback = ask_request.allow_dry_plan_fallback
