@@ -156,17 +156,6 @@ def _build_metric_ddl(content: dict) -> str:
     )
 
 
-def _build_metric_identifier_contract(content: dict) -> dict:
-    return {
-        "table_name": content["name"],
-        "columns": [
-            column["name"]
-            for column in content["columns"]
-            if column["data_type"].lower() != "unknown"
-        ],
-    }
-
-
 def _build_view_ddl(content: dict) -> str:
     context = _format_semantic_context(
         {
@@ -184,13 +173,6 @@ def _build_view_ddl(content: dict) -> str:
     return (
         f"{context}{content['comment']}CREATE VIEW {content['name']}\nAS {content['statement']}"
     )
-
-
-def _build_view_identifier_contract(content: dict) -> dict:
-    return {
-        "table_name": content["name"],
-        "columns": None,
-    }
 
 
 def _format_semantic_context(context: dict) -> str:
@@ -341,16 +323,6 @@ def _build_table_retrieval_context(
         }
     )
     return f"{context}{ddl}", has_calculated_field, has_json_field
-
-
-def _build_table_identifier_contract(
-    content: dict, columns: Optional[set[str]] = None, tables: Optional[set[str]] = None
-) -> dict:
-    included_columns = _included_columns(content, columns, tables)
-    return {
-        "table_name": content["name"],
-        "columns": [column["name"] for column in included_columns],
-    }
 
 
 ## Start of Pipeline
@@ -616,9 +588,6 @@ def check_using_db_schemas_without_pruning(
                 {
                     "table_name": table_schema["name"],
                     "table_ddl": ddl,
-                    "identifier_contract": _build_table_identifier_contract(
-                        table_schema
-                    ),
                 }
             )
             if _has_calculated_field:
@@ -634,7 +603,6 @@ def check_using_db_schemas_without_pruning(
                 {
                     "table_name": content["name"],
                     "table_ddl": _build_metric_ddl(content),
-                    "identifier_contract": _build_metric_identifier_contract(content),
                 }
             )
             has_metric = True
@@ -643,7 +611,6 @@ def check_using_db_schemas_without_pruning(
                 {
                     "table_name": content["name"],
                     "table_ddl": _build_view_ddl(content),
-                    "identifier_contract": _build_view_identifier_contract(content),
                 }
             )
 
@@ -754,11 +721,6 @@ def construct_retrieval_results(
                     {
                         "table_name": table_schema["name"],
                         "table_ddl": ddl,
-                        "identifier_contract": _build_table_identifier_contract(
-                            table_schema,
-                            columns=columns,
-                            tables=tables,
-                        ),
                     }
                 )
 
@@ -770,9 +732,6 @@ def construct_retrieval_results(
                     {
                         "table_name": content["name"],
                         "table_ddl": _build_metric_ddl(content),
-                        "identifier_contract": _build_metric_identifier_contract(
-                            content
-                        ),
                     }
                 )
                 has_metric = True
@@ -781,9 +740,6 @@ def construct_retrieval_results(
                     {
                         "table_name": content["name"],
                         "table_ddl": _build_view_ddl(content),
-                        "identifier_contract": _build_view_identifier_contract(
-                            content
-                        ),
                     }
                 )
 

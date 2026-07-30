@@ -582,9 +582,6 @@ describe('IbisAdaptor', () => {
         params: {
           limit: DEFAULT_PREVIEW_LIMIT,
         },
-        headers: {
-          'x-wren-fallback_disable': 'false',
-        },
       },
     );
   });
@@ -619,9 +616,6 @@ describe('IbisAdaptor', () => {
       {
         params: {
           limit: customLimit,
-        },
-        headers: {
-          'x-wren-fallback_disable': 'false',
         },
       },
     );
@@ -682,35 +676,6 @@ describe('IbisAdaptor', () => {
 
     expect(res.correlationId).toEqual('123');
     expect(res.processTime).toEqual('1s');
-  });
-
-  it('should disable v3 fallback during dry run when requested', async () => {
-    mockedAxios.post.mockResolvedValue({
-      headers: {
-        'x-correlation-id': '123',
-        'x-process-time': '1s',
-      },
-    });
-    mockedEncryptor.prototype.decrypt.mockReturnValue(
-      JSON.stringify({ password: mockPostgresConnectionInfo.password }),
-    );
-
-    await ibisAdaptor.dryRun('SELECT * FROM test_table', {
-      dataSource: DataSourceName.POSTGRES,
-      connectionInfo: mockPostgresConnectionInfo,
-      mdl: mockManifest,
-      allowFallback: false,
-    });
-
-    expect(mockedAxios.post).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.any(Object),
-      {
-        headers: {
-          'x-wren-fallback_disable': 'true',
-        },
-      },
-    );
   });
 
   it('should throw an exception with correlationId and processTime when dry run fails', async () => {

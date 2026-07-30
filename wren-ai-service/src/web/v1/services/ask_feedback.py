@@ -161,11 +161,6 @@ class AskFeedbackService:
                 has_json_field = _retrieval_result.get("has_json_field", False)
                 documents = _retrieval_result.get("retrieval_results", [])
                 table_ddls = [document.get("table_ddl") for document in documents]
-                identifier_contracts = [
-                    document.get("identifier_contract")
-                    for document in documents
-                    if document.get("identifier_contract")
-                ]
                 sql_samples = sql_samples_task["formatted_output"].get("documents", [])
                 instructions = instructions_task["formatted_output"].get(
                     "documents", []
@@ -192,7 +187,6 @@ class AskFeedbackService:
                     has_json_field=has_json_field,
                     sql_functions=sql_functions,
                     sql_knowledge=sql_knowledge,
-                    identifier_contracts=identifier_contracts,
                 )
 
                 if sql_valid_result := text_to_sql_generation_results["post_process"][
@@ -222,10 +216,7 @@ class AskFeedbackService:
                             trace_id=trace_id,
                         )
 
-                        if (
-                            allow_sql_diagnosis
-                            and failed_dry_run_result["type"] != "SCHEMA_GROUNDING"
-                        ):
+                        if allow_sql_diagnosis:
                             sql_diagnosis_results = await self._pipelines[
                                 "sql_diagnosis"
                             ].run(
@@ -260,7 +251,6 @@ class AskFeedbackService:
                             project_id=ask_feedback_request.project_id,
                             sql_functions=sql_functions,
                             sql_knowledge=sql_knowledge,
-                            identifier_contracts=identifier_contracts,
                         )
 
                         if valid_generation_result := sql_correction_results[

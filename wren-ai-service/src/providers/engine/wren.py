@@ -31,13 +31,11 @@ class WrenUI(Engine):
         dry_run: bool = True,
         timeout: float = settings.engine_timeout,
         limit: int = 500,
-        allow_fallback: bool = True,
         **kwargs,
     ) -> Tuple[bool, Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
         data = {
             "sql": remove_limit_statement(sql),
             "projectId": project_id,
-            "allowFallback": allow_fallback,
         }
         if dry_run:
             data["dryRun"] = True
