@@ -23,7 +23,6 @@ def _coerce_limit(limit: int | None) -> int | None:
     return coerced
 
 
-
 def _escape_sql(value: str) -> str:
     return value.replace("'", "''")
 
