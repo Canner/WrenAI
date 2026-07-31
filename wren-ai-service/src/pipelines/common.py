@@ -1,4 +1,3 @@
-import ast
 import re
 from typing import Any, List, Optional, Tuple
 
@@ -112,84 +111,6 @@ async def retrieve_metadata(project_id: str, retriever) -> dict[str, Any]:
         return doc.meta
     else:
         return {}
-
-
-def resolve_schema_manifest(
-    metadata: dict[str, Any],
-    schema_manifest: dict[str, list[str]] | None,
-) -> dict[str, list[str]] | None:
-    active_schema_manifest = metadata.get("schema_manifest")
-    if isinstance(active_schema_manifest, dict) and active_schema_manifest:
-        return active_schema_manifest
-
-    return schema_manifest
-
-
-async def retrieve_schema_manifest(
-    project_id: str,
-    retriever,
-) -> dict[str, list[str]]:
-    filters: dict[str, Any] = {
-        "operator": "AND",
-        "conditions": [
-            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-        ],
-    }
-    if project_id:
-        filters["conditions"].append(
-            {"field": "project_id", "operator": "==", "value": project_id}
-        )
-
-    result = await retriever.run(query_embedding=[], filters=filters, top_k=10000)
-    manifest: dict[str, list[str]] = {}
-
-    for document in result.get("documents", []):
-        content = ast.literal_eval(document.content)
-        table_name = document.meta.get("name") or content.get("name")
-        if not table_name:
-            continue
-
-        manifest.setdefault(table_name, [])
-        if content.get("type") == "TABLE_COLUMNS":
-            column_names = [
-                column["name"]
-                for column in content.get("columns", [])
-                if column.get("type") == "COLUMN"
-                and column.get("name")
-                and column.get("data_type", "").lower() != "unknown"
-            ]
-        elif content.get("type") in {"VIEW", "METRIC"}:
-            column_names = [
-                column["name"]
-                for column in content.get("columns", [])
-                if column.get("name")
-                and column.get("data_type", "").lower() != "unknown"
-            ]
-        else:
-            column_names = []
-
-        for column_name in column_names:
-            if column_name not in manifest[table_name]:
-                manifest[table_name].append(column_name)
-
-    return {table_name: columns for table_name, columns in manifest.items() if columns}
-
-
-async def resolve_active_schema_manifest(
-    metadata: dict[str, Any],
-    schema_manifest: dict[str, list[str]] | None,
-    project_id: str,
-    dbschema_retriever,
-) -> dict[str, list[str]] | None:
-    resolved_schema_manifest = resolve_schema_manifest(metadata, schema_manifest)
-    if metadata.get("schema_manifest") or not project_id:
-        return resolved_schema_manifest
-
-    indexed_schema_manifest = await retrieve_schema_manifest(
-        project_id=project_id,
-        retriever=dbschema_retriever,
-    )
-    return indexed_schema_manifest or resolved_schema_manifest
 
 
 @component

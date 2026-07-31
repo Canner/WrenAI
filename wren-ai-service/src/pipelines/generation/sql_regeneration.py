@@ -14,7 +14,6 @@ from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
-    construct_executable_identifier_catalog,
     construct_instructions,
     get_calculated_field_instructions,
     get_json_field_instructions,
@@ -58,10 +57,6 @@ sql_regeneration_user_prompt_template = """
 {% for document in documents %}
     {{ document }}
 {% endfor %}
-
-{% if executable_identifier_catalog %}
-{{ executable_identifier_catalog }}
-{% endif %}
 
 {% if calculated_field_instructions %}
 {{ calculated_field_instructions }}
@@ -124,15 +119,11 @@ def prompt(
     has_json_field: bool = False,
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
-    schema_manifest: dict[str, list[str]] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
         sql=sql,
         documents=documents,
-        executable_identifier_catalog=construct_executable_identifier_catalog(
-            schema_manifest
-        ),
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
@@ -173,12 +164,10 @@ async def post_process(
     regenerate_sql: dict,
     post_processor: SQLGenPostProcessor,
     project_id: str | None = None,
-    schema_manifest: dict[str, list[str]] | None = None,
 ) -> dict:
     return await post_processor.run(
         regenerate_sql.get("replies"),
         project_id=project_id,
-        schema_manifest=schema_manifest,
     )
 
 
@@ -223,7 +212,6 @@ class SQLRegeneration(BasicPipeline):
         has_json_field: bool = False,
         sql_functions: list[SqlFunction] | None = None,
         sql_knowledge: SqlKnowledge | None = None,
-        schema_manifest: dict[str, list[str]] | None = None,
     ):
         logger.info("SQL Regeneration pipeline is running...")
 
@@ -242,7 +230,6 @@ class SQLRegeneration(BasicPipeline):
                 "has_json_field": has_json_field,
                 "sql_functions": sql_functions,
                 "sql_knowledge": sql_knowledge,
-                "schema_manifest": schema_manifest,
                 **self._components,
             },
         )

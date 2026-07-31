@@ -36,7 +36,7 @@ def test_ask_service_defaults_to_column_pruning():
 
     assert service._enable_column_pruning is True
     assert service._allow_sql_generation_reasoning is False
-    assert service._max_sql_correction_retries == 3
+    assert service._max_sql_correction_retries == 0
 
 
 @pytest.mark.asyncio
@@ -59,20 +59,9 @@ async def test_sql_correction_service_requires_retrieved_tables():
 
 
 @pytest.mark.asyncio
-async def test_ask_service_skips_speculative_reasoning_and_corrects_with_retrieved_schema():
+async def test_ask_service_does_not_run_speculative_reasoning_or_correction_after_failed_generation():
     sql_generation_reasoning = AsyncMock(run=AsyncMock(return_value={}))
-    sql_correction = AsyncMock(
-        run=AsyncMock(
-            return_value={
-                "post_process": {
-                    "valid_generation_result": {
-                        "sql": "SELECT retrieved_field FROM retrieved_model"
-                    },
-                    "invalid_generation_result": {},
-                }
-            }
-        )
-    )
+    sql_correction = AsyncMock(run=AsyncMock(return_value={}))
     service = AskService(
         {
             "sql_pairs_retrieval": AsyncMock(
@@ -119,7 +108,6 @@ async def test_ask_service_skips_speculative_reasoning_and_corrects_with_retriev
             "sql_correction": sql_correction,
         },
         allow_intent_classification=False,
-        allow_sql_diagnosis=False,
     )
     request = AskRequest(query="Can this be answered?", id="deploy-id")
     request.query_id = "query-id"
@@ -127,14 +115,11 @@ async def test_ask_service_skips_speculative_reasoning_and_corrects_with_retriev
     await service.ask(request)
     result = service.get_ask_result(AskResultRequest(query_id="query-id"))
 
-    assert result.status == "finished"
-    assert result.response[0].sql == "SELECT retrieved_field FROM retrieved_model"
+    assert result.status == "failed"
+    assert result.error.code == "NO_RELEVANT_SQL"
     assert result.invalid_sql is None
     sql_generation_reasoning.run.assert_not_called()
-    sql_correction.run.assert_called_once()
-    assert sql_correction.run.call_args.kwargs["contexts"] == [
-        "CREATE TABLE retrieved_model (retrieved_field VARCHAR);"
-    ]
+    sql_correction.run.assert_not_called()
 
 
 def test_sql_correction_router_defaults_to_planner_validation_without_fallback():

@@ -5,7 +5,6 @@ from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
     construct_ask_history_messages,
-    construct_executable_identifier_catalog,
     construct_instructions,
     get_json_field_instructions,
     get_metric_instructions,
@@ -22,7 +21,6 @@ from src.pipelines.generation.sql_correction import (
 )
 from src.pipelines.generation.sql_answer import sql_to_answer_system_prompt
 from src.pipelines.generation.sql_generation import sql_generation_user_prompt_template
-from src.pipelines.generation.sql_generation import post_process as sql_post_process
 from src.pipelines.generation.sql_regeneration import get_sql_regeneration_system_prompt
 from src.pipelines.generation.sql_regeneration import sql_regeneration_user_prompt_template
 
@@ -118,158 +116,6 @@ async def test_sql_postprocessor_rejects_null_sql_generation_result():
     assert result["valid_generation_result"] == {}
     assert result["invalid_generation_result"]["type"] == "NO_RELEVANT_SQL"
     assert result["invalid_generation_result"]["sql"] == ""
-
-
-@pytest.mark.asyncio
-async def test_sql_postprocessor_rejects_table_outside_retrieved_manifest():
-    engine = _DryPlanEngine()
-
-    result = await SQLGenPostProcessor(engine).run(
-        replies=['{"sql": "SELECT \\"AvailableField\\" FROM \\"UnretrievedObject\\""}'],
-        use_dry_plan=True,
-        data_source="source",
-        schema_manifest={"RetrievedObject": ["AvailableField"]},
-    )
-
-    assert result["valid_generation_result"] == {}
-    assert result["invalid_generation_result"]["type"] == "MANIFEST_GROUNDING"
-    assert "UnretrievedObject" in result["invalid_generation_result"]["error"]
-    assert engine.dry_plan_calls == []
-    assert engine.execute_sql_calls == []
-
-
-@pytest.mark.asyncio
-async def test_sql_postprocessor_rejects_column_outside_retrieved_manifest():
-    engine = _DryPlanEngine()
-
-    result = await SQLGenPostProcessor(engine).run(
-        replies=['{"sql": "SELECT \\"UnretrievedField\\" FROM \\"RetrievedObject\\""}'],
-        use_dry_plan=True,
-        data_source="source",
-        schema_manifest={"RetrievedObject": ["AvailableField"]},
-    )
-
-    assert result["valid_generation_result"] == {}
-    assert result["invalid_generation_result"]["type"] == "MANIFEST_GROUNDING"
-    assert "UnretrievedField" in result["invalid_generation_result"]["error"]
-    assert "RetrievedObject" in result["invalid_generation_result"]["error"]
-    assert engine.dry_plan_calls == []
-    assert engine.execute_sql_calls == []
-
-
-@pytest.mark.asyncio
-async def test_sql_generation_post_process_uses_separate_grounding_manifest():
-    engine = _DryPlanEngine()
-
-    result = await sql_post_process(
-        generate_sql={
-            "replies": ['{"sql": "SELECT \\"ActiveField\\" FROM \\"ActiveEntity\\""}']
-        },
-        post_processor=SQLGenPostProcessor(engine),
-        data_source="source",
-        use_dry_plan=True,
-        grounding_schema_manifest={"ActiveEntity": ["ActiveField"]},
-    )
-
-    assert result["valid_generation_result"]["sql"] == (
-        'SELECT "ActiveField" FROM "ActiveEntity"'
-    )
-    assert len(engine.dry_plan_calls) == 1
-    assert len(engine.execute_sql_calls) == 1
-
-
-@pytest.mark.asyncio
-async def test_sql_postprocessor_rejects_filter_column_outside_retrieved_manifest():
-    engine = _DryPlanEngine()
-
-    result = await SQLGenPostProcessor(engine).run(
-        replies=[
-            (
-                '{"sql": "SELECT * FROM \\"RetrievedObject\\" '
-                'WHERE \\"UnretrievedDate\\" >= CURRENT_DATE"}'
-            )
-        ],
-        use_dry_plan=True,
-        data_source="source",
-        schema_manifest={"RetrievedObject": ["AvailableField"]},
-    )
-
-    assert result["valid_generation_result"] == {}
-    assert result["invalid_generation_result"]["type"] == "MANIFEST_GROUNDING"
-    assert engine.dry_plan_calls == []
-    assert engine.execute_sql_calls == []
-
-
-@pytest.mark.asyncio
-async def test_sql_postprocessor_rejects_function_argument_column_outside_manifest():
-    engine = _DryPlanEngine()
-
-    result = await SQLGenPostProcessor(engine).run(
-        replies=[
-            (
-                '{"sql": "SELECT * FROM \\"RetrievedObject\\" '
-                "WHERE DATE_TRUNC('month', \\\"UnretrievedDate\\\") = CURRENT_DATE\"}"
-            )
-        ],
-        use_dry_plan=True,
-        data_source="source",
-        schema_manifest={"RetrievedObject": ["AvailableField"]},
-    )
-
-    assert result["valid_generation_result"] == {}
-    assert result["invalid_generation_result"]["type"] == "MANIFEST_GROUNDING"
-    assert engine.dry_plan_calls == []
-    assert engine.execute_sql_calls == []
-
-
-@pytest.mark.asyncio
-async def test_sql_postprocessor_allows_exact_retrieved_manifest_identifiers():
-    engine = _DryPlanEngine()
-
-    result = await SQLGenPostProcessor(engine).run(
-        replies=[
-            (
-                '{"sql": "SELECT SUM(\\"AvailableField\\") AS \\"TotalField\\" '
-                'FROM \\"RetrievedObject\\""}'
-            )
-        ],
-        use_dry_plan=True,
-        data_source="source",
-        schema_manifest={"RetrievedObject": ["AvailableField"]},
-    )
-
-    assert result["valid_generation_result"]["sql"] == (
-        'SELECT SUM("AvailableField") AS "TotalField" FROM "RetrievedObject"'
-    )
-    assert len(engine.dry_plan_calls) == 1
-    assert len(engine.execute_sql_calls) == 1
-
-
-@pytest.mark.asyncio
-async def test_sql_postprocessor_validates_join_predicate_columns():
-    engine = _DryPlanEngine()
-
-    result = await SQLGenPostProcessor(engine).run(
-        replies=[
-            (
-                '{"sql": "SELECT a.\\"AvailableField\\" FROM \\"RetrievedObject\\" a '
-                'JOIN \\"RelatedObject\\" b ON a.\\"JoinField\\" = b.\\"JoinField\\""}'
-            )
-        ],
-        use_dry_plan=True,
-        data_source="source",
-        schema_manifest={
-            "RetrievedObject": ["AvailableField", "JoinField"],
-            "RelatedObject": ["JoinField"],
-        },
-    )
-
-    assert result["valid_generation_result"]["sql"] == (
-        'SELECT a."AvailableField" FROM "RetrievedObject" a JOIN '
-        '"RelatedObject" b ON a."JoinField" = b."JoinField"'
-    )
-    assert len(engine.dry_plan_calls) == 1
-    assert len(engine.execute_sql_calls) == 1
 
 
 def test_construct_instructions_uses_instruction_text():
@@ -441,79 +287,6 @@ def test_sql_correction_system_prompt_discards_invalid_identifier_context():
     assert "return null for sql instead of substituting non-schema identifiers" in prompt
 
 
-def test_sql_generation_prompt_requires_schema_object_selection_before_sql():
-    prompt = get_sql_generation_system_prompt()
-
-    assert "Read every retrieved DATABASE SCHEMA object before choosing" in prompt
-    assert "Retrieval rank only lists candidates" in prompt
-    assert "Do not default to the first retrieved object" in prompt
-    assert "declared fields support the user's requested subject" in prompt
-
-
-def test_sql_generation_prompt_treats_identifiers_as_indivisible_strings():
-    prompt = get_sql_generation_system_prompt()
-
-    assert "Treat every declared table and column identifier as an indivisible string" in prompt
-    assert "Never splice, recombine, or transfer prefixes" in prompt
-    assert "copy the entire identifier exactly as declared" in prompt
-    assert "Do not rebuild it from the business meaning" in prompt
-
-
-def test_construct_executable_identifier_catalog_lists_manifest_identifiers():
-    catalog = construct_executable_identifier_catalog(
-        {"ObjectA": ["FieldA", "FieldB"], "ObjectB": ["FieldC"]}
-    )
-
-    assert "EXECUTABLE WREN IDENTIFIER CATALOG" in catalog
-    assert 'Table: "ObjectA"' in catalog
-    assert '- "FieldA"' in catalog
-    assert 'Table: "ObjectB"' in catalog
-    assert "Copy identifiers exactly as written here" in catalog
-
-
-def test_sql_generation_prompt_can_include_executable_identifier_catalog():
-    catalog = construct_executable_identifier_catalog({"ObjectA": ["FieldA"]})
-    prompt = PromptBuilder(template=sql_generation_user_prompt_template).run(
-        query="Question",
-        documents=["SCHEMA_CONTEXT"],
-        executable_identifier_catalog=catalog,
-        sql_generation_reasoning=None,
-        instructions=[],
-        calculated_field_instructions="",
-        metric_instructions="",
-        json_field_instructions="",
-        sql_samples=[],
-        sql_functions=[],
-    )["prompt"]
-
-    assert "SCHEMA_CONTEXT" in prompt
-    assert "EXECUTABLE WREN IDENTIFIER CATALOG" in prompt
-    assert 'Table: "ObjectA"' in prompt
-    assert '- "FieldA"' in prompt
-
-
-def test_sql_correction_prompt_includes_manifest_grounding_failure():
-    prompt = PromptBuilder(template=sql_correction_user_prompt_template).run(
-        query="Question",
-        documents=["SCHEMA_CONTEXT"],
-        invalid_generation_result={
-            "type": "MANIFEST_GROUNDING",
-            "error": (
-                "Generated SQL references column `RejectedField` outside the "
-                "retrieved Wren schema for table `RetrievedObject`."
-            ),
-        },
-        sql_generation_reasoning=None,
-        instructions=[],
-        sql_functions=[],
-    )["prompt"]
-
-    assert "MANIFEST GROUNDING FAILURE" in prompt
-    assert "RejectedField" in prompt
-    assert "RetrievedObject" in prompt
-    assert "Do not reuse rejected identifiers" in prompt
-
-
 def test_sql_reasoning_prompt_keeps_reasoning_non_executable():
     prompt = sql_generation_reasoning_system_prompt
 
@@ -635,7 +408,6 @@ def test_executable_prompt_templates_omit_untrusted_reasoning_and_sql_context():
     assert "dry-run diagnostic text is intentionally omitted" in (
         correction_prompt
     )
-    assert (
-        "Regenerate from the user question and current DATABASE SCHEMA or "
-        "EXECUTABLE WREN IDENTIFIER CATALOG only"
-    ) in correction_prompt
+    assert "Regenerate from the user question and current DATABASE SCHEMA only" in (
+        correction_prompt
+    )

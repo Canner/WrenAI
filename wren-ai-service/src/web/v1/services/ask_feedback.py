@@ -105,7 +105,6 @@ class AskFeedbackService:
         error_message = None
         invalid_sql = None
         sql_knowledge = None
-        schema_manifest = {}
         allow_sql_knowledge_retrieval = self._allow_sql_knowledge_retrieval
 
         try:
@@ -162,14 +161,6 @@ class AskFeedbackService:
                 has_json_field = _retrieval_result.get("has_json_field", False)
                 documents = _retrieval_result.get("retrieval_results", [])
                 table_ddls = [document.get("table_ddl") for document in documents]
-                schema_manifest = {
-                    document.get("table_name"): document.get(
-                        "manifest_column_names",
-                        document.get("column_names", []),
-                    )
-                    for document in documents
-                    if document.get("table_name")
-                }
                 sql_samples = sql_samples_task["formatted_output"].get("documents", [])
                 instructions = instructions_task["formatted_output"].get(
                     "documents", []
@@ -196,7 +187,6 @@ class AskFeedbackService:
                     has_json_field=has_json_field,
                     sql_functions=sql_functions,
                     sql_knowledge=sql_knowledge,
-                    schema_manifest=schema_manifest,
                 )
 
                 if sql_valid_result := text_to_sql_generation_results["post_process"][
@@ -217,7 +207,6 @@ class AskFeedbackService:
                         original_sql = failed_dry_run_result["original_sql"]
                         invalid_sql = failed_dry_run_result["sql"]
                         error_message = failed_dry_run_result["error"]
-                        error_type = failed_dry_run_result["type"]
                         sql_diagnosis_reasoning = None
 
                         self._ask_feedback_results[
@@ -227,10 +216,7 @@ class AskFeedbackService:
                             trace_id=trace_id,
                         )
 
-                        if (
-                            allow_sql_diagnosis
-                            and error_type != "MANIFEST_GROUNDING"
-                        ):
+                        if allow_sql_diagnosis:
                             sql_diagnosis_results = await self._pipelines[
                                 "sql_diagnosis"
                             ].run(
@@ -258,7 +244,6 @@ class AskFeedbackService:
                             sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
                             instructions=instructions,
                             invalid_generation_result={
-                                "type": error_type,
                                 "original_sql": original_sql,
                                 "sql": invalid_sql,
                                 "error": correction_error_message,
@@ -266,7 +251,6 @@ class AskFeedbackService:
                             project_id=ask_feedback_request.project_id,
                             sql_functions=sql_functions,
                             sql_knowledge=sql_knowledge,
-                            schema_manifest=schema_manifest,
                         )
 
                         if valid_generation_result := sql_correction_results[

@@ -10,16 +10,11 @@ from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
-from src.pipelines.common import (
-    clean_up_new_lines,
-    resolve_active_schema_manifest,
-    retrieve_metadata,
-)
+from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
     construct_ask_history_messages,
-    construct_executable_identifier_catalog,
     construct_instructions,
     get_calculated_field_instructions,
     get_json_field_instructions,
@@ -43,10 +38,6 @@ generate one SQL query to best answer the user's question.
 {% for document in documents %}
     {{ document }}
 {% endfor %}
-
-{% if executable_identifier_catalog %}
-{{ executable_identifier_catalog }}
-{% endif %}
 
 {% if calculated_field_instructions %}
 {{ calculated_field_instructions }}
@@ -85,9 +76,8 @@ Summary:
 
 ### QUESTION ###
 User's Follow-up Question: {{ query }}
-Before writing SQL, review every DATABASE SCHEMA document supplied in this prompt. Select table, view, metric, and column identifiers only from schema objects whose declared fields support the user's requested subject, output columns, filters, groupings, measures, time concepts, and relationships. Do not use the first retrieved object by default; retrieval rank is only candidate order. If a declared identifier contains prefixes, numeric ordinals, underscores, spaces, punctuation, casing, abbreviations, or suffixes, copy the whole identifier exactly as declared and do not rebuild it from the business meaning.
-Answer the user's intent using the current DATABASE SCHEMA and EXECUTABLE WREN IDENTIFIER CATALOG. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA or EXECUTABLE WREN IDENTIFIER CATALOG. Do not copy semantic labels, source/physical/lineage names, user question words, or inferred names into executable SQL. If a needed table, output column, filter column, grouping column, relation, date field, measure, or function is not declared in DATABASE SCHEMA, EXECUTABLE WREN IDENTIFIER CATALOG, or SQL FUNCTIONS, return null for sql instead of inventing, substituting, or approximating a similar name. If the supplied schema and catalog do not ground the user's primary requested intent, return null for sql instead of querying an unrelated object.
-If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA or EXECUTABLE WREN IDENTIFIER CATALOG, stop and return null for sql. Never create a table or column from the user's wording, even when the wording looks like a business term or object name.
+Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, user question words, or inferred names into executable SQL. If a needed table, output column, filter column, grouping column, relation, date field, measure, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, return null for sql instead of inventing, substituting, or approximating a similar name. If the retrieved schema does not ground the user's primary requested intent, return null for sql instead of querying an unrelated object.
+If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT, stop and return null for sql. Never create a table or column from the user's wording, even when the wording looks like a business term or object name.
 Do not generate SQL from a reasoning plan. The reasoning plan is not executable context and cannot provide table names, column names, filters, functions, joins, or examples.
 
 Return only the final JSON SQL response.
@@ -108,14 +98,10 @@ def prompt(
     has_json_field: bool = False,
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
-    schema_manifest: dict[str, list[str]] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
-        executable_identifier_catalog=construct_executable_identifier_catalog(
-            schema_manifest
-        ),
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
@@ -163,7 +149,6 @@ async def post_process(
     project_id: str | None = None,
     use_dry_plan: bool = False,
     allow_dry_plan_fallback: bool = True,
-    grounding_schema_manifest: dict[str, list[str]] | None = None,
 ) -> dict:
     return await post_processor.run(
         generate_sql_in_followup.get("replies"),
@@ -171,7 +156,6 @@ async def post_process(
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
-        schema_manifest=grounding_schema_manifest,
     )
 
 
@@ -188,9 +172,6 @@ class FollowUpSQLGeneration(BasicPipeline):
     ):
         self._retriever = document_store_provider.get_retriever(
             document_store_provider.get_store("project_meta")
-        )
-        self._dbschema_retriever = document_store_provider.get_retriever(
-            document_store_provider.get_store()
         )
 
         self._components = {
@@ -226,20 +207,13 @@ class FollowUpSQLGeneration(BasicPipeline):
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
         sql_knowledge: SqlKnowledge | None = None,
-        schema_manifest: dict[str, list[str]] | None = None,
     ):
         logger.info("Follow-Up SQL Generation pipeline is running...")
 
-        if project_id or use_dry_plan:
+        if use_dry_plan:
             metadata = await retrieve_metadata(project_id or "", self._retriever)
         else:
             metadata = {}
-        grounding_schema_manifest = await resolve_active_schema_manifest(
-            metadata,
-            schema_manifest,
-            project_id or "",
-            self._dbschema_retriever,
-        )
 
         return await self._pipe.execute(
             ["post_process"],
@@ -259,8 +233,6 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "allow_dry_plan_fallback": allow_dry_plan_fallback,
                 "data_source": metadata.get("data_source", "local_file"),
                 "sql_knowledge": sql_knowledge,
-                "schema_manifest": schema_manifest,
-                "grounding_schema_manifest": grounding_schema_manifest,
                 **self._components,
             },
         )
