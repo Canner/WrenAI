@@ -13,11 +13,23 @@ from wren.model import (
 from wren.model.error import ErrorCode, WrenError
 
 
-def _coerce_limit(limit: int | None) -> int | None:
-    """Validate limit before SQL LIMIT interpolation."""
+def _coerce_limit(limit: int | str | None) -> int | None:
+    """Validate a limit before SQL ``LIMIT`` interpolation.
+
+    Accepts ``None`` (unlimited), integers, and integer-valued strings.
+    Rejects negative and non-integral values (e.g. ``-0.5``) so no
+    injection-like or fractional input can reach the interpolated SQL.
+    """
     if limit is None:
         return None
-    coerced = int(limit)
+    if isinstance(limit, bool):
+        raise ValueError(f"limit must be an integer, got {limit!r}")
+    if isinstance(limit, float):
+        if not limit.is_integer():
+            raise ValueError(f"limit must be an integer, got {limit!r}")
+        coerced = int(limit)
+    else:
+        coerced = int(limit)
     if coerced < 0:
         raise ValueError(f"limit must be non-negative, got {coerced}")
     return coerced
@@ -82,7 +94,7 @@ class DuckDBConnector(ConnectorABC):
             self.connection.close()
             raise
 
-    def query(self, sql: str, limit: int | None = None) -> pa.Table:
+    def query(self, sql: str, limit: int | str | None = None) -> pa.Table:
         """Execute ``sql`` and return the result as an Arrow table.
 
         When ``limit`` is provided the query is wrapped in a ``LIMIT`` clause

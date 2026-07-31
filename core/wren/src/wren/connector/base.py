@@ -22,7 +22,7 @@ def strip_trailing_semicolon(sql: str) -> str:
 
 class ConnectorABC(ABC):
     @abstractmethod
-    def query(self, sql: str, limit: int | None = None) -> pa.Table:
+    def query(self, sql: str, limit: int | str | None = None) -> pa.Table:
         pass
 
     @abstractmethod
