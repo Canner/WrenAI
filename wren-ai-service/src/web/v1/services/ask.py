@@ -25,10 +25,10 @@ class AskRequest(BaseRequest):
     # so we need to support as a choice, and will remove it in the future
     mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
     histories: Optional[list[AskHistory]] = Field(default_factory=list)
-    ignore_sql_generation_reasoning: bool = True
+    ignore_sql_generation_reasoning: bool = False
     enable_column_pruning: bool = False
-    use_dry_plan: bool = True
-    allow_dry_plan_fallback: bool = False
+    use_dry_plan: bool = False
+    allow_dry_plan_fallback: bool = True
     custom_instruction: Optional[str] = None
 
 
@@ -99,12 +99,12 @@ class AskService:
         self,
         pipelines: Dict[str, BasicPipeline],
         allow_intent_classification: bool = True,
-        allow_sql_generation_reasoning: bool = False,
+        allow_sql_generation_reasoning: bool = True,
         allow_sql_functions_retrieval: bool = True,
         allow_sql_diagnosis: bool = True,
         allow_sql_knowledge_retrieval: bool = True,
-        enable_column_pruning: bool = True,
-        max_sql_correction_retries: int = 0,
+        enable_column_pruning: bool = False,
+        max_sql_correction_retries: int = 3,
         max_histories: int = 5,
         maxsize: int = 1_000_000,
         ttl: int = 120,
@@ -161,14 +161,17 @@ class AskService:
         table_names = []
         error_message = None
         invalid_sql = None
-        allow_sql_generation_reasoning = False
+        allow_sql_generation_reasoning = (
+            self._allow_sql_generation_reasoning
+            and not ask_request.ignore_sql_generation_reasoning
+        )
         enable_column_pruning = (
             self._enable_column_pruning or ask_request.enable_column_pruning
         )
         allow_sql_functions_retrieval = self._allow_sql_functions_retrieval
         allow_sql_diagnosis = self._allow_sql_diagnosis
         allow_sql_knowledge_retrieval = self._allow_sql_knowledge_retrieval
-        max_sql_correction_retries = 0
+        max_sql_correction_retries = self._max_sql_correction_retries
         current_sql_correction_retries = 0
         use_dry_plan = ask_request.use_dry_plan
         allow_dry_plan_fallback = ask_request.allow_dry_plan_fallback
@@ -186,7 +189,29 @@ class AskService:
                     is_followup=True if histories else False,
                 )
 
-                if not api_results:
+                historical_question = await self._pipelines["historical_question"].run(
+                    query=user_query,
+                    project_id=ask_request.project_id,
+                )
+
+                # we only return top 1 result
+                historical_question_result = historical_question.get(
+                    "formatted_output", {}
+                ).get("documents", [])[:1]
+
+                if historical_question_result:
+                    api_results = [
+                        AskResult(
+                            **{
+                                "sql": result.get("statement"),
+                                "type": "view" if result.get("viewId") else "llm",
+                                "viewId": result.get("viewId"),
+                            }
+                        )
+                        for result in historical_question_result
+                    ]
+                    sql_generation_reasoning = ""
+                else:
                     # Run both pipeline operations concurrently
                     sql_samples_task, instructions_task = await asyncio.gather(
                         self._pipelines["sql_pairs_retrieval"].run(
@@ -200,6 +225,7 @@ class AskService:
                         ),
                     )
 
+                    # Extract results from completed tasks
                     sql_samples = sql_samples_task["formatted_output"].get(
                         "documents", []
                     )
@@ -486,12 +512,7 @@ class AskService:
                     "post_process"
                 ]["invalid_generation_result"]:
                     while current_sql_correction_retries < max_sql_correction_retries:
-                        if failed_dry_run_result["type"] in (
-                            "TIME_OUT",
-                            "NO_RELEVANT_SQL",
-                        ):
-                            error_message = failed_dry_run_result["error"]
-                            invalid_sql = failed_dry_run_result["sql"]
+                        if failed_dry_run_result["type"] == "TIME_OUT":
                             break
 
                         original_sql = failed_dry_run_result["original_sql"]
@@ -528,17 +549,12 @@ class AskService:
                             "sql_correction"
                         ].run(
                             contexts=table_ddls,
-                            query=user_query,
-                            sql_generation_reasoning=sql_generation_reasoning,
                             instructions=instructions,
                             invalid_generation_result={
                                 "sql": original_sql,
-                                "error": (
-                                    f"{sql_diagnosis_reasoning}\nDry run error: {error_message}"
-                                    if allow_sql_diagnosis
-                                    and sql_diagnosis_reasoning
-                                    else error_message
-                                ),
+                                "error": sql_diagnosis_reasoning
+                                if allow_sql_diagnosis
+                                else error_message,
                             },
                             project_id=ask_request.project_id,
                             use_dry_plan=use_dry_plan,
