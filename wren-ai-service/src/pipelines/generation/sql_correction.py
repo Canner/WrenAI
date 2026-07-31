@@ -13,7 +13,7 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.common import (
     clean_up_new_lines,
-    resolve_schema_manifest,
+    resolve_active_schema_manifest,
     retrieve_metadata,
 )
 from src.pipelines.generation.utils.sql import (
@@ -192,6 +192,9 @@ class SQLCorrection(BasicPipeline):
         self._retriever = document_store_provider.get_retriever(
             document_store_provider.get_store("project_meta")
         )
+        self._dbschema_retriever = document_store_provider.get_retriever(
+            document_store_provider.get_store()
+        )
 
         self._components = {
             "generator": llm_provider.get_generator(
@@ -230,7 +233,12 @@ class SQLCorrection(BasicPipeline):
             metadata = await retrieve_metadata(project_id or "", self._retriever)
         else:
             metadata = {}
-        schema_manifest = resolve_schema_manifest(metadata, schema_manifest)
+        schema_manifest = await resolve_active_schema_manifest(
+            metadata,
+            schema_manifest,
+            project_id or "",
+            self._dbschema_retriever,
+        )
 
         return await self._pipe.execute(
             ["post_process"],
