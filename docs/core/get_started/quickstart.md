@@ -20,7 +20,7 @@ This guide drops three things on you in the first few steps. Skim before you sta
 
 - **Wren CLI (`wren`)**: the Python CLI that runs all of this. Connects to a database, holds your modeling files, executes SQL through the context layer, manages a local memory index. ([CLI reference →](/oss/reference/cli))
 - **MDL (Modeling Definition Language)**: YAML files under `models/`, `views/`, and `relationships.yml` that describe your tables, columns, and joins in business terms. The agent reads MDL instead of guessing from raw schema. ([MDL concept →](/oss/concepts/what_is_mdl) · [Wren project guide →](/oss/reference/mdl))
-- **jaffle_shop**: a public sample database from dbt Labs. We use it so you do not need to bring your own database to follow this quickstart. It is a fictional ecommerce business with `customers`, `orders`, `products`, and `supplies`. *(Want to skip jaffle_shop and use your own database? Finish the install in step 2 then jump to [Connect your database](/oss/guides/connect).)*
+- **jaffle_shop**: a public sample database from dbt Labs. We use it so you do not need to bring your own database to follow this quickstart. It is a fictional ecommerce business whose raw data is customers, orders, and payments; `dbt build` turns that into two analytics tables, `customers` and `orders`. *(Want to skip jaffle_shop and use your own database? Finish the install in step 2 then jump to [Connect your database](/oss/guides/connect).)*
 - **Skills**: markdown workflow guides that tell an AI coding agent (Claude Code, Openclaw, Hermes, Codex, etc.) how to operate the CLI. You install one `wren` discovery stub; it fetches the guides from the CLI on demand. Two guides drive this quickstart: `generate-mdl` (one-time scaffolding) and `usage` (day-to-day querying). ([Skills concept →](/oss/reference/skills))
 
 ---
@@ -63,6 +63,19 @@ Verify the database file was created:
 ```bash
 ls jaffle_shop.duckdb
 ```
+
+`dbt build` seeds three raw tables, then builds three staging views and two
+analytics tables on top of them:
+
+| Objects | Names |
+|---------|-------|
+| Analytics tables — **model these** | `customers`, `orders` |
+| Staging views | `stg_customers`, `stg_orders`, `stg_payments` |
+| Raw seeds | `raw_customers`, `raw_orders`, `raw_payments` |
+
+Only `customers` and `orders` matter for this quickstart. The `raw_*` and `stg_*`
+objects are dbt's intermediate layers — leave them out of your Wren project so
+the agent has one unambiguous table per concept.
 
 Note the **absolute path** to this directory. You'll need it when setting up the profile:
 
@@ -227,15 +240,16 @@ claude
 Then ask:
 
 ```
-Use the /wren skill to explore the jaffle_shop database
-and generate the MDL for all tables. The data source is DuckDB.
+Use the /wren skill to explore the jaffle_shop database and generate the MDL
+for the customers and orders tables. Skip the raw_* seeds and stg_* views.
+The data source is DuckDB.
 ```
 
 The `wren` skill recognizes this as a scaffolding task and pulls in the `generate-mdl` guide (`wren skills get generate-mdl`) to drive it.
 
 Claude Code will:
 
-1. **Discover tables**: `customers`, `orders`, `products`, `supplies`, etc.
+1. **Discover tables**: `customers` and `orders`
 2. **Introspect columns and types** using SQLAlchemy or `information_schema`
 3. **Normalize types** via `wren utils parse-type`
 4. **Write model YAML files**, one folder per table under `models/`
@@ -264,7 +278,7 @@ How many customers placed more than one order?
 ```
 
 ```
-What are the top 5 products by total revenue?
+Which 5 customers have the highest lifetime value?
 ```
 
 ```
@@ -371,11 +385,7 @@ After setup, your project directory looks like this:
 ├── models/
 │   ├── customers/
 │   │   └── metadata.yml        # table schema and descriptions
-│   ├── orders/
-│   │   └── metadata.yml
-│   ├── products/
-│   │   └── metadata.yml
-│   └── supplies/
+│   └── orders/
 │       └── metadata.yml
 ├── views/
 ├── cubes/                      # only if you did Step 8
@@ -397,7 +407,8 @@ Key files to customize:
 
   ```markdown
   ## Naming Conventions
-  - "revenue" always means order total, not supply cost
+  - "revenue" always means the order `amount`, not one of the per-payment-method
+    columns like `credit_card_amount`
   - "active customers" means customers with at least one order in the last 90 days
 
   ## Query Rules
