@@ -18,6 +18,17 @@ from wren.connector.base import ConnectorABC, strip_trailing_semicolon
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 
 
+def _coerce_limit(limit: int | None) -> int | None:
+    """Validate limit before interpolating into ROWNUM SQL."""
+    if limit is None:
+        return None
+    coerced = int(limit)
+    if coerced < 0:
+        raise ValueError(f"limit must be non-negative, got {coerced}")
+    return coerced
+
+
+
 def _parse_oracle_connection_url(url: str):
     """Parse an Oracle URL after escaping raw brackets in userinfo only.
 
@@ -181,6 +192,7 @@ class OracleConnector(ConnectorABC):
         # Always strip terminating `;` even on the unlimited path: a bare
         # trailing semicolon is rejected by some Oracle clients/drivers even
         # though engines accept multi-statement scripts elsewhere.
+        limit = _coerce_limit(limit)
         sql = strip_trailing_semicolon(sql)
         if limit is not None:
             sql = f"SELECT * FROM ({sql}) t WHERE ROWNUM <= {limit}"
