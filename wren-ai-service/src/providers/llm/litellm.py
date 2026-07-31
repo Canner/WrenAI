@@ -71,10 +71,7 @@ class LitellmLLMProvider(LLMProvider):
         generation_kwargs: Optional[Dict[str, Any]] = None,
         streaming_callback: Optional[Callable[[StreamingChunk], None]] = None,
     ):
-        combined_generation_kwargs = {
-            **(generation_kwargs or {}),
-            **(self._model_kwargs or {}),
-        }
+        component_generation_kwargs = generation_kwargs or {}
 
         def _normalize_generation_kwargs(
             kwargs: Optional[Dict[str, Any]],
@@ -124,7 +121,8 @@ class LitellmLLMProvider(LLMProvider):
 
             generation_kwargs = _normalize_generation_kwargs(
                 {
-                    **combined_generation_kwargs,
+                    **(self._model_kwargs or {}),
+                    **component_generation_kwargs,
                     **(generation_kwargs or {}),
                 }
             )
