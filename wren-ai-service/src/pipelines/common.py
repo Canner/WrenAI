@@ -4,6 +4,23 @@ from typing import Any, List, Optional, Tuple
 from haystack import Document, component
 
 
+def build_project_deploy_filter(
+    project_id: Optional[str] = None,
+    mdl_hash: Optional[str] = None,
+) -> dict[str, Any] | None:
+    conditions = []
+
+    if project_id:
+        conditions.append(
+            {"field": "project_id", "operator": "==", "value": project_id}
+        )
+
+    if mdl_hash:
+        conditions.append({"field": "mdl_hash", "operator": "==", "value": mdl_hash})
+
+    return {"operator": "AND", "conditions": conditions} if conditions else None
+
+
 def get_engine_supported_data_type(data_type: str | None) -> str:
     """
     This function makes sure downstream ai pipeline get column data types in a format that is supported by the data engine.
@@ -92,15 +109,12 @@ def build_table_ddl(
     )
 
 
-async def retrieve_metadata(project_id: str, retriever) -> dict[str, Any]:
-    filters = None
-    if project_id:
-        filters = {
-            "operator": "AND",
-            "conditions": [
-                {"field": "project_id", "operator": "==", "value": project_id},
-            ],
-        }
+async def retrieve_metadata(
+    project_id: str,
+    retriever,
+    mdl_hash: Optional[str] = None,
+) -> dict[str, Any]:
+    filters = build_project_deploy_filter(project_id=project_id, mdl_hash=mdl_hash)
 
     result = await retriever.run(query_embedding=[], filters=filters)
     documents = result["documents"]

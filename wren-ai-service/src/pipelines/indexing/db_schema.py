@@ -49,9 +49,15 @@ class DDLChunker:
         mdl: Dict[str, Any],
         column_batch_size: int,
         project_id: Optional[str] = None,
+        mdl_hash: Optional[str] = None,
     ):
         def _additional_meta() -> Dict[str, Any]:
-            return {"project_id": project_id} if project_id else {}
+            metadata = {}
+            if project_id:
+                metadata["project_id"] = project_id
+            if mdl_hash:
+                metadata["mdl_hash"] = mdl_hash
+            return metadata
 
         chunks = [
             {
@@ -382,11 +388,13 @@ async def chunk(
     chunker: DDLChunker,
     column_batch_size: int,
     project_id: Optional[str] = None,
+    mdl_hash: Optional[str] = None,
 ) -> Dict[str, Any]:
     return await chunker.run(
         mdl=mdl,
         column_batch_size=column_batch_size,
         project_id=project_id,
+        mdl_hash=mdl_hash,
     )
 
 
@@ -445,7 +453,10 @@ class DBSchema(BasicPipeline):
 
     @observe(name="DB Schema Indexing")
     async def run(
-        self, mdl_str: str, project_id: Optional[str] = None
+        self,
+        mdl_str: str,
+        project_id: Optional[str] = None,
+        mdl_hash: Optional[str] = None,
     ) -> Dict[str, Any]:
         logger.info(
             f"Project ID: {project_id}, DB Schema Indexing pipeline is running..."
@@ -455,6 +466,7 @@ class DBSchema(BasicPipeline):
             inputs={
                 "mdl_str": mdl_str,
                 "project_id": project_id,
+                "mdl_hash": mdl_hash,
                 **self._components,
                 **self._configs,
             },

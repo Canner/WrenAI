@@ -194,6 +194,7 @@ class SQLGeneration(BasicPipeline):
         sql_samples: list[dict] | None = None,
         instructions: list[dict] | None = None,
         project_id: str | None = None,
+        mdl_hash: str | None = None,
         has_calculated_field: bool = False,
         has_metric: bool = False,
         has_json_field: bool = False,
@@ -206,7 +207,11 @@ class SQLGeneration(BasicPipeline):
         logger.info("SQL Generation pipeline is running...")
 
         if use_dry_plan:
-            metadata = await retrieve_metadata(project_id or "", self._retriever)
+            metadata = await retrieve_metadata(
+                project_id or "",
+                self._retriever,
+                mdl_hash=mdl_hash,
+            )
         else:
             metadata = {}
 
@@ -219,6 +224,7 @@ class SQLGeneration(BasicPipeline):
                 "sql_samples": sql_samples,
                 "instructions": instructions,
                 "project_id": project_id,
+                "mdl_hash": mdl_hash,
                 "has_calculated_field": has_calculated_field,
                 "has_metric": has_metric,
                 "has_json_field": has_json_field,

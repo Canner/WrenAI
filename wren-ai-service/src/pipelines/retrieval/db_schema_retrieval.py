@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.common import (
+    build_project_deploy_filter,
     build_table_ddl,
     clean_up_new_lines,
     get_engine_supported_data_type,
@@ -138,7 +139,11 @@ async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> d
 
 @observe(capture_input=False)
 async def table_retrieval(
-    embedding: dict, project_id: str, tables: list[str], table_retriever: Any
+    embedding: dict,
+    project_id: str,
+    tables: list[str],
+    table_retriever: Any,
+    mdl_hash: str = "",
 ) -> dict:
     filters = {
         "operator": "AND",
@@ -150,6 +155,11 @@ async def table_retrieval(
     if project_id:
         filters["conditions"].append(
             {"field": "project_id", "operator": "==", "value": project_id}
+        )
+
+    if mdl_hash:
+        filters["conditions"].append(
+            {"field": "mdl_hash", "operator": "==", "value": mdl_hash}
         )
 
     if embedding:
@@ -170,7 +180,10 @@ async def table_retrieval(
 
 @observe(capture_input=False)
 async def dbschema_retrieval(
-    table_retrieval: dict, project_id: str, dbschema_retriever: Any
+    table_retrieval: dict,
+    project_id: str,
+    dbschema_retriever: Any,
+    mdl_hash: str = "",
 ) -> list[Document]:
     tables = table_retrieval.get("documents", [])
     table_names = []
@@ -184,6 +197,10 @@ async def dbschema_retrieval(
     ]
 
     if table_name_conditions:
+        project_deploy_filter = build_project_deploy_filter(
+            project_id=project_id,
+            mdl_hash=mdl_hash,
+        )
         filters = {
             "operator": "AND",
             "conditions": [
@@ -192,10 +209,8 @@ async def dbschema_retrieval(
             ],
         }
 
-        if project_id:
-            filters["conditions"].append(
-                {"field": "project_id", "operator": "==", "value": project_id}
-            )
+        if project_deploy_filter:
+            filters["conditions"] += project_deploy_filter["conditions"]
 
         results = await dbschema_retriever.run(query_embedding=[], filters=filters)
         return results["documents"]
@@ -501,6 +516,7 @@ class DbSchemaRetrieval(BasicPipeline):
         query: str = "",
         tables: Optional[list[str]] = None,
         project_id: Optional[str] = None,
+        mdl_hash: Optional[str] = None,
         histories: Optional[list[AskHistory]] = None,
         enable_column_pruning: bool = False,
     ):
@@ -511,6 +527,7 @@ class DbSchemaRetrieval(BasicPipeline):
                 "query": query,
                 "tables": tables,
                 "project_id": project_id or "",
+                "mdl_hash": mdl_hash or "",
                 "histories": histories or [],
                 "enable_column_pruning": enable_column_pruning,
                 **self._components,

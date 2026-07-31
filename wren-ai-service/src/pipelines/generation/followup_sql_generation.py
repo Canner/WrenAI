@@ -200,6 +200,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         sql_samples: list[dict] | None = None,
         instructions: list[dict] | None = None,
         project_id: str | None = None,
+        mdl_hash: str | None = None,
         has_calculated_field: bool = False,
         has_metric: bool = False,
         has_json_field: bool = False,
@@ -211,7 +212,11 @@ class FollowUpSQLGeneration(BasicPipeline):
         logger.info("Follow-Up SQL Generation pipeline is running...")
 
         if use_dry_plan:
-            metadata = await retrieve_metadata(project_id or "", self._retriever)
+            metadata = await retrieve_metadata(
+                project_id or "",
+                self._retriever,
+                mdl_hash=mdl_hash,
+            )
         else:
             metadata = {}
 
@@ -223,6 +228,7 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "sql_generation_reasoning": sql_generation_reasoning,
                 "histories": histories,
                 "project_id": project_id,
+                "mdl_hash": mdl_hash,
                 "sql_samples": sql_samples,
                 "instructions": instructions,
                 "has_calculated_field": has_calculated_field,

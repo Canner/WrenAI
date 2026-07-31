@@ -76,6 +76,7 @@ class SemanticsPreparationService:
             input = {
                 "mdl_str": prepare_semantics_request.mdl,
                 "project_id": prepare_semantics_request.project_id,
+                "mdl_hash": prepare_semantics_request.mdl_hash,
             }
             project_scoped_index_names = [
                 "db_schema",

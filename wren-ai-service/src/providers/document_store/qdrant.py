@@ -178,6 +178,9 @@ class AsyncQdrantDocumentStore(QdrantDocumentStore):
         self.client.create_payload_index(
             collection_name=index, field_name="project_id", field_schema="keyword"
         )
+        self.client.create_payload_index(
+            collection_name=index, field_name="mdl_hash", field_schema="keyword"
+        )
 
     def recreate_collection(
         self,

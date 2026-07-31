@@ -3,7 +3,7 @@ from typing import List, Literal, Optional
 
 from cachetools import TTLCache
 from langfuse.decorators import observe
-from pydantic import BaseModel
+from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
@@ -60,6 +60,9 @@ class SqlCorrectionService:
         event_id: str
         sql: str
         error: str
+        mdl_hash: Optional[str] = Field(
+            default=None, validation_alias=AliasChoices("mdl_hash", "id")
+        )
         retrieved_tables: Optional[List[str]] = None
         use_dry_plan: bool = True
         allow_dry_plan_fallback: bool = False
@@ -100,12 +103,14 @@ class SqlCorrectionService:
             if self._allow_sql_knowledge_retrieval:
                 sql_knowledge = await self._pipelines["sql_knowledge_retrieval"].run(
                     project_id=project_id,
+                    mdl_hash=request.mdl_hash,
                 )
 
             documents = (
                 (
                     await self._pipelines["db_schema_retrieval"].run(
                         project_id=project_id,
+                        mdl_hash=request.mdl_hash,
                         tables=retrieved_tables,
                     )
                 )
@@ -118,6 +123,7 @@ class SqlCorrectionService:
                 contexts=table_ddls,
                 invalid_generation_result=_invalid,
                 project_id=project_id,
+                mdl_hash=request.mdl_hash,
                 use_dry_plan=use_dry_plan,
                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                 sql_knowledge=sql_knowledge,

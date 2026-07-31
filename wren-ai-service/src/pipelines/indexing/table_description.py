@@ -26,9 +26,19 @@ class TableDescriptionChunker:
         return properties if isinstance(properties, dict) else {}
 
     @component.output_types(documents=List[Document])
-    def run(self, mdl: Dict[str, Any], project_id: Optional[str] = None):
+    def run(
+        self,
+        mdl: Dict[str, Any],
+        project_id: Optional[str] = None,
+        mdl_hash: Optional[str] = None,
+    ):
         def _additional_meta() -> Dict[str, Any]:
-            return {"project_id": project_id} if project_id else {}
+            metadata = {}
+            if project_id:
+                metadata["project_id"] = project_id
+            if mdl_hash:
+                metadata["mdl_hash"] = mdl_hash
+            return metadata
 
         chunks = [
             {
@@ -226,8 +236,9 @@ def chunk(
     mdl: Dict[str, Any],
     chunker: TableDescriptionChunker,
     project_id: Optional[str] = None,
+    mdl_hash: Optional[str] = None,
 ) -> Dict[str, Any]:
-    return chunker.run(mdl=mdl, project_id=project_id)
+    return chunker.run(mdl=mdl, project_id=project_id, mdl_hash=mdl_hash)
 
 
 @observe(capture_input=False, capture_output=False)
@@ -286,7 +297,10 @@ class TableDescription(BasicPipeline):
 
     @observe(name="Table Description Indexing")
     async def run(
-        self, mdl_str: str, project_id: Optional[str] = None
+        self,
+        mdl_str: str,
+        project_id: Optional[str] = None,
+        mdl_hash: Optional[str] = None,
     ) -> Dict[str, Any]:
         logger.info(
             f"Project ID: {project_id}, Table Description Indexing pipeline is running..."
@@ -296,6 +310,7 @@ class TableDescription(BasicPipeline):
             inputs={
                 "mdl_str": mdl_str,
                 "project_id": project_id,
+                "mdl_hash": mdl_hash,
                 **self._components,
                 **self._configs,
             },

@@ -192,6 +192,7 @@ class AskService:
                 historical_question = await self._pipelines["historical_question"].run(
                     query=user_query,
                     project_id=ask_request.project_id,
+                    mdl_hash=ask_request.mdl_hash,
                 )
 
                 # we only return top 1 result
@@ -347,6 +348,7 @@ class AskService:
                     query=user_query,
                     histories=histories,
                     project_id=ask_request.project_id,
+                    mdl_hash=ask_request.mdl_hash,
                     enable_column_pruning=enable_column_pruning,
                 )
                 _retrieval_result = retrieval_result.get(
@@ -442,6 +444,7 @@ class AskService:
                         "sql_functions_retrieval"
                     ].run(
                         project_id=ask_request.project_id,
+                        mdl_hash=ask_request.mdl_hash,
                     )
                 else:
                     sql_functions = []
@@ -451,6 +454,7 @@ class AskService:
                         "sql_knowledge_retrieval"
                     ].run(
                         project_id=ask_request.project_id,
+                        mdl_hash=ask_request.mdl_hash,
                     )
 
                 has_calculated_field = _retrieval_result.get(
@@ -468,6 +472,7 @@ class AskService:
                         sql_generation_reasoning=sql_generation_reasoning,
                         histories=histories,
                         project_id=ask_request.project_id,
+                        mdl_hash=ask_request.mdl_hash,
                         sql_samples=sql_samples,
                         instructions=instructions,
                         has_calculated_field=has_calculated_field,
@@ -486,6 +491,7 @@ class AskService:
                         contexts=table_ddls,
                         sql_generation_reasoning=sql_generation_reasoning,
                         project_id=ask_request.project_id,
+                        mdl_hash=ask_request.mdl_hash,
                         sql_samples=sql_samples,
                         instructions=instructions,
                         has_calculated_field=has_calculated_field,
@@ -557,6 +563,7 @@ class AskService:
                                 else error_message,
                             },
                             project_id=ask_request.project_id,
+                            mdl_hash=ask_request.mdl_hash,
                             use_dry_plan=use_dry_plan,
                             allow_dry_plan_fallback=allow_dry_plan_fallback,
                             sql_functions=sql_functions,

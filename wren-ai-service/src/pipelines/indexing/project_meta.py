@@ -30,8 +30,13 @@ def validate_mdl(mdl_str: str, validator: MDLValidator) -> dict[str, Any]:
 def chunk(
     mdl: dict[str, Any],
     project_id: Optional[str] = None,
+    mdl_hash: Optional[str] = None,
 ) -> dict[str, Any]:
-    addition = {"project_id": project_id} if project_id else {}
+    addition = {}
+    if project_id:
+        addition["project_id"] = project_id
+    if mdl_hash:
+        addition["mdl_hash"] = mdl_hash
     data_source = str(mdl.get("dataSource") or "local_file").lower()
 
     if data_source == "duckdb":
@@ -87,7 +92,10 @@ class ProjectMeta(BasicPipeline):
 
     @observe(name="Project Meta Indexing")
     async def run(
-        self, mdl_str: str, project_id: Optional[str] = None
+        self,
+        mdl_str: str,
+        project_id: Optional[str] = None,
+        mdl_hash: Optional[str] = None,
     ) -> dict[str, Any]:
         logger.info(
             f"Project ID: {project_id}, Project Meta Indexing pipeline is running..."
@@ -97,6 +105,7 @@ class ProjectMeta(BasicPipeline):
             inputs={
                 "mdl_str": mdl_str,
                 "project_id": project_id,
+                "mdl_hash": mdl_hash,
                 **self._components,
             },
         )

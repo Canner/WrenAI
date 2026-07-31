@@ -104,12 +104,17 @@ class SqlFunctions(BasicPipeline):
     async def run(
         self,
         project_id: Optional[str] = None,
+        mdl_hash: Optional[str] = None,
     ) -> List[SqlFunction]:
         logger.info(
             f"Project ID: {project_id} SQL Functions Retrieval pipeline is running..."
         )
 
-        metadata = await retrieve_metadata(project_id or "", self._retriever)
+        metadata = await retrieve_metadata(
+            project_id or "",
+            self._retriever,
+            mdl_hash=mdl_hash,
+        )
         _data_source = metadata.get("data_source", "local_file")
 
         if _data_source in self._cache:

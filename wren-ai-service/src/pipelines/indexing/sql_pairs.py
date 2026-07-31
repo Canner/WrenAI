@@ -28,10 +28,19 @@ class SqlPair(BaseModel):
 @component
 class SqlPairsConverter:
     @component.output_types(documents=List[Document])
-    def run(self, sql_pairs: List[SqlPair], project_id: str = ""):
+    def run(
+        self,
+        sql_pairs: List[SqlPair],
+        project_id: str = "",
+        mdl_hash: Optional[str] = None,
+    ):
         logger.info(f"Project ID: {project_id} Converting SQL pairs to documents...")
 
-        addition = {"project_id": project_id} if project_id else {}
+        addition = {}
+        if project_id:
+            addition["project_id"] = project_id
+        if mdl_hash:
+            addition["mdl_hash"] = mdl_hash
 
         return {
             "documents": [
@@ -118,8 +127,13 @@ def to_documents(
     sql_pairs: List[SqlPair],
     document_converter: SqlPairsConverter,
     project_id: str = "",
+    mdl_hash: Optional[str] = None,
 ) -> Dict[str, Any]:
-    return document_converter.run(sql_pairs=sql_pairs, project_id=project_id)
+    return document_converter.run(
+        sql_pairs=sql_pairs,
+        project_id=project_id,
+        mdl_hash=mdl_hash,
+    )
 
 
 @observe(capture_input=False, capture_output=False)
@@ -213,6 +227,7 @@ class SqlPairs(BasicPipeline):
         self,
         mdl_str: str,
         project_id: str = "",
+        mdl_hash: Optional[str] = None,
         external_pairs: Optional[Dict[str, Any]] = None,
         delete_all: bool = False,
         include_default_pairs: bool = True,
@@ -229,6 +244,7 @@ class SqlPairs(BasicPipeline):
         input = {
             "mdl_str": mdl_str,
             "project_id": project_id,
+            "mdl_hash": mdl_hash,
             "external_pairs": pairs,
             "delete_all": delete_all,
             "include_default_pairs": include_default_pairs,

@@ -10,7 +10,7 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
-from src.pipelines.common import ScoreFilter
+from src.pipelines.common import ScoreFilter, build_project_deploy_filter
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -39,17 +39,9 @@ class OutputFormatter:
 async def count_documents(
     view_questions_store: QdrantDocumentStore,
     project_id: Optional[str] = None,
+    mdl_hash: Optional[str] = None,
 ) -> int:
-    filters = (
-        {
-            "operator": "AND",
-            "conditions": [
-                {"field": "project_id", "operator": "==", "value": project_id},
-            ],
-        }
-        if project_id
-        else None
-    )
+    filters = build_project_deploy_filter(project_id=project_id, mdl_hash=mdl_hash)
 
     count = await view_questions_store.count_documents(filters=filters)
     return count
@@ -68,18 +60,10 @@ async def retrieval(
     embedding: dict,
     project_id: str,
     view_questions_retriever: Any,
+    mdl_hash: str = "",
 ) -> dict:
     if embedding:
-        filters = (
-            {
-                "operator": "AND",
-                "conditions": [
-                    {"field": "project_id", "operator": "==", "value": project_id},
-                ],
-            }
-            if project_id
-            else None
-        )
+        filters = build_project_deploy_filter(project_id=project_id, mdl_hash=mdl_hash)
 
         view_question_res = await view_questions_retriever.run(
             query_embedding=embedding.get("embedding"),
@@ -149,13 +133,19 @@ class HistoricalQuestionRetrieval(BasicPipeline):
         )
 
     @observe(name="Historical Question")
-    async def run(self, query: str, project_id: Optional[str] = None):
+    async def run(
+        self,
+        query: str,
+        project_id: Optional[str] = None,
+        mdl_hash: Optional[str] = None,
+    ):
         logger.info("HistoricalQuestion Retrieval pipeline is running...")
         return await self._pipe.execute(
             ["formatted_output"],
             inputs={
                 "query": query,
                 "project_id": project_id or "",
+                "mdl_hash": mdl_hash or "",
                 **self._components,
                 **self._configs,
             },

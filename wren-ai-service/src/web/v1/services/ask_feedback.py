@@ -4,7 +4,7 @@ from typing import Dict, List, Literal, Optional
 
 from cachetools import TTLCache
 from langfuse.decorators import observe
-from pydantic import BaseModel
+from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
@@ -20,6 +20,9 @@ class AskFeedbackRequest(BaseRequest):
     tables: List[str]
     sql_generation_reasoning: str
     sql: str
+    mdl_hash: Optional[str] = Field(
+        default=None, validation_alias=AliasChoices("mdl_hash", "id")
+    )
 
 
 class AskFeedbackResponse(BaseModel):
@@ -122,6 +125,7 @@ class AskFeedbackService:
                     self._pipelines["db_schema_retrieval"].run(
                         tables=ask_feedback_request.tables,
                         project_id=ask_feedback_request.project_id,
+                        mdl_hash=ask_feedback_request.mdl_hash,
                     ),
                     self._pipelines["sql_pairs_retrieval"].run(
                         query=ask_feedback_request.question,
@@ -139,6 +143,7 @@ class AskFeedbackService:
                         "sql_functions_retrieval"
                     ].run(
                         project_id=ask_feedback_request.project_id,
+                        mdl_hash=ask_feedback_request.mdl_hash,
                     )
                 else:
                     sql_functions = []
@@ -148,6 +153,7 @@ class AskFeedbackService:
                         "sql_knowledge_retrieval"
                     ].run(
                         project_id=ask_feedback_request.project_id,
+                        mdl_hash=ask_feedback_request.mdl_hash,
                     )
 
                 # Extract results from completed tasks
@@ -249,6 +255,7 @@ class AskFeedbackService:
                                 "error": correction_error_message,
                             },
                             project_id=ask_feedback_request.project_id,
+                            mdl_hash=ask_feedback_request.mdl_hash,
                             sql_functions=sql_functions,
                             sql_knowledge=sql_knowledge,
                         )

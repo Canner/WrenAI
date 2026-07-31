@@ -172,6 +172,7 @@ class SQLCorrection(BasicPipeline):
         instructions: list[dict] | None = None,
         sql_functions: list[SqlFunction] | None = None,
         project_id: str | None = None,
+        mdl_hash: str | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
         sql_knowledge: SqlKnowledge | None = None,
@@ -179,7 +180,11 @@ class SQLCorrection(BasicPipeline):
         logger.info("SQLCorrection pipeline is running...")
 
         if use_dry_plan:
-            metadata = await retrieve_metadata(project_id or "", self._retriever)
+            metadata = await retrieve_metadata(
+                project_id or "",
+                self._retriever,
+                mdl_hash=mdl_hash,
+            )
         else:
             metadata = {}
 
@@ -191,6 +196,7 @@ class SQLCorrection(BasicPipeline):
                 "instructions": instructions,
                 "sql_functions": sql_functions,
                 "project_id": project_id,
+                "mdl_hash": mdl_hash,
                 "use_dry_plan": use_dry_plan,
                 "allow_dry_plan_fallback": allow_dry_plan_fallback,
                 "data_source": metadata.get("data_source", "local_file"),
