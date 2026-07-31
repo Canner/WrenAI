@@ -13,6 +13,17 @@ from wren.model import (
 from wren.model.error import ErrorCode, WrenError
 
 
+def _coerce_limit(limit: int | None) -> int | None:
+    """Validate limit before SQL LIMIT interpolation."""
+    if limit is None:
+        return None
+    coerced = int(limit)
+    if coerced < 0:
+        raise ValueError(f"limit must be non-negative, got {coerced}")
+    return coerced
+
+
+
 class RedshiftConnector(ConnectorABC):
     def __init__(self, connection_info: RedshiftConnectionUnion):
         import redshift_connector  # noqa: PLC0415
@@ -44,10 +55,11 @@ class RedshiftConnector(ConnectorABC):
         self.connection.autocommit = True
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
+        limit = _coerce_limit(limit)
         if limit is not None:
             sql = (
                 f"SELECT * FROM ({strip_trailing_semicolon(sql)}) "
-                f"AS _q LIMIT {int(limit)}"
+                f"AS _q LIMIT {limit}"
             )
         else:
             # Unlimited path also rejects trailing ``;`` for single statements
