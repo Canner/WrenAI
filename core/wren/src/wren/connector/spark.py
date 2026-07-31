@@ -41,10 +41,11 @@ class SparkConnector(ConnectorABC):
         return pa.Table.from_pandas(df)
 
     def dry_run(self, sql: str) -> None:
-        # Prefer a LIMIT 0 subquery wrapper (like other connectors) so EXPLAIN
-        # is unnecessary and a trailing semicolon cannot break Spark SQL.
+        # Validate via the DataFrame API so statements that are not legal as a
+        # subquery (SHOW TABLES, DESCRIBE, ...) are still accepted, exactly as
+        # before. Only strip a trailing ``;`` so it cannot break Spark SQL.
         cleaned = strip_trailing_semicolon(sql)
-        self.connection.sql(f"SELECT * FROM ({cleaned}) AS _q LIMIT 0").count()
+        self.connection.sql(cleaned).limit(0).count()
 
     def close(self) -> None:
         if self._closed:

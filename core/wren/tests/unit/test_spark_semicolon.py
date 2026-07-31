@@ -30,11 +30,14 @@ def test_query_pushes_limit_into_sql_after_strip() -> None:
     session.sql.assert_called_once_with("SELECT * FROM (SELECT 1 AS x) AS _q LIMIT 2")
 
 
-def test_dry_run_wraps_limit_zero_after_strip() -> None:
+def test_dry_run_validates_via_dataframe_after_strip() -> None:
     connector, session = _make_mock_connector()
     connector.dry_run("SELECT 1;  \n")
-    session.sql.assert_called_once_with("SELECT * FROM (SELECT 1) AS _q LIMIT 0")
-    session.sql.return_value.count.assert_called_once_with()
+    # Validation stays on the DataFrame API so non-subquery statements
+    # (SHOW TABLES, DESCRIBE, ...) remain valid; only the trailing ; is stripped.
+    session.sql.assert_called_once_with("SELECT 1")
+    session.sql.return_value.limit.assert_called_once_with(0)
+    session.sql.return_value.limit.return_value.count.assert_called_once_with()
 
 
 def test_helper_preserves_semicolon_inside_string_literal() -> None:
