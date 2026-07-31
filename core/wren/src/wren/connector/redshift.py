@@ -23,7 +23,6 @@ def _coerce_limit(limit: int | None) -> int | None:
     return coerced
 
 
-
 class RedshiftConnector(ConnectorABC):
     def __init__(self, connection_info: RedshiftConnectionUnion):
         import redshift_connector  # noqa: PLC0415
