@@ -163,7 +163,7 @@ async def post_process(
     project_id: str | None = None,
     use_dry_plan: bool = False,
     allow_dry_plan_fallback: bool = True,
-    schema_manifest: dict[str, list[str]] | None = None,
+    grounding_schema_manifest: dict[str, list[str]] | None = None,
 ) -> dict:
     return await post_processor.run(
         generate_sql_in_followup.get("replies"),
@@ -171,7 +171,7 @@ async def post_process(
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
-        schema_manifest=schema_manifest,
+        schema_manifest=grounding_schema_manifest,
     )
 
 
@@ -234,7 +234,7 @@ class FollowUpSQLGeneration(BasicPipeline):
             metadata = await retrieve_metadata(project_id or "", self._retriever)
         else:
             metadata = {}
-        schema_manifest = await resolve_active_schema_manifest(
+        grounding_schema_manifest = await resolve_active_schema_manifest(
             metadata,
             schema_manifest,
             project_id or "",
@@ -260,6 +260,7 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "data_source": metadata.get("data_source", "local_file"),
                 "sql_knowledge": sql_knowledge,
                 "schema_manifest": schema_manifest,
+                "grounding_schema_manifest": grounding_schema_manifest,
                 **self._components,
             },
         )

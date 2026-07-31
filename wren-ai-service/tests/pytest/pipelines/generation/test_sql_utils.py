@@ -22,6 +22,7 @@ from src.pipelines.generation.sql_correction import (
 )
 from src.pipelines.generation.sql_answer import sql_to_answer_system_prompt
 from src.pipelines.generation.sql_generation import sql_generation_user_prompt_template
+from src.pipelines.generation.sql_generation import post_process as sql_post_process
 from src.pipelines.generation.sql_regeneration import get_sql_regeneration_system_prompt
 from src.pipelines.generation.sql_regeneration import sql_regeneration_user_prompt_template
 
@@ -154,6 +155,27 @@ async def test_sql_postprocessor_rejects_column_outside_retrieved_manifest():
     assert "RetrievedObject" in result["invalid_generation_result"]["error"]
     assert engine.dry_plan_calls == []
     assert engine.execute_sql_calls == []
+
+
+@pytest.mark.asyncio
+async def test_sql_generation_post_process_uses_separate_grounding_manifest():
+    engine = _DryPlanEngine()
+
+    result = await sql_post_process(
+        generate_sql={
+            "replies": ['{"sql": "SELECT \\"ActiveField\\" FROM \\"ActiveEntity\\""}']
+        },
+        post_processor=SQLGenPostProcessor(engine),
+        data_source="source",
+        use_dry_plan=True,
+        grounding_schema_manifest={"ActiveEntity": ["ActiveField"]},
+    )
+
+    assert result["valid_generation_result"]["sql"] == (
+        'SELECT "ActiveField" FROM "ActiveEntity"'
+    )
+    assert len(engine.dry_plan_calls) == 1
+    assert len(engine.execute_sql_calls) == 1
 
 
 @pytest.mark.asyncio
