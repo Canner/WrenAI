@@ -57,10 +57,7 @@ class RedshiftConnector(ConnectorABC):
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         limit = _coerce_limit(limit)
         if limit is not None:
-            sql = (
-                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) "
-                f"AS _q LIMIT {limit}"
-            )
+            sql = f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS _q LIMIT {limit}"
         else:
             # Unlimited path also rejects trailing ``;`` for single statements
             # depending on driver/session settings — strip for consistency.
