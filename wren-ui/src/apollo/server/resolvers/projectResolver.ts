@@ -378,6 +378,14 @@ export class ProjectResolver {
       displayName,
       connectionInfo: { ...project.connectionInfo, ...toUpdateConnectionInfo },
     });
+
+    await ctx.schemaChangeRepository.deleteAllBy({ projectId: project.id });
+    await ctx.deployService.deleteAllByProjectId(project.id);
+    await ctx.askingService.deleteAllByProjectId(project.id);
+    await ctx.modelService.deleteAllViewsByProjectId(project.id);
+    await ctx.modelService.deleteAllModelsByProjectId(project.id);
+    await ctx.wrenAIAdaptor.delete(project.id);
+
     return {
       type: updatedProject.type,
       properties: {
