@@ -28,7 +28,6 @@ def _coerce_limit(limit: int | None) -> int | None:
     return coerced
 
 
-
 def _parse_oracle_connection_url(url: str):
     """Parse an Oracle URL after escaping raw brackets in userinfo only.
 
