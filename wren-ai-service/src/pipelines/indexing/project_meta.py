@@ -18,6 +18,58 @@ from src.pipelines.indexing import AsyncDocumentWriter, DocumentCleaner, MDLVali
 logger = logging.getLogger("wren-ai-service")
 
 
+def _column_name(column: dict[str, Any]) -> str | None:
+    name = column.get("name")
+    return name if isinstance(name, str) and name else None
+
+
+def _model_column_names(model: dict[str, Any]) -> list[str]:
+    return [
+        name
+        for column in model.get("columns", [])
+        if column.get("isHidden") is not True and not column.get("relationship")
+        for name in [_column_name(column)]
+        if name
+    ]
+
+
+def _view_column_names(view: dict[str, Any]) -> list[str]:
+    properties = view.get("properties") or {}
+    return [
+        name
+        for column in properties.get("columns", [])
+        for name in [_column_name(column)]
+        if name
+    ]
+
+
+def _metric_column_names(metric: dict[str, Any]) -> list[str]:
+    return [
+        name
+        for column in metric.get("dimension", []) + metric.get("measure", [])
+        for name in [_column_name(column)]
+        if name
+    ]
+
+
+def build_schema_manifest(mdl: dict[str, Any]) -> dict[str, list[str]]:
+    manifest: dict[str, list[str]] = {}
+
+    for model in mdl.get("models", []):
+        if name := model.get("name"):
+            manifest[name] = _model_column_names(model)
+
+    for view in mdl.get("views", []):
+        if name := view.get("name"):
+            manifest[name] = _view_column_names(view)
+
+    for metric in mdl.get("metrics", []):
+        if name := metric.get("name"):
+            manifest[name] = _metric_column_names(metric)
+
+    return manifest
+
+
 ## Start of Pipeline
 @observe(capture_input=False, capture_output=False)
 @extract_fields(dict(mdl=dict[str, Any]))
@@ -40,7 +92,11 @@ def chunk(
 
     document = Document(
         id=str(uuid.uuid4()),
-        meta={"data_source": data_source, **addition},
+        meta={
+            "data_source": data_source,
+            "schema_manifest": build_schema_manifest(mdl),
+            **addition,
+        },
     )
     return {"documents": [document]}
 

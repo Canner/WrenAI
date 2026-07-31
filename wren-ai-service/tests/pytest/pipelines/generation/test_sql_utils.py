@@ -613,6 +613,7 @@ def test_executable_prompt_templates_omit_untrusted_reasoning_and_sql_context():
     assert "dry-run diagnostic text is intentionally omitted" in (
         correction_prompt
     )
-    assert "Regenerate from the user question and current DATABASE SCHEMA only" in (
-        correction_prompt
-    )
+    assert (
+        "Regenerate from the user question and current DATABASE SCHEMA or "
+        "EXECUTABLE WREN IDENTIFIER CATALOG only"
+    ) in correction_prompt

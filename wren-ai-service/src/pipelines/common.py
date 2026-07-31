@@ -113,6 +113,17 @@ async def retrieve_metadata(project_id: str, retriever) -> dict[str, Any]:
         return {}
 
 
+def resolve_schema_manifest(
+    metadata: dict[str, Any],
+    schema_manifest: dict[str, list[str]] | None,
+) -> dict[str, list[str]] | None:
+    active_schema_manifest = metadata.get("schema_manifest")
+    if isinstance(active_schema_manifest, dict) and active_schema_manifest:
+        return active_schema_manifest
+
+    return schema_manifest
+
+
 @component
 class ScoreFilter:
     @component.output_types(

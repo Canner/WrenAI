@@ -1,6 +1,6 @@
 import pytest
 
-from src.pipelines.common import retrieve_metadata
+from src.pipelines.common import resolve_schema_manifest, retrieve_metadata
 from src.pipelines.retrieval import historical_question_retrieval, instructions
 from src.pipelines.retrieval import sql_pairs_retrieval
 
@@ -46,6 +46,20 @@ async def test_metadata_retrieval_does_not_fall_back_to_global_documents():
 
     assert result == {}
     assert [call["filters"] for call in retriever.calls] == [PROJECT_FILTER]
+
+
+def test_active_project_manifest_overrides_retrieved_subset():
+    assert resolve_schema_manifest(
+        metadata={"schema_manifest": {"ActiveEntity": ["ActiveField"]}},
+        schema_manifest={"RetrievedEntity": ["RetrievedField"]},
+    ) == {"ActiveEntity": ["ActiveField"]}
+
+
+def test_retrieved_manifest_is_used_when_project_metadata_has_no_manifest():
+    assert resolve_schema_manifest(
+        metadata={"data_source": "source"},
+        schema_manifest={"RetrievedEntity": ["RetrievedField"]},
+    ) == {"RetrievedEntity": ["RetrievedField"]}
 
 
 @pytest.mark.asyncio
