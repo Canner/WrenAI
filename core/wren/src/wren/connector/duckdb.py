@@ -13,6 +13,17 @@ from wren.model import (
 from wren.model.error import ErrorCode, WrenError
 
 
+def _coerce_limit(limit: int | None) -> int | None:
+    """Validate limit before SQL LIMIT interpolation."""
+    if limit is None:
+        return None
+    coerced = int(limit)
+    if coerced < 0:
+        raise ValueError(f"limit must be non-negative, got {coerced}")
+    return coerced
+
+
+
 def _escape_sql(value: str) -> str:
     return value.replace("'", "''")
 
@@ -81,10 +92,11 @@ class DuckDBConnector(ConnectorABC):
         Trailing statement terminators are always stripped so client-pasted
         ``SELECT …;`` behaves the same on limited and unlimited paths.
         """
+        limit = _coerce_limit(limit)
         stripped = strip_trailing_semicolon(sql)
         if limit is not None:
             # Subquery wrap rejects an interior terminator after strip.
-            sql = f"SELECT * FROM ({stripped}) AS _q LIMIT {int(limit)}"
+            sql = f"SELECT * FROM ({stripped}) AS _q LIMIT {limit}"
         else:
             sql = stripped
         return self.connection.execute(sql).fetch_arrow_table()
