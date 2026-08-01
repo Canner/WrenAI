@@ -1,0 +1,159 @@
+/*
+ * Context Overview ER diagram — mockup-parity canvas + model-node cards.
+ * Colors/radius/shadow all come from AntD tokens (`app/theme/tokens.ts`,
+ * exposed as `--ant-*` since `cssVar` is on); `--genbi-surface-2` is the one
+ * mockup value with no clean AntD alias (set by `ThemeProvider`). Nothing
+ * here hard-codes a color.
+ */
+
+.genbi-canvas-er {
+  position: relative;
+  overflow: auto;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--ant-border-radius);
+  box-shadow: var(--ant-box-shadow-tertiary);
+  background:
+    radial-gradient(circle at 1px 1px, var(--ant-color-border-secondary) 1px, transparent 0) 0 0 / 22px 22px,
+    var(--ant-color-bg-container);
+}
+
+.genbi-er-inner {
+  position: relative;
+}
+
+.genbi-er-edges {
+  position: absolute;
+  inset: 0;
+}
+
+.genbi-er-edges path {
+  fill: none;
+  stroke: var(--ant-color-border);
+  stroke-width: 1.5;
+}
+
+.genbi-er-edges circle {
+  fill: var(--ant-color-link);
+}
+
+.genbi-er-edges text {
+  fill: var(--ant-color-text-tertiary);
+  font-size: 10px;
+}
+
+.genbi-er-edges.is-impact path.is-active {
+  stroke: var(--ant-color-primary);
+  stroke-width: 2;
+}
+
+.genbi-er-edges.is-impact circle.is-active {
+  fill: var(--ant-color-primary);
+}
+
+.genbi-mnode {
+  position: absolute;
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border);
+  border-radius: 9px;
+  box-shadow: var(--ant-box-shadow-tertiary);
+  overflow: hidden;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+}
+
+.genbi-mnode.is-interactive {
+  cursor: pointer;
+}
+
+.genbi-mnode.is-interactive:hover {
+  border-color: var(--ant-color-primary);
+}
+
+.genbi-mnode.is-interactive:focus-visible {
+  outline: 2px solid var(--ant-color-primary);
+  outline-offset: 2px;
+}
+
+.genbi-mnode .genbi-mh {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--genbi-surface-2);
+  border-bottom: 1px solid var(--ant-color-border-secondary);
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--ant-color-text);
+}
+
+.genbi-mnode .genbi-cnt {
+  margin-left: auto;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--ant-color-text-tertiary);
+}
+
+.genbi-mnode ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.genbi-mnode li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-family: var(--ant-font-family-code);
+  font-size: 11px;
+  border-top: 1px solid var(--ant-color-border-secondary);
+}
+
+.genbi-mnode li:first-child {
+  border-top: none;
+}
+
+.genbi-mnode .genbi-fn {
+  color: var(--ant-color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.genbi-mnode .genbi-ft {
+  margin-left: auto;
+  color: var(--ant-color-text-tertiary);
+}
+
+.genbi-mnode .genbi-key {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+}
+
+.genbi-mnode .genbi-key-pk {
+  background: color-mix(in srgb, var(--ant-color-primary) 16%, transparent);
+  color: var(--ant-color-primary-active);
+}
+
+.genbi-mnode .genbi-key-fk {
+  background: color-mix(in srgb, var(--ant-color-link) 16%, transparent);
+  color: var(--ant-color-link);
+}
+
+.genbi-mnode.is-selected {
+  outline: 2px solid var(--ant-color-primary);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ant-color-primary) 16%, transparent);
+}
+
+.genbi-mnode.is-affected {
+  outline: 2px solid color-mix(in srgb, var(--ant-color-warning) 72%, transparent);
+  outline-offset: 1px;
+}

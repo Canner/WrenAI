@@ -118,10 +118,14 @@ Both formats are accepted. The CLI auto-flattens the envelope format.
 
 ## DuckDB (local files)
 
+`url` must be the **directory** that contains your `.duckdb` file(s) — not a path to
+an individual `.duckdb` file. All `.duckdb` files found in that directory are
+attached automatically.
+
 ```json
 {
   "datasource": "duckdb",
-  "url": "/path/to/data",
-  "format": "parquet"
+  "url": "/path/to/directory",
+  "format": "duckdb"
 }
 ```

@@ -12,6 +12,7 @@ from wren.context import (
     _convert_keys,
     _snake_to_camel,
     apply_upgrade,
+    auto_pin_active_profile,
     build_json,
     build_manifest,
     convert_mdl_to_project,
@@ -20,8 +21,11 @@ from wren.context import (
     load_cubes,
     load_instructions,
     load_models,
+    load_project_config,
     load_relationships,
     load_views,
+    maybe_pin_new_profile_to_project,
+    pin_profile,
     plan_upgrade,
     require_schema_version,
     save_target,
@@ -1628,3 +1632,205 @@ def test_validate_manifest_invalid_datasource():
     manifest = {**_SEM_BASE_MANIFEST, "views": [_VALID_VIEW]}
     result = validate_manifest(_b64(manifest), "not-a-datasource")
     assert len(result["errors"]) == 1
+
+
+# ── pin_profile / auto_pin_active_profile ─────────────────────────────────
+
+
+def test_pin_profile_writes_profile_and_data_source(tmp_path):
+    (tmp_path / "wren_project.yml").write_text(
+        "schema_version: 5\nname: my_project\ndata_source: postgres\n"
+    )
+
+    pin_profile(tmp_path, "duck_prof", "duckdb")
+
+    config = load_project_config(tmp_path)
+    assert config["profile"] == "duck_prof"
+    assert config["data_source"] == "duckdb"
+    # Every other existing field survives.
+    assert config["name"] == "my_project"
+
+
+def test_auto_pin_active_profile_pins_when_active_exists(tmp_path, monkeypatch):
+    """Exactly one profile in the store → nothing to guess between, so the
+    ambient fallback pins it."""
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    monkeypatch.setattr(profile_mod, "_WREN_HOME", tmp_path / "wren-home")
+    monkeypatch.setattr(
+        profile_mod, "_PROFILES_FILE", tmp_path / "wren-home" / "profiles.yml"
+    )
+    profile_mod.add_profile("active_one", {"datasource": "duckdb"})
+
+    proj = tmp_path / "myproj"
+    proj.mkdir()
+    (proj / "wren_project.yml").write_text(
+        "schema_version: 5\nname: my_project\ndata_source: postgres\n"
+    )
+
+    pinned = auto_pin_active_profile(proj)
+
+    assert pinned == "active_one"
+    config = load_project_config(proj)
+    assert config["profile"] == "active_one"
+    assert config["data_source"] == "duckdb"
+
+
+def test_auto_pin_active_profile_noop_when_no_active_profile(tmp_path, monkeypatch):
+    """No active profile at all (fresh WREN_HOME) → no-op, project stays
+    unpinned exactly as it did before this feature existed."""
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    monkeypatch.setattr(profile_mod, "_WREN_HOME", tmp_path / "wren-home")
+    monkeypatch.setattr(
+        profile_mod, "_PROFILES_FILE", tmp_path / "wren-home" / "profiles.yml"
+    )
+
+    proj = tmp_path / "myproj"
+    proj.mkdir()
+    (proj / "wren_project.yml").write_text(
+        "schema_version: 5\nname: my_project\ndata_source: postgres\n"
+    )
+
+    pinned = auto_pin_active_profile(proj)
+
+    assert pinned is None
+    config = load_project_config(proj)
+    assert "profile" not in config
+    assert config["data_source"] == "postgres"  # untouched
+
+
+def test_auto_pin_active_profile_noop_when_multiple_profiles_exist(
+    tmp_path, monkeypatch
+):
+    """Two or more profiles in the store → the fallback must guess at
+    NOTHING; it is strictly narrower than "pin whatever is active" so an
+    LLM agent can't be silently pinned to the wrong one. The project stays
+    unpinned and later fails loudly at build/query time instead (Hole B)."""
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    monkeypatch.setattr(profile_mod, "_WREN_HOME", tmp_path / "wren-home")
+    monkeypatch.setattr(
+        profile_mod, "_PROFILES_FILE", tmp_path / "wren-home" / "profiles.yml"
+    )
+    profile_mod.add_profile("prof_a", {"datasource": "duckdb"})
+    profile_mod.add_profile("prof_b", {"datasource": "postgres"})
+
+    proj = tmp_path / "myproj"
+    proj.mkdir()
+    (proj / "wren_project.yml").write_text(
+        "schema_version: 5\nname: my_project\ndata_source: postgres\n"
+    )
+
+    pinned = auto_pin_active_profile(proj)
+
+    assert pinned is None
+    config = load_project_config(proj)
+    assert "profile" not in config
+    assert config["data_source"] == "postgres"  # untouched
+
+
+# ── maybe_pin_new_profile_to_project (all four return-None-equivalent paths) ─
+#
+# The CLI's decision of *whether* to print anything (loud vs. silent) lives
+# in profile_cli._maybe_announce_project_pin and is covered end-to-end by
+# tests/test_profile_cli.py. These unit tests instead pin down the
+# *ProjectPinOutcome* this function returns for each of its four no-pin
+# paths, so a future refactor of the CLI layer can't quietly collapse a
+# "loud" reason into a "silent" one (or vice versa) without a test noticing.
+
+
+def test_maybe_pin_pins_into_pinless_project(tmp_path, monkeypatch):
+    proj = tmp_path / "myproj"
+    proj.mkdir()
+    (proj / "wren_project.yml").write_text("schema_version: 5\nname: my_project\n")
+    monkeypatch.chdir(proj)
+
+    outcome = maybe_pin_new_profile_to_project("duck_one", "duckdb")
+
+    assert outcome.pinned_path == proj
+    assert outcome.reason is None
+    config = load_project_config(proj)
+    assert config["profile"] == "duck_one"
+    assert config["data_source"] == "duckdb"
+
+
+def test_maybe_pin_reason_no_project(tmp_path, monkeypatch):
+    """No project discoverable from cwd (and no ~/.wren/config.yml
+    default_project fallback either) — the routine, silent no-op. Mirrors
+    the isolation approach in test_discover_no_project_raises."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("WREN_PROJECT_HOME", raising=False)
+    monkeypatch.setenv("WREN_HOME", str(tmp_path / "empty_wren_home"))
+
+    import importlib  # noqa: PLC0415
+
+    import wren.context as ctx  # noqa: PLC0415
+
+    importlib.reload(ctx)
+    try:
+        outcome = ctx.maybe_pin_new_profile_to_project("duck_one", "duckdb")
+    finally:
+        importlib.reload(ctx)
+
+    assert outcome.pinned_path is None
+    assert outcome.reason == "no_project"
+    assert outcome.project_path is None
+    assert outcome.existing_datasource is None
+
+
+def test_maybe_pin_reason_already_pinned(tmp_path, monkeypatch):
+    """A project that already has a `profile:` pin — the other routine,
+    silent no-op."""
+    proj = tmp_path / "myproj"
+    proj.mkdir()
+    (proj / "wren_project.yml").write_text(
+        "schema_version: 5\nname: my_project\ndata_source: postgres\n"
+        "profile: already_pinned\n"
+    )
+    monkeypatch.chdir(proj)
+
+    outcome = maybe_pin_new_profile_to_project("duck_new", "duckdb")
+
+    assert outcome.pinned_path is None
+    assert outcome.reason == "already_pinned"
+    config = load_project_config(proj)
+    assert config["profile"] == "already_pinned"  # untouched
+    assert config["data_source"] == "postgres"  # untouched
+
+
+def test_maybe_pin_reason_datasource_mismatch(tmp_path, monkeypatch):
+    """A project declaring a real, different data_source — a "loud" no-op:
+    the outcome must carry enough detail (project_path,
+    existing_datasource) for a caller to explain the conflict."""
+    proj = tmp_path / "myproj"
+    proj.mkdir()
+    before = "schema_version: 5\nname: my_project\ndata_source: duckdb\n"
+    (proj / "wren_project.yml").write_text(before)
+    monkeypatch.chdir(proj)
+
+    outcome = maybe_pin_new_profile_to_project("some-bq-thing", "bigquery")
+
+    assert outcome.pinned_path is None
+    assert outcome.reason == "datasource_mismatch"
+    assert outcome.project_path == proj
+    assert outcome.existing_datasource == "duckdb"
+    # Never repinned or rewritten — byte-identical file.
+    assert (proj / "wren_project.yml").read_text() == before
+
+
+def test_maybe_pin_reason_unparseable(tmp_path, monkeypatch):
+    """A discovered project whose wren_project.yml fails to parse — the
+    other "loud" no-op: project_path is set (discovery succeeded) even
+    though the config itself couldn't be read."""
+    proj = tmp_path / "myproj"
+    proj.mkdir()
+    (proj / "wren_project.yml").write_text("data_source: [unclosed\n")
+    monkeypatch.chdir(proj)
+
+    outcome = maybe_pin_new_profile_to_project("duck_one", "duckdb")
+
+    assert outcome.pinned_path is None
+    assert outcome.reason == "unparseable"
+    assert outcome.project_path == proj
+    assert outcome.existing_datasource is None

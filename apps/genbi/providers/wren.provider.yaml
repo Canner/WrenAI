@@ -1,0 +1,33 @@
+# wren capability-provider fragment (NATIVE realization) — supplies the genbi-default profile's
+# analytical domain capabilities via the harness's native `wren` CLI tools (query, semantic
+# introspection, dashboard build), for `warble dispatch --provider <this file> --target vercel`.
+# Lives outside the warble repo — warble itself stays product-neutral / zero-wren.
+fragment_version: "0.1"
+provider: wren
+engine: vercel
+capabilities:
+  sql_execution:read_only:
+    outcome: native
+    via: wren-cli
+    provided_by: runtime
+    criticality: required
+  semantic_introspection:
+    outcome: realize-via
+    via: wren-cli
+    provided_by: runtime
+    criticality: required
+  genbi_build:
+    outcome: native
+    via: wren-cli
+    provided_by: runtime
+    criticality: required
+tools:
+  sql_execution:read_only:
+    name: query
+    source: native
+  semantic_introspection:
+    name: semantic_introspect
+    source: native
+  genbi_build:
+    name: build_dashboard
+    source: native

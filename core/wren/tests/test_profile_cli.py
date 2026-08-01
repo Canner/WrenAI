@@ -187,6 +187,203 @@ def test_add_with_activate_flag():
     assert profile_mod.get_active_name() == "second"
 
 
+# ── add: project-aware pin (Hole A, primary mechanism) ─────────────────────
+
+
+def _write_pinless_project(project_dir: Path, data_source: str | None = "") -> None:
+    """Write an unpinned wren_project.yml. ``data_source=""`` (default) omits
+    the field entirely (the "absent" case); pass a real value to simulate a
+    project that already declares one (scaffold placeholder or genuine
+    choice — the two are indistinguishable and must be treated identically,
+    see maybe_pin_new_profile_to_project's docstring)."""
+    project_dir.mkdir(parents=True, exist_ok=True)
+    body = "schema_version: 5\nname: my_project\n"
+    if data_source:
+        body += f"data_source: {data_source}\n"
+    (project_dir / "wren_project.yml").write_text(body)
+
+
+def test_add_pins_into_discovered_pinless_project_no_datasource(tmp_path, monkeypatch):
+    """profile add, run from inside a project with no `profile:` pin AND no
+    `data_source` declared yet, pins the just-created profile in
+    deterministically — nothing to conflict with."""
+    proj = tmp_path / "myproj"
+    _write_pinless_project(proj)  # no data_source at all
+    monkeypatch.chdir(proj)
+
+    result = runner.invoke(profile_app, ["add", "duck_one", "--datasource", "duckdb"])
+    assert result.exit_code == 0, result.output
+    assert "Pinned profile 'duck_one'" in result.output
+
+    import yaml  # noqa: PLC0415
+
+    config = yaml.safe_load((proj / "wren_project.yml").read_text())
+    assert config["profile"] == "duck_one"
+    assert config["data_source"] == "duckdb"
+
+
+def test_add_pins_when_datasource_matches(tmp_path, monkeypatch):
+    """A project that already declares the SAME datasource as the new
+    profile (e.g. `data_source: duckdb`, no pin yet) still gets pinned —
+    the compatibility guard only blocks a genuine mismatch."""
+    proj = tmp_path / "myproj"
+    _write_pinless_project(proj, data_source="duckdb")
+    monkeypatch.chdir(proj)
+
+    result = runner.invoke(profile_app, ["add", "duck_one", "--datasource", "duckdb"])
+    assert result.exit_code == 0, result.output
+    assert "Pinned profile 'duck_one'" in result.output
+
+    import yaml  # noqa: PLC0415
+
+    config = yaml.safe_load((proj / "wren_project.yml").read_text())
+    assert config["profile"] == "duck_one"
+    assert config["data_source"] == "duckdb"
+
+
+def test_add_does_not_pin_or_rewrite_datasource_on_mismatch(tmp_path, monkeypatch):
+    """Regression test for the reviewer's exact repro: an unpinned project
+    that already declares a real, different `data_source` (the common case
+    — this is exactly what a fresh `context init` scaffold placeholder OR a
+    deliberate user choice looks like) must come out of an unrelated
+    `profile add` byte-identical. No pin, no datasource rewrite — checking
+    only "no pin was added" would miss the datasource-rewrite half of the
+    bug, so this asserts full file identity."""
+    proj = tmp_path / "myproj"
+    _write_pinless_project(proj, data_source="duckdb")
+    before = (proj / "wren_project.yml").read_text()
+    monkeypatch.chdir(proj)
+
+    result = runner.invoke(
+        profile_app, ["add", "some-bq-thing", "--datasource", "bigquery"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "Pinned profile" not in result.output
+    # Not silent, though: the mismatch must be called out explicitly so the
+    # caller (human or agent) knows the new connection is unbound here.
+    assert "NOT pinned" in result.output
+    assert "duckdb" in result.output  # the project's declared data_source
+    assert "bigquery" in result.output  # the new profile's datasource
+    assert "set-profile" in result.output
+
+    after = (proj / "wren_project.yml").read_text()
+    assert after == before
+
+
+def test_add_does_not_overwrite_existing_pin(tmp_path, monkeypatch):
+    """A project that already has a `profile:` pin must never be silently
+    repinned by a later, unrelated `profile add` — only `set-profile` may
+    change an existing pin."""
+    proj = tmp_path / "myproj"
+    (proj).mkdir(parents=True, exist_ok=True)
+    (proj / "wren_project.yml").write_text(
+        "schema_version: 5\nname: my_project\ndata_source: postgres\n"
+        "profile: already_pinned\n"
+    )
+    monkeypatch.chdir(proj)
+
+    result = runner.invoke(profile_app, ["add", "duck_new", "--datasource", "duckdb"])
+    assert result.exit_code == 0, result.output
+    assert "Pinned profile" not in result.output
+    # A project that already has a pin is a routine, legitimate no-op — it
+    # must stay completely silent, unlike the mismatch/unparseable cases.
+    assert "NOT pinned" not in result.output
+
+    import yaml  # noqa: PLC0415
+
+    config = yaml.safe_load((proj / "wren_project.yml").read_text())
+    assert config["profile"] == "already_pinned"
+    assert config["data_source"] == "postgres"
+
+
+def test_add_noop_on_malformed_project_file(tmp_path, monkeypatch):
+    """A discovered project whose wren_project.yml fails to parse must not
+    crash `profile add` — it's not this command's business to fix or even
+    touch a broken, unrelated project file. But it must not stay silent
+    either: an unparseable project file is a reason to speak up, just like
+    a datasource mismatch is."""
+    proj = tmp_path / "myproj"
+    proj.mkdir(parents=True, exist_ok=True)
+    (proj / "wren_project.yml").write_text("data_source: [unclosed\n")
+    monkeypatch.chdir(proj)
+
+    result = runner.invoke(profile_app, ["add", "duck_one", "--datasource", "duckdb"])
+    assert result.exit_code == 0, result.output
+    assert "Pinned profile" not in result.output
+    assert "NOT pinned" in result.output
+    assert "wren_project.yml" in result.output
+    assert "set-profile" in result.output
+
+
+def test_add_noop_on_malformed_global_config(tmp_path, monkeypatch):
+    """A malformed ~/.wren/config.yml (consulted by discover_project_path's
+    default_project fallback, once cwd-walk finds no project) must not
+    crash `profile add` either.
+
+    Mirrors test_add_noop_when_no_project_discovered's isolation approach:
+    WREN_HOME must point at a real directory here (not a nonexistent one)
+    so discover_project_path actually reaches load_global_config() and
+    exercises its malformed-YAML path, rather than short-circuiting on a
+    missing config file."""
+    wren_home = tmp_path / "wren-home"
+    wren_home.mkdir(parents=True, exist_ok=True)
+    (wren_home / "config.yml").write_text("default_project: [unclosed\n")
+    empty_cwd = tmp_path / "empty_cwd"
+    empty_cwd.mkdir(parents=True, exist_ok=True)
+    monkeypatch.chdir(empty_cwd)  # no wren_project.yml anywhere up to here
+    monkeypatch.delenv("WREN_PROJECT_HOME", raising=False)
+    monkeypatch.setenv("WREN_HOME", str(wren_home))
+
+    import importlib  # noqa: PLC0415
+
+    import wren.context as ctx  # noqa: PLC0415
+
+    importlib.reload(ctx)
+    try:
+        result = runner.invoke(
+            profile_app, ["add", "duck_one", "--datasource", "duckdb"]
+        )
+        assert result.exit_code == 0, result.output
+        assert "Pinned profile" not in result.output
+        # Discovery itself failing (no project found, however that came
+        # about) is the "no_project" reason — routine and silent, unlike a
+        # discovered project's own file being unparseable.
+        assert "NOT pinned" not in result.output
+    finally:
+        importlib.reload(ctx)
+
+
+def test_add_noop_when_no_project_discovered(tmp_path, monkeypatch):
+    """profile add run with no project in scope (the common case — e.g.
+    general profile management, or the very first onboarding step before
+    any project exists) must not crash and must not announce a pin.
+
+    Isolation note: must block every fallback discover_project_path() has —
+    not just cwd — or this test could resolve to a real project via the
+    developer machine's actual ~/.wren/config.yml default_project. Mirrors
+    tests/unit/test_context.py::test_discover_no_project_raises.
+    """
+    monkeypatch.chdir(tmp_path)  # no wren_project.yml anywhere up to here
+    monkeypatch.delenv("WREN_PROJECT_HOME", raising=False)
+    # Non-existent WREN_HOME so no real config.yml / default_project is found.
+    monkeypatch.setenv("WREN_HOME", str(tmp_path / "empty_wren_home"))
+
+    import importlib  # noqa: PLC0415
+
+    import wren.context as ctx  # noqa: PLC0415
+
+    importlib.reload(ctx)
+    try:
+        result = runner.invoke(
+            profile_app, ["add", "duck_one", "--datasource", "duckdb"]
+        )
+        assert result.exit_code == 0, result.output
+        assert "Pinned profile" not in result.output
+        assert "NOT pinned" not in result.output
+    finally:
+        importlib.reload(ctx)
+
+
 # ── import dbt ────────────────────────────────────────────────────────────────
 
 

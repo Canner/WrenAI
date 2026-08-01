@@ -1,0 +1,50 @@
+/*
+ * PageContainer — shared page-framing primitive. Centers content in a
+ * max-width column with horizontal padding + top/bottom breathing room.
+ * Colors come from AntD tokens only.
+ */
+.genbi-page {
+  margin: 0 auto;
+  width: 100%;
+  padding: 24px 26px 40px;
+  box-sizing: border-box;
+}
+
+.genbi-page-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.genbi-page-head-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.genbi-page-title.ant-typography {
+  margin: 0 !important;
+}
+
+.genbi-page-lead {
+  margin: 4px 0 0;
+  max-width: 64ch;
+  color: var(--ant-color-text-tertiary);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.genbi-page-actions {
+  margin-left: auto;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.genbi-page-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}

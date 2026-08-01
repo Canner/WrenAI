@@ -70,16 +70,22 @@ from sqlalchemy import create_engine, inspect
 engine = create_engine(connection_url)
 inspector = inspect(engine)
 
-tables = inspector.get_table_names(schema="public")
+# Do not hardcode a schema name — it varies by data source (e.g. postgres
+# defaults to "public", duckdb to "main"). schema=None makes SQLAlchemy
+# resolve each engine's own default schema, which works across dialects;
+# pass an explicit name only if the user chose a specific schema in Phase 1.
+schema = None  # or the schema name confirmed with the user in Phase 1
+
+tables = inspector.get_table_names(schema=schema)
 
 for table in tables:
-    columns = inspector.get_columns(table, schema="public")
+    columns = inspector.get_columns(table, schema=schema)
     # columns → [{"name": "id", "type": INTEGER(), "nullable": False, ...}]
 
-    pk = inspector.get_pk_constraint(table, schema="public")
+    pk = inspector.get_pk_constraint(table, schema=schema)
     # pk → {"constrained_columns": ["id"], "name": "orders_pkey"}
 
-    fks = inspector.get_foreign_keys(table, schema="public")
+    fks = inspector.get_foreign_keys(table, schema=schema)
     # fks → [{"constrained_columns": ["customer_id"],
     #          "referred_table": "customers",
     #          "referred_columns": ["id"]}]
@@ -97,14 +103,30 @@ for table in tables:
 If no driver is available but a wren profile is configured, query
 `information_schema` through wren itself:
 
+Schema names vary by data source — postgres defaults to `public`, duckdb
+to `main`, and others differ again — so do not filter on a guessed schema
+name. Discover what schemas actually exist first:
+
 ```bash
-wren --sql "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'" -o json
+wren --sql "SELECT table_schema, table_name FROM information_schema.tables" -o json
+```
+
+On some data sources this also lists system schemas alongside your own
+(e.g. postgres includes `pg_catalog` and `information_schema` itself) —
+that's expected; pick the schema name that matches your actual database.
+
+Then, once you know the real schema name(s) from the output above, narrow
+further if needed:
+
+```bash
+wren --sql "SELECT table_name FROM information_schema.tables WHERE table_schema = '<schema>'" -o json
 wren --sql "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'orders'" -o json
 ```
 
 Note: this goes through the MDL layer, so it only works if you already
 have a minimal MDL or if the database supports `information_schema` as
-regular tables. For bootstrapping from zero, Option A or B is preferred.
+regular tables (not every data source does). For bootstrapping from zero,
+Option A or B is preferred.
 
 ## Phase 3 — Normalize types
 
@@ -190,7 +212,10 @@ table_reference:
   catalog: ""           # database catalog (empty string if not applicable;
                         #   for DuckDB, use the DB file name without extension,
                         #   e.g. jaffle_shop.duckdb → catalog: jaffle_shop)
-  schema: public        # database schema (this IS the DB schema)
+  schema: public        # database schema — this IS the DB schema, and its
+                        #   name is data-source-specific: e.g. "public" for
+                        #   Postgres, "main" for DuckDB. Use the value
+                        #   discovered in Phase 2, not this literal example.
   table: orders         # database table name
 primary_key: order_id
 columns:
@@ -240,7 +265,19 @@ Ask the user to describe:
 These descriptions are indexed by `wren memory index` and significantly
 improve LLM query accuracy.
 
-## Phase 5 — Validate and build
+## Phase 5 — Finalize: validate, then build
+
+> **This is the only way to finalize/compile a project — exactly two
+> commands, in this order, and nothing else is needed:**
+> `wren context validate` then `wren context build`. `build` is the
+> command that compiles the YAML into `target/mdl.json`, the file the
+> engine actually reads; success looks like
+> `Built: N models, M views → .../target/mdl.json`. Do not reach for
+> `wren context upgrade` (schema-version migration, unrelated),
+> `wren context init` again (already done in Phase 4), `wren context show`
+> (read-only inspector), or `--help` exploration on any of these — the
+> two-command sequence below is complete and requires no further
+> discovery.
 
 ```bash
 # Validate YAML structure and integrity

@@ -127,7 +127,9 @@ def _load_conn(
     return {}
 
 
-def _resolve_engine_profile(mdl: str | None) -> tuple[str | None, dict]:
+def _resolve_engine_profile(
+    mdl: str | None, *, strict: bool = False
+) -> tuple[str | None, dict]:
     """Resolve the connection profile for project-context CLI commands.
 
     Project detection is decoupled from ``--mdl`` shape: ``--mdl`` is a pure
@@ -135,7 +137,12 @@ def _resolve_engine_profile(mdl: str | None) -> tuple[str | None, dict]:
     independently by walking up from the MDL path (when it's a real file)
     AND from cwd. Active profile is reserved for the case where neither
     discovery finds a project — preventing ``--mdl <base64>`` or
-    ``--mdl /external.json`` from silently bypassing cwd's pin.
+    ``--mdl /external.json`` from silently bypassing cwd's pin. This lenient
+    fallback is unaffected by ``strict``: it only governs what happens once
+    a project *is* discovered but has no pin.
+
+    ``strict=True`` is for callers that actually connect to the resolved
+    profile's data source (real queries) — see ``resolve_profile_for_project``.
     """
     from wren.profile import (  # noqa: PLC0415
         get_active_profile,
@@ -145,7 +152,7 @@ def _resolve_engine_profile(mdl: str | None) -> tuple[str | None, dict]:
     project_path = _discover_project_for_engine(mdl)
     if project_path is None:
         return get_active_profile()
-    return resolve_profile_for_project(project_path)
+    return resolve_profile_for_project(project_path, strict=strict)
 
 
 def _discover_project_for_engine(mdl: str | None) -> Path | None:
@@ -209,15 +216,21 @@ def _build_engine(
 
     manifest_str = _load_manifest(_require_mdl(mdl))
 
-    # Try project-pinned profile (or fall back to active) when no explicit
-    # connection flags given.
+    # Try project-pinned profile when no explicit connection flags given.
+    # strict=True: this is the real-DB-connection path (query / cube query /
+    # serve mcp all route through here) — a project discovered with no
+    # `profile:` pin must fail loudly rather than silently connect through
+    # whatever profile happens to be globally active on the machine. A
+    # project with no discoverable context at all still falls back to the
+    # active profile (see `_resolve_engine_profile`); that ad-hoc path is
+    # unaffected by `strict`.
     if not connection_info and not connection_file:
         from wren.profile import (  # noqa: PLC0415
             MissingSecretError,
             expand_profile_secrets,
         )
 
-        prof_name, prof_dict = _resolve_engine_profile(mdl)
+        prof_name, prof_dict = _resolve_engine_profile(mdl, strict=True)
         if prof_dict:
             prof_ds = prof_dict.pop("datasource", None)
             ds_str = datasource or prof_ds

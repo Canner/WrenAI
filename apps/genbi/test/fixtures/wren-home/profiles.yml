@@ -1,0 +1,16 @@
+active: other_active_profile
+profiles:
+  fixture_duckdb:
+    datasource: duckdb
+    url: /tmp/fixtures/manifest-duckdb
+    format: duckdb
+  fixture_bigquery:
+    datasource: bigquery
+    bigquery_type: project
+    project_id: fixture-project
+    dataset_id: fixture_dataset
+    credentials: super-secret-value-must-never-leak-b64
+  other_active_profile:
+    datasource: duckdb
+    url: /should/not/be/used
+    format: duckdb

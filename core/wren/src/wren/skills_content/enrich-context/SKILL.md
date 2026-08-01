@@ -307,13 +307,13 @@ If it fails:
 
 ## Step 8 — Session finalize
 
-After Step 6 ends (user says stop in grill mode, or every finding is processed in auto-pilot):
+After Step 6 ends (user says stop in grill mode, or every finding is processed in auto-pilot), run exactly one command to finalize/compile — nothing else is needed, and no other `wren context` subcommand plays this role (`upgrade` is schema-version migration, unrelated; `show` is a read-only inspector):
 
 ```bash
 wren context build
 ```
 
-This recompiles `target/mdl.json` from the YAML edits.
+This recompiles `target/mdl.json` from the YAML edits — it's the file the engine actually reads. Success looks like `Built: N models, M views → .../target/mdl.json`. (Per-edit `wren context validate` already ran throughout Step 6/7, so a separate validate pass here isn't required — `build` re-validates by default anyway.)
 
 If `MEMORY_AVAILABLE = true`:
 

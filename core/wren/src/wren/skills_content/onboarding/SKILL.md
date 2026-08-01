@@ -56,7 +56,7 @@ Wait for both. Don't ask for credentials.
 
 ## Step 2 — Workspace + .env setup (batch)
 
-Side effects: creates `~/<project>/`, installs `wrenai[<ds>,main]`, generates an empty `.env` template. The project files (`wren_project.yml` etc.) come later in Step 3.5 — at this point we only have a directory with credentials waiting to be filled.
+Side effects: creates `~/<project>/`, installs `wrenai[<ds>,main]`, generates an empty `.env` template. The project files (`wren_project.yml` etc.) come next in Step 3 — at this point we only have a directory with credentials waiting to be filled.
 
 Run as a batch — report each command briefly, then end with one "please fill `.env`" ask:
 
@@ -83,11 +83,21 @@ Run as a batch — report each command briefly, then end with one "please fill `
 4. Add `.env` to `.gitignore` if the project is a git repo. Suggest `chmod 600 .env`.
 5. Tell the user: `.env` is at `<path>`, please fill every value and reply **"done"**.
 
-## Step 3 — Create the connection profile
+## Step 3 — Scaffold the project
 
-Only after the user replies "done".
+```bash
+wren context init --empty
+```
 
-Write `/tmp/conn.yml` with **every field as a `${VAR}` placeholder** matching the `.env` keys you generated in Step 2:
+Refuses to overwrite an existing `wren_project.yml`. Creates the project directory layout (`models/`, `views/`, `relationships.yml`, `knowledge/` (rules + sql), `AGENTS.md`). No connection profile needs to exist yet — this step only writes placeholder project files (`data_source:` is left as a to-be-changed placeholder for now; Step 3.5 fixes it).
+
+Run this **before** creating the connection profile (Step 3.5), not after — it's what lets Step 3.5 bind the profile to this project the moment it's created, instead of needing a separate binding step later.
+
+## Step 3.5 — Create the connection profile (binds automatically)
+
+Only after the user replies "done" in Step 2.
+
+From inside `~/<project>` (the directory scaffolded in Step 3), write a scratch file named `conn.profile.yml` with **every field as a `${VAR}` placeholder** matching the `.env` keys you generated in Step 2 — a placeholder token only, **never** a value read out of `.env` or typed from memory. You must not open, cat, or otherwise read `.env` to produce this file; you only need the field *names*, which you already have from Step 2's `wren docs connection-info <ds>` output. Use exactly this name, not `conn.yml` — a same-named file is reserved for hand-authored fixtures elsewhere in the toolchain, and this scratch file must never be mistaken for one:
 
 ```yaml
 datasource: <ds>
@@ -96,34 +106,19 @@ port: ${<DS>_PORT}
 # … one line per field from `wren docs connection-info <ds>`
 ```
 
-Then:
+Then, still from inside `~/<project>`:
 
 ```bash
-wren profile add <project> --from-file /tmp/conn.yml
+wren profile add <project> --from-file conn.profile.yml --activate
 ```
 
-Validation runs automatically. The CLI overwrites profiles silently — there is no `--force` flag.
+(`conn.profile.yml` is a project-relative path — deliberately not `/tmp` or any other absolute location outside the project directory.)
 
-- ✓ **Success** → continue to Step 3.5.
-- ⚠ **Any warning** → consult [`connect.md#troubleshooting`](https://github.com/Canner/WrenAI/blob/main/docs/core/guides/connect.md) for the exact symptom (missing secret, driver auth failure, ValidationError, unreachable host, …) and tell the user what to fix.
+Because Step 3 already scaffolded `~/<project>` and it has no `profile:` pin yet, this command **pins itself into the project automatically** — look for a line starting `⚠ Pinned profile '<project>' to the project at …` in its output. That line, not `--activate`, is what makes this project resolve `<project>`'s connection deterministically going forward, independent of whatever else later becomes the globally active profile. `--activate` still matters (it's what makes validation and Step 4 work in *this* turn), but it no longer needs to survive as the project's connection of record — the pin does that.
 
-## Step 3.5 — Scaffold the project
-
-```bash
-wren context init --empty
-```
-
-Refuses to overwrite an existing `wren_project.yml`. Creates the project directory layout (`models/`, `views/`, `relationships.yml`, `knowledge/` (rules + sql), `AGENTS.md`).
-
-## Step 3.6 — Bind the profile to the project
-
-```bash
-wren context set-profile <project>
-```
-
-Writes both `profile: <project>` and `data_source: <ds>` into `wren_project.yml` (data_source is taken from the profile we just validated, so it's guaranteed correct). Future CLI commands and the SDK resolve the connection deterministically — independent of which profile is globally active.
-
-This step also future-proofs the project for multi-project setups: once the binding is recorded, switching `wren profile switch` elsewhere never breaks this project's queries.
+- ✓ **Success + the `⚠ Pinned profile …` line present** → delete the scratch file (`rm conn.profile.yml`) — it only ever held `${VAR}` placeholders, and those are now captured in `~/.wren/profiles.yml`, so nothing is lost — then continue to Step 4.
+- ✓ **Success but no `⚠ Pinned profile …` line** → the project already had a different profile pinned (this command never overwrites an existing pin) — but it can also mean the command wasn't actually run from inside `~/<project>`, or the project's declared datasource doesn't match this profile's (a real mismatch is left unpinned rather than silently repinned). Run `wren context show` and confirm the pinned profile is the one you intend; if not, use `wren context set-profile <project>` to repin explicitly before continuing. Delete `conn.profile.yml` once the pin situation is resolved.
+- ⚠ **Any warning** → consult [`connect.md#troubleshooting`](https://github.com/Canner/WrenAI/blob/main/docs/core/guides/connect.md) for the exact symptom (missing secret, driver auth failure, ValidationError, unreachable host, …) and tell the user what to fix. Leave `conn.profile.yml` in place until a retry succeeds, then delete it.
 
 ## Step 4 — Generate MDL (hand off)
 

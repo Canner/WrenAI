@@ -216,22 +216,38 @@ def get_active_profile() -> tuple[str | None, dict]:
     return name, dict(profiles.get(name, {}))
 
 
-def resolve_profile_for_project(project_path: Path) -> tuple[str | None, dict]:
+def resolve_profile_for_project(
+    project_path: Path, *, strict: bool = False
+) -> tuple[str | None, dict]:
     """Resolve the connection profile for a given project.
 
     Resolution order:
       1. ``profile:`` field in ``<project>/wren_project.yml`` (if non-empty)
-      2. Global active profile in ``~/.wren/profiles.yml``
+      2. Global active profile in ``~/.wren/profiles.yml`` — unless
+         ``strict=True``, see below.
 
     Returns ``(name, profile_dict)``. Returns ``(None, {})`` if neither a
-    project pin nor a global active profile is set.
+    project pin nor a global active profile is set (only reachable when
+    ``strict=False``).
 
     Raises ``SystemExit`` when the project pins a profile name that does not
     exist in profiles.yml — fail loudly because the user explicitly bound
-    a profile that's no longer there.
+    a profile that's no longer there. This happens regardless of ``strict``.
+
+    ``strict=True`` additionally raises ``SystemExit`` instead of falling
+    back to the global active profile when the project has **no** pin at
+    all. The global active profile is mutable, shared, machine-wide state —
+    silently resolving a project's real database connection through it is
+    exactly the footgun this parameter exists to close. Callers that
+    actually connect to the project's data source (running a query,
+    building context) should pass ``strict=True``; callers that merely
+    display or validate schema-level state for a project that may predate
+    the pin feature (e.g. adopting a pre-existing project) should keep the
+    lenient default.
     """
     project_yml = project_path / "wren_project.yml"
     pinned_name: str | None = None
+    project_data_source: str | None = None
     if project_yml.exists():
         try:
             config = yaml.safe_load(project_yml.read_text(encoding="utf-8")) or {}
@@ -248,8 +264,13 @@ def resolve_profile_for_project(project_path: Path) -> tuple[str | None, dict]:
             value = config.get("profile")
             if isinstance(value, str) and value.strip():
                 pinned_name = value.strip()
+            ds_value = config.get("data_source")
+            if isinstance(ds_value, str) and ds_value.strip():
+                project_data_source = ds_value.strip()
 
     if pinned_name is None:
+        if strict:
+            raise SystemExit(_no_pin_error(project_path, project_data_source))
         return get_active_profile()
 
     data = _load_raw()
@@ -264,6 +285,37 @@ def resolve_profile_for_project(project_path: Path) -> tuple[str | None, dict]:
             f"`wren profile add {pinned_name}` to recreate the missing profile."
         )
     return pinned_name, dict(profiles[pinned_name])
+
+
+def _no_pin_error(project_path: Path, project_data_source: str | None) -> str:
+    """Build the actionable error message for a strict-mode no-pin failure.
+
+    Names the project, states the missing pin, gives the literal fix
+    command, and lists profiles compatible with the project's declared
+    ``data_source`` (or all profiles, if the project hasn't declared one)
+    when that's cheap to compute from the already-loaded profile store.
+    """
+    project_name = project_path.name
+    profiles = _load_raw().get("profiles", {})
+    if project_data_source:
+        compatible = sorted(
+            name
+            for name, prof in profiles.items()
+            if isinstance(prof, dict) and prof.get("datasource") == project_data_source
+        )
+    else:
+        compatible = sorted(profiles)
+    compatible_str = ", ".join(compatible) if compatible else "(none)"
+    return (
+        f"Error: project '{project_name}' at {project_path} has no `profile:` "
+        "pin in wren_project.yml.\n"
+        "  Refusing to fall back to the machine's global active profile — "
+        "that's shared, mutable state and can silently connect this project "
+        "to the wrong database.\n"
+        f"  Run `wren context set-profile <name>` to pin one explicitly.\n"
+        f"  Compatible profiles ({project_data_source or 'any datasource'}): "
+        f"{compatible_str}"
+    )
 
 
 def add_profile(name: str, profile: dict, *, activate: bool = False) -> None:

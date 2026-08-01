@@ -454,6 +454,170 @@ def save_project_config(project_path: Path, config: dict) -> None:
     )
 
 
+def pin_profile(project_path: Path, name: str, datasource: str) -> None:
+    """Write ``profile: <name>`` and ``data_source: <datasource>`` into
+    ``wren_project.yml``, preserving every other existing field.
+
+    Shared by ``wren context set-profile``, ``wren context init --profile``,
+    the project-aware pin performed by ``wren profile add`` (see
+    ``maybe_pin_new_profile_to_project``), and the narrow ambient fallback
+    (see ``auto_pin_active_profile``) — every pin-writing path funnels
+    through here so they all write the pin identically.
+    """
+    config = load_project_config(project_path)
+    config["profile"] = name
+    config["data_source"] = datasource
+    save_project_config(project_path, config)
+
+
+@dataclass(frozen=True)
+class ProjectPinOutcome:
+    """Result of :func:`maybe_pin_new_profile_to_project`.
+
+    ``pinned_path`` is set only when the pin was actually written; every
+    other field is then ``None``. Otherwise ``reason`` says why not, one of:
+
+    - ``"no_project"`` — no project could be discovered from the current
+      directory (or the current context, e.g. ``discover_project_path``'s
+      ``~/.wren/config.yml`` fallback, couldn't be read either). Common and
+      legitimate — e.g. managing profiles with no particular project in
+      mind — so callers should stay silent on it.
+    - ``"already_pinned"`` — the discovered project already has a
+      ``profile:`` pin. Also common and legitimate — repinning is ``wren
+      context set-profile``'s job, not this function's — so callers should
+      stay silent on it too.
+    - ``"datasource_mismatch"`` — the discovered project declares a real,
+      *different* ``data_source``. ``project_path`` and
+      ``existing_datasource`` (the project's declared value) are set so a
+      caller can explain the conflict.
+    - ``"unparseable"`` — the discovered project's ``wren_project.yml``
+      exists but couldn't be read as a config dict (parse error, or content
+      that isn't a mapping). ``project_path`` is set (discovery itself
+      succeeded); the file just couldn't be trusted enough to check for a
+      pin.
+
+    Unlike the first two, ``datasource_mismatch`` and ``unparseable`` are
+    *not* routine no-ops — they mean the caller is sitting on a connection
+    that was just created and a project that, for one reason or another,
+    didn't end up pinned to it. Callers should say so.
+    """
+
+    pinned_path: Path | None = None
+    reason: str | None = None
+    project_path: Path | None = None
+    existing_datasource: str | None = None
+
+
+def maybe_pin_new_profile_to_project(name: str, datasource: str) -> ProjectPinOutcome:
+    """Pin a just-created connection profile into a project discovered from
+    the current directory, if that project has no ``profile:`` pin yet AND
+    the new profile's datasource is compatible with what the project already
+    declares.
+
+    This is the primary fix for the "project can end up with a connection
+    but no pin" gap: ``wren profile add`` calls this immediately after
+    saving a new profile, so the pin becomes a deterministic side effect of
+    the one step an agent cannot skip (creating a working connection at
+    all), rather than a guess at ambient state made later, at ``wren
+    context init`` time (see ``auto_pin_active_profile``, now a narrow
+    fallback for callers who haven't adopted this ordering).
+
+    Guarded to never surprise an existing decision or corrupt an unrelated
+    project:
+    - Only pins when ``discover_project_path`` resolves to a project AND
+      that project has no ``profile:`` field yet. An already-pinned project
+      is left completely untouched — re-pinning is ``wren context
+      set-profile``'s job, not ``profile add``'s.
+    - Only pins when the project's declared ``data_source`` is empty/absent
+      OR case-insensitively equal to the new profile's datasource. A
+      project that already declares a real, *different* datasource is left
+      unpinned rather than silently repinned and rewritten to a mismatched
+      one — `profile add` for an unrelated connection must never overwrite
+      an existing project's intent just because cwd happens to be inside
+      it. (Deliberately does NOT special-case the literal string
+      "postgres" as a placeholder sentinel: it's a real, valid datasource a
+      user may have chosen deliberately, and string-matching the scaffold
+      default can't distinguish "untouched placeholder" from "genuine
+      choice" — so an unpinned `postgres` project is only auto-pinned by a
+      newly-added `postgres` profile, same as any other datasource.)
+    - Tolerates a project whose ``wren_project.yml`` (or the global
+      ``~/.wren/config.yml`` consulted during discovery) fails to parse —
+      profile management must not crash on an unrelated project's broken
+      file; it just treats that as "nothing to pin into."
+
+    None of the above changes with this function's return type: it still
+    never repins, never overwrites, and never crashes on a broken file. It
+    now returns a :class:`ProjectPinOutcome` instead of a bare ``Path |
+    None`` purely so the caller (``profile_cli._maybe_announce_project_pin``)
+    can tell a routine no-op (silent) apart from one worth telling the
+    caller about (loud) — see that function's docstring.
+    """
+    try:
+        project_path = discover_project_path(None)
+    except (SystemExit, Exception):
+        return ProjectPinOutcome(reason="no_project")
+    try:
+        config = load_project_config(project_path)
+    except (SystemExit, Exception):
+        return ProjectPinOutcome(reason="unparseable", project_path=project_path)
+    if not isinstance(config, dict):
+        return ProjectPinOutcome(reason="unparseable", project_path=project_path)
+    if config.get("profile"):
+        return ProjectPinOutcome(reason="already_pinned")
+    existing_datasource = config.get("data_source")
+    if (
+        existing_datasource
+        and str(existing_datasource).strip().lower() != str(datasource).strip().lower()
+    ):
+        return ProjectPinOutcome(
+            reason="datasource_mismatch",
+            project_path=project_path,
+            existing_datasource=str(existing_datasource),
+        )
+    pin_profile(project_path, name, datasource)
+    return ProjectPinOutcome(pinned_path=project_path)
+
+
+def auto_pin_active_profile(project_path: Path) -> str | None:
+    """Pin the machine's active connection profile to a freshly scaffolded
+    project, but ONLY when the profile store contains exactly one profile
+    total — i.e. there is nothing to guess between.
+
+    This is a narrow, secondary fallback, not the primary mechanism. The
+    primary fix for "a project can end up with a connection but no
+    ``profile:`` pin" is ``wren profile add`` pinning itself into a
+    discovered pinless project deterministically (see
+    ``maybe_pin_new_profile_to_project``), which fires regardless of which
+    profile happens to be ambiently active. This function only matters for
+    callers who haven't adopted that path — e.g. ``wren context init`` runs
+    without an explicit ``--profile`` flag.
+
+    Deliberately does NOT pin whichever profile happens to be ``active:``
+    when two or more profiles exist in the store: guessing there is exactly
+    the failure mode this whole feature exists to prevent (a project
+    silently ending up pinned to the wrong database). A missing pin fails
+    loudly and actionably at the next real connection attempt (via
+    ``resolve_profile_for_project(strict=True)``); a wrong pin fails
+    silently and durably. Between those two outcomes, no pin is strictly
+    safer, so that's what happens whenever there's more than one candidate
+    profile to choose from. When exactly one profile exists, there's
+    nothing to guess — pinning it is unambiguous.
+
+    Returns the pinned profile name, or ``None`` if nothing was pinned.
+    """
+    from wren.profile import list_profiles  # noqa: PLC0415
+
+    profiles = list_profiles()
+    if len(profiles) != 1:
+        return None
+    [(name, profile)] = profiles.items()
+    datasource = profile.get("datasource")
+    if not datasource:
+        return None
+    pin_profile(project_path, name, datasource)
+    return name
+
+
 _SUPPORTED_SCHEMA_VERSIONS = {1, 2, 3, 4, 5}
 
 # schema_version → layoutVersion mapping for the engine.
@@ -874,11 +1038,14 @@ def validate_project(project_path: Path) -> list[ValidationError]:
     else:
         for required in ("name", "data_source"):
             if not config.get(required):
-                errors.append(
-                    ValidationError(
-                        "error", PROJECT_FILE, f"missing required field '{required}'"
+                message = f"missing required field '{required}'"
+                if required == "data_source":
+                    message += (
+                        "; create a profile with `wren profile add <name>`, "
+                        "bind one with `wren context set-profile <name>`, or "
+                        "scaffold with `wren context init --data-source <data-source>`"
                     )
-                )
+                errors.append(ValidationError("error", PROJECT_FILE, message))
         raw_sv = config.get("schema_version", 1)
         try:
             sv = int(raw_sv)

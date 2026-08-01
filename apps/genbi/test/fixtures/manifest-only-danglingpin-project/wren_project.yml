@@ -1,0 +1,7 @@
+schema_version: 5
+name: manifest-only-danglingpin
+version: '1.0'
+catalog: wren
+schema: public
+data_source: postgres
+profile: profile_that_does_not_exist

@@ -1,0 +1,660 @@
+{
+  "vercel_bundle_version": "0.1",
+  "compat": {
+    "min_ir_version": "0.3",
+    "max_ir_version": "0.3"
+  },
+  "profile": "genbi-default",
+  "target": "vercel:headless",
+  "agents": [
+    {
+      "id": "explore_model",
+      "verb": "explore_model",
+      "component_type": "analytical",
+      "realization_kind": "skill",
+      "trigger": "one_shot",
+      "outcome": "none",
+      "steps": [
+        {
+          "name": "summarize_semantics",
+          "tier": "cheap",
+          "consumes": [],
+          "produces": "semantic_summary",
+          "prompt": "You introspect the `jaffle-wren` wren project (a semantic layer at `../examples/jaffle-wren`) and return a\nstructured summary of what it contains — the map the other GenBI components build on.\n\n- Introspect the semantic layer with the `wren` CLI: run `wren context show` (and, if available,\n  `wren cube list`) to read the models, columns, relationships, and metrics/cubes. This is the\n  `raw_introspect_result` you consume — read it, do not assume the schema.\n- Cover the FULL set: every model, its key columns and their roles (dimension vs measure vs\n  time), the relationships between models, and any defined metrics/cubes. Do not drop entries to\n  keep the summary short — coverage is the point.\n- Produce `semantic_summary`: a compact structured listing of every model and metric found. Your\n  FINAL message must be a single JSON object of the form\n  `{\"columns\": [\"model\"], \"rows\": [[\"<model_name>\"], ...]}` listing every model in the layer\n  (one row per model), so coverage can be checked deterministically. You may add a short prose\n  summary after the JSON.",
+          "realization": {
+            "kind": "independent"
+          }
+        }
+      ],
+      "guardrails": {
+        "read_only_execution": {
+          "enforcement": "read_only",
+          "locked": true
+        }
+      },
+      "tools": [
+        {
+          "name": "semantic_introspect",
+          "source": "mcp:sample/semantic_introspect"
+        }
+      ],
+      "output_schema": {
+        "properties": {
+          "blocks": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "verified": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "blocks"
+        ],
+        "type": "object"
+      },
+      "capabilities": [
+        {
+          "capability": "semantic_introspection",
+          "outcome": "realize-via",
+          "provided_by": "runtime",
+          "criticality": "required"
+        },
+        {
+          "capability": "llm:cheap",
+          "outcome": "native",
+          "provided_by": "runtime",
+          "criticality": "required"
+        }
+      ]
+    },
+    {
+      "id": "answer_query",
+      "verb": "answer_query",
+      "component_type": "analytical",
+      "realization_kind": "skill",
+      "trigger": "one_shot",
+      "outcome": "none",
+      "steps": [
+        {
+          "name": "resolve_intent",
+          "tier": "cheap",
+          "consumes": [],
+          "produces": "query_intent",
+          "prompt": "You answer a single data question over the `jaffle-wren` wren project (a semantic layer at\n`../examples/jaffle-wren`). This first step resolves the user's question into a concrete query intent.\n\n- If unsure of the schema, introspect first: `wren context show`.\n- Identify which model(s), metric(s), dimension(s), filters, grouping, and ordering the question\n  implies. Resolve ambiguous business terms to concrete columns/metrics in the semantic layer.\n- Produce `query_intent`: a short, explicit statement of exactly what to compute (measures,\n  grouping, filters, ordering, row limit) — enough for the next step to write SQL without\n  re-reading the question.",
+          "realization": {
+            "kind": "independent"
+          }
+        },
+        {
+          "name": "generate_sql",
+          "tier": "strong",
+          "consumes": [
+            "query_intent"
+          ],
+          "produces": "query_result",
+          "prompt": "Given the resolved `query_intent`, write and execute the query through the semantic layer.\n\n- Query ONLY through the wren CLI, which returns JSON: `wren -q -o json -s '<SQL>'`. Never\n  hand-write SQL against raw tables outside the model — always go through the semantic layer.\n- Respect the guardrails: read-only only, keep within the row limit, and prefer a deterministic\n  ordering when the question implies a ranking or a top-N.\n- **Verify the result set (deterministic gate — required before answering).** After the query runs,\n  check it is legitimate: it actually executed (no error), it is non-empty where a value is expected,\n  the types/units are sane, and the grain matches the question. Record whether it passed.\n- Produce `query_result`: the executed result set (`{columns, rows}` from `wren`), the exact SQL you\n  ran, the source tables it read, and the filters applied, plus whether execution + validation\n  passed (and the error text, if any) so the repair step can decide whether it must run.",
+          "realization": {
+            "kind": "independent"
+          }
+        },
+        {
+          "name": "repair_sql",
+          "tier": "strong",
+          "consumes": [
+            "query_result"
+          ],
+          "produces": "repaired_result",
+          "prompt": "Repair step — runs ONLY when `query_result` came back with an execution error or an empty/obviously\nwrong result. If the previous step succeeded with a sensible result, do nothing and pass it through.\n\n- Diagnose the failure from the error text (unknown column, bad join, type mismatch, wrong grain),\n  fix the SQL, and re-run it through `wren -q -o json -s '<SQL>'`. Bound your attempts — a few\n  retries at most; do not loop indefinitely (retry depth is this step's concern, not the profile's).\n- **If the result still cannot be validated, REFUSE.** Do not fabricate a number. Emit\n  `{\"verified\": false, \"refused\": true, \"reason\": \"<why it could not be verified>\"}` and stop.\n- Produce `repaired_result`. On success your FINAL message must be ONLY a single JSON object, no\n  prose and no markdown fences, carrying the answer plus its verify facet and shallow definition:\n  ```\n  {\"columns\": [\"col1\", ...], \"rows\": [[v1, ...], ...],\n   \"verified\": true,\n   \"definition\": {\"sql\": \"<the exact SQL you ran>\", \"source_tables\": [\"...\"], \"filters\": [\"...\"]}}\n  ```\n  Emit numbers as numbers, not strings. Set `\"verified\": true` ONLY when a query ran and its result\n  set passed validation. The `definition` is run-level provenance only (the query behind this\n  answer) — do not invent unit/owner/formal-metric lineage (out of scope for this run-level card).",
+          "when": {
+            "guard": "on_failure",
+            "target": "generate_sql"
+          },
+          "realization": {
+            "kind": "repair_fold",
+            "fold_into": "generate_sql",
+            "max_attempts": 1
+          }
+        }
+      ],
+      "guardrails": {
+        "deterministic_gate": {
+          "enforcement": "gated_check",
+          "locked": true
+        },
+        "read_only_execution": {
+          "enforcement": "read_only",
+          "locked": true
+        },
+        "row_limit": {
+          "enforcement": "threshold_limit",
+          "locked": false,
+          "threshold": 1000
+        },
+        "statement_timeout": {
+          "enforcement": "generic",
+          "locked": false,
+          "threshold": 30
+        }
+      },
+      "tools": [
+        {
+          "name": "query",
+          "source": "mcp:sample/query"
+        }
+      ],
+      "output_schema": {
+        "properties": {
+          "blocks": {
+            "items": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "columns": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "rows": {
+                      "items": {
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "type": {
+                      "const": "table"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "columns",
+                    "rows"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "filters": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "source_tables": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "sql": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "const": "definition"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "filters",
+                    "source_tables",
+                    "sql"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "verified": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "blocks"
+        ],
+        "type": "object"
+      },
+      "capabilities": [
+        {
+          "capability": "sql_execution:read_only",
+          "outcome": "native",
+          "provided_by": "runtime",
+          "criticality": "required"
+        },
+        {
+          "capability": "llm:per_step_tier",
+          "outcome": "realize-via",
+          "provided_by": "runtime",
+          "criticality": "required"
+        },
+        {
+          "capability": "llm:strong",
+          "outcome": "native",
+          "provided_by": "runtime",
+          "criticality": "required"
+        },
+        {
+          "capability": "llm:cheap",
+          "outcome": "native",
+          "provided_by": "runtime",
+          "criticality": "required"
+        },
+        {
+          "capability": "render_contract",
+          "outcome": "native",
+          "provided_by": "runtime",
+          "criticality": "required"
+        }
+      ]
+    },
+    {
+      "id": "generate_dashboard",
+      "verb": "generate_dashboard",
+      "component_type": "analytical",
+      "realization_kind": "skill",
+      "trigger": "one_shot",
+      "outcome": "none",
+      "steps": [
+        {
+          "name": "plan_dashboard",
+          "tier": "strong",
+          "consumes": [],
+          "produces": "dashboard_plan",
+          "prompt": "You build data dashboards over the `jaffle-wren` wren project (a semantic layer at\n`../examples/jaffle-wren`).\n\nGiven the user's topic, plan the dashboard:\n\n- Discover available models, columns, and cubes **at query time** using the `wren` CLI\n  (`wren context show`, `wren cube list`, `wren cube describe <cube>`). Do not assume the schema —\n  introspect it.\n- Decide which metrics and dimensions answer the topic, and what panels are needed\n  (KPI cards for headline numbers, a chart for trends/breakdowns, a table for detail).\n- Produce `dashboard_plan`: for each panel, the panel type (kpi_card | table | chart) and the exact\n  query (through the semantic layer) that populates it. Every query goes through `wren`; never\n  hand-write SQL against raw tables outside the model.",
+          "realization": {
+            "kind": "independent"
+          }
+        },
+        {
+          "name": "compose_layout",
+          "tier": "cheap",
+          "consumes": [
+            "dashboard_plan"
+          ],
+          "produces": "dashboard",
+          "prompt": "Given the `dashboard_plan`, run each panel's query and compose the dashboard.\n\n- Run each planned panel query with the `wren` CLI (`wren -q -o json -s '<SQL>'`) and collect the\n  results — these are the `panel_results` you consume. (This inlines the query behavior; it does not\n  call a separate query component.)\n- Assemble each panel into a typed render block conforming to the render contract:\n  `kpi_card` for headline numbers, `chart` for trends/breakdowns, `table` for detail.\n- Produce `dashboard`: follow the \"Render output\" instructions the dispatcher appends below for the\n  active render flavor — emit the `{ blocks, summary }` envelope (programmatic) or write the HTML\n  (prompt). The blocks must carry real values from `panel_results`, not placeholders.",
+          "realization": {
+            "kind": "independent"
+          }
+        }
+      ],
+      "guardrails": {
+        "artifact_write": {
+          "enforcement": "scoped_write",
+          "locked": true,
+          "scope": "."
+        },
+        "read_only_execution": {
+          "enforcement": "read_only",
+          "locked": true
+        }
+      },
+      "tools": [
+        {
+          "name": "query",
+          "source": "mcp:sample/query"
+        },
+        {
+          "name": "build_dashboard",
+          "source": "mcp:sample/build_dashboard"
+        },
+        {
+          "name": "write_artifact",
+          "source": "native"
+        }
+      ],
+      "output_schema": {
+        "properties": {
+          "blocks": {
+            "items": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "delta": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "const": "kpi_card"
+                    },
+                    "unit": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "value": {
+                      "type": [
+                        "number",
+                        "string"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "label",
+                    "value"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "columns": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "rows": {
+                      "items": {
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "type": {
+                      "const": "table"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "columns",
+                    "rows"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "chart_type": {
+                      "enum": [
+                        "bar",
+                        "line",
+                        "pie",
+                        "area",
+                        "scatter"
+                      ],
+                      "type": "string"
+                    },
+                    "rows": {
+                      "items": {
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "series": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "type": {
+                      "const": "chart"
+                    },
+                    "x": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "chart_type",
+                    "rows",
+                    "series",
+                    "x"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "filters": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "source_tables": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "sql": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "const": "definition"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "filters",
+                    "source_tables",
+                    "sql"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "verified": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "blocks"
+        ],
+        "type": "object"
+      },
+      "capabilities": [
+        {
+          "capability": "sql_execution:read_only",
+          "outcome": "native",
+          "provided_by": "runtime",
+          "criticality": "required"
+        },
+        {
+          "capability": "genbi_build",
+          "outcome": "native",
+          "provided_by": "runtime",
+          "criticality": "required"
+        },
+        {
+          "capability": "render_contract",
+          "outcome": "native",
+          "provided_by": "runtime",
+          "criticality": "required"
+        },
+        {
+          "capability": "artifact_write",
+          "outcome": "realize-via",
+          "provided_by": "runtime",
+          "criticality": "safety-critical"
+        },
+        {
+          "capability": "llm:per_step_tier",
+          "outcome": "realize-via",
+          "provided_by": "runtime",
+          "criticality": "required"
+        },
+        {
+          "capability": "llm:strong",
+          "outcome": "native",
+          "provided_by": "runtime",
+          "criticality": "required"
+        },
+        {
+          "capability": "llm:cheap",
+          "outcome": "native",
+          "provided_by": "runtime",
+          "criticality": "required"
+        }
+      ]
+    },
+    {
+      "id": "explain_change",
+      "verb": "explain_change",
+      "component_type": "analytical",
+      "realization_kind": "skill",
+      "trigger": "one_shot",
+      "outcome": "none",
+      "steps": [
+        {
+          "name": "plan_decomposition",
+          "tier": "strong",
+          "consumes": [],
+          "produces": "decomposition_plan",
+          "prompt": "You explain why a metric changed over the `jaffle-wren` wren project (a semantic layer at\n`../examples/jaffle-wren`), by planning how to decompose the change.\n\n- Introspect the layer as needed (`wren context show`) to find the metric, its time dimension, and\n  the dimensions you can break the change down by.\n- Confirm the metric is **additive** across the dimensions you intend to decompose along (a sum of\n  parts equals the whole). Compile time already guarantees the layer *has* an additive metric; you\n  must still check that the **specific** metric you decompose is additive. If it is a\n  ratio/average/distinct-count or otherwise non-additive, note that: decomposing it can mislead.\n- Produce `decomposition_plan`: the metric, the two periods being compared, and the ordered list of\n  dimensions to decompose the delta along (bounded by the drill-depth limit).",
+          "realization": {
+            "kind": "independent"
+          }
+        },
+        {
+          "name": "synthesize_drivers",
+          "tier": "strong",
+          "consumes": [
+            "decomposition_plan"
+          ],
+          "produces": "driver_explanation",
+          "prompt": "Given the `decomposition_plan`, quantify the change and synthesize the drivers into an explanation.\n\n- Run the decomposition queries through the `wren` CLI (`wren -q -o json -s '<SQL>'`): compute the\n  metric for each period and the per-dimension contribution to the delta. Rank contributors by the\n  size of their contribution.\n- Produce `driver_explanation` as a `narrative` render block: a short, ordered account of what drove\n  the change (largest contributors first), with the actual numbers. Follow the \"Render output\"\n  instructions the dispatcher appends below.\n- **Additivity caveat (required):** if the metric is not strictly additive across the decomposition\n  dimensions, state plainly in the narrative that the attribution is approximate and additivity was\n  not enforced. Never present a decomposition of a non-additive metric as exact — the hero output\n  must not claim to run on verified reasoning it did not.",
+          "realization": {
+            "kind": "independent"
+          }
+        }
+      ],
+      "guardrails": {
+        "additivity_guard": {
+          "enforcement": "gated_check",
+          "locked": true
+        },
+        "artifact_write": {
+          "enforcement": "scoped_write",
+          "locked": true,
+          "scope": "."
+        },
+        "drill_depth_limit": {
+          "enforcement": "threshold_limit",
+          "locked": false,
+          "threshold": 3
+        },
+        "read_only_execution": {
+          "enforcement": "read_only",
+          "locked": true
+        }
+      },
+      "tools": [
+        {
+          "name": "query",
+          "source": "mcp:sample/query"
+        },
+        {
+          "name": "write_artifact",
+          "source": "native"
+        }
+      ],
+      "output_schema": {
+        "properties": {
+          "blocks": {
+            "items": {
+              "properties": {
+                "text": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "type": {
+                  "const": "narrative"
+                }
+              },
+              "required": [
+                "type",
+                "text"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "verified": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "blocks"
+        ],
+        "type": "object"
+      },
+      "capabilities": [
+        {
+          "capability": "sql_execution:read_only",
+          "outcome": "native",
+          "provided_by": "runtime",
+          "criticality": "required"
+        },
+        {
+          "capability": "render_contract",
+          "outcome": "native",
+          "provided_by": "runtime",
+          "criticality": "required"
+        },
+        {
+          "capability": "artifact_write",
+          "outcome": "realize-via",
+          "provided_by": "runtime",
+          "criticality": "safety-critical"
+        },
+        {
+          "capability": "llm:strong",
+          "outcome": "native",
+          "provided_by": "runtime",
+          "criticality": "required"
+        }
+      ]
+    }
+  ]
+}

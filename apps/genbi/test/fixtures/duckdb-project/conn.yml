@@ -1,0 +1,3 @@
+datasource: duckdb
+url: ${DUCKDB_URL}
+format: ${DUCKDB_FORMAT}

@@ -1,0 +1,3 @@
+active: some_profile
+profiles:
+  # deliberately empty — exercises parseProfileStore's degrade-to-nothing-found path

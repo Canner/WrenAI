@@ -254,13 +254,14 @@ For the CTE rewrite pipeline and additional error patterns, see the `wren-sql` r
 
 ## Workflow 3: Connecting a new data source
 
-1. Add a profile: `wren profile add --ui` (or `--interactive` / `--from-file`)
+1. Add a profile: `wren profile add --ui` (or `--interactive` / `--from-file`) — always pass `--activate` so this profile (not whatever was previously active) is what subsequent steps connect to
 2. Test connection: `wren profile debug`
 3. Test query: `wren --sql "SELECT 1"`
 4. Initialize project: `wren context init`
-5. Build manifest: `wren context build`
-6. Index: `wren memory index`
-7. Verify: `wren --sql "SELECT * FROM <model> LIMIT 5"`
+5. Bind the profile to the project: `wren context set-profile <name>`
+6. Build manifest: `wren context build`
+7. Index: `wren memory index`
+8. Verify: `wren --sql "SELECT * FROM <model> LIMIT 5"`
 
 ---
 

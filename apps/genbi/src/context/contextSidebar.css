@@ -1,0 +1,121 @@
+/*
+ * Context page sidebar — custom file tree. Replaces AntD `Tree`, whose node
+ * title wrapper has no `min-width: 0` anywhere in its flex chain, so a long
+ * filename forces the row wider than the sidebar and wraps the icon above a
+ * clipped name instead of eliding on one line.
+ *
+ * The fix lives on `.genbi-trow` (the flex row) and `.genbi-tname` (the flex
+ * item holding the filename): both get `min-width: 0` so the row is allowed
+ * to shrink below the filename's intrinsic width, and `.genbi-tname` adds
+ * `overflow: hidden; text-overflow: ellipsis; white-space: nowrap` to elide
+ * instead of wrap. Colors/spacing come from AntD tokens (`app/theme/tokens.ts`,
+ * exposed as `--ant-*` since `cssVar` is on) and `--genbi-surface-2` (set by
+ * `ThemeProvider`) — nothing here hard-codes a color.
+ */
+
+.genbi-filetree {
+  padding: 10px 0;
+  min-width: 0;
+}
+
+.genbi-rail-proj {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+  padding: 2px 12px 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--ant-color-border-secondary);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ant-color-text);
+}
+
+.genbi-rail-proj .genbi-tname {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.genbi-ttree,
+.genbi-tchildren {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.genbi-trow {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  gap: 7px;
+  padding: 5px 12px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ant-color-text-secondary);
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--ant-border-radius-sm);
+}
+
+.genbi-trow:hover {
+  background: var(--genbi-surface-2);
+}
+
+.genbi-trow:focus-visible {
+  outline: 2px solid var(--ant-color-primary);
+  outline-offset: -2px;
+}
+
+.genbi-tdirhdr {
+  font-weight: 500;
+  color: var(--ant-color-text);
+}
+
+.genbi-tfile.is-sel {
+  background: color-mix(in srgb, var(--ant-color-primary) 12%, transparent);
+  color: var(--ant-color-primary);
+  font-weight: 500;
+}
+
+.genbi-tfile.is-sel .genbi-fi {
+  color: var(--ant-color-primary);
+}
+
+.genbi-chev {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  font-size: 10px;
+  color: var(--ant-color-text-tertiary);
+  transition: transform 0.15s ease;
+}
+
+.genbi-chev.is-open {
+  transform: rotate(90deg);
+}
+
+.genbi-fi {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  font-size: 14px;
+  color: var(--ant-color-text-tertiary);
+}
+
+/* The wrap fix: give up the intrinsic min-width so the flex item can shrink,
+   then let overflow/text-overflow do the eliding instead of wrapping. */
+.genbi-tname {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

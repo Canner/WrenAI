@@ -250,7 +250,15 @@ class DataFusionConnectionInfo(BaseConnectionInfo):
 
 
 class LocalFileConnectionInfo(BaseConnectionInfo):
-    url: str = Field(default="/", examples=["/data"])
+    url: str = Field(
+        default="/",
+        description=(
+            "Path to the directory containing the data file(s) — not a path "
+            "to an individual file. When format is 'duckdb', this must be the "
+            "directory that holds the .duckdb file(s), not the .duckdb file itself."
+        ),
+        examples=["/data"],
+    )
     format: str = Field(default="csv", examples=["csv", "parquet", "json", "duckdb"])
 
 

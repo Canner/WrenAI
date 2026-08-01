@@ -119,6 +119,7 @@ def add(
             if activate:
                 typer.echo(f"  Profile '{result['name']}' is now active.")
             _post_add(result["name"], validate=not no_validate, minimal=False)
+            _maybe_announce_project_pin(result["name"], result.get("datasource"))
         else:
             typer.echo("Cancelled.", err=True)
             raise typer.Exit(1)
@@ -168,6 +169,7 @@ def add(
     add_profile(name, profile_data, activate=activate)
     typer.echo(f"Profile '{name}' added.")
     _post_add(name, validate=not no_validate, minimal=minimal)
+    _maybe_announce_project_pin(name, profile_data.get("datasource"))
 
 
 @profile_app.command("import")
@@ -302,6 +304,52 @@ def _post_add(name: str, *, validate: bool, minimal: bool) -> None:
         typer.echo("Next: wren context init")
 
 
+def _maybe_announce_project_pin(name: str, datasource: str | None) -> None:
+    """Pin this newly-added profile into a discovered pinless project (see
+    ``context.maybe_pin_new_profile_to_project``), and print a line
+    explaining what happened whenever that's worth knowing.
+
+    Silent on the two routine no-op paths — no project discovered from the
+    current directory, or the project already has a pin — since both are
+    common, legitimate cases (e.g. managing profiles with no particular
+    project in mind). Loud on the other two: a datasource mismatch (this
+    profile doesn't match what the project already declares) and an
+    unparseable ``wren_project.yml`` — both mean the caller is standing in
+    a project directory, just created a working connection, and it did
+    *not* get bound to that project. An agent can only see stdout, not
+    "nothing happened", so those two must say so explicitly rather than
+    look identical to success.
+    """
+    if not datasource:
+        return
+    from wren.context import maybe_pin_new_profile_to_project  # noqa: PLC0415
+
+    outcome = maybe_pin_new_profile_to_project(name, datasource)
+    if outcome.pinned_path is not None:
+        typer.echo(
+            f"⚠ Pinned profile '{name}' to the project at {outcome.pinned_path} "
+            "(it had no profile pin yet). Verify this is the intended "
+            "database — see `wren context set-profile` to change it."
+        )
+    elif outcome.reason == "datasource_mismatch":
+        typer.echo(
+            f"⚠ Profile '{name}' (datasource: {datasource}) was NOT pinned "
+            f"to the project at {outcome.project_path}: that project already "
+            f"declares data_source '{outcome.existing_datasource}'. The "
+            "connection exists but this project isn't using it — run `wren "
+            f"context set-profile {name}` there if that's what you want."
+        )
+    elif outcome.reason == "unparseable":
+        typer.echo(
+            f"⚠ Profile '{name}' was NOT pinned to the project at "
+            f"{outcome.project_path}: its wren_project.yml could not be "
+            "read. The connection exists but this project isn't using it "
+            f"— fix the file, then run `wren context set-profile {name}` "
+            "there if that's what you want."
+        )
+    # "no_project" and "already_pinned" stay silent — see docstring.
+
+
 def _retry_hint(name: str) -> str:
     """Retry instruction shown after a validation warning.
 
@@ -331,7 +379,7 @@ def _validate_connection(name: str) -> bool:
     """
     from pydantic import ValidationError  # noqa: PLC0415
 
-    from wren.connector.factory import get_connector  # noqa: PLC0415
+    from wren.connector import smoke_test  # noqa: PLC0415
     from wren.model.data_source import DataSource  # noqa: PLC0415
     from wren.profile import (  # noqa: PLC0415
         MissingSecretError,
@@ -377,8 +425,7 @@ def _validate_connection(name: str) -> bool:
         return False
 
     try:
-        connector = get_connector(ds, conn_info)
-        connector.dry_run("SELECT 1")
+        smoke_test(ds, conn_info)
     except Exception as exc:  # noqa: BLE001 — surface whatever driver raises
         typer.echo(f"⚠ Connection failed: {exc}", err=True)
         typer.echo(

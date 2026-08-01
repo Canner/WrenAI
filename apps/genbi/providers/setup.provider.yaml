@@ -1,0 +1,31 @@
+# setup capability-provider fragment (NATIVE realization) — supplies the genbi-setup profile's
+# onboarding capabilities (`source_connect`, `context_build`) via the harness's scope-limited
+# `setup_execution` native tool, for `warble dispatch --provider <this file> --target vercel`
+# against the pre-committed `warble/genbi-setup/ir.golden.json`.
+#
+# Mirrors wren.provider.yaml's shape exactly. Unlike that fragment (which binds each capability to
+# its own dedicated tool), both capabilities here share ONE native tool — `connect_source` and
+# `build_context` are sibling halves of the same guarded-Bash-and-scoped-write lifecycle
+# (`setup_execution`, see the two component.yml files), so a single tool with an
+# exec/write action discriminator covers both rather than duplicating the guardrail plumbing twice.
+fragment_version: "0.1"
+provider: setup
+engine: vercel
+capabilities:
+  source_connect:
+    outcome: native
+    via: setup-execution
+    provided_by: runtime
+    criticality: required
+  context_build:
+    outcome: native
+    via: setup-execution
+    provided_by: runtime
+    criticality: required
+tools:
+  source_connect:
+    name: setup_execution
+    source: native
+  context_build:
+    name: setup_execution
+    source: native

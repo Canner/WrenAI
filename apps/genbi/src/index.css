@@ -1,0 +1,32 @@
+/*
+ * Minimal global reset. AntD v6 is CSS-in-JS with a built-in reset per
+ * component, so we only normalize the document root here; all theming flows
+ * through AntD tokens (see app/theme/tokens.ts).
+ */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--ant-font-family);
+}
+
+/*
+ * Mockup-parity touches AntD component tokens don't cover: pill-style tags
+ * (no `borderRadius` Tag token) and uppercase, muted table column headers.
+ * Colors/radius still flow from AntD tokens (`app/theme/tokens.ts`) — this
+ * only adds shape/transform.
+ */
+.ant-tag {
+  border-radius: 999px;
+}
+
+.ant-table-thead > tr > th {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}

@@ -1,0 +1,179 @@
+/*
+ * Context Overview — stats toolbar + 2-column layout (ER canvas left, a side
+ * rail of compact panels right). Colors/spacing come from AntD tokens
+ * (`app/theme/tokens.ts`, exposed as `--ant-*` since `cssVar` is on) and
+ * `--genbi-surface-2` (set by `ThemeProvider`); nothing here hard-codes a
+ * color.
+ */
+
+.genbi-mdl-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.genbi-project-identity {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.genbi-project-name {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--ant-color-text);
+}
+
+.genbi-project-path {
+  color: var(--ant-color-text-secondary);
+}
+
+.genbi-project-path code {
+  font-family: var(--ant-font-family-code);
+  font-size: 12px;
+}
+
+.genbi-project-path-unbound {
+  font-style: italic;
+  color: var(--ant-color-text-tertiary);
+}
+
+.genbi-mdl-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--ant-border-radius);
+  background: var(--ant-color-bg-container);
+  font-size: 13px;
+  color: var(--ant-color-text-secondary);
+}
+
+.genbi-mdl-stat b {
+  color: var(--ant-color-text);
+}
+
+.genbi-mdl-stat-sep {
+  color: var(--ant-color-border);
+}
+
+.genbi-mdl-layout {
+  display: grid;
+  /* minmax(0, 1fr): let the left column shrink below the ER canvas's natural
+   * width so the diagram scrolls inside its own overflow wrapper instead of
+   * expanding the grid past the page width (which misaligned the stats bar). */
+  grid-template-columns: minmax(0, 1fr) 296px;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .genbi-mdl-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.genbi-mdl-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.genbi-measure {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--ant-color-border-secondary);
+}
+
+.genbi-measure:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.genbi-mtxt {
+  flex: 1;
+  min-width: 0;
+}
+
+.genbi-mname {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ant-color-text);
+}
+
+.genbi-mexpr {
+  margin-top: 2px;
+  font-family: var(--ant-font-family-code);
+  font-size: 11px;
+  color: var(--ant-color-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.genbi-measure-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex: none;
+}
+
+.genbi-relrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--ant-color-border-secondary);
+  font-size: 12px;
+}
+
+.genbi-relrow:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.genbi-relname {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.genbi-kstat {
+  display: flex;
+  gap: 20px;
+}
+
+.genbi-kstat-item .genbi-num {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ant-color-text);
+  line-height: 1.2;
+}
+
+.genbi-kstat-item .genbi-lbl {
+  font-size: 11px;
+  color: var(--ant-color-text-tertiary);
+}
+
+/* Softened stat when the live project has no verified-pairs source yet — same
+ * slot as `.genbi-num` but de-emphasized (tertiary color, no bold weight). */
+.genbi-num-muted {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ant-color-text-tertiary);
+  font-style: italic;
+}
+
+.genbi-outscope {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

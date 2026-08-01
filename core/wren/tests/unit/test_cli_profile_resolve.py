@@ -57,9 +57,7 @@ def test_resolve_engine_profile_prefers_project_pin_when_mdl_given(
     assert prof["datasource"] == "postgres"
 
 
-def test_resolve_engine_profile_falls_back_to_active_when_no_pin(
-    tmp_path, monkeypatch
-):
+def test_resolve_engine_profile_falls_back_to_active_when_no_pin(tmp_path, monkeypatch):
     """No `profile:` field → falls back to global active."""
     profile_mod.add_profile("active_only", {"datasource": "duckdb"})
     mdl = _write_project(tmp_path / "myproj")  # no profile field
@@ -115,9 +113,7 @@ def test_resolve_engine_profile_raises_when_pinned_profile_missing(
         _resolve_engine_profile(str(mdl))
 
 
-def test_resolve_engine_profile_uses_cwd_pin_when_mdl_is_base64(
-    tmp_path, monkeypatch
-):
+def test_resolve_engine_profile_uses_cwd_pin_when_mdl_is_base64(tmp_path, monkeypatch):
     """--mdl as a base64 string must NOT silently bypass cwd's project pin —
     that would re-introduce the silent-mismatch problem this PR is closing."""
     profile_mod.add_profile("active_one", {"datasource": "postgres"})
@@ -194,3 +190,58 @@ def test_resolve_engine_profile_walks_up_from_nonstandard_mdl_layout(
         "Walk-up didn't find wren_project.yml; resolver still relies on the "
         "parent.parent shortcut."
     )
+
+
+# ── strict=True — the opt-in enforcement used by _build_engine ────────────
+
+
+def test_resolve_engine_profile_strict_uses_project_pin(tmp_path, monkeypatch):
+    """strict=True must not disturb the pinned-profile happy path."""
+    profile_mod.add_profile("active_a", {"datasource": "duckdb", "path": "/a"})
+    profile_mod.add_profile("pinned_b", {"datasource": "postgres", "host": "b"})
+    profile_mod.switch_profile("active_a")
+
+    mdl = _write_project(tmp_path / "myproj", profile="pinned_b")
+
+    name, prof = _resolve_engine_profile(str(mdl), strict=True)
+    assert name == "pinned_b"
+    assert prof["datasource"] == "postgres"
+
+
+def test_resolve_engine_profile_strict_raises_when_project_has_no_pin(
+    tmp_path, monkeypatch
+):
+    """A discovered project with no pin must error under strict=True instead
+    of silently resolving through the global active profile — this is the
+    behavior `_build_engine` (query / cube query / serve mcp) relies on."""
+    profile_mod.add_profile("active_only", {"datasource": "duckdb"})
+    mdl = _write_project(tmp_path / "myproj")  # no profile field
+
+    with pytest.raises(SystemExit) as exc:
+        _resolve_engine_profile(str(mdl), strict=True)
+    assert "set-profile" in str(exc.value)
+
+
+def test_resolve_engine_profile_strict_lenient_when_no_project_discovered(
+    tmp_path, monkeypatch
+):
+    """AC#4: ad-hoc/no-project context must stay lenient even under
+    strict=True — there's no project to have skipped pinning, so falling
+    back to global active is correct, not a footgun."""
+    profile_mod.add_profile("only", {"datasource": "duckdb"})
+    monkeypatch.chdir(tmp_path)  # no wren_project.yml anywhere in cwd
+
+    name, prof = _resolve_engine_profile(None, strict=True)
+    assert name == "only"
+
+
+def test_resolve_engine_profile_strict_still_raises_on_dangling_pin(
+    tmp_path, monkeypatch
+):
+    """strict=True doesn't change pre-existing dangling-pin behavior."""
+    profile_mod.add_profile("real", {"datasource": "duckdb"})
+    mdl = _write_project(tmp_path / "myproj", profile="ghost")
+
+    with pytest.raises(SystemExit) as exc:
+        _resolve_engine_profile(str(mdl), strict=True)
+    assert "ghost" in str(exc.value)

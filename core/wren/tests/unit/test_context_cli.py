@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 import yaml
 from typer.testing import CliRunner
 
@@ -215,7 +216,13 @@ def _make_dbt_project(tmp_path: Path) -> tuple[Path, Path]:
 # ── wren context init ─────────────────────────────────────────────────────
 
 
-def test_init_creates_scaffold(tmp_path):
+def test_init_creates_scaffold(tmp_path, monkeypatch):
+    # Isolate the profile store: `init` now auto-pins whatever profile is
+    # globally active (see auto_pin_active_profile), so this test must not
+    # depend on — or be polluted by — the real developer machine's
+    # ~/.wren/profiles.yml.
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+
     result = runner.invoke(app, ["context", "init", "--path", str(tmp_path)])
     assert result.exit_code == 0, result.output
     assert (tmp_path / "wren_project.yml").exists()
@@ -232,13 +239,90 @@ def test_init_creates_scaffold(tmp_path):
     project_yml = (tmp_path / "wren_project.yml").read_text()
     assert "catalog: wren" in project_yml
     assert "schema: public" in project_yml
-    assert "data_source: postgres" in project_yml
+    # A bare init (no --data-source) must not declare a fake data_source
+    # that looks like a deliberate choice — see
+    # test_init_scaffold_does_not_declare_a_fake_data_source for the
+    # dedicated regression test.
+    assert "data_source:" in project_yml
+    assert "data_source: postgres" not in project_yml
     assert "NOT your database" in project_yml
 
     # Verify example model metadata contains table_reference annotation
     model_meta = (tmp_path / "models" / "example" / "metadata.yml").read_text()
     assert "table_reference" in model_meta
     assert "ACTUAL database" in model_meta
+
+
+def test_init_scaffold_does_not_declare_a_fake_data_source(tmp_path, monkeypatch):
+    """Regression: a bare `wren context init` (no --data-source flag)
+    must NOT write a `data_source:` value that looks like a deliberate user
+    choice. The scaffold doesn't know the user's datasource, so it must leave
+    the field empty/absent (an explanatory comment is fine) rather than
+    defaulting to `postgres` — a fake value that
+    `maybe_pin_new_profile_to_project` cannot tell apart from a genuine one."""
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+
+    result = runner.invoke(app, ["context", "init", "--path", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+
+    config = yaml.safe_load((tmp_path / "wren_project.yml").read_text())
+    assert not config.get("data_source")
+
+
+def test_init_next_steps_bind_profile_before_validate_and_build(tmp_path, monkeypatch):
+    """The init guidance must not send a blank-data-source project straight
+    to validation. It must first explain how to create/bind a profile."""
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+
+    result = runner.invoke(
+        app, ["context", "init", "--empty", "--path", str(tmp_path)]
+    )
+    assert result.exit_code == 0, result.output
+
+    next_steps = result.output.rsplit("Next:", maxsplit=1)[1]
+    assert "wren profile add <name>" in next_steps
+    assert "wren context set-profile <name>" in next_steps
+    assert next_steps.index("wren profile add <name>") < next_steps.index(
+        "wren context validate"
+    )
+    assert next_steps.index("wren context set-profile <name>") < next_steps.index(
+        "wren context build"
+    )
+
+
+def test_init_then_profile_add_pins_any_datasource_deterministically(
+    tmp_path, monkeypatch
+):
+    """Regression: reproduces the real-world failure — a freshly
+    scaffolded project (no --data-source flag, no profile yet), followed by
+    `wren profile add` for a NON-postgres datasource, must pin deterministically
+    with no "NOT pinned" warning. Before the fix, `init`'s scaffold falsely
+    declares `data_source: postgres`, so `maybe_pin_new_profile_to_project`
+    sees a genuine mismatch against a duckdb profile and refuses to pin it —
+    even though nobody ever chose postgres. This must fail before the fix and
+    pass after (verified: run against the pre-fix scaffold, it fails)."""
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+
+    proj = tmp_path / "myproj"
+    _invoke_ok(["context", "init", "--path", str(proj)])
+    monkeypatch.chdir(proj)
+
+    result = runner.invoke(
+        app, ["profile", "add", "duck_one", "--datasource", "duckdb"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "NOT pinned" not in result.output
+    assert "Pinned profile 'duck_one'" in result.output
+
+    config = yaml.safe_load((proj / "wren_project.yml").read_text())
+    assert config["profile"] == "duck_one"
+    assert config["data_source"] == "duckdb"
+
+    validate_result = runner.invoke(app, ["context", "validate", "--path", str(proj)])
+    assert validate_result.exit_code == 0, validate_result.output
+    build_result = runner.invoke(app, ["context", "build", "--path", str(proj)])
+    assert build_result.exit_code == 0, build_result.output
+    assert (proj / "target" / "mdl.json").exists()
 
 
 def test_init_refuses_existing(tmp_path):
@@ -388,9 +472,19 @@ def test_init_writes_v5(tmp_path):
 
 
 def test_v5_build_roundtrip(tmp_path):
-    """init → build produces a valid mdl.json stamped layoutVersion 3."""
+    """init --data-source → build produces a valid mdl.json stamped layoutVersion 3.
+
+    Passes --data-source explicitly: a bare `init` (no flag,
+    no profile pinned yet) leaves data_source blank, and `validate`/`build`
+    require it — this test's purpose is the compile pipeline, not the
+    data_source-required check, so it supplies the field the normal way.
+    """
     assert (
-        runner.invoke(app, ["context", "init", "--path", str(tmp_path)]).exit_code == 0
+        runner.invoke(
+            app,
+            ["context", "init", "--path", str(tmp_path), "--data-source", "postgres"],
+        ).exit_code
+        == 0
     )
     result = runner.invoke(app, ["context", "build", "--path", str(tmp_path)])
     assert result.exit_code == 0, result.output
@@ -429,19 +523,35 @@ def test_v5_uses_v2_reader(tmp_path):
 # ── wren context validate ─────────────────────────────────────────────────
 
 
-def test_validate_pass(tmp_path):
+def test_validate_pass(tmp_path, monkeypatch):
+    # Isolate the profile store: this project has no `profile:` pin, so
+    # `validate`'s connectivity check falls back to whatever profile is
+    # globally active on the real machine — which would make this test's
+    # outcome depend on the developer's real ~/.wren/profiles.yml. Pin down
+    # an empty, isolated store instead so there's nothing to fall back to.
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+
     _make_valid_project(tmp_path)
     result = runner.invoke(app, ["context", "validate", "--path", str(tmp_path)])
     assert result.exit_code == 0, result.output
     assert "Valid" in result.output
 
 
-def test_validate_fail(tmp_path):
-    # Missing data_source in project config
-    (tmp_path / "wren_project.yml").write_text("schema_version: 2\nname: broken\n")
+def test_validate_fail(tmp_path, monkeypatch):
+    # Missing data_source is a hard, actionable error. In particular, don't
+    # attempt semantic dry-planning with YAML's None value and leak an engine
+    # implementation exception to the user.
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+    _invoke_ok(["context", "init", "--path", str(tmp_path)])
     result = runner.invoke(app, ["context", "validate", "--path", str(tmp_path)])
     assert result.exit_code == 1
-    assert "ERROR" in result.output
+    assert "missing required field 'data_source'" in result.output
+    assert "wren profile add" in result.output
+    assert "wren context set-profile" in result.output
+    assert "--data-source" in result.output
+    assert "'NoneType' object has no attribute 'name'" not in result.output
+    assert "0 errors" not in result.output
+    assert "1 error(s)" in result.output
 
 
 def test_validate_strict_warns(tmp_path):
@@ -852,6 +962,48 @@ def _invoke_ok(args):
     return result
 
 
+def test_init_profile_flag_pins_explicitly(tmp_path, monkeypatch):
+    """`wren context init --profile <name>` pins deterministically, even when
+    the ambient auto-pin rule would not fire (2+ profiles in the store) and
+    even when the chosen profile isn't the only candidate."""
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+    profile_mod.add_profile("X", {"datasource": "postgres"})
+    profile_mod.add_profile("Y", {"datasource": "duckdb"})
+
+    proj = tmp_path / "myproj"
+    result = runner.invoke(
+        app,
+        ["context", "init", "--empty", "--path", str(proj), "--profile", "Y"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "pinned to 'Y'" in result.output
+
+    import yaml  # noqa: PLC0415
+
+    config = yaml.safe_load((proj / "wren_project.yml").read_text())
+    assert config["profile"] == "Y"
+    assert config["data_source"] == "duckdb"
+
+
+def test_init_profile_flag_errors_on_unknown_profile(tmp_path, monkeypatch):
+    """--profile referencing a nonexistent profile must fail loudly, not
+    silently scaffold an unpinned/mispinned project."""
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+
+    proj = tmp_path / "myproj"
+    result = runner.invoke(
+        app,
+        ["context", "init", "--empty", "--path", str(proj), "--profile", "nope"],
+    )
+    assert result.exit_code != 0
+    assert "nope" in result.output
+    assert not (proj / "wren_project.yml").exists() or not yaml.safe_load(
+        (proj / "wren_project.yml").read_text()
+    ).get("profile")
+
+
 def test_set_profile_writes_profile_field(tmp_path, monkeypatch):
     import wren.profile as profile_mod  # noqa: PLC0415
 
@@ -874,8 +1026,8 @@ def test_set_profile_writes_profile_field(tmp_path, monkeypatch):
 
 
 def test_set_profile_overwrites_placeholder_data_source(tmp_path, monkeypatch):
-    """init writes `data_source: postgres` placeholder; set-profile overwrites it
-    with the bound profile's datasource (no --force needed for first bind)."""
+    """init leaves data_source blank; set-profile fills it in with the bound
+    profile's datasource (no --force needed for first bind)."""
     import wren.profile as profile_mod  # noqa: PLC0415
 
     _isolate_profiles(tmp_path / "wren-home", monkeypatch)
@@ -1129,18 +1281,28 @@ def test_set_profile_no_stale_mdl_warning_when_datasource_unchanged(
 def test_set_profile_prints_summary_with_arrow_when_data_source_changes(
     tmp_path, monkeypatch
 ):
-    """When binding overwrites data_source, summary shows the transition."""
+    """When binding overwrites data_source, summary shows the transition.
+
+    init no longer leaves a fake `postgres` placeholder behind, so
+    a genuine prior data_source has to come from a real first bind — set-profile
+    to a postgres profile, then rebind to a duckdb profile, and the summary
+    should show the real postgres -> duckdb transition.
+    """
     import wren.profile as profile_mod  # noqa: PLC0415
 
     _isolate_profiles(tmp_path / "wren-home", monkeypatch)
-    profile_mod.add_profile("duck", {"datasource": "duckdb"})
 
     proj = tmp_path / "myproj"
     _invoke_ok(["context", "init", "--empty", "--path", str(proj)])
 
+    profile_mod.add_profile("pg", {"datasource": "postgres"})
+    profile_mod.add_profile("duck", {"datasource": "duckdb"})
+
+    _invoke_ok(["context", "set-profile", "pg", "--path", str(proj)])
+
     result = runner.invoke(app, ["context", "set-profile", "duck", "--path", str(proj)])
     assert result.exit_code == 0, result.output
-    # init wrote postgres placeholder; we're binding duck (duckdb)
+    # genuine transition: bound to pg (postgres) first, now rebinding to duck (duckdb)
     assert "postgres" in result.output
     assert "duckdb" in result.output
 
@@ -1279,8 +1441,124 @@ def test_validate_hint_suppressed_when_hard_errors(tmp_path, monkeypatch):
 
     result = runner.invoke(app, ["context", "validate", "--path", str(tmp_path)])
     assert result.exit_code == 1
-    # hint must not appear when there are hard errors
-    assert "set-profile" not in result.output
+    # The general no-pin hint must not appear when there are hard errors;
+    # the actionable missing-data-source error itself correctly names
+    # `set-profile` as one repair route.
+    assert "Connection will fall back" not in result.output
+
+
+# ── wren context validate — connectivity check (smoke query) ──────────────
+
+
+def test_validate_smoke_query_failure_is_reported(tmp_path, monkeypatch):
+    """A profile that resolves but can't actually be queried (driver raises)
+    must fail validation with a clear message naming the profile/datasource,
+    not just pass because the schema was fine."""
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+    profile_mod.add_profile(
+        "pg",
+        {
+            "datasource": "postgres",
+            "host": "db.invalid",
+            "port": "5432",
+            "database": "wren",
+            "user": "someone",
+            "password": "secret",
+        },
+    )
+    _make_valid_project(tmp_path)
+    config = yaml.safe_load((tmp_path / "wren_project.yml").read_text())
+    config["profile"] = "pg"
+    (tmp_path / "wren_project.yml").write_text(yaml.safe_dump(config))
+
+    def failing_get_connector(ds, info):
+        raise RuntimeError("connection refused")
+
+    monkeypatch.setattr("wren.connector.factory.get_connector", failing_get_connector)
+
+    result = runner.invoke(app, ["context", "validate", "--path", str(tmp_path)])
+    assert result.exit_code == 1, result.output
+    assert "Semantic errors" in result.output
+    assert "pg" in result.output
+    assert "postgres" in result.output
+    assert "connection refused" in result.output
+
+
+def test_validate_smoke_query_success_still_passes(tmp_path, monkeypatch):
+    """A profile whose smoke query succeeds must not affect the exit code —
+    the connectivity check should be silent on success."""
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+    profile_mod.add_profile(
+        "pg",
+        {
+            "datasource": "postgres",
+            "host": "db.local",
+            "port": "5432",
+            "database": "wren",
+            "user": "someone",
+            "password": "secret",
+        },
+    )
+    _make_valid_project(tmp_path)
+    config = yaml.safe_load((tmp_path / "wren_project.yml").read_text())
+    config["profile"] = "pg"
+    (tmp_path / "wren_project.yml").write_text(yaml.safe_dump(config))
+
+    class FakeConnector:
+        def dry_run(self, sql):
+            assert sql == "SELECT 1"
+
+    monkeypatch.setattr(
+        "wren.connector.factory.get_connector", lambda ds, info: FakeConnector()
+    )
+
+    result = runner.invoke(app, ["context", "validate", "--path", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "Semantic errors" not in result.output
+
+
+def test_validate_duckdb_file_url_fails_directory_url_passes(tmp_path, monkeypatch):
+    """Concrete regression case: a DuckDB profile whose `url` points at the
+    `.duckdb` file itself (instead of its containing directory) must fail
+    validation with a clear message; pointing at the directory must pass."""
+    duckdb = pytest.importorskip("duckdb")
+
+    _isolate_profiles(tmp_path / "wren-home", monkeypatch)
+    _make_valid_project(tmp_path)
+    config = yaml.safe_load((tmp_path / "wren_project.yml").read_text())
+    config["profile"] = "duck"
+    (tmp_path / "wren_project.yml").write_text(yaml.safe_dump(config))
+
+    warehouse = tmp_path / "warehouse"
+    warehouse.mkdir()
+    db_file = warehouse / "data.duckdb"
+    con = duckdb.connect(str(db_file))
+    con.execute("CREATE TABLE t (id INTEGER)")
+    con.close()
+
+    import wren.profile as profile_mod  # noqa: PLC0415
+
+    # Wrong: url points directly at the .duckdb file.
+    profile_mod.add_profile(
+        "duck", {"datasource": "duckdb", "url": str(db_file), "format": "duckdb"}
+    )
+    bad_result = runner.invoke(app, ["context", "validate", "--path", str(tmp_path)])
+    assert bad_result.exit_code == 1, bad_result.output
+    assert "Semantic errors" in bad_result.output
+    assert "duck" in bad_result.output
+    assert "duckdb" in bad_result.output
+
+    # Right: url points at the directory containing the .duckdb file.
+    profile_mod.add_profile(
+        "duck", {"datasource": "duckdb", "url": str(warehouse), "format": "duckdb"}
+    )
+    good_result = runner.invoke(app, ["context", "validate", "--path", str(tmp_path)])
+    assert good_result.exit_code == 0, good_result.output
+    assert "Semantic errors" not in good_result.output
 
 
 def test_validate_strict_fails_on_missing_pinned_profile(tmp_path, monkeypatch):

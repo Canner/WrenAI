@@ -17,10 +17,10 @@ A Wren project is the unit of authoring, version control, and deployment for MDL
 
 ```bash
 wren context init              # scaffold a new project in cwd
-wren context validate          # check YAML structure (no DB required)
+wren context set-profile pg    # bind a profile before first validate/build
+wren context validate          # check YAML after binding and after later edits
 wren context build             # compile YAML to target/mdl.json
 wren context upgrade           # upgrade to the latest schema_version
-wren context set-profile pg    # bind a connection profile to the project
 wren memory index              # index schema + knowledge/ for recall
 ```
 
@@ -29,14 +29,20 @@ A typical first-time setup:
 ```bash
 mkdir my_project && cd my_project
 wren context init
+wren profile add pg-dev --from-file dev.yml --activate
+wren context set-profile pg-dev
 # (edit models/, relationships.yml, knowledge/ — usually agent-driven)
 wren context validate
 wren context build
-wren profile add pg-dev --from-file dev.yml --activate
-wren context set-profile pg-dev
 wren memory index
 wren --sql "SELECT 1"
 ```
+
+`wren context init` intentionally leaves `data_source` blank: a project must
+know its data-source dialect before validation or build. Create the profile and
+bind it first. `wren profile add` auto-binds a newly initialized, unbound
+project; `wren context set-profile` is safe to run explicitly and is required
+when binding an existing profile.
 
 After editing models, rebuild and re-index:
 

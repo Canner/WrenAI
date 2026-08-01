@@ -1,0 +1,6 @@
+schema_version: 5
+name: manifest-only-nopin
+version: '1.0'
+catalog: wren
+schema: public
+data_source: duckdb

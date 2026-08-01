@@ -1,0 +1,4 @@
+{
+  "note": "Checked-in golden of the block `type` values that the genbi-default bundle agents can actually emit via their `output_schema`. The profile these agents are authored in is a warble project rather than part of this repo, so this file is the source of truth for the UI side of the contract — regenerate it by inspecting each genbi-default agent's output_schema block-type enum in the compiled bundle snapshot at `fixtures/genbi-default.bundle.json`, or via `warble compile` + inspecting the compiled bundle, then re-union across agents: answer_query -> table, definition; generate_dashboard -> kpi_card, table, chart, definition; explain_change -> narrative; explore_model -> (none). This test only guards against DRIFT (a block type this UI can't render), so update it whenever a bundle agent's output_schema block-type set changes.",
+  "blockTypes": ["chart", "definition", "kpi_card", "narrative", "table"]
+}

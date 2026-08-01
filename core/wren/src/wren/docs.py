@@ -8,7 +8,11 @@ from typing import Any, Union
 from pydantic import SecretStr
 
 from wren.model import BaseConnectionInfo
-from wren.model.field_registry import DATASOURCE_MODELS  # noqa: F401
+from wren.model.field_registry import (  # noqa: F401
+    DATASOURCE_MODELS,
+    get_fields,
+    get_variants,
+)
 
 
 def _resolve_sources(
@@ -104,15 +108,38 @@ def _escape_md_cell(value: str) -> str:
     return value.replace("\\", "\\\\").replace("|", "\\|").replace("\n", "<br>")
 
 
-def _format_model_markdown(model: type[BaseConnectionInfo]) -> str:
-    """Format a single ConnectionInfo model as a Markdown section."""
+def _field_notes(name: str, field_info, hints: dict[str, str]) -> str:
+    """Return the best available guidance text for a field.
+
+    Prefers the datasource-aware hint from the field registry (which can
+    distinguish two datasources that share the same underlying model, e.g.
+    ``duckdb`` vs ``local_file``) and falls back to the model's own Pydantic
+    ``description`` when no such override exists.
+    """
+    return hints.get(name) or field_info.description or ""
+
+
+def _format_model_markdown(
+    model: type[BaseConnectionInfo], hints: dict[str, str] | None = None
+) -> str:
+    """Format a single ConnectionInfo model as a Markdown section.
+
+    ``hints`` maps field name to datasource-specific guidance text (see
+    ``wren.model.field_registry.get_fields``), layered on top of each
+    field's own Pydantic ``description``.
+    """
+    hints = hints or {}
     lines: list[str] = []
     lines.append(f"### {model.__name__}")
     lines.append("")
 
     # Build table
-    lines.append("| Field | Type | Required | Default | Sensitive | Alias | Example |")
-    lines.append("|-------|------|----------|---------|-----------|-------|---------|")
+    lines.append(
+        "| Field | Type | Required | Default | Sensitive | Alias | Example | Notes |"
+    )
+    lines.append(
+        "|-------|------|----------|---------|-----------|-------|---------|-------|"
+    )
 
     for name, field_info in model.model_fields.items():
         type_label = _type_label(field_info)
@@ -124,8 +151,9 @@ def _format_model_markdown(model: type[BaseConnectionInfo]) -> str:
         )
         examples = field_info.examples or []
         example_str = ", ".join(f"`{e}`" for e in examples)
+        notes = _field_notes(name, field_info, hints)
         lines.append(
-            f"| `{_escape_md_cell(name)}` | {_escape_md_cell(type_label)} | {required} | {_escape_md_cell(default)} | {sensitive} | {_escape_md_cell(alias)} | {_escape_md_cell(example_str)} |"
+            f"| `{_escape_md_cell(name)}` | {_escape_md_cell(type_label)} | {required} | {_escape_md_cell(default)} | {sensitive} | {_escape_md_cell(alias)} | {_escape_md_cell(example_str)} | {_escape_md_cell(notes)} |"
         )
 
     lines.append("")
@@ -196,8 +224,18 @@ def generate_markdown(datasource: str | None = None) -> str:
     for ds_name, models in sources.items():
         lines.append(f"## {ds_name}")
         lines.append("")
-        for model in models:
-            lines.append(_format_model_markdown(model))
+        variants = get_variants(ds_name)
+        for i, model in enumerate(models):
+            variant = variants[i] if variants and i < len(variants) else None
+            try:
+                hints = {
+                    f.name: f.hint
+                    for f in get_fields(ds_name, variant=variant)
+                    if f.hint
+                }
+            except ValueError:
+                hints = {}
+            lines.append(_format_model_markdown(model, hints))
 
     return "\n".join(lines)
 

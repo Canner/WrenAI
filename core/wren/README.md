@@ -41,7 +41,7 @@ mkdir my-project && cd my-project
 wren context init
 ```
 
-This creates `wren_project.yml`, `models/`, and `views/`. Edit `wren_project.yml` to set your `data_source` and add models under `models/`:
+This creates `wren_project.yml`, `models/`, and `views/`. `data_source` is left blank — it's filled in automatically when you add or bind a connection profile (step 2), or you can set it explicitly with `wren context init --data-source postgres`. Add models under `models/`:
 
 ```yaml
 # wren_project.yml
@@ -49,7 +49,7 @@ schema_version: 2
 name: my_project
 catalog: wren
 schema: public
-data_source: postgres
+data_source:  # e.g. postgres, mysql, bigquery, snowflake, duckdb, ... — set by `wren profile add`/`wren context set-profile`, or the --data-source flag
 ```
 
 ```yaml

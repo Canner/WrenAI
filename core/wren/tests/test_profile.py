@@ -233,6 +233,83 @@ def test_resolve_profile_for_project_treats_empty_profile_field_as_unset(
     assert name == "active_one"
 
 
+# ── resolve_profile_for_project(strict=True) ──────────────────────────────────
+
+
+def test_resolve_profile_for_project_strict_uses_pinned_profile(tmp_path: Path):
+    """strict=True must not disturb the pinned-profile happy path."""
+    profile_mod.add_profile("project_a", {"datasource": "duckdb", "path": "/a"})
+    profile_mod.add_profile("project_b", {"datasource": "postgres", "host": "x"})
+    profile_mod.switch_profile("project_a")  # active != pinned
+
+    proj = tmp_path / "myproj"
+    _write_project(proj, profile="project_b")
+
+    name, prof = profile_mod.resolve_profile_for_project(proj, strict=True)
+    assert name == "project_b"
+    assert prof["datasource"] == "postgres"
+
+
+def test_resolve_profile_for_project_strict_raises_when_unpinned(tmp_path: Path):
+    """strict=True must refuse the silent active-profile fallback — this is
+    the Hole B fix: a project with no pin must error instead of resolving
+    through whatever profile happens to be globally active."""
+    profile_mod.add_profile("active_one", {"datasource": "duckdb", "path": "/x"})
+    proj = tmp_path / "myproj"
+    _write_project(proj)  # no `profile:` field
+
+    with pytest.raises(SystemExit) as exc:
+        profile_mod.resolve_profile_for_project(proj, strict=True)
+    msg = str(exc.value)
+    assert proj.name in msg
+    assert "set-profile" in msg
+    assert "Compatible profiles" in msg
+
+
+def test_resolve_profile_for_project_strict_lists_compatible_profiles(
+    tmp_path: Path,
+):
+    """The strict error should name profiles compatible with the project's
+    declared data_source, to make the fix command actionable."""
+    profile_mod.add_profile("pg_prof", {"datasource": "postgres"})
+    profile_mod.add_profile("duck_prof", {"datasource": "duckdb"})
+    proj = tmp_path / "myproj"
+    _write_project(proj, data_source="duckdb")  # no profile pin
+
+    with pytest.raises(SystemExit) as exc:
+        profile_mod.resolve_profile_for_project(proj, strict=True)
+    msg = str(exc.value)
+    assert "duck_prof" in msg
+    assert "pg_prof" not in msg
+
+
+def test_resolve_profile_for_project_strict_raises_when_no_active_either(
+    tmp_path: Path,
+):
+    """No pin and no active profile at all — strict mode still errors
+    (never silently returns the empty (None, {}) the lenient path would)."""
+    proj = tmp_path / "myproj"
+    _write_project(proj)  # no profile field, no profiles.yml setup
+
+    with pytest.raises(SystemExit) as exc:
+        profile_mod.resolve_profile_for_project(proj, strict=True)
+    assert "set-profile" in str(exc.value)
+
+
+def test_resolve_profile_for_project_strict_still_raises_on_dangling_pin(
+    tmp_path: Path,
+):
+    """strict=True doesn't change the pre-existing dangling-pin behavior —
+    that already raises regardless of strict."""
+    profile_mod.add_profile("real", {"datasource": "duckdb"})
+    proj = tmp_path / "myproj"
+    _write_project(proj, profile="ghost")
+
+    with pytest.raises(SystemExit) as exc:
+        profile_mod.resolve_profile_for_project(proj, strict=True)
+    assert "ghost" in str(exc.value)
+
+
 # ── Round-trip persistence ────────────────────────────────────────────────────
 
 

@@ -1,0 +1,82 @@
+/*
+ * Artifacts page sidebar — custom list (not the generic `SidebarList`, which
+ * has no icon slot). Mirrors the `ContextSidebar` fix: `.genbi-arow` and
+ * `.genbi-aname` both get `min-width: 0` so the row can shrink below the
+ * label's intrinsic width, and `.genbi-aname` elides with an ellipsis instead
+ * of wrapping. Colors come from AntD tokens (`--ant-*`) — nothing here
+ * hard-codes a color.
+ */
+
+.genbi-artifacts-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0;
+  min-width: 0;
+}
+
+.genbi-arow {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  gap: 8px;
+  padding: 7px 12px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ant-color-text-secondary);
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--ant-border-radius-sm);
+}
+
+.genbi-arow:hover {
+  background: var(--genbi-surface-2);
+}
+
+.genbi-arow:focus-visible {
+  outline: 2px solid var(--ant-color-primary);
+  outline-offset: -2px;
+}
+
+.genbi-arow.is-sel {
+  background: color-mix(in srgb, var(--ant-color-primary) 12%, transparent);
+  color: var(--ant-color-primary);
+  font-weight: 500;
+}
+
+.genbi-arow.is-sel .genbi-aicon {
+  color: var(--ant-color-primary);
+}
+
+.genbi-aicon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  font-size: 14px;
+  color: var(--ant-color-text-tertiary);
+}
+
+.genbi-atext {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.genbi-aname {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.genbi-abadges {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}

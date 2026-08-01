@@ -10,7 +10,16 @@ import typer
 
 context_app = typer.Typer(
     name="context",
-    help="Manage MDL context — models, views, relationships, and instructions.",
+    help=(
+        "Manage MDL context — models, views, relationships, and instructions.\n\n"
+        "Bind a profile (or pass --data-source to init) before finalizing "
+        "a project. Finalizing after writing/editing YAML is exactly two "
+        "commands, in this order: `validate` then `build`. `build` is the "
+        "one command that compiles everything into target/mdl.json (the "
+        "artifact the engine reads) — no other subcommand is needed to "
+        "finish/compile a project. `upgrade` is unrelated (schema_version "
+        "migration only)."
+    ),
 )
 
 
@@ -41,7 +50,9 @@ DataSourceOpt = Annotated[
         "--data-source",
         help=(
             "Target data source (postgres, snowflake, bigquery, ...). "
-            "Required when --from-osi is used."
+            "Required when --from-osi is used; optional otherwise — sets "
+            "the scaffolded project's data_source instead of leaving it "
+            "blank."
         ),
     ),
 ]
@@ -185,6 +196,17 @@ def init(
             ),
         ),
     ] = False,
+    profile: Annotated[
+        Optional[str],
+        typer.Option(
+            "--profile",
+            help=(
+                "Pin this named profile (see `wren profile list`) to the new "
+                "project immediately and explicitly, instead of guessing "
+                "from ambient state."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Initialize a new Wren project.
 
@@ -197,6 +219,13 @@ def init(
     you want to leave the OSI flow and own the YAML going forward; for
     keeping OSI as the source of truth, use ``wren context build --from-osi``
     instead.
+
+    This command only scaffolds/imports files — it does not compile the
+    project. Bind a profile (or pass ``--data-source``) before writing or
+    validating models/views/relationships, then finalize with ``wren context
+    validate`` followed by ``wren context build``. Run this once per project
+    directory; do not re-run it to "finish" a project — that's what ``build``
+    is for.
     """
     if from_mdl and from_osi:
         typer.echo(
@@ -270,6 +299,19 @@ def init(
     (project_path / "cubes").mkdir(parents=True, exist_ok=True)
 
     # wren_project.yml
+    #
+    # data_source is intentionally left blank unless --data-source was
+    # given: a placeholder like "postgres" would look like a deliberate
+    # choice to maybe_pin_new_profile_to_project's compatibility guard
+    # (see wren.context), which would then refuse to auto-pin any other
+    # datasource's profile for every non-postgres user starting from a
+    # bare `wren context init`. An empty/absent data_source is the "no
+    # choice made yet" signal the guard already treats as safe to pin.
+    data_source_line = (
+        f"data_source: {data_source}\n"
+        if data_source
+        else "data_source:  # not set yet — `wren profile add`/`set-profile` will fill this in\n"
+    )
     project_yml = (
         "schema_version: 5\n"
         "name: my_project\n"
@@ -280,8 +322,7 @@ def init(
         "# Your database's actual catalog/schema goes in each model's table_reference.\n"
         "catalog: wren\n"
         "schema: public\n"
-        "\n"
-        "data_source: postgres  # change to your datasource type\n"
+        "\n" + data_source_line
     )
     project_file.write_text(project_yml)
 
@@ -361,8 +402,49 @@ def init(
     # NL→SQL pairs live in knowledge/sql/ (written by `wren memory store`),
     # so no queries.yml is scaffolded.
 
+    # ── Pin a connection profile, if we can do so unambiguously ──
+    # Closes the gap where a project can end up with a connection but no
+    # `profile:` pin. Preference order:
+    #   1. --profile <name>: explicit and deterministic.
+    #   2. exactly one profile in the whole store: nothing to guess between
+    #      (see auto_pin_active_profile's docstring for why this is kept
+    #      narrow rather than guessing at whichever profile is active).
+    #   3. otherwise: no pin written here. `wren profile add` pinning
+    #      itself into this project (see maybe_pin_new_profile_to_project)
+    #      is the primary mechanism and is expected to have already handled
+    #      the common case when the recommended onboarding order is
+    #      followed; this is only the init-first fallback.
+    from wren.context import auto_pin_active_profile, pin_profile  # noqa: PLC0415
+
+    pinned_profile: str | None = None
+    pin_reason: str | None = None
+    if profile:
+        from wren.profile import list_profiles  # noqa: PLC0415
+
+        prof_dict = list_profiles().get(profile)
+        if prof_dict is None:
+            typer.echo(
+                f"Error: profile '{profile}' not found. Run `wren profile "
+                "list` to see available profiles.",
+                err=True,
+            )
+            raise typer.Exit(1)
+        prof_datasource = prof_dict.get("datasource")
+        if not prof_datasource:
+            typer.echo(f"Error: profile '{profile}' has no datasource set.", err=True)
+            raise typer.Exit(1)
+        pin_profile(project_path, profile, prof_datasource)
+        pinned_profile = profile
+        pin_reason = "--profile"
+    else:
+        pinned_profile = auto_pin_active_profile(project_path)
+        if pinned_profile:
+            pin_reason = "the only profile in the store"
+
     typer.echo(f"Wren project initialized: {project_path}")
-    typer.echo("  wren_project.yml            — project metadata (edit data_source)")
+    typer.echo(
+        "  wren_project.yml            — project metadata (data_source is set by profile binding)"
+    )
     if not empty:
         typer.echo("  models/example/             — example model (metadata.yml)")
         typer.echo(
@@ -379,6 +461,19 @@ def init(
         "  knowledge/sql/              — confirmed NL-SQL pairs (wren memory store)"
     )
     typer.echo("  AGENTS.md                   — AI agent workflow guidance")
+    if pinned_profile:
+        typer.echo(
+            f"  profile:                    — pinned to '{pinned_profile}' "
+            f"({pin_reason}); verify this is the intended database (see "
+            f"`wren context set-profile` to change)"
+        )
+    else:
+        typer.echo(
+            "  profile:                    — none pinned yet; run "
+            "`wren profile add <name> --from-file <yaml> --activate` then "
+            "`wren context set-profile <name>` before querying, or this "
+            "project will error instead of silently using another profile."
+        )
     # A pre-existing legacy queries.yml is still auto-loaded by `wren memory
     # index`; surface it so v4 and v5 pair sources don't silently mix.
     if (project_path / "queries.yml").exists():
@@ -393,7 +488,22 @@ def init(
         "Next: Install agent skills via "
         "`curl -fsSL https://raw.githubusercontent.com/Canner/WrenAI/main/skills/install.sh | bash`, "
         "then use the `wren-generate-mdl` skill in your agent to populate models/"
-        " (or edit them manually). Run `wren context build` when done."
+        " (or edit them manually)."
+    )
+    typer.echo("Next:")
+    typer.echo(
+        "  1. Create and bind a connection profile: `wren profile add <name> "
+        "--from-file <connection.yml> --activate`. In a fresh project this "
+        "binds automatically."
+    )
+    typer.echo(
+        "     If the profile already exists or was not auto-bound, run "
+        "`wren context set-profile <name>`."
+    )
+    typer.echo("  2. Populate models/ (with `wren-generate-mdl` or by editing YAML).")
+    typer.echo(
+        "  3. Finalize with `wren context validate` then `wren context build`. "
+        "`build` compiles the project into target/mdl.json."
     )
 
 
@@ -435,6 +545,12 @@ def validate(
     """Validate MDL project: YAML structure + view SQL dry-plan + description checks.
 
     With --from-osi: lint the OSI file's conversion path. Requires --data-source.
+
+    This is the recommended first half of the finalize sequence: run this,
+    then run ``wren context build`` to actually compile target/mdl.json.
+    Validation alone does not produce a build artifact — ``build`` also
+    re-validates by default, so running it directly is safe even if you
+    skip this step.
     """
     if from_osi:
         _validate_from_osi(
@@ -479,24 +595,25 @@ def validate(
     # ── Semantic validation (dry-plan + description checks) ──────────────
     sem_errors: list[str] = []
     sem_warnings: list[str] = []
-    config: dict = {}
-    try:
-        config = load_project_config(project_path)
-        ds_str = config.get("data_source", "")
-        manifest_json = build_json(project_path)
-        manifest_str = _b64.b64encode(
-            json.dumps(manifest_json, ensure_ascii=False).encode()
-        ).decode()
-        sem_result = validate_manifest(manifest_str, ds_str, level=level)
-        sem_errors = sem_result["errors"]
-        sem_warnings = sem_result["warnings"]
-    except Exception as e:
-        sem_errors = [f"Semantic validation failed: {e}"]
+    config = load_project_config(project_path)
+    if not struct_hard:
+        try:
+            ds_str = config.get("data_source", "")
+            manifest_json = build_json(project_path)
+            manifest_str = _b64.b64encode(
+                json.dumps(manifest_json, ensure_ascii=False).encode()
+            ).decode()
+            sem_result = validate_manifest(manifest_str, ds_str, level=level)
+            sem_errors = sem_result["errors"]
+            sem_warnings = sem_result["warnings"]
+        except Exception as e:
+            sem_errors = [f"Semantic validation failed: {e}"]
 
     # ── Profile binding check ─────────────────────────────────────────────
     # Pinned profile that no longer exists → warning (or error in --strict).
     # No pin at all → friendly info hint pointing to `set-profile`.
     profile_pin = config.get("profile") if isinstance(config, dict) else None
+    resolved_profile: tuple[str | None, dict] | None = None
     if isinstance(profile_pin, str) and profile_pin.strip():
         # Guard the lookup: if profiles.yml itself is unreadable / malformed,
         # the user shouldn't see a raw traceback — surface it as a warning so
@@ -510,12 +627,39 @@ def validate(
                 f"could not check pinned profile '{profile_pin}': {profile_exc}"
             )
         else:
-            if profile_pin.strip() not in registered:
+            pin_name = profile_pin.strip()
+            if pin_name not in registered:
                 sem_warnings.append(
-                    f"project pins profile '{profile_pin}' but it doesn't "
+                    f"project pins profile '{pin_name}' but it doesn't "
                     "exist in ~/.wren/profiles.yml. "
                     "Run `wren context set-profile <name>` to rebind."
                 )
+            else:
+                resolved_profile = (pin_name, dict(registered[pin_name]))
+    else:
+        # No pin — fall back to whatever profile is globally active, same
+        # as a real query would at runtime.
+        try:
+            from wren.profile import get_active_profile  # noqa: PLC0415
+
+            active_name, active_conf = get_active_profile()
+        except Exception:
+            active_name, active_conf = None, {}
+        if active_conf:
+            resolved_profile = (active_name, active_conf)
+
+    # ── Connectivity check (smoke query) ──────────────────────────────────
+    # Schema-level checks above never touch the actual data source, so a
+    # connection that's schema-valid but not queryable (wrong host, bad
+    # credentials, a DuckDB URL pointing at a file instead of its directory,
+    # ...) would otherwise pass validation and only fail once a real
+    # question is asked. Run a trivial probe query through the resolved
+    # profile's connector to catch that here instead.
+    if resolved_profile is not None:
+        conn_check = _check_connection(*resolved_profile)
+        if conn_check is not None:
+            is_error, message = conn_check
+            (sem_errors if is_error else sem_warnings).append(message)
 
     if sem_errors:
         typer.echo("\nSemantic errors:")
@@ -523,7 +667,10 @@ def validate(
             typer.echo(f"  \u2717 {msg}", err=True)
 
     all_warnings: list[str] = [str(w) for w in struct_warnings] + list(sem_warnings)
-    _print_warnings(all_warnings, verbose=verbose)
+    error_count = len(struct_hard) + len(sem_errors)
+    _print_warnings(all_warnings, verbose=verbose, error_count=error_count)
+    if not all_warnings and error_count:
+        typer.echo(f"\n0 warning(s), {error_count} error(s).")
 
     # ── Exit logic ──────────────────────────────────────────────────────────────────
     has_hard_error = bool(struct_hard or sem_errors)
@@ -554,9 +701,72 @@ def validate(
         typer.echo(
             f"Valid — {len(models)} models, {len(views)} views, {len(rels)} relationships."
         )
+        typer.echo(
+            "Next: wren context build --path "
+            f"{project_path} to compile target/mdl.json."
+        )
 
 
-def _print_warnings(warnings: list[str], *, verbose: bool) -> None:
+def _check_connection(name: str | None, profile: dict) -> tuple[bool, str] | None:
+    """Smoke-test *profile*'s connection with a trivial probe query.
+
+    Returns ``(is_error, message)`` when there's something to report, or
+    ``None`` when the connection is queryable (or there's nothing to check).
+    ``is_error`` distinguishes a real connectivity failure (hard error —
+    the connection was actually attempted and is genuinely broken) from an
+    environment/config limitation that just means the probe couldn't be
+    attempted here (missing secret, incomplete/skeletal profile, connector
+    extra not installed) — reported as a warning instead, so e.g. running
+    validate against a not-yet-configured profile, or without live
+    credentials in CI, doesn't newly start failing builds that only need
+    the schema-level checks.
+    """
+    from pydantic import ValidationError  # noqa: PLC0415
+
+    from wren.connector import smoke_test  # noqa: PLC0415
+    from wren.model.data_source import DataSource  # noqa: PLC0415
+    from wren.model.error import ErrorCode, WrenError  # noqa: PLC0415
+    from wren.profile import MissingSecretError, expand_profile_secrets  # noqa: PLC0415
+
+    label = f"profile '{name}'" if name else "the active profile"
+    ds_str = profile.get("datasource")
+    if not isinstance(ds_str, str) or not ds_str:
+        return None
+
+    try:
+        ds = DataSource(ds_str.lower())
+    except ValueError:
+        return True, f"{label}: unknown datasource '{ds_str}'"
+
+    fields = {k: v for k, v in profile.items() if k != "datasource"}
+    try:
+        fields = expand_profile_secrets(fields)
+    except MissingSecretError as exc:
+        return False, f"{label}: could not check connectivity — {exc}"
+
+    try:
+        conn_info = ds.get_connection_info(fields)
+    except (ValidationError, ValueError) as exc:
+        return (
+            False,
+            f"{label} ({ds_str}): could not check connectivity — "
+            f"incomplete connection info: {exc}",
+        )
+
+    try:
+        smoke_test(ds, conn_info)
+    except WrenError as exc:
+        if exc.error_code == ErrorCode.NOT_IMPLEMENTED:
+            return False, f"{label} ({ds_str}): could not check connectivity — {exc}"
+        return True, f"{label} ({ds_str}): connection check failed — {exc}"
+    except Exception as exc:  # noqa: BLE001 — surface whatever the driver raises
+        return True, f"{label} ({ds_str}): connection check failed — {exc}"
+    return None
+
+
+def _print_warnings(
+    warnings: list[str], *, verbose: bool, error_count: int = 0
+) -> None:
     """Render warnings: every line below the threshold, grouped summary above.
 
     Agents and humans both read the first "Warnings:" line as a signal
@@ -573,7 +783,7 @@ def _print_warnings(warnings: list[str], *, verbose: bool) -> None:
         typer.echo("\nWarnings:")
         for msg in warnings:
             typer.echo(f"  \u26a0 {msg}")
-        typer.echo(f"\n{total} warning(s), 0 errors.")
+        typer.echo(f"\n{total} warning(s), {error_count} error(s).")
         return
 
     # Bucket by warning *category* — the text after the last colon
@@ -611,8 +821,19 @@ def build(
 ) -> None:
     """Build into target/mdl.json for the engine.
 
+    This is THE finalize/compile step: the one command that turns a YAML
+    project into the artifact the engine reads. Run it once after writing
+    or editing anything under models/, views/, relationships.yml, or
+    knowledge/ — no other subcommand is needed to finish a project.
+
     Default mode: reads wren_project.yml, models/*/metadata.yml (+ref_sql.sql),
     views/*/metadata.yml (+sql.yml), relationships.yml, and knowledge/.
+
+    By default this also runs structural validation first (the same checks
+    as ``wren context validate``) and aborts on hard errors, so it's safe
+    to run directly without a separate validate call first. Pass
+    ``--no-validate`` to skip that pre-check. It's also idempotent — re-run
+    it any number of times as YAML changes.
 
     With --from-osi: reads an Open Semantic Interchange YAML file and emits
     MDL JSON directly. The OSI file stays as the single source of truth; no
@@ -686,6 +907,10 @@ def show(
     ] = "summary",
 ) -> None:
     """Show the current project context (models, views, relationships).
+
+    Read-only inspector — it does not compile or write anything. To
+    finalize a project after writing/editing YAML, use
+    ``wren context validate`` then ``wren context build`` instead.
 
     With --from-osi: show what the OSI file would produce. Requires --data-source.
     """
@@ -770,7 +995,11 @@ def show(
             )
 
         if not models and not views:
-            typer.echo("Empty project. Run `wren context init` to get started.")
+            typer.echo(
+                "Empty project. Run `wren context init` to get started, then "
+                "`wren context validate` + `wren context build` to finalize "
+                "once models/ has content."
+            )
 
 
 @context_app.command()
@@ -811,7 +1040,7 @@ def set_profile(
     from wren.context import (  # noqa: PLC0415
         discover_project_path,
         load_project_config,
-        save_project_config,
+        pin_profile,
     )
     from wren.profile import list_profiles  # noqa: PLC0415
 
@@ -863,10 +1092,9 @@ def set_profile(
 
     config = load_project_config(project_path)
     old_ds = config.get("data_source")
-    config["profile"] = name
-    config["data_source"] = new_ds
+    project_name = config.get("name") or "<unnamed>"
     try:
-        save_project_config(project_path, config)
+        pin_profile(project_path, name, new_ds)
     except OSError as exc:
         typer.echo(
             f"Error: could not write {project_path / PROJECT_FILE}: {exc}",
@@ -874,7 +1102,6 @@ def set_profile(
         )
         raise typer.Exit(1)
 
-    project_name = config.get("name") or "<unnamed>"
     typer.echo(f"✓ Bound profile '{name}' to project {project_name}")
     typer.echo(f"  profile:     {name}")
     if old_ds and old_ds != new_ds:
@@ -904,7 +1131,16 @@ def upgrade(
         typer.Option("--dry-run", help="Preview changes without writing."),
     ] = False,
 ) -> None:
-    """Upgrade project schema_version to enable new features."""
+    """Upgrade project schema_version to enable new features.
+
+    This is unrelated to compiling/finalizing a project — it only migrates
+    wren_project.yml (and accompanying scaffold files, e.g. knowledge/)
+    between schema_version numbers, and it's a no-op if the project is
+    already on the latest version. If you're trying to finish a project
+    after writing/editing YAML, use ``wren context validate`` then
+    ``wren context build`` instead — this command does not build
+    target/mdl.json.
+    """
     from wren.context import (  # noqa: PLC0415
         UpgradeError,
         apply_upgrade,
@@ -932,11 +1168,19 @@ def upgrade(
         and not result.files_deleted
         and not result.files_modified
     ):
-        typer.echo(f"Already at schema_version {current}. Nothing to do.")
+        typer.echo(
+            f"Already at schema_version {current}. Nothing to do.\n"
+            "If you're trying to finish/compile the project, this isn't the "
+            "command for that — run `wren context build` instead."
+        )
         return
 
     if result.from_version == result.to_version:
-        typer.echo(f"Already at schema_version {current}. Nothing to do.")
+        typer.echo(
+            f"Already at schema_version {current}. Nothing to do.\n"
+            "If you're trying to finish/compile the project, this isn't the "
+            "command for that — run `wren context build` instead."
+        )
         return
 
     if dry_run:
@@ -972,7 +1216,10 @@ def upgrade(
             f"  * {f} (schema_version {result.from_version} -> {result.to_version})"
         )
 
-    typer.echo("\nUpgrade complete. Run `wren context validate` to check the result.")
+    typer.echo(
+        "\nUpgrade complete. Run `wren context validate` then "
+        "`wren context build` to check and recompile the result."
+    )
 
 
 # ── OSI source helpers ────────────────────────────────────────────────────

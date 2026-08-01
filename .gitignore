@@ -17,6 +17,12 @@ __MACOSX/
 **/.env.*
 !**/.env.example
 !**/.env.*.example
+# Fixture projects for the genbi app's connection-config tests. The code under
+# test reads a literal `<projectDir>/.env`, so these have to be present under
+# that exact name for the tests to exercise the real path. Their contents are
+# synthetic — the "password" in the postgres one exists so a test can assert it
+# is never copied into an API response.
+!apps/genbi/test/fixtures/*-project/.env
 
 # ---- Secrets / credentials ----
 *.pem
