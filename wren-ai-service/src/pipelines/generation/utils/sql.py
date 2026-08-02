@@ -17,6 +17,10 @@ from src.web.v1.services.ask import AskHistory
 logger = logging.getLogger("wren-ai-service")
 
 
+def _is_timeout_error(error_message: str) -> bool:
+    return error_message.startswith("Request timed out")
+
+
 @component
 class SQLGenPostProcessor:
     def __init__(self, engine: Engine):
@@ -101,12 +105,17 @@ class SQLGenPostProcessor:
                 )
 
                 if not dry_plan_result:
+                    if _is_timeout_error(error_message):
+                        valid_generation_result = {
+                            "sql": generation_result,
+                            "correlation_id": "",
+                        }
+                        return valid_generation_result, invalid_generation_result
+
                     invalid_generation_result = {
                         "sql": generation_result,
                         "original_sql": generation_result,
-                        "type": "TIME_OUT"
-                        if error_message.startswith("Request timed out")
-                        else "DRY_PLAN",
+                        "type": "DRY_PLAN",
                         "error": error_message,
                         "correlation_id": "",
                     }
@@ -128,12 +137,17 @@ class SQLGenPostProcessor:
                     }
                 else:
                     error_message = addition.get("error_message", "")
+                    if _is_timeout_error(error_message):
+                        valid_generation_result = {
+                            "sql": generation_result,
+                            "correlation_id": addition.get("correlation_id", ""),
+                        }
+                        return valid_generation_result, invalid_generation_result
+
                     invalid_generation_result = {
                         "sql": addition.get("error_sql", generation_result),
                         "original_sql": generation_result,
-                        "type": "TIME_OUT"
-                        if error_message.startswith("Request timed out")
-                        else "DRY_RUN",
+                        "type": "DRY_RUN",
                         "error": error_message,
                         "correlation_id": addition.get("correlation_id", ""),
                     }
@@ -153,12 +167,17 @@ class SQLGenPostProcessor:
                     }
                 else:
                     error_message = addition.get("error_message", "")
+                    if _is_timeout_error(error_message):
+                        valid_generation_result = {
+                            "sql": generation_result,
+                            "correlation_id": addition.get("correlation_id", ""),
+                        }
+                        return valid_generation_result, invalid_generation_result
+
                     invalid_generation_result = {
                         "sql": addition.get("error_sql", generation_result),
                         "original_sql": generation_result,
-                        "type": "TIME_OUT"
-                        if error_message.startswith("Request timed out")
-                        else "DRY_RUN",
+                        "type": "DRY_RUN",
                         "error": error_message,
                         "correlation_id": addition.get("correlation_id", ""),
                     }
@@ -178,6 +197,13 @@ class SQLGenPostProcessor:
                     }
                 else:
                     error_message = addition.get("error_message", "")
+                    if _is_timeout_error(error_message):
+                        valid_generation_result = {
+                            "sql": generation_result,
+                            "correlation_id": addition.get("correlation_id", ""),
+                        }
+                        return valid_generation_result, invalid_generation_result
+
                     preview_data_status = (
                         "PREVIEW_EMPTY_DATA"
                         if error_message == ""
@@ -186,9 +212,7 @@ class SQLGenPostProcessor:
                     invalid_generation_result = {
                         "sql": addition.get("error_sql", generation_result),
                         "original_sql": generation_result,
-                        "type": "TIME_OUT"
-                        if error_message.startswith("Request timed out")
-                        else preview_data_status,
+                        "type": preview_data_status,
                         "error": error_message,
                         "correlation_id": addition.get("correlation_id", ""),
                     }

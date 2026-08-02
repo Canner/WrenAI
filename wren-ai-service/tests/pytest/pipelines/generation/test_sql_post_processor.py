@@ -1,0 +1,99 @@
+import pytest
+
+from src.pipelines.generation.utils.sql import SQLGenPostProcessor
+
+
+class TimeoutEngine:
+    async def dry_plan(
+        self,
+        session,
+        sql,
+        data_source,
+        project_id=None,
+        allow_fallback=True,
+    ):
+        return False, "Request timed out after 30 seconds"
+
+    async def execute_sql(
+        self,
+        sql,
+        session,
+        project_id=None,
+        limit=1,
+        dry_run=True,
+    ):
+        return False, None, {
+            "error_message": "Request timed out after 30 seconds",
+            "correlation_id": "timeout-correlation",
+        }
+
+
+class ErrorEngine:
+    async def dry_plan(
+        self,
+        session,
+        sql,
+        data_source,
+        project_id=None,
+        allow_fallback=True,
+    ):
+        return False, "Planner rejected the statement"
+
+    async def execute_sql(
+        self,
+        sql,
+        session,
+        project_id=None,
+        limit=1,
+        dry_run=True,
+    ):
+        return False, None, {"error_message": "Execution rejected the statement"}
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_returns_generated_sql_when_dry_plan_times_out():
+    result = await SQLGenPostProcessor(TimeoutEngine()).run(
+        ['{"sql": "SELECT 1"}'],
+        project_id="project-id",
+        use_dry_plan=True,
+        data_source="source",
+    )
+
+    assert result["valid_generation_result"] == {
+        "sql": "SELECT 1",
+        "correlation_id": "",
+    }
+    assert result["invalid_generation_result"] == {}
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_returns_generated_sql_when_dry_run_times_out():
+    result = await SQLGenPostProcessor(TimeoutEngine()).run(
+        ['{"sql": "SELECT 1"}'],
+        project_id="project-id",
+    )
+
+    assert result["valid_generation_result"] == {
+        "sql": "SELECT 1",
+        "correlation_id": "timeout-correlation",
+    }
+    assert result["invalid_generation_result"] == {}
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_keeps_non_timeout_dry_plan_errors_invalid():
+    result = await SQLGenPostProcessor(ErrorEngine()).run(
+        ['{"sql": "SELECT 1"}'],
+        project_id="project-id",
+        use_dry_plan=True,
+        data_source="source",
+    )
+
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"] == {
+        "sql": "SELECT 1",
+        "original_sql": "SELECT 1",
+        "type": "DRY_PLAN",
+        "error": "Planner rejected the statement",
+        "correlation_id": "",
+    }
