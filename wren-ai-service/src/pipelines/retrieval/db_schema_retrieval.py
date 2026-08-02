@@ -1,6 +1,7 @@
 import ast
 import logging
 import sys
+from copy import deepcopy
 from typing import Any, Optional
 
 import orjson
@@ -216,6 +217,37 @@ def _build_view_ddl(content: dict) -> str:
     )
 
 
+def _remove_mdl_hash_filter(filters: dict | None) -> dict | None:
+    if not filters:
+        return filters
+
+    fallback_filters = deepcopy(filters)
+    fallback_filters["conditions"] = [
+        condition
+        for condition in fallback_filters.get("conditions", [])
+        if condition.get("field") != "mdl_hash"
+    ]
+    return fallback_filters
+
+
+async def _run_with_project_metadata_fallback(
+    retriever: Any,
+    query_embedding: list,
+    filters: dict,
+    project_id: str,
+    mdl_hash: str,
+) -> dict:
+    result = await retriever.run(query_embedding=query_embedding, filters=filters)
+    if result.get("documents") or not (project_id and mdl_hash):
+        return result
+
+    fallback_filters = _remove_mdl_hash_filter(filters)
+    return await retriever.run(
+        query_embedding=query_embedding,
+        filters=fallback_filters,
+    )
+
+
 ## Start of Pipeline
 @observe(capture_input=False, capture_output=False)
 async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> dict:
@@ -251,18 +283,24 @@ async def table_retrieval(
         )
 
     if embedding:
-        return await table_retriever.run(
+        return await _run_with_project_metadata_fallback(
+            table_retriever,
             query_embedding=embedding.get("embedding"),
             filters=filters,
+            project_id=project_id,
+            mdl_hash=mdl_hash,
         )
     else:
         filters["conditions"].append(
             {"field": "name", "operator": "in", "value": tables}
         )
 
-        return await table_retriever.run(
+        return await _run_with_project_metadata_fallback(
+            table_retriever,
             query_embedding=[],
             filters=filters,
+            project_id=project_id,
+            mdl_hash=mdl_hash,
         )
 
 
@@ -309,9 +347,12 @@ async def dbschema_retrieval(
         if not table_names:
             return []
 
-        results = await dbschema_retriever.run(
+        results = await _run_with_project_metadata_fallback(
+            dbschema_retriever,
             query_embedding=[],
             filters=_filters_for_names(table_names),
+            project_id=project_id,
+            mdl_hash=mdl_hash,
         )
         return results["documents"]
 
@@ -350,9 +391,12 @@ async def dbschema_retrieval(
 
     documents = []
     if not table_names and embedding and embedding.get("embedding"):
-        results = await dbschema_retriever.run(
+        results = await _run_with_project_metadata_fallback(
+            dbschema_retriever,
             query_embedding=embedding.get("embedding"),
             filters=_base_filters(),
+            project_id=project_id,
+            mdl_hash=mdl_hash,
         )
         documents.extend(results["documents"])
         for document in results["documents"]:
