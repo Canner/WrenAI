@@ -12,6 +12,14 @@ PROJECT_FILTER = {
     ],
 }
 
+PROJECT_DEPLOY_FILTER = {
+    "operator": "AND",
+    "conditions": [
+        {"field": "project_id", "operator": "==", "value": "project-a"},
+        {"field": "mdl_hash", "operator": "==", "value": "deploy-a"},
+    ],
+}
+
 
 class StoreSpy:
     def __init__(self, count=0):
@@ -59,6 +67,20 @@ async def test_sql_pairs_count_stays_project_scoped_when_project_has_no_document
 
 
 @pytest.mark.asyncio
+async def test_sql_pairs_count_can_be_deploy_scoped():
+    store = StoreSpy(count=0)
+
+    count = await sql_pairs_retrieval.count_documents(
+        store,
+        project_id="project-a",
+        mdl_hash="deploy-a",
+    )
+
+    assert count == 0
+    assert store.filters == [PROJECT_DEPLOY_FILTER]
+
+
+@pytest.mark.asyncio
 async def test_sql_pairs_retrieval_does_not_fall_back_to_global_documents():
     retriever = RetrieverSpy()
 
@@ -70,6 +92,21 @@ async def test_sql_pairs_retrieval_does_not_fall_back_to_global_documents():
 
     assert result == {"documents": []}
     assert [call["filters"] for call in retriever.calls] == [PROJECT_FILTER]
+
+
+@pytest.mark.asyncio
+async def test_sql_pairs_retrieval_can_be_deploy_scoped():
+    retriever = RetrieverSpy()
+
+    result = await sql_pairs_retrieval.retrieval(
+        {"embedding": [0.1]},
+        project_id="project-a",
+        mdl_hash="deploy-a",
+        retriever=retriever,
+    )
+
+    assert result == {"documents": []}
+    assert [call["filters"] for call in retriever.calls] == [PROJECT_DEPLOY_FILTER]
 
 
 @pytest.mark.asyncio
@@ -110,6 +147,20 @@ async def test_instruction_count_stays_project_scoped_when_project_has_no_docume
 
 
 @pytest.mark.asyncio
+async def test_instruction_count_can_be_deploy_scoped():
+    store = StoreSpy(count=0)
+
+    count = await instructions.count_documents(
+        store,
+        project_id="project-a",
+        mdl_hash="deploy-a",
+    )
+
+    assert count == 0
+    assert store.filters == [PROJECT_DEPLOY_FILTER]
+
+
+@pytest.mark.asyncio
 async def test_instruction_retrieval_does_not_fall_back_to_global_documents():
     retriever = RetrieverSpy()
 
@@ -126,6 +177,30 @@ async def test_instruction_retrieval_does_not_fall_back_to_global_documents():
             "conditions": [
                 {"field": "is_default", "operator": "==", "value": False},
                 {"field": "project_id", "operator": "==", "value": "project-a"},
+            ],
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_instruction_retrieval_can_be_deploy_scoped():
+    retriever = RetrieverSpy()
+
+    result = await instructions.retrieval(
+        {"embedding": [0.1]},
+        project_id="project-a",
+        mdl_hash="deploy-a",
+        retriever=retriever,
+    )
+
+    assert result == {"documents": []}
+    assert [call["filters"] for call in retriever.calls] == [
+        {
+            "operator": "AND",
+            "conditions": [
+                {"field": "is_default", "operator": "==", "value": False},
+                {"field": "project_id", "operator": "==", "value": "project-a"},
+                {"field": "mdl_hash", "operator": "==", "value": "deploy-a"},
             ],
         }
     ]
@@ -150,6 +225,32 @@ async def test_default_instructions_do_not_fall_back_to_global_documents():
             "conditions": [
                 {"field": "is_default", "operator": "==", "value": True},
                 {"field": "project_id", "operator": "==", "value": "project-a"},
+            ],
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_default_instructions_can_be_deploy_scoped():
+    retriever = RetrieverSpy()
+
+    result = await instructions.default_instructions(
+        count_documents=1,
+        retriever=retriever,
+        project_id="project-a",
+        mdl_hash="deploy-a",
+        scope_filter=instructions.ScopeFilter(),
+        scope="sql",
+    )
+
+    assert result == {"documents": []}
+    assert [call["filters"] for call in retriever.calls] == [
+        {
+            "operator": "AND",
+            "conditions": [
+                {"field": "is_default", "operator": "==", "value": True},
+                {"field": "project_id", "operator": "==", "value": "project-a"},
+                {"field": "mdl_hash", "operator": "==", "value": "deploy-a"},
             ],
         }
     ]

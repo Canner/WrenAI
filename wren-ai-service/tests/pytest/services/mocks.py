@@ -9,7 +9,13 @@ class RetrievalMock(retrieval.DbSchemaRetrieval):
     def __init__(self, documents: list = []):
         self._documents = documents
 
-    async def run(self, query: str, project_id: Optional[str] = None):
+    async def run(
+        self,
+        query: str,
+        project_id: Optional[str] = None,
+        mdl_hash: Optional[str] = None,
+        **_,
+    ):
         return {"construct_retrieval_results": self._documents}
 
 
@@ -17,7 +23,12 @@ class SqlPairsRetrievalMock(retrieval.SqlPairsRetrieval):
     def __init__(self, documents: list = []):
         self._documents = documents
 
-    async def run(self, query: str, project_id: Optional[str] = None):
+    async def run(
+        self,
+        query: str,
+        project_id: Optional[str] = None,
+        mdl_hash: Optional[str] = None,
+    ):
         return {"formatted_output": {"documents": self._documents}}
 
 
@@ -25,7 +36,13 @@ class InstructionsRetrievalMock(retrieval.Instructions):
     def __init__(self, documents: list = []):
         self._documents = documents
 
-    async def run(self, query: str, project_id: Optional[str] = None):
+    async def run(
+        self,
+        query: str,
+        project_id: Optional[str] = None,
+        scope: str = "sql",
+        mdl_hash: Optional[str] = None,
+    ):
         return {"formatted_output": {"documents": self._documents}}
 
 
@@ -33,7 +50,12 @@ class HistoricalQuestionMock(retrieval.HistoricalQuestionRetrieval):
     def __init__(self, documents: list = []):
         self._documents = documents
 
-    async def run(self, query: str, project_id: Optional[str] = None):
+    async def run(
+        self,
+        query: str,
+        project_id: Optional[str] = None,
+        mdl_hash: Optional[str] = None,
+    ):
         return {"formatted_output": {"documents": self._documents}}
 
 

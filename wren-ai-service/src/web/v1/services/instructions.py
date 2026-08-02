@@ -103,6 +103,7 @@ class InstructionsService:
 
             await self._pipelines["instructions_indexing"].run(
                 project_id=request.project_id,
+                mdl_hash=request.mdl_hash,
                 instructions=instructions,
             )
 

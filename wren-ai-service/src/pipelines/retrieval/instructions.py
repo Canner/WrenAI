@@ -10,7 +10,7 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
-from src.pipelines.common import ScoreFilter
+from src.pipelines.common import ScoreFilter, build_project_deploy_filter
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -57,18 +57,11 @@ class ScopeFilter:
 ## Start of Pipeline
 @observe(capture_input=False)
 async def count_documents(
-    store: QdrantDocumentStore, project_id: Optional[str] = None
+    store: QdrantDocumentStore,
+    project_id: Optional[str] = None,
+    mdl_hash: Optional[str] = None,
 ) -> int:
-    filters = (
-        {
-            "operator": "AND",
-            "conditions": [
-                {"field": "project_id", "operator": "==", "value": project_id},
-            ],
-        }
-        if project_id
-        else None
-    )
+    filters = build_project_deploy_filter(project_id=project_id, mdl_hash=mdl_hash)
     document_count = await store.count_documents(filters=filters)
     return document_count
 
@@ -82,7 +75,12 @@ async def embedding(count_documents: int, query: str, embedder: Any) -> dict:
 
 
 @observe(capture_input=False)
-async def retrieval(embedding: dict, project_id: str, retriever: Any) -> dict:
+async def retrieval(
+    embedding: dict,
+    project_id: str,
+    retriever: Any,
+    mdl_hash: str = "",
+) -> dict:
     if not embedding:
         return {}
 
@@ -96,6 +94,11 @@ async def retrieval(embedding: dict, project_id: str, retriever: Any) -> dict:
     if project_id:
         filters["conditions"].append(
             {"field": "project_id", "operator": "==", "value": project_id}
+        )
+
+    if mdl_hash:
+        filters["conditions"].append(
+            {"field": "mdl_hash", "operator": "==", "value": mdl_hash}
         )
 
     res = await retriever.run(
@@ -136,6 +139,7 @@ async def default_instructions(
     project_id: str,
     scope_filter: ScopeFilter,
     scope: str,
+    mdl_hash: str = "",
 ) -> list[Document]:
     if not count_documents:
         return []
@@ -150,6 +154,11 @@ async def default_instructions(
     if project_id:
         filters["conditions"].append(
             {"field": "project_id", "operator": "==", "value": project_id}
+        )
+
+    if mdl_hash:
+        filters["conditions"].append(
+            {"field": "mdl_hash", "operator": "==", "value": mdl_hash}
         )
 
     _res = await retriever.run(
@@ -213,7 +222,11 @@ class Instructions(BasicPipeline):
 
     @observe(name="Instructions Retrieval")
     async def run(
-        self, query: str, project_id: Optional[str] = None, scope: str = "sql"
+        self,
+        query: str,
+        project_id: Optional[str] = None,
+        scope: str = "sql",
+        mdl_hash: Optional[str] = None,
     ):
         logger.info("Instructions Retrieval pipeline is running...")
         return await self._pipe.execute(
@@ -222,6 +235,7 @@ class Instructions(BasicPipeline):
                 "query": query,
                 "project_id": project_id or "",
                 "scope": scope,
+                "mdl_hash": mdl_hash or "",
                 **self._components,
                 **self._configs,
             },

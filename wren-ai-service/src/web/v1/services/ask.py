@@ -218,10 +218,12 @@ class AskService:
                         self._pipelines["sql_pairs_retrieval"].run(
                             query=user_query,
                             project_id=ask_request.project_id,
+                            mdl_hash=ask_request.mdl_hash,
                         ),
                         self._pipelines["instructions_retrieval"].run(
                             query=user_query,
                             project_id=ask_request.project_id,
+                            mdl_hash=ask_request.mdl_hash,
                             scope="sql",
                         ),
                     )

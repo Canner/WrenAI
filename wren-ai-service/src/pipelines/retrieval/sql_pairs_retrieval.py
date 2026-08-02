@@ -10,7 +10,7 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
-from src.pipelines.common import ScoreFilter
+from src.pipelines.common import ScoreFilter, build_project_deploy_filter
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -36,18 +36,11 @@ class OutputFormatter:
 ## Start of Pipeline
 @observe(capture_input=False)
 async def count_documents(
-    store: QdrantDocumentStore, project_id: Optional[str] = None
+    store: QdrantDocumentStore,
+    project_id: Optional[str] = None,
+    mdl_hash: Optional[str] = None,
 ) -> int:
-    filters = (
-        {
-            "operator": "AND",
-            "conditions": [
-                {"field": "project_id", "operator": "==", "value": project_id},
-            ],
-        }
-        if project_id
-        else None
-    )
+    filters = build_project_deploy_filter(project_id=project_id, mdl_hash=mdl_hash)
     document_count = await store.count_documents(filters=filters)
     return document_count
 
@@ -61,18 +54,14 @@ async def embedding(count_documents: int, query: str, embedder: Any) -> dict:
 
 
 @observe(capture_input=False)
-async def retrieval(embedding: dict, project_id: str, retriever: Any) -> dict:
+async def retrieval(
+    embedding: dict,
+    project_id: str,
+    retriever: Any,
+    mdl_hash: str = "",
+) -> dict:
     if embedding:
-        filters = (
-            {
-                "operator": "AND",
-                "conditions": [
-                    {"field": "project_id", "operator": "==", "value": project_id},
-                ],
-            }
-            if project_id
-            else None
-        )
+        filters = build_project_deploy_filter(project_id=project_id, mdl_hash=mdl_hash)
 
         res = await retriever.run(
             query_embedding=embedding.get("embedding"),
@@ -143,13 +132,19 @@ class SqlPairsRetrieval(BasicPipeline):
         )
 
     @observe(name="SqlPairs Retrieval")
-    async def run(self, query: str, project_id: Optional[str] = None):
+    async def run(
+        self,
+        query: str,
+        project_id: Optional[str] = None,
+        mdl_hash: Optional[str] = None,
+    ):
         logger.info("SqlPairs Retrieval pipeline is running...")
         return await self._pipe.execute(
             ["formatted_output"],
             inputs={
                 "query": query,
                 "project_id": project_id or "",
+                "mdl_hash": mdl_hash or "",
                 **self._components,
                 **self._configs,
             },

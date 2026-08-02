@@ -9,6 +9,7 @@ import {
 import { IInstructionRepository, Instruction } from '@server/repositories';
 import * as Errors from '@server/utils/error';
 import { GeneralErrorCodes } from '@server/utils/error';
+import { IDeployService } from './deployService';
 export interface IInstructionService {
   getInstructions(projectId: number): Promise<Instruction[]>;
   getInstruction(id: number): Promise<Instruction>;
@@ -21,15 +22,19 @@ export interface IInstructionService {
 export class InstructionService implements IInstructionService {
   private readonly instructionRepository: IInstructionRepository;
   private readonly wrenAIAdaptor: IWrenAIAdaptor;
+  private readonly deployService: IDeployService;
   constructor({
     instructionRepository,
     wrenAIAdaptor,
+    deployService,
   }: {
     instructionRepository: IInstructionRepository;
     wrenAIAdaptor: IWrenAIAdaptor;
+    deployService: IDeployService;
   }) {
     this.instructionRepository = instructionRepository;
     this.wrenAIAdaptor = wrenAIAdaptor;
+    this.deployService = deployService;
   }
 
   public async getInstructions(projectId: number): Promise<Instruction[]> {
@@ -56,9 +61,11 @@ export class InstructionService implements IInstructionService {
           tx,
         },
       );
-      const { queryId } = await this.wrenAIAdaptor.generateInstruction([
-        this.pickGenerateInstructionInput(newInstruction),
-      ]);
+      const mdlHash = await this.getDeployHash(input.projectId);
+      const { queryId } = await this.wrenAIAdaptor.generateInstruction(
+        [this.pickGenerateInstructionInput(newInstruction)],
+        mdlHash,
+      );
       const res = await this.waitDeployInstruction(queryId);
       if (res.error) {
         await tx.rollback();
@@ -90,8 +97,10 @@ export class InstructionService implements IInstructionService {
           tx,
         },
       );
+      const mdlHash = await this.getDeployHash(inputs[0]?.projectId);
       const { queryId } = await this.wrenAIAdaptor.generateInstruction(
         newInstructions.map(this.pickGenerateInstructionInput),
+        mdlHash,
       );
       const res = await this.waitDeployInstruction(queryId);
       if (res.error) {
@@ -133,9 +142,11 @@ export class InstructionService implements IInstructionService {
         instructionData,
         { tx },
       );
-      const { queryId } = await this.wrenAIAdaptor.generateInstruction([
-        this.pickGenerateInstructionInput(updatedInstruction),
-      ]);
+      const mdlHash = await this.getDeployHash(input.projectId);
+      const { queryId } = await this.wrenAIAdaptor.generateInstruction(
+        [this.pickGenerateInstructionInput(updatedInstruction)],
+        mdlHash,
+      );
       const res = await this.waitDeployInstruction(queryId);
       if (res.error) {
         await tx.rollback();
@@ -214,5 +225,13 @@ export class InstructionService implements IInstructionService {
     if (input.instruction.length > 1000) {
       throw new Error('Instruction is too long');
     }
+  }
+
+  private async getDeployHash(projectId?: number): Promise<string | undefined> {
+    if (!projectId) {
+      return undefined;
+    }
+    const deployment = await this.deployService.getLastDeployment(projectId);
+    return deployment?.hash;
   }
 }

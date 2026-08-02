@@ -69,6 +69,7 @@ class SqlPairsService:
             input = {
                 "mdl_str": '{"models": [{"properties": {"boilerplate": "sql_pairs"}}]}',
                 "project_id": request.project_id,
+                "mdl_hash": request.mdl_hash,
                 "external_pairs": {
                     "sql_pairs": [
                         sql_pair.model_dump() for sql_pair in request.sql_pairs

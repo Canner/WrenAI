@@ -29,10 +29,19 @@ class Instruction(BaseModel):
 @component
 class InstructionsConverter:
     @component.output_types(documents=List[Document])
-    def run(self, instructions: list[Instruction], project_id: str = ""):
+    def run(
+        self,
+        instructions: list[Instruction],
+        project_id: str = "",
+        mdl_hash: Optional[str] = None,
+    ):
         logger.info(f"Project ID: {project_id} Converting instructions to documents...")
 
-        addition = {"project_id": project_id} if project_id else {}
+        addition = {}
+        if project_id:
+            addition["project_id"] = project_id
+        if mdl_hash:
+            addition["mdl_hash"] = mdl_hash
 
         return {
             "documents": [
@@ -161,6 +170,7 @@ class Instructions(BasicPipeline):
         self,
         instructions: list[Instruction],
         project_id: str = "",
+        mdl_hash: Optional[str] = None,
     ) -> Dict[str, Any]:
         logger.info(
             f"Project ID: {project_id} Instructions Indexing pipeline is running..."
@@ -168,6 +178,7 @@ class Instructions(BasicPipeline):
 
         input = {
             "project_id": project_id,
+            "mdl_hash": mdl_hash,
             "instructions": instructions,
             **self._components,
         }

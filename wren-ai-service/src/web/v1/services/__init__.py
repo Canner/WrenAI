@@ -61,6 +61,7 @@ class BaseRequest(BaseModel):
         default=None,
         validation_alias=AliasChoices("project_id", "projectId"),
     )
+    mdl_hash: Optional[str] = None
     thread_id: Optional[str] = None
     configurations: Configuration = Field(
         default_factory=Configuration,

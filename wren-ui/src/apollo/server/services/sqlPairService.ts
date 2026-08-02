@@ -17,6 +17,7 @@ import {
 } from '../models/adaptor';
 import { Manifest } from '@server/mdl/type';
 import { DataSourceName } from '@server/types';
+import { IDeployService } from './deployService';
 
 const logger = getLogger('SqlPairService');
 
@@ -60,19 +61,23 @@ export class SqlPairService implements ISqlPairService {
   private sqlPairRepository: ISqlPairRepository;
   private wrenAIAdaptor: IWrenAIAdaptor;
   private ibisAdaptor: IIbisAdaptor;
+  private deployService: IDeployService;
 
   constructor({
     sqlPairRepository,
     wrenAIAdaptor,
     ibisAdaptor,
+    deployService,
   }: {
     sqlPairRepository: ISqlPairRepository;
     wrenAIAdaptor: IWrenAIAdaptor;
     ibisAdaptor: IIbisAdaptor;
+    deployService: IDeployService;
   }) {
     this.sqlPairRepository = sqlPairRepository;
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.ibisAdaptor = ibisAdaptor;
+    this.deployService = deployService;
   }
 
   public async modelSubstitute(
@@ -145,9 +150,11 @@ export class SqlPairService implements ISqlPairService {
         },
         { tx },
       );
+      const mdlHash = await this.getDeployHash(projectId);
       const { queryId } = await this.wrenAIAdaptor.deploySqlPair(
         projectId,
         newPair,
+        mdlHash,
       );
       const deployResult = await this.waitUntilSqlPairResult(queryId);
       if (deployResult.error) {
@@ -179,12 +186,14 @@ export class SqlPairService implements ISqlPairService {
     const successPairs = [];
     const errorPairs = [];
     const chunks = chunk(newPairs, 10);
+    const mdlHash = await this.getDeployHash(projectId);
     for (const pairs of chunks) {
       await Promise.allSettled(
         pairs.map(async (pair) => {
           const { queryId } = await this.wrenAIAdaptor.deploySqlPair(
             projectId,
             pair,
+            mdlHash,
           );
           const deployResult = await this.waitUntilSqlPairResult(queryId);
           if (deployResult.error) {
@@ -249,9 +258,11 @@ export class SqlPairService implements ISqlPairService {
         updatedData,
         { tx },
       );
+      const mdlHash = await this.getDeployHash(projectId);
       const { queryId } = await this.wrenAIAdaptor.deploySqlPair(
         projectId,
         updatedSqlPair,
+        mdlHash,
       );
       const deployResult = await this.waitUntilSqlPairResult(queryId);
       if (deployResult.error) {
@@ -325,5 +336,10 @@ export class SqlPairService implements ISqlPairService {
 
   private isFinishedState(status: SqlPairStatus) {
     return [SqlPairStatus.FINISHED, SqlPairStatus.FAILED].includes(status);
+  }
+
+  private async getDeployHash(projectId: number): Promise<string | undefined> {
+    const deployment = await this.deployService.getLastDeployment(projectId);
+    return deployment?.hash;
   }
 }

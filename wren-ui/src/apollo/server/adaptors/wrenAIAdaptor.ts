@@ -121,6 +121,7 @@ export interface IWrenAIAdaptor {
   deploySqlPair(
     projectId: number,
     sqlPair: { question: string; sql: string },
+    mdlHash?: string,
   ): Promise<AsyncQueryResponse>;
   getSqlPairResult(queryId: string): Promise<SqlPairResult>;
   deleteSqlPairs(projectId: number, sqlPairIds: number[]): Promise<void>;
@@ -132,6 +133,7 @@ export interface IWrenAIAdaptor {
    */
   generateInstruction(
     input: GenerateInstructionInput[],
+    mdlHash?: string,
   ): Promise<AsyncQueryResponse>;
   getInstructionResult(queryId: string): Promise<InstructionResult>;
   deleteInstructions(ids: number[], projectId: number): Promise<void>;
@@ -178,9 +180,10 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
   public async deploySqlPair(
     projectId: number,
     sqlPair: Partial<SqlPair>,
+    mdlHash?: string,
   ): Promise<AsyncQueryResponse> {
     try {
-      const body = {
+      const body: any = {
         sql_pairs: [
           {
             id: `${sqlPair.id}`,
@@ -190,6 +193,9 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
         ],
         project_id: projectId.toString(),
       };
+      if (mdlHash) {
+        body['mdl_hash'] = mdlHash;
+      }
 
       return axios
         .post(`${this.wrenAIBaseEndpoint}/v1/sql-pairs`, body)
@@ -667,8 +673,9 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
 
   public async generateInstruction(
     input: GenerateInstructionInput[],
+    mdlHash?: string,
   ): Promise<AsyncQueryResponse> {
-    const body = {
+    const body: any = {
       instructions: input.map((item) => ({
         id: item.id.toString(),
         instruction: item.instruction,
@@ -677,6 +684,9 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       })),
       project_id: input[0]?.projectId.toString(),
     };
+    if (mdlHash) {
+      body['mdl_hash'] = mdlHash;
+    }
     try {
       const res = await axios.post(
         `${this.wrenAIBaseEndpoint}/v1/instructions`,

@@ -273,10 +273,12 @@ export const initComponents = () => {
     sqlPairRepository,
     wrenAIAdaptor,
     ibisAdaptor,
+    deployService,
   });
   const instructionService = new InstructionService({
     instructionRepository,
     wrenAIAdaptor,
+    deployService,
   });
   const rbacService = new RbacService({
     roleRepository,
