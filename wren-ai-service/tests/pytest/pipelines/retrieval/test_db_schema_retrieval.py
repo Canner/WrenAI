@@ -133,6 +133,46 @@ async def test_table_retrieval_fetches_explicit_table_descriptions():
 
 
 @pytest.mark.asyncio
+async def test_table_retrieval_keeps_deploy_scope_when_no_documents_match():
+    class Retriever:
+        def __init__(self):
+            self.calls = []
+
+        async def run(self, query_embedding, filters):
+            self.calls.append(
+                {
+                    "query_embedding": query_embedding,
+                    "filters": filters,
+                }
+            )
+            return {"documents": []}
+
+    retriever = Retriever()
+
+    await table_retrieval(
+        embedding={"embedding": [0.25]},
+        project_id="project-1",
+        mdl_hash="deploy-1",
+        tables=[],
+        table_retriever=retriever,
+    )
+
+    assert retriever.calls == [
+        {
+            "query_embedding": [0.25],
+            "filters": {
+                "operator": "AND",
+                "conditions": [
+                    {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
+                    {"field": "project_id", "operator": "==", "value": "project-1"},
+                    {"field": "mdl_hash", "operator": "==", "value": "deploy-1"},
+                ],
+            },
+        }
+    ]
+
+
+@pytest.mark.asyncio
 async def test_dbschema_retrieval_loads_selected_active_project_schema():
     class Retriever:
         def __init__(self):
@@ -195,6 +235,47 @@ async def test_dbschema_retrieval_loads_selected_active_project_schema():
             {"field": "project_id", "operator": "==", "value": "project-1"},
         ],
     }
+
+
+@pytest.mark.asyncio
+async def test_dbschema_retrieval_keeps_deploy_scope_when_no_documents_match():
+    class Retriever:
+        def __init__(self):
+            self.calls = []
+
+        async def run(self, query_embedding, filters):
+            self.calls.append(
+                {
+                    "query_embedding": query_embedding,
+                    "filters": filters,
+                }
+            )
+            return {"documents": []}
+
+    retriever = Retriever()
+
+    documents = await dbschema_retrieval(
+        table_retrieval={"documents": []},
+        project_id="project-1",
+        mdl_hash="deploy-1",
+        dbschema_retriever=retriever,
+        embedding={"embedding": [0.25]},
+    )
+
+    assert documents == []
+    assert retriever.calls == [
+        {
+            "query_embedding": [0.25],
+            "filters": {
+                "operator": "AND",
+                "conditions": [
+                    {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+                    {"field": "project_id", "operator": "==", "value": "project-1"},
+                    {"field": "mdl_hash", "operator": "==", "value": "deploy-1"},
+                ],
+            },
+        }
+    ]
 
 
 @pytest.mark.asyncio
