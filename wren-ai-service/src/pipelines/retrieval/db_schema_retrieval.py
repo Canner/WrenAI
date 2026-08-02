@@ -31,6 +31,7 @@ table_columns_selection_system_prompt = """
 You are a highly skilled data analyst. Your goal is to examine the provided database schema, interpret the posed question, and identify the specific columns from the relevant tables required to construct an accurate SQL query.
 
 The database schema includes tables, columns, primary keys, foreign keys, relationships, and any relevant constraints.
+The same business concept is represented by multiple modeled datasets in some projects; preserve each relevant dataset when it can answer the requested intent.
 
 ### INSTRUCTIONS ###
 1. Carefully analyze the schema and identify the essential tables and columns needed to answer the question.
@@ -40,6 +41,7 @@ The database schema includes tables, columns, primary keys, foreign keys, relati
 5. The number of columns chosen must match the number of reasoning.
 6. Final chosen columns must be only column names, don't prefix it with table names.
 7. If the chosen column is a child column of a STRUCT type column, choose the parent column instead of the child column.
+8. If multiple schema objects provide compatible fields for the same requested result shape, include all of those schema objects instead of choosing only one.
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:
@@ -115,9 +117,102 @@ def _build_metric_ddl(content: dict) -> str:
     )
 
 
-def _build_view_ddl(content: dict) -> str:
+def _schema_column_names(content: dict) -> list[str]:
+    return [
+        column["name"]
+        for column in content.get("columns", [])
+        if column.get("type") == "COLUMN" and column.get("name")
+    ]
+
+
+def _identifier_catalog(table_name: str, column_names: list[str]) -> str:
+    columns = "\n".join(f"- {column_name}" for column_name in column_names)
     return (
-        f"{content['comment']}CREATE VIEW {content['name']}\nAS {content['statement']}"
+        "/* EXECUTABLE WREN IDENTIFIER CATALOG\n"
+        f"table: {table_name}\n"
+        "columns:\n"
+        f"{columns}\n"
+        "Do not create identifiers from user wording, comments, aliases, display labels, or source metadata.\n"
+        "*/\n"
+    )
+
+
+def _semantic_context(content: dict, column_names: list[str]) -> str:
+    table_name = content.get("name", "")
+    semantic_parts = [
+        str(content.get("comment", "") or "").strip(),
+        str(content.get("properties", {}) or "").strip(),
+    ]
+    for column in content.get("columns", []):
+        comment = str(column.get("comment", "") or "").strip()
+        if comment:
+            semantic_parts.append(f"{column.get('name', '')}: {comment}")
+
+    relationship_constraints = [
+        column.get("constraint", "")
+        for column in content.get("columns", [])
+        if column.get("type") == "FOREIGN_KEY" and column.get("constraint")
+    ]
+
+    block = [
+        "/* WREN RETRIEVED SEMANTIC CONTEXT",
+        f"sql_table_name_use_exactly: {table_name}",
+        "sql_column_names_use_exactly:",
+        *[f"- {column_name}" for column_name in column_names],
+    ]
+    for column_name in column_names:
+        block.append(f"sql_column_name_use_exactly: {column_name}")
+
+    if relationship_constraints:
+        block.append("relationship_constraints_use_exactly:")
+        block.extend(f"- {constraint}" for constraint in relationship_constraints)
+
+    semantic_context = "\n".join(part for part in semantic_parts if part)
+    if semantic_context:
+        block.append("semantic_context_not_sql_identifiers:")
+        block.append(semantic_context)
+
+    block.append("*/")
+    return "\n".join(block) + "\n"
+
+
+def _build_table_context_ddl(
+    content: dict,
+    include_retrieved_semantic_context: bool = False,
+) -> tuple[str, bool, bool, list[str]]:
+    column_names = _schema_column_names(content)
+    ddl, has_calculated_field, has_json_field = build_table_ddl(
+        content,
+        include_semantic_comments=False,
+    )
+    context = _identifier_catalog(content["name"], column_names)
+    if include_retrieved_semantic_context:
+        context += _semantic_context(content, column_names)
+
+    return context + ddl, has_calculated_field, has_json_field, column_names
+
+
+def _build_view_ddl(content: dict) -> str:
+    columns = content.get("columns", [])
+    column_names = [column.get("name", "") for column in columns if column.get("name")]
+    columns_ddl = [
+        f"{column['name']} {get_engine_supported_data_type(column.get('data_type'))}"
+        for column in columns
+        if column.get("name")
+        and str(column.get("data_type", "")).lower() != "unknown"
+    ]
+
+    return (
+        _identifier_catalog(content["name"], column_names)
+        + "/* WREN RETRIEVED SEMANTIC CONTEXT\n"
+        + f"sql_table_name_use_exactly: {content['name']}\n"
+        + "sql_column_names_use_exactly:\n"
+        + "\n".join(f"- {column_name}" for column_name in column_names)
+        + "\nsemantic_context_not_sql_identifier: view definition_omitted_from_executable_schema\n"
+        + "*/\n"
+        + f"CREATE TABLE {content['name']} (\n  "
+        + ",\n  ".join(columns_ddl)
+        + "\n);"
     )
 
 
@@ -125,13 +220,6 @@ def _build_view_ddl(content: dict) -> str:
 @observe(capture_input=False, capture_output=False)
 async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> dict:
     if query:
-        if histories:
-            previous_query_summaries = [history.question for history in histories]
-        else:
-            previous_query_summaries = []
-
-        query = "\n".join(previous_query_summaries) + "\n" + query
-
         return await embedder.run(query)
     else:
         return {}
@@ -184,19 +272,9 @@ async def dbschema_retrieval(
     project_id: str,
     dbschema_retriever: Any,
     mdl_hash: str = "",
+    embedding: Optional[dict] = None,
 ) -> list[Document]:
-    tables = table_retrieval.get("documents", [])
-    table_names = []
-    for table in tables:
-        content = ast.literal_eval(table.content)
-        table_names.append(content["name"])
-
-    table_name_conditions = [
-        {"field": "name", "operator": "==", "value": table_name}
-        for table_name in table_names
-    ]
-
-    if table_name_conditions:
+    def _base_filters() -> dict:
         project_deploy_filter = build_project_deploy_filter(
             project_id=project_id,
             mdl_hash=mdl_hash,
@@ -205,17 +283,94 @@ async def dbschema_retrieval(
             "operator": "AND",
             "conditions": [
                 {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-                {"operator": "OR", "conditions": table_name_conditions},
             ],
         }
 
         if project_deploy_filter:
             filters["conditions"] += project_deploy_filter["conditions"]
 
-        results = await dbschema_retriever.run(query_embedding=[], filters=filters)
+        return filters
+
+    def _filters_for_names(table_names: list[str]) -> dict:
+        filters = _base_filters()
+        filters["conditions"].insert(
+            1,
+            {
+                "operator": "OR",
+                "conditions": [
+                    {"field": "name", "operator": "==", "value": table_name}
+                    for table_name in table_names
+                ],
+            },
+        )
+        return filters
+
+    async def _fetch_by_names(table_names: list[str]) -> list[Document]:
+        if not table_names:
+            return []
+
+        results = await dbschema_retriever.run(
+            query_embedding=[],
+            filters=_filters_for_names(table_names),
+        )
         return results["documents"]
 
-    return []
+    def _document_name(document: Document) -> str:
+        return document.meta.get("name", "")
+
+    def _related_table_names(documents: list[Document], visited: set[str]) -> list[str]:
+        related_names = []
+        for document in documents:
+            content = ast.literal_eval(document.content)
+            if content.get("type") != "TABLE_COLUMNS":
+                continue
+
+            for column in content.get("columns", []):
+                if column.get("type") != "FOREIGN_KEY":
+                    continue
+
+                candidates = list(column.get("tables", []) or [])
+                if column.get("referenced_table"):
+                    candidates.append(column["referenced_table"])
+
+                for table_name in candidates:
+                    if table_name and table_name not in visited:
+                        visited.add(table_name)
+                        related_names.append(table_name)
+
+        return related_names
+
+    tables = table_retrieval.get("documents", [])
+    table_names = []
+    for table in tables:
+        content = ast.literal_eval(table.content)
+        table_name = content.get("name")
+        if table_name and table_name not in table_names:
+            table_names.append(table_name)
+
+    documents = []
+    if not table_names and embedding and embedding.get("embedding"):
+        results = await dbschema_retriever.run(
+            query_embedding=embedding.get("embedding"),
+            filters=_base_filters(),
+        )
+        documents.extend(results["documents"])
+        for document in results["documents"]:
+            table_name = _document_name(document)
+            if table_name and table_name not in table_names:
+                table_names.append(table_name)
+
+    visited = set(table_names)
+    pending = list(table_names)
+    while pending:
+        current_names = pending
+        pending = []
+        current_documents = await _fetch_by_names(current_names)
+        documents.extend(current_documents)
+        pending.extend(_related_table_names(current_documents, visited))
+
+    return documents
+
 
 
 @observe()
@@ -261,11 +416,15 @@ def check_using_db_schemas_without_pruning(
 
     for table_schema in construct_db_schemas:
         if table_schema["type"] == "TABLE":
-            ddl, _has_calculated_field, _has_json_field = build_table_ddl(table_schema)
+            ddl, _has_calculated_field, _has_json_field, column_names = (
+                _build_table_context_ddl(table_schema)
+            )
             retrieval_results.append(
                 {
                     "table_name": table_schema["name"],
                     "table_ddl": ddl,
+                    "column_names": column_names,
+                    "manifest_column_names": column_names,
                 }
             )
             if _has_calculated_field:
@@ -324,15 +483,9 @@ def prompt(
 ) -> dict:
     if not check_using_db_schemas_without_pruning["db_schemas"]:
         db_schemas = [
-            build_table_ddl(construct_db_schema)[0]
+            _build_table_context_ddl(construct_db_schema)[0]
             for construct_db_schema in construct_db_schemas
         ]
-
-        previous_query_summaries = (
-            [history.question for history in histories] if histories else []
-        )
-
-        query = "\n".join(previous_query_summaries) + "\n" + query
 
         _prompt = prompt_builder.run(question=query, db_schemas=db_schemas)
         return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
@@ -379,12 +532,11 @@ def construct_retrieval_results(
 
         for table_schema in construct_db_schemas:
             if table_schema["type"] == "TABLE" and table_schema["name"] in tables:
-                ddl, _has_calculated_field, _has_json_field = build_table_ddl(
-                    table_schema,
-                    columns=set(
-                        columns_and_tables_needed[table_schema["name"]]["columns"]
-                    ),
-                    tables=tables,
+                ddl, _has_calculated_field, _has_json_field, column_names = (
+                    _build_table_context_ddl(
+                        table_schema,
+                        include_retrieved_semantic_context=True,
+                    )
                 )
                 if _has_calculated_field:
                     has_calculated_field = True
@@ -395,28 +547,29 @@ def construct_retrieval_results(
                     {
                         "table_name": table_schema["name"],
                         "table_ddl": ddl,
+                        "column_names": column_names,
+                        "manifest_column_names": column_names,
                     }
                 )
 
         for document in dbschema_retrieval:
-            if document.meta["name"] in columns_and_tables_needed:
-                content = ast.literal_eval(document.content)
+            content = ast.literal_eval(document.content)
 
-                if content["type"] == "METRIC":
-                    retrieval_results.append(
-                        {
-                            "table_name": content["name"],
-                            "table_ddl": _build_metric_ddl(content),
-                        }
-                    )
-                    has_metric = True
-                elif content["type"] == "VIEW":
-                    retrieval_results.append(
-                        {
-                            "table_name": content["name"],
-                            "table_ddl": _build_view_ddl(content),
-                        }
-                    )
+            if content["type"] == "METRIC":
+                retrieval_results.append(
+                    {
+                        "table_name": content["name"],
+                        "table_ddl": _build_metric_ddl(content),
+                    }
+                )
+                has_metric = True
+            elif content["type"] == "VIEW":
+                retrieval_results.append(
+                    {
+                        "table_name": content["name"],
+                        "table_ddl": _build_view_ddl(content),
+                    }
+                )
 
         return {
             "retrieval_results": retrieval_results,
