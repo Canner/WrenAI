@@ -226,7 +226,10 @@ class CreateRelationshipErrorHandler extends ErrorHandler {
   public getErrorMessage(error: GraphQLError) {
     switch (error.extensions?.code) {
       default:
-        return 'Failed to create relationship.';
+        return replaceMessage(
+          'Failed to create %{relationship}.',
+          error.message,
+        );
     }
   }
 }

@@ -39,6 +39,13 @@ export default function CombineFieldSelector(props: Props) {
     ...value,
   });
 
+  useEffect(() => {
+    setInternalValue((currentValue) => ({
+      model: value?.model || modelValue || currentValue.model,
+      field: value?.field || fieldValue || currentValue.field,
+    }));
+  }, [value?.model, value?.field, modelValue, fieldValue]);
+
   const syncOnChange = () => {
     if (internalValue?.model && internalValue?.field) {
       onChange && onChange(internalValue);
@@ -56,7 +63,11 @@ export default function CombineFieldSelector(props: Props) {
 
   const changeField = (field: string) => {
     onFieldChange && onFieldChange(field);
-    setInternalValue({ ...internalValue, field });
+    setInternalValue({
+      ...internalValue,
+      model: internalValue.model || value?.model || modelValue,
+      field,
+    });
   };
 
   return (

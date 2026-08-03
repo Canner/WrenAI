@@ -226,12 +226,48 @@ const normalizeRelationshipType = (type: string) => {
   return type;
 };
 
-const parseQualifiedField = (value = '') => {
-  const [model, ...columnParts] = String(value).split('.');
-  return {
-    model: model || '',
-    column: columnParts.join('.') || '',
-  };
+const getRelationshipFieldValue = (model = '', column = '') =>
+  `${model}.${column}`;
+
+const resolveRelationshipField = (
+  value = '',
+  models: Array<{ referenceName?: string; fields?: any[] }> = [],
+) => {
+  const fieldValue = String(value || '');
+  for (const model of models) {
+    for (const field of model.fields || []) {
+      if (
+        fieldValue ===
+        getRelationshipFieldValue(model.referenceName, field.referenceName)
+      ) {
+        return {
+          model: model.referenceName || '',
+          column: field.referenceName || '',
+        };
+      }
+    }
+  }
+
+  return { model: '', column: '' };
+};
+
+const resolveRelationshipFieldParts = (
+  model = '',
+  column = '',
+  fallbackValue = '',
+  models: Array<{ referenceName?: string; fields?: any[] }> = [],
+) => {
+  const resolvedField =
+    model && column
+      ? resolveRelationshipField(
+          getRelationshipFieldValue(model, column),
+          models,
+        )
+      : { model: '', column: '' };
+
+  return resolvedField.model && resolvedField.column
+    ? resolvedField
+    : resolveRelationshipField(fallbackValue, models);
 };
 
 const renderIcon = (IconComponent) => React.createElement(IconComponent as any);
@@ -673,16 +709,23 @@ export default function Modeling() {
           : [];
 
     return relationships.map((relationship, index) => {
-      const from = parseQualifiedField(
+      const availableModels = diagramData?.models || [];
+      const from = resolveRelationshipFieldParts(
+        relationship.fromModel || '',
+        relationship.fromColumn || '',
         relationship.from || relationship.fromField || '',
+        availableModels,
       );
-      const to = parseQualifiedField(
+      const to = resolveRelationshipFieldParts(
+        relationship.toModel || '',
+        relationship.toColumn || '',
         relationship.to || relationship.toField || '',
+        availableModels,
       );
-      const fromModel = relationship.fromModel || from.model;
-      const fromColumn = relationship.fromColumn || from.column;
-      const toModel = relationship.toModel || to.model;
-      const toColumn = relationship.toColumn || to.column;
+      const fromModel = from.model;
+      const fromColumn = from.column;
+      const toModel = to.model;
+      const toColumn = to.column;
 
       return {
         clientId:
@@ -831,7 +874,7 @@ export default function Modeling() {
     side: 'from' | 'to',
     value: string,
   ) => {
-    const field = parseQualifiedField(value);
+    const field = resolveRelationshipField(value, diagramData?.models || []);
     updateRelationship(
       clientId,
       side === 'from'
@@ -959,7 +1002,10 @@ export default function Modeling() {
     (model) =>
       (model.fields || []).map((field) => ({
         label: `${model.referenceName}.${field.referenceName}`,
-        value: `${model.referenceName}.${field.referenceName}`,
+        value: getRelationshipFieldValue(
+          model.referenceName,
+          field.referenceName,
+        ),
       })),
   );
 
@@ -1269,7 +1315,10 @@ export default function Modeling() {
                                 <Select
                                   showSearch
                                   style={{ width: '100%' }}
-                                  value={`${record.fromModel}.${record.fromColumn}`}
+                                  value={getRelationshipFieldValue(
+                                    record.fromModel,
+                                    record.fromColumn,
+                                  )}
                                   options={relationshipFieldOptions}
                                   optionFilterProp="label"
                                   onChange={(value) =>
@@ -1281,7 +1330,10 @@ export default function Modeling() {
                                   }
                                 />
                               ) : (
-                                `${record.fromModel}.${record.fromColumn}`
+                                getRelationshipFieldValue(
+                                  record.fromModel,
+                                  record.fromColumn,
+                                )
                               ),
                           },
                           {
@@ -1292,7 +1344,10 @@ export default function Modeling() {
                                 <Select
                                   showSearch
                                   style={{ width: '100%' }}
-                                  value={`${record.toModel}.${record.toColumn}`}
+                                  value={getRelationshipFieldValue(
+                                    record.toModel,
+                                    record.toColumn,
+                                  )}
                                   options={relationshipFieldOptions}
                                   optionFilterProp="label"
                                   onChange={(value) =>
@@ -1304,7 +1359,10 @@ export default function Modeling() {
                                   }
                                 />
                               ) : (
-                                `${record.toModel}.${record.toColumn}`
+                                getRelationshipFieldValue(
+                                  record.toModel,
+                                  record.toColumn,
+                                )
                               ),
                           },
                           {
