@@ -1,4 +1,4 @@
-"""Trailing-semicolon stripping + LIMIT pushdown for the Spark connector."""
+"""Trailing-semicolon stripping + DataFrame limit for the Spark connector."""
 
 from unittest.mock import MagicMock
 
@@ -24,41 +24,35 @@ def test_query_strips_trailing_semicolon_before_sql() -> None:
     session.sql.assert_called_once_with("SELECT 1")
 
 
-def test_query_pushes_limit_into_sql_after_strip() -> None:
+def test_query_limit_uses_dataframe_limit_before_to_pandas() -> None:
     connector, session = _make_mock_connector()
-    session.sql.return_value.toPandas.return_value = pd.DataFrame({"x": [1, 2]})
+    frame = session.sql.return_value
+    frame.limit.return_value.toPandas.return_value = pd.DataFrame({"x": [1, 2]})
     connector.query("SELECT 1 AS x;", limit=2)
-    session.sql.assert_called_once_with(
-        "SELECT * FROM (\nSELECT 1 AS x\n) AS _q LIMIT 2"
-    )
+    session.sql.assert_called_once_with("SELECT 1 AS x")
+    frame.limit.assert_called_once_with(2)
+    frame.limit.return_value.toPandas.assert_called_once_with()
+    # Must not call toPandas on the unlimited frame.
+    frame.toPandas.assert_not_called()
 
 
-def test_query_trailing_line_comment_does_not_swallow_wrap() -> None:
+def test_query_limit_zero_uses_dataframe_limit_zero() -> None:
     connector, session = _make_mock_connector()
-    session.sql.return_value.toPandas.return_value = pd.DataFrame({"x": [1]})
-    connector.query("SELECT 1 -- note", limit=10)
-    session.sql.assert_called_once_with(
-        "SELECT * FROM (\nSELECT 1 -- note\n) AS _q LIMIT 10"
-    )
-
-
-def test_query_limit_zero_pushes_limit_zero() -> None:
-    connector, session = _make_mock_connector()
-    session.sql.return_value.toPandas.return_value = pd.DataFrame({"x": []})
+    frame = session.sql.return_value
+    frame.limit.return_value.toPandas.return_value = pd.DataFrame({"x": []})
     connector.query("SELECT 1 AS x", limit=0)
-    session.sql.assert_called_once_with(
-        "SELECT * FROM (\nSELECT 1 AS x\n) AS _q LIMIT 0"
-    )
+    session.sql.assert_called_once_with("SELECT 1 AS x")
+    frame.limit.assert_called_once_with(0)
 
 
 def test_query_negative_limit_raises() -> None:
-    connector, _session = _make_mock_connector()
+    connector, session = _make_mock_connector()
     with pytest.raises(ValueError, match="non-negative"):
         connector.query("SELECT 1", limit=-1)
+    session.sql.assert_not_called()
 
 
-def test_query_show_tables_with_limit_uses_dataframe_slice() -> None:
-    """Non-subqueryable statements keep DataFrame path (MCP always passes limit)."""
+def test_query_show_tables_with_limit_uses_dataframe_limit() -> None:
     connector, session = _make_mock_connector()
     frame = session.sql.return_value
     frame.limit.return_value.toPandas.return_value = pd.DataFrame({"tableName": ["t"]})
@@ -67,22 +61,9 @@ def test_query_show_tables_with_limit_uses_dataframe_slice() -> None:
     frame.limit.assert_called_once_with(500)
 
 
-def test_query_show_tables_with_leading_comment_uses_dataframe_slice() -> None:
-    """Leading -- / /* */ comments must not force subquery wrap on SHOW."""
-    connector, session = _make_mock_connector()
-    frame = session.sql.return_value
-    frame.limit.return_value.toPandas.return_value = pd.DataFrame({"tableName": ["t"]})
-    sql = "-- metadata\nSHOW TABLES"
-    connector.query(sql, limit=500)
-    session.sql.assert_called_once_with(sql)
-    frame.limit.assert_called_once_with(500)
-
-
 def test_dry_run_validates_via_dataframe_after_strip() -> None:
     connector, session = _make_mock_connector()
     connector.dry_run("SELECT 1;  \n")
-    # Validation stays on the DataFrame API so non-subquery statements
-    # (SHOW TABLES, DESCRIBE, ...) remain valid; only the trailing ; is stripped.
     session.sql.assert_called_once_with("SELECT 1")
     session.sql.return_value.limit.assert_called_once_with(0)
     session.sql.return_value.limit.return_value.count.assert_called_once_with()

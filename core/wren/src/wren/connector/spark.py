@@ -1,35 +1,7 @@
-import re
-
 import pyarrow as pa
 
 from wren.connector.base import ConnectorABC, strip_trailing_semicolon
 from wren.model import SparkConnectionInfo
-
-# Statements that are not legal as a subquery on Spark. When a limit is
-# supplied for these, fall back to the DataFrame client-side slice so MCP
-# `run_sql` (which always passes a default limit) keeps working as on main.
-_NON_SUBQUERYABLE = re.compile(
-    r"^(SHOW|DESCRIBE|DESC|EXPLAIN|USE|SET|RESET|CACHE|UNCACHE|CLEAR|REFRESH|"
-    r"MSCK|ANALYZE|LIST|ADD|REMOVE|GET|PUT|DFS|CREATE|DROP|ALTER|TRUNCATE|INSERT|"
-    r"UPDATE|DELETE|MERGE|LOAD|WITH\s+.*\bINSERT\b)\b",
-    re.IGNORECASE | re.DOTALL,
-)
-
-# Leading line/block comments (and whitespace) before the first keyword.
-_LEADING_SQL_NOISE = re.compile(r"(?s)^(?:\s|--[^\n]*(?:\n|$)|/\*.*?\*/)+")
-
-
-def _strip_leading_sql_comments(sql: str) -> str:
-    """Remove leading whitespace and SQL comments so keyword classification works."""
-    prev = None
-    while prev != sql:
-        prev = sql
-        sql = _LEADING_SQL_NOISE.sub("", sql, count=1)
-    return sql.lstrip()
-
-
-def _is_non_subqueryable(sql: str) -> bool:
-    return bool(_NON_SUBQUERYABLE.match(_strip_leading_sql_comments(sql)))
 
 
 def _coerce_limit(limit: int | None) -> int | None:
@@ -60,24 +32,15 @@ class SparkConnector(ConnectorABC):
         )
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
-        # Push LIMIT into Spark SQL so the engine does not materialize the full
-        # result only for a client-side slice. Strip trailing ``;`` first so the
-        # outer form stays valid.
-        cleaned = strip_trailing_semicolon(sql)
+        # Apply limit via DataFrame.limit before toPandas so Spark pushes a
+        # CollectLimit into the plan (server-side). Avoid post-Arrow slice and
+        # SQL subquery wraps — both unnecessary on the DataFrame API and the
+        # latter breaks SHOW/DESCRIBE-style statements.
         coerced = _coerce_limit(limit)
-        if coerced is not None and not _is_non_subqueryable(cleaned):
-            # Place the user SQL on its own line so a trailing line comment
-            # (`-- ...`) cannot swallow the closing paren, alias, or LIMIT.
-            # Mirrors snowflake.py.
-            executed = f"SELECT * FROM (\n{cleaned}\n) AS _q LIMIT {coerced}"
-            df = self.connection.sql(executed).toPandas()
-        else:
-            # Unlimited path, or non-subqueryable statements (SHOW/DESCRIBE/…).
-            # Preserve main behaviour: DataFrame API + optional client slice.
-            frame = self.connection.sql(cleaned)
-            if coerced is not None:
-                frame = frame.limit(coerced)
-            df = frame.toPandas()
+        frame = self.connection.sql(strip_trailing_semicolon(sql))
+        if coerced is not None:
+            frame = frame.limit(coerced)
+        df = frame.toPandas()
         if hasattr(df, "attrs") and df.attrs:
             df.attrs = {
                 k: v
@@ -87,11 +50,7 @@ class SparkConnector(ConnectorABC):
         return pa.Table.from_pandas(df)
 
     def dry_run(self, sql: str) -> None:
-        # Validate via the DataFrame API so statements that are not legal as a
-        # subquery (SHOW TABLES, DESCRIBE, ...) are still accepted, exactly as
-        # before. Only strip a trailing ``;`` so it cannot break Spark SQL.
-        cleaned = strip_trailing_semicolon(sql)
-        self.connection.sql(cleaned).limit(0).count()
+        self.connection.sql(strip_trailing_semicolon(sql)).limit(0).count()
 
     def close(self) -> None:
         if self._closed:
