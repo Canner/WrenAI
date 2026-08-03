@@ -194,12 +194,33 @@ async def test_sql_post_processor_allows_tables_inside_schema_contract():
 
 
 @pytest.mark.asyncio
-async def test_sql_post_processor_returns_generated_sql_when_dry_plan_times_out():
+async def test_sql_post_processor_keeps_dry_plan_timeout_invalid_without_fallback():
     result = await SQLGenPostProcessor(TimeoutEngine()).run(
         ['{"sql": "SELECT 1"}'],
         project_id="project-id",
         use_dry_plan=True,
         data_source="source",
+        allow_dry_plan_fallback=False,
+    )
+
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"] == {
+        "sql": "SELECT 1",
+        "original_sql": "SELECT 1",
+        "type": "DRY_PLAN",
+        "error": "Request timed out after 30 seconds",
+        "correlation_id": "",
+    }
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_returns_generated_sql_when_dry_plan_fallback_is_allowed():
+    result = await SQLGenPostProcessor(TimeoutEngine()).run(
+        ['{"sql": "SELECT 1"}'],
+        project_id="project-id",
+        use_dry_plan=True,
+        data_source="source",
+        allow_dry_plan_fallback=True,
     )
 
     assert result["valid_generation_result"] == {

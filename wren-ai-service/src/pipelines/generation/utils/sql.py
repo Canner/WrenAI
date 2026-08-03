@@ -363,8 +363,18 @@ class SQLGenPostProcessor:
 
                 if not dry_plan_result:
                     if _is_timeout_error(error_message):
-                        valid_generation_result = {
+                        if allow_dry_plan_fallback:
+                            valid_generation_result = {
+                                "sql": generation_result,
+                                "correlation_id": "",
+                            }
+                            return valid_generation_result, invalid_generation_result
+
+                        invalid_generation_result = {
                             "sql": generation_result,
+                            "original_sql": generation_result,
+                            "type": "DRY_PLAN",
+                            "error": error_message,
                             "correlation_id": "",
                         }
                         return valid_generation_result, invalid_generation_result
