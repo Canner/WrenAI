@@ -4,7 +4,7 @@ import pandas as pd
 import pyarrow as pa
 from loguru import logger
 
-from wren.connector.base import ConnectorABC, strip_trailing_semicolon, coerce_limit
+from wren.connector.base import ConnectorABC, coerce_limit, strip_trailing_semicolon
 from wren.model import (
     RedshiftConnectionInfo,
     RedshiftConnectionUnion,

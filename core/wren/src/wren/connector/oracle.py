@@ -14,7 +14,7 @@ try:
 except ImportError:  # pragma: no cover
     oracledb = None
 
-from wren.connector.base import ConnectorABC, strip_trailing_semicolon, coerce_limit
+from wren.connector.base import ConnectorABC, coerce_limit, strip_trailing_semicolon
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 
 

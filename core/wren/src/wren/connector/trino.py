@@ -19,7 +19,7 @@ import sqlglot.errors
 from loguru import logger
 from sqlglot.expressions import ColumnDef, DataType
 
-from wren.connector.base import ConnectorABC, strip_trailing_semicolon, coerce_limit
+from wren.connector.base import ConnectorABC, coerce_limit, strip_trailing_semicolon
 from wren.model.error import (
     DIALECT_SQL,
     ErrorCode,

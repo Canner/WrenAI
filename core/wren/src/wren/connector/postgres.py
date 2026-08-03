@@ -20,7 +20,7 @@ import psycopg
 import pyarrow as pa
 from loguru import logger
 
-from wren.connector.base import ConnectorABC, strip_trailing_semicolon, coerce_limit
+from wren.connector.base import ConnectorABC, coerce_limit, strip_trailing_semicolon
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 
 # Map of well-known PostgreSQL OIDs to Arrow types. OIDs that we have not

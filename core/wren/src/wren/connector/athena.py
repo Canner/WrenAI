@@ -16,7 +16,7 @@ from typing import Any
 
 import pyarrow as pa
 
-from wren.connector.base import ConnectorABC, strip_trailing_semicolon, coerce_limit
+from wren.connector.base import ConnectorABC, coerce_limit, strip_trailing_semicolon
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 
 # Athena's DB-API cursor returns Trino-style type names. We delegate the

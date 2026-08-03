@@ -57,6 +57,8 @@ def test_rejects_non_integral_decimal_and_fraction() -> None:
         coerce_limit(Decimal("1.5"))  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="integral"):
         coerce_limit(Fraction(3, 2))  # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        coerce_limit(Decimal("-0.5"))  # type: ignore[arg-type]
 
 
 def test_accepts_integral_decimal() -> None:
