@@ -529,6 +529,7 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - If a requested noun, output column, grouping, filter, or measure appears only in the user's wording and not in DATABASE SCHEMA, do not translate it into a generic object name. Use only schema-supported concepts and omit unsupported parts.
 - If the user's primary requested subject, output column, grouping, filter, timeframe, measure, or required relationship cannot be grounded by the retrieved DATABASE SCHEMA, return null for sql instead of producing an approximate query.
 - Do not answer by selecting a nearby table only because it was retrieved. A retrieved object is usable only when its declared table, columns, relationships, or metric fields support the user's requested intent.
+- Never use SELECT * or table.*. Always select explicit deployed schema columns that are needed to answer the user's question. If no specific output columns can be grounded for the question, return null for sql.
 """
 
 
@@ -536,7 +537,7 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 ### SQL RULES ###
 - ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
 - ONLY USE the tables and columns mentioned in the database schema.
-- ONLY USE "*" if the user query asks for all the columns of a table.
+- Never use "*" in the SELECT list. Select explicit deployed schema columns needed for the question.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - DON'T INCLUDE comments in the generated SQL query.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
@@ -556,6 +557,7 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
 - Output aliases may be used only to name expressions in the final SELECT list. Output aliases are labels for result columns only; they are not source identifiers.
+- Do not satisfy a filtered, time-bounded, metric, or business-specific request by returning an unfiltered table scan. If the requested filter, time field, metric, or business concept is not grounded in DATABASE SCHEMA, return null for sql.
 - Comments, aliases, display labels, and descriptions from DATABASE SCHEMA may guide which exact source column to select, but they must not be copied into FROM, JOIN, WHERE, GROUP BY, HAVING, or ORDER BY as table or column names.
 - Physical/source/lineage names from metadata may guide meaning, but generated SQL must use only the declared Wren model, view, metric, and column identifiers from DATABASE SCHEMA.
 - DON'T USE '.' in output aliases, replace '.' with '_' in output aliases.
