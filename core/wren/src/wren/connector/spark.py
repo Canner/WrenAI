@@ -16,9 +16,7 @@ _NON_SUBQUERYABLE = re.compile(
 )
 
 # Leading line/block comments (and whitespace) before the first keyword.
-_LEADING_SQL_NOISE = re.compile(
-    r"(?s)^(?:\s|--[^\n]*(?:\n|$)|/\*.*?\*/)+"
-)
+_LEADING_SQL_NOISE = re.compile(r"(?s)^(?:\s|--[^\n]*(?:\n|$)|/\*.*?\*/)+")
 
 
 def _strip_leading_sql_comments(sql: str) -> str:
