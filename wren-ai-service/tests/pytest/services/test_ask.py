@@ -115,6 +115,12 @@ def test_ask_request_uses_strict_dry_plan_by_default():
     assert ask_request.allow_dry_plan_fallback is False
 
 
+def test_ask_service_uses_single_sql_correction_retry_by_default():
+    ask_service = AskService({})
+
+    assert ask_service._max_sql_correction_retries == 1
+
+
 @pytest.mark.asyncio
 async def test_ask_with_successful_query(
     indexing_service: SemanticsPreparationService,

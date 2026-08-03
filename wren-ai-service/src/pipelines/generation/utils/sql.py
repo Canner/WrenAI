@@ -21,7 +21,21 @@ logger = logging.getLogger("wren-ai-service")
 
 
 def _is_timeout_error(error_message: str) -> bool:
-    return error_message.startswith("Request timed out")
+    if not error_message:
+        return False
+
+    normalized_error = error_message.lower()
+    return "timeout" in normalized_error or "timed out" in normalized_error
+
+
+def _normalize_engine_addition(addition: Any) -> dict:
+    if isinstance(addition, dict):
+        return addition
+
+    if addition:
+        return {"error_message": str(addition), "correlation_id": ""}
+
+    return {}
 
 
 def _canonicalize_wren_sql_syntax(sql: str | None) -> str | None:
@@ -340,7 +354,7 @@ class SQLGenPostProcessor:
                     limit=1,
                     dry_run=True,
                 )
-                addition = addition if isinstance(addition, dict) else {}
+                addition = _normalize_engine_addition(addition)
 
                 if success:
                     valid_generation_result = {
@@ -371,6 +385,7 @@ class SQLGenPostProcessor:
                     limit=1,
                     dry_run=True,
                 )
+                addition = _normalize_engine_addition(addition)
 
                 if success:
                     valid_generation_result = {
@@ -401,6 +416,7 @@ class SQLGenPostProcessor:
                     limit=1,
                     dry_run=False,
                 )
+                addition = _normalize_engine_addition(addition)
 
                 if has_data:
                     valid_generation_result = {

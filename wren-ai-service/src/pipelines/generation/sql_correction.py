@@ -88,6 +88,11 @@ sql_correction_user_prompt_template = """
 User's Question: {{ query }}
 {% endif %}
 
+{% if executable_schema_contract %}
+### ALLOWED EXECUTABLE IDENTIFIERS FOR THIS CORRECTION ###
+{{ executable_schema_contract }}
+{% endif %}
+
 ### FAILED SQL DIAGNOSTIC CONTEXT ###
 Failed SQL: {{ invalid_generation_result.sql }}
 Error Message: {{ invalid_generation_result.error }}

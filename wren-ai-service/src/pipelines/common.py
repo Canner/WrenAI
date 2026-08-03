@@ -1,3 +1,4 @@
+import asyncio
 import re
 from typing import Any, List, Optional, Tuple
 
@@ -110,6 +111,36 @@ def build_table_ddl(
 
 
 async def retrieve_metadata(
+    project_id: str,
+    retriever,
+    mdl_hash: Optional[str] = None,
+) -> dict[str, Any]:
+    cache_key = (
+        id(retriever),
+        str(project_id),
+        str(mdl_hash),
+    )
+    if project_id and mdl_hash:
+        if cache_key in _METADATA_CACHE:
+            return _METADATA_CACHE[cache_key]
+
+        lock = _METADATA_CACHE_LOCKS.setdefault(cache_key, asyncio.Lock())
+        async with lock:
+            if cache_key in _METADATA_CACHE:
+                return _METADATA_CACHE[cache_key]
+
+            metadata = await _retrieve_metadata_uncached(project_id, retriever, mdl_hash)
+            _METADATA_CACHE[cache_key] = metadata
+            return metadata
+
+    return await _retrieve_metadata_uncached(project_id, retriever, mdl_hash)
+
+
+_METADATA_CACHE: dict[tuple[int, str, str], dict[str, Any]] = {}
+_METADATA_CACHE_LOCKS: dict[tuple[int, str, str], asyncio.Lock] = {}
+
+
+async def _retrieve_metadata_uncached(
     project_id: str,
     retriever,
     mdl_hash: Optional[str] = None,

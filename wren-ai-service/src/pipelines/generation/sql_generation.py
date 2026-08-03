@@ -81,6 +81,11 @@ If a needed table, output column, filter column, grouping column, relation, date
 If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT, stop and return null for sql. Never create a table or column from the user's wording, even when the wording looks like a business term or object name.
 Do not generate SQL from a reasoning plan. The reasoning plan is not executable context and cannot provide table names, column names, filters, functions, joins, or examples.
 
+{% if executable_schema_contract %}
+### ALLOWED EXECUTABLE IDENTIFIERS FOR THIS REQUEST ###
+{{ executable_schema_contract }}
+{% endif %}
+
 {% if sql_generation_reasoning %}
 ### REASONING PLAN ###
 {{ sql_generation_reasoning }}

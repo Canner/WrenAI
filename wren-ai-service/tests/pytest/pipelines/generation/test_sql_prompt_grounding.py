@@ -8,6 +8,10 @@ from src.pipelines.generation.sql_generation import (
     prompt as build_sql_generation_prompt,
     sql_generation_user_prompt_template,
 )
+from src.pipelines.generation.sql_regeneration import (
+    prompt as build_sql_regeneration_prompt,
+    sql_regeneration_user_prompt_template,
+)
 from src.pipelines.generation.utils.sql import build_executable_schema_contract
 
 
@@ -61,6 +65,7 @@ def test_sql_generation_prompt_includes_executable_schema_contract():
 
     built_prompt = result["prompt"]
 
+    assert "ALLOWED EXECUTABLE IDENTIFIERS FOR THIS REQUEST" in built_prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" in built_prompt
     assert "TABLE: retrieved_model" in built_prompt
     assert "- grouping_attribute" in built_prompt
@@ -104,6 +109,29 @@ def test_sql_correction_prompt_includes_executable_schema_contract():
 
     built_prompt = result["prompt"]
 
+    assert "ALLOWED EXECUTABLE IDENTIFIERS FOR THIS CORRECTION" in built_prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" in built_prompt
     assert "TABLE: retrieved_model" in built_prompt
     assert "Failed SQL:" in built_prompt
+
+
+def test_sql_regeneration_prompt_includes_executable_schema_contract():
+    result = build_sql_regeneration_prompt(
+        query="summarize the records",
+        documents=[],
+        sql_generation_reasoning="",
+        sql="",
+        prompt_builder=PromptBuilder(template=sql_regeneration_user_prompt_template),
+        schema_contracts=[
+            {
+                "table_name": "retrieved_model",
+                "column_names": ["grouping_attribute", "numeric_measure"],
+            }
+        ],
+    )
+
+    built_prompt = result["prompt"]
+
+    assert "ALLOWED EXECUTABLE IDENTIFIERS FOR THIS REGENERATION" in built_prompt
+    assert "EXECUTABLE WREN IDENTIFIER CATALOG" in built_prompt
+    assert "TABLE: retrieved_model" in built_prompt

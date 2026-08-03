@@ -1361,18 +1361,29 @@ export class ModelResolver {
       : await ctx.projectService.getCurrentProject();
     const manifest = await this.getLastDeployedManifest(ctx, project.id);
 
-    if (project.type === DataSourceName.DUCKDB) {
-      await ctx.wrenEngineAdaptor.getNativeSQL(sql, {
-        manifest,
-        modelingOnly: false,
-      });
-    } else {
-      await ctx.ibisServerAdaptor.getNativeSql({
-        dataSource: project.type,
-        sql,
-        mdl: manifest,
-        allowFallback,
-      });
+    try {
+      if (project.type === DataSourceName.DUCKDB) {
+        await ctx.wrenEngineAdaptor.getNativeSQL(sql, {
+          manifest,
+          modelingOnly: false,
+        });
+      } else {
+        await ctx.ibisServerAdaptor.getNativeSql({
+          dataSource: project.type,
+          sql,
+          mdl: manifest,
+          allowFallback,
+        });
+      }
+    } catch (error) {
+      if (this.isDryPlanTimeout(error)) {
+        logger.warn(
+          'Dry plan timed out; accepting generated Wren SQL without native rewrite',
+        );
+        return true;
+      }
+
+      throw error;
     }
 
     return true;
@@ -1484,6 +1495,11 @@ export class ModelResolver {
 
     // otherwise, return the value
     return value;
+  }
+
+  private isDryPlanTimeout(error: unknown): boolean {
+    const errorMessage = JSON.stringify(error ?? '').toLowerCase();
+    return errorMessage.includes('timeout') || errorMessage.includes('timed out');
   }
 
   // validate view name

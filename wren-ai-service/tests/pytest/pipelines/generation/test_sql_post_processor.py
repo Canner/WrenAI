@@ -50,6 +50,28 @@ class ErrorEngine:
         return False, None, {"error_message": "Execution rejected the statement"}
 
 
+class StringTimeoutEngine:
+    async def dry_plan(
+        self,
+        session,
+        sql,
+        data_source,
+        project_id=None,
+        allow_fallback=True,
+    ):
+        return True, None
+
+    async def execute_sql(
+        self,
+        sql,
+        session,
+        project_id=None,
+        limit=1,
+        dry_run=True,
+    ):
+        return False, None, "Timeout when connecting to execution engine"
+
+
 class CapturingEngine:
     def __init__(self):
         self.sql = None
@@ -165,6 +187,22 @@ async def test_sql_post_processor_returns_generated_sql_when_dry_run_times_out()
     assert result["valid_generation_result"] == {
         "sql": "SELECT 1",
         "correlation_id": "timeout-correlation",
+    }
+    assert result["invalid_generation_result"] == {}
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_returns_generated_sql_when_engine_timeout_is_string():
+    result = await SQLGenPostProcessor(StringTimeoutEngine()).run(
+        ['{"sql": "SELECT 1"}'],
+        project_id="project-id",
+        use_dry_plan=True,
+        data_source="source",
+    )
+
+    assert result["valid_generation_result"] == {
+        "sql": "SELECT 1",
+        "correlation_id": "",
     }
     assert result["invalid_generation_result"] == {}
 
