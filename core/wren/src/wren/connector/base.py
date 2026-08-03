@@ -29,7 +29,8 @@ def coerce_limit(limit: int | None) -> int | None:
 
     - ``None`` stays unlimited
     - ``bool`` is rejected (``bool`` is an ``int`` subclass)
-    - non-integral numbers (e.g. ``-0.5``, ``1.5``) are rejected — never truncated
+    - non-integral numbers (e.g. ``-0.5``, ``1.5``, ``Decimal("1.5")``) are
+      rejected — never truncated by ``int()``
     - non-numeric / overflow values raise ``ValueError``
     - negatives raise ``ValueError``
 
@@ -43,20 +44,15 @@ def coerce_limit(limit: int | None) -> int | None:
     if isinstance(limit, float):
         if not limit.is_integer():
             raise ValueError(f"limit must be an integral value, got {limit!r}")
-        # Still route through int() below for consistency / overflow.
     try:
         coerced = int(limit)
     except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError(f"limit must be an integer, got {limit!r}") from exc
-    # Reject values whose int() truncation would change the number (e.g. Decimal)
-    # when the original compares unequal as a number.
-    if isinstance(limit, (int, float)):
-        if float(limit) != float(coerced):
-            raise ValueError(f"limit must be an integral value, got {limit!r}")
-    else:
-        # Strings / other: require exact round-trip for numeric strings only.
-        # int("1.5") already failed; int("01") == 1 is fine.
-        pass
+    # Reject truncation (Decimal/Fraction/etc.) via direct equality — no float()
+    # so oversized ints do not surface OverflowError. Integral floats already
+    # passed is_integer() above; plain int/str need no extra check.
+    if not isinstance(limit, (int, float, str)) and limit != coerced:
+        raise ValueError(f"limit must be an integral value, got {limit!r}")
     if coerced < 0:
         raise ValueError(f"limit must be non-negative, got {coerced}")
     return coerced

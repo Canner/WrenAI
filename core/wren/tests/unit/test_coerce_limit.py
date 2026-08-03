@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+from fractions import Fraction
+
 import pytest
 
 from wren.connector.base import coerce_limit
@@ -47,3 +50,20 @@ def test_rejects_negative() -> None:
 def test_rejects_non_numeric() -> None:
     with pytest.raises(ValueError):
         coerce_limit(object())  # type: ignore[arg-type]
+
+
+def test_rejects_non_integral_decimal_and_fraction() -> None:
+    with pytest.raises(ValueError, match="integral"):
+        coerce_limit(Decimal("1.5"))  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="integral"):
+        coerce_limit(Fraction(3, 2))  # type: ignore[arg-type]
+
+
+def test_accepts_integral_decimal() -> None:
+    assert coerce_limit(Decimal("2.0")) == 2  # type: ignore[arg-type]
+
+
+def test_oversized_int_is_value_error_not_overflow() -> None:
+    huge = 10**400
+    # int stays int; ensure path still returns or rejects cleanly as ValueError only on bad types
+    assert coerce_limit(huge) == huge

@@ -4,7 +4,7 @@ import opendal
 import pyarrow as pa
 from loguru import logger
 
-from wren.connector.base import ConnectorABC, strip_trailing_semicolon, coerce_limit
+from wren.connector.base import ConnectorABC, coerce_limit, strip_trailing_semicolon
 from wren.model import (
     GcsFileConnectionInfo,
     MinioFileConnectionInfo,
@@ -73,7 +73,6 @@ class DuckDBConnector(ConnectorABC):
             raise
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
-        limit = coerce_limit(limit)
         """Execute ``sql`` and return the result as an Arrow table.
 
         When ``limit`` is provided the query is wrapped in a ``LIMIT`` clause
@@ -82,6 +81,7 @@ class DuckDBConnector(ConnectorABC):
         Trailing statement terminators are always stripped so client-pasted
         ``SELECT …;`` behaves the same on limited and unlimited paths.
         """
+        limit = coerce_limit(limit)
         stripped = strip_trailing_semicolon(sql)
         if limit is not None:
             # Subquery wrap rejects an interior terminator after strip.
