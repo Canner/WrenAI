@@ -98,7 +98,6 @@ Failed SQL: {{ invalid_generation_result.sql }}
 Error Message: {{ invalid_generation_result.error }}
 
 Regenerate from the user's question and DATABASE SCHEMA only when a user question is available. Otherwise, correct the failed SQL only by using exact executable identifiers declared in DATABASE SCHEMA or SQL FUNCTIONS. Do not copy table names, column names, functions, literals, aliases, or SQL structure from the failed SQL unless each one is declared in DATABASE SCHEMA or SQL FUNCTIONS.
-Do not repair a failed query into a broad table scan. Select the exact output columns, filters, groupings, measures, joins, and ordering needed for the question from DATABASE SCHEMA. Return null for sql if those required parts are not grounded.
 Return only the final JSON SQL response.
 """
 

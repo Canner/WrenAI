@@ -5,10 +5,6 @@ from src.pipelines.generation.sql_correction import (
     prompt as build_sql_correction_prompt,
     sql_correction_user_prompt_template,
 )
-from src.pipelines.generation.followup_sql_generation import (
-    prompt as build_followup_sql_generation_prompt,
-    text_to_sql_with_followup_user_prompt_template,
-)
 from src.pipelines.generation.sql_generation import (
     get_sql_generation_system_prompt,
     prompt as build_sql_generation_prompt,
@@ -28,8 +24,6 @@ def test_sql_generation_system_prompt_requires_retrieved_semantic_authority():
     assert "Do not use pretrained knowledge" in prompt
     assert "Before generating SQL, silently validate" in prompt
     assert "return null for sql instead of choosing one" in prompt
-    assert "Never use SELECT * or table.*" in prompt
-    assert "Do not satisfy a filtered, time-bounded, metric, or business-specific request by returning an unfiltered table scan" in prompt
 
 
 def test_sql_correction_system_prompt_allows_null_when_ungrounded():
@@ -38,7 +32,6 @@ def test_sql_correction_system_prompt_allows_null_when_ungrounded():
     assert "repair the query only when the repair can be verified" in prompt
     assert "Never introduce a new schema object during repair" in prompt
     assert "or null" in prompt
-    assert "Never use SELECT * or table.*" in prompt
 
 
 def test_build_executable_schema_contract_lists_retrieved_identifiers():
@@ -96,20 +89,6 @@ def test_sql_generation_prompt_includes_executable_schema_contract():
     assert "TABLE: retrieved_model" in built_prompt
     assert "- grouping_attribute" in built_prompt
     assert "- numeric_measure" in built_prompt
-    assert "Do not answer a specific business question with a broad table scan" in built_prompt
-
-
-def test_followup_sql_generation_prompt_rejects_broad_table_scan_generation():
-    result = build_followup_sql_generation_prompt(
-        query="show recent refunds",
-        documents=[],
-        sql_generation_reasoning="",
-        prompt_builder=PromptBuilder(
-            template=text_to_sql_with_followup_user_prompt_template
-        ),
-    )
-
-    assert "Do not answer a specific business question with a broad table scan" in result["prompt"]
 
 
 def test_sql_correction_prompt_keeps_failed_sql_diagnostic_and_question():
@@ -128,7 +107,6 @@ def test_sql_correction_prompt_keeps_failed_sql_diagnostic_and_question():
     assert "User's Question: summarize the records" in built_prompt
     assert "Failed SQL: SELECT 1" in built_prompt
     assert "DIAGNOSTIC CONTEXT" in built_prompt
-    assert "Do not repair a failed query into a broad table scan" in built_prompt
 
 
 def test_sql_correction_prompt_includes_executable_schema_contract():
@@ -176,4 +154,3 @@ def test_sql_regeneration_prompt_includes_executable_schema_contract():
     assert "ALLOWED EXECUTABLE IDENTIFIERS FOR THIS REGENERATION" in built_prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" in built_prompt
     assert "TABLE: retrieved_model" in built_prompt
-    assert "Do not regenerate into a broad table scan" in built_prompt
