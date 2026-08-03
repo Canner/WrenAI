@@ -7,7 +7,6 @@
 </a>
 
 
-[![WrenAI — open-source generative BI (GenBI): semantic layer and AI context layer for AI agents](https://github.com/Canner/WrenAI/raw/main/misc/wrenai_logo.png)](https://getwren.ai)
 
 ### Open-source GenBI: generative BI for AI agents.
 
