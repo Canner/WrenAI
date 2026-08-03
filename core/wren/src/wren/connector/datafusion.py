@@ -31,10 +31,7 @@ class DataFusionConnector(ConnectorABC):
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         limit = coerce_limit(limit)
         if limit is not None:
-            sql = (
-                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) "
-                f"AS _q LIMIT {limit}"
-            )
+            sql = f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS _q LIMIT {limit}"
         ipc_bytes = self.ctx.query(sql)
         reader = ipc.open_stream(io.BytesIO(bytes(ipc_bytes)))
         return reader.read_all()
