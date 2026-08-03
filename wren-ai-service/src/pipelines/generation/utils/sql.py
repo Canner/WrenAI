@@ -529,6 +529,8 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - If a requested noun, output column, grouping, filter, or measure appears only in the user's wording and not in DATABASE SCHEMA, do not translate it into a generic object name. Use only schema-supported concepts and omit unsupported parts.
 - If the user's primary requested subject, output column, grouping, filter, timeframe, measure, or required relationship cannot be grounded by the retrieved DATABASE SCHEMA, return null for sql instead of producing an approximate query.
 - Do not answer by selecting a nearby table only because it was retrieved. A retrieved object is usable only when its declared table, columns, relationships, or metric fields support the user's requested intent.
+- Do not answer a specific business question with a broad table scan. The SQL shape must match the user's requested output columns, filters, groupings, measures, joins, ordering, and limits.
+- For analytical or metric questions, select only the requested dimensions and measures. Use declared metric columns, calculated fields, relationship paths, and schema-grounded aggregate expressions. If the required metric components are not grounded, return null for sql instead of returning raw rows.
 """
 
 
@@ -536,7 +538,7 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 ### SQL RULES ###
 - ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
 - ONLY USE the tables and columns mentioned in the database schema.
-- ONLY USE "*" if the user query asks for all the columns of a table.
+- Never use "*" in the SELECT list. Select explicit deployed schema columns needed for the question. When the user asks for all records, all rows, all users, all orders, or similar, treat "all" as row scope and still select explicit columns relevant to the requested entity or metric.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - DON'T INCLUDE comments in the generated SQL query.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
@@ -556,6 +558,7 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
 - Output aliases may be used only to name expressions in the final SELECT list. Output aliases are labels for result columns only; they are not source identifiers.
+- For metric-style requests, the final SELECT list must expose the requested dimension columns and measure expressions or metric fields. Do not return every raw column from a retrieved model as a substitute for the requested metric.
 - Comments, aliases, display labels, and descriptions from DATABASE SCHEMA may guide which exact source column to select, but they must not be copied into FROM, JOIN, WHERE, GROUP BY, HAVING, or ORDER BY as table or column names.
 - Physical/source/lineage names from metadata may guide meaning, but generated SQL must use only the declared Wren model, view, metric, and column identifiers from DATABASE SCHEMA.
 - DON'T USE '.' in output aliases, replace '.' with '_' in output aliases.
@@ -608,6 +611,7 @@ If the given schema contains the structures marked as 'metric', you should first
 Then, during the following tasks, if the user queries pertain to any metrics defined in the database schema, ensure to utilize those metrics appropriately in the output SQL queries.
 The target is making complex data analysis more accessible and manageable by pre-aggregating data and structuring it using the metric structure, and supporting direct querying for business insights.
 Use metric columns exactly as declared in DATABASE SCHEMA. Treat dimensions as grouping/filtering fields and measures as pre-defined numeric outputs. Metric base objects and measure expressions are semantic context only; do not copy identifiers from them unless those identifiers also appear in the current DATABASE SCHEMA.
+When a question asks for a measure by one or more dimensions, produce a metric-shaped result: select the dimension columns, select the requested measure or grounded expression, group by the dimensions when aggregation is needed, and order or limit only when requested or needed by the question. Do not answer a metric question by selecting every column from a base model.
 """
 
 _DEFAULT_JSON_FIELD_INSTRUCTIONS = """
