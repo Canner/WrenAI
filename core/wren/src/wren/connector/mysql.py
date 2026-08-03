@@ -20,6 +20,7 @@ from loguru import logger
 
 from wren.connector.base import (
     ConnectorABC,
+    coerce_limit,
     strip_trailing_semicolon,
 )
 from wren.model.data_source import DataSource
@@ -39,20 +40,6 @@ def _apply_limit(sql: str, limit: int) -> str:
     ``a.id`` and ``b.id``).
     """
     return f"{strip_trailing_semicolon(sql)}\nLIMIT {limit}"
-
-
-def _coerce_limit(limit: int | None) -> int | None:
-    """Validate and coerce a user-supplied ``limit`` to a non-negative ``int``.
-
-    ``int(limit)`` rejects strings like ``"5 OR 1=1"`` so the value can be
-    safely interpolated into SQL. Negative limits are also rejected.
-    """
-    if limit is None:
-        return None
-    coerced = int(limit)
-    if coerced < 0:
-        raise ValueError(f"limit must be non-negative, got {coerced}")
-    return coerced
 
 
 class MySqlConnector(ConnectorABC):
@@ -89,7 +76,7 @@ class MySqlConnector(ConnectorABC):
             raise
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
-        limit = _coerce_limit(limit)
+        limit = coerce_limit(limit)
         if limit is not None:
             sql = _apply_limit(sql, limit)
         else:

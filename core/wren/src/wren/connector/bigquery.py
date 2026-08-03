@@ -4,7 +4,7 @@ from json import loads
 import pyarrow as pa
 from loguru import logger
 
-from wren.connector.base import ConnectorABC, strip_trailing_semicolon
+from wren.connector.base import ConnectorABC, strip_trailing_semicolon, coerce_limit
 
 
 def _apply_limit(sql: str, limit: int) -> str:
@@ -18,7 +18,7 @@ def _apply_limit(sql: str, limit: int) -> str:
     Avoids comment-sensitive outer-LIMIT detection heuristics.
     """
     cleaned = strip_trailing_semicolon(sql)
-    return f"SELECT * FROM ({cleaned}) AS _sub LIMIT {int(limit)}"
+    return f"SELECT * FROM ({cleaned}) AS _sub LIMIT {limit}"
 
 
 class BigQueryConnector(ConnectorABC):
@@ -51,6 +51,7 @@ class BigQueryConnector(ConnectorABC):
         self.connection = client
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
+        limit = coerce_limit(limit)
         if limit is not None:
             sql = _apply_limit(sql, limit)
         else:

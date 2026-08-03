@@ -23,13 +23,40 @@ def strip_trailing_semicolon(sql: str) -> str:
 def coerce_limit(limit: int | None) -> int | None:
     """Validate and coerce a user-supplied ``limit`` to a non-negative ``int``.
 
-    Connectors train-plan LIMIT by interpolating the value into SQL. ``int()``
-    rejects injection strings like ``"5 OR 1=1"``; negatives are rejected so
-    engines never see ``LIMIT -1`` (undefined / dialect-dependent).
+    ``ConnectorABC.query`` is typed as ``limit: int | None``. At runtime this
+    helper still defends against accidental non-ints so every connector that
+    interpolates LIMIT shares one contract:
+
+    - ``None`` stays unlimited
+    - ``bool`` is rejected (``bool`` is an ``int`` subclass)
+    - non-integral numbers (e.g. ``-0.5``, ``1.5``) are rejected — never truncated
+    - non-numeric / overflow values raise ``ValueError``
+    - negatives raise ``ValueError``
+
+    Invalid limits surface as a consistent ``ValueError`` instead of a
+    driver-level error after SQL interpolation.
     """
     if limit is None:
         return None
-    coerced = int(limit)
+    if isinstance(limit, bool):
+        raise ValueError("limit must be an integer, not bool")
+    if isinstance(limit, float):
+        if not limit.is_integer():
+            raise ValueError(f"limit must be an integral value, got {limit!r}")
+        # Still route through int() below for consistency / overflow.
+    try:
+        coerced = int(limit)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"limit must be an integer, got {limit!r}") from exc
+    # Reject values whose int() truncation would change the number (e.g. Decimal)
+    # when the original compares unequal as a number.
+    if isinstance(limit, (int, float)):
+        if float(limit) != float(coerced):
+            raise ValueError(f"limit must be an integral value, got {limit!r}")
+    else:
+        # Strings / other: require exact round-trip for numeric strings only.
+        # int("1.5") already failed; int("01") == 1 is fine.
+        pass
     if coerced < 0:
         raise ValueError(f"limit must be non-negative, got {coerced}")
     return coerced

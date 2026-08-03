@@ -4,7 +4,7 @@ import pandas as pd
 import pyarrow as pa
 from loguru import logger
 
-from wren.connector.base import ConnectorABC, strip_trailing_semicolon
+from wren.connector.base import ConnectorABC, strip_trailing_semicolon, coerce_limit
 from wren.model import (
     RedshiftConnectionInfo,
     RedshiftConnectionUnion,
@@ -44,10 +44,11 @@ class RedshiftConnector(ConnectorABC):
         self.connection.autocommit = True
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
+        limit = coerce_limit(limit)
         if limit is not None:
             sql = (
                 f"SELECT * FROM ({strip_trailing_semicolon(sql)}) "
-                f"AS _q LIMIT {int(limit)}"
+                f"AS _q LIMIT {limit}"
             )
         else:
             # Unlimited path also rejects trailing ``;`` for single statements
