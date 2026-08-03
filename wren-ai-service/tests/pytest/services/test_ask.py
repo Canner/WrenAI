@@ -22,6 +22,24 @@ from src.web.v1.services.semantics_preparation import (
 @pytest.fixture
 def ask_service():
     pipe_components = generate_components(settings.components)
+    required_components = {
+        "intent_classification",
+        "misleading_assistance",
+        "data_assistance",
+        "user_guide_assistance",
+        "db_schema_retrieval",
+        "historical_question_retrieval",
+        "sql_generation",
+        "sql_correction",
+        "sql_pairs_retrieval",
+        "instructions_retrieval",
+    }
+    missing_components = required_components - pipe_components.keys()
+    if missing_components:
+        pytest.skip(
+            f"Ask integration test requires configured components: {sorted(missing_components)}"
+        )
+
     wren_ai_docs = fetch_wren_ai_docs(settings.doc_endpoint, settings.is_oss)
 
     return AskService(
@@ -40,7 +58,7 @@ def ask_service():
                 **pipe_components["user_guide_assistance"],
                 wren_ai_docs=wren_ai_docs,
             ),
-            "retrieval": retrieval.DbSchemaRetrieval(
+            "db_schema_retrieval": retrieval.DbSchemaRetrieval(
                 **pipe_components["db_schema_retrieval"],
             ),
             "historical_question": retrieval.HistoricalQuestionRetrieval(
@@ -58,13 +76,28 @@ def ask_service():
             "instructions_retrieval": retrieval.Instructions(
                 **pipe_components["instructions_retrieval"],
             ),
-        }
+        },
+        allow_sql_functions_retrieval=False,
+        allow_sql_diagnosis=False,
+        allow_sql_knowledge_retrieval=False,
     )
 
 
 @pytest.fixture
 def indexing_service():
     pipe_components = generate_components(settings.components)
+    required_components = {
+        "db_schema_indexing",
+        "historical_question_indexing",
+        "table_description_indexing",
+        "sql_pairs_indexing",
+        "project_meta_indexing",
+    }
+    missing_components = required_components - pipe_components.keys()
+    if missing_components:
+        pytest.skip(
+            f"Ask integration test requires configured components: {sorted(missing_components)}"
+        )
 
     return SemanticsPreparationService(
         {
@@ -76,6 +109,13 @@ def indexing_service():
             ),
             "table_description": indexing.TableDescription(
                 **pipe_components["table_description_indexing"],
+            ),
+            "sql_pairs": indexing.SqlPairs(
+                **pipe_components["sql_pairs_indexing"],
+                sql_pairs_path=settings.sql_pairs_path,
+            ),
+            "project_meta": indexing.ProjectMeta(
+                **pipe_components["project_meta_indexing"],
             ),
         }
     )
