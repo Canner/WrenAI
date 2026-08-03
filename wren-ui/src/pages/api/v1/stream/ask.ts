@@ -132,6 +132,7 @@ export default async function handler(
         Errors.GeneralErrorCodes.NO_DEPLOYMENT_FOUND,
       );
     }
+    const deployId = await deployService.ensureDeploymentPrepared(project.id);
 
     // Create a new thread if it's a new question
     const newThreadId = threadId || uuidv4();
@@ -150,7 +151,7 @@ export default async function handler(
     });
     const askTask = await wrenAIAdaptor.ask({
       query: question,
-      deployId: lastDeploy.hash,
+      deployId,
       projectId: project.id.toString(),
       histories: transformHistoryInput(histories) as any,
       configurations: {
