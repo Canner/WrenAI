@@ -53,11 +53,7 @@ class SparkConnector(ConnectorABC):
             # Place the user SQL on its own line so a trailing line comment
             # (`-- ...`) cannot swallow the closing paren, alias, or LIMIT.
             # Mirrors snowflake.py.
-            executed = (
-                "SELECT * FROM (\n"
-                f"{cleaned}\n"
-                f") AS _q LIMIT {coerced}"
-            )
+            executed = f"SELECT * FROM (\n{cleaned}\n) AS _q LIMIT {coerced}"
             df = self.connection.sql(executed).toPandas()
         else:
             # Unlimited path, or non-subqueryable statements (SHOW/DESCRIBE/…).
