@@ -55,6 +55,7 @@ export const coerceBoolean = (value: unknown): boolean => {
 };
 
 export class BaseRepository<T> implements IBasicRepository<T> {
+  private static manualIdInsertLocks = new Map<string, Promise<void>>();
   protected knex: Knex;
   protected tableName: string;
   private hasIdColumnCache: boolean | null = null;
@@ -122,20 +123,33 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     const executer = queryOptions?.tx ? queryOptions.tx : this.knex;
     try {
       const insertValue = await this.prepareInsertData(data, executer);
-      const [result] = await executer(this.tableName)
-        .insert(this.normalizeMssqlBindings(insertValue))
-        .returning('*');
+      const [result] = await this.insertOne(executer, insertValue);
       return this.transformFromDBData(result);
     } catch (error) {
       if (!this.shouldRetryManualId(error, data, executer)) {
         throw error;
       }
 
-      const insertValue = await this.prepareInsertData(data, executer, true);
-      const [result] = await executer(this.tableName)
-        .insert(this.normalizeMssqlBindings(insertValue))
-        .returning('*');
-      return this.transformFromDBData(result);
+      return await this.withManualIdInsertLock(executer, async () => {
+        let lastError: unknown = error;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const insertValue = await this.prepareInsertData(
+              data,
+              executer,
+              true,
+            );
+            const [result] = await this.insertOne(executer, insertValue);
+            return this.transformFromDBData(result);
+          } catch (retryError) {
+            if (!this.shouldRetryManualId(retryError, data, executer)) {
+              throw retryError;
+            }
+            lastError = retryError;
+          }
+        }
+        throw lastError;
+      });
     }
   }
 
@@ -158,8 +172,25 @@ export class BaseRepository<T> implements IBasicRepository<T> {
         throw error;
       }
 
-      preparedData = await this.prepareInsertManyData(data, executer, true);
-      return await this.insertMany(executer, preparedData);
+      return await this.withManualIdInsertLock(executer, async () => {
+        let lastError: unknown = error;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            preparedData = await this.prepareInsertManyData(
+              data,
+              executer,
+              true,
+            );
+            return await this.insertMany(executer, preparedData);
+          } catch (retryError) {
+            if (!this.shouldRetryManualId(retryError, data, executer)) {
+              throw retryError;
+            }
+            lastError = retryError;
+          }
+        }
+        throw lastError;
+      });
     }
   }
 
@@ -309,6 +340,33 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     return this.toNextIdValue(row?.maxId);
   }
 
+  private async withManualIdInsertLock<TResult>(
+    executer: Knex | Knex.Transaction,
+    task: () => Promise<TResult>,
+  ): Promise<TResult> {
+    const lockKey = `${executer.client.config.client}:${this.tableName}`;
+    const previousLock =
+      BaseRepository.manualIdInsertLocks.get(lockKey) ?? Promise.resolve();
+    let releaseLock: () => void = () => undefined;
+    const currentLock = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+    const chainedLock = previousLock.catch(() => undefined).then(
+      () => currentLock,
+    );
+    BaseRepository.manualIdInsertLocks.set(lockKey, chainedLock);
+
+    await previousLock.catch(() => undefined);
+    try {
+      return await task();
+    } finally {
+      releaseLock();
+      if (BaseRepository.manualIdInsertLocks.get(lockKey) === chainedLock) {
+        BaseRepository.manualIdInsertLocks.delete(lockKey);
+      }
+    }
+  }
+
   private async hasIdentityId(executer: Knex | Knex.Transaction) {
     if (!this.isMssql(executer)) {
       return true;
@@ -412,6 +470,12 @@ export class BaseRepository<T> implements IBasicRepository<T> {
     return result.map((data) => this.transformFromDBData(data));
   }
 
+  private async insertOne(executer: Knex | Knex.Transaction, preparedData: any) {
+    return await executer(this.tableName)
+      .insert(this.normalizeMssqlBindings(preparedData))
+      .returning('*');
+  }
+
   private normalizeMssqlBindings(value: any): any {
     if (!this.isMssql(this.knex)) {
       return value;
@@ -481,6 +545,10 @@ export class BaseRepository<T> implements IBasicRepository<T> {
           ? error
           : '';
 
-    return message.includes("Cannot insert the value NULL into column 'id'");
+    return (
+      message.includes("Cannot insert the value NULL into column 'id'") ||
+      message.includes('Violation of PRIMARY KEY constraint') ||
+      message.includes('Cannot insert duplicate key')
+    );
   }
 }

@@ -531,6 +531,7 @@ class AskService:
                 elif failed_dry_run_result := text_to_sql_generation_results[
                     "post_process"
                 ]["invalid_generation_result"]:
+                    schema_grounding_correction_attempted = False
                     while current_sql_correction_retries < max_sql_correction_retries:
                         if failed_dry_run_result["type"] == "TIME_OUT":
                             break
@@ -540,6 +541,15 @@ class AskService:
                         error_message = failed_dry_run_result["error"]
                         is_schema_grounding_error = (
                             failed_dry_run_result.get("type") == "SCHEMA_GROUNDING"
+                        )
+                        if (
+                            is_schema_grounding_error
+                            and schema_grounding_correction_attempted
+                        ):
+                            break
+                        schema_grounding_correction_attempted = (
+                            schema_grounding_correction_attempted
+                            or is_schema_grounding_error
                         )
                         current_sql_correction_retries += 1
 
