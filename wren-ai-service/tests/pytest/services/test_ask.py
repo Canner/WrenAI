@@ -102,6 +102,12 @@ def mdl_str():
         return orjson.dumps(json.load(f)).decode("utf-8")
 
 
+def test_ask_request_skips_sql_generation_reasoning_by_default():
+    ask_request = AskRequest(query="question", mdl_hash="deploy")
+
+    assert ask_request.ignore_sql_generation_reasoning is True
+
+
 @pytest.mark.asyncio
 async def test_ask_with_successful_query(
     indexing_service: SemanticsPreparationService,
