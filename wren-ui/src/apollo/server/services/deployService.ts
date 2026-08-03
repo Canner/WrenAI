@@ -1,4 +1,7 @@
-import { WrenAIDeployStatusEnum } from '@server/models/adaptor';
+import {
+  WrenAIDeployStatusEnum,
+  WrenAISystemStatus,
+} from '@server/models/adaptor';
 import { IWrenAIAdaptor } from '../adaptors/wrenAIAdaptor';
 import {
   Deploy,
@@ -35,6 +38,7 @@ export interface IDeployService {
     force?: boolean,
   ): Promise<DeployResponse>;
   getLastDeployment(projectId: number): Promise<Deploy>;
+  ensureDeploymentPrepared(projectId: number): Promise<string>;
   getInProgressDeployment(projectId: number): Promise<Deploy>;
   createMDLHash(manifest: Manifest, projectId: number): string;
   isSameDeployment(
@@ -74,6 +78,38 @@ export class DeployService implements IDeployService {
     return lastDeploy;
   }
 
+  public async ensureDeploymentPrepared(projectId: number): Promise<string> {
+    const lastDeploy =
+      await this.deployLogRepository.findLastProjectDeployLog(projectId);
+    if (!lastDeploy) {
+      throw new Error(`No deployment found for project ${projectId}`);
+    }
+
+    try {
+      const status = await this.wrenAIAdaptor.getDeployStatus(lastDeploy.hash);
+      if (status === WrenAISystemStatus.FINISHED) {
+        return lastDeploy.hash;
+      }
+      logger.warn(
+        `Deployment ${lastDeploy.hash} is not ready in AI service: ${status}`,
+      );
+    } catch (err: any) {
+      logger.warn(
+        `Deployment ${lastDeploy.hash} is not available in AI service: ${err.message}`,
+      );
+    }
+
+    const result = await this.deploy(lastDeploy.manifest, projectId);
+    if (result.status !== DeployStatusEnum.SUCCESS) {
+      throw new Error(
+        result.error ||
+          `Failed to prepare deployment ${lastDeploy.hash} for project ${projectId}`,
+      );
+    }
+
+    return lastDeploy.hash;
+  }
+
   public async getInProgressDeployment(projectId) {
     const inProgressDeploy = await this.deployLogRepository.findInProgressProjectDeployLog(
       projectId,
@@ -108,12 +144,23 @@ export class DeployService implements IDeployService {
         const lastDeploy =
           await this.deployLogRepository.findLastProjectDeployLog(projectId);
         if (lastDeploy && lastDeploy.hash === hash) {
-          logger.log(`Model has been deployed, hash: ${hash}`);
+          logger.log(`Model has been deployed, refreshing AI index, hash: ${hash}`);
+          deploy = lastDeploy;
+          const { status: aiStatus, error: aiError } =
+            await this.wrenAIAdaptor.deploy({
+              manifest,
+              hash,
+              projectId,
+            });
+          const status =
+            aiStatus === WrenAIDeployStatusEnum.SUCCESS
+              ? DeployStatusEnum.SUCCESS
+              : DeployStatusEnum.FAILED;
           await this.deployLogRepository.updateOne(lastDeploy.id, {
-            status: DeployStatusEnum.SUCCESS,
-            error: null,
+            status,
+            error: aiError,
           });
-          return { status: DeployStatusEnum.SUCCESS };
+          return { status, error: aiError };
         }
       }
       const previousInProgressDeploy =

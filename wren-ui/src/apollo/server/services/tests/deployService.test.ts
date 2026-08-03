@@ -11,6 +11,7 @@ describe('DeployService', () => {
   beforeEach(() => {
     mockTelemetry = { sendEvent: jest.fn() };
     mockWrenAIAdaptor = { deploy: jest.fn() };
+    mockWrenAIAdaptor.getDeployStatus = jest.fn();
     mockDeployLogRepository = {
       findLastProjectDeployLog: jest.fn(),
       findInProgressProjectDeployLog: jest.fn(),
@@ -82,22 +83,68 @@ describe('DeployService', () => {
     });
   });
 
-  it('should skip deployment if an existing deployment with the same hash exists', async () => {
+  it('should refresh ai-service deployment if an existing deployment with the same hash exists', async () => {
     const manifest = { key: 'value' };
     const projectId = 1;
+    const hash = deployService.createMDLHash(manifest, 1);
 
     mockDeployLogRepository.findLastProjectDeployLog.mockResolvedValue({
       id: 123,
-      hash: deployService.createMDLHash(manifest, 1),
+      hash,
     });
+    mockWrenAIAdaptor.deploy.mockResolvedValue({ status: 'SUCCESS' });
 
     const response = await deployService.deploy(manifest, projectId);
 
     expect(response.status).toEqual(DeployStatusEnum.SUCCESS);
-    expect(mockWrenAIAdaptor.deploy).not.toHaveBeenCalled();
+    expect(mockWrenAIAdaptor.deploy).toHaveBeenCalledWith({
+      manifest,
+      hash,
+      projectId,
+    });
     expect(mockDeployLogRepository.updateOne).toHaveBeenCalledWith(123, {
       status: DeployStatusEnum.SUCCESS,
-      error: null,
+      error: undefined,
+    });
+  });
+
+  it('should return the deployment hash when ai-service already has the exact deployment prepared', async () => {
+    mockDeployLogRepository.findLastProjectDeployLog.mockResolvedValue({
+      hash: 'deploy-hash',
+      manifest: { key: 'value' },
+    });
+    mockWrenAIAdaptor.getDeployStatus.mockResolvedValue('FINISHED');
+
+    const hash = await deployService.ensureDeploymentPrepared(1);
+
+    expect(hash).toEqual('deploy-hash');
+    expect(mockWrenAIAdaptor.getDeployStatus).toHaveBeenCalledWith('deploy-hash');
+    expect(mockWrenAIAdaptor.deploy).not.toHaveBeenCalled();
+  });
+
+  it('should redeploy the saved manifest when ai-service no longer has the exact deployment prepared', async () => {
+    const manifest = { key: 'value' };
+    mockDeployLogRepository.findLastProjectDeployLog
+      .mockResolvedValueOnce({
+        id: 123,
+        hash: deployService.createMDLHash(manifest, 1),
+        manifest,
+      })
+      .mockResolvedValueOnce({
+        id: 123,
+        hash: deployService.createMDLHash(manifest, 1),
+        manifest,
+      });
+    mockWrenAIAdaptor.getDeployStatus.mockRejectedValue(new Error('not found'));
+    mockWrenAIAdaptor.deploy.mockResolvedValue({ status: 'SUCCESS' });
+
+    const hash = await deployService.ensureDeploymentPrepared(1);
+
+    expect(hash).toEqual(deployService.createMDLHash(manifest, 1));
+    expect(mockWrenAIAdaptor.deploy).toHaveBeenCalledWith({
+      manifest,
+      hash,
+      projectId: 1,
     });
   });
 

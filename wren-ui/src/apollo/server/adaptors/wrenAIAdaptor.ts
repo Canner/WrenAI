@@ -51,6 +51,7 @@ const getAIServiceError = (error: any) => {
 
 export interface IWrenAIAdaptor {
   deploy(deployData: DeployData): Promise<WrenAIDeployResponse>;
+  getDeployStatus(deployId: string): Promise<WrenAISystemStatus>;
   delete(projectId: number): Promise<void>;
 
   /**
@@ -901,7 +902,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     return deploySuccess;
   }
 
-  private async getDeployStatus(deployId: string): Promise<WrenAISystemStatus> {
+  public async getDeployStatus(deployId: string): Promise<WrenAISystemStatus> {
     try {
       const res = await axios.get(
         `${this.wrenAIBaseEndpoint}/v1/semantics-preparations/${deployId}/status`,

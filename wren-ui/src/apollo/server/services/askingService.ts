@@ -1274,8 +1274,7 @@ export class AskingService implements IAskingService {
 
   private async getDeployId(projectId?: number) {
     const id = projectId ?? (await this.projectService.getCurrentProject()).id;
-    const lastDeploy = await this.deployService.getLastDeployment(id);
-    return lastDeploy.hash;
+    return this.deployService.ensureDeploymentPrepared(id);
   }
 
   private async getProjectForThreadResponse(threadResponse: ThreadResponse) {

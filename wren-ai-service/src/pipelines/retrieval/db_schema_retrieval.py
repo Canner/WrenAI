@@ -242,7 +242,15 @@ async def active_mdl_hash(
         dbschema_store.count_documents(filters=filters),
     )
 
-    return mdl_hash if table_description_count or dbschema_count else ""
+    if not table_description_count and not dbschema_count:
+        logger.warning(
+            "Project ID: %s, MDL hash %s has no indexed schema documents; "
+            "keeping hash scope to avoid stale project metadata fallback.",
+            project_id,
+            mdl_hash,
+        )
+
+    return mdl_hash
 
 
 @observe(capture_input=False, capture_output=False)
@@ -262,7 +270,7 @@ async def table_retrieval(
     active_mdl_hash: Optional[str] = None,
     mdl_hash: str = "",
 ) -> dict:
-    effective_mdl_hash = active_mdl_hash if active_mdl_hash is not None else mdl_hash
+    effective_mdl_hash = active_mdl_hash or mdl_hash
     filters = {
         "operator": "AND",
         "conditions": [
@@ -305,7 +313,7 @@ async def dbschema_retrieval(
     mdl_hash: str = "",
     embedding: Optional[dict] = None,
 ) -> list[Document]:
-    effective_mdl_hash = active_mdl_hash if active_mdl_hash is not None else mdl_hash
+    effective_mdl_hash = active_mdl_hash or mdl_hash
 
     def _base_filters() -> dict:
         project_deploy_filter = build_project_deploy_filter(

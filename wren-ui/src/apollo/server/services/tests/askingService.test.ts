@@ -141,9 +141,9 @@ describe('AskingService', () => {
         }),
       };
       service.deployService = {
-        getLastDeployment: jest.fn().mockResolvedValue({
-          hash: 'latest-deploy-hash',
-        }),
+        ensureDeploymentPrepared: jest
+          .fn()
+          .mockResolvedValue('latest-deploy-hash'),
       };
       service.threadRepository = {
         createOne: jest.fn().mockResolvedValue({ id: 7, projectId: 1 }),
@@ -171,7 +171,7 @@ describe('AskingService', () => {
         sql: 'SELECT stale_recommendation_sql',
       });
 
-      expect(service.deployService.getLastDeployment).toHaveBeenCalledWith(1);
+      expect(service.deployService.ensureDeploymentPrepared).toHaveBeenCalledWith(1);
       expect(service.askingTaskTracker.createAskingTask).toHaveBeenCalledWith({
         query: trackedAskingResult.question,
         histories: null,

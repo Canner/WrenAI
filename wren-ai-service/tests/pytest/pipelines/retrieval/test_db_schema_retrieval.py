@@ -115,7 +115,7 @@ async def test_active_mdl_hash_keeps_hash_when_deploy_documents_are_indexed():
 
 
 @pytest.mark.asyncio
-async def test_active_mdl_hash_uses_project_scope_when_deploy_documents_are_absent():
+async def test_active_mdl_hash_keeps_hash_when_deploy_documents_are_absent():
     table_store = StoreCounter(count=0)
     schema_store = StoreCounter(count=0)
 
@@ -126,7 +126,7 @@ async def test_active_mdl_hash_uses_project_scope_when_deploy_documents_are_abse
         dbschema_store=schema_store,
     )
 
-    assert result == ""
+    assert result == "deploy-1"
 
 
 def test_view_schema_context_uses_declared_view_columns_not_view_definition():
@@ -223,7 +223,7 @@ async def test_table_retrieval_keeps_deploy_scope_when_no_documents_match():
 
 
 @pytest.mark.asyncio
-async def test_table_retrieval_uses_project_scope_when_active_hash_is_absent():
+async def test_table_retrieval_falls_back_to_request_hash_when_active_hash_is_absent():
     class Retriever:
         def __init__(self):
             self.calls = []
@@ -256,6 +256,7 @@ async def test_table_retrieval_uses_project_scope_when_active_hash_is_absent():
                 "conditions": [
                     {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
                     {"field": "project_id", "operator": "==", "value": "project-1"},
+                    {"field": "mdl_hash", "operator": "==", "value": "deploy-1"},
                 ],
             },
         }

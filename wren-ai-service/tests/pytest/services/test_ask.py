@@ -108,6 +108,13 @@ def test_ask_request_skips_sql_generation_reasoning_by_default():
     assert ask_request.ignore_sql_generation_reasoning is True
 
 
+def test_ask_request_uses_strict_dry_plan_by_default():
+    ask_request = AskRequest(query="question", mdl_hash="deploy")
+
+    assert ask_request.use_dry_plan is True
+    assert ask_request.allow_dry_plan_fallback is False
+
+
 @pytest.mark.asyncio
 async def test_ask_with_successful_query(
     indexing_service: SemanticsPreparationService,
