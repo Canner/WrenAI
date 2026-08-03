@@ -1,4 +1,5 @@
 import ast
+import asyncio
 import logging
 import sys
 from typing import Any, Optional
@@ -217,6 +218,25 @@ def _build_view_ddl(content: dict) -> str:
 
 
 ## Start of Pipeline
+@observe(capture_input=False)
+async def active_mdl_hash(
+    project_id: str,
+    mdl_hash: str,
+    table_description_store: Any,
+    dbschema_store: Any,
+) -> str:
+    if not project_id or not mdl_hash:
+        return mdl_hash
+
+    filters = build_project_deploy_filter(project_id=project_id, mdl_hash=mdl_hash)
+    table_description_count, dbschema_count = await asyncio.gather(
+        table_description_store.count_documents(filters=filters),
+        dbschema_store.count_documents(filters=filters),
+    )
+
+    return mdl_hash if table_description_count or dbschema_count else ""
+
+
 @observe(capture_input=False, capture_output=False)
 async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> dict:
     if query:
@@ -231,8 +251,10 @@ async def table_retrieval(
     project_id: str,
     tables: list[str],
     table_retriever: Any,
+    active_mdl_hash: Optional[str] = None,
     mdl_hash: str = "",
 ) -> dict:
+    effective_mdl_hash = active_mdl_hash if active_mdl_hash is not None else mdl_hash
     filters = {
         "operator": "AND",
         "conditions": [
@@ -245,9 +267,9 @@ async def table_retrieval(
             {"field": "project_id", "operator": "==", "value": project_id}
         )
 
-    if mdl_hash:
+    if effective_mdl_hash:
         filters["conditions"].append(
-            {"field": "mdl_hash", "operator": "==", "value": mdl_hash}
+            {"field": "mdl_hash", "operator": "==", "value": effective_mdl_hash}
         )
 
     if embedding:
@@ -271,13 +293,16 @@ async def dbschema_retrieval(
     table_retrieval: dict,
     project_id: str,
     dbschema_retriever: Any,
+    active_mdl_hash: Optional[str] = None,
     mdl_hash: str = "",
     embedding: Optional[dict] = None,
 ) -> list[Document]:
+    effective_mdl_hash = active_mdl_hash if active_mdl_hash is not None else mdl_hash
+
     def _base_filters() -> dict:
         project_deploy_filter = build_project_deploy_filter(
             project_id=project_id,
-            mdl_hash=mdl_hash,
+            mdl_hash=effective_mdl_hash,
         )
         filters = {
             "operator": "AND",
@@ -627,16 +652,23 @@ class DbSchemaRetrieval(BasicPipeline):
         table_column_retrieval_size: int = 100,
         **kwargs,
     ):
+        table_description_store = document_store_provider.get_store(
+            dataset_name="table_descriptions"
+        )
+        dbschema_store = document_store_provider.get_store()
+
         self._components = {
             "embedder": embedder_provider.get_text_embedder(),
             "table_retriever": document_store_provider.get_retriever(
-                document_store_provider.get_store(dataset_name="table_descriptions"),
+                table_description_store,
                 top_k=table_retrieval_size,
             ),
             "dbschema_retriever": document_store_provider.get_retriever(
-                document_store_provider.get_store(),
+                dbschema_store,
                 top_k=table_column_retrieval_size,
             ),
+            "table_description_store": table_description_store,
+            "dbschema_store": dbschema_store,
             "table_columns_selection_generator": llm_provider.get_generator(
                 system_prompt=table_columns_selection_system_prompt,
                 generation_kwargs=RETRIEVAL_MODEL_KWARGS,

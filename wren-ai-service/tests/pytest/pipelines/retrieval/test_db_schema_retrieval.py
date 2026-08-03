@@ -4,6 +4,7 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 
 from src.pipelines.common import build_table_ddl
 from src.pipelines.retrieval.db_schema_retrieval import (
+    active_mdl_hash,
     _build_view_ddl,
     check_using_db_schemas_without_pruning,
     construct_retrieval_results,
@@ -14,6 +15,16 @@ from src.pipelines.retrieval.db_schema_retrieval import (
     table_columns_selection_system_prompt,
     table_columns_selection_user_prompt_template,
 )
+
+
+class StoreCounter:
+    def __init__(self, count):
+        self.count = count
+        self.filters = []
+
+    async def count_documents(self, filters=None):
+        self.filters.append(filters)
+        return self.count
 
 
 @pytest.mark.asyncio
@@ -77,6 +88,45 @@ def test_table_selection_prompt_keeps_multiple_relevant_datasets():
     assert "compatible fields for the same requested result shape" in (
         table_columns_selection_system_prompt
     )
+
+
+@pytest.mark.asyncio
+async def test_active_mdl_hash_keeps_hash_when_deploy_documents_are_indexed():
+    table_store = StoreCounter(count=1)
+    schema_store = StoreCounter(count=0)
+
+    result = await active_mdl_hash(
+        project_id="project-1",
+        mdl_hash="deploy-1",
+        table_description_store=table_store,
+        dbschema_store=schema_store,
+    )
+
+    expected_filters = {
+        "operator": "AND",
+        "conditions": [
+            {"field": "project_id", "operator": "==", "value": "project-1"},
+            {"field": "mdl_hash", "operator": "==", "value": "deploy-1"},
+        ],
+    }
+    assert result == "deploy-1"
+    assert table_store.filters == [expected_filters]
+    assert schema_store.filters == [expected_filters]
+
+
+@pytest.mark.asyncio
+async def test_active_mdl_hash_uses_project_scope_when_deploy_documents_are_absent():
+    table_store = StoreCounter(count=0)
+    schema_store = StoreCounter(count=0)
+
+    result = await active_mdl_hash(
+        project_id="project-1",
+        mdl_hash="deploy-1",
+        table_description_store=table_store,
+        dbschema_store=schema_store,
+    )
+
+    assert result == ""
 
 
 def test_view_schema_context_uses_declared_view_columns_not_view_definition():
@@ -166,6 +216,46 @@ async def test_table_retrieval_keeps_deploy_scope_when_no_documents_match():
                     {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
                     {"field": "project_id", "operator": "==", "value": "project-1"},
                     {"field": "mdl_hash", "operator": "==", "value": "deploy-1"},
+                ],
+            },
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_table_retrieval_uses_project_scope_when_active_hash_is_absent():
+    class Retriever:
+        def __init__(self):
+            self.calls = []
+
+        async def run(self, query_embedding, filters):
+            self.calls.append(
+                {
+                    "query_embedding": query_embedding,
+                    "filters": filters,
+                }
+            )
+            return {"documents": []}
+
+    retriever = Retriever()
+
+    await table_retrieval(
+        embedding={"embedding": [0.25]},
+        project_id="project-1",
+        mdl_hash="deploy-1",
+        active_mdl_hash="",
+        tables=[],
+        table_retriever=retriever,
+    )
+
+    assert retriever.calls == [
+        {
+            "query_embedding": [0.25],
+            "filters": {
+                "operator": "AND",
+                "conditions": [
+                    {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
+                    {"field": "project_id", "operator": "==", "value": "project-1"},
                 ],
             },
         }
