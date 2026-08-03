@@ -147,7 +147,7 @@ async def post_process(
     data_source: str,
     project_id: str | None = None,
     use_dry_plan: bool = False,
-    allow_dry_plan_fallback: bool = True,
+    allow_dry_plan_fallback: bool = False,
     schema_contracts: list[dict] | None = None,
 ) -> dict:
     return await post_processor.run(
@@ -203,7 +203,7 @@ class SQLCorrection(BasicPipeline):
         project_id: str | None = None,
         mdl_hash: str | None = None,
         use_dry_plan: bool = False,
-        allow_dry_plan_fallback: bool = True,
+        allow_dry_plan_fallback: bool = False,
         sql_knowledge: SqlKnowledge | None = None,
         schema_contracts: list[dict] | None = None,
     ):

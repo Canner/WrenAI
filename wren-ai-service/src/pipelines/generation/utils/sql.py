@@ -256,7 +256,7 @@ class SQLGenPostProcessor:
         replies: List[str] | List[List[str]],
         project_id: str | None = None,
         use_dry_plan: bool = False,
-        allow_dry_plan_fallback: bool = True,
+        allow_dry_plan_fallback: bool = False,
         data_source: str = "",
         allow_data_preview: bool = False,
         schema_contracts: list[dict] | None = None,
@@ -334,7 +334,7 @@ class SQLGenPostProcessor:
         generation_result: str | None,
         project_id: str | None = None,
         use_dry_plan: bool = False,
-        allow_dry_plan_fallback: bool = True,
+        allow_dry_plan_fallback: bool = False,
         data_source: str = "",
         allow_data_preview: bool = False,
     ) -> Dict[str, str]:

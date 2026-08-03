@@ -1376,13 +1376,6 @@ export class ModelResolver {
         });
       }
     } catch (error) {
-      if (this.isDryPlanTimeout(error) && allowFallback !== false) {
-        logger.warn(
-          'Dry plan timed out; accepting generated Wren SQL without native rewrite',
-        );
-        return true;
-      }
-
       throw error;
     }
 
@@ -1495,11 +1488,6 @@ export class ModelResolver {
 
     // otherwise, return the value
     return value;
-  }
-
-  private isDryPlanTimeout(error: unknown): boolean {
-    const errorMessage = JSON.stringify(error ?? '').toLowerCase();
-    return errorMessage.includes('timeout') || errorMessage.includes('timed out');
   }
 
   // validate view name

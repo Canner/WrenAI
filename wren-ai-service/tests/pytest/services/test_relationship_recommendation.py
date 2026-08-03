@@ -123,7 +123,7 @@ async def test_recommend_success(relationship_recommendation_service, mock_pipel
 
 
 @pytest.mark.asyncio
-async def test_recommend_replaces_technical_llm_relationship_reason(
+async def test_recommend_preserves_llm_relationship_reason(
     relationship_recommendation_service,
     mock_pipeline,
     mdl_with_project_relationship_candidate,
@@ -152,8 +152,7 @@ async def test_recommend_replaces_technical_llm_relationship_reason(
 
     assert response.status == "finished"
     assert response.response["relationships"][0]["reason"] == (
-        "Each view belongs to one project, so views can be grouped and analyzed "
-        "by project."
+        "view.project_id references project.id."
     )
 
 
@@ -215,7 +214,7 @@ def test_getitem_not_found(relationship_recommendation_service):
 
 
 @pytest.mark.asyncio
-async def test_recommend_timeout_returns_fallback_relationships(
+async def test_recommend_timeout_fails_without_fallback_relationships(
     mock_pipeline, mdl_with_project_relationship_candidate
 ):
     service = RelationshipRecommendation(
@@ -234,27 +233,13 @@ async def test_recommend_timeout_returns_fallback_relationships(
     await service.recommend(request)
     response = service[request.id]
 
-    assert response.status == "finished"
-    assert response.response == {
-        "relationships": [
-            {
-                "name": "view_project",
-                "fromModel": "view",
-                "fromColumn": "project_id",
-                "type": "MANY_TO_ONE",
-                "toModel": "project",
-                "toColumn": "id",
-                "reason": (
-                    "Each view belongs to one project, so views can be grouped "
-                    "and analyzed by project."
-                ),
-            }
-        ]
-    }
+    assert response.status == "failed"
+    assert response.error.code == "OTHERS"
+    assert "timed out" in response.error.message
 
 
 @pytest.mark.asyncio
-async def test_recommend_empty_llm_result_returns_fallback_relationships(
+async def test_recommend_empty_llm_result_stays_empty(
     relationship_recommendation_service,
     mock_pipeline,
     mdl_with_project_relationship_candidate,
@@ -268,13 +253,27 @@ async def test_recommend_empty_llm_result_returns_fallback_relationships(
     response = relationship_recommendation_service[request.id]
 
     assert response.status == "finished"
-    assert response.response["relationships"][0]["fromModel"] == "view"
-    assert response.response["relationships"][0]["toModel"] == "project"
-    assert response.response["relationships"][0]["type"] == "MANY_TO_ONE"
+    assert response.response == {"relationships": []}
 
 
 @pytest.mark.asyncio
-async def test_recommend_fallback_matches_prefixed_model_name(
+async def test_recommend_missing_validated_response_fails(
+    relationship_recommendation_service,
+    mock_pipeline,
+):
+    request = RelationshipRecommendation.Input(id="test_id", mdl='{"relationships": []}')
+    mock_pipeline.run.return_value = {}
+
+    await relationship_recommendation_service.recommend(request)
+    response = relationship_recommendation_service[request.id]
+
+    assert response.status == "failed"
+    assert response.error.code == "OTHERS"
+    assert "no validated response" in response.error.message
+
+
+@pytest.mark.asyncio
+async def test_recommend_does_not_create_prefixed_model_relationships(
     relationship_recommendation_service,
     mock_pipeline,
     mdl_with_prefixed_project_model,
@@ -288,24 +287,11 @@ async def test_recommend_fallback_matches_prefixed_model_name(
     response = relationship_recommendation_service[request.id]
 
     assert response.status == "finished"
-    assert response.response["relationships"] == [
-        {
-            "name": "dbo_view_dbo_project",
-            "fromModel": "dbo_view",
-            "fromColumn": "project_id",
-            "type": "MANY_TO_ONE",
-            "toModel": "dbo_project",
-            "toColumn": "id",
-            "reason": (
-                "Each view belongs to one project, so views can be grouped "
-                "and analyzed by project."
-            ),
-        }
-    ]
+    assert response.response == {"relationships": []}
 
 
 @pytest.mark.asyncio
-async def test_recommend_fallback_identifies_one_to_one_relationships(
+async def test_recommend_does_not_infer_one_to_one_relationships(
     relationship_recommendation_service,
     mock_pipeline,
     mdl_with_one_to_one_profile_candidate,
@@ -319,24 +305,11 @@ async def test_recommend_fallback_identifies_one_to_one_relationships(
     response = relationship_recommendation_service[request.id]
 
     assert response.status == "finished"
-    assert response.response["relationships"] == [
-        {
-            "name": "profile_user",
-            "fromModel": "profile",
-            "fromColumn": "user_id",
-            "type": "ONE_TO_ONE",
-            "toModel": "user",
-            "toColumn": "id",
-            "reason": (
-                "Each profile is linked to one matching user, connecting details "
-                "that describe the same business record."
-            ),
-        }
-    ]
+    assert response.response == {"relationships": []}
 
 
 @pytest.mark.asyncio
-async def test_recommend_fallback_scans_all_models_and_identifies_one_to_many(
+async def test_recommend_does_not_infer_shared_key_relationships(
     relationship_recommendation_service,
     mock_pipeline,
     mdl_with_shared_key_candidates,
@@ -350,44 +323,7 @@ async def test_recommend_fallback_scans_all_models_and_identifies_one_to_many(
     response = relationship_recommendation_service[request.id]
 
     assert response.status == "finished"
-    assert response.response["relationships"] == [
-        {
-            "name": "employees_titles",
-            "fromModel": "employees",
-            "fromColumn": "emp_no",
-            "type": "ONE_TO_MANY",
-            "toModel": "titles",
-            "toColumn": "emp_no",
-            "reason": (
-                "Each employee can be associated with multiple titles, supporting "
-                "analysis of titles by employee."
-            ),
-        },
-        {
-            "name": "employees_dept_emp",
-            "fromModel": "employees",
-            "fromColumn": "emp_no",
-            "type": "ONE_TO_MANY",
-            "toModel": "dept_emp",
-            "toColumn": "emp_no",
-            "reason": (
-                "Each employee can be associated with multiple department employees, "
-                "supporting analysis of department employees by employee."
-            ),
-        },
-        {
-            "name": "departments_dept_emp",
-            "fromModel": "departments",
-            "fromColumn": "dept_no",
-            "type": "ONE_TO_MANY",
-            "toModel": "dept_emp",
-            "toColumn": "dept_no",
-            "reason": (
-                "Each department can be associated with multiple department employees, "
-                "supporting analysis of department employees by department."
-            ),
-        },
-    ]
+    assert response.response == {"relationships": []}
 
 
 def test_setitem(relationship_recommendation_service):

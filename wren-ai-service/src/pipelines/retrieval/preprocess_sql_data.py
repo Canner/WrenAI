@@ -1,6 +1,7 @@
 import logging
 import sys
-from typing import Dict
+from copy import deepcopy
+from typing import Any, Dict
 
 import tiktoken
 from hamilton import base
@@ -14,6 +15,46 @@ logger = logging.getLogger("wren-ai-service")
 
 
 ## Start of Pipeline
+def _get_column_name(column: Any) -> str:
+    if isinstance(column, dict):
+        return str(column.get("name", ""))
+
+    return str(column)
+
+
+def _build_row_records(sql_data: Dict) -> list[dict]:
+    column_names = [
+        column_name
+        for column_name in (
+            _get_column_name(column) for column in sql_data.get("columns", [])
+        )
+        if column_name
+    ]
+
+    if not column_names:
+        return []
+
+    row_records = []
+    for row in sql_data.get("data", []):
+        if isinstance(row, dict):
+            row_records.append(
+                {column_name: row.get(column_name) for column_name in column_names}
+            )
+            continue
+
+        if not isinstance(row, (list, tuple)):
+            row = [row]
+
+        row_records.append(
+            {
+                column_name: row[index] if index < len(row) else None
+                for index, column_name in enumerate(column_names)
+            }
+        )
+
+    return row_records
+
+
 @observe(capture_input=False, capture_output=False)
 def preprocess(
     sql_data: Dict,
@@ -46,6 +87,9 @@ def preprocess(
 
         return returned_data
 
+    sql_data = deepcopy(sql_data)
+    sql_data["row_records"] = _build_row_records(sql_data)
+
     _token_count = len(encoding.encode(str(sql_data)))
     num_rows_used_in_llm = len(sql_data.get("data", []))
     iteration = 0
@@ -62,6 +106,7 @@ def preprocess(
 
         data = sql_data.get("data", [])
         sql_data["data"] = reduce_data_size(data)
+        sql_data["row_records"] = _build_row_records(sql_data)
         num_rows_used_in_llm = len(sql_data.get("data", []))
         _token_count = len(encoding.encode(str(sql_data)))
         logger.info(f"Token count: {_token_count}")

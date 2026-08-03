@@ -281,7 +281,7 @@ export class IbisAdaptor implements IIbisAdaptor {
         {
           headers: {
             'x-wren-fallback_disable':
-              allowFallback === false ? 'true' : 'false',
+              allowFallback === true ? 'false' : 'true',
           },
         },
       );

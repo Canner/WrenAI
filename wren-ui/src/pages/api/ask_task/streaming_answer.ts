@@ -47,13 +47,6 @@ const parseSSEMessages = (chunk: Buffer): string[] => {
     });
 };
 
-const buildFallbackAnswer = (question: string) =>
-  [
-    `I found results for: **${question}**.`,
-    '',
-    'The result table below contains the data returned from the active datasource. Use the visible fields and rows to review the detailed records, and switch to the chart tab when a visualization is available.',
-  ].join('\n');
-
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
@@ -105,10 +98,31 @@ export default async function handler(
 
     stream.on('end', () => {
       streamEnded = true;
-      const finalContent =
-        contentMap.getContent(queryId)?.trim() || buildFallbackAnswer(response.question);
+      const finalContent = contentMap.getContent(queryId)?.trim();
       res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
       res.end();
+      if (!finalContent) {
+        askingService
+          .changeThreadResponseAnswerDetailStatus(
+            Number(responseId),
+            ThreadResponseAnswerStatus.FAILED,
+          )
+          .then(() => {
+            console.error(
+              `Thread response ${responseId} answer stream ended without content`,
+            );
+            contentMap.remove(queryId);
+          })
+          .catch((error) => {
+            console.error(
+              'Failed to update empty thread response answer detail status',
+              error,
+            );
+            contentMap.remove(queryId);
+          });
+        return;
+      }
+
       askingService
         .changeThreadResponseAnswerDetailStatus(
           Number(responseId),
