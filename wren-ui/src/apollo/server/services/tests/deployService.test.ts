@@ -127,26 +127,56 @@ describe('DeployService', () => {
 
   it('should redeploy the saved manifest when ai-service no longer has the exact deployment prepared', async () => {
     const manifest = { key: 'value' };
+    const hash = deployService.createMDLHash(manifest, 1);
     mockDeployLogRepository.findLastProjectDeployLog
       .mockResolvedValueOnce({
         id: 123,
-        hash: deployService.createMDLHash(manifest, 1),
+        hash,
         manifest,
       })
       .mockResolvedValueOnce({
         id: 123,
-        hash: deployService.createMDLHash(manifest, 1),
+        hash,
         manifest,
       });
     mockWrenAIAdaptor.getDeployStatus.mockRejectedValue(new Error('not found'));
     mockWrenAIAdaptor.deploy.mockResolvedValue({ status: 'SUCCESS' });
 
-    const hash = await deployService.ensureDeploymentPrepared(1);
+    const preparedHash = await deployService.ensureDeploymentPrepared(1);
 
-    expect(hash).toEqual(deployService.createMDLHash(manifest, 1));
+    expect(preparedHash).toEqual(hash);
     expect(mockWrenAIAdaptor.deploy).toHaveBeenCalledWith({
       manifest,
       hash,
+      projectId: 1,
+    });
+  });
+
+  it('should return the current manifest hash after redeploying a stale saved hash', async () => {
+    const manifest = { key: 'value' };
+    const activeHash = deployService.createMDLHash(manifest, 1);
+
+    mockDeployLogRepository.findLastProjectDeployLog
+      .mockResolvedValueOnce({
+        id: 123,
+        hash: 'legacy-saved-hash',
+        manifest,
+      })
+      .mockResolvedValueOnce({
+        id: 456,
+        hash: activeHash,
+        manifest,
+      });
+    mockWrenAIAdaptor.deploy.mockResolvedValue({ status: 'SUCCESS' });
+    mockDeployLogRepository.createOne.mockResolvedValue({ id: 456 });
+
+    const preparedHash = await deployService.ensureDeploymentPrepared(1);
+
+    expect(preparedHash).toEqual(activeHash);
+    expect(mockWrenAIAdaptor.getDeployStatus).not.toHaveBeenCalled();
+    expect(mockWrenAIAdaptor.deploy).toHaveBeenCalledWith({
+      manifest,
+      hash: activeHash,
       projectId: 1,
     });
   });

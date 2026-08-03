@@ -25,6 +25,7 @@ const STALE_DEPLOYMENT_MS = 10 * 60 * 1000;
 export interface DeployResponse {
   status: DeployStatusEnum;
   error?: string;
+  hash?: string;
 }
 
 export interface MDLSyncResponse {
@@ -84,21 +85,28 @@ export class DeployService implements IDeployService {
     if (!lastDeploy) {
       throw new Error(`No deployment found for project ${projectId}`);
     }
+    const activeHash = this.createMDLHash(lastDeploy.manifest, projectId);
 
-    try {
-      const status = await this.wrenAIAdaptor.getDeployStatus(
-        lastDeploy.hash,
-        projectId,
-      );
-      if (status === WrenAISystemStatus.FINISHED) {
-        return lastDeploy.hash;
+    if (lastDeploy.hash === activeHash) {
+      try {
+        const status = await this.wrenAIAdaptor.getDeployStatus(
+          activeHash,
+          projectId,
+        );
+        if (status === WrenAISystemStatus.FINISHED) {
+          return activeHash;
+        }
+        logger.warn(
+          `Deployment ${activeHash} is not ready in AI service: ${status}`,
+        );
+      } catch (err: any) {
+        logger.warn(
+          `Deployment ${activeHash} is not available in AI service: ${err.message}`,
+        );
       }
+    } else {
       logger.warn(
-        `Deployment ${lastDeploy.hash} is not ready in AI service: ${status}`,
-      );
-    } catch (err: any) {
-      logger.warn(
-        `Deployment ${lastDeploy.hash} is not available in AI service: ${err.message}`,
+        `Deployment ${lastDeploy.hash} does not match current manifest hash ${activeHash}; preparing current hash.`,
       );
     }
 
@@ -110,7 +118,7 @@ export class DeployService implements IDeployService {
       );
     }
 
-    return lastDeploy.hash;
+    return result.hash || activeHash;
   }
 
   public async getInProgressDeployment(projectId) {
@@ -163,7 +171,7 @@ export class DeployService implements IDeployService {
             status,
             error: aiError,
           });
-          return { status, error: aiError };
+          return { status, error: aiError, hash };
         }
       }
       const previousInProgressDeploy =
@@ -212,7 +220,7 @@ export class DeployService implements IDeployService {
           false,
         );
       }
-      return { status, error: aiError };
+      return { status, error: aiError, hash };
     } catch (err: any) {
       logger.error(`Error deploying model: ${err.message}`);
       if (deploy?.id) {
