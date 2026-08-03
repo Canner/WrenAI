@@ -67,6 +67,17 @@ def test_query_show_tables_with_limit_uses_dataframe_slice() -> None:
     frame.limit.assert_called_once_with(500)
 
 
+def test_query_show_tables_with_leading_comment_uses_dataframe_slice() -> None:
+    """Leading -- / /* */ comments must not force subquery wrap on SHOW."""
+    connector, session = _make_mock_connector()
+    frame = session.sql.return_value
+    frame.limit.return_value.toPandas.return_value = pd.DataFrame({"tableName": ["t"]})
+    sql = "-- metadata\nSHOW TABLES"
+    connector.query(sql, limit=500)
+    session.sql.assert_called_once_with(sql)
+    frame.limit.assert_called_once_with(500)
+
+
 def test_dry_run_validates_via_dataframe_after_strip() -> None:
     connector, session = _make_mock_connector()
     connector.dry_run("SELECT 1;  \n")

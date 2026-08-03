@@ -9,11 +9,29 @@ from wren.model import SparkConnectionInfo
 # supplied for these, fall back to the DataFrame client-side slice so MCP
 # `run_sql` (which always passes a default limit) keeps working as on main.
 _NON_SUBQUERYABLE = re.compile(
-    r"^\s*(SHOW|DESCRIBE|DESC|EXPLAIN|USE|SET|RESET|CACHE|UNCACHE|CLEAR|REFRESH|"
+    r"^(SHOW|DESCRIBE|DESC|EXPLAIN|USE|SET|RESET|CACHE|UNCACHE|CLEAR|REFRESH|"
     r"MSCK|ANALYZE|LIST|ADD|REMOVE|GET|PUT|DFS|CREATE|DROP|ALTER|TRUNCATE|INSERT|"
     r"UPDATE|DELETE|MERGE|LOAD|WITH\s+.*\bINSERT\b)\b",
     re.IGNORECASE | re.DOTALL,
 )
+
+# Leading line/block comments (and whitespace) before the first keyword.
+_LEADING_SQL_NOISE = re.compile(
+    r"(?s)^(?:\s|--[^\n]*(?:\n|$)|/\*.*?\*/)+"
+)
+
+
+def _strip_leading_sql_comments(sql: str) -> str:
+    """Remove leading whitespace and SQL comments so keyword classification works."""
+    prev = None
+    while prev != sql:
+        prev = sql
+        sql = _LEADING_SQL_NOISE.sub("", sql, count=1)
+    return sql.lstrip()
+
+
+def _is_non_subqueryable(sql: str) -> bool:
+    return bool(_NON_SUBQUERYABLE.match(_strip_leading_sql_comments(sql)))
 
 
 def _coerce_limit(limit: int | None) -> int | None:
@@ -49,7 +67,7 @@ class SparkConnector(ConnectorABC):
         # outer form stays valid.
         cleaned = strip_trailing_semicolon(sql)
         coerced = _coerce_limit(limit)
-        if coerced is not None and not _NON_SUBQUERYABLE.match(cleaned):
+        if coerced is not None and not _is_non_subqueryable(cleaned):
             # Place the user SQL on its own line so a trailing line comment
             # (`-- ...`) cannot swallow the closing paren, alias, or LIMIT.
             # Mirrors snowflake.py.
