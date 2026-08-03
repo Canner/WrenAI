@@ -485,11 +485,16 @@ export default function Modeling() {
   const onSelect = (selectKeys) => {
     if (diagramRef.current) {
       const { getNodes, fitBounds } = diagramRef.current;
-      const node = getNodes().find((node) => node.id === selectKeys[0]);
+      const selectedKey = selectKeys?.[0];
+      if (!selectedKey) return;
+
+      const node = getNodes().find((node) => node.id === selectedKey);
+      if (!node?.position) return;
+
       const position = {
         ...node.position,
-        width: node.width,
-        height: node.height,
+        width: node.width ?? 1,
+        height: node.height ?? 1,
       };
       fitBounds(position);
     }
