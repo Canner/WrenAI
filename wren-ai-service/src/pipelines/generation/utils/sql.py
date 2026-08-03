@@ -3,8 +3,10 @@ from typing import Any, Dict, List
 
 import aiohttp
 import orjson
+import sqlparse
 from haystack import component
 from haystack.dataclasses import ChatMessage
+from sqlparse import tokens as sqlparse_tokens
 from pydantic import BaseModel
 
 from src.core.engine import (
@@ -19,6 +21,46 @@ logger = logging.getLogger("wren-ai-service")
 
 def _is_timeout_error(error_message: str) -> bool:
     return error_message.startswith("Request timed out")
+
+
+def _canonicalize_wren_sql_syntax(sql: str | None) -> str | None:
+    if not sql:
+        return sql
+
+    statements = sqlparse.parse(sql)
+    if len(statements) != 1:
+        return sql
+
+    statement = statements[0]
+    tokens = statement.tokens
+    significant_tokens = [
+        (index, token) for index, token in enumerate(tokens) if not token.is_whitespace
+    ]
+
+    if len(significant_tokens) < 3:
+        return sql
+
+    first_token = significant_tokens[0][1]
+    top_token_index, top_token = significant_tokens[1]
+    limit_token_index, limit_token = significant_tokens[2]
+    has_limit = any(token.normalized == "LIMIT" for _, token in significant_tokens)
+
+    if (
+        first_token.ttype != sqlparse_tokens.Keyword.DML
+        or first_token.normalized != "SELECT"
+        or top_token.normalized != "TOP"
+        or limit_token.ttype != sqlparse_tokens.Literal.Number.Integer
+        or has_limit
+    ):
+        return sql
+
+    before_top = "".join(str(token) for token in tokens[:top_token_index]).rstrip()
+    after_limit = "".join(str(token) for token in tokens[limit_token_index + 1 :]).lstrip()
+
+    if not before_top or not after_limit:
+        return sql
+
+    return f"{before_top} {after_limit} LIMIT {limit_token.value}".strip()
 
 
 @component
@@ -47,6 +89,10 @@ class SQLGenPostProcessor:
                 cleaned_generation_result = orjson.loads(cleaned_generation_result).get(
                     "sql"
                 )
+
+            cleaned_generation_result = _canonicalize_wren_sql_syntax(
+                cleaned_generation_result
+            )
 
             (
                 valid_generation_result,

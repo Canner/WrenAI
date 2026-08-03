@@ -50,6 +50,39 @@ class ErrorEngine:
         return False, None, {"error_message": "Execution rejected the statement"}
 
 
+class CapturingEngine:
+    def __init__(self):
+        self.sql = None
+
+    async def execute_sql(
+        self,
+        sql,
+        session,
+        project_id=None,
+        limit=1,
+        dry_run=True,
+    ):
+        self.sql = sql
+        return True, None, {"correlation_id": "valid-correlation"}
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_converts_select_top_to_wren_limit():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        ['{"sql": "SELECT TOP 5 1 ORDER BY 1"}'],
+        project_id="project-id",
+    )
+
+    assert engine.sql == "SELECT 1 ORDER BY 1 LIMIT 5"
+    assert result["valid_generation_result"] == {
+        "sql": "SELECT 1 ORDER BY 1 LIMIT 5",
+        "correlation_id": "valid-correlation",
+    }
+    assert result["invalid_generation_result"] == {}
+
+
 @pytest.mark.asyncio
 async def test_sql_post_processor_returns_generated_sql_when_dry_plan_times_out():
     result = await SQLGenPostProcessor(TimeoutEngine()).run(
