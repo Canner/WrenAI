@@ -1,7 +1,29 @@
+import re
+
 import pyarrow as pa
 
 from wren.connector.base import ConnectorABC, strip_trailing_semicolon
 from wren.model import SparkConnectionInfo
+
+# Statements that are not legal as a subquery on Spark. When a limit is
+# supplied for these, fall back to the DataFrame client-side slice so MCP
+# `run_sql` (which always passes a default limit) keeps working as on main.
+_NON_SUBQUERYABLE = re.compile(
+    r"^\s*(SHOW|DESCRIBE|DESC|EXPLAIN|USE|SET|RESET|CACHE|UNCACHE|CLEAR|REFRESH|"
+    r"MSCK|ANALYZE|LIST|ADD|REMOVE|GET|PUT|DFS|CREATE|DROP|ALTER|TRUNCATE|INSERT|"
+    r"UPDATE|DELETE|MERGE|LOAD|WITH\s+.*\bINSERT\b)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _coerce_limit(limit: int | None) -> int | None:
+    """Validate and coerce a user-supplied ``limit`` to a non-negative ``int``."""
+    if limit is None:
+        return None
+    coerced = int(limit)
+    if coerced < 0:
+        raise ValueError(f"limit must be non-negative, got {coerced}")
+    return coerced
 
 
 class SparkConnector(ConnectorABC):
@@ -24,14 +46,26 @@ class SparkConnector(ConnectorABC):
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         # Push LIMIT into Spark SQL so the engine does not materialize the full
         # result only for a client-side slice. Strip trailing ``;`` first so the
-        # outer subscript form stays valid.
+        # outer form stays valid.
         cleaned = strip_trailing_semicolon(sql)
-        if limit is not None:
-            coerced = int(limit)
-            if coerced < 0:
-                raise ValueError(f"limit must be non-negative, got {coerced}")
-            cleaned = f"SELECT * FROM ({cleaned}) AS _q LIMIT {coerced}"
-        df = self.connection.sql(cleaned).toPandas()
+        coerced = _coerce_limit(limit)
+        if coerced is not None and not _NON_SUBQUERYABLE.match(cleaned):
+            # Place the user SQL on its own line so a trailing line comment
+            # (`-- ...`) cannot swallow the closing paren, alias, or LIMIT.
+            # Mirrors snowflake.py.
+            executed = (
+                "SELECT * FROM (\n"
+                f"{cleaned}\n"
+                f") AS _q LIMIT {coerced}"
+            )
+            df = self.connection.sql(executed).toPandas()
+        else:
+            # Unlimited path, or non-subqueryable statements (SHOW/DESCRIBE/…).
+            # Preserve main behaviour: DataFrame API + optional client slice.
+            frame = self.connection.sql(cleaned)
+            if coerced is not None:
+                frame = frame.limit(coerced)
+            df = frame.toPandas()
         if hasattr(df, "attrs") and df.attrs:
             df.attrs = {
                 k: v
