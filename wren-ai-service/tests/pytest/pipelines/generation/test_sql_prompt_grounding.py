@@ -1,10 +1,12 @@
 from haystack.components.builders.prompt_builder import PromptBuilder
 
 from src.pipelines.generation.sql_correction import (
+    get_sql_correction_system_prompt,
     prompt as build_sql_correction_prompt,
     sql_correction_user_prompt_template,
 )
 from src.pipelines.generation.sql_generation import (
+    get_sql_generation_system_prompt,
     prompt as build_sql_generation_prompt,
     sql_generation_user_prompt_template,
 )
@@ -13,6 +15,23 @@ from src.pipelines.generation.sql_regeneration import (
     sql_regeneration_user_prompt_template,
 )
 from src.pipelines.generation.utils.sql import build_executable_schema_contract
+
+
+def test_sql_generation_system_prompt_requires_retrieved_semantic_authority():
+    prompt = get_sql_generation_system_prompt()
+
+    assert "retrieved semantic context as the only authoritative source" in prompt
+    assert "Do not use pretrained knowledge" in prompt
+    assert "Before generating SQL, silently validate" in prompt
+    assert "return null for sql instead of choosing one" in prompt
+
+
+def test_sql_correction_system_prompt_allows_null_when_ungrounded():
+    prompt = get_sql_correction_system_prompt()
+
+    assert "repair the query only when the repair can be verified" in prompt
+    assert "Never introduce a new schema object during repair" in prompt
+    assert "or null" in prompt
 
 
 def test_build_executable_schema_contract_lists_retrieved_identifiers():

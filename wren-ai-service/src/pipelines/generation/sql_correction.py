@@ -51,7 +51,7 @@ Make sure you follow the SQL Rules strictly.
 The final answer must be in JSON format:
 
 {{
-    "sql": <CORRECTED_SQL_QUERY_STRING>
+    "sql": "corrected SQL query string using only identifiers declared in DATABASE SCHEMA, or null"
 }}
 """
 

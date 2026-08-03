@@ -491,7 +491,10 @@ class SQLGenPostProcessor:
 
 _MANDATORY_SQL_GROUNDING_RULES = """
 ### MANDATORY SQL GROUNDING RULES ###
+- Treat the retrieved semantic context as the only authoritative source for this request. Do not use pretrained knowledge, common warehouse schemas, example schemas, or memorized business definitions as executable truth.
 - Treat the DATABASE SCHEMA section as the only source of executable table and column identifiers.
+- Use only deployed semantic models, views, metrics, relationships, and columns that are present in the retrieved DATABASE SCHEMA, WREN SQL IDENTIFIER CONTRACT, EXECUTABLE WREN IDENTIFIER CATALOG, SQL FUNCTIONS, or current USER INSTRUCTIONS.
+- Before generating SQL, silently validate that every model, column, metric, relationship, join path, filter field, grouping field, ordering field, and SQL function is present in the retrieved context. Generate SQL only after this validation succeeds.
 - Every table and column referenced in SELECT, FROM, JOIN, WHERE, GROUP BY, HAVING, and ORDER BY must appear exactly in the CREATE TABLE, CREATE VIEW, or metric schema text provided in DATABASE SCHEMA.
 - Comments, aliases, display labels, descriptions, reasoning text, SQL samples, and user wording are semantic hints only. They are never source table or source column identifiers.
 - Physical datasource names, source database names, source schema names, source table names, source column names, lineage names, and names embedded inside descriptions or comments are semantic context only. Never use them as executable Wren table or column identifiers unless the exact same identifier is declared in DATABASE SCHEMA.
@@ -509,6 +512,7 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - When a dry run error reports an invalid object name or invalid column name, remove that identifier unless it appears exactly in DATABASE SCHEMA. Correct it only to an exact schema identifier.
 - Do not replace an invalid identifier with a similar-looking physical, source, lineage, alias, display, description, sample, or error-message name. Regenerate from the user's intent and the current DATABASE SCHEMA, and omit unsupported parts instead of substituting non-schema identifiers.
 - When using multiple tables to combine fields into the same output row, join only through the FOREIGN KEY relationships shown in DATABASE SCHEMA. If no relationship is shown for the needed tables, prefer a single table, view, or metric that already contains the requested fields.
+- If multiple semantic interpretations exist and the retrieved context does not make one interpretation authoritative, return null for sql instead of choosing one.
 - When the same requested result can be answered from multiple schema objects with compatible columns or metrics, include all relevant schema objects by combining separate result rows with UNION ALL instead of choosing only one object.
 - Use UNION ALL only when each SELECT branch is independently valid from DATABASE SCHEMA and returns the same result shape. Do not use UNION ALL to combine unrelated concepts or to compensate for missing columns.
 - If the question requires fields that are spread across multiple schema objects, use all required related tables, views, or metrics only when the DATABASE SCHEMA provides the needed columns and relationship path.
@@ -517,6 +521,7 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - Generate Wren SQL only. Do not use warehouse-specific functions unless they are explicitly listed in SQL FUNCTIONS for this request.
 - Apply relative date or time filters only when DATABASE SCHEMA contains an exact date/time field for the requested time concept and SQL FUNCTIONS contains the exact date/time operation needed. Do not compare text fields to date functions.
 - Treat reasoning plans, correction notes, and error messages as non-executable context. Never copy SQL fragments, inferred identifiers, placeholder names, template markers, literal values, or unsupported functions from them.
+- If SQL execution or validation fails, repair the query only when the repair can be verified using the same retrieved DATABASE SCHEMA, WREN SQL IDENTIFIER CONTRACT, and SQL FUNCTIONS. Never introduce a new schema object during repair.
 - If a column comment, alias, display label, or description names a business concept, first locate the exact declared source column for that concept in DATABASE SCHEMA. If no exact declared source column exists, omit that concept.
 - For aggregate sorting, select the aggregate with an alias and order by that alias instead of ordering directly by an aggregate expression.
 - Before returning the final SQL, silently check that each identifier and function in the SQL is grounded in DATABASE SCHEMA or SQL FUNCTIONS. If any identifier or function is ungrounded, remove that part. If the ungrounded part is needed to answer the user's requested intent, return null for sql.
