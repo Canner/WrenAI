@@ -86,7 +86,10 @@ export class DeployService implements IDeployService {
     }
 
     try {
-      const status = await this.wrenAIAdaptor.getDeployStatus(lastDeploy.hash);
+      const status = await this.wrenAIAdaptor.getDeployStatus(
+        lastDeploy.hash,
+        projectId,
+      );
       if (status === WrenAISystemStatus.FINISHED) {
         return lastDeploy.hash;
       }

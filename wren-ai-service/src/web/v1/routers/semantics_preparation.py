@@ -42,10 +42,11 @@ async def prepare_semantics(
 @router.get("/semantics-preparations/{mdl_hash}/status")
 async def get_prepare_semantics_status(
     mdl_hash: str,
+    project_id: str | None = None,
     service_container: ServiceContainer = Depends(get_service_container),
 ) -> SemanticsPreparationStatusResponse:
     return await service_container.semantics_preparation_service.get_prepare_semantics_status(
-        SemanticsPreparationStatusRequest(mdl_hash=mdl_hash)
+        SemanticsPreparationStatusRequest(mdl_hash=mdl_hash, project_id=project_id)
     )
 
 

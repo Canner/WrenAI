@@ -61,9 +61,7 @@ export default async function handler(
       throw new ApiError('Question is required', 400);
     }
 
-    // get current project's last deployment
     const lastDeploy = await deployService.getLastDeployment(project.id);
-
     if (!lastDeploy) {
       throw new ApiError(
         'No deployment found, please deploy a model first',
@@ -71,6 +69,9 @@ export default async function handler(
         Errors.GeneralErrorCodes.NO_DEPLOYMENT_FOUND,
       );
     }
+    const deployId = await deployService.ensureDeploymentPrepared(project.id);
+
+    // get current project's prepared deployment
     const deployId = await deployService.ensureDeploymentPrepared(project.id);
 
     // ask AI service to generate SQL

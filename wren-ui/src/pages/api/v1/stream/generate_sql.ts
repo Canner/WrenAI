@@ -76,6 +76,9 @@ export default async function handler(
     }
     const deployId = await deployService.ensureDeploymentPrepared(project.id);
 
+    // Get current project's prepared deployment
+    const deployId = await deployService.ensureDeploymentPrepared(project.id);
+
     // Get conversation history if threadId is provided
     const histories = threadId
       ? await apiHistoryRepository.findAllBy({ threadId })

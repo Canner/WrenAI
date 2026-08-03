@@ -51,7 +51,10 @@ const getAIServiceError = (error: any) => {
 
 export interface IWrenAIAdaptor {
   deploy(deployData: DeployData): Promise<WrenAIDeployResponse>;
-  getDeployStatus(deployId: string): Promise<WrenAISystemStatus>;
+  getDeployStatus(
+    deployId: string,
+    projectId?: string | number,
+  ): Promise<WrenAISystemStatus>;
   delete(projectId: number): Promise<void>;
 
   /**
@@ -368,7 +371,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       logger.debug(
         `Wren AI: Deploying wren AI, hash: ${hash}, deployId: ${deployId}`,
       );
-      const deploySuccess = await this.waitDeployFinished(deployId);
+      const deploySuccess = await this.waitDeployFinished(deployId, projectId);
       if (deploySuccess) {
         logger.debug(`Wren AI: Deploy wren AI success, hash: ${hash}`);
         return { status: WrenAIDeployStatusEnum.SUCCESS };
@@ -872,14 +875,17 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     };
   }
 
-  private async waitDeployFinished(deployId: string): Promise<boolean> {
+  private async waitDeployFinished(
+    deployId: string,
+    projectId?: string | number,
+  ): Promise<boolean> {
     let deploySuccess = false;
     const maxAttempts = 90;
     const pollingIntervalMs = 2000;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const status = await this.getDeployStatus(deployId);
+        const status = await this.getDeployStatus(deployId, projectId);
         logger.debug(
           `Wren AI: Deploy status: ${status}, attempt: ${attempt}/${maxAttempts}`,
         );
@@ -902,10 +908,16 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     return deploySuccess;
   }
 
-  public async getDeployStatus(deployId: string): Promise<WrenAISystemStatus> {
+  public async getDeployStatus(
+    deployId: string,
+    projectId?: string | number,
+  ): Promise<WrenAISystemStatus> {
     try {
       const res = await axios.get(
         `${this.wrenAIBaseEndpoint}/v1/semantics-preparations/${deployId}/status`,
+        {
+          params: projectId ? { project_id: projectId.toString() } : undefined,
+        },
       );
       if (res.data.error) {
         const error =

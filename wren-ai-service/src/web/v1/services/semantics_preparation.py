@@ -28,7 +28,7 @@ class SemanticsPreparationResponse(BaseModel):
 
 
 # GET /v1/semantics-preparations/{mdl_hash}/status
-class SemanticsPreparationStatusRequest(BaseModel):
+class SemanticsPreparationStatusRequest(BaseRequest):
     # don't recommend to use id as a field name, but it's used in the API spec
     # so we need to support as a choice, and will remove it in the future
     mdl_hash: str = Field(validation_alias=AliasChoices("mdl_hash", "id"))
@@ -159,7 +159,14 @@ class SemanticsPreparationService:
                 mdl_hash=mdl_hash,
             ),
         )
-        return dbschema_count > 0 and table_description_count > 0
+        logger.info(
+            "Project ID: %s, MDL hash %s indexed schema document counts: db_schema=%s, table_description=%s",
+            project_id,
+            mdl_hash,
+            dbschema_count,
+            table_description_count,
+        )
+        return dbschema_count > 0
 
     async def get_prepare_semantics_status(
         self, prepare_semantics_status_request: SemanticsPreparationStatusRequest
@@ -169,6 +176,15 @@ class SemanticsPreparationService:
                 prepare_semantics_status_request.mdl_hash
             )
         ) is None:
+            if (
+                prepare_semantics_status_request.project_id
+                and await self._has_indexed_schema_documents(
+                    prepare_semantics_status_request.project_id,
+                    prepare_semantics_status_request.mdl_hash,
+                )
+            ):
+                return SemanticsPreparationStatusResponse(status="finished")
+
             logger.exception(
                 f"id is not found for SemanticsPreparation: {prepare_semantics_status_request.mdl_hash}"
             )
@@ -176,17 +192,20 @@ class SemanticsPreparationService:
                 status="failed",
                 error=SemanticsPreparationStatusResponse.SemanticsPreparationError(
                     code="OTHERS",
-                    message="{prepare_semantics_status_request.id} is not found",
+                    message=f"{prepare_semantics_status_request.mdl_hash} is not found",
                 ),
             )
 
         if result.status != "finished":
             return result
 
-        project_id = self._prepare_semantics_project_ids.get(
-            prepare_semantics_status_request.mdl_hash
+        project_id = (
+            prepare_semantics_status_request.project_id
+            or self._prepare_semantics_project_ids.get(
+                prepare_semantics_status_request.mdl_hash
+            )
         )
-        if project_id is None:
+        if not project_id:
             return result
 
         if await self._has_indexed_schema_documents(

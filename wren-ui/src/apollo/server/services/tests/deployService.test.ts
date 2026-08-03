@@ -118,7 +118,10 @@ describe('DeployService', () => {
     const hash = await deployService.ensureDeploymentPrepared(1);
 
     expect(hash).toEqual('deploy-hash');
-    expect(mockWrenAIAdaptor.getDeployStatus).toHaveBeenCalledWith('deploy-hash');
+    expect(mockWrenAIAdaptor.getDeployStatus).toHaveBeenCalledWith(
+      'deploy-hash',
+      1,
+    );
     expect(mockWrenAIAdaptor.deploy).not.toHaveBeenCalled();
   });
 

@@ -58,6 +58,14 @@ describe('WrenAIAdaptor', () => {
           project_id: mockInput.projectId.toString(),
         },
       );
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        `${baseEndpoint}/v1/semantics-preparations/${mockInput.hash}/status`,
+        {
+          params: {
+            project_id: mockInput.projectId.toString(),
+          },
+        },
+      );
     });
   });
 

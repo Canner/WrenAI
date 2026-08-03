@@ -242,10 +242,17 @@ async def active_mdl_hash(
         dbschema_store.count_documents(filters=filters),
     )
 
-    if not table_description_count and not dbschema_count:
+    if not dbschema_count:
         logger.warning(
             "Project ID: %s, MDL hash %s has no indexed schema documents; "
             "keeping hash scope to avoid stale project metadata fallback.",
+            project_id,
+            mdl_hash,
+        )
+    elif not table_description_count:
+        logger.info(
+            "Project ID: %s, MDL hash %s has indexed db schema documents but no table descriptions; "
+            "using db schema retrieval fallback.",
             project_id,
             mdl_hash,
         )

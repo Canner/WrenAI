@@ -62,7 +62,6 @@ export default async function handler(
       throw new ApiError('Question is required', 400);
     }
 
-    // Get current project's last deployment
     const lastDeploy = await deployService.getLastDeployment(project.id);
     if (!lastDeploy) {
       throw new ApiError(
@@ -71,6 +70,9 @@ export default async function handler(
         Errors.GeneralErrorCodes.NO_DEPLOYMENT_FOUND,
       );
     }
+    const deployId = await deployService.ensureDeploymentPrepared(project.id);
+
+    // Get current project's prepared deployment
     const deployId = await deployService.ensureDeploymentPrepared(project.id);
 
     // Create a new thread if it's a new question

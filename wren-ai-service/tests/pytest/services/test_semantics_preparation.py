@@ -63,3 +63,47 @@ async def test_prepare_semantics_status_stays_finished_when_exact_schema_documen
 
     assert status.status == "finished"
     assert status.error is None
+
+
+@pytest.mark.asyncio
+async def test_prepare_semantics_status_stays_finished_when_schema_documents_exist_without_descriptions():
+    service = SemanticsPreparationService(
+        {
+            "db_schema": CountPipeline(1),
+            "table_description": CountPipeline(0),
+        }
+    )
+    service._prepare_semantics_statuses["deploy-1"] = SemanticsPreparationStatusResponse(
+        status="finished"
+    )
+    service._prepare_semantics_project_ids["deploy-1"] = "project-1"
+
+    status = await service.get_prepare_semantics_status(
+        SemanticsPreparationStatusRequest(mdl_hash="deploy-1")
+    )
+
+    assert status.status == "finished"
+    assert status.error is None
+
+
+@pytest.mark.asyncio
+async def test_prepare_semantics_status_recovers_when_status_cache_is_missing():
+    db_schema = CountPipeline(1)
+    table_description = CountPipeline(1)
+    service = SemanticsPreparationService(
+        {
+            "db_schema": db_schema,
+            "table_description": table_description,
+        }
+    )
+
+    status = await service.get_prepare_semantics_status(
+        SemanticsPreparationStatusRequest(mdl_hash="deploy-1", project_id="project-1")
+    )
+
+    assert status.status == "finished"
+    assert status.error is None
+    assert db_schema.calls == [{"project_id": "project-1", "mdl_hash": "deploy-1"}]
+    assert table_description.calls == [
+        {"project_id": "project-1", "mdl_hash": "deploy-1"}
+    ]
