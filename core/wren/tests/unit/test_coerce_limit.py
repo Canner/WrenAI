@@ -65,7 +65,7 @@ def test_accepts_integral_decimal() -> None:
     assert coerce_limit(Decimal("2.0")) == 2  # type: ignore[arg-type]
 
 
-def test_oversized_int_is_value_error_not_overflow() -> None:
+def test_preserves_oversized_int_without_float_overflow() -> None:
     huge = 10**400
-    # int stays int; ensure path still returns or rejects cleanly as ValueError only on bad types
+    # Preserve arbitrary-size integers without converting through float.
     assert coerce_limit(huge) == huge
