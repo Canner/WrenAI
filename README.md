@@ -6,13 +6,18 @@
   </picture>
 </a>
 
+
+[![WrenAI — open-source generative BI (GenBI): semantic layer and AI context layer for AI agents](https://github.com/Canner/WrenAI/raw/main/misc/wrenai_logo.png)](https://getwren.ai)
+
 ### Open-source GenBI: generative BI for AI agents.
 
 *Your agents generate, deploy, and govern dashboards from any database, grounded in a context layer they can actually trust.*
 
+**Wren AI is an open-source generative BI (GenBI) engine — a governed text-to-SQL and semantic-layer platform, powered by an open AI context layer, deployable as an enterprise solution with row- and column-level governance across 22+ data sources.**
+
 [Docs](https://docs.getwren.ai) · [Discord](https://discord.gg/5DvshJqG8Z) · [Vision](https://www.getwren.ai/post/the-missing-context-layer-for-ai-agents-over-business-data) · [Blog](https://www.getwren.ai/blog)
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/Canner/WrenAI/blob/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/wrenai?label=wrenai)](https://pypi.org/project/wrenai/)
 [![GitHub Release](https://img.shields.io/github/v/release/Canner/WrenAI?logo=github&label=release)](https://github.com/Canner/WrenAI/releases)
 [![Discord](https://img.shields.io/discord/1227143286951514152?logo=discord&label=Discord)](https://discord.gg/5DvshJqG8Z)
@@ -27,41 +32,29 @@
 
 > 📣 **2026-05-07**: Wren Engine has merged into this repo under [`core/`](./core). The previous `Canner/wren-engine` repo is archived. The previous WrenAI GenBI app (the Docker-based chat-first BI product) is preserved on the [`legacy/v1`](https://github.com/Canner/WrenAI/tree/legacy/v1) branch (tag `v1-final`) and is now **Wren GenBI Classic**; see [A note on the "GenBI" name](#a-note-on-the-genbi-name) below. [Read the announcement →](https://github.com/Canner/WrenAI/discussions/2205)
 
-<!--
-  📺 HERO DEMO (place here)
-  ─────────────────────────
-  Suggested: a 10-second silent loop showing GenBI end to end:
-    1. User asks their agent (in plain language) for a dashboard
-    2. Agent writes governed SQL via the Wren context layer, builds the app
-    3. `wren genbi deploy` produces a live, shareable dashboard URL
-  Format: .gif (≤2 MB) or .mp4 (autoplay-muted).
-  Save under  /assets/wrenai-demo.gif  and use the line below:
-
-  <img src="./assets/wrenai-demo.gif" alt="Wren GenBI in action" width="820" />
--->
-
 ---
 
 ## What WrenAI is
 
-WrenAI is the **open-source GenBI engine**: it lets AI agents **generate, deploy, and govern** business intelligence, from a SQL answer to a shareable dashboard, across 22+ data sources.
+WrenAI is the **open-source generative BI (GenBI) engine**: it lets AI agents **generate, deploy, and govern** business intelligence, from a governed **text-to-SQL** answer to a shareable dashboard, across 22+ data sources.
 
-What makes the output trustworthy is the layer underneath: an open **context layer** that gives agents what schemas don't. That means business semantics, approved definitions, examples, memory, and governance, plus the unstructured company knowledge that lives in your docs, wikis, and chat threads. Generative BI is only as good as the context it stands on, and Wren is that context, made reviewable and reusable by every agent you already run.
+What makes the output trustworthy is the layer underneath: an open **AI context layer** plus a governed **semantic layer (MDL)** that gives agents what schemas don't. That means business semantics, approved definitions, examples, memory, and governance, plus the unstructured company knowledge that lives in your docs, wikis, and chat threads. Generative BI is only as good as the context it stands on, and Wren is that context, made reviewable and reusable by every agent you already run.
 
-![Wren AI architecture](./misc/wren-ai-architecture.png)
+![Wren AI generative BI architecture — semantic layer and AI context layer for AI agents](./misc/wren-ai-architecture.png)
 
 ## GenBI in three beats: Generate · Deploy · Know
 
-- **Generate.** Your agent turns a business question into *governed* SQL and charts. Schema-aware retrieval, MDL planning, dry-plan validation, and structured errors keep it correct instead of confidently wrong.
+- **Generate.** Your agent turns a business question into *governed* **text-to-SQL** and charts. Schema-aware retrieval, MDL planning, dry-plan validation, and structured errors keep it correct instead of confidently wrong.
 - **Deploy.** Turn any answer into a shareable, browser-side dashboard powered by [`wren-core-wasm`](https://docs.getwren.ai/oss/sdk/wasm) and ship it to your own Vercel or Cloudflare Pages account with one command.
 - **Know.** The knowledge that makes all of this correct lives in versionable, evidence-linked files: semantic models (MDL), company definitions (`instructions.md`), and a memory of what worked. Reviewable. Git-friendly. Never locked inside someone else's UI.
 
 ## Why agent builders pick WrenAI
 
-- **Generative BI, end to end.** Not just text-to-SQL. Generate the answer, deploy the dashboard, share the URL, all driven by the agents you already use.
-- **Knowledge management built in.** Business meaning, approved definitions, and proven examples are captured as reviewable, version-controlled context, not buried in prompts.
+- **Generative BI, end to end.** Wren does **governed text-to-SQL** — and goes beyond it: generate the answer, deploy the dashboard, share the URL, all driven by the agents you already use.
+- **Knowledge management built in.** Business meaning, approved definitions, and proven examples are captured as a reviewable, version-controlled **semantic layer (MDL)**, not buried in prompts.
 - **Open by default.** Open-sourced core, SDK, and skills under the Apache-2.0 license.
 - **Correctness as primitives.** Rich schema retrieval, dry-plan validation, structured errors with hints, value profiling, eval runner. The agent orchestrates; the trace lives in its reasoning.
+- **Enterprise-ready governance.** Row-level and column-level access control (RLAC / CLAC), governed execution, and audit-friendly, Git-reviewable context — see [Enterprise governance & security](#enterprise-governance--security).
 - **Sits on top of your existing stack.** Warehouse, transformation pipelines, your existing semantic layer. Not another tool to maintain.
 
 ## How Wren compares
@@ -79,7 +72,8 @@ What makes the output trustworthy is the layer underneath: an open **context lay
 
 - You want **AI agents to produce trustworthy BI**, answers *and* dashboards, not just plausible SQL.
 - Your business logic (definitions, enums, units, approved joins) lives **outside the database** and your agents keep getting it wrong.
-- You want context that's **open, reviewable, and version-controlled**, usable by every agent and person, not gated behind one vendor's UI.
+- You want an **AI context layer** and **semantic layer** that are **open, reviewable, and version-controlled**, usable by every agent and person, not gated behind one vendor's UI.
+- You need an **enterprise solution** with row/column-level governance you can audit.
 
 **Skip Wren if** you only need a one-off chart from a single CSV, or you're happy letting an agent guess at SQL with no governance.
 
@@ -170,12 +164,37 @@ wren ask "<question>" --direct     # wrap a question for a stronger agent
 
 Fast at first. Deep when you need it. Always reviewable and Git-friendly.
 
+## Semantic layer (MDL)
+
+Wren **is** a governed semantic layer, expressed in the **Modeling Definition Language (MDL)** — a Git-friendly, reviewable definition of what your data *means*, not just where it lives. Every text-to-SQL answer and dashboard is planned against it, so agents inherit your business truth instead of guessing.
+
+MDL covers:
+
+- **Models, columns, relationships, and views** — the shape of your data, decoupled from any one warehouse.
+- **Cubes and metrics** — approved, reusable definitions so "revenue" means the same thing everywhere.
+- **Row-level and column-level access control (RLAC / CLAC)** — governance defined once, enforced at query time.
+- **Business context beyond the schema** — enums, units, approved joins, and definitions in version-controlled `instructions.md` and `queries.yml`.
+
+Unlike a bare semantic layer that only stores definitions, Wren pairs the semantic layer with an **AI context layer** — memory, examples, and unstructured company knowledge — and a governed execution engine, so the same definitions that describe your data also *run* it correctly across 22+ sources.
+
+## Enterprise governance & security
+
+Wren is built to run as an **enterprise solution**, self-hosted or on your own cloud, with governance that agents can't route around:
+
+- **Row-level & column-level access control (RLAC / CLAC)** enforced at query time through the semantic layer.
+- **Governed execution primitives** — functions, dry-plan validation, row limits, and structured errors keep agent-generated SQL inside guardrails.
+- **Open, auditable context** — every definition, permission, and example lives in Git: reviewable, versioned, and diff-able, not buried in a vendor UI.
+- **Self-hosted & open-source core** under Apache-2.0 — deploy in your own environment, keep your data where it is.
+- **On the roadmap:** audit logs, rate limits, approval workflows, and a data-flow inspector (see [What's next](#whats-next)).
+
+For a maintained, hosted, and commercially supported deployment, see [Wren AI Commercial](https://getwren.ai).
+
 ## What's Included
 
-- **Modeling Definition Language (MDL)**: models, columns, relationships, views, cubes, metrics, row-level / column-level access control (RLAC / CLAC)
-- **Engine**: Apache DataFusion based, 22+ data sources
+- **Modeling Definition Language (MDL) — the semantic layer**: models, columns, relationships, views, cubes, metrics, row-level / column-level access control (RLAC / CLAC)
+- **Engine**: Apache DataFusion based, 22+ data sources (BigQuery, Snowflake, PostgreSQL, ClickHouse, Amazon Redshift, Databricks, DuckDB, and more)
 - **GenBI dashboards**: agent-built, browser-side apps powered by [`wren-core-wasm`](https://docs.getwren.ai/oss/sdk/wasm), deployable to Vercel / Cloudflare Pages
-- **Knowledge & memory**: business meaning in version-controlled `instructions.md` and `queries.yml`, plus a local LanceDB memory index (hybrid retrieval) for recall
+- **Knowledge & memory — the AI context layer**: business meaning in version-controlled `instructions.md` and `queries.yml`, plus a local LanceDB memory index (hybrid retrieval) for recall
 - **Agent SDK**: `wren-langchain` (LangChain / LangGraph), `wren-pydantic`; reference Python integration for other stacks
 - **Governed execution primitives**: functions, dry-plan, row limits, access control
 
@@ -186,6 +205,32 @@ Fast at first. Deep when you need it. Always reviewable and Git-friendly.
 - **Full governed execution**: audit logs, rate limits, approval workflow, data-flow inspector
 
 Full roadmap and design notes: see the [introduction](https://docs.getwren.ai/oss/introduction).
+
+## FAQ
+
+### What is generative BI (GenBI)?
+
+Generative BI (GenBI) is business intelligence produced by AI agents: instead of manually building charts, an agent generates governed SQL, deploys a dashboard, and shares it — grounded in an AI context layer so the output is trustworthy, not just plausible. Wren AI is the open-source GenBI engine.
+
+### Does Wren AI do text-to-SQL?
+
+Yes — Wren does **governed** text-to-SQL: agents turn natural-language questions into SQL that's planned against your semantic layer (MDL), dry-plan validated, and access-controlled. It then goes beyond text-to-SQL to deploy dashboards and manage the context that keeps answers correct.
+
+### Is Wren AI a semantic layer?
+
+Yes. Wren is a governed semantic layer expressed in MDL — models, metrics, relationships, and RLAC/CLAC governance — and it pairs that semantic layer with an AI context layer (memory, examples, unstructured knowledge) so agents inherit your business definitions.
+
+### What is an AI context layer?
+
+An AI context layer is the reviewable, version-controlled knowledge that agents need but schemas don't provide: business semantics, approved definitions, examples, memory, and governance. It's what makes generative BI trustworthy. Read the vision: [The missing context layer for AI agents over business data](https://www.getwren.ai/post/the-missing-context-layer-for-ai-agents-over-business-data).
+
+### Can I run Wren AI as an enterprise solution?
+
+Yes. Wren is open-source (Apache-2.0) and self-hostable, with enterprise-grade governance — row/column-level access control, governed execution, and open auditable context. For a hosted, commercially supported version, see [Wren AI Commercial](https://getwren.ai).
+
+### Which data sources does Wren AI support?
+
+22+ sources via an Apache DataFusion engine, including BigQuery, Snowflake, PostgreSQL, ClickHouse, Amazon Redshift, Databricks, and DuckDB. See [Connect a database](https://docs.getwren.ai/oss/guides/connect).
 
 ## A note on the "GenBI" name
 
@@ -222,7 +267,7 @@ We build in the open. Issues, PRs, connector contributions, SDK integrations, do
 - Looking for somewhere to start? Try the [`good first issue`](https://github.com/Canner/WrenAI/labels/good%20first%20issue) label.
 
 <details>
-<summary><strong>Project structure</strong> (click to expand)</summary>
+<summary><b>Project structure (click to expand)</b></summary>
 
 ```
 core/
