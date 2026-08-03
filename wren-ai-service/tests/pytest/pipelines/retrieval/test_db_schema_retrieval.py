@@ -760,7 +760,76 @@ def test_construct_retrieval_results_preserves_retrieved_metric_when_pruning():
         "modeled_dataset",
         "semantic_metric",
     ]
+    assert result["retrieval_results"][1]["column_names"] == ["metric_value"]
+    assert result["retrieval_results"][1]["manifest_column_names"] == ["metric_value"]
     assert result["has_metric"] is True
+
+
+def test_construct_retrieval_results_preserves_retrieved_view_columns_when_pruning():
+    result = construct_retrieval_results(
+        check_using_db_schemas_without_pruning={},
+        filter_columns_in_tables={
+            "replies": [
+                """
+                {
+                    "results": [
+                        {
+                            "table_name": "modeled_dataset",
+                            "table_selection_reason": "Selected for the current request.",
+                            "table_contents": {
+                                "chain_of_thought_reasoning": ["Needed field."],
+                                "columns": ["stored_attribute"]
+                            }
+                        }
+                    ]
+                }
+                """
+            ]
+        },
+        construct_db_schemas=[
+            {
+                "type": "TABLE",
+                "name": "modeled_dataset",
+                "comment": "",
+                "columns": [
+                    {
+                        "type": "COLUMN",
+                        "name": "stored_attribute",
+                        "data_type": "VARCHAR",
+                        "comment": "",
+                        "is_primary_key": False,
+                    }
+                ],
+                "properties": {},
+                "primaryKey": "",
+            }
+        ],
+        dbschema_retrieval=[
+            Document(
+                content=str(
+                    {
+                        "type": "VIEW",
+                        "comment": "",
+                        "name": "semantic_view",
+                        "columns": [
+                            {
+                                "name": "view_attribute",
+                                "data_type": "VARCHAR",
+                                "comment": "",
+                            }
+                        ],
+                    }
+                ),
+                meta={"type": "TABLE_SCHEMA", "name": "semantic_view"},
+            )
+        ],
+    )
+
+    assert result["retrieval_results"][1]["table_name"] == "semantic_view"
+    assert result["retrieval_results"][1]["column_names"] == ["view_attribute"]
+    assert result["retrieval_results"][1]["manifest_column_names"] == [
+        "view_attribute"
+    ]
 
 
 def test_construct_retrieval_results_keeps_schema_when_pruner_returns_unknown_columns():

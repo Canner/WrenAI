@@ -224,6 +224,9 @@ class AskFeedbackService:
                         original_sql = failed_dry_run_result["original_sql"]
                         invalid_sql = failed_dry_run_result["sql"]
                         error_message = failed_dry_run_result["error"]
+                        is_schema_grounding_error = (
+                            failed_dry_run_result.get("type") == "SCHEMA_GROUNDING"
+                        )
                         sql_diagnosis_reasoning = None
 
                         self._ask_feedback_results[
@@ -233,7 +236,7 @@ class AskFeedbackService:
                             trace_id=trace_id,
                         )
 
-                        if allow_sql_diagnosis:
+                        if allow_sql_diagnosis and not is_schema_grounding_error:
                             sql_diagnosis_results = await self._pipelines[
                                 "sql_diagnosis"
                             ].run(
@@ -262,7 +265,7 @@ class AskFeedbackService:
                             instructions=instructions,
                             invalid_generation_result={
                                 "original_sql": original_sql,
-                                "sql": invalid_sql,
+                                "sql": "" if is_schema_grounding_error else invalid_sql,
                                 "error": correction_error_message,
                             },
                             project_id=ask_feedback_request.project_id,

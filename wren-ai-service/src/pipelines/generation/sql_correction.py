@@ -15,6 +15,7 @@ from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
+    build_executable_schema_contract,
     construct_instructions,
     get_text_to_sql_rules,
 )
@@ -56,6 +57,11 @@ The final answer must be in JSON format:
 
 
 sql_correction_user_prompt_template = """
+{% if executable_schema_contract %}
+{{ executable_schema_contract }}
+
+{% endif %}
+
 {% if documents %}
 ### DATABASE SCHEMA ###
 {% for document in documents %}
@@ -100,9 +106,11 @@ def prompt(
     query: str | None = None,
     instructions: list[dict] | None = None,
     sql_functions: list[SqlFunction] | None = None,
+    schema_contracts: list[dict] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         documents=documents,
+        executable_schema_contract=build_executable_schema_contract(schema_contracts),
         invalid_generation_result=invalid_generation_result,
         query=query or "",
         instructions=construct_instructions(

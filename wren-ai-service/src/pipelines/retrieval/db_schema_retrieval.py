@@ -118,6 +118,14 @@ def _build_metric_ddl(content: dict) -> str:
     )
 
 
+def _content_column_names(content: dict) -> list[str]:
+    return [
+        column.get("name", "")
+        for column in content.get("columns", [])
+        if column.get("name")
+    ]
+
+
 def _schema_column_names(content: dict) -> list[str]:
     return [
         column["name"]
@@ -195,7 +203,7 @@ def _build_table_context_ddl(
 
 def _build_view_ddl(content: dict) -> str:
     columns = content.get("columns", [])
-    column_names = [column.get("name", "") for column in columns if column.get("name")]
+    column_names = _content_column_names(content)
     columns_ddl = [
         f"{column['name']} {get_engine_supported_data_type(column.get('data_type'))}"
         for column in columns
@@ -461,18 +469,24 @@ def check_using_db_schemas_without_pruning(
         content = ast.literal_eval(document.content)
 
         if content["type"] == "METRIC":
+            column_names = _content_column_names(content)
             retrieval_results.append(
                 {
                     "table_name": content["name"],
                     "table_ddl": _build_metric_ddl(content),
+                    "column_names": column_names,
+                    "manifest_column_names": column_names,
                 }
             )
             has_metric = True
         elif content["type"] == "VIEW":
+            column_names = _content_column_names(content)
             retrieval_results.append(
                 {
                     "table_name": content["name"],
                     "table_ddl": _build_view_ddl(content),
+                    "column_names": column_names,
+                    "manifest_column_names": column_names,
                 }
             )
 
@@ -581,18 +595,24 @@ def construct_retrieval_results(
             content = ast.literal_eval(document.content)
 
             if content["type"] == "METRIC":
+                column_names = _content_column_names(content)
                 retrieval_results.append(
                     {
                         "table_name": content["name"],
                         "table_ddl": _build_metric_ddl(content),
+                        "column_names": column_names,
+                        "manifest_column_names": column_names,
                     }
                 )
                 has_metric = True
             elif content["type"] == "VIEW":
+                column_names = _content_column_names(content)
                 retrieval_results.append(
                     {
                         "table_name": content["name"],
                         "table_ddl": _build_view_ddl(content),
+                        "column_names": column_names,
+                        "manifest_column_names": column_names,
                     }
                 )
 

@@ -14,6 +14,7 @@ from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
+    build_executable_schema_contract,
     construct_instructions,
     get_calculated_field_instructions,
     get_json_field_instructions,
@@ -53,6 +54,11 @@ The final answer must be JSON. Return a SQL string only when it is fully grounde
 
 
 sql_regeneration_user_prompt_template = """
+{% if executable_schema_contract %}
+{{ executable_schema_contract }}
+
+{% endif %}
+
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
@@ -119,11 +125,13 @@ def prompt(
     has_json_field: bool = False,
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
+    schema_contracts: list[dict] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
         sql=sql,
         documents=documents,
+        executable_schema_contract=build_executable_schema_contract(schema_contracts),
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,

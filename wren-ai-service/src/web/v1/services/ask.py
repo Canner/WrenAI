@@ -538,6 +538,9 @@ class AskService:
                         original_sql = failed_dry_run_result["original_sql"]
                         invalid_sql = failed_dry_run_result["sql"]
                         error_message = failed_dry_run_result["error"]
+                        is_schema_grounding_error = (
+                            failed_dry_run_result.get("type") == "SCHEMA_GROUNDING"
+                        )
                         current_sql_correction_retries += 1
 
                         self._ask_results[query_id] = AskResultResponse(
@@ -551,7 +554,8 @@ class AskService:
                             is_followup=True if histories else False,
                         )
 
-                        if allow_sql_diagnosis:
+                        sql_diagnosis_reasoning = None
+                        if allow_sql_diagnosis and not is_schema_grounding_error:
                             sql_diagnosis_results = await self._pipelines[
                                 "sql_diagnosis"
                             ].run(
@@ -565,6 +569,10 @@ class AskService:
                                 "post_process"
                             ].get("reasoning")
 
+                        correction_error_message = error_message
+                        if sql_diagnosis_reasoning:
+                            correction_error_message = sql_diagnosis_reasoning
+
                         sql_correction_results = await self._pipelines[
                             "sql_correction"
                         ].run(
@@ -572,10 +580,10 @@ class AskService:
                             query=user_query,
                             instructions=instructions,
                             invalid_generation_result={
-                                "sql": original_sql,
-                                "error": sql_diagnosis_reasoning
-                                if allow_sql_diagnosis
-                                else error_message,
+                                "sql": (
+                                    "" if is_schema_grounding_error else original_sql
+                                ),
+                                "error": correction_error_message,
                             },
                             project_id=ask_request.project_id,
                             mdl_hash=ask_request.mdl_hash,

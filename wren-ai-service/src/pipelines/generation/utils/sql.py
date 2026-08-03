@@ -183,6 +183,36 @@ def _table_grounding_error(
     return None
 
 
+def build_executable_schema_contract(schema_contracts: list[dict] | None) -> str:
+    if not schema_contracts:
+        return ""
+
+    sections = [
+        "### EXECUTABLE WREN IDENTIFIER CATALOG ###",
+        "Copy executable table and column identifiers only from this catalog or the matching DATABASE SCHEMA DDL.",
+        "Use descriptions, aliases, source names, and user wording only to understand meaning.",
+    ]
+
+    for contract in schema_contracts:
+        table_name = contract.get("table_name")
+        if not table_name:
+            continue
+
+        sections.append(f"TABLE: {table_name}")
+        column_names = [
+            column_name
+            for column_name in contract.get("column_names", [])
+            if column_name
+        ]
+        if column_names:
+            sections.append("COLUMNS:")
+            sections.extend(f"- {column_name}" for column_name in column_names)
+        else:
+            sections.append("COLUMNS: declared in the matching DATABASE SCHEMA DDL")
+
+    return "\n".join(sections)
+
+
 @component
 class SQLGenPostProcessor:
     def __init__(self, engine: Engine):
