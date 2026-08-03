@@ -49,6 +49,42 @@ async def test_embedding_uses_current_query_without_history_text():
     assert embedder.query == "current request"
 
 
+@pytest.mark.asyncio
+async def test_embedding_skips_semantic_search_when_deployed_schema_exists():
+    class Embedder:
+        def __init__(self):
+            self.called = False
+
+        async def run(self, query):
+            self.called = True
+            return {"embedding": [1.0]}
+
+    schema_store = StoreCounter(count=1)
+    embedder = Embedder()
+
+    result = await embedding(
+        query="current request",
+        embedder=embedder,
+        histories=[],
+        project_id="project-1",
+        mdl_hash="deploy-1",
+        dbschema_store=schema_store,
+    )
+
+    assert result == {}
+    assert embedder.called is False
+    assert schema_store.filters == [
+        {
+            "operator": "AND",
+            "conditions": [
+                {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+                {"field": "project_id", "operator": "==", "value": "project-1"},
+                {"field": "mdl_hash", "operator": "==", "value": "deploy-1"},
+            ],
+        }
+    ]
+
+
 def test_column_pruning_prompt_uses_current_query_without_history_text():
     result = build_column_selection_prompt(
         query="current request",
@@ -180,6 +216,30 @@ async def test_table_retrieval_fetches_explicit_table_descriptions():
             {"field": "name", "operator": "in", "value": ["orders"]},
         ],
     }
+
+
+@pytest.mark.asyncio
+async def test_table_retrieval_skips_candidate_search_without_embedding_or_tables():
+    class Retriever:
+        def __init__(self):
+            self.called = False
+
+        async def run(self, query_embedding, filters):
+            self.called = True
+            return {"documents": []}
+
+    retriever = Retriever()
+
+    result = await table_retrieval(
+        embedding={},
+        project_id="project-1",
+        tables=[],
+        table_retriever=retriever,
+        mdl_hash="deploy-1",
+    )
+
+    assert result == {"documents": []}
+    assert retriever.called is False
 
 
 @pytest.mark.asyncio
@@ -357,6 +417,80 @@ async def test_dbschema_retrieval_keeps_deploy_scope_when_no_documents_match():
     assert retriever.calls == [
         {
             "query_embedding": [0.25],
+            "filters": {
+                "operator": "AND",
+                "conditions": [
+                    {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+                    {"field": "project_id", "operator": "==", "value": "project-1"},
+                    {"field": "mdl_hash", "operator": "==", "value": "deploy-1"},
+                ],
+            },
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_dbschema_retrieval_loads_exact_deployed_schema_without_candidates():
+    class Retriever:
+        def __init__(self):
+            self.calls = []
+
+        async def run(self, query_embedding, filters):
+            self.calls.append(
+                {
+                    "query_embedding": query_embedding,
+                    "filters": filters,
+                }
+            )
+            return {
+                "documents": [
+                    Document(
+                        content=str(
+                            {
+                                "type": "TABLE",
+                                "name": "orders",
+                                "comment": "",
+                                "columns": [],
+                                "properties": {},
+                                "primaryKey": "",
+                            }
+                        ),
+                        meta={"type": "TABLE_SCHEMA", "name": "orders"},
+                    ),
+                    Document(
+                        content=str(
+                            {
+                                "type": "TABLE_COLUMNS",
+                                "columns": [
+                                    {
+                                        "type": "COLUMN",
+                                        "name": "order_id",
+                                        "data_type": "VARCHAR",
+                                        "comment": "",
+                                        "is_primary_key": True,
+                                    }
+                                ],
+                            }
+                        ),
+                        meta={"type": "TABLE_SCHEMA", "name": "orders"},
+                    ),
+                ]
+            }
+
+    retriever = Retriever()
+
+    documents = await dbschema_retrieval(
+        table_retrieval={"documents": []},
+        project_id="project-1",
+        mdl_hash="deploy-1",
+        dbschema_retriever=retriever,
+        embedding={},
+    )
+
+    assert [document.meta["name"] for document in documents] == ["orders", "orders"]
+    assert retriever.calls == [
+        {
+            "query_embedding": [],
             "filters": {
                 "operator": "AND",
                 "conditions": [

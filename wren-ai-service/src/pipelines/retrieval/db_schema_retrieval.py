@@ -254,11 +254,32 @@ async def active_mdl_hash(
 
 
 @observe(capture_input=False, capture_output=False)
-async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> dict:
+async def embedding(
+    query: str,
+    embedder: Any,
+    histories: list[AskHistory],
+    project_id: str = "",
+    mdl_hash: str = "",
+    dbschema_store: Any = None,
+) -> dict:
+    if project_id and mdl_hash and dbschema_store:
+        filters = {
+            "operator": "AND",
+            "conditions": [
+                {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+                *build_project_deploy_filter(
+                    project_id=project_id,
+                    mdl_hash=mdl_hash,
+                )["conditions"],
+            ],
+        }
+        if await dbschema_store.count_documents(filters=filters):
+            return {}
+
     if query:
         return await embedder.run(query)
-    else:
-        return {}
+
+    return {}
 
 
 @observe(capture_input=False)
@@ -293,15 +314,16 @@ async def table_retrieval(
             query_embedding=embedding.get("embedding"),
             filters=filters,
         )
-    else:
-        filters["conditions"].append(
-            {"field": "name", "operator": "in", "value": tables}
-        )
 
-        return await table_retriever.run(
-            query_embedding=[],
-            filters=filters,
-        )
+    if not tables:
+        return {"documents": []}
+
+    filters["conditions"].append({"field": "name", "operator": "in", "value": tables})
+
+    return await table_retriever.run(
+        query_embedding=[],
+        filters=filters,
+    )
 
 
 @observe(capture_input=False)
@@ -390,6 +412,13 @@ async def dbschema_retrieval(
             table_names.append(table_name)
 
     documents = []
+    if not table_names and not (embedding and embedding.get("embedding")):
+        results = await dbschema_retriever.run(
+            query_embedding=[],
+            filters=_base_filters(),
+        )
+        return results["documents"]
+
     if not table_names and embedding and embedding.get("embedding"):
         results = await dbschema_retriever.run(
             query_embedding=embedding.get("embedding"),
