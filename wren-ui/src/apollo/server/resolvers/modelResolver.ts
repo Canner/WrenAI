@@ -1376,7 +1376,7 @@ export class ModelResolver {
         });
       }
     } catch (error) {
-      if (this.isDryPlanTimeout(error)) {
+      if (this.isDryPlanTimeout(error) && allowFallback !== false) {
         logger.warn(
           'Dry plan timed out; accepting generated Wren SQL without native rewrite',
         );

@@ -197,6 +197,21 @@ def _table_grounding_error(
     return None
 
 
+def _sql_statement_shape_error(sql: str | None) -> str | None:
+    if not sql:
+        return None
+
+    statements = [
+        statement
+        for statement in sqlparse.parse(sql)
+        if str(statement).strip().strip(";").strip()
+    ]
+    if len(statements) > 1:
+        return "Generated SQL contains multiple statements; return exactly one SQL statement."
+
+    return None
+
+
 def build_executable_schema_contract(schema_contracts: list[dict] | None) -> str:
     if not schema_contracts:
         return ""
@@ -254,10 +269,26 @@ class SQLGenPostProcessor:
                 cleaned_generation_result = orjson.loads(cleaned_generation_result).get(
                     "sql"
                 )
+                cleaned_generation_result = clean_generation_result(
+                    cleaned_generation_result
+                )
 
             cleaned_generation_result = _canonicalize_wren_sql_syntax(
                 cleaned_generation_result
             )
+
+            shape_error = _sql_statement_shape_error(cleaned_generation_result)
+            if shape_error:
+                return {
+                    "valid_generation_result": {},
+                    "invalid_generation_result": {
+                        "sql": cleaned_generation_result,
+                        "original_sql": cleaned_generation_result,
+                        "type": "SQL_SYNTAX",
+                        "error": shape_error,
+                        "correlation_id": "",
+                    },
+                }
 
             grounding_error = _table_grounding_error(
                 cleaned_generation_result, schema_contracts

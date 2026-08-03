@@ -1,5 +1,6 @@
 import pytest
 
+from src.core.engine import clean_generation_result
 from src.pipelines.generation.utils.sql import SQLGenPostProcessor
 
 
@@ -90,6 +91,13 @@ class CapturingEngine:
         return True, None, {"correlation_id": "valid-correlation"}
 
 
+def test_clean_generation_result_preserves_internal_statement_separators():
+    assert (
+        clean_generation_result("SELECT * FROM a; SELECT * FROM b;")
+        == "SELECT * FROM a; SELECT * FROM b"
+    )
+
+
 @pytest.mark.asyncio
 async def test_sql_post_processor_converts_select_top_to_wren_limit():
     engine = CapturingEngine()
@@ -105,6 +113,30 @@ async def test_sql_post_processor_converts_select_top_to_wren_limit():
         "correlation_id": "valid-correlation",
     }
     assert result["invalid_generation_result"] == {}
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_rejects_multiple_statements_before_execution():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        ['{"sql": "SELECT * FROM first_model; SELECT * FROM second_model;"}'],
+        project_id="project-id",
+        schema_contracts=[
+            {"table_name": "first_model", "column_names": []},
+            {"table_name": "second_model", "column_names": []},
+        ],
+    )
+
+    assert engine.executed is False
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"] == {
+        "sql": "SELECT * FROM first_model; SELECT * FROM second_model",
+        "original_sql": "SELECT * FROM first_model; SELECT * FROM second_model",
+        "type": "SQL_SYNTAX",
+        "error": "Generated SQL contains multiple statements; return exactly one SQL statement.",
+        "correlation_id": "",
+    }
 
 
 @pytest.mark.asyncio
