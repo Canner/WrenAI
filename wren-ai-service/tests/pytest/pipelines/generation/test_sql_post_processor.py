@@ -53,6 +53,7 @@ class ErrorEngine:
 class CapturingEngine:
     def __init__(self):
         self.sql = None
+        self.executed = False
 
     async def execute_sql(
         self,
@@ -63,6 +64,7 @@ class CapturingEngine:
         dry_run=True,
     ):
         self.sql = sql
+        self.executed = True
         return True, None, {"correlation_id": "valid-correlation"}
 
 
@@ -78,6 +80,60 @@ async def test_sql_post_processor_converts_select_top_to_wren_limit():
     assert engine.sql == "SELECT 1 ORDER BY 1 LIMIT 5"
     assert result["valid_generation_result"] == {
         "sql": "SELECT 1 ORDER BY 1 LIMIT 5",
+        "correlation_id": "valid-correlation",
+    }
+    assert result["invalid_generation_result"] == {}
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_rejects_tables_outside_schema_contract():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        ['{"sql": "SELECT * FROM unsupported_model"}'],
+        project_id="project-id",
+        schema_contracts=[{"table_name": "supported_model", "column_names": []}],
+    )
+
+    assert engine.executed is False
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"] == {
+        "sql": "SELECT * FROM unsupported_model",
+        "original_sql": "SELECT * FROM unsupported_model",
+        "type": "SCHEMA_GROUNDING",
+        "error": "Generated SQL references table identifiers outside the retrieved deployed schema.",
+        "correlation_id": "",
+    }
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_rejects_joined_tables_outside_schema_contract():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        ['{"sql": "SELECT * FROM supported_model JOIN unsupported_model ON 1 = 1"}'],
+        project_id="project-id",
+        schema_contracts=[{"table_name": "supported_model", "column_names": []}],
+    )
+
+    assert engine.executed is False
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "SCHEMA_GROUNDING"
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_allows_tables_inside_schema_contract():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        ['{"sql": "SELECT * FROM supported_model"}'],
+        project_id="project-id",
+        schema_contracts=[{"table_name": "supported_model", "column_names": []}],
+    )
+
+    assert engine.executed is True
+    assert result["valid_generation_result"] == {
+        "sql": "SELECT * FROM supported_model",
         "correlation_id": "valid-correlation",
     }
     assert result["invalid_generation_result"] == {}

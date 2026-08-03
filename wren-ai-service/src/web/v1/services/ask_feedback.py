@@ -167,6 +167,16 @@ class AskFeedbackService:
                 has_json_field = _retrieval_result.get("has_json_field", False)
                 documents = _retrieval_result.get("retrieval_results", [])
                 table_ddls = [document.get("table_ddl") for document in documents]
+                schema_contracts = [
+                    {
+                        "table_name": document.get("table_name"),
+                        "column_names": document.get("manifest_column_names")
+                        or document.get("column_names")
+                        or [],
+                    }
+                    for document in documents
+                    if document.get("table_name")
+                ]
                 sql_samples = sql_samples_task["formatted_output"].get("documents", [])
                 instructions = instructions_task["formatted_output"].get(
                     "documents", []
@@ -193,6 +203,7 @@ class AskFeedbackService:
                     has_json_field=has_json_field,
                     sql_functions=sql_functions,
                     sql_knowledge=sql_knowledge,
+                    schema_contracts=schema_contracts,
                 )
 
                 if sql_valid_result := text_to_sql_generation_results["post_process"][
@@ -258,6 +269,7 @@ class AskFeedbackService:
                             mdl_hash=ask_feedback_request.mdl_hash,
                             sql_functions=sql_functions,
                             sql_knowledge=sql_knowledge,
+                            schema_contracts=schema_contracts,
                         )
 
                         if valid_generation_result := sql_correction_results[

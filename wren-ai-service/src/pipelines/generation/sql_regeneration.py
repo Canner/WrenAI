@@ -164,10 +164,12 @@ async def post_process(
     regenerate_sql: dict,
     post_processor: SQLGenPostProcessor,
     project_id: str | None = None,
+    schema_contracts: list[dict] | None = None,
 ) -> dict:
     return await post_processor.run(
         regenerate_sql.get("replies"),
         project_id=project_id,
+        schema_contracts=schema_contracts,
     )
 
 
@@ -212,6 +214,7 @@ class SQLRegeneration(BasicPipeline):
         has_json_field: bool = False,
         sql_functions: list[SqlFunction] | None = None,
         sql_knowledge: SqlKnowledge | None = None,
+        schema_contracts: list[dict] | None = None,
     ):
         logger.info("SQL Regeneration pipeline is running...")
 
@@ -230,6 +233,7 @@ class SQLRegeneration(BasicPipeline):
                 "has_json_field": has_json_field,
                 "sql_functions": sql_functions,
                 "sql_knowledge": sql_knowledge,
+                "schema_contracts": schema_contracts,
                 **self._components,
             },
         )

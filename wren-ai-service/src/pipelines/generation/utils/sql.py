@@ -6,6 +6,7 @@ import orjson
 import sqlparse
 from haystack import component
 from haystack.dataclasses import ChatMessage
+from sqlparse.sql import Identifier, IdentifierList, Parenthesis, TokenList
 from sqlparse import tokens as sqlparse_tokens
 from pydantic import BaseModel
 
@@ -63,6 +64,125 @@ def _canonicalize_wren_sql_syntax(sql: str | None) -> str | None:
     return f"{before_top} {after_limit} LIMIT {limit_token.value}".strip()
 
 
+def _meaningful_tokens(token_list: TokenList) -> list:
+    return [
+        token
+        for token in token_list.tokens
+        if not token.is_whitespace and token.ttype not in sqlparse_tokens.Comment
+    ]
+
+
+def _identifier_name(identifier: Identifier) -> str | None:
+    return identifier.get_real_name() or identifier.get_name()
+
+
+def _contains_select(token: TokenList) -> bool:
+    return any(
+        child.ttype == sqlparse_tokens.Keyword.DML and child.normalized == "SELECT"
+        for child in token.flatten()
+    )
+
+
+def _collect_cte_names(statement: TokenList) -> set[str]:
+    tokens = _meaningful_tokens(statement)
+    if not tokens or tokens[0].normalized != "WITH":
+        return set()
+
+    names = set()
+    for token in tokens[1:]:
+        if token.ttype == sqlparse_tokens.Keyword.DML and token.normalized == "SELECT":
+            break
+        if isinstance(token, IdentifierList):
+            for identifier in token.get_identifiers():
+                name = _identifier_name(identifier)
+                if name:
+                    names.add(name)
+        elif isinstance(token, Identifier):
+            name = _identifier_name(token)
+            if name:
+                names.add(name)
+
+    return names
+
+
+def _collect_table_references(token: TokenList) -> set[str]:
+    table_names = set()
+    tokens = _meaningful_tokens(token)
+    expect_table = False
+
+    for current in tokens:
+        normalized = current.normalized
+
+        if isinstance(current, Parenthesis):
+            if _contains_select(current):
+                table_names.update(_collect_table_references(current))
+            continue
+
+        if current.ttype == sqlparse_tokens.Keyword and (
+            normalized == "FROM" or normalized == "JOIN" or normalized.endswith(" JOIN")
+        ):
+            expect_table = True
+            continue
+
+        if expect_table:
+            if isinstance(current, IdentifierList):
+                for identifier in current.get_identifiers():
+                    if any(
+                        isinstance(child, Parenthesis) and _contains_select(child)
+                        for child in identifier.tokens
+                    ):
+                        for child in identifier.tokens:
+                            if isinstance(child, Parenthesis):
+                                table_names.update(_collect_table_references(child))
+                    else:
+                        name = _identifier_name(identifier)
+                        if name:
+                            table_names.add(name)
+            elif isinstance(current, Identifier):
+                if any(
+                    isinstance(child, Parenthesis) and _contains_select(child)
+                    for child in current.tokens
+                ):
+                    for child in current.tokens:
+                        if isinstance(child, Parenthesis):
+                            table_names.update(_collect_table_references(child))
+                else:
+                    name = _identifier_name(current)
+                    if name:
+                        table_names.add(name)
+            expect_table = False
+
+    return table_names
+
+
+def _table_grounding_error(
+    sql: str | None, schema_contracts: list[dict] | None
+) -> str | None:
+    if not sql or not schema_contracts:
+        return None
+
+    allowed_tables = {
+        contract.get("table_name")
+        for contract in schema_contracts
+        if contract.get("table_name")
+    }
+    if not allowed_tables:
+        return None
+
+    statements = sqlparse.parse(sql)
+    cte_names = set()
+    referenced_tables = set()
+    for statement in statements:
+        cte_names.update(_collect_cte_names(statement))
+        referenced_tables.update(_collect_table_references(statement))
+
+    ungrounded_tables = referenced_tables - allowed_tables - cte_names
+    if ungrounded_tables:
+        return "Generated SQL references table identifiers outside the retrieved deployed schema."
+
+    return None
+
+
 @component
 class SQLGenPostProcessor:
     def __init__(self, engine: Engine):
@@ -80,6 +200,7 @@ class SQLGenPostProcessor:
         allow_dry_plan_fallback: bool = True,
         data_source: str = "",
         allow_data_preview: bool = False,
+        schema_contracts: list[dict] | None = None,
     ) -> dict:
         try:
             cleaned_generation_result = clean_generation_result(replies[0])
@@ -93,6 +214,21 @@ class SQLGenPostProcessor:
             cleaned_generation_result = _canonicalize_wren_sql_syntax(
                 cleaned_generation_result
             )
+
+            grounding_error = _table_grounding_error(
+                cleaned_generation_result, schema_contracts
+            )
+            if grounding_error:
+                return {
+                    "valid_generation_result": {},
+                    "invalid_generation_result": {
+                        "sql": cleaned_generation_result,
+                        "original_sql": cleaned_generation_result,
+                        "type": "SCHEMA_GROUNDING",
+                        "error": grounding_error,
+                        "correlation_id": "",
+                    },
+                }
 
             (
                 valid_generation_result,
