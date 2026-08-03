@@ -14,6 +14,7 @@ from tqdm import tqdm
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
+from src.pipelines.common import build_project_deploy_filter
 from src.pipelines.indexing import AsyncDocumentWriter, DocumentCleaner, MDLValidator
 
 logger = logging.getLogger("wren-ai-service")
@@ -277,6 +278,7 @@ class TableDescription(BasicPipeline):
         table_description_store = document_store_provider.get_store(
             dataset_name="table_descriptions"
         )
+        self._store = table_description_store
 
         self._components = {
             "cleaner": DocumentCleaner([table_description_store]),
@@ -323,3 +325,22 @@ class TableDescription(BasicPipeline):
             cleaner=self._components["cleaner"],
             project_id=project_id,
         )
+
+    async def count_documents(
+        self,
+        project_id: Optional[str] = None,
+        mdl_hash: Optional[str] = None,
+    ) -> int:
+        filters = {
+            "operator": "AND",
+            "conditions": [
+                {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
+            ],
+        }
+        if project_deploy_filter := build_project_deploy_filter(
+            project_id=project_id,
+            mdl_hash=mdl_hash,
+        ):
+            filters["conditions"] += project_deploy_filter["conditions"]
+
+        return await self._store.count_documents(filters=filters)

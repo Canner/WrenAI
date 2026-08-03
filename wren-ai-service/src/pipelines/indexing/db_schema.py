@@ -21,6 +21,7 @@ from src.pipelines.indexing import (
     MDLValidator,
     clean_display_name,
 )
+from src.pipelines.common import build_project_deploy_filter
 from src.pipelines.indexing.utils import helper
 
 logger = logging.getLogger("wren-ai-service")
@@ -430,6 +431,7 @@ class DBSchema(BasicPipeline):
         **kwargs,
     ) -> None:
         dbschema_store = document_store_provider.get_store()
+        self._store = dbschema_store
 
         self._components = {
             "cleaner": DocumentCleaner([dbschema_store]),
@@ -479,3 +481,22 @@ class DBSchema(BasicPipeline):
             cleaner=self._components["cleaner"],
             project_id=project_id,
         )
+
+    async def count_documents(
+        self,
+        project_id: Optional[str] = None,
+        mdl_hash: Optional[str] = None,
+    ) -> int:
+        filters = {
+            "operator": "AND",
+            "conditions": [
+                {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+            ],
+        }
+        if project_deploy_filter := build_project_deploy_filter(
+            project_id=project_id,
+            mdl_hash=mdl_hash,
+        ):
+            filters["conditions"] += project_deploy_filter["conditions"]
+
+        return await self._store.count_documents(filters=filters)

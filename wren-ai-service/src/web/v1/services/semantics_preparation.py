@@ -54,6 +54,9 @@ class SemanticsPreparationService:
         self._prepare_semantics_statuses: Dict[
             str, SemanticsPreparationStatusResponse
         ] = TTLCache(maxsize=maxsize, ttl=ttl)
+        self._prepare_semantics_project_ids: Dict[str, str] = TTLCache(
+            maxsize=maxsize, ttl=ttl
+        )
 
     @observe(name="Prepare Semantics")
     @trace_metadata
@@ -107,11 +110,22 @@ class SemanticsPreparationService:
 
             await asyncio.gather(*tasks)
 
+            if not await self._has_indexed_schema_documents(
+                prepare_semantics_request.project_id,
+                prepare_semantics_request.mdl_hash,
+            ):
+                raise RuntimeError(
+                    "No indexed schema documents were found for the prepared deployment"
+                )
+
             self._prepare_semantics_statuses[
                 prepare_semantics_request.mdl_hash
             ] = SemanticsPreparationStatusResponse(
                 status="finished",
             )
+            self._prepare_semantics_project_ids[
+                prepare_semantics_request.mdl_hash
+            ] = prepare_semantics_request.project_id or ""
         except Exception as e:
             logger.exception(f"Failed to prepare semantics: {e}")
 
@@ -130,7 +144,24 @@ class SemanticsPreparationService:
 
         return results
 
-    def get_prepare_semantics_status(
+    async def _has_indexed_schema_documents(
+        self,
+        project_id: str,
+        mdl_hash: str,
+    ) -> bool:
+        dbschema_count, table_description_count = await asyncio.gather(
+            self._pipelines["db_schema"].count_documents(
+                project_id=project_id,
+                mdl_hash=mdl_hash,
+            ),
+            self._pipelines["table_description"].count_documents(
+                project_id=project_id,
+                mdl_hash=mdl_hash,
+            ),
+        )
+        return dbschema_count > 0 and table_description_count > 0
+
+    async def get_prepare_semantics_status(
         self, prepare_semantics_status_request: SemanticsPreparationStatusRequest
     ) -> SemanticsPreparationStatusResponse:
         if (
@@ -149,7 +180,28 @@ class SemanticsPreparationService:
                 ),
             )
 
-        return result
+        if result.status != "finished":
+            return result
+
+        project_id = self._prepare_semantics_project_ids.get(
+            prepare_semantics_status_request.mdl_hash
+        )
+        if project_id is None:
+            return result
+
+        if await self._has_indexed_schema_documents(
+            project_id,
+            prepare_semantics_status_request.mdl_hash,
+        ):
+            return result
+
+        return SemanticsPreparationStatusResponse(
+            status="failed",
+            error=SemanticsPreparationStatusResponse.SemanticsPreparationError(
+                code="OTHERS",
+                message="Prepared schema documents are missing for this deployment",
+            ),
+        )
 
     @observe(name="Delete Semantics Documents")
     @trace_metadata

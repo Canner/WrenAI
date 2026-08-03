@@ -44,7 +44,7 @@ async def get_prepare_semantics_status(
     mdl_hash: str,
     service_container: ServiceContainer = Depends(get_service_container),
 ) -> SemanticsPreparationStatusResponse:
-    return service_container.semantics_preparation_service.get_prepare_semantics_status(
+    return await service_container.semantics_preparation_service.get_prepare_semantics_status(
         SemanticsPreparationStatusRequest(mdl_hash=mdl_hash)
     )
 
