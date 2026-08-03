@@ -30,12 +30,16 @@ def get_sql_correction_system_prompt(sql_knowledge: SqlKnowledge | None = None) 
 
     return f"""
 ### TASK ###
-You are an ANSI SQL expert with exceptional logical thinking skills and debugging skills, you need to fix the syntactically incorrect ANSI SQL query.
+You are an ANSI SQL expert with exceptional logical thinking skills and debugging skills.
+You need to regenerate one grounded Wren SQL query from the user's question and current DATABASE SCHEMA.
+The failed SQL and error message are diagnostic context only.
 
 ### SQL CORRECTION INSTRUCTIONS ###
 
-1. First, think hard about the error message, and figure out the root cause first(please use the DATABASE SCHEMA, SQL FUNCTIONS and USER INSTRUCTIONS to help you figure out the root cause).
-2. Then, generate the syntactically correct ANSI SQL query to correct the error.
+1. First, use the error message only to understand why the previous SQL failed.
+2. Then, ignore any failed SQL identifier, placeholder, literal, or function that is not declared in the current DATABASE SCHEMA or SQL FUNCTIONS.
+3. Regenerate the SQL from the user's question, DATABASE SCHEMA, SQL FUNCTIONS, and USER INSTRUCTIONS.
+4. If the user's requested intent cannot be fully grounded by the current DATABASE SCHEMA and SQL FUNCTIONS, return null for sql instead of repairing the failed SQL approximately.
 
 ### SQL RULES ###
 Make sure you follow the SQL Rules strictly.
@@ -73,11 +77,17 @@ sql_correction_user_prompt_template = """
 {% endfor %}
 {% endif %}
 
+{% if query %}
 ### QUESTION ###
-SQL: {{ invalid_generation_result.sql }}
+User's Question: {{ query }}
+{% endif %}
+
+### FAILED SQL DIAGNOSTIC CONTEXT ###
+Failed SQL: {{ invalid_generation_result.sql }}
 Error Message: {{ invalid_generation_result.error }}
 
-Let's think step by step.
+Regenerate from the user's question and DATABASE SCHEMA only when a user question is available. Otherwise, correct the failed SQL only by using exact executable identifiers declared in DATABASE SCHEMA or SQL FUNCTIONS. Do not copy table names, column names, functions, literals, aliases, or SQL structure from the failed SQL unless each one is declared in DATABASE SCHEMA or SQL FUNCTIONS.
+Return only the final JSON SQL response.
 """
 
 
@@ -87,12 +97,14 @@ def prompt(
     documents: List[Document],
     invalid_generation_result: Dict,
     prompt_builder: PromptBuilder,
+    query: str | None = None,
     instructions: list[dict] | None = None,
     sql_functions: list[SqlFunction] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         documents=documents,
         invalid_generation_result=invalid_generation_result,
+        query=query or "",
         instructions=construct_instructions(
             instructions=instructions,
         ),
@@ -169,6 +181,8 @@ class SQLCorrection(BasicPipeline):
         self,
         contexts: List[Document],
         invalid_generation_result: Dict[str, str],
+        query: str | None = None,
+        sql_generation_reasoning: str | None = None,
         instructions: list[dict] | None = None,
         sql_functions: list[SqlFunction] | None = None,
         project_id: str | None = None,
@@ -192,6 +206,7 @@ class SQLCorrection(BasicPipeline):
             ["post_process"],
             inputs={
                 "invalid_generation_result": invalid_generation_result,
+                "query": query,
                 "documents": contexts,
                 "instructions": instructions,
                 "sql_functions": sql_functions,

@@ -557,6 +557,7 @@ class AskService:
                             "sql_correction"
                         ].run(
                             contexts=table_ddls,
+                            query=user_query,
                             instructions=instructions,
                             invalid_generation_result={
                                 "sql": original_sql,
@@ -585,9 +586,19 @@ class AskService:
                             ]
                             break
 
-                        failed_dry_run_result = sql_correction_results["post_process"][
-                            "invalid_generation_result"
-                        ]
+                        next_failed_dry_run_result = sql_correction_results[
+                            "post_process"
+                        ]["invalid_generation_result"]
+                        if (
+                            next_failed_dry_run_result
+                            and next_failed_dry_run_result.get("sql") == invalid_sql
+                            and next_failed_dry_run_result.get("error")
+                            == error_message
+                        ):
+                            failed_dry_run_result = next_failed_dry_run_result
+                            break
+
+                        failed_dry_run_result = next_failed_dry_run_result
 
             if api_results:
                 if not self._is_stopped(query_id, self._ask_results):
