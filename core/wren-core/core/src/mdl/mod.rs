@@ -695,11 +695,12 @@ mod test {
             Arc::new(HashMap::default()),
             Mode::Unparse,
         )?);
+        let ctx = create_wren_ctx(None, analyzed_mdl.wren_mdl().data_source().as_ref());
 
         crate::logical_plan::analyze::model_anlayze::BUILD_MODEL_PLAN_NODE_CALLS
             .with(|c| c.set(0));
         let actual = mdl::transform_sql_with_ctx(
-            &create_wren_ctx(None, analyzed_mdl.wren_mdl().data_source().as_ref()),
+            &ctx,
             Arc::clone(&analyzed_mdl),
             &[],
             Arc::new(HashMap::new()),
@@ -714,6 +715,52 @@ mod test {
              throwaway wildcard node first"
         );
         assert_sql_valid_executable(&actual).await?;
+        assert_snapshot!(actual, @"SELECT e.c_custkey FROM (SELECT customer.c_custkey FROM (SELECT __source.c_custkey AS c_custkey FROM customer AS __source) AS customer) AS e");
+
+        // count(*) on an aliased model has no required columns, so it's the only
+        // remaining path that reaches the `visited_dataset` fallback (`field =
+        // vec![]`) for an aliased scan; it must still build once, not twice.
+        crate::logical_plan::analyze::model_anlayze::BUILD_MODEL_PLAN_NODE_CALLS
+            .with(|c| c.set(0));
+        let actual = mdl::transform_sql_with_ctx(
+            &ctx,
+            Arc::clone(&analyzed_mdl),
+            &[],
+            Arc::new(HashMap::new()),
+            "select count(*) from test.test.customer e",
+        )
+        .await?;
+        assert_eq!(
+            crate::logical_plan::analyze::model_anlayze::BUILD_MODEL_PLAN_NODE_CALLS
+                .with(|c| c.get()),
+            1,
+            "count(*) on an aliased model should still build its ModelPlanNode once"
+        );
+        assert_sql_valid_executable(&actual).await?;
+        assert_snapshot!(actual, @r#"SELECT count(1) AS "count(*)" FROM (SELECT __source.c_custkey AS c_custkey, __source.c_name AS c_name FROM customer AS __source) AS e"#);
+
+        // A join of two aliased models is the only thing that exercises
+        // `shortcut_taken` across siblings: `ModelRewriter` carries one `bool` field
+        // for the whole walk, and it must reflect only the child just visited, never
+        // leak from the left join input into the right's `f_up`.
+        crate::logical_plan::analyze::model_anlayze::BUILD_MODEL_PLAN_NODE_CALLS
+            .with(|c| c.set(0));
+        let actual = mdl::transform_sql_with_ctx(
+            &ctx,
+            Arc::clone(&analyzed_mdl),
+            &[],
+            Arc::new(HashMap::new()),
+            "select e.c_custkey, o.o_orderkey from test.test.customer e join test.test.orders o on e.c_custkey = o.o_custkey",
+        )
+        .await?;
+        assert_eq!(
+            crate::logical_plan::analyze::model_anlayze::BUILD_MODEL_PLAN_NODE_CALLS
+                .with(|c| c.get()),
+            2,
+            "a join of two aliased models should build each ModelPlanNode once"
+        );
+        assert_sql_valid_executable(&actual).await?;
+        assert_snapshot!(actual, @"SELECT e.c_custkey, o.o_orderkey FROM (SELECT customer.c_custkey FROM (SELECT __source.c_custkey AS c_custkey FROM customer AS __source) AS customer) AS e INNER JOIN (SELECT orders.o_custkey, orders.o_orderkey FROM (SELECT __source.o_custkey AS o_custkey, __source.o_orderkey AS o_orderkey FROM orders AS __source) AS orders) AS o ON e.c_custkey = o.o_custkey");
 
         Ok(())
     }
@@ -3301,12 +3348,9 @@ mod test {
 
     #[tokio::test]
     async fn test_clac_unreferenced_column_pruned_not_denied() -> Result<()> {
-        // A CLS-protected column the query does NOT reference must be pruned,
-        // not denied — even when the model is referenced with a table alias
-        // (which builds a throwaway inner plan with empty required fields, so the
-        // model gets wildcard-expanded), and for `count(*)`. Before the fix, an
-        // aliased scan of `customer` — or `count(*)` — that never selected
-        // `c_name` still denied `customer.c_name`.
+        // A CLS-protected column the query does NOT reference must be pruned, not
+        // denied, in every scan shape (bare, aliased, count(*), wildcard). Before
+        // the fix, an aliased or count(*) scan of `customer` still denied `c_name`.
         let ctx = create_wren_ctx(None, None);
         let manifest = ManifestBuilder::new()
             .catalog("wren")
