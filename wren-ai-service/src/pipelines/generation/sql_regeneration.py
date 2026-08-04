@@ -178,6 +178,7 @@ async def regenerate_sql(
 async def post_process(
     regenerate_sql: dict,
     post_processor: SQLGenPostProcessor,
+    query: str,
     project_id: str | None = None,
     schema_contracts: list[dict] | None = None,
 ) -> dict:
@@ -185,6 +186,7 @@ async def post_process(
         regenerate_sql.get("replies"),
         project_id=project_id,
         schema_contracts=schema_contracts,
+        query=query,
     )
 
 

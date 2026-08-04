@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Any, Dict, List
 
 import aiohttp
@@ -18,6 +19,19 @@ from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
+
+
+_ANALYTICAL_OR_FILTER_QUERY_PATTERN = re.compile(
+    r"\b("
+    r"per|by|group|breakdown|total|sum|count|average|avg|min|max|top|bottom|"
+    r"highest|lowest|first|last|from|before|after|between|since|during|"
+    r"today|yesterday|week|month|quarter|year|january|february|march|april|"
+    r"may|june|july|august|september|october|november|december"
+    r")\b",
+    re.IGNORECASE,
+)
+
+_BROAD_TABLE_PREVIEW_COLUMN_THRESHOLD = 8
 
 
 def _is_timeout_error(error_message: str) -> bool:
@@ -267,6 +281,92 @@ def _select_wildcard_error(sql: str | None) -> str | None:
     return None
 
 
+def _is_aggregate_item(token: Any) -> bool:
+    token_text = str(token).upper()
+    return any(
+        f"{function_name}(" in token_text
+        for function_name in ["COUNT", "SUM", "AVG", "MIN", "MAX"]
+    )
+
+
+def _select_items(statement: TokenList) -> list[Any]:
+    tokens = _meaningful_tokens(statement)
+    items = []
+    in_select_list = False
+
+    for token in tokens:
+        if token.ttype == sqlparse_tokens.Keyword.DML and token.normalized == "SELECT":
+            in_select_list = True
+            continue
+
+        if not in_select_list:
+            continue
+
+        if token.ttype == sqlparse_tokens.Keyword and token.normalized == "FROM":
+            break
+
+        if token.ttype == sqlparse_tokens.Keyword and token.normalized == "DISTINCT":
+            continue
+
+        if isinstance(token, IdentifierList):
+            items.extend(list(token.get_identifiers()))
+        else:
+            items.append(token)
+
+    return [item for item in items if str(item).strip()]
+
+
+def _has_answer_shaping_clause(statement: TokenList) -> bool:
+    for token in _meaningful_tokens(statement):
+        normalized = token.normalized
+        if normalized in {"WHERE", "GROUP BY", "HAVING", "ORDER BY"}:
+            return True
+        if normalized.startswith("WHERE "):
+            return True
+
+    return False
+
+
+def _table_preview_shape_error(sql: str | None, query: str | None = None) -> str | None:
+    if not sql:
+        return None
+
+    query_has_shape = bool(query and _ANALYTICAL_OR_FILTER_QUERY_PATTERN.search(query))
+
+    for statement in sqlparse.parse(sql):
+        if not str(statement).strip().strip(";").strip():
+            continue
+
+        items = _select_items(statement)
+        if not items or any(_is_aggregate_item(item) for item in items):
+            continue
+
+        if _has_answer_shaping_clause(statement):
+            continue
+
+        referenced_tables = _collect_table_references(statement)
+        cte_names = _collect_cte_names(statement)
+        source_tables = referenced_tables - cte_names
+        is_single_source_scan = len(source_tables) <= 1
+
+        if query_has_shape and is_single_source_scan:
+            return (
+                "Generated SQL is a table preview and does not apply the requested "
+                "aggregation, grouping, filter, timeframe, ranking, or ordering."
+            )
+
+        if (
+            is_single_source_scan
+            and len(items) >= _BROAD_TABLE_PREVIEW_COLUMN_THRESHOLD
+        ):
+            return (
+                "Generated SQL is a broad table preview; select only the explicit "
+                "columns and operations needed to answer the question."
+            )
+
+    return None
+
+
 def build_executable_schema_contract(schema_contracts: list[dict] | None) -> str:
     if not schema_contracts:
         return ""
@@ -315,6 +415,7 @@ class SQLGenPostProcessor:
         data_source: str = "",
         allow_data_preview: bool = False,
         schema_contracts: list[dict] | None = None,
+        query: str | None = None,
     ) -> dict:
         try:
             cleaned_generation_result = clean_generation_result(replies[0])
@@ -369,6 +470,22 @@ class SQLGenPostProcessor:
                         "original_sql": cleaned_generation_result,
                         "type": "SQL_SYNTAX",
                         "error": wildcard_error,
+                        "correlation_id": "",
+                    },
+                }
+
+            table_preview_error = _table_preview_shape_error(
+                cleaned_generation_result,
+                query=query,
+            )
+            if table_preview_error:
+                return {
+                    "valid_generation_result": {},
+                    "invalid_generation_result": {
+                        "sql": cleaned_generation_result,
+                        "original_sql": cleaned_generation_result,
+                        "type": "SQL_SHAPE",
+                        "error": table_preview_error,
                         "correlation_id": "",
                     },
                 }

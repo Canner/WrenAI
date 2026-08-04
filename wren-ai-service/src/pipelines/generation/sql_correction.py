@@ -146,6 +146,7 @@ async def post_process(
     generate_sql_correction: dict,
     post_processor: SQLGenPostProcessor,
     data_source: str,
+    query: str | None = None,
     project_id: str | None = None,
     use_dry_plan: bool = False,
     allow_dry_plan_fallback: bool = False,
@@ -158,6 +159,7 @@ async def post_process(
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
         schema_contracts=schema_contracts,
+        query=query,
     )
 
 

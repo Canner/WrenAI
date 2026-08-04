@@ -235,6 +235,127 @@ async def test_sql_post_processor_allows_count_star():
 
 
 @pytest.mark.asyncio
+async def test_sql_post_processor_rejects_unshaped_analytical_table_preview():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        [
+            (
+                '{"sql": "SELECT dim_a, dim_b, dim_c, dim_d '
+                'FROM model_alpha LIMIT 500"}'
+            )
+        ],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "model_alpha",
+                "column_names": ["dim_a", "dim_b", "dim_c", "dim_d"],
+            }
+        ],
+        query="per month by category",
+    )
+
+    assert engine.executed is False
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "SQL_SHAPE"
+    assert (
+        result["invalid_generation_result"]["error"]
+        == "Generated SQL is a table preview and does not apply the requested "
+        "aggregation, grouping, filter, timeframe, ranking, or ordering."
+    )
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_rejects_unfiltered_timeframe_table_preview():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        ['{"sql": "SELECT entity_id, event_date FROM model_alpha"}'],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "model_alpha",
+                "column_names": ["entity_id", "event_date"],
+            }
+        ],
+        query="from july 2026",
+    )
+
+    assert engine.executed is False
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "SQL_SHAPE"
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_allows_intent_shaped_analytical_query():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        [
+            (
+                '{"sql": "SELECT category_col, DATE_TRUNC('
+                "'month', event_date) AS period_col, COUNT(*) AS row_count "
+                "FROM model_alpha GROUP BY category_col, "
+                "DATE_TRUNC('month', event_date)\"}"
+            )
+        ],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "model_alpha",
+                "column_names": ["category_col", "event_date"],
+            }
+        ],
+        query="per month by category",
+    )
+
+    assert engine.executed is True
+    assert result["valid_generation_result"] == {
+        "sql": (
+            "SELECT category_col, DATE_TRUNC('month', event_date) AS period_col, "
+            "COUNT(*) AS row_count FROM model_alpha GROUP BY category_col, "
+            "DATE_TRUNC('month', event_date)"
+        ),
+        "correlation_id": "valid-correlation",
+    }
+    assert result["invalid_generation_result"] == {}
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_allows_intent_shaped_filter_query():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        [
+            (
+                '{"sql": "SELECT entity_id, event_date FROM model_alpha '
+                "WHERE event_date >= DATE '2026-07-01' "
+                "AND event_date < DATE '2026-08-01'\"}"
+            )
+        ],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "model_alpha",
+                "column_names": ["entity_id", "event_date"],
+            }
+        ],
+        query="from july 2026",
+    )
+
+    assert engine.executed is True
+    assert result["valid_generation_result"] == {
+        "sql": (
+            "SELECT entity_id, event_date FROM model_alpha "
+            "WHERE event_date >= DATE '2026-07-01' "
+            "AND event_date < DATE '2026-08-01'"
+        ),
+        "correlation_id": "valid-correlation",
+    }
+    assert result["invalid_generation_result"] == {}
+
+
+@pytest.mark.asyncio
 async def test_sql_post_processor_keeps_dry_plan_timeout_invalid_without_fallback():
     result = await SQLGenPostProcessor(TimeoutEngine()).run(
         ['{"sql": "SELECT 1"}'],
