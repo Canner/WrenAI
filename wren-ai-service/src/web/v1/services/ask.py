@@ -21,12 +21,37 @@ _DETERMINISTIC_SQL_VALIDATION_TYPES = {
     "NO_RELEVANT_SQL",
 }
 
+_NON_REPAIRABLE_SQL_VALIDATION_TYPES = {
+    "NO_RELEVANT_SQL",
+    "SQL_VALUE_GROUNDING",
+}
+
 
 def should_skip_sql_diagnosis(failed_generation_result: dict | None) -> bool:
     if not failed_generation_result:
         return False
 
     return failed_generation_result.get("type") in _DETERMINISTIC_SQL_VALIDATION_TYPES
+
+
+def should_attempt_sql_correction(failed_generation_result: dict | None) -> bool:
+    if not failed_generation_result:
+        return False
+
+    failure_type = failed_generation_result.get("type")
+    if not failure_type or failure_type == "TIME_OUT":
+        return False
+
+    if failure_type in _NON_REPAIRABLE_SQL_VALIDATION_TYPES:
+        return False
+
+    if failure_type == "SCHEMA_GROUNDING" and not (
+        failed_generation_result.get("sql")
+        or failed_generation_result.get("original_sql")
+    ):
+        return False
+
+    return True
 
 
 async def run_pipeline_with_timeout(awaitable, timeout_seconds: float, operation: str):
@@ -583,10 +608,7 @@ class AskService:
                 ]["invalid_generation_result"]:
                     schema_grounding_correction_attempted = False
                     while current_sql_correction_retries < max_sql_correction_retries:
-                        failed_generation_type = failed_dry_run_result.get("type")
-                        if not failed_generation_type:
-                            break
-                        if failed_generation_type == "TIME_OUT":
+                        if not should_attempt_sql_correction(failed_dry_run_result):
                             break
 
                         original_sql = failed_dry_run_result.get("original_sql") or ""
@@ -649,11 +671,7 @@ class AskService:
                                 query=user_query,
                                 instructions=instructions,
                                 invalid_generation_result={
-                                    "sql": (
-                                        ""
-                                        if is_schema_grounding_error
-                                        else original_sql
-                                    ),
+                                    "sql": original_sql,
                                     "error": correction_error_message,
                                 },
                                 project_id=ask_request.project_id,

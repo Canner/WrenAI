@@ -38,6 +38,10 @@ _AGGREGATE_QUERY_PATTERN = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+_RANKING_QUERY_PATTERN = re.compile(
+    r"\b(top|bottom|highest|lowest|most|least|largest|smallest|fastest|slowest)\b",
+    re.IGNORECASE,
+)
 _TIME_QUERY_PATTERN = re.compile(
     r"\b("
     r"today|yesterday|week|month|quarter|year|january|february|march|april|"
@@ -236,6 +240,248 @@ def _table_grounding_error(
     return None
 
 
+def _normalize_identifier_part(identifier: str | None) -> str:
+    if not identifier:
+        return ""
+
+    return identifier.strip().strip('"`[]').lower()
+
+
+def _schema_contract_index(
+    schema_contracts: list[dict] | None,
+) -> dict[str, dict[str, Any]]:
+    index: dict[str, dict[str, Any]] = {}
+    for contract in schema_contracts or []:
+        table_name = contract.get("table_name")
+        normalized_table_name = _normalize_identifier_part(table_name)
+        if not table_name or not normalized_table_name:
+            continue
+
+        column_names = [
+            column_name for column_name in contract.get("column_names", []) if column_name
+        ]
+        index[normalized_table_name] = {
+            "table_name": table_name,
+            "columns": {
+                _normalize_identifier_part(column_name) for column_name in column_names
+            },
+            "has_column_contract": bool(column_names),
+        }
+
+    return index
+
+
+def _identifier_contains_subquery(identifier: Identifier) -> bool:
+    return any(
+        isinstance(child, Parenthesis) and _contains_select(child)
+        for child in identifier.tokens
+    )
+
+
+def _mark_identifier_tree(identifier: Identifier, marked_ids: set[int]) -> None:
+    marked_ids.add(id(identifier))
+    for child in identifier.tokens:
+        if isinstance(child, Identifier):
+            _mark_identifier_tree(child, marked_ids)
+        elif isinstance(child, IdentifierList):
+            for child_identifier in child.get_identifiers():
+                _mark_identifier_tree(child_identifier, marked_ids)
+        elif isinstance(child, TokenList):
+            for nested_child in child.tokens:
+                if isinstance(nested_child, Identifier):
+                    _mark_identifier_tree(nested_child, marked_ids)
+
+
+def _collect_table_context(
+    token: TokenList,
+    schema_index: dict[str, dict[str, Any]],
+    cte_names: set[str],
+) -> tuple[dict[str, str], set[int]]:
+    aliases: dict[str, str] = {}
+    table_identifier_ids: set[int] = set()
+    tokens = _meaningful_tokens(token)
+    expect_table = False
+
+    def add_table_identifier(identifier: Identifier) -> None:
+        if _identifier_contains_subquery(identifier):
+            for child in identifier.tokens:
+                if isinstance(child, Parenthesis):
+                    child_aliases, child_table_ids = _collect_table_context(
+                        child, schema_index, cte_names
+                    )
+                    aliases.update(child_aliases)
+                    table_identifier_ids.update(child_table_ids)
+            return
+
+        table_name = _table_reference_name(identifier)
+        normalized_table_name = _normalize_identifier_part(table_name)
+        if not normalized_table_name or normalized_table_name in cte_names:
+            _mark_identifier_tree(identifier, table_identifier_ids)
+            return
+
+        if normalized_table_name not in schema_index:
+            _mark_identifier_tree(identifier, table_identifier_ids)
+            return
+
+        _mark_identifier_tree(identifier, table_identifier_ids)
+        aliases[normalized_table_name] = normalized_table_name
+
+        real_name = _normalize_identifier_part(identifier.get_real_name())
+        if real_name:
+            aliases[real_name] = normalized_table_name
+
+        alias = _normalize_identifier_part(identifier.get_alias())
+        if alias:
+            aliases[alias] = normalized_table_name
+
+    for current in tokens:
+        normalized = current.normalized
+
+        if isinstance(current, Parenthesis):
+            if _contains_select(current):
+                child_aliases, child_table_ids = _collect_table_context(
+                    current, schema_index, cte_names
+                )
+                aliases.update(child_aliases)
+                table_identifier_ids.update(child_table_ids)
+            continue
+
+        if current.ttype == sqlparse_tokens.Keyword and (
+            normalized == "FROM" or normalized == "JOIN" or normalized.endswith(" JOIN")
+        ):
+            expect_table = True
+            continue
+
+        if expect_table:
+            if isinstance(current, IdentifierList):
+                for identifier in current.get_identifiers():
+                    add_table_identifier(identifier)
+            elif isinstance(current, Identifier):
+                add_table_identifier(current)
+            expect_table = False
+
+    return aliases, table_identifier_ids
+
+
+def _iter_identifier_nodes(
+    token: TokenList, parent: TokenList | None = None
+) -> list[tuple[Identifier, TokenList | None]]:
+    identifiers: list[tuple[Identifier, TokenList | None]] = []
+    if isinstance(token, Identifier):
+        identifiers.append((token, parent))
+
+    if isinstance(token, TokenList):
+        for child in token.tokens:
+            if isinstance(child, TokenList):
+                identifiers.extend(_iter_identifier_nodes(child, token))
+
+    return identifiers
+
+
+def _select_aliases(statement: TokenList) -> set[str]:
+    return {
+        _normalize_identifier_part(item.get_alias())
+        for item in _select_items(statement)
+        if isinstance(item, Identifier) and item.get_alias()
+    }
+
+
+def _identifier_has_function_child(identifier: Identifier) -> bool:
+    return any(isinstance(child, Function) for child in identifier.tokens)
+
+
+def _column_grounding_error(
+    sql: str | None, schema_contracts: list[dict] | None
+) -> str | None:
+    if not sql or not schema_contracts:
+        return None
+
+    schema_index = _schema_contract_index(schema_contracts)
+    if not schema_index:
+        return None
+
+    for statement in sqlparse.parse(sql):
+        cte_names = {
+            _normalize_identifier_part(cte_name)
+            for cte_name in _collect_cte_names(statement)
+        }
+        table_aliases, table_identifier_ids = _collect_table_context(
+            statement, schema_index, cte_names
+        )
+        referenced_tables = set(table_aliases.values())
+        if not referenced_tables:
+            continue
+
+        allowed_unqualified_columns = set()
+        all_referenced_tables_have_column_contract = True
+        for table_name in referenced_tables:
+            table_contract = schema_index.get(table_name)
+            if not table_contract:
+                continue
+            allowed_unqualified_columns.update(table_contract["columns"])
+            all_referenced_tables_have_column_contract = (
+                all_referenced_tables_have_column_contract
+                and table_contract["has_column_contract"]
+            )
+
+        select_aliases = _select_aliases(statement)
+
+        for identifier, parent in _iter_identifier_nodes(statement):
+            if id(identifier) in table_identifier_ids:
+                continue
+
+            if isinstance(parent, Function):
+                function_name = _normalize_identifier_part(parent.get_name())
+                if _normalize_identifier_part(_identifier_name(identifier)) == function_name:
+                    continue
+
+            if _identifier_has_function_child(identifier):
+                continue
+
+            column_name = _normalize_identifier_part(identifier.get_real_name())
+            if not column_name:
+                continue
+
+            parent_name = _normalize_identifier_part(identifier.get_parent_name())
+            if parent_name:
+                if parent_name in cte_names:
+                    continue
+
+                source_table_name = table_aliases.get(parent_name)
+                if not source_table_name:
+                    return (
+                        "Generated SQL references column identifiers outside the "
+                        "retrieved deployed schema."
+                    )
+
+                table_contract = schema_index.get(source_table_name)
+                if (
+                    table_contract
+                    and table_contract["has_column_contract"]
+                    and column_name not in table_contract["columns"]
+                ):
+                    return (
+                        "Generated SQL references column identifiers outside the "
+                        "retrieved deployed schema."
+                    )
+                continue
+
+            if column_name in select_aliases or column_name in cte_names:
+                continue
+            if column_name in table_aliases:
+                continue
+            if column_name in allowed_unqualified_columns:
+                continue
+
+            if all_referenced_tables_have_column_contract:
+                return (
+                    "Generated SQL references column identifiers outside the "
+                    "retrieved deployed schema."
+                )
+
+    return None
+
+
 def _sql_statement_shape_error(sql: str | None) -> str | None:
     if not sql:
         return None
@@ -369,6 +615,7 @@ def _table_preview_shape_error(sql: str | None, query: str | None = None) -> str
 
     query_has_shape = bool(query and _ANALYTICAL_OR_FILTER_QUERY_PATTERN.search(query))
     query_has_aggregate_shape = bool(query and _AGGREGATE_QUERY_PATTERN.search(query))
+    query_has_ranking_shape = bool(query and _RANKING_QUERY_PATTERN.search(query))
 
     for statement in sqlparse.parse(sql):
         if not str(statement).strip().strip(";").strip():
@@ -398,6 +645,11 @@ def _table_preview_shape_error(sql: str | None, query: str | None = None) -> str
             return (
                 "Generated SQL does not apply the requested aggregation, grouping, "
                 "ranking, or measure calculation."
+            )
+
+        if query_has_ranking_shape and has_aggregate_item and not has_ordering:
+            return (
+                "Generated SQL does not apply the requested ranking or ordering."
             )
 
         if (
@@ -620,6 +872,21 @@ class SQLGenPostProcessor:
                         "original_sql": cleaned_generation_result,
                         "type": "SQL_SYNTAX",
                         "error": wildcard_error,
+                        "correlation_id": "",
+                    },
+                }
+
+            column_grounding_error = _column_grounding_error(
+                cleaned_generation_result, schema_contracts
+            )
+            if column_grounding_error:
+                return {
+                    "valid_generation_result": {},
+                    "invalid_generation_result": {
+                        "sql": cleaned_generation_result,
+                        "original_sql": cleaned_generation_result,
+                        "type": "SCHEMA_GROUNDING",
+                        "error": column_grounding_error,
                         "correlation_id": "",
                     },
                 }
@@ -863,9 +1130,11 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - Never output template SQL. Every table, column, metric, relationship, join key, function, filter value, grouping, ordering, and limit in the final SQL must be complete and executable for the current request.
 - Never output generic, unresolved, variable-like, or placeholder identifiers or literal values. If a value or identifier would need to be filled in later, return null for sql.
 - The SQL must answer every supported part of the user's request: requested subject, requested entity, requested filter value, timeframe, grouping, measure, ordering, and limit.
+- Preserve the user's requested result shape exactly. Do not convert a detail-list request into a count, distinct count, latest-row query, top query, or summary unless the user explicitly asks for that operation.
+- Do not add implicit filters, latest-period logic, maximum-date logic, row limits, distinctness, aggregation, or ordering unless the current user request requires it.
 - If the user asks for a filtered result, include the filter only when the filtered concept is represented by an exact schema field. If the filter field is not present, return null for sql instead of ignoring the filter.
 - If the user provides a literal filter value, copy that current request value into the SQL string literal exactly as the user provided it, except for normal SQL string escaping. Do not invent, translate, summarize, describe, or substitute filter values.
-- If the user does not provide a literal filter value needed for the requested answer, do not add a stand-in value. Return null for sql when the missing value is required, or omit the filter only when the requested answer remains correct without it.
+- If the user asks for a specific or particular entity but does not provide the required value, return null for sql instead of adding a stand-in value. Omit a missing filter only when the requested answer remains correct without it.
 - Never use schema descriptions, column comments, aliases, display labels, source names, physical names, lineage names, reasoning text, or error messages as string literal data values.
 - If the user asks "which", "who", or "what" for a ranked entity, select and group by the exact schema field that represents that requested entity. Do not replace the requested entity with a context field or unrelated dimension.
 - Use row counting for record or entity volume questions when no numeric business measure is requested. Use numeric measures only when the question asks for a value, amount, quantity, rate, cost, or other declared measure.
@@ -892,6 +1161,8 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - Use only Wren SQL syntax and only schema objects declared in DATABASE SCHEMA.
 - Quote table and column identifiers with double quotes. Quote string literals with single quotes. Do not quote numeric literals.
 - Never use SELECT *. Select only columns and expressions needed for the user's requested answer.
+- Preserve the requested answer shape. For record-list requests, return the requested records with explicit identifying columns and filters; do not replace them with COUNT, DISTINCT, MAX, latest-row, ranking, or summary logic.
+- Use COUNT, DISTINCT, SUM, AVG, MIN, MAX, GROUP BY, ORDER BY, LIMIT, date predicates, and joins only when the user's request requires that operation and the required identifiers are grounded in DATABASE SCHEMA.
 - Do not include SQL comments.
 - Use CTEs when they make multi-step SQL clearer.
 - Use joins only when DATABASE SCHEMA declares the needed relationship.
