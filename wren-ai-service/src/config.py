@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     allow_sql_knowledge_retrieval: bool = Field(default=False)
     max_histories: int = Field(default=5)
     max_sql_correction_retries: int = Field(default=1)
+    sql_generation_timeout_seconds: float = Field(default=45.0)
 
     # engine config
     engine_timeout: float = Field(default=30.0)

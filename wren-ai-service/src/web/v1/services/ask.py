@@ -29,6 +29,15 @@ def should_skip_sql_diagnosis(failed_generation_result: dict | None) -> bool:
     return failed_generation_result.get("type") in _DETERMINISTIC_SQL_VALIDATION_TYPES
 
 
+async def run_pipeline_with_timeout(awaitable, timeout_seconds: float, operation: str):
+    try:
+        return await asyncio.wait_for(awaitable, timeout=timeout_seconds)
+    except asyncio.TimeoutError as exc:
+        raise TimeoutError(
+            f"{operation} timed out after {timeout_seconds:g} seconds"
+        ) from exc
+
+
 class AskHistory(BaseModel):
     sql: str
     question: str
@@ -121,6 +130,7 @@ class AskService:
         allow_sql_knowledge_retrieval: bool = True,
         enable_column_pruning: bool = False,
         max_sql_correction_retries: int = 1,
+        sql_generation_timeout_seconds: float = 45.0,
         max_histories: int = 5,
         maxsize: int = 1_000_000,
         ttl: int = 120,
@@ -137,6 +147,7 @@ class AskService:
         self._enable_column_pruning = enable_column_pruning
         self._max_histories = max_histories
         self._max_sql_correction_retries = max_sql_correction_retries
+        self._sql_generation_timeout_seconds = sql_generation_timeout_seconds
 
     def _is_stopped(self, query_id: str, container: dict):
         if (
@@ -496,45 +507,49 @@ class AskService:
                 has_json_field = _retrieval_result.get("has_json_field", False)
 
                 if histories:
-                    text_to_sql_generation_results = await self._pipelines[
-                        "followup_sql_generation"
-                    ].run(
-                        query=user_query,
-                        contexts=table_ddls,
-                        sql_generation_reasoning=sql_generation_reasoning,
-                        histories=histories,
-                        project_id=ask_request.project_id,
-                        mdl_hash=ask_request.mdl_hash,
-                        sql_samples=sql_samples,
-                        instructions=instructions,
-                        has_calculated_field=has_calculated_field,
-                        has_metric=has_metric,
-                        has_json_field=has_json_field,
-                        sql_functions=sql_functions,
-                        use_dry_plan=use_dry_plan,
-                        allow_dry_plan_fallback=allow_dry_plan_fallback,
-                        sql_knowledge=sql_knowledge,
-                        schema_contracts=schema_contracts,
+                    text_to_sql_generation_results = await run_pipeline_with_timeout(
+                        self._pipelines["followup_sql_generation"].run(
+                            query=user_query,
+                            contexts=table_ddls,
+                            sql_generation_reasoning=sql_generation_reasoning,
+                            histories=histories,
+                            project_id=ask_request.project_id,
+                            mdl_hash=ask_request.mdl_hash,
+                            sql_samples=sql_samples,
+                            instructions=instructions,
+                            has_calculated_field=has_calculated_field,
+                            has_metric=has_metric,
+                            has_json_field=has_json_field,
+                            sql_functions=sql_functions,
+                            use_dry_plan=use_dry_plan,
+                            allow_dry_plan_fallback=allow_dry_plan_fallback,
+                            sql_knowledge=sql_knowledge,
+                            schema_contracts=schema_contracts,
+                        ),
+                        self._sql_generation_timeout_seconds,
+                        "Follow-up SQL generation",
                     )
                 else:
-                    text_to_sql_generation_results = await self._pipelines[
-                        "sql_generation"
-                    ].run(
-                        query=user_query,
-                        contexts=table_ddls,
-                        sql_generation_reasoning=sql_generation_reasoning,
-                        project_id=ask_request.project_id,
-                        mdl_hash=ask_request.mdl_hash,
-                        sql_samples=sql_samples,
-                        instructions=instructions,
-                        has_calculated_field=has_calculated_field,
-                        has_metric=has_metric,
-                        has_json_field=has_json_field,
-                        sql_functions=sql_functions,
-                        use_dry_plan=use_dry_plan,
-                        allow_dry_plan_fallback=allow_dry_plan_fallback,
-                        sql_knowledge=sql_knowledge,
-                        schema_contracts=schema_contracts,
+                    text_to_sql_generation_results = await run_pipeline_with_timeout(
+                        self._pipelines["sql_generation"].run(
+                            query=user_query,
+                            contexts=table_ddls,
+                            sql_generation_reasoning=sql_generation_reasoning,
+                            project_id=ask_request.project_id,
+                            mdl_hash=ask_request.mdl_hash,
+                            sql_samples=sql_samples,
+                            instructions=instructions,
+                            has_calculated_field=has_calculated_field,
+                            has_metric=has_metric,
+                            has_json_field=has_json_field,
+                            sql_functions=sql_functions,
+                            use_dry_plan=use_dry_plan,
+                            allow_dry_plan_fallback=allow_dry_plan_fallback,
+                            sql_knowledge=sql_knowledge,
+                            schema_contracts=schema_contracts,
+                        ),
+                        self._sql_generation_timeout_seconds,
+                        "SQL generation",
                     )
 
                 if sql_valid_result := text_to_sql_generation_results["post_process"][
@@ -589,14 +604,16 @@ class AskService:
 
                         sql_diagnosis_reasoning = None
                         if allow_sql_diagnosis and not skip_sql_diagnosis:
-                            sql_diagnosis_results = await self._pipelines[
-                                "sql_diagnosis"
-                            ].run(
-                                contexts=table_ddls,
-                                original_sql=original_sql,
-                                invalid_sql=invalid_sql,
-                                error_message=error_message,
-                                language=ask_request.configurations.language,
+                            sql_diagnosis_results = await run_pipeline_with_timeout(
+                                self._pipelines["sql_diagnosis"].run(
+                                    contexts=table_ddls,
+                                    original_sql=original_sql,
+                                    invalid_sql=invalid_sql,
+                                    error_message=error_message,
+                                    language=ask_request.configurations.language,
+                                ),
+                                self._sql_generation_timeout_seconds,
+                                "SQL diagnosis",
                             )
                             sql_diagnosis_reasoning = sql_diagnosis_results[
                                 "post_process"
@@ -606,25 +623,29 @@ class AskService:
                         if sql_diagnosis_reasoning:
                             correction_error_message = sql_diagnosis_reasoning
 
-                        sql_correction_results = await self._pipelines[
-                            "sql_correction"
-                        ].run(
-                            contexts=table_ddls,
-                            query=user_query,
-                            instructions=instructions,
-                            invalid_generation_result={
-                                "sql": (
-                                    "" if is_schema_grounding_error else original_sql
-                                ),
-                                "error": correction_error_message,
-                            },
-                            project_id=ask_request.project_id,
-                            mdl_hash=ask_request.mdl_hash,
-                            use_dry_plan=use_dry_plan,
-                            allow_dry_plan_fallback=allow_dry_plan_fallback,
-                            sql_functions=sql_functions,
-                            sql_knowledge=sql_knowledge,
-                            schema_contracts=schema_contracts,
+                        sql_correction_results = await run_pipeline_with_timeout(
+                            self._pipelines["sql_correction"].run(
+                                contexts=table_ddls,
+                                query=user_query,
+                                instructions=instructions,
+                                invalid_generation_result={
+                                    "sql": (
+                                        ""
+                                        if is_schema_grounding_error
+                                        else original_sql
+                                    ),
+                                    "error": correction_error_message,
+                                },
+                                project_id=ask_request.project_id,
+                                mdl_hash=ask_request.mdl_hash,
+                                use_dry_plan=use_dry_plan,
+                                allow_dry_plan_fallback=allow_dry_plan_fallback,
+                                sql_functions=sql_functions,
+                                sql_knowledge=sql_knowledge,
+                                schema_contracts=schema_contracts,
+                            ),
+                            self._sql_generation_timeout_seconds,
+                            "SQL correction",
                         )
 
                         if valid_generation_result := sql_correction_results[

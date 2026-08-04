@@ -1,3 +1,4 @@
+import asyncio
 import json
 import uuid
 
@@ -209,6 +210,11 @@ class _ShapeInvalidSqlGenerationPipeline:
         }
 
 
+class _SlowSqlGenerationPipeline:
+    async def run(self, **_):
+        await asyncio.sleep(60)
+
+
 class _CapturingCorrectionPipeline:
     def __init__(self):
         self.calls = []
@@ -269,6 +275,37 @@ async def test_ask_skips_sql_diagnosis_for_local_validation_error():
         "sql": "SELECT entity_id FROM model_alpha",
         "error": "Generated SQL is a table preview.",
     }
+
+
+@pytest.mark.asyncio
+async def test_ask_times_out_slow_sql_generation_instead_of_hanging():
+    ask_service = AskService(
+        {
+            "historical_question": _EmptyRetrievalPipeline(),
+            "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
+            "instructions_retrieval": _EmptyRetrievalPipeline(),
+            "db_schema_retrieval": _SchemaRetrievalPipeline(),
+            "sql_generation": _SlowSqlGenerationPipeline(),
+        },
+        allow_intent_classification=False,
+        allow_sql_functions_retrieval=False,
+        allow_sql_knowledge_retrieval=False,
+        sql_generation_timeout_seconds=0.01,
+    )
+    query_id = str(uuid.uuid4())
+    ask_request = AskRequest(query="count records by model", mdl_hash=None)
+    ask_request.query_id = query_id
+
+    await ask_service.ask(ask_request)
+
+    ask_result_response = ask_service.get_ask_result(
+        AskResultRequest(query_id=query_id)
+    )
+    assert ask_result_response.status == "failed"
+    assert ask_result_response.error.code == "OTHERS"
+    assert ask_result_response.error.message == (
+        "SQL generation timed out after 0.01 seconds"
+    )
 
 
 @pytest.mark.asyncio

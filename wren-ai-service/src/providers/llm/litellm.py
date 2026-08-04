@@ -126,6 +126,7 @@ class LitellmLLMProvider(LLMProvider):
                     **(generation_kwargs or {}),
                 }
             )
+            completion_timeout = generation_kwargs.pop("timeout", self._timeout)
             should_stream = (
                 streaming_callback is not None
                 and query_id is not None
@@ -143,6 +144,7 @@ class LitellmLLMProvider(LLMProvider):
                     stream=should_stream,
                     allowed_openai_params=allowed_openai_params,
                     mock_testing_fallbacks=self._enable_fallback_testing,
+                    timeout=completion_timeout,
                     **generation_kwargs,
                 )
             else:
@@ -151,7 +153,7 @@ class LitellmLLMProvider(LLMProvider):
                     api_key=self._api_key,
                     api_base=self._api_base,
                     api_version=self._api_version,
-                    timeout=self._timeout,
+                    timeout=completion_timeout,
                     messages=openai_formatted_messages,
                     stream=should_stream,
                     allowed_openai_params=allowed_openai_params,
