@@ -31,6 +31,22 @@ _ANALYTICAL_OR_FILTER_QUERY_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+_AGGREGATE_QUERY_PATTERN = re.compile(
+    r"\b("
+    r"per|by|group|breakdown|total|sum|count|average|avg|min|max|top|bottom|"
+    r"highest|lowest|quantity|qty|sold"
+    r")\b",
+    re.IGNORECASE,
+)
+_TIME_QUERY_PATTERN = re.compile(
+    r"\b("
+    r"today|yesterday|week|month|quarter|year|january|february|march|april|"
+    r"may|june|july|august|september|october|november|december"
+    r")\b",
+    re.IGNORECASE,
+)
+_DATE_LITERAL_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2})?$")
+
 _BROAD_TABLE_PREVIEW_COLUMN_THRESHOLD = 8
 
 
@@ -327,27 +343,69 @@ def _has_answer_shaping_clause(statement: TokenList) -> bool:
     return False
 
 
+def _has_clause(statement: TokenList, clauses: set[str]) -> bool:
+    for token in _meaningful_tokens(statement):
+        normalized = token.normalized
+        if normalized in clauses:
+            return True
+        if any(normalized.startswith(f"{clause} ") for clause in clauses):
+            return True
+
+    return False
+
+
 def _table_preview_shape_error(sql: str | None, query: str | None = None) -> str | None:
     if not sql:
         return None
 
     query_has_shape = bool(query and _ANALYTICAL_OR_FILTER_QUERY_PATTERN.search(query))
+    query_has_aggregate_shape = bool(query and _AGGREGATE_QUERY_PATTERN.search(query))
 
     for statement in sqlparse.parse(sql):
         if not str(statement).strip().strip(";").strip():
             continue
 
         items = _select_items(statement)
-        if not items or any(_is_aggregate_item(item) for item in items):
+        if not items:
             continue
 
-        if _has_answer_shaping_clause(statement):
-            continue
+        has_aggregate_item = any(_is_aggregate_item(item) for item in items)
+        has_grouping = _has_clause(statement, {"GROUP BY", "HAVING"})
+        has_ordering = _has_clause(statement, {"ORDER BY"})
+        has_filter = _has_clause(statement, {"WHERE"})
 
         referenced_tables = _collect_table_references(statement)
         cte_names = _collect_cte_names(statement)
         source_tables = referenced_tables - cte_names
         is_single_source_scan = len(source_tables) <= 1
+
+        if (
+            query_has_aggregate_shape
+            and is_single_source_scan
+            and not has_aggregate_item
+            and not has_grouping
+            and not has_ordering
+        ):
+            return (
+                "Generated SQL does not apply the requested aggregation, grouping, "
+                "ranking, or measure calculation."
+            )
+
+        if (
+            is_single_source_scan
+            and len(items) >= _BROAD_TABLE_PREVIEW_COLUMN_THRESHOLD
+            and (query_has_shape or has_filter)
+        ):
+            return (
+                "Generated SQL is a broad table preview; select only the explicit "
+                "columns and operations needed to answer the question."
+            )
+
+        if has_aggregate_item:
+            continue
+
+        if _has_answer_shaping_clause(statement):
+            continue
 
         if query_has_shape and is_single_source_scan:
             return (
@@ -363,6 +421,45 @@ def _table_preview_shape_error(sql: str | None, query: str | None = None) -> str
                 "Generated SQL is a broad table preview; select only the explicit "
                 "columns and operations needed to answer the question."
             )
+
+    return None
+
+
+def _unsupported_literal_filter_error(
+    sql: str | None, query: str | None = None
+) -> str | None:
+    if not sql or not query:
+        return None
+
+    query_terms = {
+        term
+        for term in re.findall(r"[a-zA-Z0-9]+", query.lower())
+        if len(term) >= 2
+    }
+    query_has_timeframe = bool(_TIME_QUERY_PATTERN.search(query))
+
+    for statement in sqlparse.parse(sql):
+        for token in statement.flatten():
+            if token.ttype != sqlparse_tokens.Literal.String.Single:
+                continue
+
+            literal_value = str(token.value).strip("'\"")
+            if not literal_value:
+                continue
+
+            if query_has_timeframe and _DATE_LITERAL_PATTERN.match(literal_value):
+                continue
+
+            literal_terms = {
+                term
+                for term in re.findall(r"[a-zA-Z0-9]+", literal_value.lower())
+                if len(term) >= 2
+            }
+            if literal_terms and not (literal_terms & query_terms):
+                return (
+                    "Generated SQL contains string filter values that are not "
+                    "grounded in the user's question."
+                )
 
     return None
 
@@ -481,6 +578,22 @@ class SQLGenPostProcessor:
                         "original_sql": cleaned_generation_result,
                         "type": "SQL_SYNTAX",
                         "error": wildcard_error,
+                        "correlation_id": "",
+                    },
+                }
+
+            literal_filter_error = _unsupported_literal_filter_error(
+                cleaned_generation_result,
+                query=query,
+            )
+            if literal_filter_error:
+                return {
+                    "valid_generation_result": {},
+                    "invalid_generation_result": {
+                        "sql": cleaned_generation_result,
+                        "original_sql": cleaned_generation_result,
+                        "type": "SQL_VALUE_GROUNDING",
+                        "error": literal_filter_error,
                         "correlation_id": "",
                     },
                 }
@@ -703,6 +816,7 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - The executable identifier is the name in the CREATE TABLE, CREATE VIEW, or metric field declaration. Do not derive executable identifiers by rewriting, translating, singularizing, pluralizing, spacing, casing, or abbreviating natural language, comments, aliases, display labels, or descriptions.
 - Never generate SQL from assumptions such as "assuming the table contains", "assuming this column exists", or "a possible table/column". Use only schema-confirmed identifiers.
 - Never generate placeholder identifiers, placeholder table names, or template markers in the SQL. If the retrieved metadata does not contain an executable object or column for a requested concept, omit that unsupported concept.
+- Never invent string literal filter values. Use a string value in WHERE, HAVING, CASE, or JOIN conditions only when that value is explicitly present in the user's current question or grounded by a current USER INSTRUCTION. For relative time requests, bounded date literals may be generated only from the requested timeframe and an exact date/time column.
 - Never create an identifier from user question wording by changing spaces, casing, punctuation, singular/plural form, abbreviations, prefixes, or suffixes. If the exact requested table or column concept is not represented by a retrieved schema identifier, return null for sql.
 - If a requested concept, output column, filter, sort, join, grouping, measure, or time field is not represented by an exact table or column in DATABASE SCHEMA, do not invent a field for it. If that field is required to answer the request, return null for sql.
 - When a dry run error reports an invalid object name or invalid column name, remove that identifier unless it appears exactly in DATABASE SCHEMA. Correct it only to an exact schema identifier.
@@ -756,6 +870,7 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
 - Output aliases may be used only to name expressions in the final SELECT list. Output aliases are labels for result columns only; they are not source identifiers.
 - For metric-style requests, the final SELECT list must expose the requested dimension columns and measure expressions or metric fields. Do not return every raw column from a retrieved model as a substitute for the requested metric.
+- For aggregate, ranking, or "by" requests, do not add unrelated string filters to make the SQL look specific. If the user did not provide a filter value, leave it out.
 - Comments, aliases, display labels, and descriptions from DATABASE SCHEMA may guide which exact source column to select, but they must not be copied into FROM, JOIN, WHERE, GROUP BY, HAVING, or ORDER BY as table or column names.
 - Physical/source/lineage names from metadata may guide meaning, but generated SQL must use only the declared Wren model, view, metric, and column identifiers from DATABASE SCHEMA.
 - DON'T USE '.' in output aliases, replace '.' with '_' in output aliases.

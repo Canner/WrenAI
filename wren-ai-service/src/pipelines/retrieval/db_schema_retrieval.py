@@ -132,6 +132,8 @@ _QUERY_TERM_STOPWORDS = {
     "with",
 }
 
+_MAX_SCHEMA_SEMANTIC_TABLE_CANDIDATES = 5
+
 
 def _normalize_terms(value: str) -> set[str]:
     terms = {
@@ -565,11 +567,17 @@ async def dbschema_retrieval(
             query_embedding=embedding.get("embedding"),
             filters=_base_filters(),
         )
-        _extend_unique_documents(documents, results["documents"], seen_documents)
+        added_schema_table_names = 0
         for document in results["documents"]:
             table_name = _document_name(document)
             if table_name and table_name not in table_names:
                 table_names.append(table_name)
+                added_schema_table_names += 1
+                if (
+                    added_schema_table_names
+                    >= _MAX_SCHEMA_SEMANTIC_TABLE_CANDIDATES
+                ):
+                    break
 
     visited = set(table_names)
     current_documents = await _fetch_by_names(table_names)

@@ -808,7 +808,6 @@ async def test_dbschema_retrieval_uses_semantic_schema_hits_when_table_retrieval
     }
     assert [document.meta["name"] for document in documents] == [
         semantic_model,
-        semantic_model,
     ]
 
 
@@ -915,10 +914,92 @@ async def test_dbschema_retrieval_combines_description_and_schema_semantic_hits(
         ],
     }
     assert [document.meta["name"] for document in documents] == [
-        semantic_model,
         described_model,
         semantic_model,
     ]
+
+
+@pytest.mark.asyncio
+async def test_dbschema_retrieval_caps_schema_semantic_table_rescue():
+    class Retriever:
+        def __init__(self):
+            self.calls = []
+
+        async def run(self, query_embedding, filters):
+            self.calls.append(
+                {
+                    "query_embedding": query_embedding,
+                    "filters": filters,
+                }
+            )
+
+            if query_embedding:
+                return {
+                    "documents": [
+                        Document(
+                            content=str(
+                                {
+                                    "type": "TABLE_COLUMNS",
+                                    "columns": [
+                                        {
+                                            "type": "COLUMN",
+                                            "name": "semantic_value",
+                                            "data_type": "DOUBLE",
+                                            "comment": "",
+                                            "is_primary_key": False,
+                                        }
+                                    ],
+                                }
+                            ),
+                            meta={
+                                "type": "TABLE_SCHEMA",
+                                "name": f"semantic_model_{index}",
+                            },
+                        )
+                        for index in range(25)
+                    ]
+                }
+
+            selected_names = [
+                condition["value"]
+                for condition in filters["conditions"][1]["conditions"]
+            ]
+            return {
+                "documents": [
+                    Document(
+                        content=str(
+                            {
+                                "type": "TABLE",
+                                "name": name,
+                                "comment": "",
+                                "columns": [],
+                                "properties": {},
+                                "primaryKey": "",
+                            }
+                        ),
+                        meta={"type": "TABLE_SCHEMA", "name": name},
+                    )
+                    for name in selected_names
+                ]
+            }
+
+    retriever = Retriever()
+
+    documents = await dbschema_retrieval(
+        table_retrieval={"documents": []},
+        project_id="project-1",
+        dbschema_retriever=retriever,
+        embedding={"embedding": [0.25]},
+    )
+
+    selected_names = [
+        condition["value"]
+        for condition in retriever.calls[1]["filters"]["conditions"][1]["conditions"]
+    ]
+
+    assert len(selected_names) == 5
+    assert selected_names == [f"semantic_model_{index}" for index in range(5)]
+    assert [document.meta["name"] for document in documents] == selected_names
 
 
 def test_check_using_db_schemas_without_pruning_triggers_legacy_column_pruning():

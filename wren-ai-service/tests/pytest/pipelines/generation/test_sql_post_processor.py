@@ -260,8 +260,8 @@ async def test_sql_post_processor_rejects_unshaped_analytical_table_preview():
     assert result["invalid_generation_result"]["type"] == "SQL_SHAPE"
     assert (
         result["invalid_generation_result"]["error"]
-        == "Generated SQL is a table preview and does not apply the requested "
-        "aggregation, grouping, filter, timeframe, ranking, or ordering."
+        == "Generated SQL does not apply the requested aggregation, grouping, "
+        "ranking, or measure calculation."
     )
 
 
@@ -284,6 +284,73 @@ async def test_sql_post_processor_rejects_unfiltered_timeframe_table_preview():
     assert engine.executed is False
     assert result["valid_generation_result"] == {}
     assert result["invalid_generation_result"]["type"] == "SQL_SHAPE"
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_rejects_broad_preview_with_placeholder_filter():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        [
+            (
+                '{"sql": "SELECT dim_a, dim_b, dim_c, dim_d, dim_e, '
+                "dim_f, dim_g, metric_col FROM model_alpha "
+                "WHERE dim_a = 'SyntheticValue1'\"}"
+            )
+        ],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "model_alpha",
+                "column_names": [
+                    "dim_a",
+                    "dim_b",
+                    "dim_c",
+                    "dim_d",
+                    "dim_e",
+                    "dim_f",
+                    "dim_g",
+                    "metric_col",
+                ],
+            }
+        ],
+        query="total metric by category",
+    )
+
+    assert engine.executed is False
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "SQL_VALUE_GROUNDING"
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_rejects_aggregate_intent_without_aggregate_shape():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        [
+            (
+                '{"sql": "SELECT dim_a, dim_b FROM model_alpha '
+                "WHERE dim_a = 'dim_a'\"}"
+            )
+        ],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "model_alpha",
+                "column_names": ["dim_a", "dim_b"],
+            }
+        ],
+        query="total metric by dim_a",
+    )
+
+    assert engine.executed is False
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "SQL_SHAPE"
+    assert (
+        result["invalid_generation_result"]["error"]
+        == "Generated SQL does not apply the requested aggregation, grouping, "
+        "ranking, or measure calculation."
+    )
 
 
 @pytest.mark.asyncio
@@ -315,6 +382,38 @@ async def test_sql_post_processor_allows_intent_shaped_analytical_query():
             "SELECT category_col, DATE_TRUNC('month', event_date) AS period_col, "
             "COUNT(*) AS row_count FROM model_alpha GROUP BY category_col, "
             "DATE_TRUNC('month', event_date)"
+        ),
+        "correlation_id": "valid-correlation",
+    }
+    assert result["invalid_generation_result"] == {}
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_allows_user_provided_string_filter_value():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        [
+            (
+                '{"sql": "SELECT entity_id, status_col FROM model_alpha '
+                "WHERE status_col = 'active'\"}"
+            )
+        ],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "model_alpha",
+                "column_names": ["entity_id", "status_col"],
+            }
+        ],
+        query="show active records",
+    )
+
+    assert engine.executed is True
+    assert result["valid_generation_result"] == {
+        "sql": (
+            "SELECT entity_id, status_col FROM model_alpha "
+            "WHERE status_col = 'active'"
         ),
         "correlation_id": "valid-correlation",
     }
