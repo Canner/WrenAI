@@ -192,6 +192,17 @@ def test_semantics_description_uses_timeout_without_rewriting_ttl():
     assert service._cache.ttl == 120
 
 
+def test_semantics_description_uses_configured_batch_and_concurrency_limits():
+    service = SemanticsDescription(
+        pipelines={"semantics_description": AsyncMock()},
+        max_models_per_batch=2,
+        max_concurrent_tasks=3,
+    )
+
+    assert service._max_models_per_batch == 2
+    assert service._max_concurrent_tasks == 3
+
+
 @pytest.mark.asyncio
 async def test_batch_processing_with_multiple_models(
     service: SemanticsDescription,
@@ -249,10 +260,10 @@ async def test_batch_processing_with_multiple_models(
     assert len(response.response["model3"]["columns"]) == 1
 
     chunks = service._chunking(orjson.loads(request.mdl), request)
-    assert len(chunks) == 1
+    assert len(chunks) == 3
     assert all("user_prompt" in chunk for chunk in chunks)
     assert all("mdl" in chunk for chunk in chunks)
-    assert [len(chunk["selected_models"]) for chunk in chunks] == [3]
+    assert [len(chunk["selected_models"]) for chunk in chunks] == [1, 1, 1]
 
 
 def test_batch_processing_with_custom_chunk_size(
@@ -275,7 +286,7 @@ def test_batch_processing_with_custom_chunk_size(
     assert chunks[1]["selected_models"] == ["model3", "model4"]
 
 
-def test_default_batch_allows_large_column_groups(
+def test_default_batch_keeps_large_column_groups_by_model(
     service: SemanticsDescription,
 ):
     request = SemanticsDescription.GenerateRequest(
@@ -306,8 +317,11 @@ def test_default_batch_allows_large_column_groups(
 
     chunks = service._chunking(orjson.loads(request.mdl), request)
 
-    assert len(chunks) == 1
-    assert chunks[0]["selected_models"] == ["model1", "model2"]
+    assert len(chunks) == 2
+    assert chunks[0]["selected_models"] == ["model1"]
+    assert chunks[1]["selected_models"] == ["model2"]
+    assert len(chunks[0]["mdl"]["models"][0]["columns"]) == 500
+    assert len(chunks[1]["mdl"]["models"][0]["columns"]) == 400
 
 
 @pytest.mark.asyncio

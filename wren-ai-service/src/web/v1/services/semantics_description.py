@@ -33,12 +33,14 @@ class SemanticsDescription:
         maxsize: int = 1_000_000,
         ttl: int = 120,
         generation_timeout_seconds: int = 90,
-        max_models_per_batch: int = 5,
+        max_models_per_batch: int = 1,
+        max_concurrent_tasks: int = 4,
     ):
         self._pipelines = pipelines
         self._cache: Dict[str, self.Resource] = TTLCache(maxsize=maxsize, ttl=ttl)
         self._generation_timeout_seconds = generation_timeout_seconds
         self._max_models_per_batch = max(1, max_models_per_batch)
+        self._max_concurrent_tasks = max(1, max_concurrent_tasks)
 
     def _handle_exception(
         self,
@@ -98,6 +100,15 @@ class SemanticsDescription:
         if not isinstance(output, dict):
             raise ValueError("Semantics description pipeline returned invalid output")
         return output
+
+    async def _generate_chunks(self, chunks: list[dict]) -> list[dict]:
+        semaphore = asyncio.Semaphore(self._max_concurrent_tasks)
+
+        async def _bounded_generate(chunk: dict) -> dict:
+            async with semaphore:
+                return await self._generate_task(chunk)
+
+        return await asyncio.gather(*[_bounded_generate(chunk) for chunk in chunks])
 
     def _merge_outputs(
         self, mdl_dict: dict, selected_models: list[str], outputs: list[dict]
@@ -204,10 +215,8 @@ class SemanticsDescription:
                 raise ValueError(
                     "No selected models matched the current semantic model metadata"
                 )
-            tasks = [self._generate_task(chunk) for chunk in chunks]
-
             outputs = await asyncio.wait_for(
-                asyncio.gather(*tasks),
+                self._generate_chunks(chunks),
                 timeout=self._generation_timeout_seconds,
             )
 

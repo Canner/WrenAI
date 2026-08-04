@@ -7,7 +7,7 @@ from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
@@ -165,21 +165,29 @@ def output(normalize: dict, picked_models: list[dict]) -> dict:
 
 ## End of Pipeline
 class ModelProperties(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     description: str
 
 
 class ModelColumns(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     properties: ModelProperties
 
 
 class SemanticModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     columns: list[ModelColumns]
     properties: ModelProperties
 
 
 class SemanticResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     models: list[SemanticModel]
 
 
@@ -188,6 +196,7 @@ SEMANTICS_DESCRIPTION_MODEL_KWARGS = {
         "type": "json_schema",
         "json_schema": {
             "name": "semantic_description",
+            "strict": True,
             "schema": SemanticResult.model_json_schema(),
         },
     }
