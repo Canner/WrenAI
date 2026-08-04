@@ -30,6 +30,8 @@ def test_sql_generation_system_prompt_requires_retrieved_semantic_authority():
     assert "return null for sql instead of choosing one" in prompt
     assert "Never use \"*\" in the SELECT list" in prompt
     assert "For metric-style requests" in prompt
+    assert "Do not join tables just because they were retrieved together" in prompt
+    assert "Do not invent join predicates from similar column names" in prompt
 
 
 def test_sql_correction_system_prompt_allows_null_when_ungrounded():

@@ -579,11 +579,12 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - If a requested concept, output column, filter, sort, join, grouping, measure, or time field is not represented by an exact table or column in DATABASE SCHEMA, do not invent a field for it. If that field is required to answer the request, return null for sql.
 - When a dry run error reports an invalid object name or invalid column name, remove that identifier unless it appears exactly in DATABASE SCHEMA. Correct it only to an exact schema identifier.
 - Do not replace an invalid identifier with a similar-looking physical, source, lineage, alias, display, description, sample, or error-message name. Regenerate from the user's intent and the current DATABASE SCHEMA, and omit unsupported parts instead of substituting non-schema identifiers.
-- When using multiple tables to combine fields into the same output row, join only through the FOREIGN KEY relationships shown in DATABASE SCHEMA. If no relationship is shown for the needed tables, prefer a single table, view, or metric that already contains the requested fields.
+- Prefer a single table, view, or metric that already contains the requested fields. Do not join tables just because they were retrieved together.
+- When using multiple tables to combine fields into the same output row, join only through the exact FOREIGN KEY constraints shown in DATABASE SCHEMA. If no relationship is shown for the needed tables, return null for sql or use one schema object that already contains the requested fields.
 - If multiple semantic interpretations exist and the retrieved context does not make one interpretation authoritative, return null for sql instead of choosing one.
 - When the same requested result can be answered from multiple schema objects with compatible columns or metrics, include all relevant schema objects by combining separate result rows with UNION ALL instead of choosing only one object.
 - Use UNION ALL only when each SELECT branch is independently valid from DATABASE SCHEMA and returns the same result shape. Do not use UNION ALL to combine unrelated concepts or to compensate for missing columns.
-- If the question requires fields that are spread across multiple schema objects, use all required related tables, views, or metrics only when the DATABASE SCHEMA provides the needed columns and relationship path.
+- If the question requires fields that are spread across multiple schema objects, use all required related tables, views, or metrics only when the DATABASE SCHEMA provides the needed columns and an exact relationship path. Do not invent join predicates from similar column names.
 - Do not query INFORMATION_SCHEMA, system catalogs, metadata tables, or table-existence checks to answer the user. Query only the business tables, views, and metrics in DATABASE SCHEMA.
 - SQL samples and query history are examples of intent and style only. Never copy a table name, column name, alias, literal value, or function from them unless it is also valid for the current DATABASE SCHEMA and SQL FUNCTIONS.
 - Generate Wren SQL only. Do not use warehouse-specific functions unless they are explicitly listed in SQL FUNCTIONS for this request.
@@ -609,7 +610,7 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - Never use "*" in the SELECT list. Select explicit deployed schema columns needed for the question. When the user asks for all records, all rows, all users, all orders, or similar, treat "all" as row scope and still select explicit columns relevant to the requested entity or metric.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - DON'T INCLUDE comments in the generated SQL query.
-- YOU MUST USE "JOIN" if you choose columns from multiple tables!
+- Use JOIN only when selected columns come from multiple tables and DATABASE SCHEMA declares the exact FOREIGN KEY relationship needed for the join. Do not invent join predicates from similar-looking column names.
 - PREFER USING CTEs over subqueries.
 - When generating SQL query, always:
     - Put double quotes around column and table names.

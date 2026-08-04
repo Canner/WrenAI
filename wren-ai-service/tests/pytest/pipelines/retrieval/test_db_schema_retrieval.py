@@ -542,7 +542,7 @@ async def test_dbschema_retrieval_loads_exact_deployed_schema_without_candidates
 
 
 @pytest.mark.asyncio
-async def test_dbschema_retrieval_expands_declared_relationships():
+async def test_dbschema_retrieval_expands_direct_declared_relationships():
     selected_model = "model_a"
     related_model = "model_b"
     downstream_model = "model_c"
@@ -661,13 +661,12 @@ async def test_dbschema_retrieval_expands_declared_relationships():
         embedding={},
     )
 
-    assert retriever.calls == [[selected_model], [related_model], [downstream_model]]
+    assert retriever.calls == [[selected_model], [related_model]]
     assert [document.meta["name"] for document in documents] == [
         selected_model,
         selected_model,
         related_model,
         related_model,
-        downstream_model,
     ]
 
 
@@ -1250,6 +1249,70 @@ def test_construct_retrieval_results_adds_query_matching_tables_after_pruning():
     assert [item["table_name"] for item in result["retrieval_results"]] == [
         "regional_orders",
         "archived_orders",
+    ]
+
+
+def test_construct_retrieval_results_does_not_add_column_only_term_matches():
+    result = construct_retrieval_results(
+        check_using_db_schemas_without_pruning={},
+        filter_columns_in_tables={
+            "replies": [
+                """
+                {
+                    "results": [
+                        {
+                            "table_name": "regional_orders",
+                            "table_selection_reason": "Selected for the current request.",
+                            "table_contents": {
+                                "chain_of_thought_reasoning": ["Needed field."],
+                                "columns": ["order_id"]
+                            }
+                        }
+                    ]
+                }
+                """
+            ]
+        },
+        construct_db_schemas=[
+            {
+                "type": "TABLE",
+                "name": "regional_orders",
+                "comment": "",
+                "columns": [
+                    {
+                        "type": "COLUMN",
+                        "name": "order_id",
+                        "data_type": "VARCHAR",
+                        "comment": "",
+                        "is_primary_key": False,
+                    }
+                ],
+                "properties": {},
+                "primaryKey": "",
+            },
+            {
+                "type": "TABLE",
+                "name": "fact_sales",
+                "comment": "",
+                "columns": [
+                    {
+                        "type": "COLUMN",
+                        "name": "country",
+                        "data_type": "VARCHAR",
+                        "comment": "",
+                        "is_primary_key": False,
+                    }
+                ],
+                "properties": {},
+                "primaryKey": "",
+            },
+        ],
+        dbschema_retrieval=[],
+        query="show orders from country france",
+    )
+
+    assert [item["table_name"] for item in result["retrieval_results"]] == [
+        "regional_orders"
     ]
 
 

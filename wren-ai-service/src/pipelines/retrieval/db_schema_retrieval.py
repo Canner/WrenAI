@@ -148,21 +148,7 @@ def _normalize_terms(value: str) -> set[str]:
 
 
 def _schema_semantic_text(content: dict) -> str:
-    parts = [
-        str(content.get("name", "") or ""),
-        str(content.get("comment", "") or ""),
-        str(content.get("properties", {}) or ""),
-    ]
-    for column in content.get("columns", []):
-        parts.extend(
-            [
-                str(column.get("name", "") or ""),
-                str(column.get("comment", "") or ""),
-                str(column.get("constraint", "") or ""),
-            ]
-        )
-
-    return " ".join(parts)
+    return str(content.get("name", "") or "")
 
 
 def _tables_matching_query_terms(
@@ -515,6 +501,22 @@ async def dbschema_retrieval(
 
         return related_names
 
+    def _document_key(document: Document) -> tuple[str, str]:
+        return document.meta.get("name", ""), document.content or ""
+
+    def _extend_unique_documents(
+        target: list[Document],
+        source: list[Document],
+        seen: set[tuple[str, str]],
+    ) -> None:
+        for document in source:
+            key = _document_key(document)
+            if key in seen:
+                continue
+
+            seen.add(key)
+            target.append(document)
+
     tables = table_retrieval.get("documents", [])
     table_names = []
     for table in tables:
@@ -524,6 +526,7 @@ async def dbschema_retrieval(
             table_names.append(table_name)
 
     documents = []
+    seen_documents = set()
     if not table_names and not (embedding and embedding.get("embedding")):
         results = await dbschema_retriever.run(
             query_embedding=[],
@@ -536,20 +539,19 @@ async def dbschema_retrieval(
             query_embedding=embedding.get("embedding"),
             filters=_base_filters(),
         )
-        documents.extend(results["documents"])
+        _extend_unique_documents(documents, results["documents"], seen_documents)
         for document in results["documents"]:
             table_name = _document_name(document)
             if table_name and table_name not in table_names:
                 table_names.append(table_name)
 
     visited = set(table_names)
-    pending = list(table_names)
-    while pending:
-        current_names = pending
-        pending = []
-        current_documents = await _fetch_by_names(current_names)
-        documents.extend(current_documents)
-        pending.extend(_related_table_names(current_documents, visited))
+    current_documents = await _fetch_by_names(table_names)
+    _extend_unique_documents(documents, current_documents, seen_documents)
+
+    related_names = _related_table_names(current_documents, visited)
+    related_documents = await _fetch_by_names(related_names)
+    _extend_unique_documents(documents, related_documents, seen_documents)
 
     return documents
 
