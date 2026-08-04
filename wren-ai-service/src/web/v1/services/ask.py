@@ -88,7 +88,12 @@ class AskResult(BaseModel):
 
 
 class AskError(BaseModel):
-    code: Literal["NO_RELEVANT_DATA", "NO_RELEVANT_SQL", "OTHERS"]
+    code: Literal[
+        "NO_RELEVANT_DATA",
+        "NO_RELEVANT_SQL",
+        "ASK_RESULT_NOT_FOUND",
+        "OTHERS",
+    ]
     message: str
 
 
@@ -755,14 +760,15 @@ class AskService:
         ask_result_request: AskResultRequest,
     ) -> AskResultResponse:
         if (result := self._ask_results.get(ask_result_request.query_id)) is None:
-            logger.exception(
-                f"ask pipeline - OTHERS: {ask_result_request.query_id} is not found"
+            logger.warning(
+                "ask pipeline - ASK_RESULT_NOT_FOUND: "
+                f"{ask_result_request.query_id} is not found"
             )
             return AskResultResponse(
                 status="failed",
                 type="TEXT_TO_SQL",
                 error=AskError(
-                    code="OTHERS",
+                    code="ASK_RESULT_NOT_FOUND",
                     message=f"{ask_result_request.query_id} is not found",
                 ),
             )
