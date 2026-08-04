@@ -165,6 +165,7 @@ def test_ask_service_uses_single_sql_correction_retry_by_default():
 
 
 def test_should_skip_sql_diagnosis_for_deterministic_validation_errors():
+    assert should_skip_sql_diagnosis({"type": "SQL_INTENT_MISMATCH"}) is True
     assert should_skip_sql_diagnosis({"type": "SQL_SHAPE"}) is True
     assert should_skip_sql_diagnosis({"type": "SCHEMA_GROUNDING"}) is True
     assert should_skip_sql_diagnosis({"type": "SQL_VALUE_GROUNDING"}) is True
@@ -173,6 +174,7 @@ def test_should_skip_sql_diagnosis_for_deterministic_validation_errors():
 
 
 def test_should_not_attempt_sql_correction_for_contract_validation_errors():
+    assert should_attempt_sql_correction({"type": "SQL_INTENT_MISMATCH"}) is True
     assert should_attempt_sql_correction({"type": "SQL_SHAPE"}) is False
     assert should_attempt_sql_correction({"type": "SCHEMA_GROUNDING"}) is False
     assert should_attempt_sql_correction({"type": "SQL_VALUE_GROUNDING"}) is False

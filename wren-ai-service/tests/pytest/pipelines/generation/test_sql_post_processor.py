@@ -300,7 +300,7 @@ async def test_sql_post_processor_rejects_unshaped_analytical_table_preview():
 
     assert engine.executed is False
     assert result["valid_generation_result"] == {}
-    assert result["invalid_generation_result"]["type"] == "SQL_SHAPE"
+    assert result["invalid_generation_result"]["type"] == "SQL_INTENT_MISMATCH"
     assert (
         result["invalid_generation_result"]["error"]
         == "Generated SQL does not apply the requested aggregation, grouping, "
@@ -326,7 +326,7 @@ async def test_sql_post_processor_rejects_unfiltered_timeframe_table_preview():
 
     assert engine.executed is False
     assert result["valid_generation_result"] == {}
-    assert result["invalid_generation_result"]["type"] == "SQL_SHAPE"
+    assert result["invalid_generation_result"]["type"] == "SQL_INTENT_MISMATCH"
 
 
 @pytest.mark.asyncio
@@ -388,7 +388,7 @@ async def test_sql_post_processor_rejects_aggregate_intent_without_aggregate_sha
 
     assert engine.executed is False
     assert result["valid_generation_result"] == {}
-    assert result["invalid_generation_result"]["type"] == "SQL_SHAPE"
+    assert result["invalid_generation_result"]["type"] == "SQL_INTENT_MISMATCH"
     assert (
         result["invalid_generation_result"]["error"]
         == "Generated SQL does not apply the requested aggregation, grouping, "

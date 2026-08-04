@@ -946,7 +946,7 @@ class SQLGenPostProcessor:
                     "invalid_generation_result": {
                         "sql": cleaned_generation_result,
                         "original_sql": cleaned_generation_result,
-                        "type": "SQL_SHAPE",
+                        "type": "SQL_INTENT_MISMATCH",
                         "error": table_preview_error,
                         "correlation_id": "",
                     },
