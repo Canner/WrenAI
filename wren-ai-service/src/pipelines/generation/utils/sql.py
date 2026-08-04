@@ -6,7 +6,7 @@ import orjson
 import sqlparse
 from haystack import component
 from haystack.dataclasses import ChatMessage
-from sqlparse.sql import Identifier, IdentifierList, Parenthesis, TokenList
+from sqlparse.sql import Function, Identifier, IdentifierList, Parenthesis, TokenList
 from sqlparse import tokens as sqlparse_tokens
 from pydantic import BaseModel
 
@@ -212,6 +212,61 @@ def _sql_statement_shape_error(sql: str | None) -> str | None:
     return None
 
 
+def _is_select_wildcard_token(token: Any) -> bool:
+    if isinstance(token, Function):
+        return False
+
+    if isinstance(token, IdentifierList):
+        return any(
+            _is_select_wildcard_token(identifier)
+            for identifier in token.get_identifiers()
+        )
+
+    if token.ttype == sqlparse_tokens.Wildcard:
+        return True
+
+    if isinstance(token, Identifier):
+        token_text = str(token).strip()
+        return bool(
+            token_text == "*"
+            or token_text.endswith(".*")
+            or token_text.upper().startswith("DISTINCT *")
+        )
+
+    return False
+
+
+def _select_wildcard_error(sql: str | None) -> str | None:
+    if not sql:
+        return None
+
+    for statement in sqlparse.parse(sql):
+        tokens = _meaningful_tokens(statement)
+        in_select_list = False
+        for token in tokens:
+            if (
+                token.ttype == sqlparse_tokens.Keyword.DML
+                and token.normalized == "SELECT"
+            ):
+                in_select_list = True
+                continue
+
+            if not in_select_list:
+                continue
+
+            if token.ttype == sqlparse_tokens.Keyword and token.normalized == "FROM":
+                in_select_list = False
+                continue
+
+            if _is_select_wildcard_token(token):
+                return (
+                    "Generated SQL uses SELECT *; select explicit deployed schema "
+                    "columns needed for the question."
+                )
+
+    return None
+
+
 def build_executable_schema_contract(schema_contracts: list[dict] | None) -> str:
     if not schema_contracts:
         return ""
@@ -301,6 +356,19 @@ class SQLGenPostProcessor:
                         "original_sql": cleaned_generation_result,
                         "type": "SCHEMA_GROUNDING",
                         "error": grounding_error,
+                        "correlation_id": "",
+                    },
+                }
+
+            wildcard_error = _select_wildcard_error(cleaned_generation_result)
+            if wildcard_error:
+                return {
+                    "valid_generation_result": {},
+                    "invalid_generation_result": {
+                        "sql": cleaned_generation_result,
+                        "original_sql": cleaned_generation_result,
+                        "type": "SQL_SYNTAX",
+                        "error": wildcard_error,
                         "correlation_id": "",
                     },
                 }

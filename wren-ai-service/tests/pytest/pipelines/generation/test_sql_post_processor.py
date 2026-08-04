@@ -180,14 +180,55 @@ async def test_sql_post_processor_allows_tables_inside_schema_contract():
     engine = CapturingEngine()
 
     result = await SQLGenPostProcessor(engine).run(
-        ['{"sql": "SELECT * FROM supported_model"}'],
+        ['{"sql": "SELECT id FROM supported_model"}'],
         project_id="project-id",
-        schema_contracts=[{"table_name": "supported_model", "column_names": []}],
+        schema_contracts=[{"table_name": "supported_model", "column_names": ["id"]}],
     )
 
     assert engine.executed is True
     assert result["valid_generation_result"] == {
-        "sql": "SELECT * FROM supported_model",
+        "sql": "SELECT id FROM supported_model",
+        "correlation_id": "valid-correlation",
+    }
+    assert result["invalid_generation_result"] == {}
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_rejects_select_wildcard_inside_schema_contract():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        ['{"sql": "SELECT supported_model.* FROM supported_model"}'],
+        project_id="project-id",
+        schema_contracts=[{"table_name": "supported_model", "column_names": ["id"]}],
+    )
+
+    assert engine.executed is False
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"] == {
+        "sql": "SELECT supported_model.* FROM supported_model",
+        "original_sql": "SELECT supported_model.* FROM supported_model",
+        "type": "SQL_SYNTAX",
+        "error": "Generated SQL uses SELECT *; select explicit deployed schema columns needed for the question.",
+        "correlation_id": "",
+    }
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_allows_count_star():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        ['{"sql": "SELECT COUNT(*) AS total_records FROM supported_model"}'],
+        project_id="project-id",
+        schema_contracts=[
+            {"table_name": "supported_model", "column_names": ["total_records"]}
+        ],
+    )
+
+    assert engine.executed is True
+    assert result["valid_generation_result"] == {
+        "sql": "SELECT COUNT(*) AS total_records FROM supported_model",
         "correlation_id": "valid-correlation",
     }
     assert result["invalid_generation_result"] == {}

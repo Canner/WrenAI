@@ -1,6 +1,7 @@
 import ast
 import asyncio
 import logging
+import re
 import sys
 from typing import Any, Optional
 
@@ -101,6 +102,87 @@ table_columns_selection_user_prompt_template = """
 ### INPUT ###
 {{ question }}
 """
+
+
+_QUERY_TERM_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "by",
+    "for",
+    "from",
+    "give",
+    "in",
+    "is",
+    "last",
+    "list",
+    "me",
+    "month",
+    "of",
+    "on",
+    "placed",
+    "show",
+    "the",
+    "this",
+    "to",
+    "week",
+    "with",
+}
+
+
+def _normalize_terms(value: str) -> set[str]:
+    terms = {
+        term
+        for term in re.findall(r"[a-zA-Z0-9]+", value.lower())
+        if len(term) >= 3 and term not in _QUERY_TERM_STOPWORDS
+    }
+    singular_terms = {
+        term[:-1]
+        for term in terms
+        if term.endswith("s") and len(term) > 3
+    }
+    return terms | singular_terms
+
+
+def _schema_semantic_text(content: dict) -> str:
+    parts = [
+        str(content.get("name", "") or ""),
+        str(content.get("comment", "") or ""),
+        str(content.get("properties", {}) or ""),
+    ]
+    for column in content.get("columns", []):
+        parts.extend(
+            [
+                str(column.get("name", "") or ""),
+                str(column.get("comment", "") or ""),
+                str(column.get("constraint", "") or ""),
+            ]
+        )
+
+    return " ".join(parts)
+
+
+def _tables_matching_query_terms(
+    query: str,
+    construct_db_schemas: list[dict],
+) -> set[str]:
+    query_terms = _normalize_terms(query)
+    if not query_terms:
+        return set()
+
+    matching_tables = set()
+    for table_schema in construct_db_schemas:
+        if table_schema.get("type") != "TABLE":
+            continue
+
+        schema_terms = _normalize_terms(_schema_semantic_text(table_schema))
+        if query_terms & schema_terms:
+            matching_tables.add(table_schema["name"])
+
+    return matching_tables
 
 
 def _build_metric_ddl(content: dict) -> str:
@@ -268,9 +350,10 @@ async def embedding(
     project_id: str = "",
     mdl_hash: str = "",
     dbschema_store: Any = None,
+    table_description_store: Any = None,
 ) -> dict:
     if project_id and mdl_hash and dbschema_store:
-        filters = {
+        schema_filters = {
             "operator": "AND",
             "conditions": [
                 {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
@@ -280,7 +363,29 @@ async def embedding(
                 )["conditions"],
             ],
         }
-        if await dbschema_store.count_documents(filters=filters):
+        schema_count = await dbschema_store.count_documents(filters=schema_filters)
+        if schema_count and table_description_store:
+            table_description_filters = {
+                "operator": "AND",
+                "conditions": [
+                    {
+                        "field": "type",
+                        "operator": "==",
+                        "value": "TABLE_DESCRIPTION",
+                    },
+                    *build_project_deploy_filter(
+                        project_id=project_id,
+                        mdl_hash=mdl_hash,
+                    )["conditions"],
+                ],
+            }
+            table_description_count = await table_description_store.count_documents(
+                filters=table_description_filters
+            )
+            if table_description_count:
+                return await embedder.run(query) if query else {}
+
+        if schema_count:
             return {}
 
     if query:
@@ -595,6 +700,7 @@ def construct_retrieval_results(
     filter_columns_in_tables: dict,
     construct_db_schemas: list[dict],
     dbschema_retrieval: list[Document],
+    query: str = "",
 ) -> dict[str, Any]:
     if filter_columns_in_tables:
         columns_and_tables_needed = orjson.loads(
@@ -608,6 +714,7 @@ def construct_retrieval_results(
             reformated_json[table["table_name"]] = table["table_contents"]
         columns_and_tables_needed = reformated_json
         tables = set(columns_and_tables_needed.keys())
+        tables.update(_tables_matching_query_terms(query, construct_db_schemas))
         retrieval_results = []
         has_calculated_field = False
         has_metric = False

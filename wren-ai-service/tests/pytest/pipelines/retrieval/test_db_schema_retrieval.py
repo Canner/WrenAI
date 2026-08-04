@@ -85,6 +85,44 @@ async def test_embedding_skips_semantic_search_when_deployed_schema_exists():
     ]
 
 
+@pytest.mark.asyncio
+async def test_embedding_uses_table_description_search_when_deploy_descriptions_exist():
+    class Embedder:
+        def __init__(self):
+            self.query = None
+
+        async def run(self, query):
+            self.query = query
+            return {"embedding": [1.0]}
+
+    schema_store = StoreCounter(count=1)
+    table_description_store = StoreCounter(count=1)
+    embedder = Embedder()
+
+    result = await embedding(
+        query="show orders from last month",
+        embedder=embedder,
+        histories=[],
+        project_id="project-1",
+        mdl_hash="deploy-1",
+        dbschema_store=schema_store,
+        table_description_store=table_description_store,
+    )
+
+    assert result == {"embedding": [1.0]}
+    assert embedder.query == "show orders from last month"
+    assert table_description_store.filters == [
+        {
+            "operator": "AND",
+            "conditions": [
+                {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
+                {"field": "project_id", "operator": "==", "value": "project-1"},
+                {"field": "mdl_hash", "operator": "==", "value": "deploy-1"},
+            ],
+        }
+    ]
+
+
 def test_column_pruning_prompt_uses_current_query_without_history_text():
     result = build_column_selection_prompt(
         query="current request",
@@ -1143,6 +1181,75 @@ def test_construct_retrieval_results_uses_full_columns_for_sql_generation():
     assert retrieved["manifest_column_names"] == [
         "stored_dimension",
         "stored_measure",
+    ]
+
+
+def test_construct_retrieval_results_adds_query_matching_tables_after_pruning():
+    def order_schema(name):
+        return {
+            "type": "TABLE",
+            "name": name,
+            "comment": "",
+            "columns": [
+                {
+                    "type": "COLUMN",
+                    "name": "order_id",
+                    "data_type": "VARCHAR",
+                    "comment": "",
+                    "is_primary_key": False,
+                }
+            ],
+            "properties": {},
+            "primaryKey": "",
+        }
+
+    result = construct_retrieval_results(
+        check_using_db_schemas_without_pruning={},
+        filter_columns_in_tables={
+            "replies": [
+                """
+                {
+                    "results": [
+                        {
+                            "table_name": "regional_orders",
+                            "table_selection_reason": "Selected for the current request.",
+                            "table_contents": {
+                                "chain_of_thought_reasoning": ["Needed field."],
+                                "columns": ["order_id"]
+                            }
+                        }
+                    ]
+                }
+                """
+            ]
+        },
+        construct_db_schemas=[
+            order_schema("regional_orders"),
+            order_schema("archived_orders"),
+            {
+                "type": "TABLE",
+                "name": "customers",
+                "comment": "",
+                "columns": [
+                    {
+                        "type": "COLUMN",
+                        "name": "customer_id",
+                        "data_type": "VARCHAR",
+                        "comment": "",
+                        "is_primary_key": False,
+                    }
+                ],
+                "properties": {},
+                "primaryKey": "",
+            },
+        ],
+        dbschema_retrieval=[],
+        query="show orders from last month",
+    )
+
+    assert [item["table_name"] for item in result["retrieval_results"]] == [
+        "regional_orders",
+        "archived_orders",
     ]
 
 
