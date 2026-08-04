@@ -717,6 +717,102 @@ async def test_dbschema_retrieval_expands_direct_declared_relationships():
 
 
 @pytest.mark.asyncio
+async def test_dbschema_retrieval_caps_related_table_expansion():
+    selected_model = "model_anchor"
+    related_models = [f"related_model_{index}" for index in range(8)]
+
+    class Retriever:
+        def __init__(self):
+            self.calls = []
+
+        async def run(self, query_embedding, filters):
+            names = [
+                condition["value"]
+                for condition in filters["conditions"][1]["conditions"]
+            ]
+            self.calls.append(names)
+
+            if names == [selected_model]:
+                return {
+                    "documents": [
+                        Document(
+                            content=str(
+                                {
+                                    "type": "TABLE",
+                                    "name": selected_model,
+                                }
+                            ),
+                            meta={"type": "TABLE_SCHEMA", "name": selected_model},
+                        ),
+                        Document(
+                            content=str(
+                                {
+                                    "type": "TABLE_COLUMNS",
+                                    "columns": [
+                                        {
+                                            "type": "FOREIGN_KEY",
+                                            "tables": [
+                                                selected_model,
+                                                related_model,
+                                            ],
+                                            "column": f"related_id_{index}",
+                                            "referenced_table": related_model,
+                                            "referenced_column": "id",
+                                        }
+                                        for index, related_model in enumerate(
+                                            related_models
+                                        )
+                                    ],
+                                }
+                            ),
+                            meta={"type": "TABLE_SCHEMA", "name": selected_model},
+                        ),
+                    ]
+                }
+
+            return {
+                "documents": [
+                    Document(
+                        content=str(
+                            {
+                                "type": "TABLE",
+                                "name": name,
+                            }
+                        ),
+                        meta={"type": "TABLE_SCHEMA", "name": name},
+                    )
+                    for name in names
+                ]
+            }
+
+    retriever = Retriever()
+
+    documents = await dbschema_retrieval(
+        table_retrieval={
+            "documents": [
+                Document(
+                    content=str({"name": selected_model}),
+                    meta={"type": "TABLE_DESCRIPTION", "name": selected_model},
+                )
+            ]
+        },
+        project_id="project-1",
+        dbschema_retriever=retriever,
+        embedding={},
+    )
+
+    assert retriever.calls == [
+        [selected_model],
+        related_models[:5],
+    ]
+    assert [document.meta["name"] for document in documents] == [
+        selected_model,
+        selected_model,
+        *related_models[:5],
+    ]
+
+
+@pytest.mark.asyncio
 async def test_dbschema_retrieval_uses_semantic_schema_hits_when_table_retrieval_misses():
     semantic_model = "semantic_dataset"
 

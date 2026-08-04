@@ -133,6 +133,7 @@ _QUERY_TERM_STOPWORDS = {
 }
 
 _MAX_SCHEMA_SEMANTIC_TABLE_CANDIDATES = 5
+_MAX_RELATED_SCHEMA_TABLE_CANDIDATES = 5
 
 _DATE_TIME_TYPE_TERMS = {
     "date",
@@ -785,6 +786,11 @@ async def dbschema_retrieval(
                     if table_name and table_name not in visited:
                         visited.add(table_name)
                         related_names.append(table_name)
+                        if (
+                            len(related_names)
+                            >= _MAX_RELATED_SCHEMA_TABLE_CANDIDATES
+                        ):
+                            return related_names
 
         return related_names
 
