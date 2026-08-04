@@ -222,23 +222,30 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     if (this.initialized) return;
 
     const taskRecords = await this.askingTaskRepository.findAll();
-    taskRecords.forEach((taskRecord) => {
-      const detail = taskRecord.detail as AskResult | undefined;
-      if (
-        !taskRecord.queryId ||
-        !detail ||
-        this.isTaskFinalized(detail.status)
-      ) {
-        return;
-      }
+    await Promise.all(
+      taskRecords.map(async (taskRecord) => {
+        const detail = taskRecord.detail as AskResult | undefined;
+        if (
+          !taskRecord.queryId ||
+          !detail ||
+          this.isTaskFinalized(detail.status)
+        ) {
+          return;
+        }
 
-      this.restoreTrackedTask({
-        ...detail,
-        queryId: taskRecord.queryId,
-        question: taskRecord.question,
-        taskId: taskRecord.id,
-      });
-    });
+        if (this.isStaleUnfinishedTask(taskRecord)) {
+          await this.finalizeStaleTask(taskRecord);
+          return;
+        }
+
+        this.restoreTrackedTask({
+          ...detail,
+          queryId: taskRecord.queryId,
+          question: taskRecord.question,
+          taskId: taskRecord.id,
+        });
+      }),
+    );
 
     this.initialized = true;
   }
@@ -481,6 +488,20 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       return null;
     }
 
+    if (
+      taskRecord.detail &&
+      !this.isTaskFinalized((taskRecord.detail as AskResult).status) &&
+      this.isStaleUnfinishedTask(taskRecord)
+    ) {
+      await this.finalizeStaleTask(taskRecord);
+      taskRecord = await this.askingTaskRepository.findOneBy({
+        id: taskRecord.id,
+      });
+      if (!taskRecord) {
+        return null;
+      }
+    }
+
     return {
       ...(taskRecord?.detail as AskResult),
       queryId: queryId || taskRecord?.queryId,
@@ -533,6 +554,30 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       AskResultStatus.FAILED,
       AskResultStatus.STOPPED,
     ].includes(status);
+  }
+
+  private isStaleUnfinishedTask(taskRecord: AskingTask): boolean {
+    const updatedAt = taskRecord.updatedAt
+      ? new Date(taskRecord.updatedAt).getTime()
+      : 0;
+    return Date.now() - updatedAt > this.memoryRetentionTime;
+  }
+
+  private async finalizeStaleTask(taskRecord: AskingTask): Promise<void> {
+    const result: AskResult = {
+      type: AskResultType.TEXT_TO_SQL,
+      status: AskResultStatus.FAILED,
+      response: null,
+      error: {
+        code: Errors.GeneralErrorCodes.POLLING_TIMEOUT,
+        message:
+          'The previous asking task expired after the service restarted. Please ask again.',
+      },
+    };
+
+    await this.askingTaskRepository.updateOne(taskRecord.id, {
+      detail: result,
+    });
   }
 
   private isResultChanged(
