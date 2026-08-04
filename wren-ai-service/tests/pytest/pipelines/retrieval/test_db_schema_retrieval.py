@@ -1685,6 +1685,69 @@ def test_metric_schema_keeps_measure_semantics_outside_executable_ddl():
     assert "-- This column is a measure" not in executable_ddl
 
 
+def test_retrieved_schema_adds_generic_column_role_hints_without_comments():
+    class Encoding:
+        def encode(self, value):
+            return value.split()
+
+    result = check_using_db_schemas_without_pruning(
+        construct_db_schemas=[
+            {
+                "type": "TABLE",
+                "name": "modeled_dataset",
+                "comment": "Business-facing dataset description.",
+                "columns": [
+                    {
+                        "type": "COLUMN",
+                        "name": "entity_id",
+                        "data_type": "INTEGER",
+                        "comment": "Business identifier label.",
+                        "is_primary_key": True,
+                    },
+                    {
+                        "type": "COLUMN",
+                        "name": "event_date",
+                        "data_type": "DATE",
+                        "comment": "Business date label.",
+                        "is_primary_key": False,
+                    },
+                    {
+                        "type": "COLUMN",
+                        "name": "measure_value",
+                        "data_type": "DOUBLE",
+                        "comment": "Business measure label.",
+                        "is_primary_key": False,
+                    },
+                    {
+                        "type": "COLUMN",
+                        "name": "category_label",
+                        "data_type": "VARCHAR",
+                        "comment": "Business category label.",
+                        "is_primary_key": False,
+                    },
+                ],
+                "properties": {},
+                "primaryKey": "",
+            }
+        ],
+        dbschema_retrieval=[],
+        encoding=Encoding(),
+        enable_column_pruning=False,
+        context_window_size=1000,
+    )
+
+    table_ddl = result["db_schemas"][0]["table_ddl"]
+    executable_ddl = table_ddl.split("CREATE TABLE", maxsplit=1)[1]
+
+    assert "column_role_hints_not_identifiers" in table_ddl
+    assert "- entity_id: identifier_candidate" in table_ddl
+    assert "- event_date: date_time_candidate" in table_ddl
+    assert "- measure_value: numeric_measure_candidate" in table_ddl
+    assert "- category_label: dimension_candidate" in table_ddl
+    assert "Business measure label." not in executable_ddl
+    assert "Business category label." not in executable_ddl
+
+
 def test_build_table_ddl_can_render_executable_schema_without_semantic_comments():
     ddl, has_calculated_field, has_json_field = build_table_ddl(
         {

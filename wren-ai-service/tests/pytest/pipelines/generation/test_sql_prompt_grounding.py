@@ -32,6 +32,11 @@ def test_sql_generation_system_prompt_requires_retrieved_semantic_authority():
     assert "For metric-style requests" in prompt
     assert "Do not join tables just because they were retrieved together" in prompt
     assert "Do not invent join predicates from similar column names" in prompt
+    assert "column_role_hints_not_identifiers" in prompt
+    assert "date_time_candidate" in prompt
+    assert "numeric_measure_candidate" in prompt
+    assert "Do not answer a timeframe request with an unfiltered table scan" in prompt
+    assert "produce an analytical query shape" in prompt
 
 
 def test_sql_correction_system_prompt_allows_null_when_ungrounded():
@@ -104,6 +109,8 @@ def test_sql_generation_prompt_includes_executable_schema_contract():
     assert "- grouping_attribute" in built_prompt
     assert "- numeric_measure" in built_prompt
     assert "Generate an intent-shaped query, not a table preview" in built_prompt
+    assert "For timeframe requests, filter an exact date_time_candidate column" in built_prompt
+    assert "aggregate exact numeric_measure_candidate columns" in built_prompt
 
 
 def test_followup_sql_generation_prompt_requires_intent_shaped_query():
@@ -136,6 +143,7 @@ def test_sql_correction_prompt_keeps_failed_sql_diagnostic_and_question():
     assert "Failed SQL: SELECT 1" in built_prompt
     assert "DIAGNOSTIC CONTEXT" in built_prompt
     assert "Correct into an intent-shaped query, not a table preview" in built_prompt
+    assert "rebuild the query shape from the user's question" in built_prompt
 
 
 def test_sql_correction_prompt_includes_executable_schema_contract():
@@ -184,3 +192,4 @@ def test_sql_regeneration_prompt_includes_executable_schema_contract():
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" in built_prompt
     assert "TABLE: retrieved_model" in built_prompt
     assert "Regenerate an intent-shaped query, not a table preview" in built_prompt
+    assert "For timeframe requests, filter an exact date_time_candidate column" in built_prompt

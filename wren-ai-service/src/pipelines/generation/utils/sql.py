@@ -812,6 +812,7 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - When DATABASE SCHEMA contains WREN SQL IDENTIFIER CONTRACT sections, treat them as the compact authoritative list of executable identifiers for each retrieved object before reading semantic descriptions.
 - In WREN RETRIEVED SEMANTIC CONTEXT, copy executable identifiers only from sql_table_name_use_exactly, sql_column_name_use_exactly, sql_column_names_use_exactly, relationship_constraints_use_exactly, or the following DDL declarations.
 - Values under semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier are meaning only. Do not combine words, labels, ordinals, prefixes, suffixes, abbreviations, comments, or descriptions from those values into a table or column identifier.
+- Values under column_role_hints_not_identifiers are semantic roles only. Use them to decide whether an exact declared column can serve as a date/time field, measure, identifier, or dimension, but copy executable column names only from the columns list or DDL.
 - When a business term is represented by a column alias, display label, or description, use the corresponding real table and column name from DATABASE SCHEMA in the SQL, not the display text.
 - The executable identifier is the name in the CREATE TABLE, CREATE VIEW, or metric field declaration. Do not derive executable identifiers by rewriting, translating, singularizing, pluralizing, spacing, casing, or abbreviating natural language, comments, aliases, display labels, or descriptions.
 - Never generate SQL from assumptions such as "assuming the table contains", "assuming this column exists", or "a possible table/column". Use only schema-confirmed identifiers.
@@ -830,7 +831,8 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - Do not query INFORMATION_SCHEMA, system catalogs, metadata tables, or table-existence checks to answer the user. Query only the business tables, views, and metrics in DATABASE SCHEMA.
 - SQL samples and query history are examples of intent and style only. Never copy a table name, column name, alias, literal value, or function from them unless it is also valid for the current DATABASE SCHEMA and SQL FUNCTIONS.
 - Generate Wren SQL only. Do not use warehouse-specific functions unless they are explicitly listed in SQL FUNCTIONS for this request.
-- Apply relative date or time filters only when DATABASE SCHEMA contains an exact date/time field for the requested time concept and SQL FUNCTIONS contains the exact date/time operation needed. Do not compare text fields to date functions.
+- Apply relative date or time filters only when DATABASE SCHEMA contains an exact date/time field for the requested time concept and the predicate can be expressed with normal SQL comparison syntax or an operation listed in SQL FUNCTIONS. Do not compare text fields to date functions.
+- For explicit month/year or relative timeframe requests, prefer a bounded range predicate on one exact date_time_candidate column when available. The lower bound is inclusive and the upper bound is exclusive. Do not answer a timeframe request with an unfiltered table scan.
 - Treat reasoning plans, correction notes, and error messages as non-executable context. Never copy SQL fragments, inferred identifiers, placeholder names, template markers, literal values, or unsupported functions from them.
 - If SQL execution or validation fails, repair the query only when the repair can be verified using the same retrieved DATABASE SCHEMA, WREN SQL IDENTIFIER CONTRACT, and SQL FUNCTIONS. Never introduce a new schema object during repair.
 - If a column comment, alias, display label, or description names a business concept, first locate the exact declared source column for that concept in DATABASE SCHEMA. If no exact declared source column exists, omit that concept.
@@ -842,6 +844,8 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - Do not answer by selecting a nearby table only because it was retrieved. A retrieved object is usable only when its declared table, columns, relationships, or metric fields support the user's requested intent.
 - Do not answer a specific business question with a broad table scan. The SQL shape must match the user's requested output columns, filters, groupings, measures, joins, ordering, and limits.
 - For analytical or metric questions, select only the requested dimensions and measures. Use declared metric columns, calculated fields, relationship paths, and schema-grounded aggregate expressions. If the required metric components are not grounded, return null for sql instead of returning raw rows.
+- For questions asking total, count, average, minimum, maximum, ratio, per, by, top, bottom, highest, lowest, trend, month, week, year, or ranking, produce an analytical query shape: select exact dimension columns or date buckets, aggregate exact numeric_measure_candidate columns or count rows, GROUP BY every non-aggregated selected expression, ORDER BY the selected aggregate alias when ranking, and apply LIMIT only when requested.
+- If the question asks for an entity list with a timeframe or filter but no metric, select only the entity identifier, relevant dimensions, and exact date/time column needed by the request; include the requested WHERE predicate. Do not select every column from the table.
 """
 
 
@@ -865,12 +869,16 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - Do not convert deployed identifiers into display-friendly variants by replacing spaces with underscores, removing prefixes, changing case, shortening names, or expanding abbreviations.
 - For case-insensitive comparisons, use only functions or operators that are supported by SQL FUNCTIONS for this request. If SQL FUNCTIONS does not provide a safe case-insensitive function, use a normal equality or LIKE comparison on an exact schema column.
 - For date/time questions, first choose an exact schema column whose type or metadata clearly represents the requested time concept. Use only date/time functions and casts whose exact syntax is provided in SQL FUNCTIONS for this request.
-- If the question asks for a specific or relative date, generate a bounded date/time filter only when both the exact date/time schema column and required SQL FUNCTIONS-supported operation are available. If either is missing, do not invent a field or function.
+- If the question asks for a specific or relative date, generate a bounded date/time filter only when the exact date/time schema column is available and the predicate can be expressed with normal SQL comparison syntax or a SQL FUNCTIONS-supported operation. If either the column or required operation is missing, do not invent a field or function.
+- When DATABASE SCHEMA includes column_role_hints_not_identifiers, use date_time_candidate, numeric_measure_candidate, identifier_candidate, and dimension_candidate roles to map the question intent to exact declared columns. These role names are never executable SQL identifiers.
+- For explicit calendar month and year requests, use an inclusive lower bound and exclusive upper bound on the exact date/time column, rather than formatting the column into text.
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
 - Output aliases may be used only to name expressions in the final SELECT list. Output aliases are labels for result columns only; they are not source identifiers.
 - For metric-style requests, the final SELECT list must expose the requested dimension columns and measure expressions or metric fields. Do not return every raw column from a retrieved model as a substitute for the requested metric.
 - For aggregate, ranking, or "by" requests, do not add unrelated string filters to make the SQL look specific. If the user did not provide a filter value, leave it out.
+- For total, count, average, minimum, maximum, per, by, trend, top, bottom, highest, lowest, or ranking requests, the final SQL must include the requested aggregate expression or metric field, GROUP BY required dimensions, ORDER BY required ranking expression, and LIMIT only when requested. A raw row list is not a valid answer.
+- For record-list requests with a filter or timeframe, the final SQL must include the requested WHERE predicate and only the columns needed to identify and describe the matching records.
 - Comments, aliases, display labels, and descriptions from DATABASE SCHEMA may guide which exact source column to select, but they must not be copied into FROM, JOIN, WHERE, GROUP BY, HAVING, or ORDER BY as table or column names.
 - Physical/source/lineage names from metadata may guide meaning, but generated SQL must use only the declared Wren model, view, metric, and column identifiers from DATABASE SCHEMA.
 - DON'T USE '.' in output aliases, replace '.' with '_' in output aliases.

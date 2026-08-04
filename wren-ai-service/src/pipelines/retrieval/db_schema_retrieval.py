@@ -134,6 +134,30 @@ _QUERY_TERM_STOPWORDS = {
 
 _MAX_SCHEMA_SEMANTIC_TABLE_CANDIDATES = 5
 
+_DATE_TIME_TYPE_TERMS = {
+    "date",
+    "datetime",
+    "timestamp",
+    "time",
+}
+_NUMERIC_TYPE_TERMS = {
+    "bigint",
+    "decimal",
+    "double",
+    "float",
+    "int",
+    "integer",
+    "numeric",
+    "real",
+    "smallint",
+}
+_DATE_TIME_NAME_PATTERN = re.compile(r"(date|time|timestamp|period|month|year)", re.I)
+_MEASURE_NAME_PATTERN = re.compile(
+    r"(amount|value|qty|quantity|count|total|sum|cost|price|rate|score|percent)",
+    re.I,
+)
+_IDENTIFIER_NAME_PATTERN = re.compile(r"(^id$|[_\s-]?id$|key|code|number|num|no$)", re.I)
+
 
 def _normalize_terms(value: str) -> set[str]:
     terms = {
@@ -228,6 +252,7 @@ def _build_metric_ddl(content: dict) -> str:
                     "sql_column_name_use_exactly": column["name"],
                     "data_type": get_engine_supported_data_type(column["data_type"]),
                     "semantic_context_not_sql_identifier": column["comment"],
+                    **_semantic_role_context(column),
                 }
                 for column in columns
             ],
@@ -261,9 +286,53 @@ def _format_semantic_context(context: dict) -> str:
         f"{_format_identifier_contract(context)}"
         "Only values in sql_identifier_contract, sql_column_name_use_exactly, and identifiers declared in the following DDL are executable in Wren SQL.\n"
         "Values under semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier explain meaning only and must not be copied, combined, or rewritten as executable SQL identifiers.\n"
+        "Values under column_role_hints_not_identifiers and semantic_roles_not_identifiers are meaning only; use them to map intent to exact declared columns, not as executable identifiers.\n"
         "*/\n"
         f"{_format_executable_identifier_catalog(context)}"
     )
+
+
+def _normalized_data_type(column: dict) -> str:
+    return str(column.get("data_type", "") or "").lower()
+
+
+def _has_data_type_term(data_type: str, terms: set[str]) -> bool:
+    return any(term in data_type for term in terms)
+
+
+def _column_roles(column: dict) -> list[str]:
+    name = str(column.get("name", "") or "")
+    comment = str(column.get("comment", "") or "")
+    searchable_text = f"{name} {comment}"
+    data_type = _normalized_data_type(column)
+    roles: list[str] = []
+
+    is_date_time = _has_data_type_term(data_type, _DATE_TIME_TYPE_TERMS) or bool(
+        _DATE_TIME_NAME_PATTERN.search(searchable_text)
+    )
+    is_identifier = bool(column.get("is_primary_key")) or bool(
+        _IDENTIFIER_NAME_PATTERN.search(name)
+    )
+    is_numeric = _has_data_type_term(data_type, _NUMERIC_TYPE_TERMS)
+    is_measure = (is_numeric or bool(_MEASURE_NAME_PATTERN.search(searchable_text))) and (
+        not is_identifier
+    )
+
+    if is_date_time:
+        roles.append("date_time_candidate")
+    if is_measure:
+        roles.append("numeric_measure_candidate")
+    if is_identifier:
+        roles.append("identifier_candidate")
+    if not is_date_time and not is_measure and not is_identifier:
+        roles.append("dimension_candidate")
+
+    return roles
+
+
+def _semantic_role_context(column: dict) -> dict:
+    roles = _column_roles(column)
+    return {"semantic_roles_not_identifiers": roles} if roles else {}
 
 
 def _format_executable_identifier_catalog(context: dict) -> str:
@@ -295,6 +364,24 @@ def _format_executable_identifier_catalog(context: dict) -> str:
     if column_names:
         lines.append("columns:")
         lines.extend(f"- {column_name}" for column_name in column_names)
+    role_hint_lines = [
+        (
+            column.get("sql_column_name_use_exactly"),
+            column.get("semantic_roles_not_identifiers") or [],
+        )
+        for column in context.get("columns", [])
+        if column.get("sql_column_name_use_exactly")
+        and column.get("semantic_roles_not_identifiers")
+    ]
+    if role_hint_lines:
+        lines.append("column_role_hints_not_identifiers:")
+        lines.extend(
+            f"- {column_name}: {', '.join(roles)}"
+            for column_name, roles in role_hint_lines
+        )
+        lines.append(
+            "Use role hints only to map question intent to exact columns listed above."
+        )
     if relationship_constraints:
         lines.append("relationships:")
         lines.extend(f"- {constraint}" for constraint in relationship_constraints)
@@ -428,6 +515,7 @@ def _build_table_context_ddl(
                     "data_type": get_engine_supported_data_type(column["data_type"]),
                     "is_primary_key": column["is_primary_key"],
                     "semantic_context_not_sql_identifier": column["comment"],
+                    **_semantic_role_context(column),
                 }
                 for column in included_columns
             ],
@@ -474,6 +562,7 @@ def _build_view_ddl(content: dict) -> str:
                         column.get("data_type")
                     ),
                     "semantic_context_not_sql_identifier": column.get("comment", ""),
+                    **_semantic_role_context(column),
                 }
                 for column in columns
             ],
