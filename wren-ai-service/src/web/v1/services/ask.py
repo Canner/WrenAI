@@ -25,7 +25,9 @@ _DETERMINISTIC_SQL_VALIDATION_TYPES = {
 _NON_REPAIRABLE_SQL_VALIDATION_TYPES = {
     "NO_RELEVANT_SQL",
     "SCHEMA_GROUNDING",
+    "SQL_INTENT_MISMATCH",
     "SQL_SHAPE",
+    "SQL_VALUE_GROUNDING",
 }
 
 
@@ -594,9 +596,12 @@ class AskService:
                         "SQL generation",
                     )
 
-                if sql_valid_result := text_to_sql_generation_results["post_process"][
+                generation_post_process = (
+                    text_to_sql_generation_results.get("post_process") or {}
+                )
+                if sql_valid_result := generation_post_process.get(
                     "valid_generation_result"
-                ]:
+                ):
                     api_results = [
                         AskResult(
                             **{
@@ -605,9 +610,9 @@ class AskService:
                             }
                         )
                     ]
-                elif failed_dry_run_result := text_to_sql_generation_results[
-                    "post_process"
-                ]["invalid_generation_result"]:
+                elif failed_dry_run_result := generation_post_process.get(
+                    "invalid_generation_result"
+                ):
                     original_sql = failed_dry_run_result.get("original_sql") or ""
                     invalid_sql = failed_dry_run_result.get("sql") or original_sql
                     error_message = (
@@ -678,7 +683,8 @@ class AskService:
                                 query=user_query,
                                 instructions=instructions,
                                 invalid_generation_result={
-                                    "sql": original_sql,
+                                    "original_sql": original_sql,
+                                    "sql": invalid_sql,
                                     "error": correction_error_message,
                                 },
                                 project_id=ask_request.project_id,
@@ -693,9 +699,12 @@ class AskService:
                             "SQL correction",
                         )
 
-                        if valid_generation_result := sql_correction_results[
-                            "post_process"
-                        ]["valid_generation_result"]:
+                        correction_post_process = (
+                            sql_correction_results.get("post_process") or {}
+                        )
+                        if valid_generation_result := correction_post_process.get(
+                            "valid_generation_result"
+                        ):
                             api_results = [
                                 AskResult(
                                     **{
@@ -706,9 +715,9 @@ class AskService:
                             ]
                             break
 
-                        next_failed_dry_run_result = sql_correction_results[
-                            "post_process"
-                        ]["invalid_generation_result"]
+                        next_failed_dry_run_result = correction_post_process.get(
+                            "invalid_generation_result"
+                        )
                         if not next_failed_dry_run_result:
                             break
                         if (

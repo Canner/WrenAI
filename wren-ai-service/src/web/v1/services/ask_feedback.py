@@ -13,6 +13,7 @@ from src.web.v1.services.ask import (
     AskError,
     AskResult,
     run_pipeline_with_timeout,
+    should_attempt_sql_correction,
     should_skip_sql_diagnosis,
 )
 
@@ -218,9 +219,12 @@ class AskFeedbackService:
                     "SQL regeneration",
                 )
 
-                if sql_valid_result := text_to_sql_generation_results["post_process"][
+                generation_post_process = (
+                    text_to_sql_generation_results.get("post_process") or {}
+                )
+                if sql_valid_result := generation_post_process.get(
                     "valid_generation_result"
-                ]:
+                ):
                     api_results = [
                         AskResult(
                             **{
@@ -229,18 +233,17 @@ class AskFeedbackService:
                             }
                         )
                     ]
-                elif failed_dry_run_result := text_to_sql_generation_results[
-                    "post_process"
-                ]["invalid_generation_result"]:
-                    if failed_dry_run_result["type"] != "TIME_OUT":
-                        original_sql = failed_dry_run_result["original_sql"]
-                        invalid_sql = failed_dry_run_result["sql"]
-                        error_message = failed_dry_run_result["error"]
+                elif failed_dry_run_result := generation_post_process.get(
+                    "invalid_generation_result"
+                ):
+                    if should_attempt_sql_correction(failed_dry_run_result):
+                        original_sql = failed_dry_run_result.get("original_sql") or ""
+                        invalid_sql = failed_dry_run_result.get("sql") or original_sql
+                        error_message = (
+                            failed_dry_run_result.get("error") or "No relevant SQL"
+                        )
                         skip_sql_diagnosis = should_skip_sql_diagnosis(
                             failed_dry_run_result
-                        )
-                        is_schema_grounding_error = (
-                            failed_dry_run_result.get("type") == "SCHEMA_GROUNDING"
                         )
                         sql_diagnosis_reasoning = None
 
@@ -281,11 +284,7 @@ class AskFeedbackService:
                                 instructions=instructions,
                                 invalid_generation_result={
                                     "original_sql": original_sql,
-                                    "sql": (
-                                        ""
-                                        if is_schema_grounding_error
-                                        else invalid_sql
-                                    ),
+                                    "sql": invalid_sql,
                                     "error": correction_error_message,
                                 },
                                 project_id=ask_feedback_request.project_id,
@@ -298,9 +297,12 @@ class AskFeedbackService:
                             "SQL correction",
                         )
 
-                        if valid_generation_result := sql_correction_results[
-                            "post_process"
-                        ]["valid_generation_result"]:
+                        correction_post_process = (
+                            sql_correction_results.get("post_process") or {}
+                        )
+                        if valid_generation_result := correction_post_process.get(
+                            "valid_generation_result"
+                        ):
                             api_results = [
                                 AskResult(
                                     **{
@@ -309,14 +311,18 @@ class AskFeedbackService:
                                     }
                                 )
                             ]
-                        elif failed_dry_run_result := sql_correction_results[
-                            "post_process"
-                        ]["invalid_generation_result"]:
-                            invalid_sql = failed_dry_run_result["sql"]
-                            error_message = failed_dry_run_result["error"]
+                        elif failed_dry_run_result := correction_post_process.get(
+                            "invalid_generation_result"
+                        ):
+                            invalid_sql = failed_dry_run_result.get("sql") or invalid_sql
+                            error_message = (
+                                failed_dry_run_result.get("error") or error_message
+                            )
                     else:
-                        invalid_sql = failed_dry_run_result["sql"]
-                        error_message = failed_dry_run_result["error"]
+                        invalid_sql = failed_dry_run_result.get("sql")
+                        error_message = (
+                            failed_dry_run_result.get("error") or "No relevant SQL"
+                        )
 
             if api_results:
                 if not self._is_stopped(query_id, self._ask_feedback_results):
