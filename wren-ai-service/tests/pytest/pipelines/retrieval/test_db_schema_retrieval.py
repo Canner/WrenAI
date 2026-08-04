@@ -6,6 +6,7 @@ from src.pipelines.common import build_table_ddl
 from src.pipelines.retrieval.db_schema_retrieval import (
     active_mdl_hash,
     _build_view_ddl,
+    _tables_matching_query_terms,
     check_using_db_schemas_without_pruning,
     construct_retrieval_results,
     dbschema_retrieval,
@@ -162,6 +163,51 @@ def test_table_selection_prompt_keeps_multiple_relevant_datasets():
     assert "compatible fields for the same requested result shape" in (
         table_columns_selection_system_prompt
     )
+
+
+def test_table_term_matching_uses_semantic_columns_and_relationships():
+    matched = _tables_matching_query_terms(
+        "summarize lifecycle value by segment",
+        [
+            {
+                "type": "TABLE",
+                "name": "model_alpha",
+                "comment": "",
+                "properties": {},
+                "columns": [
+                    {
+                        "type": "COLUMN",
+                        "name": "metric_col",
+                        "data_type": "DOUBLE",
+                        "comment": "Lifecycle value used for analysis.",
+                    },
+                    {
+                        "type": "FOREIGN_KEY",
+                        "constraint": "FOREIGN KEY (segment_id) REFERENCES model_beta(id)",
+                        "tables": ["model_alpha", "model_beta"],
+                        "referenced_table": "model_beta",
+                        "referenced_column": "id",
+                    },
+                ],
+            },
+            {
+                "type": "TABLE",
+                "name": "model_gamma",
+                "comment": "",
+                "properties": {},
+                "columns": [
+                    {
+                        "type": "COLUMN",
+                        "name": "other_col",
+                        "data_type": "VARCHAR",
+                        "comment": "Unrelated text.",
+                    }
+                ],
+            },
+        ],
+    )
+
+    assert matched == {"model_alpha"}
 
 
 @pytest.mark.asyncio
@@ -767,8 +813,9 @@ async def test_dbschema_retrieval_uses_semantic_schema_hits_when_table_retrieval
 
 
 @pytest.mark.asyncio
-async def test_dbschema_retrieval_prefers_table_description_hits_over_schema_chunk_hits():
+async def test_dbschema_retrieval_combines_description_and_schema_semantic_hits():
     described_model = "described_dataset"
+    semantic_model = "semantic_dataset"
 
     class Retriever:
         def __init__(self):
@@ -782,22 +829,51 @@ async def test_dbschema_retrieval_prefers_table_description_hits_over_schema_chu
                 }
             )
 
+            if query_embedding:
+                return {
+                    "documents": [
+                        Document(
+                            content=str(
+                                {
+                                    "type": "TABLE_COLUMNS",
+                                    "columns": [
+                                        {
+                                            "type": "COLUMN",
+                                            "name": "semantic_value",
+                                            "data_type": "DOUBLE",
+                                            "comment": "",
+                                            "is_primary_key": False,
+                                        }
+                                    ],
+                                }
+                            ),
+                            meta={"type": "TABLE_SCHEMA", "name": semantic_model},
+                        )
+                    ]
+                }
+
+            names = [
+                condition["value"]
+                for condition in filters["conditions"][1]["conditions"]
+            ]
+            documents = [
+                Document(
+                    content=str(
+                        {
+                            "type": "TABLE",
+                            "name": name,
+                            "comment": "",
+                            "columns": [],
+                            "properties": {},
+                            "primaryKey": "",
+                        }
+                    ),
+                    meta={"type": "TABLE_SCHEMA", "name": name},
+                )
+                for name in names
+            ]
             return {
-                "documents": [
-                    Document(
-                        content=str(
-                            {
-                                "type": "TABLE",
-                                "name": described_model,
-                                "comment": "",
-                                "columns": [],
-                                "properties": {},
-                                "primaryKey": "",
-                            }
-                        ),
-                        meta={"type": "TABLE_SCHEMA", "name": described_model},
-                    )
-                ]
+                "documents": documents
             }
 
     retriever = Retriever()
@@ -816,8 +892,15 @@ async def test_dbschema_retrieval_prefers_table_description_hits_over_schema_chu
         embedding={"embedding": [0.25]},
     )
 
-    assert [call["query_embedding"] for call in retriever.calls] == [[]]
+    assert [call["query_embedding"] for call in retriever.calls] == [[0.25], []]
     assert retriever.calls[0]["filters"] == {
+        "operator": "AND",
+        "conditions": [
+            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+            {"field": "project_id", "operator": "==", "value": "project-1"},
+        ],
+    }
+    assert retriever.calls[1]["filters"] == {
         "operator": "AND",
         "conditions": [
             {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
@@ -825,12 +908,17 @@ async def test_dbschema_retrieval_prefers_table_description_hits_over_schema_chu
                 "operator": "OR",
                 "conditions": [
                     {"field": "name", "operator": "==", "value": described_model},
+                    {"field": "name", "operator": "==", "value": semantic_model},
                 ],
             },
             {"field": "project_id", "operator": "==", "value": "project-1"},
         ],
     }
-    assert [document.meta["name"] for document in documents] == [described_model]
+    assert [document.meta["name"] for document in documents] == [
+        semantic_model,
+        described_model,
+        semantic_model,
+    ]
 
 
 def test_check_using_db_schemas_without_pruning_triggers_legacy_column_pruning():

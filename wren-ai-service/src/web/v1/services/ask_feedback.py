@@ -173,6 +173,9 @@ class AskFeedbackService:
                         "column_names": document.get("manifest_column_names")
                         or document.get("column_names")
                         or [],
+                        "relationship_constraints": document.get(
+                            "relationship_constraints", []
+                        ),
                     }
                     for document in documents
                     if document.get("table_name")

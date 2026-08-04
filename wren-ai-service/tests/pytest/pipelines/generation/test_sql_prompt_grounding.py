@@ -49,6 +49,9 @@ def test_build_executable_schema_contract_lists_retrieved_identifiers():
             {
                 "table_name": "retrieved_model",
                 "column_names": ["grouping_attribute", "numeric_measure"],
+                "relationship_constraints": [
+                    "FOREIGN KEY (related_id) REFERENCES related_model(id)"
+                ],
             }
         ]
     )
@@ -57,6 +60,8 @@ def test_build_executable_schema_contract_lists_retrieved_identifiers():
     assert "TABLE: retrieved_model" in contract
     assert "- grouping_attribute" in contract
     assert "- numeric_measure" in contract
+    assert "RELATIONSHIPS:" in contract
+    assert "- FOREIGN KEY (related_id) REFERENCES related_model(id)" in contract
 
 
 def test_sql_generation_prompt_omits_sample_sql_body():

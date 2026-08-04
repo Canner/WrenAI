@@ -394,6 +394,17 @@ def build_executable_schema_contract(schema_contracts: list[dict] | None) -> str
         else:
             sections.append("COLUMNS: declared in the matching DATABASE SCHEMA DDL")
 
+        relationship_constraints = [
+            constraint
+            for constraint in contract.get("relationship_constraints", [])
+            if constraint
+        ]
+        if relationship_constraints:
+            sections.append("RELATIONSHIPS:")
+            sections.extend(
+                f"- {constraint}" for constraint in relationship_constraints
+            )
+
     return "\n".join(sections)
 
 

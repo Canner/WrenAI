@@ -147,8 +147,35 @@ def _normalize_terms(value: str) -> set[str]:
     return terms | singular_terms
 
 
+def _relationship_constraints(content: dict) -> list[str]:
+    return [
+        column.get("constraint", "")
+        for column in content.get("columns", [])
+        if column.get("type") == "FOREIGN_KEY" and column.get("constraint")
+    ]
+
+
 def _schema_semantic_text(content: dict) -> str:
-    return str(content.get("name", "") or "")
+    parts = [
+        str(content.get("name", "") or ""),
+        str(content.get("comment", "") or ""),
+        str(content.get("properties", {}) or ""),
+    ]
+
+    for column in content.get("columns", []):
+        parts.extend(
+            [
+                str(column.get("name", "") or ""),
+                str(column.get("data_type", "") or ""),
+                str(column.get("comment", "") or ""),
+                str(column.get("constraint", "") or ""),
+                str(column.get("referenced_table", "") or ""),
+                str(column.get("referenced_column", "") or ""),
+                " ".join(str(table) for table in column.get("tables", []) or []),
+            ]
+        )
+
+    return " ".join(part for part in parts if part)
 
 
 def _tables_matching_query_terms(
@@ -164,8 +191,11 @@ def _tables_matching_query_terms(
         if table_schema.get("type") != "TABLE":
             continue
 
+        table_name_terms = _normalize_terms(str(table_schema.get("name", "") or ""))
         schema_terms = _normalize_terms(_schema_semantic_text(table_schema))
-        if query_terms & schema_terms:
+        direct_table_match = bool(query_terms & table_name_terms)
+        semantic_match_count = len(query_terms & schema_terms)
+        if direct_table_match or semantic_match_count >= 2:
             matching_tables.add(table_schema["name"])
 
     return matching_tables
@@ -225,11 +255,7 @@ def _semantic_context(content: dict, column_names: list[str]) -> str:
         if comment:
             semantic_parts.append(f"{column.get('name', '')}: {comment}")
 
-    relationship_constraints = [
-        column.get("constraint", "")
-        for column in content.get("columns", [])
-        if column.get("type") == "FOREIGN_KEY" and column.get("constraint")
-    ]
+    relationship_constraints = _relationship_constraints(content)
 
     block = [
         "/* WREN RETRIEVED SEMANTIC CONTEXT",
@@ -534,7 +560,7 @@ async def dbschema_retrieval(
         )
         return results["documents"]
 
-    if not table_names and embedding and embedding.get("embedding"):
+    if embedding and embedding.get("embedding"):
         results = await dbschema_retriever.run(
             query_embedding=embedding.get("embedding"),
             filters=_base_filters(),
@@ -609,6 +635,9 @@ def check_using_db_schemas_without_pruning(
                     "table_ddl": ddl,
                     "column_names": column_names,
                     "manifest_column_names": column_names,
+                    "relationship_constraints": _relationship_constraints(
+                        table_schema
+                    ),
                 }
             )
             if _has_calculated_field:
@@ -627,6 +656,7 @@ def check_using_db_schemas_without_pruning(
                     "table_ddl": _build_metric_ddl(content),
                     "column_names": column_names,
                     "manifest_column_names": column_names,
+                    "relationship_constraints": [],
                 }
             )
             has_metric = True
@@ -638,6 +668,7 @@ def check_using_db_schemas_without_pruning(
                     "table_ddl": _build_view_ddl(content),
                     "column_names": column_names,
                     "manifest_column_names": column_names,
+                    "relationship_constraints": [],
                 }
             )
 
@@ -741,6 +772,9 @@ def construct_retrieval_results(
                         "table_ddl": ddl,
                         "column_names": column_names,
                         "manifest_column_names": column_names,
+                        "relationship_constraints": _relationship_constraints(
+                            table_schema
+                        ),
                     }
                 )
 
@@ -755,6 +789,7 @@ def construct_retrieval_results(
                         "table_ddl": _build_metric_ddl(content),
                         "column_names": column_names,
                         "manifest_column_names": column_names,
+                        "relationship_constraints": [],
                     }
                 )
                 has_metric = True
@@ -766,6 +801,7 @@ def construct_retrieval_results(
                         "table_ddl": _build_view_ddl(content),
                         "column_names": column_names,
                         "manifest_column_names": column_names,
+                        "relationship_constraints": [],
                     }
                 )
 
