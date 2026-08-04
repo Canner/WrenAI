@@ -452,11 +452,11 @@ export class ModelService implements IModelService {
         ? models.find((model) => model.referenceName === referenceName)
         : undefined);
 
-    const fromModel = resolveModel(
+    let fromModel = resolveModel(
       relation.fromModelId,
       relation.fromModelReferenceName,
     );
-    const toModel = resolveModel(
+    let toModel = resolveModel(
       relation.toModelId,
       relation.toModelReferenceName,
     );
@@ -486,6 +486,13 @@ export class ModelService implements IModelService {
       toModel?.id,
       relation.toColumnReferenceName,
     );
+
+    if (!fromModel && fromColumn) {
+      fromModel = models.find((model) => model.id === fromColumn.modelId);
+    }
+    if (!toModel && toColumn) {
+      toModel = models.find((model) => model.id === toColumn.modelId);
+    }
 
     return {
       ...relation,
