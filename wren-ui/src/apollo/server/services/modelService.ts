@@ -399,29 +399,101 @@ export class ModelService implements IModelService {
 
   public async createRelation(relation: RelationData): Promise<Relation> {
     const { id } = await this.projectService.getCurrentProject();
-    const modelIds = [relation.fromModelId, relation.toModelId];
-    const models = await this.modelRepository.findAllByIds(modelIds);
-    const columnIds = [relation.fromColumnId, relation.toColumnId];
+    const models = await this.modelRepository.findAllBy({ projectId: id });
+    const modelIds = models.map((model) => model.id);
+    const projectColumns =
+      await this.modelColumnRepository.findColumnsByModelIds(modelIds);
+    const resolvedRelation = this.resolveRelationEndpoints(
+      relation,
+      models,
+      projectColumns,
+    );
+    const columnIds = [
+      resolvedRelation.fromColumnId,
+      resolvedRelation.toColumnId,
+    ];
     const columns =
       await this.modelColumnRepository.findColumnsByIds(columnIds);
 
     const { valid, message } = await this.validateCreateRelation(
       models,
       columns,
-      relation,
+      resolvedRelation,
     );
     if (!valid) {
       throw new Error(message);
     }
-    const relationName = this.generateRelationName(relation, models, columns);
+    const relationName = this.generateRelationName(
+      resolvedRelation,
+      models,
+      columns,
+    );
     const savedRelation = await this.relationRepository.createOne({
       projectId: id,
       name: relationName,
-      fromColumnId: relation.fromColumnId,
-      toColumnId: relation.toColumnId,
-      joinType: relation.type,
+      fromColumnId: resolvedRelation.fromColumnId,
+      toColumnId: resolvedRelation.toColumnId,
+      joinType: resolvedRelation.type,
     });
     return savedRelation;
+  }
+
+  private resolveRelationEndpoints(
+    relation: RelationData,
+    models: Model[],
+    columns: ModelColumn[],
+  ): RelationData {
+    const resolveModel = (
+      id: number,
+      referenceName?: string,
+    ): Model | undefined =>
+      models.find((model) => model.id === id) ||
+      (referenceName
+        ? models.find((model) => model.referenceName === referenceName)
+        : undefined);
+
+    const fromModel = resolveModel(
+      relation.fromModelId,
+      relation.fromModelReferenceName,
+    );
+    const toModel = resolveModel(
+      relation.toModelId,
+      relation.toModelReferenceName,
+    );
+
+    const resolveColumn = (
+      id: number,
+      modelId: number | undefined,
+      referenceName?: string,
+    ): ModelColumn | undefined =>
+      columns.find(
+        (column) => column.id === id && (!modelId || column.modelId === modelId),
+      ) ||
+      (referenceName && modelId
+        ? columns.find(
+            (column) =>
+              column.modelId === modelId && column.referenceName === referenceName,
+          )
+        : undefined);
+
+    const fromColumn = resolveColumn(
+      relation.fromColumnId,
+      fromModel?.id,
+      relation.fromColumnReferenceName,
+    );
+    const toColumn = resolveColumn(
+      relation.toColumnId,
+      toModel?.id,
+      relation.toColumnReferenceName,
+    );
+
+    return {
+      ...relation,
+      fromModelId: fromModel?.id ?? relation.fromModelId,
+      fromColumnId: fromColumn?.id ?? relation.fromColumnId,
+      toModelId: toModel?.id ?? relation.toModelId,
+      toColumnId: toColumn?.id ?? relation.toColumnId,
+    };
   }
 
   public async updateRelation(

@@ -1,8 +1,12 @@
 export interface RelationData {
   fromModelId: number;
+  fromModelReferenceName?: string;
   fromColumnId: number;
+  fromColumnReferenceName?: string;
   toModelId: number;
+  toModelReferenceName?: string;
   toColumnId: number;
+  toColumnReferenceName?: string;
   type: RelationType;
   description?: string;
 }

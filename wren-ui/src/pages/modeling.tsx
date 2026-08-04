@@ -1596,9 +1596,13 @@ export default function Modeling() {
                 variables: {
                   data: {
                     fromModelId: Number(relation.fromField.modelId),
+                    fromModelReferenceName: relation.fromField.modelName,
                     fromColumnId: Number(relation.fromField.fieldId),
+                    fromColumnReferenceName: relation.fromField.fieldName,
                     toModelId: Number(relation.toField.modelId),
+                    toModelReferenceName: relation.toField.modelName,
                     toColumnId: Number(relation.toField.fieldId),
+                    toColumnReferenceName: relation.toField.fieldName,
                     type: relation.type,
                   },
                 },

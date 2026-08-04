@@ -244,9 +244,13 @@ export const typeDefs = gql`
 
   input RelationInput {
     fromModelId: Int!
+    fromModelReferenceName: String
     fromColumnId: Int!
+    fromColumnReferenceName: String
     toModelId: Int!
+    toModelReferenceName: String
     toColumnId: Int!
+    toColumnReferenceName: String
     type: RelationType!
   }
 

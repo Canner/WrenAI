@@ -1303,9 +1303,13 @@ export type Relation = {
 
 export type RelationInput = {
   fromColumnId: Scalars['Int'];
+  fromColumnReferenceName?: InputMaybe<Scalars['String']>;
   fromModelId: Scalars['Int'];
+  fromModelReferenceName?: InputMaybe<Scalars['String']>;
   toColumnId: Scalars['Int'];
+  toColumnReferenceName?: InputMaybe<Scalars['String']>;
   toModelId: Scalars['Int'];
+  toModelReferenceName?: InputMaybe<Scalars['String']>;
   type: RelationType;
 };
 
