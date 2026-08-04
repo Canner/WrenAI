@@ -37,6 +37,9 @@ def test_sql_generation_system_prompt_requires_retrieved_semantic_authority():
     assert "numeric_measure_candidate" in prompt
     assert "Do not answer a timeframe request with an unfiltered table scan" in prompt
     assert "produce an analytical query shape" in prompt
+    assert "Never output template SQL" in prompt
+    assert "contains no placeholders or template parts" in prompt
+    assert "complete executable SQL query string" in prompt
 
 
 def test_sql_correction_system_prompt_allows_null_when_ungrounded():
@@ -111,6 +114,8 @@ def test_sql_generation_prompt_includes_executable_schema_contract():
     assert "Generate an intent-shaped query, not a table preview" in built_prompt
     assert "For timeframe requests, filter an exact date_time_candidate column" in built_prompt
     assert "aggregate exact numeric_measure_candidate columns" in built_prompt
+    assert "Never return template SQL" in built_prompt
+    assert "Copy user-provided filter values exactly" in built_prompt
 
 
 def test_followup_sql_generation_prompt_requires_intent_shaped_query():
@@ -124,6 +129,7 @@ def test_followup_sql_generation_prompt_requires_intent_shaped_query():
     )
 
     assert "Generate an intent-shaped query, not a table preview" in result["prompt"]
+    assert "Never return template SQL" in result["prompt"]
 
 
 def test_sql_correction_prompt_keeps_failed_sql_diagnostic_and_question():
@@ -144,6 +150,7 @@ def test_sql_correction_prompt_keeps_failed_sql_diagnostic_and_question():
     assert "DIAGNOSTIC CONTEXT" in built_prompt
     assert "Correct into an intent-shaped query, not a table preview" in built_prompt
     assert "rebuild the query shape from the user's question" in built_prompt
+    assert "Never return template SQL" in built_prompt
 
 
 def test_sql_correction_prompt_includes_executable_schema_contract():
@@ -193,3 +200,4 @@ def test_sql_regeneration_prompt_includes_executable_schema_contract():
     assert "TABLE: retrieved_model" in built_prompt
     assert "Regenerate an intent-shaped query, not a table preview" in built_prompt
     assert "For timeframe requests, filter an exact date_time_candidate column" in built_prompt
+    assert "Never return template SQL" in built_prompt

@@ -79,6 +79,9 @@ If a required part of the request is not grounded by an exact deployed schema ob
 Do not answer a specific analytical question with a broad table preview or with an unrelated nearby table.
 Do not ignore a literal filter value from the user; apply it to the exact schema field representing that filter concept, or return null when that field is unavailable.
 String literals in WHERE or HAVING must come from the current user question or current user instructions only. Never use schema descriptions, column comments, aliases, display labels, source names, or lineage names as data values.
+Copy user-provided filter values exactly into SQL string literals, except for normal SQL string escaping. Do not replace them with descriptive labels, unresolved variables, or values to be filled in later.
+Never return template SQL. If any required table, column, join, filter value, timeframe boundary, measure, or function is not fully grounded now, return null for sql instead of a partial query.
+Do not invent generic table names, generic column names, join keys, common-column placeholders, or substitute identifiers from the wording of the user's question.
 For ranked entity questions, select and group by the exact schema field representing the requested entity, not only context fields.
 For record or entity volume questions, count rows unless the user requests a declared numeric measure. For value, amount, quantity, rate, cost, or metric questions, use the declared measure that represents the request.
 For timeframe requests, filter an exact date_time_candidate column when the retrieved schema provides one for the requested time concept.

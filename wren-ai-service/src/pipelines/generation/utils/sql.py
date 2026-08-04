@@ -816,9 +816,12 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - Use comments, aliases, descriptions, display labels, metrics, calculated fields, and relationships only to understand business meaning.
 - Use column_role_hints_not_identifiers only as semantic hints for choosing exact declared columns; date_time_candidate, numeric_measure_candidate, identifier_candidate, and dimension_candidate are never SQL identifiers.
 - Copy executable table, column, metric, and relationship identifiers exactly from DATABASE SCHEMA. Do not create identifiers from user wording, descriptions, samples, history, physical names, lineage names, or error messages.
+- Never output template SQL. Every table, column, metric, relationship, join key, function, filter value, grouping, ordering, and limit in the final SQL must be complete and executable for the current request.
+- Never output generic, unresolved, variable-like, or placeholder identifiers or literal values. If a value or identifier would need to be filled in later, return null for sql.
 - The SQL must answer every supported part of the user's request: requested subject, requested entity, requested filter value, timeframe, grouping, measure, ordering, and limit.
 - If the user asks for a filtered result, include the filter only when the filtered concept is represented by an exact schema field. If the filter field is not present, return null for sql instead of ignoring the filter.
-- If the user provides a literal filter value, use only that provided value. Do not invent, translate, or substitute filter values.
+- If the user provides a literal filter value, copy that current request value into the SQL string literal exactly as the user provided it, except for normal SQL string escaping. Do not invent, translate, summarize, describe, or substitute filter values.
+- If the user does not provide a literal filter value needed for the requested answer, do not add a stand-in value. Return null for sql when the missing value is required, or omit the filter only when the requested answer remains correct without it.
 - Never use schema descriptions, column comments, aliases, display labels, source names, physical names, lineage names, reasoning text, or error messages as string literal data values.
 - If the user asks "which", "who", or "what" for a ranked entity, select and group by the exact schema field that represents that requested entity. Do not replace the requested entity with a context field or unrelated dimension.
 - Use row counting for record or entity volume questions when no numeric business measure is requested. Use numeric measures only when the question asks for a value, amount, quantity, rate, cost, or other declared measure.
@@ -1044,19 +1047,20 @@ Given the user's question and database schema, generate one grounded Wren SQL qu
 7. When DATABASE SCHEMA contains EXECUTABLE WREN IDENTIFIER CATALOG sections, treat those sections as the first and clearest list of allowed executable identifiers.
 8. If the user asks for fields that exist across multiple related schema objects, include those objects only when DATABASE SCHEMA shows the exact columns and relationship path needed to join them.
 9. If the user asks for fields that require multiple schema objects, combine them only when DATABASE SCHEMA provides the exact relationship path and the result shape is grounded by the request. Do not use UNION, INTERSECT, or EXCEPT unless the user explicitly asks to combine separate result sets and each branch has the same selected columns.
-10. Before finalizing the JSON response, YOU MUST perform a silent grounding check: every table, column, join key, filter field, grouping field, ordering field, and function in the SQL must be present in DATABASE SCHEMA or SQL FUNCTIONS. If a planned element is not grounded, omit that element. If the element is needed to answer the user's requested subject, output column, filter, grouping, measure, timeframe, or relationship, return null for sql.
+10. Before finalizing the JSON response, YOU MUST perform a silent grounding check: every table, column, join key, filter field, grouping field, ordering field, and function in the SQL must be present in DATABASE SCHEMA or SQL FUNCTIONS. Every string literal used as a data value must be copied from the current user question or USER INSTRUCTIONS, or be a concrete date/time boundary derived directly from the user's explicit timeframe using supported SQL FUNCTIONS. If a planned element is not grounded, omit that element. If the element is needed to answer the user's requested subject, output column, filter, grouping, measure, timeframe, or relationship, return null for sql.
 11. YOU MUST treat source database/schema/table names, physical datasource names, lineage names, comments, aliases, and display labels as semantic context only. Never use them as executable identifiers unless the exact same identifier appears in DATABASE SCHEMA.
 12. If an identifier, literal value, placeholder, template marker, or function appears only in SQL samples, failed SQL, descriptions, lineage, reasoning text, or error messages, it is not executable for this request; ignore those parts when generating executable SQL.
 13. If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA, EXECUTABLE WREN IDENTIFIER CATALOG, or WREN SQL IDENTIFIER CONTRACT, return null for sql. Never create a table or column from the user's wording.
-14. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
+14. If any planned SQL literal would be an unresolved variable, descriptive label, instruction to be replaced later, or placeholder value, return null for sql. The SQL field must never contain a partially completed query.
+15. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be JSON. Return a SQL string only when it is fully grounded in DATABASE SCHEMA and SQL FUNCTIONS and it answers the user's requested intent. Do not create table or column identifiers from the user's wording. If the retrieved schema does not ground the requested subject, output column, filter, grouping, measure, timeframe, or relationship, return null for sql.
+The final answer must be JSON. Return a SQL string only when it is fully grounded in DATABASE SCHEMA and SQL FUNCTIONS, contains no placeholders or template parts, and answers the user's requested intent. Do not create table or column identifiers from the user's wording. If the retrieved schema does not ground the requested subject, output column, filter, grouping, measure, timeframe, or relationship, return null for sql.
 
 {{
-    "sql": "SQL query string using only identifiers declared in DATABASE SCHEMA, or null"
+    "sql": "complete executable SQL query string using only identifiers declared in DATABASE SCHEMA, or null"
 }}
 """
 

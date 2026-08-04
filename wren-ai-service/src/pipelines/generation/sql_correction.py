@@ -51,7 +51,7 @@ Make sure you follow the SQL Rules strictly.
 The final answer must be in JSON format:
 
 {{
-    "sql": "corrected SQL query string using only identifiers declared in DATABASE SCHEMA, or null"
+    "sql": "complete executable corrected SQL query string using only identifiers declared in DATABASE SCHEMA, or null"
 }}
 """
 
@@ -96,6 +96,9 @@ Regenerate from the user's question and DATABASE SCHEMA only when a user questio
 Correct into an intent-shaped query, not a table preview. Select explicit columns, filters, groupings, measures, joins, ordering, and limits needed by the question. For metric questions, return dimensions plus the requested measure or grounded expression; never use SELECT * as a substitute.
 If the error says the SQL is a broad table preview, table preview, missing requested aggregation, missing requested grouping, missing timeframe, or missing ordering/ranking, rebuild the query shape from the user's question. When DATABASE SCHEMA contains column_role_hints_not_identifiers, use those roles only to map intent to exact declared columns. For timeframe requests, filter an exact date_time_candidate column with a bounded range. For aggregate, "by", trend, or ranking requests, aggregate exact numeric_measure_candidate columns or count rows, group by exact dimension/date expressions, order by the selected aggregate alias when ranking, and limit only when requested.
 String literals in WHERE or HAVING must come from the current user question or current user instructions only. Never use schema descriptions, column comments, aliases, display labels, source names, or lineage names as data values.
+Copy user-provided filter values exactly into SQL string literals, except for normal SQL string escaping. Do not replace them with descriptive labels, unresolved variables, or values to be filled in later.
+Never return template SQL. If any required table, column, join, filter value, timeframe boundary, measure, or function is not fully grounded now, return null for sql instead of a partial query.
+Do not invent generic table names, generic column names, join keys, common-column placeholders, or substitute identifiers from the failed SQL or the wording of the user's question.
 For comparison requests, include every requested comparison group or period in the SQL result and compute the requested difference, change, growth, or ranking when the required fields and date operations are grounded. Do not answer a comparison request with only one side of the comparison.
 Return only the final JSON SQL response.
 """
