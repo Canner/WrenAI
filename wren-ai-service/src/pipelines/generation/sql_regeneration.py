@@ -54,11 +54,6 @@ The final answer must be JSON. Return a SQL string only when it is fully grounde
 
 
 sql_regeneration_user_prompt_template = """
-{% if executable_schema_contract %}
-{{ executable_schema_contract }}
-
-{% endif %}
-
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}

@@ -35,11 +35,6 @@ text_to_sql_with_followup_user_prompt_template = """
 Given the user's current follow-up question and the current retrieved DATABASE SCHEMA,
 generate one SQL query to best answer the user's question.
 
-{% if executable_schema_contract %}
-{{ executable_schema_contract }}
-
-{% endif %}
-
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}

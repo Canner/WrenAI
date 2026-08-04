@@ -57,11 +57,6 @@ The final answer must be in JSON format:
 
 
 sql_correction_user_prompt_template = """
-{% if executable_schema_contract %}
-{{ executable_schema_contract }}
-
-{% endif %}
-
 {% if documents %}
 ### DATABASE SCHEMA ###
 {% for document in documents %}

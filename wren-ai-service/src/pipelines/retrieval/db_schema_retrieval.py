@@ -361,17 +361,93 @@ def _content_column_names(content: dict) -> list[str]:
 
 
 def _format_semantic_context(context: dict) -> str:
-    return (
-        "/*\n"
-        "WREN RETRIEVED SEMANTIC CONTEXT\n"
-        f"{orjson.dumps(context).decode('utf-8')}\n"
-        f"{_format_identifier_contract(context)}"
-        "Only values in sql_identifier_contract, sql_column_name_use_exactly, and identifiers declared in the following DDL are executable in Wren SQL.\n"
-        "Values under semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier explain meaning only and must not be copied, combined, or rewritten as executable SQL identifiers.\n"
-        "Values under column_role_hints_not_identifiers and semantic_roles_not_identifiers are meaning only; use them to map intent to exact declared columns, not as executable identifiers.\n"
-        "*/\n"
-        f"{_format_executable_identifier_catalog(context)}"
+    lines = [
+        "/*",
+        "WREN RETRIEVED SEMANTIC CONTEXT",
+        f"object_type: {context.get('object_type', '')}",
+    ]
+
+    contract = context.get("sql_identifier_contract") or {}
+    if contract.get("sql_table_name_use_exactly"):
+        lines.append(
+            "sql_table_name_use_exactly: "
+            + str(contract["sql_table_name_use_exactly"])
+        )
+    if contract.get("sql_column_names_use_exactly"):
+        lines.append("sql_column_names_use_exactly:")
+        lines.extend(
+            f"- {column_name}"
+            for column_name in contract["sql_column_names_use_exactly"]
+        )
+    if contract.get("relationship_constraints_use_exactly"):
+        lines.append("relationship_constraints_use_exactly:")
+        lines.extend(
+            f"- {relationship_constraint}"
+            for relationship_constraint in contract[
+                "relationship_constraints_use_exactly"
+            ]
+        )
+
+    semantic_context = context.get("semantic_context_not_sql_identifiers") or {}
+    for key, value in semantic_context.items():
+        if value:
+            lines.append(f"semantic_context_not_sql_identifiers.{key}: {value}")
+
+    columns = [
+        column
+        for column in context.get("columns", [])
+        if column.get("sql_column_name_use_exactly")
+    ]
+    if columns:
+        lines.append("columns:")
+        for column in columns:
+            column_parts = [
+                f"sql_column_name_use_exactly={column['sql_column_name_use_exactly']}",
+                f"data_type={column.get('data_type', '')}",
+            ]
+            roles = column.get("semantic_roles_not_identifiers") or []
+            if roles:
+                column_parts.append(
+                    "column_role_hints_not_identifiers="
+                    + ", ".join(str(role) for role in roles)
+                )
+            semantic_note = column.get("semantic_context_not_sql_identifier")
+            if semantic_note:
+                column_parts.append(
+                    f"semantic_context_not_sql_identifier={semantic_note}"
+                )
+            lines.append("- " + " | ".join(column_parts))
+
+    relationships = [
+        relationship
+        for relationship in context.get("relationships", [])
+        if relationship.get("sql_relationship_constraint_use_exactly")
+    ]
+    if relationships:
+        lines.append("relationships:")
+        for relationship in relationships:
+            relationship_parts = [
+                "sql_relationship_constraint_use_exactly="
+                + relationship["sql_relationship_constraint_use_exactly"]
+            ]
+            semantic_note = relationship.get("semantic_context_not_sql_identifier")
+            if semantic_note:
+                relationship_parts.append(
+                    f"semantic_context_not_sql_identifier={semantic_note}"
+                )
+            lines.append("- " + " | ".join(relationship_parts))
+
+    lines.extend(
+        [
+            "Only values in sql_identifier_contract, sql_column_name_use_exactly, and identifiers declared in the following DDL are executable in Wren SQL.",
+            "Values under semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier explain meaning only and must not be copied, combined, or rewritten as executable SQL identifiers.",
+            "Values under column_role_hints_not_identifiers and semantic_roles_not_identifiers are meaning only; use them to map intent to exact declared columns, not as executable identifiers.",
+            "*/",
+            _format_executable_identifier_catalog(context),
+        ]
     )
+
+    return "\n".join(lines)
 
 
 def _normalized_data_type(column: dict) -> str:
