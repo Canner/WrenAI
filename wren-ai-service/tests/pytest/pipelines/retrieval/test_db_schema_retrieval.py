@@ -1581,6 +1581,56 @@ def test_construct_retrieval_results_does_not_add_column_only_term_matches():
     ]
 
 
+def test_construct_retrieval_results_caps_pruned_generation_context():
+    def table_schema(index):
+        return {
+            "type": "TABLE",
+            "name": f"model_{index}",
+            "comment": "",
+            "columns": [
+                {
+                    "type": "COLUMN",
+                    "name": "id",
+                    "data_type": "INTEGER",
+                    "comment": "",
+                    "is_primary_key": False,
+                }
+            ],
+            "properties": {},
+            "primaryKey": "",
+        }
+
+    result = construct_retrieval_results(
+        check_using_db_schemas_without_pruning={},
+        filter_columns_in_tables={
+            "replies": [
+                """
+                {
+                    "results": [
+                        {
+                            "table_name": "model_0",
+                            "table_selection_reason": "Selected for the current request.",
+                            "table_contents": {
+                                "chain_of_thought_reasoning": ["Needed field."],
+                                "columns": ["id"]
+                            }
+                        }
+                    ]
+                }
+                """
+            ]
+        },
+        construct_db_schemas=[table_schema(index) for index in range(20)],
+        dbschema_retrieval=[],
+        query="show model records",
+    )
+
+    assert len(result["retrieval_results"]) == 15
+    assert [item["table_name"] for item in result["retrieval_results"]] == [
+        f"model_{index}" for index in range(15)
+    ]
+
+
 def test_check_using_db_schemas_without_pruning_keeps_context_when_within_window():
     class Encoding:
         def encode(self, value):
@@ -1634,6 +1684,43 @@ def test_check_using_db_schemas_without_pruning_keeps_context_when_within_window
         for schema in result["db_schemas"]
     )
     assert result["tokens"] > 0
+
+
+def test_check_using_db_schemas_without_pruning_caps_generation_context():
+    class Encoding:
+        def encode(self, value):
+            return value.split()
+
+    def table_schema(index):
+        return {
+            "type": "TABLE",
+            "name": f"model_{index}",
+            "comment": "",
+            "columns": [
+                {
+                    "type": "COLUMN",
+                    "name": "id",
+                    "data_type": "INTEGER",
+                    "comment": "",
+                    "is_primary_key": False,
+                }
+            ],
+            "properties": {},
+            "primaryKey": "",
+        }
+
+    result = check_using_db_schemas_without_pruning(
+        construct_db_schemas=[table_schema(index) for index in range(20)],
+        dbschema_retrieval=[],
+        encoding=Encoding(),
+        enable_column_pruning=False,
+        context_window_size=10000,
+    )
+
+    assert len(result["db_schemas"]) == 15
+    assert [schema["table_name"] for schema in result["db_schemas"]] == [
+        f"model_{index}" for index in range(15)
+    ]
 
 
 def test_retrieved_schema_separates_exact_sql_names_from_semantic_context():

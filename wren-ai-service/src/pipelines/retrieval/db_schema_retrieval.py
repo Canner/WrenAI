@@ -134,6 +134,7 @@ _QUERY_TERM_STOPWORDS = {
 
 _MAX_SCHEMA_SEMANTIC_TABLE_CANDIDATES = 5
 _MAX_RELATED_SCHEMA_TABLE_CANDIDATES = 5
+_MAX_SQL_GENERATION_SCHEMA_RESULTS = 15
 
 _DATE_TIME_TYPE_TERMS = {
     "date",
@@ -581,6 +582,10 @@ def _build_view_ddl(content: dict) -> str:
     )
 
 
+def _limit_retrieval_results(retrieval_results: list[dict]) -> list[dict]:
+    return retrieval_results[:_MAX_SQL_GENERATION_SCHEMA_RESULTS]
+
+
 ## Start of Pipeline
 @observe(capture_input=False)
 async def active_mdl_hash(
@@ -959,7 +964,7 @@ def check_using_db_schemas_without_pruning(
         }
 
     return {
-        "db_schemas": retrieval_results,
+        "db_schemas": _limit_retrieval_results(retrieval_results),
         "tokens": _token_count,
         "has_calculated_field": has_calculated_field,
         "has_metric": has_metric,
@@ -1076,13 +1081,15 @@ def construct_retrieval_results(
                 )
 
         return {
-            "retrieval_results": retrieval_results,
+            "retrieval_results": _limit_retrieval_results(retrieval_results),
             "has_calculated_field": has_calculated_field,
             "has_metric": has_metric,
             "has_json_field": has_json_field,
         }
     else:
-        retrieval_results = check_using_db_schemas_without_pruning["db_schemas"]
+        retrieval_results = _limit_retrieval_results(
+            check_using_db_schemas_without_pruning["db_schemas"]
+        )
 
         return {
             "retrieval_results": retrieval_results,
