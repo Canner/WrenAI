@@ -273,6 +273,8 @@ const resolveRelationshipFieldParts = (
 const renderIcon = (IconComponent) => React.createElement(IconComponent as any);
 const ASSISTANT_CANCELLED = 'ASSISTANT_CANCELLED';
 const ASSISTANT_SAVE_MESSAGE_KEY = 'modeling-ai-assistant-save';
+const ASSISTANT_POLL_INTERVAL_MS = 1000;
+const ASSISTANT_MAX_POLL_ATTEMPTS = 240;
 
 export default function Modeling() {
   const router = useRouter();
@@ -639,7 +641,7 @@ export default function Modeling() {
       throw new Error('AI assistant did not return a task id.');
     }
 
-    for (let attempt = 0; attempt < 90; attempt += 1) {
+    for (let attempt = 0; attempt < ASSISTANT_MAX_POLL_ATTEMPTS; attempt += 1) {
       if (assistantRunIdRef.current !== runId) {
         throw new Error(ASSISTANT_CANCELLED);
       }
@@ -657,7 +659,9 @@ export default function Modeling() {
       if (status === 'failed') {
         throw new Error(payload.error?.message || 'AI assistant failed.');
       }
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) =>
+        setTimeout(resolve, ASSISTANT_POLL_INTERVAL_MS),
+      );
     }
     throw new Error('AI assistant timed out.');
   };

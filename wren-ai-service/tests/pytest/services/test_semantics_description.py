@@ -200,7 +200,20 @@ def test_semantics_description_uses_configured_batch_and_concurrency_limits():
     )
 
     assert service._max_models_per_batch == 2
+    assert service._max_columns_per_batch == 40
     assert service._max_concurrent_tasks == 3
+
+
+def test_semantics_description_scales_request_timeout_by_concurrency_waves():
+    service = SemanticsDescription(
+        pipelines={"semantics_description": AsyncMock()},
+        generation_timeout_seconds=120,
+        max_concurrent_tasks=4,
+    )
+
+    assert service._request_timeout_seconds(1) == 120
+    assert service._request_timeout_seconds(4) == 120
+    assert service._request_timeout_seconds(5) == 240
 
 
 @pytest.mark.asyncio
@@ -266,7 +279,7 @@ async def test_batch_processing_with_multiple_models(
     assert [len(chunk["selected_models"]) for chunk in chunks] == [1, 1, 1]
 
 
-def test_batch_processing_with_custom_chunk_size(
+def test_batch_processing_keeps_each_model_in_its_own_prompt(
     service: SemanticsDescription,
 ):
     service["test_id"] = SemanticsDescription.Resource(id="test_id")
@@ -277,16 +290,19 @@ def test_batch_processing_with_custom_chunk_size(
         mdl='{"models": [{"name": "model1", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model2", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model3", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}, {"name": "model4", "columns": [{"name": "column1", "type": "varchar", "notNull": false}]}]}',
     )
 
-    # Test chunking with custom chunk size
     chunks = service._chunking(orjson.loads(request.mdl), request, chunk_size=2)
 
-    assert len(chunks) == 2
-    assert [len(chunk["selected_models"]) for chunk in chunks] == [2, 2]
-    assert chunks[0]["selected_models"] == ["model1", "model2"]
-    assert chunks[1]["selected_models"] == ["model3", "model4"]
+    assert len(chunks) == 4
+    assert [len(chunk["selected_models"]) for chunk in chunks] == [1, 1, 1, 1]
+    assert [chunk["selected_models"][0] for chunk in chunks] == [
+        "model1",
+        "model2",
+        "model3",
+        "model4",
+    ]
 
 
-def test_default_batch_keeps_large_column_groups_by_model(
+def test_default_batch_splits_large_column_groups_by_model(
     service: SemanticsDescription,
 ):
     request = SemanticsDescription.GenerateRequest(
@@ -317,11 +333,69 @@ def test_default_batch_keeps_large_column_groups_by_model(
 
     chunks = service._chunking(orjson.loads(request.mdl), request)
 
-    assert len(chunks) == 2
+    assert len(chunks) == 23
     assert chunks[0]["selected_models"] == ["model1"]
-    assert chunks[1]["selected_models"] == ["model2"]
-    assert len(chunks[0]["mdl"]["models"][0]["columns"]) == 500
-    assert len(chunks[1]["mdl"]["models"][0]["columns"]) == 400
+    assert chunks[12]["selected_models"] == ["model1"]
+    assert chunks[13]["selected_models"] == ["model2"]
+    assert len(chunks[0]["mdl"]["models"][0]["columns"]) == 40
+    assert len(chunks[12]["mdl"]["models"][0]["columns"]) == 20
+    assert len(chunks[13]["mdl"]["models"][0]["columns"]) == 40
+
+
+@pytest.mark.asyncio
+async def test_column_chunk_outputs_merge_into_single_model(
+    service: SemanticsDescription,
+):
+    service["test_id"] = SemanticsDescription.Resource(id="test_id")
+    request = SemanticsDescription.GenerateRequest(
+        id="test_id",
+        user_prompt="Describe the model",
+        selected_models=["orders"],
+        mdl=orjson.dumps(
+            {
+                "models": [
+                    {
+                        "name": "orders",
+                        "columns": [
+                            {"name": f"column_{index}", "type": "varchar"}
+                            for index in range(41)
+                        ],
+                    }
+                ]
+            }
+        ).decode(),
+    )
+
+    def response_for_chunk(**kwargs):
+        model = kwargs["mdl"]["models"][0]
+        return {
+            "output": {
+                "orders": {
+                    "description": "Customer order transactions.",
+                    "columns": [
+                        {
+                            "name": column["name"],
+                            "properties": {
+                                "description": f"Description for {column['name']}",
+                            },
+                        }
+                        for column in model["columns"]
+                    ],
+                }
+            }
+        }
+
+    service._pipelines["semantics_description"].run.side_effect = response_for_chunk
+
+    await service.generate(request)
+    response = service[request.id]
+
+    assert response.status == "finished"
+    assert response.response["orders"]["properties"]["description"] == (
+        "Customer order transactions."
+    )
+    assert len(response.response["orders"]["columns"]) == 41
+    assert service._pipelines["semantics_description"].run.call_count == 2
 
 
 @pytest.mark.asyncio

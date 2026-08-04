@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 from typing import Dict, Literal, Optional
 
 import orjson
@@ -32,14 +33,16 @@ class SemanticsDescription:
         pipelines: Dict[str, BasicPipeline],
         maxsize: int = 1_000_000,
         ttl: int = 120,
-        generation_timeout_seconds: int = 90,
+        generation_timeout_seconds: int = 120,
         max_models_per_batch: int = 1,
+        max_columns_per_batch: int = 40,
         max_concurrent_tasks: int = 4,
     ):
         self._pipelines = pipelines
         self._cache: Dict[str, self.Resource] = TTLCache(maxsize=maxsize, ttl=ttl)
         self._generation_timeout_seconds = generation_timeout_seconds
         self._max_models_per_batch = max(1, max_models_per_batch)
+        self._max_columns_per_batch = max(1, max_columns_per_batch)
         self._max_concurrent_tasks = max(1, max_concurrent_tasks)
 
     def _handle_exception(
@@ -83,16 +86,25 @@ class SemanticsDescription:
             if model.get("name") in request.selected_models
         ]
 
-        return [
-            {
-                **template,
-                "mdl": {"models": selected_models[i : i + chunk_size]},
-                "selected_models": [
-                    model["name"] for model in selected_models[i : i + chunk_size]
-                ],
-            }
-            for i in range(0, len(selected_models), chunk_size)
-        ]
+        chunks = []
+        for i in range(0, len(selected_models), chunk_size):
+            for model in selected_models[i : i + chunk_size]:
+                columns = model.get("columns", [])
+                column_chunks = [
+                    columns[j : j + self._max_columns_per_batch]
+                    for j in range(0, len(columns), self._max_columns_per_batch)
+                ] or [[]]
+
+                for column_chunk in column_chunks:
+                    chunks.append(
+                        {
+                            **template,
+                            "mdl": {"models": [{**model, "columns": column_chunk}]},
+                            "selected_models": [model["name"]],
+                        }
+                    )
+
+        return chunks
 
     async def _generate_task(self, chunk: dict) -> dict:
         resp = await self._pipelines["semantics_description"].run(**chunk)
@@ -110,16 +122,13 @@ class SemanticsDescription:
 
         return await asyncio.gather(*[_bounded_generate(chunk) for chunk in chunks])
 
+    def _request_timeout_seconds(self, chunk_count: int) -> int:
+        waves = max(1, math.ceil(chunk_count / self._max_concurrent_tasks))
+        return self._generation_timeout_seconds * waves
+
     def _merge_outputs(
         self, mdl_dict: dict, selected_models: list[str], outputs: list[dict]
     ) -> dict:
-        generated_by_model = {
-            model_name: model_data
-            for output in outputs
-            for model_name, model_data in output.items()
-            if isinstance(model_data, dict)
-        }
-
         def properties(payload: dict) -> dict:
             value = payload.get("properties")
             return value if isinstance(value, dict) else {}
@@ -129,6 +138,28 @@ class SemanticsDescription:
                 "description", ""
             )
             return "" if value is None else str(value).strip()
+
+        generated_by_model: dict[str, dict] = {}
+        for output in outputs:
+            for model_name, model_data in output.items():
+                if not isinstance(model_data, dict):
+                    continue
+
+                generated = generated_by_model.setdefault(
+                    model_name,
+                    {
+                        "name": model_name,
+                        "columns": [],
+                        "properties": {},
+                    },
+                )
+                if not description(generated) and description(model_data):
+                    generated["properties"] = {
+                        **properties(generated),
+                        "description": description(model_data),
+                    }
+                generated.setdefault("columns", [])
+                generated["columns"].extend(model_data.get("columns", []))
 
         response: dict = {}
         for model in mdl_dict.get("models", []):
@@ -206,6 +237,7 @@ class SemanticsDescription:
     async def generate(self, request: GenerateRequest, **kwargs) -> Resource:
         logger.info("Generate Semantics Description pipeline is running...")
         trace_id = kwargs.get("trace_id")
+        request_timeout_seconds = self._generation_timeout_seconds
 
         try:
             mdl_dict = orjson.loads(request.mdl)
@@ -215,9 +247,10 @@ class SemanticsDescription:
                 raise ValueError(
                     "No selected models matched the current semantic model metadata"
                 )
+            request_timeout_seconds = self._request_timeout_seconds(len(chunks))
             outputs = await asyncio.wait_for(
                 self._generate_chunks(chunks),
-                timeout=self._generation_timeout_seconds,
+                timeout=request_timeout_seconds,
             )
 
             self[request.id] = self.Resource(
@@ -241,7 +274,7 @@ class SemanticsDescription:
             self._handle_exception(
                 request.id,
                 "Semantics description generation timed out after "
-                f"{self._generation_timeout_seconds} seconds",
+                f"{request_timeout_seconds} seconds",
                 trace_id=trace_id,
                 request_from=request.request_from,
             )
