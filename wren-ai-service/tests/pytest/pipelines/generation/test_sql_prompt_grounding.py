@@ -32,6 +32,8 @@ def test_sql_generation_system_prompt_requires_retrieved_semantic_authority():
     assert "For metric-style requests" in prompt
     assert "Do not join tables just because they were retrieved together" in prompt
     assert "Do not invent join predicates from similar column names" in prompt
+    assert "retrieved schema objects as ranked candidates" in prompt
+    assert "Use set operations only when the user explicitly requests" in prompt
     assert "role-hint metadata only as semantic hints" in prompt
     assert "Metadata role labels are never SQL identifiers" in prompt
     assert "Do not answer a timeframe request with an unfiltered table scan" in prompt
@@ -116,6 +118,8 @@ def test_sql_generation_prompt_includes_executable_schema_contract():
     assert "Metadata role labels are not executable column names" in built_prompt
     assert "Never return template SQL" in built_prompt
     assert "Copy user-provided filter values exactly" in built_prompt
+    assert "not automatic datasets to merge" in built_prompt
+    assert "Do not use UNION, UNION ALL, INTERSECT, or EXCEPT" in built_prompt
 
 
 def test_followup_sql_generation_prompt_requires_intent_shaped_query():
@@ -130,6 +134,8 @@ def test_followup_sql_generation_prompt_requires_intent_shaped_query():
 
     assert "Generate an intent-shaped query, not a table preview" in result["prompt"]
     assert "Never return template SQL" in result["prompt"]
+    assert "not automatic datasets to merge" in result["prompt"]
+    assert "Do not use UNION, UNION ALL, INTERSECT, or EXCEPT" in result["prompt"]
 
 
 def test_sql_correction_prompt_keeps_failed_sql_diagnostic_and_question():
@@ -151,6 +157,8 @@ def test_sql_correction_prompt_keeps_failed_sql_diagnostic_and_question():
     assert "Correct into an intent-shaped query, not a table preview" in built_prompt
     assert "rebuild the query shape from the user's question" in built_prompt
     assert "Never return template SQL" in built_prompt
+    assert "not automatic datasets to merge" in built_prompt
+    assert "Do not use UNION, UNION ALL, INTERSECT, or EXCEPT" in built_prompt
 
 
 def test_sql_correction_prompt_includes_executable_schema_contract():
@@ -202,3 +210,5 @@ def test_sql_regeneration_prompt_includes_executable_schema_contract():
     assert "filter an actual declared time/date column" in built_prompt
     assert "Do not write role labels" in built_prompt
     assert "Never return template SQL" in built_prompt
+    assert "not automatic datasets to merge" in built_prompt
+    assert "Do not use UNION, UNION ALL, INTERSECT, or EXCEPT" in built_prompt
