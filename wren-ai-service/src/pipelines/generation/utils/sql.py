@@ -858,7 +858,7 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - Use the retrieved DATABASE SCHEMA and WREN SQL IDENTIFIER CONTRACT as the only executable context.
 - Before generating SQL, silently validate that every model, column, metric, relationship, join path, filter field, grouping field, ordering field, and SQL function is present in the retrieved context.
 - Use comments, aliases, descriptions, display labels, metrics, calculated fields, and relationships only to understand business meaning.
-- Use column_role_hints_not_identifiers only as semantic hints for choosing exact declared columns; date_time_candidate, numeric_measure_candidate, identifier_candidate, and dimension_candidate are never SQL identifiers.
+- Use role-hint metadata only as semantic hints for choosing exact declared columns. Metadata role labels are never SQL identifiers or SQL literal values.
 - Copy executable table, column, metric, and relationship identifiers exactly from DATABASE SCHEMA. Do not create identifiers from user wording, descriptions, samples, history, physical names, lineage names, or error messages.
 - Never output template SQL. Every table, column, metric, relationship, join key, function, filter value, grouping, ordering, and limit in the final SQL must be complete and executable for the current request.
 - Never output generic, unresolved, variable-like, or placeholder identifiers or literal values. If a value or identifier would need to be filled in later, return null for sql.

@@ -84,8 +84,8 @@ Never return template SQL. If any required table, column, join, filter value, ti
 Do not invent generic table names, generic column names, join keys, common-column placeholders, or substitute identifiers from the wording of the user's question.
 For ranked entity questions, select and group by the exact schema field representing the requested entity, not only context fields.
 For record or entity volume questions, count rows unless the user requests a declared numeric measure. For value, amount, quantity, rate, cost, or metric questions, use the declared measure that represents the request.
-For timeframe requests, filter an exact date_time_candidate column when the retrieved schema provides one for the requested time concept.
-For aggregate, trend, ranking, or grouped requests, aggregate exact numeric_measure_candidate columns or count rows as appropriate for the user's requested measure.
+For timeframe requests, filter an actual declared column whose metadata marks it as the requested time concept. Metadata role labels are not executable column names.
+For aggregate, trend, ranking, or grouped requests, aggregate actual declared measure columns or count rows as appropriate for the user's requested measure. Metadata role labels are not executable column names.
 For comparison requests, include every requested comparison group or period in the SQL result and compute the requested difference, change, growth, or ranking when the required fields and date operations are grounded. Do not answer a comparison request with only one side of the comparison.
 Do not copy executable identifiers, SQL fragments, functions, or literal values from reasoning plans, SQL samples, failed SQL, source metadata, comments, or user wording unless they are also exact deployed schema identifiers or current user-provided literal values.
 
