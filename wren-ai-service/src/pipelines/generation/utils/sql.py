@@ -120,6 +120,15 @@ def _identifier_name(identifier: Identifier) -> str | None:
     return identifier.get_real_name() or identifier.get_name()
 
 
+def _table_reference_name(identifier: Identifier) -> str | None:
+    real_name = identifier.get_real_name()
+    parent_name = identifier.get_parent_name()
+    if parent_name and real_name:
+        return f"{parent_name}.{real_name}"
+
+    return real_name or identifier.get_name()
+
+
 def _contains_select(token: TokenList) -> bool:
     return any(
         child.ttype == sqlparse_tokens.Keyword.DML and child.normalized == "SELECT"
@@ -179,7 +188,7 @@ def _collect_table_references(token: TokenList) -> set[str]:
                             if isinstance(child, Parenthesis):
                                 table_names.update(_collect_table_references(child))
                     else:
-                        name = _identifier_name(identifier)
+                        name = _table_reference_name(identifier)
                         if name:
                             table_names.add(name)
             elif isinstance(current, Identifier):
@@ -191,7 +200,7 @@ def _collect_table_references(token: TokenList) -> set[str]:
                         if isinstance(child, Parenthesis):
                             table_names.update(_collect_table_references(child))
                 else:
-                    name = _identifier_name(current)
+                    name = _table_reference_name(current)
                     if name:
                         table_names.add(name)
             expect_table = False

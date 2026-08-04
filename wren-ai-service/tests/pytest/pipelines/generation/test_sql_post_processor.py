@@ -161,6 +161,32 @@ async def test_sql_post_processor_rejects_tables_outside_schema_contract():
 
 
 @pytest.mark.asyncio
+async def test_sql_post_processor_rejects_dotted_physical_table_reference():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        ['{"sql": "SELECT DISTINCT grouping_col FROM physical_schema.supported_model"}'],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "supported_model",
+                "column_names": ["grouping_col"],
+            }
+        ],
+    )
+
+    assert engine.executed is False
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"] == {
+        "sql": "SELECT DISTINCT grouping_col FROM physical_schema.supported_model",
+        "original_sql": "SELECT DISTINCT grouping_col FROM physical_schema.supported_model",
+        "type": "SCHEMA_GROUNDING",
+        "error": "Generated SQL references table identifiers outside the retrieved deployed schema.",
+        "correlation_id": "",
+    }
+
+
+@pytest.mark.asyncio
 async def test_sql_post_processor_rejects_joined_tables_outside_schema_contract():
     engine = CapturingEngine()
 
