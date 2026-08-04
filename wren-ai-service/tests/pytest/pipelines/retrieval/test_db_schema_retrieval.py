@@ -1625,9 +1625,9 @@ def test_construct_retrieval_results_caps_pruned_generation_context():
         query="show model records",
     )
 
-    assert len(result["retrieval_results"]) == 15
+    assert len(result["retrieval_results"]) == 10
     assert [item["table_name"] for item in result["retrieval_results"]] == [
-        f"model_{index}" for index in range(15)
+        f"model_{index}" for index in range(10)
     ]
 
 
@@ -1717,9 +1717,9 @@ def test_check_using_db_schemas_without_pruning_caps_generation_context():
         context_window_size=10000,
     )
 
-    assert len(result["db_schemas"]) == 15
+    assert len(result["db_schemas"]) == 10
     assert [schema["table_name"] for schema in result["db_schemas"]] == [
-        f"model_{index}" for index in range(15)
+        f"model_{index}" for index in range(10)
     ]
 
 

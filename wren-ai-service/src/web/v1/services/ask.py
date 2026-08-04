@@ -31,8 +31,18 @@ def should_skip_sql_diagnosis(failed_generation_result: dict | None) -> bool:
 
 async def run_pipeline_with_timeout(awaitable, timeout_seconds: float, operation: str):
     try:
+        logger.info(
+            "%s started with timeout_seconds=%s",
+            operation,
+            timeout_seconds,
+        )
         return await asyncio.wait_for(awaitable, timeout=timeout_seconds)
     except asyncio.TimeoutError as exc:
+        logger.error(
+            "%s timed out after %s seconds",
+            operation,
+            timeout_seconds,
+        )
         raise TimeoutError(
             f"{operation} timed out after {timeout_seconds:g} seconds"
         ) from exc

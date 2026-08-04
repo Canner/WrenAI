@@ -193,6 +193,7 @@ settings:
   allow_sql_functions_retrieval: true
   enable_column_pruning: false
   max_sql_correction_retries: 1
+  sql_generation_timeout_seconds: 30
   query_cache_maxsize: 1000
   query_cache_ttl: 3600
   langfuse_host: https://cloud.langfuse.com
