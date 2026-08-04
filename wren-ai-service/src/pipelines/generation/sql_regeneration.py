@@ -100,6 +100,8 @@ Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliase
 Regenerate with executable identifiers from the current DATABASE SCHEMA only.
 Regenerate an intent-shaped query, not a table preview. Select explicit columns, filters, groupings, measures, joins, ordering, and limits needed by the question. For metric questions, return dimensions plus the requested measure or grounded expression; never use SELECT * as a substitute.
 When DATABASE SCHEMA contains column_role_hints_not_identifiers, use those roles only to map intent to exact declared columns. For timeframe requests, filter an exact date_time_candidate column with a bounded range. For aggregate, "by", trend, or ranking requests, aggregate exact numeric_measure_candidate columns or count rows, group by exact dimension/date expressions, order by the selected aggregate alias when ranking, and limit only when requested. Do not return a raw table preview.
+String literals in WHERE or HAVING must come from the current user question or current user instructions only. Never use schema descriptions, column comments, aliases, display labels, source names, or lineage names as data values.
+For comparison requests, include every requested comparison group or period in the SQL result and compute the requested difference, change, growth, or ranking when the required fields and date operations are grounded. Do not answer a comparison request with only one side of the comparison.
 
 {% if executable_schema_contract %}
 ### ALLOWED EXECUTABLE IDENTIFIERS FOR THIS REGENERATION ###

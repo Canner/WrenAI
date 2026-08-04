@@ -414,7 +414,8 @@ def _format_semantic_context(context: dict) -> str:
             semantic_note = column.get("semantic_context_not_sql_identifier")
             if semantic_note:
                 column_parts.append(
-                    f"semantic_context_not_sql_identifier={semantic_note}"
+                    "semantic_context_not_sql_identifier"
+                    f"(description_not_filter_value)={semantic_note}"
                 )
             lines.append("- " + " | ".join(column_parts))
 
@@ -433,14 +434,16 @@ def _format_semantic_context(context: dict) -> str:
             semantic_note = relationship.get("semantic_context_not_sql_identifier")
             if semantic_note:
                 relationship_parts.append(
-                    f"semantic_context_not_sql_identifier={semantic_note}"
+                    "semantic_context_not_sql_identifier"
+                    f"(description_not_filter_value)={semantic_note}"
                 )
             lines.append("- " + " | ".join(relationship_parts))
 
     lines.extend(
         [
             "Only values in sql_identifier_contract, sql_column_name_use_exactly, and identifiers declared in the following DDL are executable in Wren SQL.",
-            "Values under semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier explain meaning only and must not be copied, combined, or rewritten as executable SQL identifiers.",
+            "Values under semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier explain meaning only and are not executable identifiers or data values.",
+            "Never use semantic descriptions, aliases, display labels, source names, physical names, or lineage names as string literals in WHERE or HAVING predicates.",
             "Values under column_role_hints_not_identifiers and semantic_roles_not_identifiers are meaning only; use them to map intent to exact declared columns, not as executable identifiers.",
             "*/",
             _format_executable_identifier_catalog(context),

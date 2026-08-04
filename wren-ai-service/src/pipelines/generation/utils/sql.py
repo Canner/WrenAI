@@ -819,10 +819,13 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - The SQL must answer every supported part of the user's request: requested subject, requested entity, requested filter value, timeframe, grouping, measure, ordering, and limit.
 - If the user asks for a filtered result, include the filter only when the filtered concept is represented by an exact schema field. If the filter field is not present, return null for sql instead of ignoring the filter.
 - If the user provides a literal filter value, use only that provided value. Do not invent, translate, or substitute filter values.
+- Never use schema descriptions, column comments, aliases, display labels, source names, physical names, lineage names, reasoning text, or error messages as string literal data values.
 - If the user asks "which", "who", or "what" for a ranked entity, select and group by the exact schema field that represents that requested entity. Do not replace the requested entity with a context field or unrelated dimension.
 - Use row counting for record or entity volume questions when no numeric business measure is requested. Use numeric measures only when the question asks for a value, amount, quantity, rate, cost, or other declared measure.
 - For analytical questions, return dimensions plus the requested measure expression or metric field. Do not return a raw table preview.
 - For aggregate, ranking, grouped, or trend questions, produce an analytical query shape.
+- For comparison questions, include each requested comparison group or time period and compute the requested difference, change, growth, or ranking when the required fields are grounded.
+- Do not answer a comparison question with only one comparison side, one period, or one group unless the user explicitly asks for only that side.
 - For detail-list questions, return only the fields needed to identify and describe the requested records, plus requested filters and timeframes.
 - Do not answer a timeframe request with an unfiltered table scan.
 - Prefer one model, view, or metric that already contains the requested fields. Do not join tables just because they were retrieved together. Do not invent join predicates from similar column names. Join only through relationships declared in DATABASE SCHEMA.

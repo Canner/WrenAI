@@ -78,10 +78,12 @@ The SQL must include every supported requested part: subject, entity, filters, t
 If a required part of the request is not grounded by an exact deployed schema object, column, relationship, metric, or supported function, return null for sql.
 Do not answer a specific analytical question with a broad table preview or with an unrelated nearby table.
 Do not ignore a literal filter value from the user; apply it to the exact schema field representing that filter concept, or return null when that field is unavailable.
+String literals in WHERE or HAVING must come from the current user question or current user instructions only. Never use schema descriptions, column comments, aliases, display labels, source names, or lineage names as data values.
 For ranked entity questions, select and group by the exact schema field representing the requested entity, not only context fields.
 For record or entity volume questions, count rows unless the user requests a declared numeric measure. For value, amount, quantity, rate, cost, or metric questions, use the declared measure that represents the request.
 For timeframe requests, filter an exact date_time_candidate column when the retrieved schema provides one for the requested time concept.
 For aggregate, trend, ranking, or grouped requests, aggregate exact numeric_measure_candidate columns or count rows as appropriate for the user's requested measure.
+For comparison requests, include every requested comparison group or period in the SQL result and compute the requested difference, change, growth, or ranking when the required fields and date operations are grounded. Do not answer a comparison request with only one side of the comparison.
 Do not copy executable identifiers, SQL fragments, functions, or literal values from reasoning plans, SQL samples, failed SQL, source metadata, comments, or user wording unless they are also exact deployed schema identifiers or current user-provided literal values.
 
 {% if executable_schema_contract %}
