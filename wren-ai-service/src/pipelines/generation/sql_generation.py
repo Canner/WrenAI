@@ -76,12 +76,18 @@ Question:
 
 ### QUESTION ###
 User's Question: {{ query }}
-Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, user question words, or inferred names into executable SQL.
-If a needed table, output column, filter column, grouping column, relation, date field, measure, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, return null for sql instead of inventing, substituting, or approximating a similar name. If the retrieved schema does not ground the user's primary requested intent, return null for sql instead of querying an unrelated object.
-If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT, stop and return null for sql. Never create a table or column from the user's wording, even when the wording looks like a business term or object name.
-Do not generate SQL from a reasoning plan. The reasoning plan is not executable context and cannot provide table names, column names, filters, functions, joins, or examples.
-Generate an intent-shaped query, not a table preview. Select explicit columns, filters, groupings, measures, joins, ordering, and limits needed by the question. For metric questions, return dimensions plus the requested measure or grounded expression; never use SELECT * as a substitute.
-When DATABASE SCHEMA contains column_role_hints_not_identifiers, use those roles only to map intent to exact declared columns. For timeframe requests, filter an exact date_time_candidate column with a bounded range. For aggregate, "by", trend, or ranking requests, aggregate exact numeric_measure_candidate columns or count rows, group by exact dimension/date expressions, order by the selected aggregate alias when ranking, and limit only when requested. Do not return a raw table preview.
+Generate one Wren SQL query that answers the full user request using only DATABASE SCHEMA and SQL FUNCTIONS.
+Generate an intent-shaped query, not a table preview.
+Use schema descriptions, aliases, display labels, metrics, calculated fields, and relationships only to understand meaning.
+The SQL must include every supported requested part: subject, entity, filters, timeframe, grouping, measure, ordering, and limit.
+If a required part of the request is not grounded by an exact deployed schema object, column, relationship, metric, or supported function, return null for sql.
+Do not answer a specific analytical question with a broad table preview or with an unrelated nearby table.
+Do not ignore a literal filter value from the user; apply it to the exact schema field representing that filter concept, or return null when that field is unavailable.
+For ranked entity questions, select and group by the exact schema field representing the requested entity, not only context fields.
+For record or entity volume questions, count rows unless the user requests a declared numeric measure. For value, amount, quantity, rate, cost, or metric questions, use the declared measure that represents the request.
+For timeframe requests, filter an exact date_time_candidate column when the retrieved schema provides one for the requested time concept.
+For aggregate, trend, ranking, or grouped requests, aggregate exact numeric_measure_candidate columns or count rows as appropriate for the user's requested measure.
+Do not copy executable identifiers, SQL fragments, functions, or literal values from reasoning plans, SQL samples, failed SQL, source metadata, comments, or user wording unless they are also exact deployed schema identifiers or current user-provided literal values.
 
 {% if executable_schema_contract %}
 ### ALLOWED EXECUTABLE IDENTIFIERS FOR THIS REQUEST ###
