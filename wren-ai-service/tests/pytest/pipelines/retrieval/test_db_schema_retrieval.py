@@ -1530,11 +1530,11 @@ def test_check_using_db_schemas_without_pruning_keeps_context_when_within_window
     assert all("table: " in schema["table_ddl"] for schema in result["db_schemas"])
     assert all("columns:" in schema["table_ddl"] for schema in result["db_schemas"])
     assert all(
-        "WREN RETRIEVED SEMANTIC CONTEXT" not in schema["table_ddl"]
+        "WREN RETRIEVED SEMANTIC CONTEXT" in schema["table_ddl"]
         for schema in result["db_schemas"]
     )
     assert all(
-        "semantic_context_not_sql_identifier" not in schema["table_ddl"]
+        "semantic_context_not_sql_identifier" in schema["table_ddl"]
         for schema in result["db_schemas"]
     )
     assert result["tokens"] > 0
@@ -1575,12 +1575,114 @@ def test_retrieved_schema_separates_exact_sql_names_from_semantic_context():
     assert "table: modeled_dataset" in table_ddl
     assert "columns:\n- stored_attribute" in table_ddl
     assert "Do not create identifiers from user wording" in table_ddl
-    assert "Business-facing attribute label." not in table_ddl
-    assert "Business-facing dataset description." not in table_ddl
-    assert "WREN RETRIEVED SEMANTIC CONTEXT" not in table_ddl
-    assert "semantic_context_not_sql_identifier" not in table_ddl
+    assert "Business-facing attribute label." in table_ddl
+    assert "Business-facing dataset description." in table_ddl
+    assert "WREN RETRIEVED SEMANTIC CONTEXT" in table_ddl
+    assert "semantic_context_not_sql_identifier" in table_ddl
     assert "CREATE TABLE modeled_dataset" in table_ddl
     assert "stored_attribute VARCHAR" in table_ddl
+    assert "Business-facing attribute label.CREATE TABLE" not in table_ddl
+    assert "Business-facing dataset description.CREATE TABLE" not in table_ddl
+
+
+def test_retrieved_schema_keeps_physical_metadata_out_of_executable_ddl():
+    class Encoding:
+        def encode(self, value):
+            return value.split()
+
+    result = check_using_db_schemas_without_pruning(
+        construct_db_schemas=[
+            {
+                "type": "TABLE",
+                "name": "modeled_dataset",
+                "comment": "Business-facing dataset description.",
+                "columns": [
+                    {
+                        "type": "COLUMN",
+                        "name": "stored_attribute",
+                        "data_type": "VARCHAR",
+                        "comment": "Business-facing attribute label.",
+                        "is_primary_key": False,
+                    }
+                ],
+                "properties": {
+                    "tableReference": {
+                        "catalog": "physical_catalog",
+                        "schema": "physical_schema",
+                        "table": "physical_table",
+                    }
+                },
+                "primaryKey": "",
+            }
+        ],
+        dbschema_retrieval=[],
+        encoding=Encoding(),
+        enable_column_pruning=False,
+        context_window_size=1000,
+    )
+
+    table_ddl = result["db_schemas"][0]["table_ddl"]
+    executable_ddl = table_ddl.split("CREATE TABLE", maxsplit=1)[1]
+
+    assert "CREATE TABLE modeled_dataset" in table_ddl
+    assert "physical_catalog" not in table_ddl
+    assert "physical_schema" not in table_ddl
+    assert "physical_table" not in table_ddl
+    assert "Business-facing attribute label." not in executable_ddl
+
+
+def test_metric_schema_keeps_measure_semantics_outside_executable_ddl():
+    class Encoding:
+        def encode(self, value):
+            return value.split()
+
+    result = check_using_db_schemas_without_pruning(
+        construct_db_schemas=[],
+        dbschema_retrieval=[
+            Document(
+                content=str(
+                    {
+                        "type": "METRIC",
+                        "name": "modeled_metric",
+                        "comment": "Metric semantic description.",
+                        "columns": [
+                            {
+                                "type": "COLUMN",
+                                "comment": "-- This column is a dimension\n  ",
+                                "name": "grouping_dimension",
+                                "data_type": "VARCHAR",
+                            },
+                            {
+                                "type": "COLUMN",
+                                "comment": (
+                                    "-- This column is a measure\n  "
+                                    "-- expression: SUM(metric_value)\n  "
+                                ),
+                                "name": "defined_measure",
+                                "data_type": "DOUBLE",
+                            },
+                        ],
+                    }
+                ),
+                meta={"name": "modeled_metric"},
+            )
+        ],
+        encoding=Encoding(),
+        enable_column_pruning=False,
+        context_window_size=1000,
+    )
+
+    table_ddl = result["db_schemas"][0]["table_ddl"]
+    executable_ddl = table_ddl.split("CREATE TABLE", maxsplit=1)[1]
+
+    assert "object_type: metric" in table_ddl
+    assert "stable analytical aggregation interface" in table_ddl
+    assert "SUM(metric_value)" in table_ddl
+    assert "CREATE TABLE modeled_metric" in table_ddl
+    assert "grouping_dimension VARCHAR" in executable_ddl
+    assert "defined_measure DOUBLE" in executable_ddl
+    assert "SUM(metric_value)" not in executable_ddl
+    assert "-- This column is a measure" not in executable_ddl
 
 
 def test_build_table_ddl_can_render_executable_schema_without_semantic_comments():
