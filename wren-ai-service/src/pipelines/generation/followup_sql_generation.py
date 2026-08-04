@@ -2,6 +2,7 @@ import logging
 import sys
 from typing import Any
 
+import orjson
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
@@ -11,6 +12,7 @@ from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.common import clean_up_new_lines, retrieve_metadata
+from src.pipelines.generation.utils.deterministic_sql import generate_grounded_sql
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
@@ -142,11 +144,21 @@ def prompt(
 @trace_cost
 async def generate_sql_in_followup(
     prompt: dict,
+    query: str,
+    documents: list[str],
     generator: Any,
     histories: list[AskHistory],
     generator_name: str,
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
+    deterministic_sql = generate_grounded_sql(query, documents)
+    if deterministic_sql:
+        logger.info("Follow-Up SQL Generation used deterministic grounded SQL fast path.")
+        return {
+            "replies": [orjson.dumps({"sql": deterministic_sql}).decode("utf-8")],
+            "metadata": [{"finish_reason": "deterministic_grounded_sql"}],
+        }, generator_name
+
     history_messages = construct_ask_history_messages(histories)
     current_system_prompt = get_sql_generation_system_prompt(sql_knowledge)
     return await generator(
