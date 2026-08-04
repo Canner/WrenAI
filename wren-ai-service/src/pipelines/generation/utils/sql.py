@@ -535,6 +535,23 @@ class SQLGenPostProcessor:
         query: str | None = None,
     ) -> dict:
         try:
+            if not replies:
+                (
+                    valid_generation_result,
+                    invalid_generation_result,
+                ) = await self._classify_generation_result(
+                    None,
+                    project_id=project_id,
+                    use_dry_plan=use_dry_plan,
+                    allow_dry_plan_fallback=allow_dry_plan_fallback,
+                    data_source=data_source,
+                    allow_data_preview=allow_data_preview,
+                )
+                return {
+                    "valid_generation_result": valid_generation_result,
+                    "invalid_generation_result": invalid_generation_result,
+                }
+
             cleaned_generation_result = clean_generation_result(replies[0])
 
             # test if cleaned_generation_result in string format is actually a dictionary with key 'sql'
@@ -542,6 +559,22 @@ class SQLGenPostProcessor:
                 cleaned_generation_result = orjson.loads(cleaned_generation_result).get(
                     "sql"
                 )
+                if not cleaned_generation_result:
+                    (
+                        valid_generation_result,
+                        invalid_generation_result,
+                    ) = await self._classify_generation_result(
+                        None,
+                        project_id=project_id,
+                        use_dry_plan=use_dry_plan,
+                        allow_dry_plan_fallback=allow_dry_plan_fallback,
+                        data_source=data_source,
+                        allow_data_preview=allow_data_preview,
+                    )
+                    return {
+                        "valid_generation_result": valid_generation_result,
+                        "invalid_generation_result": invalid_generation_result,
+                    }
                 cleaned_generation_result = clean_generation_result(
                     cleaned_generation_result
                 )
@@ -642,9 +675,20 @@ class SQLGenPostProcessor:
         except Exception as e:
             logger.exception(f"Error in SQLGenPostProcessor: {e}")
 
+            (
+                valid_generation_result,
+                invalid_generation_result,
+            ) = await self._classify_generation_result(
+                None,
+                project_id=project_id,
+                use_dry_plan=use_dry_plan,
+                allow_dry_plan_fallback=allow_dry_plan_fallback,
+                data_source=data_source,
+                allow_data_preview=allow_data_preview,
+            )
             return {
-                "valid_generation_result": {},
-                "invalid_generation_result": {},
+                "valid_generation_result": valid_generation_result,
+                "invalid_generation_result": invalid_generation_result,
             }
 
     async def _classify_generation_result(

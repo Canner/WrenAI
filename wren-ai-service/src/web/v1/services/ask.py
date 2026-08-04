@@ -583,12 +583,17 @@ class AskService:
                 ]["invalid_generation_result"]:
                     schema_grounding_correction_attempted = False
                     while current_sql_correction_retries < max_sql_correction_retries:
-                        if failed_dry_run_result["type"] == "TIME_OUT":
+                        failed_generation_type = failed_dry_run_result.get("type")
+                        if not failed_generation_type:
+                            break
+                        if failed_generation_type == "TIME_OUT":
                             break
 
-                        original_sql = failed_dry_run_result["original_sql"]
-                        invalid_sql = failed_dry_run_result["sql"]
-                        error_message = failed_dry_run_result["error"]
+                        original_sql = failed_dry_run_result.get("original_sql") or ""
+                        invalid_sql = failed_dry_run_result.get("sql") or original_sql
+                        error_message = (
+                            failed_dry_run_result.get("error") or "No relevant SQL"
+                        )
                         skip_sql_diagnosis = should_skip_sql_diagnosis(
                             failed_dry_run_result
                         )
@@ -679,6 +684,8 @@ class AskService:
                         next_failed_dry_run_result = sql_correction_results[
                             "post_process"
                         ]["invalid_generation_result"]
+                        if not next_failed_dry_run_result:
+                            break
                         if (
                             next_failed_dry_run_result
                             and next_failed_dry_run_result.get("sql") == invalid_sql

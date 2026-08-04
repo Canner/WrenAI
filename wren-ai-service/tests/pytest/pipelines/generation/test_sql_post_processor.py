@@ -99,6 +99,23 @@ def test_clean_generation_result_preserves_internal_statement_separators():
 
 
 @pytest.mark.asyncio
+async def test_sql_post_processor_returns_structured_failure_for_null_sql():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(['{"sql": null}'])
+
+    assert engine.executed is False
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"] == {
+        "sql": "",
+        "original_sql": "",
+        "type": "NO_RELEVANT_SQL",
+        "error": "No grounded SQL was generated from the current schema.",
+        "correlation_id": "",
+    }
+
+
+@pytest.mark.asyncio
 async def test_sql_post_processor_converts_select_top_to_wren_limit():
     engine = CapturingEngine()
 
