@@ -13,6 +13,22 @@ from src.web.v1.services import BaseRequest, SSEEvent
 logger = logging.getLogger("wren-ai-service")
 
 
+_DETERMINISTIC_SQL_VALIDATION_TYPES = {
+    "SCHEMA_GROUNDING",
+    "SQL_SHAPE",
+    "SQL_SYNTAX",
+    "SQL_VALUE_GROUNDING",
+    "NO_RELEVANT_SQL",
+}
+
+
+def should_skip_sql_diagnosis(failed_generation_result: dict | None) -> bool:
+    if not failed_generation_result:
+        return False
+
+    return failed_generation_result.get("type") in _DETERMINISTIC_SQL_VALIDATION_TYPES
+
+
 class AskHistory(BaseModel):
     sql: str
     question: str
@@ -543,6 +559,9 @@ class AskService:
                         original_sql = failed_dry_run_result["original_sql"]
                         invalid_sql = failed_dry_run_result["sql"]
                         error_message = failed_dry_run_result["error"]
+                        skip_sql_diagnosis = should_skip_sql_diagnosis(
+                            failed_dry_run_result
+                        )
                         is_schema_grounding_error = (
                             failed_dry_run_result.get("type") == "SCHEMA_GROUNDING"
                         )
@@ -569,7 +588,7 @@ class AskService:
                         )
 
                         sql_diagnosis_reasoning = None
-                        if allow_sql_diagnosis and not is_schema_grounding_error:
+                        if allow_sql_diagnosis and not skip_sql_diagnosis:
                             sql_diagnosis_results = await self._pipelines[
                                 "sql_diagnosis"
                             ].run(

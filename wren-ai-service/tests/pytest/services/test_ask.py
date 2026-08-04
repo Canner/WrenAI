@@ -12,6 +12,7 @@ from src.web.v1.services.ask import (
     AskRequest,
     AskResultRequest,
     AskService,
+    should_skip_sql_diagnosis,
 )
 from src.web.v1.services.semantics_preparation import (
     SemanticsPreparationRequest,
@@ -159,6 +160,115 @@ def test_ask_service_uses_single_sql_correction_retry_by_default():
     ask_service = AskService({})
 
     assert ask_service._max_sql_correction_retries == 1
+
+
+def test_should_skip_sql_diagnosis_for_deterministic_validation_errors():
+    assert should_skip_sql_diagnosis({"type": "SQL_SHAPE"}) is True
+    assert should_skip_sql_diagnosis({"type": "SCHEMA_GROUNDING"}) is True
+    assert should_skip_sql_diagnosis({"type": "SQL_VALUE_GROUNDING"}) is True
+    assert should_skip_sql_diagnosis({"type": "DRY_RUN"}) is False
+    assert should_skip_sql_diagnosis({}) is False
+
+
+class _EmptyRetrievalPipeline:
+    async def run(self, **_):
+        return {"formatted_output": {"documents": []}}
+
+
+class _SchemaRetrievalPipeline:
+    async def run(self, **_):
+        return {
+            "construct_retrieval_results": {
+                "retrieval_results": [
+                    {
+                        "table_name": "model_alpha",
+                        "table_ddl": "CREATE TABLE model_alpha (entity_id INTEGER)",
+                        "manifest_column_names": ["entity_id"],
+                    }
+                ],
+                "has_calculated_field": False,
+                "has_metric": False,
+                "has_json_field": False,
+            }
+        }
+
+
+class _ShapeInvalidSqlGenerationPipeline:
+    async def run(self, **_):
+        return {
+            "post_process": {
+                "valid_generation_result": {},
+                "invalid_generation_result": {
+                    "sql": "SELECT entity_id FROM model_alpha",
+                    "original_sql": "SELECT entity_id FROM model_alpha",
+                    "type": "SQL_SHAPE",
+                    "error": "Generated SQL is a table preview.",
+                    "correlation_id": "",
+                },
+            }
+        }
+
+
+class _CapturingCorrectionPipeline:
+    def __init__(self):
+        self.calls = []
+
+    async def run(self, **kwargs):
+        self.calls.append(kwargs)
+        return {
+            "post_process": {
+                "valid_generation_result": {
+                    "sql": "SELECT COUNT(*) AS record_count FROM model_alpha",
+                    "correlation_id": "",
+                },
+                "invalid_generation_result": {},
+            }
+        }
+
+
+class _FailingDiagnosisPipeline:
+    def __init__(self):
+        self.calls = []
+
+    async def run(self, **kwargs):
+        self.calls.append(kwargs)
+        raise AssertionError("sql_diagnosis should not run for local validation errors")
+
+
+@pytest.mark.asyncio
+async def test_ask_skips_sql_diagnosis_for_local_validation_error():
+    correction = _CapturingCorrectionPipeline()
+    diagnosis = _FailingDiagnosisPipeline()
+    ask_service = AskService(
+        {
+            "historical_question": _EmptyRetrievalPipeline(),
+            "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
+            "instructions_retrieval": _EmptyRetrievalPipeline(),
+            "db_schema_retrieval": _SchemaRetrievalPipeline(),
+            "sql_generation": _ShapeInvalidSqlGenerationPipeline(),
+            "sql_correction": correction,
+            "sql_diagnosis": diagnosis,
+        },
+        allow_intent_classification=False,
+        allow_sql_functions_retrieval=False,
+        allow_sql_knowledge_retrieval=False,
+        allow_sql_diagnosis=True,
+    )
+    query_id = str(uuid.uuid4())
+    ask_request = AskRequest(query="count records by model", mdl_hash=None)
+    ask_request.query_id = query_id
+
+    await ask_service.ask(ask_request)
+
+    ask_result_response = ask_service.get_ask_result(
+        AskResultRequest(query_id=query_id)
+    )
+    assert ask_result_response.status == "finished"
+    assert diagnosis.calls == []
+    assert correction.calls[0]["invalid_generation_result"] == {
+        "sql": "SELECT entity_id FROM model_alpha",
+        "error": "Generated SQL is a table preview.",
+    }
 
 
 @pytest.mark.asyncio

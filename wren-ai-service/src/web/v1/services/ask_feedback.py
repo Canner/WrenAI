@@ -9,7 +9,7 @@ from pydantic import AliasChoices, BaseModel, Field
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest
-from src.web.v1.services.ask import AskError, AskResult
+from src.web.v1.services.ask import AskError, AskResult, should_skip_sql_diagnosis
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -227,6 +227,9 @@ class AskFeedbackService:
                         original_sql = failed_dry_run_result["original_sql"]
                         invalid_sql = failed_dry_run_result["sql"]
                         error_message = failed_dry_run_result["error"]
+                        skip_sql_diagnosis = should_skip_sql_diagnosis(
+                            failed_dry_run_result
+                        )
                         is_schema_grounding_error = (
                             failed_dry_run_result.get("type") == "SCHEMA_GROUNDING"
                         )
@@ -239,7 +242,7 @@ class AskFeedbackService:
                             trace_id=trace_id,
                         )
 
-                        if allow_sql_diagnosis and not is_schema_grounding_error:
+                        if allow_sql_diagnosis and not skip_sql_diagnosis:
                             sql_diagnosis_results = await self._pipelines[
                                 "sql_diagnosis"
                             ].run(
