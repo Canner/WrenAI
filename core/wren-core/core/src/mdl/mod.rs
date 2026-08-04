@@ -5422,8 +5422,12 @@ mod test {
     /// A derived context keeps one `ModelAnalyzeRule` instance for its whole
     /// lifetime, so concurrent `optimize()` calls share it — the RLAC
     /// cycle-detection stack must therefore be per-invocation state.
+    ///
+    /// This stress test widens the race window but remains probabilistic;
+    /// a passing run does not prove the absence of shared invocation state.
     mod analyzer_concurrency {
         use super::*;
+        use datafusion::common::plan_err;
         use std::sync::Barrier;
         use std::thread;
 
@@ -5505,6 +5509,12 @@ mod test {
                     let ctx = Arc::clone(&derived_ctx);
                     let barrier = Arc::clone(&barrier);
                     thread::Builder::new()
+                        // 8 MiB matches CI's RUST_MIN_STACK and this file's
+                        // convention for plan-analysis tests (see
+                        // test_multiple_relationship_calculated_columns):
+                        // stack-heavy debug planning can exceed Rust's
+                        // platform-dependent thread default and obscure the
+                        // concurrency check.
                         .stack_size(8 * 1024 * 1024)
                         .spawn(move || -> Result<()> {
                             let rt = tokio::runtime::Builder::new_current_thread()
@@ -5516,17 +5526,17 @@ mod test {
                                 for iter in 0..ITERATIONS {
                                     let state = ctx.state();
                                     let plan = state.create_logical_plan(SQL).await?;
-                                    let optimized = state.optimize(&plan);
-                                    assert!(
-                                        optimized.is_ok(),
-                                        "thread {tid} iter {iter}: valid \
-                                         acyclic RLAC query failed under \
-                                         same-context concurrency: {}",
-                                        optimized
-                                            .err()
-                                            .map(|e| e.to_string())
-                                            .unwrap_or_default()
-                                    );
+                                    // Propagate optimizer failures through
+                                    // the thread's `Result`: a panic reaches
+                                    // `join()` as `Box<dyn Any>` and loses
+                                    // this diagnostic context.
+                                    if let Err(e) = state.optimize(&plan) {
+                                        return plan_err!(
+                                            "thread {tid} iter {iter}: valid \
+                                             acyclic RLAC query failed under \
+                                             same-context concurrency: {e}"
+                                        );
+                                    }
                                 }
                                 Ok(())
                             })

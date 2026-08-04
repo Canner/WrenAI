@@ -16,7 +16,7 @@ use datafusion::logical_expr::{
 };
 use datafusion::optimizer::AnalyzerRule;
 use datafusion::sql::TableReference;
-use parking_lot::Mutex;
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -38,11 +38,12 @@ pub struct ModelAnalyzeRule {
     properties: SessionPropertiesRef,
 }
 
-/// Cycle-detection stack for RLAC resolution (A's RLAC referencing B whose
-/// RLAC references A). Allocated per `analyze` invocation and passed down
-/// the recursive calls: the rule instance is shared by every — possibly
-/// concurrent — query on its session context, so this must not live on `self`.
-type ModelStack = Mutex<HashSet<String>>;
+/// RLAC cycle-detection state for recursive resolution (A's RLAC referencing
+/// B whose RLAC references A). Allocated per `analyze` invocation and threaded
+/// through recursive calls. A session context shares one `Send + Sync` analyzer
+/// rule; `RefCell` being `!Sync` makes storing this state on that rule fail
+/// to compile.
+type ModelStack = RefCell<HashSet<String>>;
 
 /// RAII guard that removes a model name from the cycle-detection stack on
 /// drop, regardless of how the surrounding function exits.
@@ -53,7 +54,7 @@ struct ModelStackGuard<'a> {
 
 impl Drop for ModelStackGuard<'_> {
     fn drop(&mut self) {
-        self.stack.lock().remove(&self.name);
+        self.stack.borrow_mut().remove(&self.name);
     }
 }
 
@@ -499,8 +500,11 @@ impl ModelAnalyzeRule {
         cycle_stack: &ModelStack,
     ) -> Result<ModelPlanNode> {
         let model_name = model.name().to_string();
+        // Keep the mutation in its own scope: recursive analysis and
+        // `ModelStackGuard::drop` both borrow the `RefCell` again, so extending
+        // the `RefMut` lifetime would cause a re-entrant-borrow panic.
         {
-            let mut stack = cycle_stack.lock();
+            let mut stack = cycle_stack.borrow_mut();
             if stack.contains(&model_name) {
                 return plan_err!(
                     "Detected a cycle in row level access control conditions for model `{}`",
