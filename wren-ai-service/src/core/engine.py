@@ -26,7 +26,10 @@ class Engine(metaclass=ABCMeta):
         ...
 
 
-def clean_generation_result(result: str) -> str:
+def clean_generation_result(result: Optional[str]) -> Optional[str]:
+    if result is None:
+        return None
+
     def _normalize_whitespace(s: str) -> str:
         return re.sub(r"\s+", " ", s).strip()
 

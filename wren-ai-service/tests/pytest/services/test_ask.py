@@ -177,7 +177,7 @@ def test_should_not_attempt_sql_correction_for_contract_validation_errors():
     assert should_attempt_sql_correction({"type": "SQL_INTENT_MISMATCH"}) is True
     assert should_attempt_sql_correction({"type": "SQL_SHAPE"}) is False
     assert should_attempt_sql_correction({"type": "SCHEMA_GROUNDING"}) is False
-    assert should_attempt_sql_correction({"type": "SQL_VALUE_GROUNDING"}) is False
+    assert should_attempt_sql_correction({"type": "SQL_VALUE_GROUNDING"}) is True
     assert should_attempt_sql_correction({"type": "NO_RELEVANT_SQL"}) is False
     assert should_attempt_sql_correction({"type": "TIME_OUT"}) is False
     assert should_attempt_sql_correction({"type": "SQL_SYNTAX"}) is True

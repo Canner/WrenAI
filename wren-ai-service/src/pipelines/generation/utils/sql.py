@@ -831,6 +831,22 @@ class SQLGenPostProcessor:
                 }
 
             cleaned_generation_result = clean_generation_result(raw_generation_result)
+            if not cleaned_generation_result:
+                (
+                    valid_generation_result,
+                    invalid_generation_result,
+                ) = await self._classify_generation_result(
+                    None,
+                    project_id=project_id,
+                    use_dry_plan=use_dry_plan,
+                    allow_dry_plan_fallback=allow_dry_plan_fallback,
+                    data_source=data_source,
+                    allow_data_preview=allow_data_preview,
+                )
+                return {
+                    "valid_generation_result": valid_generation_result,
+                    "invalid_generation_result": invalid_generation_result,
+                }
 
             # test if cleaned_generation_result in string format is actually a dictionary with key 'sql'
             if cleaned_generation_result.startswith("{"):
