@@ -135,6 +135,8 @@ _QUERY_TERM_STOPWORDS = {
 _MAX_SCHEMA_SEMANTIC_TABLE_CANDIDATES = 5
 _MAX_RELATED_SCHEMA_TABLE_CANDIDATES = 5
 _MAX_SQL_GENERATION_SCHEMA_RESULTS = 10
+_MAX_SQL_GENERATION_COLUMNS_PER_TABLE = 16
+_MAX_SQL_GENERATION_ROLE_COLUMNS = 4
 
 _DATE_TIME_TYPE_TERMS = {
     "date",
@@ -159,6 +161,15 @@ _MEASURE_NAME_PATTERN = re.compile(
     re.I,
 )
 _IDENTIFIER_NAME_PATTERN = re.compile(r"(^id$|[_\s-]?id$|key|code|number|num|no$)", re.I)
+_TIME_QUERY_PATTERN = re.compile(
+    r"\b(date|day|week|month|quarter|year|today|yesterday|last|next|from|to|between|period|recent)\b",
+    re.I,
+)
+_MEASURE_QUERY_PATTERN = re.compile(
+    r"\b(total|sum|average|avg|mean|count|number|top|highest|lowest|most|least|value|amount|sales|cost|price|rate|quantity|qty|score|percent)\b",
+    re.I,
+)
+_DETAIL_QUERY_PATTERN = re.compile(r"\b(show|list|detail|details|orders|records|rows)\b", re.I)
 
 
 def _normalize_terms(value: str) -> set[str]:
@@ -227,6 +238,75 @@ def _tables_matching_query_terms(
             matching_tables.add(table_schema["name"])
 
     return matching_tables
+
+
+def _column_search_terms(column: dict) -> set[str]:
+    return _normalize_terms(
+        " ".join(
+            [
+                str(column.get("name", "") or ""),
+                str(column.get("comment", "") or ""),
+                str(column.get("data_type", "") or ""),
+            ]
+        )
+    )
+
+
+def _compact_sql_generation_columns(content: dict, query: str) -> Optional[set[str]]:
+    columns = [
+        column
+        for column in content.get("columns", [])
+        if column.get("type") == "COLUMN"
+        and column.get("name")
+        and (
+            column.get("data_type") is None
+            or get_engine_supported_data_type(column.get("data_type")).lower()
+            != "unknown"
+        )
+    ]
+    if len(columns) <= _MAX_SQL_GENERATION_COLUMNS_PER_TABLE:
+        return None
+
+    query_terms = _normalize_terms(query)
+    wants_time = bool(_TIME_QUERY_PATTERN.search(query or ""))
+    wants_measure = bool(_MEASURE_QUERY_PATTERN.search(query or ""))
+    wants_detail = bool(_DETAIL_QUERY_PATTERN.search(query or ""))
+    selected: list[str] = []
+
+    def add(column: dict) -> None:
+        name = column.get("name")
+        if name and name not in selected:
+            selected.append(name)
+
+    for column in columns:
+        if column.get("is_primary_key"):
+            add(column)
+
+    for column in columns:
+        if query_terms and query_terms & _column_search_terms(column):
+            add(column)
+
+    def add_role(role: str, limit: int = _MAX_SQL_GENERATION_ROLE_COLUMNS) -> None:
+        added = 0
+        for column in columns:
+            if role in _column_roles(column):
+                add(column)
+                added += 1
+                if added >= limit:
+                    return
+
+    if wants_time:
+        add_role("date_time_candidate")
+    if wants_measure:
+        add_role("numeric_measure_candidate")
+    if wants_detail:
+        add_role("identifier_candidate")
+
+    if not selected:
+        add_role("dimension_candidate")
+        add_role("identifier_candidate")
+
+    return set(selected[:_MAX_SQL_GENERATION_COLUMNS_PER_TABLE])
 
 
 def _build_metric_ddl(content: dict) -> str:
@@ -896,6 +976,7 @@ def check_using_db_schemas_without_pruning(
     encoding: tiktoken.Encoding,
     enable_column_pruning: bool,
     context_window_size: int,
+    query: str = "",
 ) -> dict:
     retrieval_results = []
     has_calculated_field = False
@@ -904,8 +985,9 @@ def check_using_db_schemas_without_pruning(
 
     for table_schema in construct_db_schemas:
         if table_schema["type"] == "TABLE":
+            compact_columns = _compact_sql_generation_columns(table_schema, query)
             ddl, _has_calculated_field, _has_json_field, column_names = (
-                _build_table_context_ddl(table_schema)
+                _build_table_context_ddl(table_schema, columns=compact_columns)
             )
             retrieval_results.append(
                 {

@@ -1723,6 +1723,70 @@ def test_check_using_db_schemas_without_pruning_caps_generation_context():
     ]
 
 
+def test_check_using_db_schemas_without_pruning_compacts_wide_tables_by_query():
+    class Encoding:
+        def encode(self, value):
+            return value.split()
+
+    columns = [
+        {
+            "type": "COLUMN",
+            "name": "OrderDate",
+            "data_type": "DATE",
+            "comment": "Order date",
+            "is_primary_key": False,
+        },
+        {
+            "type": "COLUMN",
+            "name": "OrderNo",
+            "data_type": "VARCHAR",
+            "comment": "Order number",
+            "is_primary_key": False,
+        },
+        {
+            "type": "COLUMN",
+            "name": "SalesAmount",
+            "data_type": "DECIMAL",
+            "comment": "Sales amount",
+            "is_primary_key": False,
+        },
+    ]
+    columns.extend(
+        {
+            "type": "COLUMN",
+            "name": f"Filler{index}",
+            "data_type": "VARCHAR",
+            "comment": "",
+            "is_primary_key": False,
+        }
+        for index in range(25)
+    )
+
+    result = check_using_db_schemas_without_pruning(
+        construct_db_schemas=[
+            {
+                "type": "TABLE",
+                "name": "wide_orders",
+                "comment": "",
+                "columns": columns,
+                "properties": {},
+                "primaryKey": "",
+            }
+        ],
+        dbschema_retrieval=[],
+        encoding=Encoding(),
+        enable_column_pruning=False,
+        context_window_size=10000,
+        query="show orders from last week",
+    )
+
+    column_names = result["db_schemas"][0]["column_names"]
+    assert len(column_names) <= 16
+    assert "OrderDate" in column_names
+    assert "OrderNo" in column_names
+    assert "Filler24" not in column_names
+
+
 def test_retrieved_schema_separates_exact_sql_names_from_semantic_context():
     class Encoding:
         def encode(self, value):
