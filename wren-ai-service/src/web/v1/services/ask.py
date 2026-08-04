@@ -23,6 +23,8 @@ _DETERMINISTIC_SQL_VALIDATION_TYPES = {
 
 _NON_REPAIRABLE_SQL_VALIDATION_TYPES = {
     "NO_RELEVANT_SQL",
+    "SCHEMA_GROUNDING",
+    "SQL_SHAPE",
     "SQL_VALUE_GROUNDING",
 }
 
@@ -606,6 +608,11 @@ class AskService:
                 elif failed_dry_run_result := text_to_sql_generation_results[
                     "post_process"
                 ]["invalid_generation_result"]:
+                    original_sql = failed_dry_run_result.get("original_sql") or ""
+                    invalid_sql = failed_dry_run_result.get("sql") or original_sql
+                    error_message = (
+                        failed_dry_run_result.get("error") or "No relevant SQL"
+                    )
                     schema_grounding_correction_attempted = False
                     while current_sql_correction_retries < max_sql_correction_retries:
                         if not should_attempt_sql_correction(failed_dry_run_result):

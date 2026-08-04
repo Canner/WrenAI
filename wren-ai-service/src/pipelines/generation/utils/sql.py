@@ -804,14 +804,43 @@ class SQLGenPostProcessor:
                     "invalid_generation_result": invalid_generation_result,
                 }
 
-            cleaned_generation_result = clean_generation_result(replies[0])
+            raw_generation_result = replies[0]
+            if isinstance(raw_generation_result, list):
+                raw_generation_result = (
+                    raw_generation_result[0] if raw_generation_result else None
+                )
+
+            if (
+                not isinstance(raw_generation_result, str)
+                or not raw_generation_result.strip()
+            ):
+                (
+                    valid_generation_result,
+                    invalid_generation_result,
+                ) = await self._classify_generation_result(
+                    None,
+                    project_id=project_id,
+                    use_dry_plan=use_dry_plan,
+                    allow_dry_plan_fallback=allow_dry_plan_fallback,
+                    data_source=data_source,
+                    allow_data_preview=allow_data_preview,
+                )
+                return {
+                    "valid_generation_result": valid_generation_result,
+                    "invalid_generation_result": invalid_generation_result,
+                }
+
+            cleaned_generation_result = clean_generation_result(raw_generation_result)
 
             # test if cleaned_generation_result in string format is actually a dictionary with key 'sql'
             if cleaned_generation_result.startswith("{"):
                 cleaned_generation_result = orjson.loads(cleaned_generation_result).get(
                     "sql"
                 )
-                if not cleaned_generation_result:
+                if (
+                    not isinstance(cleaned_generation_result, str)
+                    or not cleaned_generation_result.strip()
+                ):
                     (
                         valid_generation_result,
                         invalid_generation_result,
