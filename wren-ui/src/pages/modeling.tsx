@@ -272,6 +272,7 @@ const resolveRelationshipFieldParts = (
 
 const renderIcon = (IconComponent) => React.createElement(IconComponent as any);
 const ASSISTANT_CANCELLED = 'ASSISTANT_CANCELLED';
+const ASSISTANT_SAVE_MESSAGE_KEY = 'modeling-ai-assistant-save';
 
 export default function Modeling() {
   const router = useRouter();
@@ -279,6 +280,7 @@ export default function Modeling() {
   const apolloClient = useApolloClient();
   const diagramRef = useRef(null);
   const assistantRunIdRef = useRef(0);
+  const assistantSavingRef = useRef(false);
   const [assistantMode, setAssistantMode] = useState<
     'semantics' | 'relationships' | null
   >(null);
@@ -655,7 +657,7 @@ export default function Modeling() {
       if (status === 'failed') {
         throw new Error(payload.error?.message || 'AI assistant failed.');
       }
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
     throw new Error('AI assistant timed out.');
   };
@@ -905,6 +907,8 @@ export default function Modeling() {
   };
 
   const saveAssistantResult = async () => {
+    if (assistantSavingRef.current) return;
+    assistantSavingRef.current = true;
     try {
       if (!diagramData) return;
       setAssistantLoading(true);
@@ -976,16 +980,23 @@ export default function Modeling() {
             `${createdCount} relationship(s) saved. ${skippedCount} invalid or duplicate suggestion(s) skipped.`,
           );
         } else {
-          message.success('Saved Modeling AI Assistant suggestions.');
+          message.success({
+            key: ASSISTANT_SAVE_MESSAGE_KEY,
+            content: 'Saved Modeling AI Assistant suggestions.',
+          });
         }
       }
       closeAssistant();
       if (assistantMode !== 'relationships') {
-        message.success('Saved Modeling AI Assistant suggestions.');
+        message.success({
+          key: ASSISTANT_SAVE_MESSAGE_KEY,
+          content: 'Saved Modeling AI Assistant suggestions.',
+        });
       }
     } catch (error: any) {
       message.error(error.message || 'Failed to save assistant suggestions.');
     } finally {
+      assistantSavingRef.current = false;
       setAssistantLoading(false);
     }
   };

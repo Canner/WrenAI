@@ -13,7 +13,15 @@ def service():
     mock_pipeline.run.return_value = {
         "output": {
             "model1": {
-                "columns": [],
+                "name": "model1",
+                "columns": [
+                    {
+                        "name": "column1",
+                        "properties": {
+                            "description": "Customer segment for reporting."
+                        },
+                    }
+                ],
                 "properties": {"description": "Test description"},
             }
         }
@@ -42,12 +50,13 @@ async def test_generate_semantics_description(
     assert response.status == "finished"
     assert response.response == {
         "model1": {
+            "name": "model1",
             "columns": [
                 {
                     "name": "column1",
                     "type": "varchar",
                     "properties": {
-                        "description": "Business attribute used to categorize, filter, and explain records in analytical questions."
+                        "description": "Customer segment for reporting."
                     },
                 }
             ],
@@ -109,7 +118,7 @@ async def test_generate_semantics_description_with_exception(
 
 
 @pytest.mark.asyncio
-async def test_generate_semantics_description_with_llm_timeout_returns_fallback():
+async def test_generate_semantics_description_with_llm_timeout_fails():
     mock_pipeline = AsyncMock()
 
     async def never_returns(**_):
@@ -131,9 +140,9 @@ async def test_generate_semantics_description_with_llm_timeout_returns_fallback(
     await service.generate(request)
     response = service[request.id]
 
-    assert response.status == "finished"
-    assert response.response["model1"]["properties"]["description"]
-    assert response.response["model1"]["columns"][0]["properties"]["description"]
+    assert response.status == "failed"
+    assert response.response is None
+    assert "timed out" in response.error.message
 
 
 def test_get_semantics_description_result(
@@ -172,15 +181,15 @@ def test_semantics_description_uses_configured_timeout():
     assert service._generation_timeout_seconds == 123
 
 
-def test_semantics_description_caps_timeout_inside_ui_polling_window():
+def test_semantics_description_uses_timeout_without_rewriting_ttl():
     service = SemanticsDescription(
         pipelines={"semantics_description": AsyncMock()},
         ttl=120,
         generation_timeout_seconds=600,
     )
 
-    assert service._generation_timeout_seconds == 150
-    assert service._cache.ttl >= 450
+    assert service._generation_timeout_seconds == 600
+    assert service._cache.ttl == 120
 
 
 @pytest.mark.asyncio
@@ -197,9 +206,33 @@ async def test_batch_processing_with_multiple_models(
 
     service._pipelines["semantics_description"].run.return_value = {
         "output": {
-            "model1": {"description": "Description 1"},
-            "model2": {"description": "Description 2"},
-            "model3": {"description": "Description 3"},
+            "model1": {
+                "description": "Description 1",
+                "columns": [
+                    {
+                        "name": "column1",
+                        "properties": {"description": "Column description 1"},
+                    }
+                ],
+            },
+            "model2": {
+                "description": "Description 2",
+                "columns": [
+                    {
+                        "name": "column1",
+                        "properties": {"description": "Column description 2"},
+                    }
+                ],
+            },
+            "model3": {
+                "description": "Description 3",
+                "columns": [
+                    {
+                        "name": "column1",
+                        "properties": {"description": "Column description 3"},
+                    }
+                ],
+            },
         }
     }
 
@@ -278,7 +311,7 @@ def test_default_batch_allows_large_column_groups(
 
 
 @pytest.mark.asyncio
-async def test_partial_llm_output_is_completed_for_all_selected_columns(
+async def test_incomplete_llm_output_fails(
     service: SemanticsDescription,
 ):
     service["test_id"] = SemanticsDescription.Resource(id="test_id")
@@ -324,15 +357,13 @@ async def test_partial_llm_output_is_completed_for_all_selected_columns(
     await service.generate(request)
     response = service[request.id]
 
-    assert response.status == "finished"
-    assert set(response.response.keys()) == {"orders", "customers"}
-    assert len(response.response["orders"]["columns"]) == 2
-    assert len(response.response["customers"]["columns"]) == 1
-    assert response.response["customers"]["properties"]["description"]
+    assert response.status == "failed"
+    assert response.response is None
+    assert "omitted selected column" in response.error.message
 
 
 @pytest.mark.asyncio
-async def test_generic_llm_descriptions_are_replaced_with_business_descriptions(
+async def test_llm_descriptions_are_not_rewritten_by_service(
     service: SemanticsDescription,
 ):
     service["test_id"] = SemanticsDescription.Resource(id="test_id")
@@ -388,19 +419,17 @@ async def test_generic_llm_descriptions_are_replaced_with_business_descriptions(
     response = service[request.id]
 
     assert response.status == "finished"
-    descriptions = [
+    assert response.response["dbo_xStageLoad2"]["properties"]["description"] == (
+        "Contains business records for xStageLoad2."
+    )
+    assert [
         column["properties"]["description"]
         for column in response.response["dbo_xStageLoad2"]["columns"]
+    ] == [
+        "Stores the Division value used to describe or analyze xStage records.",
+        "SalesPerson",
+        "Stores the SalesAmount value.",
     ]
-    assert response.response["dbo_xStageLoad2"]["properties"]["description"].startswith(
-        "Captures commercial activity"
-    )
-    assert descriptions == [
-        "Organizational segment used to group records for ownership, reporting, and performance comparison.",
-        "Responsible person or role associated with the record for ownership and performance analysis.",
-        "Monetary measure used to calculate financial results, compare performance, and summarize business activity.",
-    ]
-    assert all("Stores the" not in description for description in descriptions)
 
 
 @pytest.mark.asyncio
@@ -444,7 +473,15 @@ async def test_concurrent_updates_no_race_condition(
 
     service._pipelines["semantics_description"].run.return_value = {
         "output": {
-            f"model{i}": {"description": f"Description {i}"}
+            f"model{i}": {
+                "description": f"Description {i}",
+                "columns": [
+                    {
+                        "name": "column1",
+                        "properties": {"description": f"Column description {i}"},
+                    }
+                ],
+            }
             for i in range(1, 6)
         }
     }
@@ -457,6 +494,55 @@ async def test_concurrent_updates_no_race_condition(
     assert len(response.response) == 5
     assert all(f"model{i}" in response.response for i in range(1, 6))
     assert all(
-        response.response[f"model{i}"]["description"] == f"Description {i}"
+        response.response[f"model{i}"]["properties"]["description"]
+        == f"Description {i}"
         for i in range(1, 6)
     )
+
+
+@pytest.mark.asyncio
+async def test_repeated_llm_column_descriptions_fail(
+    service: SemanticsDescription,
+):
+    service["test_id"] = SemanticsDescription.Resource(id="test_id")
+    request = SemanticsDescription.GenerateRequest(
+        id="test_id",
+        user_prompt="Describe the model",
+        selected_models=["orders"],
+        mdl=orjson.dumps(
+            {
+                "models": [
+                    {
+                        "name": "orders",
+                        "columns": [
+                            {"name": "order_id", "type": "varchar"},
+                            {"name": "customer_id", "type": "varchar"},
+                        ],
+                    }
+                ]
+            }
+        ).decode(),
+    )
+    service._pipelines["semantics_description"].run.return_value = {
+        "output": {
+            "orders": {
+                "description": "Customer order transactions.",
+                "columns": [
+                    {
+                        "name": "order_id",
+                        "properties": {"description": "Identifier for reporting."},
+                    },
+                    {
+                        "name": "customer_id",
+                        "properties": {"description": "Identifier for reporting."},
+                    },
+                ],
+            }
+        }
+    }
+
+    await service.generate(request)
+    response = service[request.id]
+
+    assert response.status == "failed"
+    assert "repeated column descriptions" in response.error.message

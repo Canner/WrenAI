@@ -493,46 +493,78 @@ export class ModelResolver {
       projectId: project.id,
     });
     const modelById = new Map(models.map((model) => [model.id, model]));
+    const requestedItems = args.data || [];
+
+    for (const item of requestedItems) {
+      if (!modelById.has(item.modelId)) {
+        throw new Error(`Model not found: ${item.modelId}`);
+      }
+    }
 
     await Promise.all(
-      (args.data || []).map(async (item) => {
+      requestedItems.map(async (item) => {
+        if (isNil(item.description)) return;
+
         const model = modelById.get(item.modelId);
-        if (!model) {
-          throw new Error(`Model not found: ${item.modelId}`);
-        }
+        const properties = model?.properties ? JSON.parse(model.properties) : {};
+        properties.description = this.determineMetadataValue(item.description);
 
-        await this.handleUpdateModelMetadata(
-          {
-            displayName: undefined,
-            description: item.description,
-            columns: [],
-            nestedColumns: [],
-            calculatedFields: [],
-            relationships: [],
-          },
-          model,
-          ctx,
-          item.modelId,
-        );
-
-        if (!isEmpty(item.columns)) {
-          await this.handleUpdateColumnMetadata(
-            {
-              displayName: undefined,
-              description: undefined,
-              columns: item.columns,
-              nestedColumns: [],
-              calculatedFields: [],
-              relationships: [],
-            },
-            ctx,
-          );
-        }
+        await ctx.modelRepository.updateOne(item.modelId, {
+          properties: JSON.stringify(properties),
+        });
       }),
     );
 
-    this.markProjectDirty(project.id);
-    return { savedCount: args.data?.length || 0 };
+    const requestedColumns = requestedItems.flatMap(
+      (item) => item.columns || [],
+    );
+    if (!isEmpty(requestedColumns)) {
+      const columnIds = requestedColumns.map((column) => column.id);
+      const columns = await ctx.modelColumnRepository.findColumnsByIds(columnIds);
+      const columnById = new Map(
+        columns.map((column) => [String(column.id), column]),
+      );
+
+      await Promise.all(
+        requestedColumns.map(async (requestedColumn) => {
+          const column = columnById.get(String(requestedColumn.id));
+          if (!column) return;
+
+          const columnMetadata: Partial<ModelColumn> = {};
+          if (!isNil(requestedColumn.displayName)) {
+            columnMetadata.displayName = this.determineMetadataValue(
+              requestedColumn.displayName,
+            );
+          }
+
+          if (!isNil(requestedColumn.description)) {
+            const properties = column.properties
+              ? JSON.parse(column.properties)
+              : {};
+            properties.description = this.determineMetadataValue(
+              requestedColumn.description,
+            );
+            columnMetadata.properties = JSON.stringify(properties);
+          }
+
+          if (!isEmpty(columnMetadata)) {
+            await ctx.modelColumnRepository.updateOne(
+              requestedColumn.id,
+              columnMetadata,
+            );
+          }
+        }),
+      );
+    }
+
+    if (!isEmpty(requestedItems)) {
+      this.markProjectDirty(project.id);
+    }
+
+    return {
+      savedCount: requestedItems.length,
+      columnSavedCount: requestedColumns.length,
+    };
   }
 
   public async generateModelingRelationships(

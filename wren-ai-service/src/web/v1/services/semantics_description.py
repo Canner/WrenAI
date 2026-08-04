@@ -32,9 +32,13 @@ class SemanticsDescription:
         pipelines: Dict[str, BasicPipeline],
         maxsize: int = 1_000_000,
         ttl: int = 120,
+        generation_timeout_seconds: int = 90,
+        max_models_per_batch: int = 5,
     ):
         self._pipelines = pipelines
         self._cache: Dict[str, self.Resource] = TTLCache(maxsize=maxsize, ttl=ttl)
+        self._generation_timeout_seconds = generation_timeout_seconds
+        self._max_models_per_batch = max(1, max_models_per_batch)
 
     def _handle_exception(
         self,
@@ -60,48 +64,131 @@ class SemanticsDescription:
         mdl: str
 
     def _chunking(
-        self, mdl_dict: dict, request: GenerateRequest, chunk_size: int = 50
+        self,
+        mdl_dict: dict,
+        request: GenerateRequest,
+        chunk_size: Optional[int] = None,
     ) -> list[dict]:
+        chunk_size = chunk_size or self._max_models_per_batch
         template = {
             "user_prompt": request.user_prompt,
             "language": request.configurations.language,
         }
 
-        chunks = [
-            {
-                **model,
-                "columns": model.get("columns", [])[i : i + chunk_size],
-            }
+        selected_models = [
+            model
             for model in mdl_dict.get("models", [])
             if model.get("name") in request.selected_models
-            for i in range(0, len(model.get("columns", [])), chunk_size)
         ]
 
         return [
             {
                 **template,
-                "mdl": {"models": [chunk]},
-                "selected_models": [chunk["name"]],
+                "mdl": {"models": selected_models[i : i + chunk_size]},
+                "selected_models": [
+                    model["name"] for model in selected_models[i : i + chunk_size]
+                ],
             }
-            for chunk in chunks
+            for i in range(0, len(selected_models), chunk_size)
         ]
 
-    async def _generate_task(self, request_id: str, chunk: dict):
+    async def _generate_task(self, chunk: dict) -> dict:
         resp = await self._pipelines["semantics_description"].run(**chunk)
         output = resp.get("output") or {}
         if not isinstance(output, dict):
             raise ValueError("Semantics description pipeline returned invalid output")
+        return output
 
-        current = self[request_id]
-        current.response = current.response or {}
+    def _merge_outputs(
+        self, mdl_dict: dict, selected_models: list[str], outputs: list[dict]
+    ) -> dict:
+        generated_by_model = {
+            model_name: model_data
+            for output in outputs
+            for model_name, model_data in output.items()
+            if isinstance(model_data, dict)
+        }
 
-        for key in output.keys():
-            if key not in current.response:
-                current.response[key] = output[key]
+        def properties(payload: dict) -> dict:
+            value = payload.get("properties")
+            return value if isinstance(value, dict) else {}
+
+        def description(payload: dict) -> str:
+            value = payload.get("description") or properties(payload).get(
+                "description", ""
+            )
+            return "" if value is None else str(value).strip()
+
+        response: dict = {}
+        for model in mdl_dict.get("models", []):
+            model_name = model.get("name")
+            if model_name not in selected_models:
                 continue
 
-            current.response[key].setdefault("columns", [])
-            current.response[key]["columns"].extend(output[key].get("columns", []))
+            generated_model = generated_by_model.get(model_name, {})
+            if not generated_model:
+                raise ValueError(
+                    f"Semantics description output omitted selected model: {model_name}"
+                )
+
+            model_description = description(generated_model)
+            if not model_description:
+                raise ValueError(
+                    f"Semantics description output omitted description for model: {model_name}"
+                )
+
+            generated_columns = {
+                column.get("name"): column
+                for column in generated_model.get("columns", [])
+                if isinstance(column, dict) and column.get("name")
+            }
+            columns = []
+            column_descriptions = []
+            for column in model.get("columns", []):
+                if not isinstance(column, dict):
+                    continue
+
+                column_name = column.get("name", "")
+                generated_column = generated_columns.get(column_name)
+                if not generated_column:
+                    raise ValueError(
+                        "Semantics description output omitted selected column: "
+                        f"{model_name}.{column_name}"
+                    )
+
+                column_description = description(generated_column)
+                if not column_description:
+                    raise ValueError(
+                        "Semantics description output omitted description for column: "
+                        f"{model_name}.{column_name}"
+                    )
+
+                columns.append(
+                    {
+                        "name": column_name,
+                        "type": column.get("type", ""),
+                        "properties": {
+                            "description": column_description,
+                        },
+                    }
+                )
+                column_descriptions.append(column_description)
+
+            if len(set(column_descriptions)) != len(column_descriptions):
+                raise ValueError(
+                    "Semantics description output contains repeated column "
+                    f"descriptions for model: {model_name}"
+                )
+
+            response[model_name] = {
+                "name": model_name,
+                "columns": columns,
+                "properties": {
+                    "description": model_description,
+                },
+            }
+
+        return response
 
     @observe(name="Generate Semantics Description")
     @trace_metadata
@@ -117,18 +204,35 @@ class SemanticsDescription:
                 raise ValueError(
                     "No selected models matched the current semantic model metadata"
                 )
-            tasks = [self._generate_task(request.id, chunk) for chunk in chunks]
+            tasks = [self._generate_task(chunk) for chunk in chunks]
 
-            await asyncio.gather(*tasks)
+            outputs = await asyncio.wait_for(
+                asyncio.gather(*tasks),
+                timeout=self._generation_timeout_seconds,
+            )
 
-            self[request.id].status = "finished"
-            self[request.id].trace_id = trace_id
-            self[request.id].request_from = request.request_from
+            self[request.id] = self.Resource(
+                id=request.id,
+                status="finished",
+                response=self._merge_outputs(
+                    mdl_dict, request.selected_models, list(outputs)
+                ),
+                trace_id=trace_id,
+                request_from=request.request_from,
+            )
         except orjson.JSONDecodeError as e:
             self._handle_exception(
                 request.id,
                 f"Failed to parse MDL: {str(e)}",
                 code="MDL_PARSE_ERROR",
+                trace_id=trace_id,
+                request_from=request.request_from,
+            )
+        except asyncio.TimeoutError:
+            self._handle_exception(
+                request.id,
+                "Semantics description generation timed out after "
+                f"{self._generation_timeout_seconds} seconds",
                 trace_id=trace_id,
                 request_from=request.request_from,
             )
