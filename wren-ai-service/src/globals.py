@@ -110,6 +110,7 @@ def create_service_container(
                     **pipe_components["project_meta_indexing"],
                 ),
             },
+            semantic_overlay_path=settings.semantic_overlay_path,
             **query_cache,
         ),
         ask_service=services.AskService(

@@ -204,33 +204,96 @@ class DDLChunker:
             if join_type not in ["MANY_TO_ONE", "ONE_TO_MANY", "ONE_TO_ONE"]:
                 return None
 
-            condition_parts = [
-                part.strip() for part in condition.split("=", maxsplit=1)
-            ]
-            if len(condition_parts) != 2:
+            pairs = _relationship_condition_pairs(condition)
+            if not pairs:
                 return None
 
-            model_columns = []
-            for condition_part in condition_parts:
-                name_parts = [
-                    part.strip() for part in condition_part.split(".", maxsplit=1)
-                ]
-                if len(name_parts) != 2:
-                    return None
-                model_columns.append(
-                    {"table": name_parts[0], "column": name_parts[1]}
+            properties = relationship.get("properties", {})
+            relationship_properties = {
+                "name": relationship.get("name", ""),
+                "condition": condition,
+                "joinType": join_type,
+                "description": _truncate_metadata_text(
+                    properties.get("description", "")
                 )
+                if isinstance(properties, dict)
+                else "",
+            }
+            if isinstance(properties, dict) and properties.get("semanticJoinPath"):
+                relationship_properties["semanticJoinPath"] = _truncate_metadata_text(
+                    properties.get("semanticJoinPath", "")
+                )
+            is_semantic_overlay_relationship = (
+                isinstance(properties, dict)
+                and properties.get("semanticSource") == "semantic_overlay"
+            )
 
-            left, right = model_columns
+            oriented_pairs = []
+            for left, right in pairs:
+                if join_type == "MANY_TO_ONE":
+                    foreign_side, referenced_side = left, right
+                elif join_type == "ONE_TO_MANY":
+                    foreign_side, referenced_side = right, left
+                elif table_name == left["table"]:
+                    foreign_side, referenced_side = left, right
+                else:
+                    foreign_side, referenced_side = right, left
 
-            if join_type == "MANY_TO_ONE":
-                foreign_side, referenced_side = left, right
-            elif join_type == "ONE_TO_MANY":
-                foreign_side, referenced_side = right, left
-            elif table_name == left["table"]:
-                foreign_side, referenced_side = left, right
-            else:
-                foreign_side, referenced_side = right, left
+                oriented_pairs.append((foreign_side, referenced_side))
+
+            if table_name not in {
+                pair[0]["table"] for pair in oriented_pairs
+            } and not (
+                is_semantic_overlay_relationship
+                and table_name in {pair[1]["table"] for pair in oriented_pairs}
+            ):
+                return None
+
+            if len(oriented_pairs) > 1 or (
+                is_semantic_overlay_relationship
+                and table_name in {pair[1]["table"] for pair in oriented_pairs}
+            ):
+                current_pairs = []
+                for foreign_side, referenced_side in oriented_pairs:
+                    if table_name == foreign_side["table"]:
+                        current_pairs.append((foreign_side, referenced_side))
+                    elif table_name == referenced_side["table"]:
+                        current_pairs.append((referenced_side, foreign_side))
+
+                if not current_pairs:
+                    return None
+
+                related_tables = {
+                    related_side["table"]
+                    for _, related_side in current_pairs
+                    if related_side.get("table")
+                }
+                if len(related_tables) != 1:
+                    return None
+                related_table = next(iter(related_tables))
+                join_condition = " AND ".join(
+                    f"{related_side['table']}.{related_side['column']} = "
+                    f"{current_side['table']}.{current_side['column']}"
+                    for current_side, related_side in current_pairs
+                )
+                return {
+                    "type": "JOIN_PATH",
+                    "comment": f"-- {relationship_properties}\n  ",
+                    "constraint": f"JOIN {related_table} ON {join_condition}",
+                    "tables": models,
+                    "columns": [
+                        current_side["column"]
+                        for current_side, _ in current_pairs
+                        if current_side["table"] == table_name
+                    ],
+                    "referenced_table": related_table,
+                    "referenced_columns": [
+                        related_side["column"]
+                        for _, related_side in current_pairs
+                    ],
+                }
+
+            foreign_side, referenced_side = oriented_pairs[0]
 
             if table_name != foreign_side["table"]:
                 return None
@@ -245,19 +308,12 @@ class DDLChunker:
                 f"REFERENCES {related_table}({referenced_column})"
             )
 
-            properties = relationship.get("properties", {})
-            relationship_properties = {
-                "name": relationship.get("name", ""),
-                "condition": condition,
-                "joinType": join_type,
-                "description": _truncate_metadata_text(
-                    properties.get("description", "")
-                )
-                if isinstance(properties, dict)
-                else "",
-                "from": f"{foreign_side['table']}.{foreign_side['column']}",
-                "to": f"{referenced_side['table']}.{referenced_side['column']}",
-            }
+            relationship_properties.update(
+                {
+                    "from": f"{foreign_side['table']}.{foreign_side['column']}",
+                    "to": f"{referenced_side['table']}.{referenced_side['column']}",
+                }
+            )
 
             return {
                 "type": "FOREIGN_KEY",
@@ -268,6 +324,33 @@ class DDLChunker:
                 "referenced_table": related_table,
                 "referenced_column": referenced_column,
             }
+
+        def _relationship_condition_pairs(condition: str) -> List[tuple[dict, dict]]:
+            condition_parts = [
+                part.strip() for part in condition.split(" AND ") if part.strip()
+            ]
+            pairs = []
+            for condition_part in condition_parts:
+                sides = [
+                    side.strip() for side in condition_part.split("=", maxsplit=1)
+                ]
+                if len(sides) != 2:
+                    return []
+
+                model_columns = []
+                for side in sides:
+                    name_parts = [
+                        part.strip() for part in side.split(".", maxsplit=1)
+                    ]
+                    if len(name_parts) != 2:
+                        return []
+                    model_columns.append(
+                        {"table": name_parts[0], "column": name_parts[1]}
+                    )
+
+                pairs.append((model_columns[0], model_columns[1]))
+
+            return pairs
 
         def _column_batch(
             model: Dict[str, Any], primary_keys_map: Dict[str, str]

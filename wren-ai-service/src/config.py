@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     sql_pairs_retrieval_max_size: int = Field(default=10)
     instructions_similarity_threshold: float = Field(default=0.7)
     instructions_top_k: int = Field(default=10)
+    semantic_overlay_path: str = Field(default="")
 
     # generation config
     allow_intent_classification: bool = Field(default=True)

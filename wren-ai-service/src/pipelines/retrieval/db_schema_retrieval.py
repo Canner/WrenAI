@@ -190,7 +190,8 @@ def _relationship_constraints(content: dict) -> list[str]:
     return [
         column.get("constraint", "")
         for column in content.get("columns", [])
-        if column.get("type") == "FOREIGN_KEY" and column.get("constraint")
+        if column.get("type") in {"FOREIGN_KEY", "JOIN_PATH"}
+        and column.get("constraint")
     ]
 
 
@@ -601,12 +602,17 @@ def _format_identifier_contract(context: dict) -> str:
 
 
 def _included_relationship_columns(content: dict, tables: Optional[set[str]]) -> set:
-    relationship_columns = {
-        column.get("column")
-        for column in content["columns"]
-        if column["type"] == "FOREIGN_KEY"
-        and (not tables or set(column.get("tables", [])).issubset(tables))
-    }
+    relationship_columns = set()
+    for column in content["columns"]:
+        if column["type"] not in {"FOREIGN_KEY", "JOIN_PATH"}:
+            continue
+        if tables and not set(column.get("tables", [])).issubset(tables):
+            continue
+
+        if column.get("column"):
+            relationship_columns.add(column.get("column"))
+        relationship_columns.update(column.get("columns", []) or [])
+
     relationship_columns.discard(None)
     return relationship_columns
 
@@ -637,7 +643,7 @@ def _included_relationships(content: dict, tables: Optional[set[str]]) -> list[d
     return [
         column
         for column in content["columns"]
-        if column["type"] == "FOREIGN_KEY"
+        if column["type"] in {"FOREIGN_KEY", "JOIN_PATH"}
         and (not tables or set(column.get("tables", [])).issubset(tables))
     ]
 
@@ -939,7 +945,7 @@ async def dbschema_retrieval(
                 continue
 
             for column in content.get("columns", []):
-                if column.get("type") != "FOREIGN_KEY":
+                if column.get("type") not in {"FOREIGN_KEY", "JOIN_PATH"}:
                     continue
 
                 candidates = list(column.get("tables", []) or [])

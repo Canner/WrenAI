@@ -25,6 +25,7 @@ def test_settings_default_values():
         assert settings.development is False
         assert settings.allow_sql_generation_reasoning is False
         assert settings.max_sql_correction_retries == 1
+        assert settings.semantic_overlay_path == ""
 
         assert settings.config_path == "config.yaml"
 

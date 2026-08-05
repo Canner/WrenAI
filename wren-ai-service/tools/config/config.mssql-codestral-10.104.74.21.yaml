@@ -182,3 +182,4 @@ settings:
   sql_pairs_retrieval_max_size: 3
   instructions_similarity_threshold: 0.7
   instructions_top_k: 3
+  semantic_overlay_path: tools/config/semantic_overlays/po_invoice_client.yaml
