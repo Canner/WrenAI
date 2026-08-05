@@ -278,6 +278,37 @@ async def test_sql_post_processor_allows_count_star():
 
 
 @pytest.mark.asyncio
+async def test_sql_post_processor_rejects_placeholder_identifiers_before_wildcard():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        [
+            (
+                '{"sql": "SELECT * FROM supported_model '
+                'WHERE Period__would_be_order_date = OrderDate"}'
+            )
+        ],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "supported_model",
+                "column_names": ["id", "OrderDate"],
+            }
+        ],
+        query="show orders from last week",
+    )
+
+    assert engine.executed is False
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "SQL_SYNTAX"
+    assert (
+        result["invalid_generation_result"]["error"]
+        == "Generated SQL contains placeholder or unresolved identifiers; "
+        "regenerate using only exact deployed schema columns."
+    )
+
+
+@pytest.mark.asyncio
 async def test_sql_post_processor_rejects_unshaped_analytical_table_preview():
     engine = CapturingEngine()
 

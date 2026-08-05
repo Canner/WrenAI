@@ -167,6 +167,8 @@ def test_sql_correction_prompt_keeps_failed_sql_diagnostic_and_question():
     assert "DIAGNOSTIC CONTEXT" in built_prompt
     assert "Correct into an intent-shaped query, not a table preview" in built_prompt
     assert "If the error says the SQL uses SELECT *" in built_prompt
+    assert "If the error says the SQL contains placeholders" in built_prompt
+    assert "discard the failed SQL shape completely" in built_prompt
     assert "rebuild the query shape from the user's question" in built_prompt
     assert "missing literal filter value" in built_prompt
     assert "include a WHERE predicate on the grounded filter field" in built_prompt

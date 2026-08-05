@@ -68,6 +68,11 @@ _LITERAL_FILTER_QUERY_PATTERN = re.compile(
 _DATE_LITERAL_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2})?$")
 
 _BROAD_TABLE_PREVIEW_COLUMN_THRESHOLD = 8
+_PLACEHOLDER_SQL_PATTERN = re.compile(
+    r"(?:would_be|to_be_filled|placeholder|replace_me|sample_|example_|"
+    r"your_|insert_|unknown_|unresolved_|<[^>]+>|\{[^}]+\})",
+    re.IGNORECASE,
+)
 
 
 def _is_timeout_error(error_message: str) -> bool:
@@ -568,6 +573,19 @@ def _select_wildcard_error(sql: str | None) -> str | None:
     return None
 
 
+def _placeholder_sql_error(sql: str | None) -> str | None:
+    if not sql:
+        return None
+
+    if _PLACEHOLDER_SQL_PATTERN.search(sql):
+        return (
+            "Generated SQL contains placeholder or unresolved identifiers; "
+            "regenerate using only exact deployed schema columns."
+        )
+
+    return None
+
+
 def _is_aggregate_item(token: Any) -> bool:
     token_text = str(token).upper()
     return any(
@@ -932,6 +950,19 @@ class SQLGenPostProcessor:
                         "original_sql": cleaned_generation_result,
                         "type": "SCHEMA_GROUNDING",
                         "error": grounding_error,
+                        "correlation_id": "",
+                    },
+                }
+
+            placeholder_error = _placeholder_sql_error(cleaned_generation_result)
+            if placeholder_error:
+                return {
+                    "valid_generation_result": {},
+                    "invalid_generation_result": {
+                        "sql": cleaned_generation_result,
+                        "original_sql": cleaned_generation_result,
+                        "type": "SQL_SYNTAX",
+                        "error": placeholder_error,
                         "correlation_id": "",
                     },
                 }
