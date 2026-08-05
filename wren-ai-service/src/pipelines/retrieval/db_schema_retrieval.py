@@ -22,6 +22,7 @@ from src.pipelines.common import (
     clean_up_new_lines,
     get_engine_supported_data_type,
 )
+from src.pipelines.generation.utils.query_intent import analyze_query, identifier_terms
 from src.utils import trace_cost
 from src.web.v1.services.ask import AskHistory
 
@@ -137,6 +138,11 @@ _MAX_RELATED_SCHEMA_TABLE_CANDIDATES = 5
 _MAX_SQL_GENERATION_SCHEMA_RESULTS = 10
 _MAX_SQL_GENERATION_COLUMNS_PER_TABLE = 16
 _MAX_SQL_GENERATION_ROLE_COLUMNS = 4
+_TECHNICAL_OBJECT_PATTERN = re.compile(
+    r"(^|[_\s.-])(raw|stage|staging|stg|tmp|temp|backup|archive|load|etl|landing|"
+    r"snapshot|technical|system|audit)([_\s.-]|$)",
+    re.I,
+)
 
 _DATE_TIME_TYPE_TERMS = {
     "date",
@@ -217,6 +223,89 @@ def _schema_semantic_text(content: dict) -> str:
     return " ".join(part for part in parts if part)
 
 
+def _table_description_semantic_text(content: dict) -> str:
+    parts = [
+        str(content.get("name", "") or ""),
+        str(content.get("displayName", "") or ""),
+        str(content.get("description", "") or ""),
+        str(content.get("columns", "") or ""),
+        str(content.get("column_context", "") or ""),
+        str(content.get("relationships", "") or ""),
+        str(content.get("semantic_context", "") or ""),
+    ]
+    return " ".join(part for part in parts if part)
+
+
+def _object_type_priority(content: dict, query: str) -> int:
+    resource_type = str(content.get("resource_type", "") or "").upper()
+    intent = analyze_query(query)
+
+    if resource_type == "METRIC":
+        return 8 if intent.requests_aggregate else 4
+    if resource_type == "VIEW":
+        return 5
+    if resource_type == "MODEL":
+        return 3
+    return 0
+
+
+def _technical_object_penalty(content: dict) -> int:
+    name = str(content.get("name", "") or "")
+    source = str(content.get("source", "") or "")
+    resource_type = str(content.get("resource_type", "") or "").upper()
+    penalty = 0
+
+    if _TECHNICAL_OBJECT_PATTERN.search(name):
+        penalty += 8
+    if _TECHNICAL_OBJECT_PATTERN.search(source):
+        penalty += 4
+    if resource_type not in {"METRIC", "VIEW", "MODEL"}:
+        penalty += 2
+
+    return penalty
+
+
+def _semantic_document_score(content: dict, query: str) -> int:
+    query_terms = _normalize_terms(query)
+    if not query_terms:
+        return 0
+
+    name_terms = _normalize_terms(str(content.get("name", "") or ""))
+    semantic_terms = _normalize_terms(_table_description_semantic_text(content))
+    requested_dimension_terms = analyze_query(query).requested_dimension_terms
+
+    score = 0
+    score += 6 * len(query_terms & name_terms)
+    score += 3 * len(query_terms & semantic_terms)
+    score += 5 * len(requested_dimension_terms & semantic_terms)
+    score += _object_type_priority(content, query)
+    score -= _technical_object_penalty(content)
+    return score
+
+
+def _rerank_table_description_documents(
+    documents: list[Document], query: str
+) -> list[Document]:
+    scored_documents = []
+    for index, document in enumerate(documents):
+        try:
+            content = ast.literal_eval(document.content)
+        except Exception:
+            scored_documents.append((0, -index, document))
+            continue
+
+        scored_documents.append(
+            (_semantic_document_score(content, query), -index, document)
+        )
+
+    return [
+        document
+        for _, _, document in sorted(
+            scored_documents, key=lambda item: (item[0], item[1]), reverse=True
+        )
+    ]
+
+
 def _tables_matching_query_terms(
     query: str,
     construct_db_schemas: list[dict],
@@ -248,6 +337,38 @@ def _column_search_terms(column: dict) -> set[str]:
                 str(column.get("comment", "") or ""),
                 str(column.get("data_type", "") or ""),
             ]
+        )
+    )
+
+
+def _column_contract_terms(column: dict) -> list[str]:
+    role_terms = {
+        term for role in _column_roles(column) for term in identifier_terms(role)
+    }
+    return sorted(
+        _normalize_terms(
+            " ".join(
+                [
+                    str(column.get("name", "") or ""),
+                    str(column.get("comment", "") or ""),
+                    str(column.get("data_type", "") or ""),
+                ]
+            )
+        )
+        | role_terms
+    )
+
+
+def _table_contract_terms(content: dict) -> list[str]:
+    return sorted(
+        _normalize_terms(
+            " ".join(
+                [
+                    str(content.get("name", "") or ""),
+                    str(content.get("comment", "") or ""),
+                    str(content.get("properties", {}) or ""),
+                ]
+            )
         )
     )
 
@@ -761,6 +882,7 @@ async def table_retrieval(
     table_retriever: Any,
     active_mdl_hash: Optional[str] = None,
     mdl_hash: str = "",
+    query: str = "",
 ) -> dict:
     effective_mdl_hash = active_mdl_hash or mdl_hash
     filters = {
@@ -781,10 +903,14 @@ async def table_retrieval(
         )
 
     if embedding:
-        return await table_retriever.run(
+        result = await table_retriever.run(
             query_embedding=embedding.get("embedding"),
             filters=filters,
         )
+        result["documents"] = _rerank_table_description_documents(
+            result.get("documents", []), query=query
+        )
+        return result
 
     if not tables:
         return {"documents": []}
@@ -995,6 +1121,13 @@ def check_using_db_schemas_without_pruning(
                     "table_ddl": ddl,
                     "column_names": column_names,
                     "manifest_column_names": column_names,
+                    "table_semantic_terms": _table_contract_terms(table_schema),
+                    "column_semantic_terms": {
+                        column["name"]: _column_contract_terms(column)
+                        for column in table_schema.get("columns", [])
+                        if column.get("type") == "COLUMN"
+                        and column.get("name") in column_names
+                    },
                     "relationship_constraints": _relationship_constraints(
                         table_schema
                     ),
@@ -1016,6 +1149,12 @@ def check_using_db_schemas_without_pruning(
                     "table_ddl": _build_metric_ddl(content),
                     "column_names": column_names,
                     "manifest_column_names": column_names,
+                    "table_semantic_terms": _table_contract_terms(content),
+                    "column_semantic_terms": {
+                        column["name"]: _column_contract_terms(column)
+                        for column in content.get("columns", [])
+                        if column.get("name") in column_names
+                    },
                     "relationship_constraints": [],
                 }
             )
@@ -1028,6 +1167,12 @@ def check_using_db_schemas_without_pruning(
                     "table_ddl": _build_view_ddl(content),
                     "column_names": column_names,
                     "manifest_column_names": column_names,
+                    "table_semantic_terms": _table_contract_terms(content),
+                    "column_semantic_terms": {
+                        column["name"]: _column_contract_terms(column)
+                        for column in content.get("columns", [])
+                        if column.get("name") in column_names
+                    },
                     "relationship_constraints": [],
                 }
             )
@@ -1129,6 +1274,13 @@ def construct_retrieval_results(
                         "table_ddl": ddl,
                         "column_names": column_names,
                         "manifest_column_names": column_names,
+                        "table_semantic_terms": _table_contract_terms(table_schema),
+                        "column_semantic_terms": {
+                            column["name"]: _column_contract_terms(column)
+                            for column in table_schema.get("columns", [])
+                            if column.get("type") == "COLUMN"
+                            and column.get("name") in column_names
+                        },
                         "relationship_constraints": _relationship_constraints(
                             table_schema
                         ),
@@ -1146,6 +1298,12 @@ def construct_retrieval_results(
                         "table_ddl": _build_metric_ddl(content),
                         "column_names": column_names,
                         "manifest_column_names": column_names,
+                        "table_semantic_terms": _table_contract_terms(content),
+                        "column_semantic_terms": {
+                            column["name"]: _column_contract_terms(column)
+                            for column in content.get("columns", [])
+                            if column.get("name") in column_names
+                        },
                         "relationship_constraints": [],
                     }
                 )
@@ -1158,6 +1316,12 @@ def construct_retrieval_results(
                         "table_ddl": _build_view_ddl(content),
                         "column_names": column_names,
                         "manifest_column_names": column_names,
+                        "table_semantic_terms": _table_contract_terms(content),
+                        "column_semantic_terms": {
+                            column["name"]: _column_contract_terms(column)
+                            for column in content.get("columns", [])
+                            if column.get("name") in column_names
+                        },
                         "relationship_constraints": [],
                     }
                 )

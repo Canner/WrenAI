@@ -5,6 +5,21 @@ from datetime import date, timedelta
 
 import orjson
 
+from src.pipelines.generation.utils.query_intent import (
+    AGGREGATE_TERMS,
+    COUNT_AGGREGATE_TERMS,
+    COUNT_TERMS,
+    AVG_TERMS,
+    DETAIL_TERMS,
+    MAX_TERMS,
+    MIN_TERMS,
+    RANKING_TERMS,
+    QueryIntent,
+    analyze_query,
+    identifier_terms,
+    terms,
+)
+
 
 _SEMANTIC_CONTEXT_PATTERN = re.compile(
     r"WREN RETRIEVED SEMANTIC CONTEXT\s*\n(\{.*?\})\s*\n", re.DOTALL
@@ -13,7 +28,6 @@ _CREATE_TABLE_PATTERN = re.compile(
     r"CREATE\s+TABLE\s+([A-Za-z_][A-Za-z0-9_]*|\"[^\"]+\")\s*\((.*?)\)",
     re.IGNORECASE | re.DOTALL,
 )
-_WORD_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9]*")
 _IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 _STOP_TERMS = {
@@ -40,21 +54,6 @@ _STOP_TERMS = {
     "which",
     "with",
 }
-_DETAIL_TERMS = {"show", "list", "display", "find", "get"}
-_RANKING_TERMS = {"top", "bottom", "highest", "lowest", "most", "least"}
-_COUNT_TERMS = {"count", "counts", "number", "orders", "order"}
-_SUM_TERMS = {
-    "amount",
-    "cost",
-    "qty",
-    "quantity",
-    "revenue",
-    "sales",
-    "sold",
-    "sum",
-    "total",
-    "value",
-}
 _VALUE_MEASURE_TERMS = {
     "amount",
     "cost",
@@ -65,9 +64,6 @@ _VALUE_MEASURE_TERMS = {
     "sold",
     "value",
 }
-_AVG_TERMS = {"average", "avg", "mean"}
-_MIN_TERMS = {"minimum", "min", "lowest"}
-_MAX_TERMS = {"maximum", "max", "highest", "most"}
 _MONTHS = {
     month.lower(): index for index, month in enumerate(calendar.month_name) if month
 }
@@ -95,20 +91,30 @@ def generate_grounded_sql(query: str, documents: list[str]) -> str | None:
     if not query or not tables:
         return None
 
-    query_terms = _terms(query)
-    if not query_terms:
+    intent = analyze_query(query)
+    if not intent.terms:
         return None
 
-    table = max(tables, key=lambda candidate: _table_score(candidate, query_terms))
-    if _table_score(table, query_terms) <= 0:
+    candidate_tables = [
+        table
+        for table in tables
+        if _table_satisfies_requested_dimensions(table, intent)
+    ]
+    if not candidate_tables:
+        return None
+
+    table = max(
+        candidate_tables, key=lambda candidate: _table_score(candidate, intent.terms)
+    )
+    if _table_score(table, intent.terms) <= 0:
         return None
 
     filters = _build_filters(query, table)
-    aggregate_sql = _build_aggregate_sql(query, query_terms, table, filters)
+    aggregate_sql = _build_aggregate_sql(query, intent, table, filters)
     if aggregate_sql:
         return aggregate_sql
 
-    return _build_detail_sql(query, query_terms, table, filters)
+    return _build_detail_sql(query, intent.terms, table, filters)
 
 
 def _parse_table(document: str) -> _Table | None:
@@ -172,41 +178,38 @@ def _parse_table(document: str) -> _Table | None:
     )
 
 
-def _terms(value: str) -> set[str]:
-    terms = set()
-    for token in _WORD_PATTERN.findall(value or ""):
-        normalized = token.lower()
-        terms.add(normalized)
-        if normalized.endswith("ies") and len(normalized) > 4:
-            terms.add(f"{normalized[:-3]}y")
-        elif normalized.endswith("s") and len(normalized) > 3:
-            terms.add(normalized[:-1])
-    return terms
-
-
-def _identifier_terms(value: str) -> set[str]:
-    spaced = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", value or "")
-    spaced = spaced.replace("_", " ")
-    return _terms(spaced)
-
-
 def _column_terms(column: _Column) -> set[str]:
     return (
-        _identifier_terms(column.name)
-        | _terms(column.semantic_text)
-        | {term for role in column.roles for term in _identifier_terms(role)}
+        identifier_terms(column.name)
+        | terms(column.semantic_text)
+        | {term for role in column.roles for term in identifier_terms(role)}
     )
 
 
 def _table_score(table: _Table, query_terms: set[str]) -> int:
     score = len(
-        (_identifier_terms(table.name) | _terms(table.semantic_text)) & query_terms
+        (identifier_terms(table.name) | terms(table.semantic_text)) & query_terms
     )
     column_scores = sorted(
         (len(_column_terms(column) & query_terms) for column in table.columns),
         reverse=True,
     )
     return score + sum(column_scores[:6])
+
+
+def _table_satisfies_requested_dimensions(
+    table: _Table, intent: QueryIntent
+) -> bool:
+    if not intent.requests_aggregate or not intent.requested_dimension_terms:
+        return True
+
+    dimension_terms = {
+        term
+        for column in table.columns
+        if _is_dimension(column)
+        for term in _column_terms(column)
+    }
+    return bool(intent.requested_dimension_terms & dimension_terms)
 
 
 def _is_numeric(column: _Column) -> bool:
@@ -276,9 +279,7 @@ def _best_date(table: _Table, query_terms: set[str]) -> _Column | None:
 
 
 def _query_requests_aggregate(query_terms: set[str]) -> bool:
-    aggregate_terms = (
-        _RANKING_TERMS | _SUM_TERMS | _AVG_TERMS | _MIN_TERMS | _MAX_TERMS
-    )
+    aggregate_terms = (AGGREGATE_TERMS - {"order", "orders"}) | COUNT_AGGREGATE_TERMS
     return bool(query_terms & aggregate_terms) or (
         "by" in query_terms or "per" in query_terms or "compare" in query_terms
     )
@@ -287,13 +288,13 @@ def _query_requests_aggregate(query_terms: set[str]) -> bool:
 def _requested_aggregate(
     query_terms: set[str], measure: _Column | None
 ) -> tuple[str, str]:
-    if query_terms & _AVG_TERMS:
+    if query_terms & AVG_TERMS:
         return "AVG", "AverageValue"
-    if query_terms & _MIN_TERMS:
+    if query_terms & MIN_TERMS:
         return "MIN", "MinimumValue"
-    if query_terms & _COUNT_TERMS and not (query_terms & _VALUE_MEASURE_TERMS):
+    if query_terms & COUNT_TERMS and not (query_terms & _VALUE_MEASURE_TERMS):
         return "COUNT", "TotalOrders"
-    if query_terms & _MAX_TERMS and measure and not (query_terms & {"most", "top"}):
+    if query_terms & MAX_TERMS and measure and not (query_terms & {"most", "top"}):
         return "MAX", "MaximumValue"
     if measure:
         return "SUM", "TotalValue"
@@ -302,15 +303,23 @@ def _requested_aggregate(
 
 def _build_aggregate_sql(
     query: str,
-    query_terms: set[str],
+    intent: QueryIntent,
     table: _Table,
     filters: list[str],
 ) -> str | None:
+    query_terms = intent.terms
     if not _query_requests_aggregate(query_terms):
         return None
 
     dimensions = _best_columns(table, query_terms, _is_dimension, limit=2)
-    if not dimensions and not (query_terms & _COUNT_TERMS):
+    if intent.requested_dimension_terms:
+        dimension_terms = {
+            term for dimension in dimensions for term in _column_terms(dimension)
+        }
+        if not (intent.requested_dimension_terms & dimension_terms):
+            return None
+
+    if not dimensions and not (query_terms & COUNT_TERMS):
         return None
 
     measure = _best_measure(table, query_terms)
@@ -337,7 +346,7 @@ def _build_aggregate_sql(
     if dimensions:
         group_by = ", ".join(_sql_identifier(column.name) for column in dimensions)
         clauses.extend(["GROUP BY", f"  {group_by}"])
-    if query_terms & _RANKING_TERMS or "top" in query_terms or "bottom" in query_terms:
+    if query_terms & RANKING_TERMS or "top" in query_terms or "bottom" in query_terms:
         direction = "ASC" if query_terms & {"bottom", "lowest", "least"} else "DESC"
         clauses.extend(["ORDER BY", f"  {_sql_identifier(alias)} {direction}"])
         clauses.append(f"LIMIT {_top_limit(query)}")
@@ -353,7 +362,7 @@ def _build_detail_sql(
     table: _Table,
     filters: list[str],
 ) -> str | None:
-    if not filters and not (query_terms & _DETAIL_TERMS):
+    if not filters and not (query_terms & DETAIL_TERMS):
         return None
 
     selected = []
@@ -390,7 +399,7 @@ def _build_detail_sql(
 
 
 def _build_filters(query: str, table: _Table) -> list[str]:
-    query_terms = _terms(query)
+    query_terms = terms(query)
     filters: list[str] = []
 
     date_range = _date_range(query)
@@ -409,16 +418,16 @@ def _build_filters(query: str, table: _Table) -> list[str]:
 
 
 def _literal_dimension_filter(query: str, table: _Table) -> str | None:
-    if _query_requests_aggregate(_terms(query)):
+    if _query_requests_aggregate(terms(query)):
         return None
 
-    query_words = _WORD_PATTERN.findall(query or "")
+    query_words = re.findall(r"[A-Za-z][A-Za-z0-9]*", query or "")
     lowered_words = [word.lower() for word in query_words]
 
     for column in table.columns:
         if not _is_dimension(column):
             continue
-        column_terms = _identifier_terms(column.name)
+        column_terms = identifier_terms(column.name)
         for index, word in enumerate(lowered_words[:-1]):
             if word not in column_terms:
                 continue

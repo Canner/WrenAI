@@ -406,6 +406,12 @@ class AskService:
                         "relationship_constraints": document.get(
                             "relationship_constraints", []
                         ),
+                        "table_semantic_terms": document.get(
+                            "table_semantic_terms", []
+                        ),
+                        "column_semantic_terms": document.get(
+                            "column_semantic_terms", {}
+                        ),
                     }
                     for document in documents
                     if document.get("table_name")

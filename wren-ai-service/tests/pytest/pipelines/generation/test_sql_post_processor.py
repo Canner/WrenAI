@@ -380,6 +380,134 @@ async def test_sql_post_processor_rejects_aggregate_intent_without_aggregate_sha
 
 
 @pytest.mark.asyncio
+async def test_sql_post_processor_rejects_aggregate_using_wrong_business_dimension():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        [
+            (
+                '{"sql": "SELECT invoice_number, COUNT(*) AS invoice_count '
+                "FROM open_invoices GROUP BY invoice_number "
+                "ORDER BY invoice_count DESC LIMIT 10\"}"
+            )
+        ],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "open_invoices",
+                "column_names": ["invoice_number", "part_number"],
+                "column_semantic_terms": {
+                    "invoice_number": ["invoice", "number", "identifier"],
+                    "part_number": ["part", "number", "identifier"],
+                },
+            }
+        ],
+        query="Which suppliers have the highest number of invoices?",
+    )
+
+    assert engine.executed is False
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "INTENT_GROUNDING"
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_allows_aggregate_using_requested_business_dimension():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        [
+            (
+                '{"sql": "SELECT supplier_name, COUNT(*) AS invoice_count '
+                "FROM supplier_invoices GROUP BY supplier_name "
+                "ORDER BY invoice_count DESC LIMIT 10\"}"
+            )
+        ],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "supplier_invoices",
+                "column_names": ["supplier_name", "invoice_number"],
+                "column_semantic_terms": {
+                    "supplier_name": ["supplier", "name", "dimension"],
+                    "invoice_number": ["invoice", "number", "identifier"],
+                },
+            }
+        ],
+        query="Which suppliers have the highest number of invoices?",
+    )
+
+    assert engine.executed is True
+    assert result["invalid_generation_result"] == {}
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_rejects_join_without_declared_relationship():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        [
+            (
+                '{"sql": "SELECT customers.name, COUNT(*) AS order_count '
+                "FROM orders JOIN customers ON orders.customer_id = customers.id "
+                "GROUP BY customers.name\"}"
+            )
+        ],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "orders",
+                "column_names": ["customer_id"],
+                "relationship_constraints": [],
+            },
+            {
+                "table_name": "customers",
+                "column_names": ["id", "name"],
+                "relationship_constraints": [],
+            },
+        ],
+        query="orders by customer",
+    )
+
+    assert engine.executed is False
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "RELATIONSHIP_GROUNDING"
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_allows_join_with_declared_relationship():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        [
+            (
+                '{"sql": "SELECT customers.name, COUNT(*) AS order_count '
+                "FROM orders JOIN customers ON orders.customer_id = customers.id "
+                "GROUP BY customers.name\"}"
+            )
+        ],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "orders",
+                "column_names": ["customer_id"],
+                "relationship_constraints": [
+                    "FOREIGN KEY (customer_id) REFERENCES customers(id)"
+                ],
+            },
+            {
+                "table_name": "customers",
+                "column_names": ["id", "name"],
+                "relationship_constraints": [],
+            },
+        ],
+        query="orders by customer",
+    )
+
+    assert engine.executed is True
+    assert result["invalid_generation_result"] == {}
+
+
+@pytest.mark.asyncio
 async def test_sql_post_processor_allows_intent_shaped_analytical_query():
     engine = CapturingEngine()
 

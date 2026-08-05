@@ -93,6 +93,60 @@ def test_total_orders_prefers_count_even_when_numeric_measure_exists():
     assert "LIMIT 5" in sql
 
 
+def test_does_not_generate_count_ranking_when_requested_dimension_is_missing():
+    document = _schema_document(
+        "open_invoices",
+        [
+            {
+                "name": "invoice_number",
+                "data_type": "VARCHAR",
+                "comment": "Invoice number",
+                "roles": ["identifier_candidate"],
+            },
+            {
+                "name": "part_number",
+                "data_type": "VARCHAR",
+                "comment": "Part number",
+                "roles": ["identifier_candidate"],
+            },
+        ],
+    )
+
+    sql = generate_grounded_sql(
+        "Which suppliers have the highest number of invoices?", [document]
+    )
+
+    assert sql is None
+
+
+def test_aggregate_fast_path_uses_requested_business_dimension():
+    document = _schema_document(
+        "invoice_model",
+        [
+            {
+                "name": "unit_of_measure",
+                "data_type": "VARCHAR",
+                "comment": "Business unit",
+                "roles": ["dimension_candidate"],
+            },
+            {
+                "name": "invoice_number",
+                "data_type": "VARCHAR",
+                "comment": "Invoice number",
+                "roles": ["identifier_candidate"],
+            },
+        ],
+    )
+
+    sql = generate_grounded_sql(
+        "Which business units have the highest number of invoices?", [document]
+    )
+
+    assert "unit_of_measure" in sql
+    assert "COUNT(*) AS TotalOrders" in sql
+    assert "GROUP BY\n  unit_of_measure" in sql
+
+
 def test_generates_filtered_detail_sql_with_deployed_identifiers_only():
     document = _schema_document(
         "analytics_model",

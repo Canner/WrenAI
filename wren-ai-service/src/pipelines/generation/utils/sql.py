@@ -15,6 +15,7 @@ from src.core.engine import (
     Engine,
     clean_generation_result,
 )
+from src.pipelines.generation.utils.query_intent import analyze_query
 from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 from src.web.v1.services.ask import AskHistory
 
@@ -234,6 +235,176 @@ def _table_grounding_error(
         return "Generated SQL references table identifiers outside the retrieved deployed schema."
 
     return None
+
+
+def _unquote_identifier(value: str | None) -> str:
+    if not value:
+        return ""
+    value = value.strip()
+    if value.startswith('"') and value.endswith('"'):
+        return value[1:-1].replace('""', '"')
+    return value
+
+
+def _allowed_relationship_pairs(
+    schema_contracts: list[dict] | None,
+) -> set[tuple[str, str, str, str]]:
+    if not schema_contracts:
+        return set()
+
+    pairs: set[tuple[str, str, str, str]] = set()
+    relationship_pattern = re.compile(
+        r"FOREIGN\s+KEY\s*\(\s*\"?([^)\"]+)\"?\s*\)\s+REFERENCES\s+"
+        r"\"?([A-Za-z_][A-Za-z0-9_]*)\"?\s*\(\s*\"?([^)\"]+)\"?\s*\)",
+        re.IGNORECASE,
+    )
+
+    for contract in schema_contracts:
+        source_table = contract.get("table_name")
+        if not source_table:
+            continue
+        for constraint in contract.get("relationship_constraints", []) or []:
+            match = relationship_pattern.search(str(constraint))
+            if not match:
+                continue
+            source_column, target_table, target_column = (
+                _unquote_identifier(match.group(1)),
+                _unquote_identifier(match.group(2)),
+                _unquote_identifier(match.group(3)),
+            )
+            pairs.add((source_table, source_column, target_table, target_column))
+            pairs.add((target_table, target_column, source_table, source_column))
+
+    return pairs
+
+
+def _sql_alias_map(sql: str) -> dict[str, str]:
+    alias_map: dict[str, str] = {}
+    reserved_aliases = (
+        "ON|WHERE|GROUP|ORDER|HAVING|LIMIT|JOIN|LEFT|RIGHT|FULL|INNER|OUTER|CROSS"
+    )
+    table_pattern = re.compile(
+        r"\b(?:FROM|JOIN)\s+(\"[^\"]+\"|[A-Za-z_][A-Za-z0-9_]*)"
+        rf"(?:\s+(?:AS\s+)?(?!{reserved_aliases}\b)"
+        r"(\"[^\"]+\"|[A-Za-z_][A-Za-z0-9_]*))?",
+        re.IGNORECASE,
+    )
+    reserved = {
+        "ON",
+        "WHERE",
+        "GROUP",
+        "ORDER",
+        "HAVING",
+        "LIMIT",
+        "JOIN",
+        "LEFT",
+        "RIGHT",
+        "FULL",
+        "INNER",
+        "OUTER",
+        "CROSS",
+    }
+
+    for match in table_pattern.finditer(sql):
+        table_name = _unquote_identifier(match.group(1))
+        alias = _unquote_identifier(match.group(2))
+        alias_map[table_name] = table_name
+        if alias and alias.upper() not in reserved:
+            alias_map[alias] = table_name
+
+    return alias_map
+
+
+def _join_relationship_error(
+    sql: str | None, schema_contracts: list[dict] | None
+) -> str | None:
+    if not sql or not schema_contracts or not re.search(r"\bJOIN\b", sql, re.I):
+        return None
+
+    allowed_pairs = _allowed_relationship_pairs(schema_contracts)
+    if not allowed_pairs:
+        return (
+            "Generated SQL uses JOIN but the retrieved schema does not declare "
+            "a relationship path for the joined tables."
+        )
+
+    alias_map = _sql_alias_map(sql)
+    equality_pattern = re.compile(
+        r"(?:(\"[^\"]+\"|[A-Za-z_][A-Za-z0-9_]*)\.)?"
+        r"(\"[^\"]+\"|[A-Za-z_][A-Za-z0-9_]*)\s*=\s*"
+        r"(?:(\"[^\"]+\"|[A-Za-z_][A-Za-z0-9_]*)\.)?"
+        r"(\"[^\"]+\"|[A-Za-z_][A-Za-z0-9_]*)",
+        re.IGNORECASE,
+    )
+
+    for match in equality_pattern.finditer(sql):
+        left_table = alias_map.get(_unquote_identifier(match.group(1)))
+        right_table = alias_map.get(_unquote_identifier(match.group(3)))
+        if not left_table or not right_table:
+            continue
+
+        left_column = _unquote_identifier(match.group(2))
+        right_column = _unquote_identifier(match.group(4))
+        if (left_table, left_column, right_table, right_column) in allowed_pairs:
+            return None
+
+    return (
+        "Generated SQL uses a JOIN condition that is not grounded in the "
+        "relationships declared by the retrieved schema."
+    )
+
+
+def _columns_referenced_in_sql(sql: str, schema_contracts: list[dict]) -> set[str]:
+    referenced = set()
+    for contract in schema_contracts:
+        for column_name in contract.get("column_names", []) or []:
+            if not column_name:
+                continue
+            escaped = re.escape(column_name)
+            if re.search(rf'(?<![A-Za-z0-9_])"?{escaped}"?(?![A-Za-z0-9_])', sql):
+                referenced.add(column_name)
+    return referenced
+
+
+def _intent_semantic_grounding_error(
+    sql: str | None,
+    schema_contracts: list[dict] | None,
+    query: str | None,
+) -> str | None:
+    if not sql or not schema_contracts or not query:
+        return None
+
+    intent = analyze_query(query)
+    if not intent.requests_aggregate or not intent.requested_dimension_terms:
+        return None
+
+    has_semantic_terms = any(
+        contract.get("column_semantic_terms") for contract in schema_contracts
+    )
+    if not has_semantic_terms:
+        return None
+
+    referenced_columns = _columns_referenced_in_sql(sql, schema_contracts)
+    referenced_tables = set()
+    for statement in sqlparse.parse(sql):
+        referenced_tables.update(_collect_table_references(statement))
+
+    referenced_semantic_terms: set[str] = set()
+    for contract in schema_contracts:
+        if contract.get("table_name") in referenced_tables:
+            referenced_semantic_terms.update(contract.get("table_semantic_terms", []))
+
+        column_semantic_terms = contract.get("column_semantic_terms") or {}
+        for column_name in referenced_columns:
+            referenced_semantic_terms.update(column_semantic_terms.get(column_name, []))
+
+    if intent.requested_dimension_terms & referenced_semantic_terms:
+        return None
+
+    return (
+        "Generated SQL does not select, group, or order by a schema-grounded "
+        "business dimension requested by the user."
+    )
 
 
 def _sql_statement_shape_error(sql: str | None) -> str | None:
@@ -511,6 +682,20 @@ def build_executable_schema_contract(schema_contracts: list[dict] | None) -> str
                 f"- {constraint}" for constraint in relationship_constraints
             )
 
+        table_semantic_terms = [
+            term for term in contract.get("table_semantic_terms", []) if term
+        ]
+        if table_semantic_terms:
+            sections.append("TABLE_SEMANTIC_TERMS_NOT_IDENTIFIERS:")
+            sections.append("- " + ", ".join(table_semantic_terms[:50]))
+
+        column_semantic_terms = contract.get("column_semantic_terms") or {}
+        if column_semantic_terms:
+            sections.append("COLUMN_SEMANTIC_TERMS_NOT_IDENTIFIERS:")
+            for column_name, terms in column_semantic_terms.items():
+                if column_name and terms:
+                    sections.append(f"- {column_name}: {', '.join(terms[:30])}")
+
     return "\n".join(sections)
 
 
@@ -578,6 +763,21 @@ class SQLGenPostProcessor:
                     },
                 }
 
+            join_relationship_error = _join_relationship_error(
+                cleaned_generation_result, schema_contracts
+            )
+            if join_relationship_error:
+                return {
+                    "valid_generation_result": {},
+                    "invalid_generation_result": {
+                        "sql": cleaned_generation_result,
+                        "original_sql": cleaned_generation_result,
+                        "type": "RELATIONSHIP_GROUNDING",
+                        "error": join_relationship_error,
+                        "correlation_id": "",
+                    },
+                }
+
             wildcard_error = _select_wildcard_error(cleaned_generation_result)
             if wildcard_error:
                 return {
@@ -603,6 +803,23 @@ class SQLGenPostProcessor:
                         "original_sql": cleaned_generation_result,
                         "type": "SQL_VALUE_GROUNDING",
                         "error": literal_filter_error,
+                        "correlation_id": "",
+                    },
+                }
+
+            intent_grounding_error = _intent_semantic_grounding_error(
+                cleaned_generation_result,
+                schema_contracts=schema_contracts,
+                query=query,
+            )
+            if intent_grounding_error:
+                return {
+                    "valid_generation_result": {},
+                    "invalid_generation_result": {
+                        "sql": cleaned_generation_result,
+                        "original_sql": cleaned_generation_result,
+                        "type": "INTENT_GROUNDING",
+                        "error": intent_grounding_error,
                         "correlation_id": "",
                     },
                 }
