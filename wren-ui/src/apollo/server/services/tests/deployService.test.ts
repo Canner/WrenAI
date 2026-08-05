@@ -317,9 +317,11 @@ describe('DeployService', () => {
     const oldDate = new Date(Date.now() - 11 * 60 * 1000);
     mockDeployLogRepository.findInProgressProjectDeployLog.mockResolvedValue({
       id: 122,
+      hash: 'deploy-hash',
       status: DeployStatusEnum.IN_PROGRESS,
       updatedAt: oldDate,
     });
+    mockWrenAIAdaptor.getDeployStatus.mockRejectedValue(new Error('not found'));
 
     const deployment = await deployService.getInProgressDeployment(1);
 
@@ -330,6 +332,42 @@ describe('DeployService', () => {
     });
   });
 
+  it('should mark in-progress deployment successful when ai-service already finished it', async () => {
+    mockDeployLogRepository.findInProgressProjectDeployLog.mockResolvedValue({
+      id: 122,
+      hash: 'deploy-hash',
+      status: DeployStatusEnum.IN_PROGRESS,
+      updatedAt: new Date(),
+    });
+    mockWrenAIAdaptor.getDeployStatus.mockResolvedValue('FINISHED');
+
+    const deployment = await deployService.getInProgressDeployment(1);
+
+    expect(deployment).toBeNull();
+    expect(mockDeployLogRepository.updateOne).toHaveBeenCalledWith(122, {
+      status: DeployStatusEnum.SUCCESS,
+      error: undefined,
+    });
+  });
+
+  it('should mark in-progress deployment failed when ai-service reports failure', async () => {
+    mockDeployLogRepository.findInProgressProjectDeployLog.mockResolvedValue({
+      id: 122,
+      hash: 'deploy-hash',
+      status: DeployStatusEnum.IN_PROGRESS,
+      updatedAt: new Date(),
+    });
+    mockWrenAIAdaptor.getDeployStatus.mockResolvedValue('FAILED');
+
+    const deployment = await deployService.getInProgressDeployment(1);
+
+    expect(deployment).toBeNull();
+    expect(mockDeployLogRepository.updateOne).toHaveBeenCalledWith(122, {
+      status: DeployStatusEnum.FAILED,
+      error: 'AI service reported deployment failed.',
+    });
+  });
+
   it('should clear previous in-progress deployment before creating a new one', async () => {
     const manifest = { key: 'value' };
     const projectId = 1;
@@ -337,6 +375,7 @@ describe('DeployService', () => {
     mockDeployLogRepository.findLastProjectDeployLog.mockResolvedValue(null);
     mockDeployLogRepository.findInProgressProjectDeployLog.mockResolvedValue({
       id: 122,
+      hash: 'other-deploy-hash',
       status: DeployStatusEnum.IN_PROGRESS,
       updatedAt: new Date(),
     });
@@ -351,6 +390,40 @@ describe('DeployService', () => {
       error: 'Deployment was superseded by a new deployment.',
     });
     expect(mockDeployLogRepository.updateOne).toHaveBeenCalledWith(123, {
+      status: DeployStatusEnum.SUCCESS,
+      error: undefined,
+    });
+  });
+
+  it('should wait for an existing in-progress deployment with the same hash', async () => {
+    const manifest = { key: 'value' };
+    const projectId = 1;
+    const hash = deployService.createMDLHash(manifest, projectId);
+
+    mockDeployLogRepository.findLastProjectDeployLog.mockResolvedValue(null);
+    mockDeployLogRepository.findInProgressProjectDeployLog.mockResolvedValue({
+      id: 122,
+      hash,
+      status: DeployStatusEnum.IN_PROGRESS,
+      updatedAt: new Date(),
+    });
+    mockWrenAIAdaptor.getDeployStatus
+      .mockResolvedValueOnce('INDEXING')
+      .mockResolvedValueOnce('FINISHED');
+    deployService = new DeployService({
+      telemetry: mockTelemetry,
+      wrenAIAdaptor: mockWrenAIAdaptor,
+      deployLogRepository: mockDeployLogRepository,
+      deploymentPollingIntervalMs: 0,
+      deploymentMaxAttempts: 3,
+    });
+
+    const response = await deployService.deploy(manifest, projectId);
+
+    expect(response.status).toEqual(DeployStatusEnum.SUCCESS);
+    expect(response.hash).toEqual(hash);
+    expect(mockWrenAIAdaptor.deploy).not.toHaveBeenCalled();
+    expect(mockDeployLogRepository.updateOne).toHaveBeenCalledWith(122, {
       status: DeployStatusEnum.SUCCESS,
       error: undefined,
     });

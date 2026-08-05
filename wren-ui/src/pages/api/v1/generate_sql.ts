@@ -71,9 +71,6 @@ export default async function handler(
     }
     const deployId = await deployService.ensureDeploymentPrepared(project.id);
 
-    // get current project's prepared deployment
-    const deployId = await deployService.ensureDeploymentPrepared(project.id);
-
     // ask AI service to generate SQL
     const histories = threadId
       ? await apiHistoryRepository.findAllBy({ threadId })

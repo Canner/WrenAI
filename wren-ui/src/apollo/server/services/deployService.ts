@@ -191,6 +191,31 @@ export class DeployService implements IDeployService {
       return null;
     }
 
+    try {
+      const status = await this.wrenAIAdaptor.getDeployStatus(
+        inProgressDeploy.hash,
+        projectId,
+      );
+      if (status === WrenAISystemStatus.FINISHED) {
+        await this.deployLogRepository.updateOne(inProgressDeploy.id, {
+          status: DeployStatusEnum.SUCCESS,
+          error: undefined,
+        });
+        return null;
+      }
+      if (status === WrenAISystemStatus.FAILED) {
+        await this.markDeploymentFailed(
+          inProgressDeploy,
+          'AI service reported deployment failed.',
+        );
+        return null;
+      }
+    } catch (err: any) {
+      logger.warn(
+        `Unable to verify in-progress deployment ${inProgressDeploy.hash}: ${err.message}`,
+      );
+    }
+
     const updatedAt = inProgressDeploy.updatedAt || inProgressDeploy.createdAt;
     const updatedAtTime = updatedAt ? new Date(updatedAt).getTime() : 0;
     if (updatedAtTime > 0 && Date.now() - updatedAtTime > STALE_DEPLOYMENT_MS) {
@@ -239,6 +264,30 @@ export class DeployService implements IDeployService {
       const previousInProgressDeploy =
         await this.deployLogRepository.findInProgressProjectDeployLog(projectId);
       if (previousInProgressDeploy) {
+        if (previousInProgressDeploy.hash === hash) {
+          logger.warn(
+            `Deployment ${hash} is already in progress; waiting for the existing deployment.`,
+          );
+          const isReady = await this.waitForDeploymentReady(hash, projectId);
+          if (isReady) {
+            await this.deployLogRepository.updateOne(previousInProgressDeploy.id, {
+              status: DeployStatusEnum.SUCCESS,
+              error: undefined,
+            });
+            return { status: DeployStatusEnum.SUCCESS, hash };
+          }
+
+          await this.markDeploymentFailed(
+            previousInProgressDeploy,
+            `Deployment ${hash} did not finish indexing before timeout.`,
+          );
+          return {
+            status: DeployStatusEnum.FAILED,
+            error: `Deployment ${hash} did not finish indexing before timeout.`,
+            hash,
+          };
+        }
+
         await this.markDeploymentFailed(
           previousInProgressDeploy,
           'Deployment was superseded by a new deployment.',
