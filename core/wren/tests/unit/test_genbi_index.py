@@ -208,7 +208,7 @@ def test_get_app_skips_non_dict_entry(tmp_path: Path) -> None:
 
 
 def test_register_app_replaces_non_dict_entry(tmp_path: Path) -> None:
-    from wren.genbi.index import register_app, save_index
+    from wren.genbi.index import load_index, register_app, save_index
 
     project = _make_project(tmp_path, with_app="bad")
     save_index(
@@ -220,6 +220,7 @@ def test_register_app_replaces_non_dict_entry(tmp_path: Path) -> None:
     assert entry["data_mode"] == "snapshot"
     assert entry["source"] == "apps/bad"
     assert entry["status"] == "scaffolded"
+    assert load_index(project)["apps"]["bad"] == entry
 
 
 def test_update_app_rejects_missing_and_non_dict(tmp_path: Path) -> None:
@@ -270,5 +271,6 @@ def test_list_skips_non_dict_entries(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     assert "good" in result.output
     assert "snapshot" in result.output
+    assert "bad" not in result.output
     # Must not traceback; bad entry is skipped (lenient listing).
     assert "Traceback" not in result.output
