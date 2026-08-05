@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { Button } from 'antd';
 import styled from 'styled-components';
 import { Path } from '@/utils/enum';
-import { DiscordIcon, GithubIcon } from '@/utils/icons';
+import { DiscordIcon, GithubIcon, SparklesIcon } from '@/utils/icons';
 import SettingOutlined from '@ant-design/icons/SettingOutlined';
 import Home, { Props as HomeSidebarProps } from './Home';
 import Modeling, { Props as ModelingSidebarProps } from './Modeling';
@@ -38,6 +38,34 @@ const StyledButton = styled(Button)`
   &:focus {
     background-color: var(--gray-4);
   }
+`;
+
+const CloudCTA = styled(Link)`
+  display: block;
+  margin: 12px 12px 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--geekblue-3);
+  border-radius: 8px;
+  background-color: var(--geekblue-1);
+  color: var(--gray-8);
+  transition:
+    background-color 0.3s,
+    border-color 0.3s;
+
+  &:hover,
+  &:focus {
+    background-color: var(--geekblue-2);
+    border-color: var(--geekblue-4);
+    color: var(--gray-8);
+  }
+`;
+
+const CloudCTATitle = styled.div`
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--geekblue-6);
 `;
 
 type Props = (ModelingSidebarProps | HomeSidebarProps) & {
@@ -87,6 +115,21 @@ export default function Sidebar(props: Props) {
     <Layout className="d-flex flex-column">
       <DynamicSidebar {...props} pathname={router.pathname} />
       <LearningSection />
+      <CloudCTA
+        href="https://cloud.getwren.ai/?utm_campaign=383986378-OSS"
+        target="_blank"
+        rel="noopener noreferrer"
+        data-ph-capture="true"
+        data-ph-capture-attribute-name="cta_go_to_cloud"
+      >
+        <CloudCTATitle>
+          <SparklesIcon className="mr-2" style={{ width: 16 }} />
+          Upgrade to Wren AI Cloud
+        </CloudCTATitle>
+        <div className="text-xs gray-8 mt-1">
+          Team collaboration, hosted deployment, and API access
+        </div>
+      </CloudCTA>
       <div className="border-t border-gray-4 pt-2">
         <StyledButton type="text" block onClick={onSettingsClick}>
           <SettingOutlined className="text-md" />
