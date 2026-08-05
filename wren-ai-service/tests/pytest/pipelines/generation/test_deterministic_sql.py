@@ -93,6 +93,87 @@ def test_total_orders_prefers_count_even_when_numeric_measure_exists():
     assert "LIMIT 5" in sql
 
 
+def test_exact_table_count_ranking_uses_requested_column_without_llm():
+    requested_document = _schema_document(
+        "synthetic_SourceModel",
+        [
+            {
+                "name": "CustName",
+                "data_type": "VARCHAR",
+                "comment": "Customer name",
+                "roles": ["dimension_candidate"],
+            },
+            {
+                "name": "OrderNumber",
+                "data_type": "VARCHAR",
+                "comment": "Order identifier",
+                "roles": ["identifier_candidate"],
+            },
+        ],
+    )
+    noisy_document = _schema_document(
+        "synthetic_xStageSourceModel_Test",
+        [
+            {
+                "name": "CustName",
+                "data_type": "VARCHAR",
+                "comment": "Customer name",
+                "roles": ["dimension_candidate"],
+            },
+            {
+                "name": "Quantity",
+                "data_type": "INTEGER",
+                "comment": "Quantity",
+                "roles": ["numeric_measure_candidate"],
+            },
+        ],
+    )
+
+    sql = generate_grounded_sql(
+        (
+            "From synthetic_SourceModel, show the top 5 customers "
+            "by order count using CustName."
+        ),
+        [noisy_document, requested_document],
+    )
+
+    assert "FROM\n  synthetic_SourceModel" in sql
+    assert "CustName" in sql
+    assert "COUNT(*) AS TotalOrders" in sql
+    assert "LIMIT 5" in sql
+    assert "synthetic_xStageSourceModel_Test" not in sql
+
+
+def test_monthly_count_uses_date_trunc_on_requested_date_column():
+    document = _schema_document(
+        "synthetic_EventModel",
+        [
+            {
+                "name": "LiquidationDate",
+                "data_type": "DATE",
+                "comment": "Liquidation date",
+                "roles": ["date_time_candidate"],
+            },
+            {
+                "name": "RecordId",
+                "data_type": "VARCHAR",
+                "comment": "Record identifier",
+                "roles": ["identifier_candidate"],
+            },
+        ],
+    )
+
+    sql = generate_grounded_sql(
+        "Show monthly record count by LiquidationDate in synthetic_EventModel",
+        [document],
+    )
+
+    assert "FROM\n  synthetic_EventModel" in sql
+    assert "DATE_TRUNC('month', LiquidationDate) AS Month" in sql
+    assert "COUNT(*) AS TotalCount" in sql
+    assert "GROUP BY\n  DATE_TRUNC('month', LiquidationDate)" in sql
+
+
 def test_does_not_generate_count_ranking_when_requested_dimension_is_missing():
     document = _schema_document(
         "open_invoices",
@@ -143,7 +224,7 @@ def test_aggregate_fast_path_uses_requested_business_dimension():
     )
 
     assert "unit_of_measure" in sql
-    assert "COUNT(*) AS TotalOrders" in sql
+    assert "COUNT(*) AS TotalCount" in sql
     assert "GROUP BY\n  unit_of_measure" in sql
 
 

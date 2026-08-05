@@ -3,6 +3,10 @@ from dataclasses import dataclass
 
 
 WORD_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9]*")
+SOURCE_TABLE_PATTERN = re.compile(
+    r"\b(?:from|in)\s+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?)",
+    re.IGNORECASE,
+)
 
 STOP_TERMS = {
     "a",
@@ -30,7 +34,9 @@ STOP_TERMS = {
     "their",
     "this",
     "to",
+    "using",
     "with",
+    "monthly",
 }
 
 DETAIL_TERMS = {"display", "find", "get", "list", "show"}
@@ -119,6 +125,9 @@ def terms(value: str) -> set[str]:
     normalized_terms: set[str] = set()
     for token in WORD_PATTERN.findall(value or ""):
         normalized_terms.update(normalize_term(token))
+        spaced_token = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", token)
+        for split_token in WORD_PATTERN.findall(spaced_token):
+            normalized_terms.update(normalize_term(split_token))
     return normalized_terms
 
 
@@ -155,6 +164,36 @@ def analyze_query(query: str) -> QueryIntent:
     )
 
 
+def explicit_table_name_candidates(query: str) -> set[str]:
+    candidates: set[str] = set()
+    for match in SOURCE_TABLE_PATTERN.finditer(query or ""):
+        identifier = match.group(1).strip(".,;:()[]{}\"'")
+        if not _looks_like_table_identifier(identifier):
+            continue
+        normalized = identifier.replace(".", "_")
+        candidates.add(identifier)
+        candidates.add(normalized)
+        candidates.add(identifier.split(".")[-1])
+
+    return {candidate for candidate in candidates if candidate}
+
+
+def _looks_like_table_identifier(identifier: str) -> bool:
+    if not identifier:
+        return False
+    if "." in identifier or "_" in identifier:
+        return True
+    return bool(re.search(r"[a-z][A-Z]", identifier))
+
+
+def explicit_table_terms(query: str) -> set[str]:
+    return {
+        term
+        for candidate in explicit_table_name_candidates(query)
+        for term in (identifier_terms(candidate) | terms(candidate))
+    }
+
+
 def semantic_terms(value: str) -> set[str]:
     return {
         term
@@ -168,6 +207,15 @@ def _requested_dimension_terms(query: str) -> set[str]:
     normalized_tokens = [canonical_term(token) for token in raw_tokens]
     requested: set[str] = set()
 
+    def add_requested(raw_token: str, token: str) -> None:
+        if _is_business_dimension_term(token):
+            requested.add(token)
+            requested.update(
+                term
+                for term in identifier_terms(raw_token)
+                if _is_business_dimension_term(term)
+            )
+
     first_aggregate_index = next(
         (
             index
@@ -177,34 +225,36 @@ def _requested_dimension_terms(query: str) -> set[str]:
         len(normalized_tokens),
     )
 
-    for token in normalized_tokens[:first_aggregate_index]:
-        if _is_business_dimension_term(token):
-            requested.add(token)
+    for index, token in enumerate(normalized_tokens[:first_aggregate_index]):
+        add_requested(raw_tokens[index], token)
 
     for index, token in enumerate(normalized_tokens):
-        if token not in {"by", "per"} and not (
+        if token not in {"by", "per", "using"} and not (
             token == "each" and index > 0 and normalized_tokens[index - 1] == "for"
         ):
             continue
 
-        for following in normalized_tokens[index + 1 :]:
+        for following_index, following in enumerate(
+            normalized_tokens[index + 1 :], start=index + 1
+        ):
             if following in AGGREGATE_TERMS:
                 break
             if following in STOP_TERMS:
                 continue
-            if _is_business_dimension_term(following):
-                requested.add(following)
+            add_requested(raw_tokens[following_index], following)
 
-    return requested
+    return requested - explicit_table_terms(query)
 
 
 def _business_terms(query: str) -> set[str]:
+    table_terms = explicit_table_terms(query)
     return {
         token
         for token in (
             canonical_term(token) for token in WORD_PATTERN.findall(query or "")
         )
         if _is_business_dimension_term(token) and token not in RELATIONSHIP_TERMS
+        and token not in table_terms
     }
 
 

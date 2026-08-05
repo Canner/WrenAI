@@ -16,6 +16,7 @@ from src.pipelines.generation.utils.query_intent import (
     RANKING_TERMS,
     QueryIntent,
     analyze_query,
+    explicit_table_name_candidates,
     identifier_terms,
     terms,
 )
@@ -100,13 +101,18 @@ def generate_grounded_sql(query: str, documents: list[str]) -> str | None:
         for table in tables
         if _table_satisfies_requested_dimensions(table, intent)
     ]
+    explicit_tables = _explicit_table_matches(query, candidate_tables)
+    if explicit_tables:
+        candidate_tables = explicit_tables
+
     if not candidate_tables:
         return None
 
     table = max(
-        candidate_tables, key=lambda candidate: _table_score(candidate, intent.terms)
+        candidate_tables,
+        key=lambda candidate: _table_score(candidate, intent.terms, query=query),
     )
-    if _table_score(table, intent.terms) <= 0:
+    if _table_score(table, intent.terms, query=query) <= 0:
         return None
 
     filters = _build_filters(query, table)
@@ -186,10 +192,24 @@ def _column_terms(column: _Column) -> set[str]:
     )
 
 
-def _table_score(table: _Table, query_terms: set[str]) -> int:
+def _explicit_table_matches(query: str, tables: list[_Table]) -> list[_Table]:
+    requested_names = {
+        name.lower() for name in explicit_table_name_candidates(query)
+    }
+    if not requested_names:
+        return []
+
+    return [table for table in tables if table.name.lower() in requested_names]
+
+
+def _table_score(table: _Table, query_terms: set[str], query: str = "") -> int:
     score = len(
         (identifier_terms(table.name) | terms(table.semantic_text)) & query_terms
     )
+    if table.name.lower() in {
+        name.lower() for name in explicit_table_name_candidates(query)
+    }:
+        score += 100
     column_scores = sorted(
         (len(_column_terms(column) & query_terms) for column in table.columns),
         reverse=True,
@@ -206,7 +226,7 @@ def _table_satisfies_requested_dimensions(
     dimension_terms = {
         term
         for column in table.columns
-        if _is_dimension(column)
+        if _is_dimension(column) or _is_datetime(column)
         for term in _column_terms(column)
     }
     return bool(intent.requested_dimension_terms & dimension_terms)
@@ -256,8 +276,44 @@ def _best_columns(
             scored.append((score, column))
     return [
         column
-        for _, column in sorted(scored, key=lambda item: item[0], reverse=True)[:limit]
+        for _, column in sorted(
+            scored,
+            key=lambda item: (
+                item[0],
+                -len(_column_terms(item[1]) - query_terms),
+                -len(item[1].name),
+            ),
+            reverse=True,
+        )[:limit]
     ]
+
+
+def _requested_dimension_columns(
+    table: _Table,
+    intent: QueryIntent,
+    *,
+    limit: int = 2,
+) -> list[_Column]:
+    query_terms = intent.terms
+    candidates = _best_columns(table, query_terms, _is_dimension, limit=8)
+    if not candidates:
+        return []
+
+    selected: list[_Column] = []
+    covered_terms: set[str] = set()
+    requested_terms = intent.requested_dimension_terms or query_terms
+    for column in candidates:
+        coverage = _column_terms(column) & requested_terms
+        if not coverage:
+            continue
+        if coverage <= covered_terms:
+            continue
+        selected.append(column)
+        covered_terms.update(coverage)
+        if len(selected) >= limit:
+            break
+
+    return selected or candidates[:1]
 
 
 def _best_measure(table: _Table, query_terms: set[str]) -> _Column | None:
@@ -293,7 +349,8 @@ def _requested_aggregate(
     if query_terms & MIN_TERMS:
         return "MIN", "MinimumValue"
     if query_terms & COUNT_TERMS and not (query_terms & _VALUE_MEASURE_TERMS):
-        return "COUNT", "TotalOrders"
+        alias = "TotalOrders" if query_terms & {"order", "orders"} else "TotalCount"
+        return "COUNT", alias
     if query_terms & MAX_TERMS and measure and not (query_terms & {"most", "top"}):
         return "MAX", "MaximumValue"
     if measure:
@@ -311,7 +368,14 @@ def _build_aggregate_sql(
     if not _query_requests_aggregate(query_terms):
         return None
 
-    dimensions = _best_columns(table, query_terms, _is_dimension, limit=2)
+    dimensions = _requested_dimension_columns(table, intent, limit=2)
+    date_dimension = _date_group_dimension(query, table)
+    if date_dimension:
+        dimensions = [
+            dimension for dimension in dimensions if dimension != date_dimension
+        ]
+        dimensions.insert(0, date_dimension)
+
     if intent.requested_dimension_terms:
         dimension_terms = {
             term for dimension in dimensions for term in _column_terms(dimension)
@@ -333,7 +397,9 @@ def _build_aggregate_sql(
     else:
         return None
 
-    select_items = [_sql_identifier(column.name) for column in dimensions]
+    select_items = [
+        _dimension_select_expression(query, column) for column in dimensions
+    ]
     select_items.append(aggregate_expression)
     clauses = [
         "SELECT",
@@ -344,7 +410,9 @@ def _build_aggregate_sql(
     if filters:
         clauses.extend(["WHERE", "  " + "\n  AND ".join(filters)])
     if dimensions:
-        group_by = ", ".join(_sql_identifier(column.name) for column in dimensions)
+        group_by = ", ".join(
+            _dimension_group_expression(query, column) for column in dimensions
+        )
         clauses.extend(["GROUP BY", f"  {group_by}"])
     if query_terms & RANKING_TERMS or "top" in query_terms or "bottom" in query_terms:
         direction = "ASC" if query_terms & {"bottom", "lowest", "least"} else "DESC"
@@ -354,6 +422,28 @@ def _build_aggregate_sql(
         clauses.append(f"LIMIT {_top_limit(query)}")
 
     return "\n".join(clauses)
+
+
+def _date_group_dimension(query: str, table: _Table) -> _Column | None:
+    query_terms = terms(query)
+    if not (query_terms & {"month", "monthly"}):
+        return None
+
+    return _best_date(table, query_terms)
+
+
+def _dimension_select_expression(query: str, column: _Column) -> str:
+    if _is_datetime(column) and terms(query) & {"month", "monthly"}:
+        return f"DATE_TRUNC('month', {_sql_identifier(column.name)}) AS Month"
+
+    return _sql_identifier(column.name)
+
+
+def _dimension_group_expression(query: str, column: _Column) -> str:
+    if _is_datetime(column) and terms(query) & {"month", "monthly"}:
+        return f"DATE_TRUNC('month', {_sql_identifier(column.name)})"
+
+    return _sql_identifier(column.name)
 
 
 def _build_detail_sql(

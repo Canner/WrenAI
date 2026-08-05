@@ -983,6 +983,107 @@ async def test_relationship_table_retrieval_prefers_connected_business_metadata(
 
 
 @pytest.mark.asyncio
+async def test_table_retrieval_filters_to_explicit_source_table():
+    requested_model = "synthetic_SourceModel"
+
+    class Retriever:
+        async def run(self, query_embedding, filters):
+            return {
+                "documents": [
+                    Document(
+                        content=str(
+                            {
+                                "name": "synthetic_xStageSourceModel_Test",
+                                "resource_type": "MODEL",
+                                "description": "staging test copy",
+                                "columns": "customer_name, quantity",
+                            }
+                        ),
+                        meta={
+                            "type": "TABLE_DESCRIPTION",
+                            "name": "synthetic_xStageSourceModel_Test",
+                        },
+                    ),
+                    Document(
+                        content=str(
+                            {
+                                "name": requested_model,
+                                "resource_type": "MODEL",
+                                "description": "curated requested records",
+                                "columns": "customer_name, record_id",
+                            }
+                        ),
+                        meta={"type": "TABLE_DESCRIPTION", "name": requested_model},
+                    ),
+                ]
+            }
+
+    result = await table_retrieval(
+        embedding={"embedding": [0.2]},
+        project_id="project-1",
+        tables=[],
+        table_retriever=Retriever(),
+        query=(
+            "From synthetic_SourceModel, show top customers by record count "
+            "using customer_name."
+        ),
+    )
+
+    assert [document.meta["name"] for document in result["documents"]] == [
+        requested_model
+    ]
+
+
+@pytest.mark.asyncio
+async def test_table_retrieval_penalizes_stage_and_test_candidates():
+    curated_model = "modeled_activity"
+    technical_model = "synthetic_xStageActivity_Test"
+
+    class Retriever:
+        async def run(self, query_embedding, filters):
+            return {
+                "documents": [
+                    Document(
+                        content=str(
+                            {
+                                "name": technical_model,
+                                "resource_type": "MODEL",
+                                "description": "activity rows",
+                                "columns": "activity_name, quantity",
+                                "source": "warehouse.xStageActivity_Test",
+                            }
+                        ),
+                        meta={"type": "TABLE_DESCRIPTION", "name": technical_model},
+                    ),
+                    Document(
+                        content=str(
+                            {
+                                "name": curated_model,
+                                "resource_type": "MODEL",
+                                "description": "curated activity analytics",
+                                "columns": "activity_name, quantity",
+                            }
+                        ),
+                        meta={"type": "TABLE_DESCRIPTION", "name": curated_model},
+                    ),
+                ]
+            }
+
+    result = await table_retrieval(
+        embedding={"embedding": [0.2]},
+        project_id="project-1",
+        tables=[],
+        table_retriever=Retriever(),
+        query="show total quantity by activity",
+    )
+
+    assert [document.meta["name"] for document in result["documents"]] == [
+        curated_model,
+        technical_model,
+    ]
+
+
+@pytest.mark.asyncio
 async def test_dbschema_retrieval_uses_semantic_schema_hits_when_table_retrieval_misses():
     semantic_model = "semantic_dataset"
 

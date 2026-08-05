@@ -52,6 +52,10 @@ _TIME_QUERY_PATTERN = re.compile(
 _DATE_LITERAL_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2})?$")
 
 _BROAD_TABLE_PREVIEW_COLUMN_THRESHOLD = 8
+_DERIVED_TABLE_PREVIEW_PATTERN = re.compile(
+    r"\bFROM\s*\(\s*SELECT\s+(.*?)\s+FROM\s+",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 def _is_timeout_error(error_message: str) -> bool:
@@ -618,6 +622,14 @@ def _table_preview_shape_error(sql: str | None, query: str | None = None) -> str
 
     query_has_shape = bool(query and _ANALYTICAL_OR_FILTER_QUERY_PATTERN.search(query))
     query_has_aggregate_shape = bool(query and _AGGREGATE_QUERY_PATTERN.search(query))
+
+    for match in _DERIVED_TABLE_PREVIEW_PATTERN.finditer(sql):
+        inner_select = match.group(1)
+        if inner_select.count(",") + 1 >= _BROAD_TABLE_PREVIEW_COLUMN_THRESHOLD:
+            return (
+                "Generated SQL builds from a broad derived table preview; query "
+                "the exact deployed columns needed for the answer directly."
+            )
 
     for statement in sqlparse.parse(sql):
         if not str(statement).strip().strip(";").strip():

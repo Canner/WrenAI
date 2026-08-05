@@ -349,6 +349,47 @@ async def test_sql_post_processor_rejects_broad_preview_with_placeholder_filter(
 
 
 @pytest.mark.asyncio
+async def test_sql_post_processor_rejects_broad_derived_table_preview():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        [
+            (
+                '{"sql": "SELECT category_col, SUM(quantity_col) AS total_value '
+                "FROM (SELECT col_1, col_2, col_3, col_4, col_5, col_6, "
+                "col_7, col_8, col_9, category_col, quantity_col "
+                "FROM model_alpha) AS preview_source "
+                'GROUP BY category_col"}'
+            )
+        ],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "model_alpha",
+                "column_names": [
+                    "col_1",
+                    "col_2",
+                    "col_3",
+                    "col_4",
+                    "col_5",
+                    "col_6",
+                    "col_7",
+                    "col_8",
+                    "col_9",
+                    "category_col",
+                    "quantity_col",
+                ],
+            }
+        ],
+        query="show total quantity by category",
+    )
+
+    assert engine.executed is False
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "SQL_SHAPE"
+
+
+@pytest.mark.asyncio
 async def test_sql_post_processor_rejects_aggregate_intent_without_aggregate_shape():
     engine = CapturingEngine()
 

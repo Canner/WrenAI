@@ -22,7 +22,11 @@ from src.pipelines.common import (
     clean_up_new_lines,
     get_engine_supported_data_type,
 )
-from src.pipelines.generation.utils.query_intent import analyze_query, identifier_terms
+from src.pipelines.generation.utils.query_intent import (
+    analyze_query,
+    explicit_table_name_candidates,
+    identifier_terms,
+)
 from src.utils import trace_cost
 from src.web.v1.services.ask import AskHistory
 
@@ -142,9 +146,30 @@ _MAX_SQL_GENERATION_COLUMNS_PER_TABLE = 16
 _MAX_SQL_GENERATION_ROLE_COLUMNS = 4
 _TECHNICAL_OBJECT_PATTERN = re.compile(
     r"(^|[_\s.-])(raw|stage|staging|stg|tmp|temp|backup|archive|load|etl|landing|"
-    r"snapshot|technical|system|audit)([_\s.-]|$)",
+    r"snapshot|technical|system|audit|test|empty|sample|demo)([_\s.-]|$)",
     re.I,
 )
+_TECHNICAL_OBJECT_TERMS = {
+    "archive",
+    "audit",
+    "backup",
+    "demo",
+    "empty",
+    "etl",
+    "landing",
+    "load",
+    "raw",
+    "sample",
+    "snapshot",
+    "stage",
+    "staging",
+    "stg",
+    "system",
+    "technical",
+    "temp",
+    "test",
+    "tmp",
+}
 
 _DATE_TIME_TYPE_TERMS = {
     "date",
@@ -271,16 +296,29 @@ def _object_type_priority(content: dict, query: str) -> int:
     return 0
 
 
-def _technical_object_penalty(content: dict) -> int:
+def _is_explicit_table_match(table_name: str, query: str) -> bool:
+    requested_names = {
+        name.lower() for name in explicit_table_name_candidates(query)
+    }
+    return bool(table_name and table_name.lower() in requested_names)
+
+
+def _technical_object_penalty(content: dict, query: str = "") -> int:
     name = str(content.get("name", "") or "")
+    if _is_explicit_table_match(name, query):
+        return 0
+
     source = str(content.get("source", "") or "")
     resource_type = str(content.get("resource_type", "") or "").upper()
+    object_terms = identifier_terms(f"{name} {source}")
     penalty = 0
 
     if _TECHNICAL_OBJECT_PATTERN.search(name):
         penalty += 8
     if _TECHNICAL_OBJECT_PATTERN.search(source):
         penalty += 4
+    if technical_terms := object_terms & _TECHNICAL_OBJECT_TERMS:
+        penalty += 6 * len(technical_terms)
     if resource_type not in {"METRIC", "VIEW", "MODEL"}:
         penalty += 2
 
@@ -299,6 +337,8 @@ def _semantic_document_score(content: dict, query: str) -> int:
     requested_dimension_terms = intent.requested_dimension_terms
 
     score = 0
+    if _is_explicit_table_match(str(content.get("name", "") or ""), query):
+        score += 100
     score += 6 * len(query_terms & name_terms)
     score += 3 * len(query_terms & semantic_terms)
     score += 5 * len(requested_dimension_terms & semantic_terms)
@@ -307,7 +347,7 @@ def _semantic_document_score(content: dict, query: str) -> int:
         score += 6 * len(query_terms & relationship_terms)
         score += 5 * len(intent.business_terms & relationship_terms)
     score += _object_type_priority(content, query)
-    score -= _technical_object_penalty(content)
+    score -= _technical_object_penalty(content, query=query)
     return score
 
 
@@ -328,6 +368,8 @@ def _schema_document_score(document: Document, query: str) -> int:
     relationship_terms = _normalize_terms(_relationship_semantic_text(content))
 
     score = 0
+    if _is_explicit_table_match(table_name, query):
+        score += 100
     score += 6 * len(query_terms & table_terms)
     score += 3 * len(query_terms & schema_terms)
     score += 5 * len(intent.business_terms & schema_terms)
@@ -336,6 +378,32 @@ def _schema_document_score(document: Document, query: str) -> int:
         score += 7 * len(query_terms & relationship_terms)
         score += 6 * len(intent.business_terms & relationship_terms)
     return score
+
+
+def _document_table_description_name(document: Document) -> str:
+    try:
+        content = ast.literal_eval(document.content)
+    except Exception:
+        return document.meta.get("name", "")
+
+    return str(content.get("name") or document.meta.get("name", "") or "")
+
+
+def _filter_explicit_table_documents(
+    documents: list[Document], query: str
+) -> list[Document]:
+    requested_names = {
+        name.lower() for name in explicit_table_name_candidates(query)
+    }
+    if not requested_names:
+        return documents
+
+    exact_documents = [
+        document
+        for document in documents
+        if _document_table_description_name(document).lower() in requested_names
+    ]
+    return exact_documents or documents
 
 
 def _rerank_table_description_documents(
@@ -1005,8 +1073,11 @@ async def table_retrieval(
             query_embedding=embedding.get("embedding"),
             filters=filters,
         )
-        result["documents"] = _rerank_table_description_documents(
+        ranked_documents = _rerank_table_description_documents(
             result.get("documents", []), query=query
+        )
+        result["documents"] = _filter_explicit_table_documents(
+            ranked_documents, query=query
         )
         return result
 
