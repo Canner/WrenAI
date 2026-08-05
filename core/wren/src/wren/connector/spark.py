@@ -1,17 +1,7 @@
 import pyarrow as pa
 
-from wren.connector.base import ConnectorABC, strip_trailing_semicolon
+from wren.connector.base import ConnectorABC, coerce_limit, strip_trailing_semicolon
 from wren.model import SparkConnectionInfo
-
-
-def _coerce_limit(limit: int | None) -> int | None:
-    """Validate and coerce a user-supplied ``limit`` to a non-negative ``int``."""
-    if limit is None:
-        return None
-    coerced = int(limit)
-    if coerced < 0:
-        raise ValueError(f"limit must be non-negative, got {coerced}")
-    return coerced
 
 
 class SparkConnector(ConnectorABC):
@@ -36,7 +26,7 @@ class SparkConnector(ConnectorABC):
         # CollectLimit into the plan (server-side). Avoid post-Arrow slice and
         # SQL subquery wraps — both unnecessary on the DataFrame API and the
         # latter breaks SHOW/DESCRIBE-style statements.
-        coerced = _coerce_limit(limit)
+        coerced = coerce_limit(limit)
         frame = self.connection.sql(strip_trailing_semicolon(sql))
         if coerced is not None:
             frame = frame.limit(coerced)

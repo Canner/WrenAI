@@ -19,9 +19,11 @@ def _make_mock_connector() -> tuple[SparkConnector, MagicMock]:
 
 def test_query_strips_trailing_semicolon_before_sql() -> None:
     connector, session = _make_mock_connector()
-    session.sql.return_value.toPandas.return_value = pd.DataFrame({"x": [1, 2, 3]})
+    frame = session.sql.return_value
+    frame.toPandas.return_value = pd.DataFrame({"x": [1, 2, 3]})
     connector.query("SELECT 1;")
     session.sql.assert_called_once_with("SELECT 1")
+    frame.limit.assert_not_called()
 
 
 def test_query_limit_uses_dataframe_limit_before_to_pandas() -> None:
