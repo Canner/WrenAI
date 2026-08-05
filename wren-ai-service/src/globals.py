@@ -221,6 +221,9 @@ def create_service_container(
                     **pipe_components["relationship_recommendation"],
                 )
             },
+            generation_timeout_seconds=(
+                settings.relationship_recommendation_timeout_seconds
+            ),
             **query_cache,
         ),
         question_recommendation=services.QuestionRecommendation(

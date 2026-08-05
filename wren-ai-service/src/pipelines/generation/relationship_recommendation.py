@@ -68,7 +68,7 @@ Here is the relationship specification for my data model:
 {{models}}
 
 **Please analyze these models and suggest optimizations for their relationships.**
-Take into account best practices in database design, opportunities for normalization, indexing strategies, and any additional relationships that could improve data integrity and enhance query performance.
+Suggest only relationship definitions between the provided models. Do not suggest indexes, normalization changes, new models, new columns, or relationships that require fields not present in the provided model payload.
 
 Use this for the relationship name and reason based on the localization language: {{language}}
 """

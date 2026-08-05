@@ -214,6 +214,12 @@ def test_getitem_not_found(relationship_recommendation_service):
     assert "not found" in response.error.message
 
 
+def test_default_relationship_generation_timeout_is_long_running_safe(
+    relationship_recommendation_service,
+):
+    assert relationship_recommendation_service._generation_timeout_seconds == 180.0
+
+
 @pytest.mark.asyncio
 async def test_recommend_timeout_fails_without_relationship_suggestions(
     mock_pipeline, mdl_with_project_relationship_candidate

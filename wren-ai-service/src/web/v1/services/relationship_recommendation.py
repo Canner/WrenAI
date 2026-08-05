@@ -36,7 +36,7 @@ class RelationshipRecommendation:
         pipelines: Dict[str, BasicPipeline],
         maxsize: int = 1_000_000,
         ttl: int = 120,
-        generation_timeout_seconds: int = 45,
+        generation_timeout_seconds: float = 180.0,
     ):
         self._pipelines = pipelines
         self._cache: Dict[str, RelationshipRecommendation.Resource] = TTLCache(
