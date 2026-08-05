@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import sys
+from html import escape
 from typing import Any, Optional
 
 from hamilton import base
@@ -15,6 +16,8 @@ from src.utils import trace_cost
 from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
+
+_MAX_ROWS_IN_DETERMINISTIC_ANSWER = 10
 
 sql_to_answer_system_prompt = """
 ### TASK
@@ -150,6 +153,30 @@ class SQLAnswer(BasicPipeline):
             except TimeoutError:
                 break
 
+    def _enqueue_deterministic_answer(self, query_id: str, answer: str) -> None:
+        if query_id not in self._user_queues:
+            self._user_queues[query_id] = asyncio.Queue()
+
+        self._user_queues[query_id].put_nowait(answer)
+        self._user_queues[query_id].put_nowait("<DONE>")
+
+    def _build_deterministic_answer(self, query: str, sql_data: dict) -> str:
+        row_records = sql_data.get("row_records") or _build_row_records(sql_data)
+        columns = _column_names(sql_data)
+        if not row_records:
+            return "No matching records were returned for this question."
+
+        visible_rows = row_records[:_MAX_ROWS_IN_DETERMINISTIC_ANSWER]
+        prefix = _answer_prefix(query, row_records)
+        table = _markdown_table(columns, visible_rows)
+        suffix = ""
+        if len(row_records) > len(visible_rows):
+            suffix = (
+                f"\n\nShowing {len(visible_rows)} of {len(row_records)} returned rows."
+            )
+
+        return f"{prefix}\n\n{table}{suffix}"
+
     @observe(name="SQL Answer Generation")
     async def run(
         self,
@@ -162,6 +189,16 @@ class SQLAnswer(BasicPipeline):
         custom_instruction: Optional[str] = None,
     ) -> dict:
         logger.info("Sql_Answer Generation pipeline is running...")
+        deterministic_answer = self._build_deterministic_answer(query, sql_data or {})
+        if query_id:
+            self._enqueue_deterministic_answer(query_id, deterministic_answer)
+            return {
+                "generate_answer": (
+                    {"replies": [deterministic_answer], "metadata": []},
+                    self._components["generator_name"],
+                )
+            }
+
         return await self._pipe.execute(
             ["generate_answer"],
             inputs={
@@ -175,3 +212,70 @@ class SQLAnswer(BasicPipeline):
                 **self._components,
             },
         )
+
+
+def _column_names(sql_data: dict) -> list[str]:
+    return [
+        column.get("name", "") if isinstance(column, dict) else str(column)
+        for column in sql_data.get("columns", []) or []
+        if column
+    ]
+
+
+def _build_row_records(sql_data: dict) -> list[dict]:
+    columns = _column_names(sql_data)
+    rows = sql_data.get("data", []) or []
+    records = []
+    for row in rows:
+        if isinstance(row, dict):
+            records.append({column: row.get(column) for column in columns})
+            continue
+        if not isinstance(row, (list, tuple)):
+            row = [row]
+        records.append(
+            {
+                column: row[index] if index < len(row) else None
+                for index, column in enumerate(columns)
+            }
+        )
+    return records
+
+
+def _answer_prefix(query: str, row_records: list[dict]) -> str:
+    if len(row_records) == 1:
+        return "I found 1 matching record."
+    if _looks_analytical_result(row_records):
+        return f"I found {len(row_records)} summarized results for this question."
+    return f"I found {len(row_records)} matching records."
+
+
+def _looks_analytical_result(row_records: list[dict]) -> bool:
+    if not row_records:
+        return False
+    first_row = row_records[0]
+    return any(isinstance(value, (int, float)) for value in first_row.values()) and len(
+        first_row
+    ) <= 4
+
+
+def _markdown_table(columns: list[str], rows: list[dict]) -> str:
+    if not columns and rows:
+        columns = list(rows[0].keys())
+    if not columns:
+        return ""
+
+    header = "| " + " | ".join(_format_cell(column) for column in columns) + " |"
+    separator = "| " + " | ".join("---" for _ in columns) + " |"
+    body = [
+        "| "
+        + " | ".join(_format_cell(row.get(column)) for column in columns)
+        + " |"
+        for row in rows
+    ]
+    return "\n".join([header, separator, *body])
+
+
+def _format_cell(value: Any) -> str:
+    if value is None:
+        return ""
+    return escape(str(value)).replace("|", "\\|")

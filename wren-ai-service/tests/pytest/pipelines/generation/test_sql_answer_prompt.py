@@ -1,6 +1,12 @@
 from haystack.components.builders.prompt_builder import PromptBuilder
 
-from src.pipelines.generation.sql_answer import prompt, sql_to_answer_user_prompt_template
+import pytest
+
+from src.pipelines.generation.sql_answer import (
+    SQLAnswer,
+    prompt,
+    sql_to_answer_user_prompt_template,
+)
 
 
 def test_sql_answer_prompt_uses_column_mapped_result_rows():
@@ -32,3 +38,74 @@ def test_sql_answer_prompt_uses_column_mapped_result_rows():
     assert "supplier_name" in generated_prompt
     assert "Supplier 1" in generated_prompt
     assert "rows: [[" not in generated_prompt
+
+
+@pytest.mark.asyncio
+async def test_sql_answer_streams_deterministic_empty_result_without_llm():
+    class FailingProvider:
+        def get_generator(self, **_):
+            async def _generator(**__):
+                raise AssertionError("LLM generator should not be needed")
+
+            return _generator
+
+        def get_model(self):
+            return "test-model"
+
+    pipeline = SQLAnswer(FailingProvider())
+    result = await pipeline.run(
+        query="Find invoices linked to purchase order PO1001.",
+        sql="SELECT invoice_number FROM invoices WHERE po = 'PO1001'",
+        sql_data={
+            "columns": [{"name": "invoice_number", "type": "varchar"}],
+            "data": [],
+            "row_records": [],
+        },
+        language="English",
+        query_id="answer-task",
+    )
+
+    chunks = []
+    async for chunk in pipeline.get_streaming_results("answer-task"):
+        chunks.append(chunk)
+
+    assert "No matching records were returned" in "".join(chunks)
+    assert "No matching records were returned" in result["generate_answer"][0]["replies"][0]
+
+
+@pytest.mark.asyncio
+async def test_sql_answer_streams_deterministic_table_result_without_llm():
+    class FailingProvider:
+        def get_generator(self, **_):
+            async def _generator(**__):
+                raise AssertionError("LLM generator should not be needed")
+
+            return _generator
+
+        def get_model(self):
+            return "test-model"
+
+    pipeline = SQLAnswer(FailingProvider())
+    await pipeline.run(
+        query="show all the active users",
+        sql="SELECT username, name FROM users WHERE status = 'active'",
+        sql_data={
+            "columns": [
+                {"name": "username", "type": "varchar"},
+                {"name": "name", "type": "varchar"},
+            ],
+            "data": [["jdoe", "Jane Doe"]],
+            "row_records": [{"username": "jdoe", "name": "Jane Doe"}],
+        },
+        language="English",
+        query_id="answer-table-task",
+    )
+
+    chunks = []
+    async for chunk in pipeline.get_streaming_results("answer-table-task"):
+        chunks.append(chunk)
+
+    answer = "".join(chunks)
+    assert "I found 1 matching record" in answer
+    assert "| username | name |" in answer
+    assert "| jdoe | Jane Doe |" in answer
