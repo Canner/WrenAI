@@ -654,10 +654,18 @@ export default function Modeling() {
         throw new Error(ASSISTANT_CANCELLED);
       }
       const payload = res.data?.[fieldName];
+      if (!payload) {
+        throw new Error(
+          'AI assistant result is unavailable. Restart the services and run the assistant again.',
+        );
+      }
       const status = String(payload?.status || '').toLowerCase();
       if (status === 'finished') return payload.response || [];
       if (status === 'failed') {
         throw new Error(payload.error?.message || 'AI assistant failed.');
+      }
+      if (!status) {
+        throw new Error('AI assistant returned an invalid status.');
       }
       await new Promise((resolve) =>
         setTimeout(resolve, ASSISTANT_POLL_INTERVAL_MS),
