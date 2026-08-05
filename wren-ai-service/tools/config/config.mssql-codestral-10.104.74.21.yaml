@@ -171,6 +171,10 @@ settings:
   enable_column_pruning: true
   max_sql_correction_retries: 2
   sql_generation_timeout_seconds: 45
+  semantics_description_timeout_seconds: 180
+  semantics_description_max_models_per_batch: 4
+  semantics_description_max_columns_per_batch: 80
+  semantics_description_max_concurrent_tasks: 8
   query_cache_maxsize: 1000
   query_cache_ttl: 3600
   langfuse_host: https://cloud.langfuse.com

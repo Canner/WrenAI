@@ -279,7 +279,7 @@ async def test_batch_processing_with_multiple_models(
     assert [len(chunk["selected_models"]) for chunk in chunks] == [1, 1, 1]
 
 
-def test_batch_processing_keeps_each_model_in_its_own_prompt(
+def test_batch_processing_groups_models_by_configured_batch_size(
     service: SemanticsDescription,
 ):
     service["test_id"] = SemanticsDescription.Resource(id="test_id")
@@ -292,13 +292,11 @@ def test_batch_processing_keeps_each_model_in_its_own_prompt(
 
     chunks = service._chunking(orjson.loads(request.mdl), request, chunk_size=2)
 
-    assert len(chunks) == 4
-    assert [len(chunk["selected_models"]) for chunk in chunks] == [1, 1, 1, 1]
-    assert [chunk["selected_models"][0] for chunk in chunks] == [
-        "model1",
-        "model2",
-        "model3",
-        "model4",
+    assert len(chunks) == 2
+    assert [len(chunk["selected_models"]) for chunk in chunks] == [2, 2]
+    assert [chunk["selected_models"] for chunk in chunks] == [
+        ["model1", "model2"],
+        ["model3", "model4"],
     ]
 
 

@@ -26,6 +26,10 @@ def test_settings_default_values():
         assert settings.allow_sql_generation_reasoning is False
         assert settings.max_sql_correction_retries == 1
         assert settings.semantic_overlay_path == ""
+        assert settings.semantics_description_timeout_seconds == 120
+        assert settings.semantics_description_max_models_per_batch == 1
+        assert settings.semantics_description_max_columns_per_batch == 40
+        assert settings.semantics_description_max_concurrent_tasks == 4
 
         assert settings.config_path == "config.yaml"
 

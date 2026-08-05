@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     max_histories: int = Field(default=5)
     max_sql_correction_retries: int = Field(default=1)
     sql_generation_timeout_seconds: float = Field(default=45.0)
+    semantics_description_timeout_seconds: int = Field(default=120)
+    semantics_description_max_models_per_batch: int = Field(default=1)
+    semantics_description_max_columns_per_batch: int = Field(default=40)
+    semantics_description_max_concurrent_tasks: int = Field(default=4)
 
     # engine config
     engine_timeout: float = Field(default=30.0)
