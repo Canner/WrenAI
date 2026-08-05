@@ -1,6 +1,7 @@
 import pytest
 
 from src.web.v1.services.semantics_preparation import (
+    SEMANTICS_PREPARATION_STATUS_TTL_SECONDS,
     SemanticsPreparationService,
     SemanticsPreparationStatusRequest,
     SemanticsPreparationStatusResponse,
@@ -15,6 +16,14 @@ class CountPipeline:
     async def count_documents(self, project_id=None, mdl_hash=None):
         self.calls.append({"project_id": project_id, "mdl_hash": mdl_hash})
         return self.count
+
+
+def test_prepare_semantics_status_cache_lasts_longer_than_deploy_polling_window():
+    service = SemanticsPreparationService({})
+
+    assert service._prepare_semantics_statuses.ttl == (
+        SEMANTICS_PREPARATION_STATUS_TTL_SECONDS
+    )
 
 
 @pytest.mark.asyncio

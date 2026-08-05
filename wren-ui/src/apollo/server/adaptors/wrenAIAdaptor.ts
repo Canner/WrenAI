@@ -919,6 +919,10 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
           params: projectId ? { project_id: projectId.toString() } : undefined,
         },
       );
+      const status = res.data?.status?.toUpperCase() as WrenAISystemStatus;
+      if (status === WrenAISystemStatus.FAILED) {
+        return status;
+      }
       if (res.data.error) {
         const error =
           typeof res.data.error === 'string'
@@ -926,7 +930,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
             : res.data.error.message || JSON.stringify(res.data.error);
         throw new Error(error);
       }
-      return res.data?.status.toUpperCase() as WrenAISystemStatus;
+      return status;
     } catch (err: any) {
       logger.debug(
         `Got error in API /v1/semantics-preparations/${deployId}/status: ${err.message}`,
