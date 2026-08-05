@@ -21,6 +21,8 @@ const logger = getLogger('DeployService');
 logger.level = 'debug';
 
 const STALE_DEPLOYMENT_MS = 10 * 60 * 1000;
+const DEFAULT_DEPLOY_STATUS_POLLING_INTERVAL_MS = 2000;
+const DEFAULT_DEPLOY_STATUS_MAX_ATTEMPTS = 90;
 
 export interface DeployResponse {
   status: DeployStatusEnum;
@@ -55,19 +57,27 @@ export class DeployService implements IDeployService {
   private wrenAIAdaptor: IWrenAIAdaptor;
   private deployLogRepository: IDeployLogRepository;
   private telemetry: PostHogTelemetry;
+  private deploymentPollingIntervalMs: number;
+  private deploymentMaxAttempts: number;
 
   constructor({
     wrenAIAdaptor,
     deployLogRepository,
     telemetry,
+    deploymentPollingIntervalMs = DEFAULT_DEPLOY_STATUS_POLLING_INTERVAL_MS,
+    deploymentMaxAttempts = DEFAULT_DEPLOY_STATUS_MAX_ATTEMPTS,
   }: {
     wrenAIAdaptor: IWrenAIAdaptor;
     deployLogRepository: IDeployLogRepository;
     telemetry: PostHogTelemetry;
+    deploymentPollingIntervalMs?: number;
+    deploymentMaxAttempts?: number;
   }) {
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.deployLogRepository = deployLogRepository;
     this.telemetry = telemetry;
+    this.deploymentPollingIntervalMs = deploymentPollingIntervalMs;
+    this.deploymentMaxAttempts = deploymentMaxAttempts;
   }
 
   public async getLastDeployment(projectId) {
@@ -88,20 +98,40 @@ export class DeployService implements IDeployService {
     const activeHash = this.createMDLHash(lastDeploy.manifest, projectId);
 
     if (lastDeploy.hash === activeHash) {
+      let status: WrenAISystemStatus | null = null;
       try {
-        const status = await this.wrenAIAdaptor.getDeployStatus(
+        status = await this.wrenAIAdaptor.getDeployStatus(
           activeHash,
           projectId,
-        );
-        if (status === WrenAISystemStatus.FINISHED) {
-          return activeHash;
-        }
-        logger.warn(
-          `Deployment ${activeHash} is not ready in AI service: ${status}`,
         );
       } catch (err: any) {
         logger.warn(
           `Deployment ${activeHash} is not available in AI service: ${err.message}`,
+        );
+      }
+
+      if (status === WrenAISystemStatus.FINISHED) {
+        return activeHash;
+      }
+      if (status === WrenAISystemStatus.INDEXING) {
+        logger.warn(
+          `Deployment ${activeHash} is already indexing in AI service; waiting for it to finish instead of starting another deployment.`,
+        );
+        const isReady = await this.waitForDeploymentReady(
+          activeHash,
+          projectId,
+          status,
+        );
+        if (isReady) {
+          return activeHash;
+        }
+        throw new Error(
+          `Deployment ${activeHash} did not finish indexing before timeout.`,
+        );
+      }
+      if (status) {
+        logger.warn(
+          `Deployment ${activeHash} is not ready in AI service: ${status}`,
         );
       }
     } else {
@@ -119,6 +149,38 @@ export class DeployService implements IDeployService {
     }
 
     return result.hash || activeHash;
+  }
+
+  private async waitForDeploymentReady(
+    hash: string,
+    projectId: number,
+    initialStatus?: WrenAISystemStatus,
+  ): Promise<boolean> {
+    let status = initialStatus;
+    for (let attempt = 1; attempt <= this.deploymentMaxAttempts; attempt++) {
+      if (!status || attempt > 1) {
+        status = await this.wrenAIAdaptor.getDeployStatus(hash, projectId);
+      }
+
+      logger.debug(
+        `Deployment ${hash} status while waiting: ${status}, attempt: ${attempt}/${this.deploymentMaxAttempts}`,
+      );
+
+      if (status === WrenAISystemStatus.FINISHED) {
+        return true;
+      }
+      if (status === WrenAISystemStatus.FAILED) {
+        return false;
+      }
+
+      if (attempt < this.deploymentMaxAttempts) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, this.deploymentPollingIntervalMs),
+        );
+      }
+    }
+
+    return false;
   }
 
   public async getInProgressDeployment(projectId) {

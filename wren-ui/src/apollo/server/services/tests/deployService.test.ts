@@ -109,18 +109,69 @@ describe('DeployService', () => {
   });
 
   it('should return the deployment hash when ai-service already has the exact deployment prepared', async () => {
+    const manifest = { key: 'value' };
+    const hash = deployService.createMDLHash(manifest, 1);
     mockDeployLogRepository.findLastProjectDeployLog.mockResolvedValue({
-      hash: 'deploy-hash',
-      manifest: { key: 'value' },
+      hash,
+      manifest,
     });
     mockWrenAIAdaptor.getDeployStatus.mockResolvedValue('FINISHED');
 
-    const hash = await deployService.ensureDeploymentPrepared(1);
+    const preparedHash = await deployService.ensureDeploymentPrepared(1);
 
-    expect(hash).toEqual('deploy-hash');
+    expect(preparedHash).toEqual(hash);
     expect(mockWrenAIAdaptor.getDeployStatus).toHaveBeenCalledWith(
-      'deploy-hash',
+      hash,
       1,
+    );
+    expect(mockWrenAIAdaptor.deploy).not.toHaveBeenCalled();
+  });
+
+  it('should wait for an existing ai-service indexing deployment instead of redeploying it', async () => {
+    const manifest = { key: 'value' };
+    const hash = deployService.createMDLHash(manifest, 1);
+    mockDeployLogRepository.findLastProjectDeployLog.mockResolvedValue({
+      id: 123,
+      hash,
+      manifest,
+    });
+    mockWrenAIAdaptor.getDeployStatus
+      .mockResolvedValueOnce('INDEXING')
+      .mockResolvedValueOnce('FINISHED');
+    deployService = new DeployService({
+      telemetry: mockTelemetry,
+      wrenAIAdaptor: mockWrenAIAdaptor,
+      deployLogRepository: mockDeployLogRepository,
+      deploymentPollingIntervalMs: 0,
+      deploymentMaxAttempts: 3,
+    });
+
+    const preparedHash = await deployService.ensureDeploymentPrepared(1);
+
+    expect(preparedHash).toEqual(hash);
+    expect(mockWrenAIAdaptor.getDeployStatus).toHaveBeenCalledTimes(2);
+    expect(mockWrenAIAdaptor.deploy).not.toHaveBeenCalled();
+  });
+
+  it('should fail instead of redeploying when an existing ai-service indexing deployment times out', async () => {
+    const manifest = { key: 'value' };
+    const hash = deployService.createMDLHash(manifest, 1);
+    mockDeployLogRepository.findLastProjectDeployLog.mockResolvedValue({
+      id: 123,
+      hash,
+      manifest,
+    });
+    mockWrenAIAdaptor.getDeployStatus.mockResolvedValue('INDEXING');
+    deployService = new DeployService({
+      telemetry: mockTelemetry,
+      wrenAIAdaptor: mockWrenAIAdaptor,
+      deployLogRepository: mockDeployLogRepository,
+      deploymentPollingIntervalMs: 0,
+      deploymentMaxAttempts: 2,
+    });
+
+    await expect(deployService.ensureDeploymentPrepared(1)).rejects.toThrow(
+      'did not finish indexing before timeout',
     );
     expect(mockWrenAIAdaptor.deploy).not.toHaveBeenCalled();
   });
