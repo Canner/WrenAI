@@ -3,6 +3,8 @@ from haystack import Document
 
 from src.pipelines.generation.intent_classification import (
     dbschema_retrieval,
+    post_process,
+    should_force_text_to_sql_intent,
     table_retrieval,
 )
 
@@ -36,6 +38,40 @@ async def test_intent_table_retrieval_scopes_to_deployed_mdl_hash():
             {"field": "mdl_hash", "operator": "==", "value": "deploy-1"},
         ],
     }
+
+
+def test_intent_override_keeps_data_questions_in_text_to_sql():
+    assert should_force_text_to_sql_intent(
+        "show orders placed from the country france",
+        "GENERAL",
+        ["table: orders"],
+    )
+
+
+def test_intent_override_does_not_force_user_guide_questions():
+    assert not should_force_text_to_sql_intent(
+        "How do I draw a chart?",
+        "GENERAL",
+        ["table: orders"],
+    )
+
+
+def test_intent_post_process_overrides_general_for_data_question():
+    result = post_process(
+        {
+            "replies": [
+                (
+                    '{"rephrased_question":"show orders placed from the country france",'
+                    '"reasoning":"asks for database records",'
+                    '"results":"GENERAL"}'
+                )
+            ]
+        },
+        ["table: orders"],
+        "show orders placed from the country france",
+    )
+
+    assert result["intent"] == "TEXT_TO_SQL"
 
 
 @pytest.mark.asyncio

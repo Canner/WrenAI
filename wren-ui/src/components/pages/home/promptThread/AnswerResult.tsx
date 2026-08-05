@@ -25,6 +25,7 @@ import ChartAnswer from '@/components/pages/home/promptThread/ChartAnswer';
 import Preparation from '@/components/pages/home/preparation';
 import {
   AskingTaskStatus,
+  AskingTaskType,
   ChartTaskStatus,
   ThreadResponse,
   ThreadResponseAnswerDetail,
@@ -253,8 +254,12 @@ export default function AnswerResult(props: Props) {
     return answerDetail === null && !isEmpty(breakdownDetail);
   }, [answerDetail, breakdownDetail]);
   const isAnswerPrepared = !!answerDetail?.queryId || !!answerDetail?.status;
+  const isTextToSqlResponse = askingTask?.type === AskingTaskType.TEXT_TO_SQL;
+  const hasDisplaySql =
+    !!sql || !!askingTask?.invalidSql || !!adjustmentTask?.invalidSql;
   const showTextOnlyAnswer =
     isAnswerPrepared &&
+    !isTextToSqlResponse &&
     !sql &&
     !view &&
     !isBreakdownOnly &&
@@ -306,6 +311,7 @@ export default function AnswerResult(props: Props) {
   const onTabClick = (activeKey: string) => {
     if (
       activeKey === ANSWER_TAB_KEYS.CHART &&
+      !!threadResponse.sql &&
       !threadResponse.chartDetail &&
       !isChartGenerationActive(threadResponse.chartDetail?.status)
     ) {
@@ -314,10 +320,11 @@ export default function AnswerResult(props: Props) {
   };
 
   const showAnswerTabs =
-    !showTextOnlyAnswer &&
-    (askingTask?.status === AskingTaskStatus.FINISHED ||
-      isAnswerPrepared ||
-      isBreakdownOnly);
+    (!showTextOnlyAnswer &&
+      (askingTask?.status === AskingTaskStatus.FINISHED ||
+        isAnswerPrepared ||
+        isBreakdownOnly)) ||
+    (isTextToSqlResponse && hasDisplaySql);
 
   const rephrasedQuestion =
     threadResponse?.askingTask?.rephrasedQuestion || question;
@@ -381,6 +388,7 @@ export default function AnswerResult(props: Props) {
             </Tabs.TabPane>
             <Tabs.TabPane
               key="chart"
+              disabled={!sql}
               tab={
                 <div className="select-none">
                   <PieChartFilled className="mr-2" />
@@ -393,45 +401,47 @@ export default function AnswerResult(props: Props) {
               <ChartAnswer {...props} />
             </Tabs.TabPane>
           </StyledTabs>
-          <div className="mt-2 d-flex align-center">
-            <Tooltip
-              overlayInnerStyle={{ width: 'max-content' }}
-              placement="topLeft"
-              title={knowledgeTooltip}
-            >
-              <Button
-                type="link"
-                size="small"
-                className="mr-2"
+          {!!sql && (
+            <div className="mt-2 d-flex align-center">
+              <Tooltip
+                overlayInnerStyle={{ width: 'max-content' }}
+                placement="topLeft"
+                title={knowledgeTooltip}
+              >
+                <Button
+                  type="link"
+                  size="small"
+                  className="mr-2"
+                  onClick={() =>
+                    onOpenSaveToKnowledgeModal(
+                      {
+                        question: rephrasedQuestion,
+                        sql,
+                      },
+                      { isCreateMode: true },
+                    )
+                  }
+                  data-guideid="save-to-knowledge"
+                >
+                  <div className="d-flex align-center">
+                    <RobotSVG className="mr-2" />
+                    Save to knowledge
+                  </div>
+                </Button>
+              </Tooltip>
+              <ViewBlock
+                view={view}
                 onClick={() =>
-                  onOpenSaveToKnowledgeModal(
+                  onOpenSaveAsViewModal(
+                    { sql, responseId: id },
                     {
-                      question: rephrasedQuestion,
-                      sql,
+                      rephrasedQuestion: questionForSaveAsView,
                     },
-                    { isCreateMode: true },
                   )
                 }
-                data-guideid="save-to-knowledge"
-              >
-                <div className="d-flex align-center">
-                  <RobotSVG className="mr-2" />
-                  Save to knowledge
-                </div>
-              </Button>
-            </Tooltip>
-            <ViewBlock
-              view={view}
-              onClick={() =>
-                onOpenSaveAsViewModal(
-                  { sql, responseId: id },
-                  {
-                    rephrasedQuestion: questionForSaveAsView,
-                  },
-                )
-              }
-            />
-          </div>
+              />
+            </div>
+          )}
           {renderRecommendedQuestions(
             isLastThreadResponse,
             recommendedQuestionProps,
