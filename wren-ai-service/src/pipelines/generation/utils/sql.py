@@ -1185,6 +1185,7 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - Use row counting for record or entity volume questions when no numeric business measure is requested. Use numeric measures only when the question asks for a value, amount, quantity, rate, cost, or other declared measure.
 - For analytical questions, return dimensions plus the requested measure expression or metric field. Do not return a raw table preview.
 - For aggregate, ranking, grouped, or trend questions, produce an analytical query shape.
+- For "highest", "lowest", "top", "bottom", "most", "least", or "contributed" questions about a named value, amount, sales, cost, revenue, quantity, or numeric measure, group by the requested contributing dimension, aggregate the exact requested measure with SUM unless another aggregation is explicitly requested, order by that selected aggregate alias in the requested direction, and return only the requested ranked rows. Do not use AVG, subtraction, margin, cost, percentage, or another derived metric unless the user explicitly asks for that metric.
 - For comparison questions, include each requested comparison group or time period and compute the requested difference, change, growth, or ranking when the required fields are grounded.
 - Do not answer a comparison question with only one comparison side, one period, or one group unless the user explicitly asks for only that side.
 - For detail-list questions, return only the fields needed to identify and describe the requested records, plus requested filters and timeframes.
@@ -1216,6 +1217,7 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - For metric-style requests, expose the requested dimensions and measure expressions or metric fields instead of returning raw table columns.
 - Put aggregate expressions in SELECT or HAVING, not WHERE.
 - For ranking requests, order by a selected column or selected aggregate alias and use LIMIT when the user requests a limit.
+- For contribution ranking requests, use SUM of the requested numeric measure by the contributing dimension, not AVG or a different derived metric, unless the user explicitly asks for that aggregation or metric.
 - For timeframe requests, apply a bounded predicate only when an exact date/time field and required date operation are supported by the retrieved context.
 - Output aliases may label result expressions, but aliases are not source identifiers.
 - Do not use connector-specific syntax such as SELECT TOP, square brackets, backticks, INTERVAL, unsupported date formatting, or unsupported statistical functions.

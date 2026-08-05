@@ -38,6 +38,9 @@ def test_sql_generation_system_prompt_requires_retrieved_semantic_authority():
     assert "Metadata role labels are never SQL identifiers" in prompt
     assert "Do not answer a timeframe request with an unfiltered table scan" in prompt
     assert "produce an analytical query shape" in prompt
+    assert "contributed" in prompt
+    assert "aggregate the exact requested measure with SUM" in prompt
+    assert "Do not use AVG, subtraction, margin" in prompt
     assert "Never output template SQL" in prompt
     assert "contains no placeholders or template parts" in prompt
     assert "complete executable SQL query string" in prompt
@@ -115,6 +118,7 @@ def test_sql_generation_prompt_includes_executable_schema_contract():
     assert "Generate an intent-shaped query, not a table preview" in built_prompt
     assert "filter an actual declared column" in built_prompt
     assert "aggregate actual declared measure columns" in built_prompt
+    assert "aggregate the exact requested measure with SUM" in built_prompt
     assert "Metadata role labels are not executable column names" in built_prompt
     assert "Never return template SQL" in built_prompt
     assert "Copy user-provided filter values exactly" in built_prompt
@@ -134,6 +138,7 @@ def test_followup_sql_generation_prompt_requires_intent_shaped_query():
 
     assert "Generate an intent-shaped query, not a table preview" in result["prompt"]
     assert "Never return template SQL" in result["prompt"]
+    assert "aggregate the exact requested measure with SUM" in result["prompt"]
     assert "not automatic datasets to merge" in result["prompt"]
     assert "Do not use UNION, UNION ALL, INTERSECT, or EXCEPT" in result["prompt"]
 
@@ -156,6 +161,7 @@ def test_sql_correction_prompt_keeps_failed_sql_diagnostic_and_question():
     assert "DIAGNOSTIC CONTEXT" in built_prompt
     assert "Correct into an intent-shaped query, not a table preview" in built_prompt
     assert "rebuild the query shape from the user's question" in built_prompt
+    assert "Do not preserve AVG, subtraction, margin" in built_prompt
     assert "Never return template SQL" in built_prompt
     assert "not automatic datasets to merge" in built_prompt
     assert "Do not use UNION, UNION ALL, INTERSECT, or EXCEPT" in built_prompt
@@ -209,6 +215,7 @@ def test_sql_regeneration_prompt_includes_executable_schema_contract():
     assert "Regenerate an intent-shaped query, not a table preview" in built_prompt
     assert "filter an actual declared time/date column" in built_prompt
     assert "Do not write role labels" in built_prompt
+    assert "aggregate the exact requested measure with SUM" in built_prompt
     assert "Never return template SQL" in built_prompt
     assert "not automatic datasets to merge" in built_prompt
     assert "Do not use UNION, UNION ALL, INTERSECT, or EXCEPT" in built_prompt
