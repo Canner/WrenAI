@@ -39,6 +39,7 @@ export interface IDeployService {
     manifest: Manifest,
     projectId: number,
     force?: boolean,
+    waitForCompletion?: boolean,
   ): Promise<DeployResponse>;
   getLastDeployment(projectId: number): Promise<Deploy>;
   ensureDeploymentPrepared(projectId: number): Promise<string>;
@@ -140,7 +141,7 @@ export class DeployService implements IDeployService {
       );
     }
 
-    const result = await this.deploy(lastDeploy.manifest, projectId);
+    const result = await this.deploy(lastDeploy.manifest, projectId, false, true);
     if (result.status !== DeployStatusEnum.SUCCESS) {
       throw new Error(
         result.error ||
@@ -236,7 +237,12 @@ export class DeployService implements IDeployService {
     return inProgressDeploy;
   }
 
-  public async deploy(manifest, projectId, force = false) {
+  public async deploy(
+    manifest,
+    projectId,
+    force = false,
+    waitForCompletion = true,
+  ) {
     const eventName = TelemetryEvent.MODELING_DEPLOY_MDL;
     let deploy: Deploy | null = null;
     try {
@@ -272,12 +278,12 @@ export class DeployService implements IDeployService {
         await this.deployLogRepository.findInProgressProjectDeployLog(projectId);
       if (previousInProgressDeploy) {
         if (previousInProgressDeploy.hash === hash) {
-          logger.warn(
-            `Deployment ${hash} is already in progress; waiting for the existing deployment.`,
-          );
           try {
-            const isReady = await this.waitForDeploymentReady(hash, projectId);
-            if (isReady) {
+            const status = await this.wrenAIAdaptor.getDeployStatus(
+              hash,
+              projectId,
+            );
+            if (status === WrenAISystemStatus.FINISHED) {
               await this.deployLogRepository.updateOne(
                 previousInProgressDeploy.id,
                 {
@@ -287,10 +293,38 @@ export class DeployService implements IDeployService {
               );
               return { status: DeployStatusEnum.SUCCESS, hash };
             }
-            await this.markDeploymentFailed(
-              previousInProgressDeploy,
-              `Deployment ${hash} did not finish indexing before timeout.`,
-            );
+            if (status === WrenAISystemStatus.INDEXING) {
+              if (!waitForCompletion) {
+                return { status: DeployStatusEnum.IN_PROGRESS, hash };
+              }
+              logger.warn(
+                `Deployment ${hash} is already in progress; waiting for the existing deployment.`,
+              );
+              const isReady = await this.waitForDeploymentReady(
+                hash,
+                projectId,
+                status,
+              );
+              if (isReady) {
+                await this.deployLogRepository.updateOne(
+                  previousInProgressDeploy.id,
+                  {
+                    status: DeployStatusEnum.SUCCESS,
+                    error: undefined,
+                  },
+                );
+                return { status: DeployStatusEnum.SUCCESS, hash };
+              }
+              await this.markDeploymentFailed(
+                previousInProgressDeploy,
+                `Deployment ${hash} did not finish indexing before timeout.`,
+              );
+            } else if (status === WrenAISystemStatus.FAILED) {
+              await this.markDeploymentFailed(
+                previousInProgressDeploy,
+                'AI service reported deployment failed.',
+              );
+            }
           } catch (err: any) {
             logger.warn(
               `Existing in-progress deployment ${hash} is not usable: ${err.message}`,
@@ -318,36 +352,20 @@ export class DeployService implements IDeployService {
       } as Deploy;
       deploy = await this.deployLogRepository.createOne(deployData);
 
-      // deploy to AI-service
-      const { status: aiStatus, error: aiError } =
-        await this.wrenAIAdaptor.deploy({
-          manifest,
-          hash,
-          projectId,
-        });
-
-      // update deploy status
-      const status =
-        aiStatus === WrenAIDeployStatusEnum.SUCCESS
-          ? DeployStatusEnum.SUCCESS
-          : DeployStatusEnum.FAILED;
-      await this.deployLogRepository.updateOne(deploy.id, {
-        status,
-        error: aiError,
-      });
-
-      // telemetry
-      if (status === DeployStatusEnum.SUCCESS) {
-        this.telemetry.sendEvent(eventName);
-      } else {
-        this.telemetry.sendEvent(
-          eventName,
-          { mdl: manifest, error: aiError },
-          WrenService.AI,
-          false,
+      if (!waitForCompletion) {
+        this.finishDeployment(deploy, manifest, hash, projectId, eventName).catch(
+          (err: any) => logger.error(`Async deployment failed: ${err.message}`),
         );
+        return { status: DeployStatusEnum.IN_PROGRESS, hash };
       }
-      return { status, error: aiError, hash };
+
+      return await this.finishDeployment(
+        deploy,
+        manifest,
+        hash,
+        projectId,
+        eventName,
+      );
     } catch (err: any) {
       logger.error(`Error deploying model: ${err.message}`);
       if (deploy?.id) {
@@ -364,6 +382,53 @@ export class DeployService implements IDeployService {
         false,
       );
       return { status: DeployStatusEnum.FAILED, error: err.message };
+    }
+  }
+
+  private async finishDeployment(
+    deploy: Deploy,
+    manifest,
+    hash: string,
+    projectId: number,
+    eventName: TelemetryEvent,
+  ) {
+    try {
+      const { status: aiStatus, error: aiError } =
+        await this.wrenAIAdaptor.deploy({
+          manifest,
+          hash,
+          projectId,
+        });
+
+      const status =
+        aiStatus === WrenAIDeployStatusEnum.SUCCESS
+          ? DeployStatusEnum.SUCCESS
+          : DeployStatusEnum.FAILED;
+      await this.deployLogRepository.updateOne(deploy.id, {
+        status,
+        error: aiError,
+      });
+
+      if (status === DeployStatusEnum.SUCCESS) {
+        this.telemetry.sendEvent(eventName);
+      } else {
+        this.telemetry.sendEvent(
+          eventName,
+          { mdl: manifest, error: aiError },
+          WrenService.AI,
+          false,
+        );
+      }
+      return { status, error: aiError, hash };
+    } catch (err: any) {
+      await this.markDeploymentFailed(deploy, err.message);
+      this.telemetry.sendEvent(
+        eventName,
+        { mdl: manifest, error: err.message },
+        err.extensions?.service,
+        false,
+      );
+      return { status: DeployStatusEnum.FAILED, error: err.message, hash };
     }
   }
 

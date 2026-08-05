@@ -48,6 +48,33 @@ describe('DeployService', () => {
     });
   });
 
+  it('should start deployment without waiting when requested', async () => {
+    const manifest = { key: 'value' };
+    const projectId = 1;
+
+    mockDeployLogRepository.findLastProjectDeployLog.mockResolvedValue(null);
+    mockDeployLogRepository.findInProgressProjectDeployLog.mockResolvedValue(null);
+    mockDeployLogRepository.createOne.mockResolvedValue({ id: 123 });
+    mockWrenAIAdaptor.deploy.mockReturnValue(new Promise(() => {}));
+
+    const response = await deployService.deploy(manifest, projectId, false, false);
+
+    expect(response.status).toEqual(DeployStatusEnum.IN_PROGRESS);
+    expect(response.hash).toEqual(deployService.createMDLHash(manifest, projectId));
+    expect(mockDeployLogRepository.createOne).toHaveBeenCalledWith({
+      manifest,
+      hash: deployService.createMDLHash(manifest, projectId),
+      projectId,
+      status: DeployStatusEnum.IN_PROGRESS,
+    });
+    expect(mockWrenAIAdaptor.deploy).toHaveBeenCalledWith({
+      manifest,
+      hash: deployService.createMDLHash(manifest, projectId),
+      projectId,
+    });
+    expect(mockDeployLogRepository.updateOne).not.toHaveBeenCalled();
+  });
+
   it('should return failed status if ai-service deployment fails', async () => {
     const manifest = { key: 'value' };
     const projectId = 1;

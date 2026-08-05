@@ -237,22 +237,40 @@ export class ModelResolver {
 
   public async checkModelSync(_root: any, _args: any, ctx: IContext) {
     try {
-      const { id } = await ctx.projectService.getCurrentProject();
+      const project = await ctx.projectService.getCurrentProject();
+      const { id } = project;
       const inProgressDeployment =
         await ctx.deployService.getInProgressDeployment(id);
       if (inProgressDeployment) {
         return { status: SyncStatusEnum.IN_PROGRESS };
       }
 
-      const project = await ctx.projectService.getCurrentProject();
-      if (dirtyProjectIds.has(project.id)) {
+      const lastDeploy = await ctx.deployService.getLastDeployment(project.id);
+      if (!lastDeploy) {
         return { status: SyncStatusEnum.UNSYNCRONIZED };
       }
 
-      const lastDeploy = await ctx.deployService.getLastDeployment(project.id);
-      return lastDeploy
-        ? { status: SyncStatusEnum.SYNCRONIZED }
-        : { status: SyncStatusEnum.UNSYNCRONIZED };
+      if (dirtyProjectIds.has(project.id)) {
+        const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
+        const isCurrentDeployment = ctx.deployService.isSameDeployment(
+          manifest,
+          project.id,
+          lastDeploy,
+        );
+        const isDeployNewerThanChanges =
+          await this.isLastDeployNewerThanModelingChanges(
+            ctx,
+            project.id,
+            lastDeploy,
+          );
+        if (isCurrentDeployment && isDeployNewerThanChanges) {
+          dirtyProjectIds.delete(project.id);
+        } else {
+          return { status: SyncStatusEnum.UNSYNCRONIZED };
+        }
+      }
+
+      return { status: SyncStatusEnum.SYNCRONIZED };
     } catch (err: any) {
       logger.error(`checkModelSync failed: ${err.message}`, err);
       return { status: SyncStatusEnum.UNSYNCRONIZED };
@@ -281,6 +299,7 @@ export class ModelResolver {
       manifest,
       project.id,
       shouldForceDeploy,
+      false,
     );
     if (deployRes.status === 'SUCCESS') {
       dirtyProjectIds.delete(project.id);
