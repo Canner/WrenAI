@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import math
+import re
 from typing import Dict, Literal, Optional
 
 import orjson
@@ -12,6 +14,136 @@ from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest, MetadataTraceable
 
 logger = logging.getLogger("wren-ai-service")
+
+
+_IDENTIFIER_TOKEN_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9]*")
+
+
+def _identifier_terms(value: str | None) -> set[str]:
+    if not value:
+        return set()
+
+    spaced = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", str(value))
+    spaced = spaced.replace("_", " ").replace("-", " ").replace(".", " ")
+    terms: set[str] = set()
+    for token in _IDENTIFIER_TOKEN_PATTERN.findall(spaced):
+        normalized = token.lower()
+        terms.add(normalized)
+        if normalized.endswith("ies") and len(normalized) > 4:
+            terms.add(f"{normalized[:-3]}y")
+        elif normalized.endswith("s") and len(normalized) > 3:
+            terms.add(normalized[:-1])
+
+    return terms
+
+
+def _column_names(model: dict) -> set[str]:
+    return {
+        column.get("name")
+        for column in model.get("columns", []) or []
+        if isinstance(column, dict) and column.get("name") and not column.get("relationship")
+    }
+
+
+def _primary_key(model: dict) -> str:
+    primary_key = model.get("primaryKey")
+    if primary_key:
+        return primary_key
+
+    names = _column_names(model)
+    for candidate in ["id", f"{model.get('name', '')}_id"]:
+        if candidate in names:
+            return candidate
+
+    return ""
+
+
+def _relationship_name(from_model: str, to_model: str) -> str:
+    raw_name = f"{from_model}_{to_model}"
+    normalized = re.sub(r"[^A-Za-z0-9_]+", "_", raw_name).strip("_")
+    return normalized[:120] or "generated_relationship"
+
+
+def _relationship_reason(from_model: str, from_column: str, to_model: str) -> str:
+    return (
+        f"Records in {from_model} can be analyzed with related records in "
+        f"{to_model} through {from_column}."
+    )
+
+
+def _deterministic_relationship_candidates(mdl: dict) -> dict:
+    models = [
+        model
+        for model in mdl.get("models", []) or []
+        if isinstance(model, dict) and model.get("name")
+    ]
+    model_columns = {model["name"]: _column_names(model) for model in models}
+    primary_keys = {
+        model["name"]: _primary_key(model)
+        for model in models
+        if _primary_key(model) in model_columns.get(model["name"], set())
+    }
+    existing_pairs = {
+        (
+            relationship.get("fromModel"),
+            relationship.get("fromColumn"),
+            relationship.get("toModel"),
+            relationship.get("toColumn"),
+        )
+        for relationship in mdl.get("relationships", []) or []
+        if isinstance(relationship, dict)
+    }
+
+    relationships = []
+    seen = set()
+    for source_model in models:
+        source_name = source_model["name"]
+        for source_column in model_columns.get(source_name, set()):
+            source_column_terms = _identifier_terms(source_column)
+            if not source_column_terms:
+                continue
+
+            for target_model in models:
+                target_name = target_model["name"]
+                if source_name == target_name:
+                    continue
+
+                target_pk = primary_keys.get(target_name)
+                if not target_pk:
+                    continue
+
+                target_terms = _identifier_terms(target_name)
+                target_pk_terms = _identifier_terms(target_pk)
+                if not (
+                    source_column == target_pk
+                    and target_terms & _identifier_terms(source_name)
+                ) and not (
+                    target_terms
+                    and target_terms.issubset(source_column_terms | target_pk_terms)
+                    and target_pk_terms & source_column_terms
+                ):
+                    continue
+
+                key = (source_name, source_column, target_name, target_pk)
+                if key in existing_pairs or key in seen:
+                    continue
+
+                seen.add(key)
+                relationships.append(
+                    {
+                        "name": _relationship_name(source_name, target_name),
+                        "fromModel": source_name,
+                        "fromColumn": source_column,
+                        "type": "MANY_TO_ONE",
+                        "toModel": target_name,
+                        "toColumn": target_pk,
+                        "reason": _relationship_reason(
+                            source_name, source_column, target_name
+                        ),
+                    }
+                )
+
+    return {"relationships": relationships}
 
 
 class RelationshipRecommendation:
@@ -44,6 +176,11 @@ class RelationshipRecommendation:
         )
         self._generation_timeout_seconds = generation_timeout_seconds
 
+    def _request_timeout_seconds(self, mdl: dict) -> int:
+        model_count = len(mdl.get("models", []) or [])
+        waves = max(1, math.ceil(model_count / 20))
+        return self._generation_timeout_seconds * waves
+
     def _handle_exception(
         self,
         input: Input,
@@ -74,26 +211,30 @@ class RelationshipRecommendation:
                 "mdl": mdl_dict,
                 "language": request.configurations.language,
             }
+            request_timeout_seconds = self._request_timeout_seconds(mdl_dict)
 
             try:
                 logger.info(
                     "Calling configured LLM for relationship recommendations. "
                     "timeout_seconds=%s",
-                    self._generation_timeout_seconds,
+                    request_timeout_seconds,
                 )
                 resp = await asyncio.wait_for(
                     self._pipelines["relationship_recommendation"].run(**input),
-                    timeout=self._generation_timeout_seconds,
+                    timeout=request_timeout_seconds,
                 )
                 response = resp.get("validated")
                 if response is None:
                     raise ValueError(
                         "Relationship recommendation pipeline returned no validated response"
                     )
-            except TimeoutError:
-                raise TimeoutError(
-                    "Relationship recommendation LLM call timed out after "
-                    f"{self._generation_timeout_seconds} seconds"
+            except (asyncio.TimeoutError, TimeoutError, ValueError) as e:
+                response = _deterministic_relationship_candidates(mdl_dict)
+                logger.warning(
+                    "Relationship recommendation LLM path failed; using "
+                    "metadata-grounded fallback. error=%s, fallback_count=%s",
+                    str(e),
+                    len(response.get("relationships", [])),
                 )
 
             self._cache[request.id] = self.Resource(

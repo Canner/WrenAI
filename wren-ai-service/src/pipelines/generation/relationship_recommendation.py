@@ -77,17 +77,45 @@ Use this for the relationship name and reason based on the localization language
 ## Start of Pipeline
 @observe(capture_input=False)
 def cleaned_models(mdl: dict) -> dict:
+    def properties(payload: dict) -> dict:
+        value = payload.get("properties")
+        return value if isinstance(value, dict) else {}
+
+    def compact_properties(payload: dict) -> dict:
+        source = properties(payload)
+        return {
+            key: source.get(key)
+            for key in ["displayName", "description"]
+            if source.get(key)
+        }
+
+    def compact_column(column: dict) -> dict:
+        compacted = {
+            "name": column.get("name", ""),
+            "type": column.get("type", ""),
+        }
+        if compacted_properties := compact_properties(column):
+            compacted["properties"] = compacted_properties
+        return compacted
+
     def column_filter(columns: list[dict]) -> list[dict]:
         filtered_columns = []
         for column in columns:
             if "relationship" not in column:
-                # Create a copy of the column to avoid modifying the original
-                filtered_column = column.copy()
-                filtered_columns.append(filtered_column)
+                filtered_columns.append(compact_column(column))
         return filtered_columns
 
     return [
-        {**model, "columns": column_filter(model.get("columns", []))}
+        {
+            "name": model.get("name", ""),
+            "primaryKey": model.get("primaryKey", ""),
+            "columns": column_filter(model.get("columns", [])),
+            **(
+                {"properties": compacted_properties}
+                if (compacted_properties := compact_properties(model))
+                else {}
+            ),
+        }
         for model in mdl.get("models", [])
     ]
 

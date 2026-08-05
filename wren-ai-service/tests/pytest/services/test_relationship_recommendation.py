@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from src.pipelines.generation.relationship_recommendation import cleaned_models
 from src.web.v1.services.relationship_recommendation import RelationshipRecommendation
 
 
@@ -233,9 +234,24 @@ async def test_recommend_timeout_fails_without_fallback_relationships(
     await service.recommend(request)
     response = service[request.id]
 
-    assert response.status == "failed"
-    assert response.error.code == "OTHERS"
-    assert "timed out" in response.error.message
+    assert response.status == "finished"
+    assert response.error is None
+    assert response.response == {
+        "relationships": [
+            {
+                "name": "view_project",
+                "fromModel": "view",
+                "fromColumn": "project_id",
+                "type": "MANY_TO_ONE",
+                "toModel": "project",
+                "toColumn": "id",
+                "reason": (
+                    "Records in view can be analyzed with related records in "
+                    "project through project_id."
+                ),
+            }
+        ]
+    }
 
 
 @pytest.mark.asyncio
@@ -267,9 +283,9 @@ async def test_recommend_missing_validated_response_fails(
     await relationship_recommendation_service.recommend(request)
     response = relationship_recommendation_service[request.id]
 
-    assert response.status == "failed"
-    assert response.error.code == "OTHERS"
-    assert "no validated response" in response.error.message
+    assert response.status == "finished"
+    assert response.error is None
+    assert response.response == {"relationships": []}
 
 
 @pytest.mark.asyncio
@@ -333,3 +349,108 @@ def test_setitem(relationship_recommendation_service):
     relationship_recommendation_service[id] = value
 
     assert relationship_recommendation_service._cache["test_id"] == value
+
+
+@pytest.mark.asyncio
+async def test_timeout_finishes_with_empty_relationships_when_metadata_has_no_candidate(
+    mock_pipeline,
+):
+    service = RelationshipRecommendation(
+        {"relationship_recommendation": mock_pipeline},
+        generation_timeout_seconds=0.01,
+    )
+    request = RelationshipRecommendation.Input(
+        id="test_id",
+        mdl="""
+        {
+          "models": [
+            {
+              "name": "alpha",
+              "primaryKey": "id",
+              "columns": [{"name": "id"}, {"name": "label"}]
+            },
+            {
+              "name": "beta",
+              "primaryKey": "id",
+              "columns": [{"name": "id"}, {"name": "amount"}]
+            }
+          ],
+          "relationships": []
+        }
+        """,
+    )
+
+    async def never_finishes(**_kwargs):
+        await asyncio.sleep(1)
+
+    mock_pipeline.run.side_effect = never_finishes
+
+    await service.recommend(request)
+    response = service[request.id]
+
+    assert response.status == "finished"
+    assert response.response == {"relationships": []}
+
+
+def test_relationship_timeout_scales_with_model_count(mock_pipeline):
+    service = RelationshipRecommendation(
+        {"relationship_recommendation": mock_pipeline},
+        generation_timeout_seconds=45,
+    )
+
+    assert service._request_timeout_seconds({"models": [{}] * 1}) == 45
+    assert service._request_timeout_seconds({"models": [{}] * 20}) == 45
+    assert service._request_timeout_seconds({"models": [{}] * 21}) == 90
+
+
+def test_cleaned_models_uses_compact_relationship_relevant_payload():
+    result = cleaned_models(
+        {
+            "models": [
+                {
+                    "name": "model_alpha",
+                    "primaryKey": "id",
+                    "baseObject": "physical_source",
+                    "properties": {
+                        "displayName": "Alpha",
+                        "description": "Business alpha records",
+                        "unused": "omitted",
+                    },
+                    "columns": [
+                        {
+                            "name": "id",
+                            "type": "INTEGER",
+                            "expression": "complex expression",
+                            "properties": {
+                                "description": "Primary identifier",
+                                "unused": "omitted",
+                            },
+                        },
+                        {
+                            "name": "model_beta_id",
+                            "type": "INTEGER",
+                            "relationship": "existing",
+                        },
+                    ],
+                }
+            ]
+        }
+    )
+
+    assert result == [
+        {
+            "name": "model_alpha",
+            "primaryKey": "id",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "INTEGER",
+                    "properties": {"description": "Primary identifier"},
+                }
+            ],
+            "properties": {
+                "displayName": "Alpha",
+                "description": "Business alpha records",
+            },
+        }
+    ]
