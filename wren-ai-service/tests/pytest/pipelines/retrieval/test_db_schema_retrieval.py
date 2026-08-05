@@ -8,6 +8,7 @@ from src.pipelines.retrieval.db_schema_retrieval import (
     _build_view_ddl,
     _tables_matching_query_terms,
     check_using_db_schemas_without_pruning,
+    construct_db_schemas,
     construct_retrieval_results,
     dbschema_retrieval,
     embedding,
@@ -271,6 +272,92 @@ def test_view_schema_context_uses_declared_view_columns_not_view_definition():
     assert "sql_column_names_use_exactly" in result
     assert "definition_omitted_from_executable_schema" in result
     assert "NON_EXECUTABLE_DEFINITION_TOKEN" not in result
+
+
+def test_view_schema_context_deduplicates_declared_columns():
+    result = _build_view_ddl(
+        {
+            "type": "VIEW",
+            "comment": "",
+            "name": "retrieved_view",
+            "columns": [
+                {
+                    "name": "business_unit",
+                    "data_type": "VARCHAR",
+                    "comment": "",
+                },
+                {
+                    "name": "business_unit",
+                    "data_type": "VARCHAR",
+                    "comment": "",
+                },
+            ],
+        }
+    )
+
+    assert result.count("business_unit VARCHAR") == 1
+
+
+def test_construct_db_schemas_deduplicates_merged_column_chunks():
+    result = construct_db_schemas(
+        [
+            Document(
+                content=str(
+                    {
+                        "type": "TABLE",
+                        "comment": "",
+                        "name": "business_model",
+                    }
+                ),
+                meta={"type": "TABLE_SCHEMA", "name": "business_model"},
+            ),
+            Document(
+                content=str(
+                    {
+                        "type": "TABLE_COLUMNS",
+                        "columns": [
+                            {
+                                "type": "COLUMN",
+                                "comment": "",
+                                "name": "business_unit",
+                                "data_type": "VARCHAR",
+                                "is_primary_key": False,
+                            }
+                        ],
+                    }
+                ),
+                meta={"type": "TABLE_SCHEMA", "name": "business_model"},
+            ),
+            Document(
+                content=str(
+                    {
+                        "type": "TABLE_COLUMNS",
+                        "columns": [
+                            {
+                                "type": "COLUMN",
+                                "comment": "",
+                                "name": "business_unit",
+                                "data_type": "VARCHAR",
+                                "is_primary_key": False,
+                            }
+                        ],
+                    }
+                ),
+                meta={"type": "TABLE_SCHEMA", "name": "business_model"},
+            ),
+        ]
+    )
+
+    assert len(result) == 1
+    assert result[0]["columns"] == [
+        {
+            "type": "COLUMN",
+            "comment": "",
+            "name": "business_unit",
+            "data_type": "VARCHAR",
+            "is_primary_key": False,
+        }
+    ]
 
 
 @pytest.mark.asyncio
@@ -707,12 +794,13 @@ async def test_dbschema_retrieval_expands_direct_declared_relationships():
         embedding={},
     )
 
-    assert retriever.calls == [[selected_model], [related_model]]
+    assert retriever.calls == [[selected_model], [related_model], [downstream_model]]
     assert [document.meta["name"] for document in documents] == [
         selected_model,
         selected_model,
         related_model,
         related_model,
+        downstream_model,
     ]
 
 
@@ -803,12 +891,12 @@ async def test_dbschema_retrieval_caps_related_table_expansion():
 
     assert retriever.calls == [
         [selected_model],
-        related_models[:5],
+        related_models,
     ]
     assert [document.meta["name"] for document in documents] == [
         selected_model,
         selected_model,
-        *related_models[:5],
+        *related_models,
     ]
 
 

@@ -133,7 +133,8 @@ _QUERY_TERM_STOPWORDS = {
 }
 
 _MAX_SCHEMA_SEMANTIC_TABLE_CANDIDATES = 5
-_MAX_RELATED_SCHEMA_TABLE_CANDIDATES = 5
+_MAX_RELATED_SCHEMA_TABLE_CANDIDATES = 12
+_MAX_RELATED_SCHEMA_EXPANSION_HOPS = 2
 _MAX_SQL_GENERATION_SCHEMA_RESULTS = 10
 _MAX_SQL_GENERATION_COLUMNS_PER_TABLE = 16
 _MAX_SQL_GENERATION_ROLE_COLUMNS = 4
@@ -311,12 +312,14 @@ def _compact_sql_generation_columns(content: dict, query: str) -> Optional[set[s
 
 
 def _build_metric_ddl(content: dict) -> str:
-    columns = [
-        column
-        for column in content["columns"]
-        if column["data_type"].lower()
-        != "unknown"  # quick fix: filtering out UNKNOWN column type
-    ]
+    columns = _dedupe_named_columns(
+        [
+            column
+            for column in content["columns"]
+            if column["data_type"].lower()
+            != "unknown"  # quick fix: filtering out UNKNOWN column type
+        ]
+    )
     context = _format_semantic_context(
         {
             "object_type": "metric",
@@ -354,11 +357,29 @@ def _build_metric_ddl(content: dict) -> str:
 
 
 def _content_column_names(content: dict) -> list[str]:
-    return [
-        column.get("name", "")
-        for column in content.get("columns", [])
-        if column.get("name")
-    ]
+    column_names = []
+    seen = set()
+    for column in content.get("columns", []):
+        column_name = column.get("name", "")
+        normalized_column_name = str(column_name).lower()
+        if not column_name or normalized_column_name in seen:
+            continue
+        column_names.append(column_name)
+        seen.add(normalized_column_name)
+    return column_names
+
+
+def _dedupe_named_columns(columns: list[dict]) -> list[dict]:
+    deduped_columns = []
+    seen = set()
+    for column in columns:
+        column_name = column.get("name")
+        normalized_column_name = str(column_name or "").lower()
+        if not column_name or normalized_column_name in seen:
+            continue
+        deduped_columns.append(column)
+        seen.add(normalized_column_name)
+    return deduped_columns
 
 
 def _format_semantic_context(context: dict) -> str:
@@ -621,7 +642,7 @@ def _included_columns(
     content: dict, columns: Optional[set[str]], tables: Optional[set[str]]
 ) -> list[dict]:
     relationship_columns = _included_relationship_columns(content, tables)
-    return [
+    return _dedupe_named_columns([
         column
         for column in content["columns"]
         if column["type"] == "COLUMN"
@@ -636,7 +657,7 @@ def _included_columns(
             or get_engine_supported_data_type(column["data_type"]).lower()
             != "unknown"
         )
-    ]
+    ])
 
 
 def _included_relationships(content: dict, tables: Optional[set[str]]) -> list[dict]:
@@ -703,12 +724,14 @@ def _build_table_context_ddl(
 
 
 def _build_view_ddl(content: dict) -> str:
-    columns = [
-        column
-        for column in content.get("columns", [])
-        if column.get("name")
-        and str(column.get("data_type", "")).lower() != "unknown"
-    ]
+    columns = _dedupe_named_columns(
+        [
+            column
+            for column in content.get("columns", [])
+            if column.get("name")
+            and str(column.get("data_type", "")).lower() != "unknown"
+        ]
+    )
     column_names = [column["name"] for column in columns]
     context = _format_semantic_context(
         {
@@ -1018,9 +1041,21 @@ async def dbschema_retrieval(
     current_documents = await _fetch_by_names(table_names)
     _extend_unique_documents(documents, current_documents, seen_documents)
 
-    related_names = _related_table_names(current_documents, visited)
-    related_documents = await _fetch_by_names(related_names)
-    _extend_unique_documents(documents, related_documents, seen_documents)
+    frontier_documents = current_documents
+    remaining_related_budget = _MAX_RELATED_SCHEMA_TABLE_CANDIDATES
+    for _ in range(_MAX_RELATED_SCHEMA_EXPANSION_HOPS):
+        related_names = _related_table_names(frontier_documents, visited)[
+            :remaining_related_budget
+        ]
+        if not related_names:
+            break
+
+        related_documents = await _fetch_by_names(related_names)
+        _extend_unique_documents(documents, related_documents, seen_documents)
+        frontier_documents = related_documents
+        remaining_related_budget -= len(related_names)
+        if remaining_related_budget <= 0:
+            break
 
     return documents
 
@@ -1028,6 +1063,25 @@ async def dbschema_retrieval(
 
 @observe()
 def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[dict]:
+    def _column_key(column: dict) -> tuple[str, str]:
+        if column.get("type") in {"FOREIGN_KEY", "JOIN_PATH"}:
+            return (
+                column.get("type", ""),
+                str(column.get("constraint", "")).lower(),
+            )
+        return (column.get("type", ""), str(column.get("name", "")).lower())
+
+    def _dedupe_columns(columns: list[dict]) -> list[dict]:
+        deduped_columns = []
+        seen = set()
+        for column in columns:
+            key = _column_key(column)
+            if key in seen:
+                continue
+            deduped_columns.append(column)
+            seen.add(key)
+        return deduped_columns
+
     db_schemas = {}
     for document in dbschema_retrieval:
         content = ast.literal_eval(document.content)
@@ -1050,6 +1104,8 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[dict]:
 
     # remove incomplete schemas
     db_schemas = {k: v for k, v in db_schemas.items() if "type" in v and "columns" in v}
+    for db_schema in db_schemas.values():
+        db_schema["columns"] = _dedupe_columns(db_schema["columns"])
 
     return list(db_schemas.values())
 

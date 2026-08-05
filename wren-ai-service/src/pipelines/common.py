@@ -55,18 +55,27 @@ def build_table_ddl(
     include_semantic_comments: bool = True,
 ) -> Tuple[str, bool, bool]:
     columns_ddl = []
+    emitted_columns = set()
+    emitted_relationships = set()
     has_calculated_field = False
     has_json_field = False
-    relationship_columns = {
-        column.get("column")
-        for column in content["columns"]
-        if column["type"] == "FOREIGN_KEY"
-        and (not tables or set(column.get("tables", [])).issubset(tables))
-    }
+    relationship_columns = set()
+    for column in content["columns"]:
+        if column["type"] not in {"FOREIGN_KEY", "JOIN_PATH"}:
+            continue
+        if tables and not set(column.get("tables", [])).issubset(tables):
+            continue
+        if column.get("column"):
+            relationship_columns.add(column.get("column"))
+        relationship_columns.update(column.get("columns", []) or [])
     relationship_columns.discard(None)
 
     for column in content["columns"]:
         if column["type"] == "COLUMN":
+            normalized_column_name = str(column["name"]).lower()
+            if normalized_column_name in emitted_columns:
+                continue
+
             raw_data_type = column["data_type"]
             supported_data_type = get_engine_supported_data_type(raw_data_type)
             if (
@@ -91,12 +100,18 @@ def build_table_ddl(
                 if column["is_primary_key"]:
                     column_ddl += " PRIMARY KEY"
                 columns_ddl.append(column_ddl)
-        elif column["type"] == "FOREIGN_KEY":
+                emitted_columns.add(normalized_column_name)
+        elif column["type"] in {"FOREIGN_KEY", "JOIN_PATH"}:
             if not tables or (tables and set(column.get("tables", [])).issubset(tables)):
+                relationship_key = column.get("constraint", "")
+                if relationship_key in emitted_relationships:
+                    continue
+
                 relationship_comment = (
                     column["comment"] if include_semantic_comments else ""
                 )
                 columns_ddl.append(f"{relationship_comment}{column['constraint']}")
+                emitted_relationships.add(relationship_key)
 
     table_comment = content["comment"] if include_semantic_comments else ""
     return (
