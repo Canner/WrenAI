@@ -9,22 +9,26 @@ on:
   issue_comment:
     types: [created]
 
+permissions:
+  contents: write
+
 jobs:
   release:
     runs-on: macos-latest
-    if: ${{ github.event_name == 'issue_comment' && contains(github.event.comment.body, '/release-rc') && startsWith(github.event.issue.title, 'Release') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (contains(github.event.comment.body, '/release-rc') && startsWith(github.event.issue.title, 'Release')) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || 'legacy/v1' }}
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v6
         with:
           go-version: "1.25"
 
       - name: Add rocket emoji to comment
+        if: ${{ github.event_name == 'issue_comment' }}
         run: |
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
           -d '{"body": "🚀 Starting the release process!"}' \
@@ -33,11 +37,16 @@ jobs:
       - name: Parse release version from PR title
         id: parse_release_version
         env:
+          RELEASE_VERSION_INPUT: ${{ inputs.release_version }}
           GITHUB_ISSUE_TITLE: ${{ github.event.issue.title }}
         run: |
-          release_version=$(echo "$GITHUB_ISSUE_TITLE" | sed 's/ /\n/g' | tail -n 1)
+          if [ -n "$RELEASE_VERSION_INPUT" ]; then
+            release_version="$RELEASE_VERSION_INPUT"
+          else
+            release_version=$(echo "$GITHUB_ISSUE_TITLE" | sed 's/ /\n/g' | tail -n 1)
+          fi
           echo "Release version: $release_version"
-          echo "release_version=$release_version" >> $GITHUB_OUTPUT
+          echo "release_version=$release_version" >> "$GITHUB_OUTPUT"
 
       - name: Build for macOS
         working-directory: ./wren-launcher
@@ -84,12 +93,13 @@ jobs:
             ./wren-launcher/dist/wren-launcher-darwin-arm64.tar.gz
             ./wren-launcher/dist/wren-launcher-linux-arm64.tar.gz
           tag_name: ${{ steps.parse_release_version.outputs.release_version }}
-          prerelease: true
+          prerelease: ${{ contains(steps.parse_release_version.outputs.release_version, '-rc.') }}
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Comment with release link
+        if: ${{ github.event_name == 'issue_comment' }}
         run: |
           release_url="https://github.com/${{ github.repository }}/releases/tag/${{ steps.parse_release_version.outputs.release_version }}"
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
