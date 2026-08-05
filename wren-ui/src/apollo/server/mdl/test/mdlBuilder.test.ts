@@ -32,6 +32,71 @@ describe('MDLBuilder', () => {
       expect(manifest).toBeDefined();
     });
 
+    it('should skip duplicated model column reference names', () => {
+      const project = {
+        id: 1,
+        type: DataSourceName.MSSQL,
+        displayName: 'my project',
+      } as Project;
+      const models = [
+        {
+          id: 1,
+          projectId: 1,
+          displayName: 'orders',
+          sourceTableName: 'dbo.orders',
+          referenceName: 'orders',
+          refSql: null,
+          cached: false,
+          refreshTime: null,
+          properties: JSON.stringify({ table: 'dbo.orders' }),
+        },
+      ] as Model[];
+      const columns = [
+        {
+          id: 1,
+          modelId: 1,
+          isCalculated: false,
+          displayName: 'status',
+          referenceName: 'status',
+          sourceColumnName: 'status',
+          type: 'STRING',
+          notNull: false,
+          isPk: false,
+          properties: null,
+        },
+        {
+          id: 2,
+          modelId: 1,
+          isCalculated: false,
+          displayName: 'Status',
+          referenceName: 'Status',
+          sourceColumnName: 'Status',
+          type: 'STRING',
+          notNull: false,
+          isPk: false,
+          properties: null,
+        },
+      ] as ModelColumn[];
+      const builderOptions = {
+        project,
+        models,
+        columns,
+        nestedColumns: [],
+        relations: [],
+        views: [],
+        relatedModels: models,
+        relatedColumns: columns,
+        relatedRelations: [],
+      } as MDLBuilderBuildFromOptions;
+
+      mdlBuilder = new MDLBuilder(builderOptions);
+
+      const manifest = mdlBuilder.build();
+
+      expect(manifest.models[0].columns).toHaveLength(1);
+      expect((manifest.models[0] as ModelMDL).columns[0].name).toBe('status');
+    });
+
     it('should return a manifest with models & columns & relations.', () => {
       // Arrange
       const project = {

@@ -8,7 +8,15 @@ import { CompactColumn } from '@server/services/metadataService';
 
 export function getPreviewColumnsStr(modelColumns: ModelColumn[]) {
   if (modelColumns.length === 0) return '*';
-  const columns = modelColumns.map((column) => `"${column.referenceName}"`);
+  const usedReferenceNames = new Set<string>();
+  const columns = modelColumns
+    .filter((column) => {
+      const referenceName = column.referenceName.toLowerCase();
+      if (usedReferenceNames.has(referenceName)) return false;
+      usedReferenceNames.add(referenceName);
+      return true;
+    })
+    .map((column) => `"${column.referenceName}"`);
   return columns.join(',');
 }
 
