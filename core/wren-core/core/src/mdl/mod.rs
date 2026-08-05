@@ -739,10 +739,8 @@ mod test {
         assert_sql_valid_executable(&actual).await?;
         assert_snapshot!(actual, @r#"SELECT count(1) AS "count(*)" FROM (SELECT __source.c_custkey AS c_custkey, __source.c_name AS c_name FROM customer AS __source) AS e"#);
 
-        // A join of two aliased models is the only thing that exercises
-        // `shortcut_taken` across siblings: `ModelRewriter` carries one `bool` field
-        // for the whole walk, and it must reflect only the child just visited, never
-        // leak from the left join input into the right's `f_up`.
+        // A join of two aliased models exercises the shortcut on both sides of one
+        // walk: each aliased scan must still build its ModelPlanNode exactly once.
         crate::logical_plan::analyze::model_anlayze::BUILD_MODEL_PLAN_NODE_CALLS
             .with(|c| c.set(0));
         let actual = mdl::transform_sql_with_ctx(
