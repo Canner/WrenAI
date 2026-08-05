@@ -20,7 +20,7 @@ import psycopg
 import pyarrow as pa
 from loguru import logger
 
-from wren.connector.base import ConnectorABC, strip_trailing_semicolon
+from wren.connector.base import ConnectorABC, coerce_limit, strip_trailing_semicolon
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 
 # Map of well-known PostgreSQL OIDs to Arrow types. OIDs that we have not
@@ -249,6 +249,7 @@ class PostgresConnector(ConnectorABC):
         self._closed = False
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
+        limit = coerce_limit(limit)
         # Strip terminating ``;`` even when no LIMIT wrapper is applied so
         # client-pasted statements match dry_run / limited composition rules.
         sql = strip_trailing_semicolon(sql)

@@ -19,7 +19,7 @@ import sqlglot.errors
 from loguru import logger
 from sqlglot.expressions import ColumnDef, DataType
 
-from wren.connector.base import ConnectorABC, strip_trailing_semicolon
+from wren.connector.base import ConnectorABC, coerce_limit, strip_trailing_semicolon
 from wren.model.error import (
     DIALECT_SQL,
     ErrorCode,
@@ -482,6 +482,7 @@ class TrinoConnector(ConnectorABC):
         self._closed = False
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
+        limit = coerce_limit(limit)
         trino = _import_trino()
 
         if limit is not None:

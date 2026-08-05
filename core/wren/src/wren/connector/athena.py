@@ -16,7 +16,7 @@ from typing import Any
 
 import pyarrow as pa
 
-from wren.connector.base import ConnectorABC, strip_trailing_semicolon
+from wren.connector.base import ConnectorABC, coerce_limit, strip_trailing_semicolon
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 
 # Athena's DB-API cursor returns Trino-style type names. We delegate the
@@ -298,6 +298,7 @@ class AthenaConnector(ConnectorABC):
         self.connection = connect(**_build_connect_kwargs(connection_info))
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
+        limit = coerce_limit(limit)
         # Push LIMIT into Athena when requested so Presto/Trino-flavoured
         # engines can stop early instead of us downloading a full result and
         # slicing in Python. Subquery-wrap + trailing-semicolon strip keeps
@@ -308,7 +309,7 @@ class AthenaConnector(ConnectorABC):
             # is terminated by the newline instead of swallowing the closing
             # `) AS _wren_sub LIMIT n`. (Single-line sibling connectors don't
             # guard this.)
-            executed = f"SELECT * FROM (\n{executed}\n) AS _wren_sub LIMIT {int(limit)}"
+            executed = f"SELECT * FROM (\n{executed}\n) AS _wren_sub LIMIT {limit}"
         try:
             with contextlib.closing(self.connection.cursor()) as cursor:
                 cursor.execute(executed)

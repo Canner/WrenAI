@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pyarrow as pa
 
-from wren.connector.base import ConnectorABC, strip_trailing_semicolon
+from wren.connector.base import ConnectorABC, coerce_limit, strip_trailing_semicolon
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 
 
@@ -55,6 +55,7 @@ class SnowflakeConnector(ConnectorABC):
         self.connection = make_snowflake_connection(connection_info)
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
+        limit = coerce_limit(limit)
         # Push LIMIT into Snowflake when requested so we do not download a
         # full result set only to slice it in Python. Wrap as a subquery so a
         # trailing semicolon in the user SQL cannot break composition, and so
@@ -67,7 +68,7 @@ class SnowflakeConnector(ConnectorABC):
             executed = (
                 "SELECT * FROM (\n"
                 f"{strip_trailing_semicolon(sql)}\n"
-                f") AS _wren_sub LIMIT {int(limit)}"
+                f") AS _wren_sub LIMIT {limit}"
             )
         try:
             with self.connection.cursor() as cursor:

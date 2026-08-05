@@ -4,7 +4,7 @@ import opendal
 import pyarrow as pa
 from loguru import logger
 
-from wren.connector.base import ConnectorABC, strip_trailing_semicolon
+from wren.connector.base import ConnectorABC, coerce_limit, strip_trailing_semicolon
 from wren.model import (
     GcsFileConnectionInfo,
     MinioFileConnectionInfo,
@@ -81,10 +81,11 @@ class DuckDBConnector(ConnectorABC):
         Trailing statement terminators are always stripped so client-pasted
         ``SELECT …;`` behaves the same on limited and unlimited paths.
         """
+        limit = coerce_limit(limit)
         stripped = strip_trailing_semicolon(sql)
         if limit is not None:
             # Subquery wrap rejects an interior terminator after strip.
-            sql = f"SELECT * FROM ({stripped}) AS _q LIMIT {int(limit)}"
+            sql = f"SELECT * FROM ({stripped}) AS _q LIMIT {limit}"
         else:
             sql = stripped
         return self.connection.execute(sql).fetch_arrow_table()

@@ -7,7 +7,7 @@ import pyarrow as pa
 import pyarrow.ipc as ipc
 from loguru import logger
 
-from wren.connector.base import ConnectorABC, strip_trailing_semicolon
+from wren.connector.base import ConnectorABC, coerce_limit, strip_trailing_semicolon
 from wren.model import DataFusionConnectionInfo
 from wren.model.error import ErrorCode, WrenError
 
@@ -29,11 +29,12 @@ class DataFusionConnector(ConnectorABC):
         self._register_tables()
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
+        limit = coerce_limit(limit)
+        stripped = strip_trailing_semicolon(sql)
         if limit is not None:
-            sql = (
-                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) "
-                f"AS _q LIMIT {int(limit)}"
-            )
+            sql = f"SELECT * FROM ({stripped}) AS _q LIMIT {limit}"
+        else:
+            sql = stripped
         ipc_bytes = self.ctx.query(sql)
         reader = ipc.open_stream(io.BytesIO(bytes(ipc_bytes)))
         return reader.read_all()

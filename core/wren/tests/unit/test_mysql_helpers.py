@@ -10,12 +10,12 @@ from __future__ import annotations
 import pyarrow as pa
 import pytest
 
+from wren.connector.base import coerce_limit
 from wren.connector.mysql import (
     _apply_limit,
     _arrow_decimal_from_mysql_field,
     _build_mysql_column,
     _build_mysql_connect_kwargs,
-    _coerce_limit,
     _mysql_blob_codes,
     _mysql_decimal_codes,
     _mysql_field_type_map,
@@ -41,31 +41,43 @@ class _FakeConnInfoFromUrl:
         self.kwargs = kwargs
 
 
-# ── _coerce_limit ─────────────────────────────────────────────────────────
+# ── coerce_limit (shared base helper; mysql private removed) ─────────────
 
 
 def test_coerce_limit_none_passthrough() -> None:
-    assert _coerce_limit(None) is None
+    assert coerce_limit(None) is None
 
 
 def test_coerce_limit_accepts_int() -> None:
-    assert _coerce_limit(10) == 10
+    assert coerce_limit(10) == 10
 
 
 def test_coerce_limit_accepts_numeric_string() -> None:
     # ``int()`` accepts numeric strings — keep that contract.
-    assert _coerce_limit("25") == 25
+    assert coerce_limit("25") == 25
 
 
 def test_coerce_limit_rejects_injection_string() -> None:
     """A crafted limit value must not survive ``int()`` coercion."""
     with pytest.raises(ValueError):
-        _coerce_limit("1; DROP TABLE foo")
+        coerce_limit("1; DROP TABLE foo")
 
 
 def test_coerce_limit_rejects_negative() -> None:
     with pytest.raises(ValueError):
-        _coerce_limit(-1)
+        coerce_limit(-1)
+
+
+def test_coerce_limit_rejects_fractional_decimal_and_fraction() -> None:
+    from decimal import Decimal
+    from fractions import Fraction
+
+    with pytest.raises(ValueError, match="integral"):
+        coerce_limit(Decimal("1.5"))
+    with pytest.raises(ValueError, match="integral"):
+        coerce_limit(Fraction(3, 2))
+    with pytest.raises(ValueError):
+        coerce_limit(Decimal("-0.5"))
 
 
 # ── _apply_limit ──────────────────────────────────────────────────────────

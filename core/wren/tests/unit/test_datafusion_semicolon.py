@@ -49,8 +49,9 @@ def test_query_without_limit_is_unwrapped() -> None:
     connector, ctx = _make_mock_connector()
     connector.query("SELECT 1;")
     (sent,), _ = ctx.query.call_args
-    # No limit -> no subquery wrapping; passed through verbatim.
-    assert sent == "SELECT 1;"
+    # No limit -> no subquery wrapping; still strip trailing terminator
+    # so DataFusion does not treat the SQL as a multi-statement batch.
+    assert sent == "SELECT 1"
 
 
 def test_helper_preserves_semicolon_inside_string_literal() -> None:

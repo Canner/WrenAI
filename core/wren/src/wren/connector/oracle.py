@@ -14,7 +14,7 @@ try:
 except ImportError:  # pragma: no cover
     oracledb = None
 
-from wren.connector.base import ConnectorABC, strip_trailing_semicolon
+from wren.connector.base import ConnectorABC, coerce_limit, strip_trailing_semicolon
 from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
 
 
@@ -178,6 +178,7 @@ class OracleConnector(ConnectorABC):
         self.connection = _make_oracle_connection(connection_info)
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
+        limit = coerce_limit(limit)
         # Always strip terminating `;` even on the unlimited path: a bare
         # trailing semicolon is rejected by some Oracle clients/drivers even
         # though engines accept multi-statement scripts elsewhere.
