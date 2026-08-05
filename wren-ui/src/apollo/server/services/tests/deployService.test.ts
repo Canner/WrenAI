@@ -321,7 +321,7 @@ describe('DeployService', () => {
       status: DeployStatusEnum.IN_PROGRESS,
       updatedAt: oldDate,
     });
-    mockWrenAIAdaptor.getDeployStatus.mockRejectedValue(new Error('not found'));
+    mockWrenAIAdaptor.getDeployStatus.mockResolvedValue('INDEXING');
 
     const deployment = await deployService.getInProgressDeployment(1);
 
@@ -329,6 +329,24 @@ describe('DeployService', () => {
     expect(mockDeployLogRepository.updateOne).toHaveBeenCalledWith(122, {
       status: DeployStatusEnum.FAILED,
       error: 'Deployment timed out before completion.',
+    });
+  });
+
+  it('should clear in-progress deployments that are missing in ai-service', async () => {
+    mockDeployLogRepository.findInProgressProjectDeployLog.mockResolvedValue({
+      id: 122,
+      hash: 'deploy-hash',
+      status: DeployStatusEnum.IN_PROGRESS,
+      updatedAt: new Date(),
+    });
+    mockWrenAIAdaptor.getDeployStatus.mockRejectedValue(new Error('not found'));
+
+    const deployment = await deployService.getInProgressDeployment(1);
+
+    expect(deployment).toBeNull();
+    expect(mockDeployLogRepository.updateOne).toHaveBeenCalledWith(122, {
+      status: DeployStatusEnum.FAILED,
+      error: 'Deployment is missing in AI service. Please deploy again.',
     });
   });
 
@@ -424,6 +442,47 @@ describe('DeployService', () => {
     expect(response.hash).toEqual(hash);
     expect(mockWrenAIAdaptor.deploy).not.toHaveBeenCalled();
     expect(mockDeployLogRepository.updateOne).toHaveBeenCalledWith(122, {
+      status: DeployStatusEnum.SUCCESS,
+      error: undefined,
+    });
+  });
+
+  it('should start a fresh deployment when the same hash is in progress but missing in ai-service', async () => {
+    const manifest = { key: 'value' };
+    const projectId = 1;
+    const hash = deployService.createMDLHash(manifest, projectId);
+
+    mockDeployLogRepository.findLastProjectDeployLog.mockResolvedValue(null);
+    mockDeployLogRepository.findInProgressProjectDeployLog.mockResolvedValue({
+      id: 122,
+      hash,
+      status: DeployStatusEnum.IN_PROGRESS,
+      updatedAt: new Date(),
+    });
+    mockDeployLogRepository.createOne.mockResolvedValue({ id: 123 });
+    mockWrenAIAdaptor.getDeployStatus.mockRejectedValue(new Error('not found'));
+    mockWrenAIAdaptor.deploy.mockResolvedValue({ status: 'SUCCESS' });
+
+    const response = await deployService.deploy(manifest, projectId);
+
+    expect(response.status).toEqual(DeployStatusEnum.SUCCESS);
+    expect(response.hash).toEqual(hash);
+    expect(mockDeployLogRepository.updateOne).toHaveBeenCalledWith(122, {
+      status: DeployStatusEnum.FAILED,
+      error: 'Deployment is missing in AI service. Starting a fresh deployment.',
+    });
+    expect(mockDeployLogRepository.createOne).toHaveBeenCalledWith({
+      manifest,
+      hash,
+      projectId,
+      status: DeployStatusEnum.IN_PROGRESS,
+    });
+    expect(mockWrenAIAdaptor.deploy).toHaveBeenCalledWith({
+      manifest,
+      hash,
+      projectId,
+    });
+    expect(mockDeployLogRepository.updateOne).toHaveBeenCalledWith(123, {
       status: DeployStatusEnum.SUCCESS,
       error: undefined,
     });

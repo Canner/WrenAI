@@ -214,6 +214,13 @@ export class DeployService implements IDeployService {
       logger.warn(
         `Unable to verify in-progress deployment ${inProgressDeploy.hash}: ${err.message}`,
       );
+      if (this.isDeploymentMissingInAIService(err)) {
+        await this.markDeploymentFailed(
+          inProgressDeploy,
+          'Deployment is missing in AI service. Please deploy again.',
+        );
+        return null;
+      }
     }
 
     const updatedAt = inProgressDeploy.updatedAt || inProgressDeploy.createdAt;
@@ -268,30 +275,39 @@ export class DeployService implements IDeployService {
           logger.warn(
             `Deployment ${hash} is already in progress; waiting for the existing deployment.`,
           );
-          const isReady = await this.waitForDeploymentReady(hash, projectId);
-          if (isReady) {
-            await this.deployLogRepository.updateOne(previousInProgressDeploy.id, {
-              status: DeployStatusEnum.SUCCESS,
-              error: undefined,
-            });
-            return { status: DeployStatusEnum.SUCCESS, hash };
+          try {
+            const isReady = await this.waitForDeploymentReady(hash, projectId);
+            if (isReady) {
+              await this.deployLogRepository.updateOne(
+                previousInProgressDeploy.id,
+                {
+                  status: DeployStatusEnum.SUCCESS,
+                  error: undefined,
+                },
+              );
+              return { status: DeployStatusEnum.SUCCESS, hash };
+            }
+            await this.markDeploymentFailed(
+              previousInProgressDeploy,
+              `Deployment ${hash} did not finish indexing before timeout.`,
+            );
+          } catch (err: any) {
+            logger.warn(
+              `Existing in-progress deployment ${hash} is not usable: ${err.message}`,
+            );
+            await this.markDeploymentFailed(
+              previousInProgressDeploy,
+              this.isDeploymentMissingInAIService(err)
+                ? 'Deployment is missing in AI service. Starting a fresh deployment.'
+                : err.message,
+            );
           }
-
+        } else {
           await this.markDeploymentFailed(
             previousInProgressDeploy,
-            `Deployment ${hash} did not finish indexing before timeout.`,
+            'Deployment was superseded by a new deployment.',
           );
-          return {
-            status: DeployStatusEnum.FAILED,
-            error: `Deployment ${hash} did not finish indexing before timeout.`,
-            hash,
-          };
         }
-
-        await this.markDeploymentFailed(
-          previousInProgressDeploy,
-          'Deployment was superseded by a new deployment.',
-        );
       }
 
       const deployData = {
@@ -356,6 +372,12 @@ export class DeployService implements IDeployService {
       status: DeployStatusEnum.FAILED,
       error,
     });
+  }
+
+  private isDeploymentMissingInAIService(err: any) {
+    return String(err?.message || err)
+      .toLowerCase()
+      .includes('not found');
   }
 
   public createMDLHash(manifest: Manifest, projectId: number) {
