@@ -1,0 +1,65 @@
+name: Security Deepscan
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: # Allows manual triggering
+
+# By default, jobs have read-only permissions.
+# This is a security best practice.
+permissions: read-only
+
+jobs:
+  codeql:
+    name: CodeQL SAST Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      # required for all workflows
+      contents: read
+      # required for uploading security alerts
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        # Omitting the 'languages' input allows CodeQL to auto-detect all supported
+        # languages in the repo, which includes Python and Rust.
+        # Note: Rust analysis via CodeQL is currently in beta.
+
+      # CodeQL requires a build to analyze compiled languages like Rust.
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Rust code for CodeQL analysis
+        run: |
+          # Based on CONTRIBUTING.md, we build the core Rust module.
+          # This allows CodeQL to observe the compilation and perform a deep scan.
+          cd core/wren-core && cargo build --all-targets
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+  shellcheck:
+    name: ShellCheck Linter
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@2.0.0
+
+  secrets:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
