@@ -77,39 +77,35 @@ struct ModelRewriter<'a> {
     scope_manager: &'a mut ScopeManager,
     current_scope_id: ScopeId,
     cycle_stack: &'a ModelStack,
-    /// Set by `f_down` when the pre-order shortcut fires, so `f_up` skips the
-    /// bottom-up pass for that node. Correct only because a `Jump` from `f_down`
-    /// still runs `f_up` for the same node (`transform_children` turns `Jump` into `Continue`).
-    shortcut_taken: bool,
 }
 
 impl TreeNodeRewriter for ModelRewriter<'_> {
     type Node = LogicalPlan;
 
     fn f_down(&mut self, plan: LogicalPlan) -> Result<Transformed<LogicalPlan>> {
-        let result = self.rule.shortcut_aliased_table_scan(
+        self.rule.shortcut_aliased_table_scan(
             plan,
             self.scope_manager,
             self.current_scope_id,
             self.cycle_stack,
-        )?;
-        self.shortcut_taken = result.tnr == TreeNodeRecursion::Jump;
-        Ok(result)
+        )
     }
 
     fn f_up(&mut self, plan: LogicalPlan) -> Result<Transformed<LogicalPlan>> {
-        let plan = if std::mem::take(&mut self.shortcut_taken) {
-            plan
-        } else {
-            self.rule
-                .analyze_model_internal(
-                    plan,
-                    self.scope_manager,
-                    self.current_scope_id,
-                    self.cycle_stack,
-                )?
-                .data
-        };
+        // Always run the bottom-up pass, even on a node the shortcut just built
+        // (SubqueryAlias -> Extension(ModelPlanNode)): analyze_model_internal's
+        // SubqueryAlias arm only matches an immediate SubqueryAlias or TableScan
+        // input, so it falls to the `_` arm and reconstructs the same node via
+        // SubqueryAlias::try_new, a no-op.
+        let plan = self
+            .rule
+            .analyze_model_internal(
+                plan,
+                self.scope_manager,
+                self.current_scope_id,
+                self.cycle_stack,
+            )?
+            .data;
         // If the plan contains subquery, we should analyze the subquery recursively
         plan.map_subqueries(|plan| {
             if let LogicalPlan::Subquery(subquery) = &plan {
@@ -435,7 +431,6 @@ impl ModelAnalyzeRule {
             scope_manager,
             current_scope_id,
             cycle_stack,
-            shortcut_taken: false,
         };
         plan.rewrite(&mut rewriter)
     }
