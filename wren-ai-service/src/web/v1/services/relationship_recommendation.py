@@ -17,6 +17,14 @@ logger = logging.getLogger("wren-ai-service")
 
 
 _IDENTIFIER_TOKEN_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9]*")
+_GENERIC_IDENTIFIER_TERMS = {
+    "code",
+    "id",
+    "identifier",
+    "key",
+    "no",
+    "number",
+}
 
 
 def _identifier_terms(value: str | None) -> set[str]:
@@ -37,9 +45,34 @@ def _identifier_terms(value: str | None) -> set[str]:
     return terms
 
 
+def _term_abbreviations(terms: set[str]) -> set[str]:
+    abbreviations: set[str] = set()
+    for term in terms:
+        if len(term) >= 3:
+            abbreviations.add(term[:3])
+        if len(term) >= 4:
+            abbreviations.add(term[:4])
+            for character in term[3:]:
+                if character not in "aeiou":
+                    abbreviations.add(f"{term[:3]}{character}")
+                    break
+            consonants = [character for character in term[2:] if character not in "aeiou"]
+            if len(consonants) >= 2:
+                abbreviations.add(f"{term[:2]}{''.join(consonants[:2])}")
+    return abbreviations
+
+
 def _column_names(model: dict) -> set[str]:
     return {
         column.get("name")
+        for column in model.get("columns", []) or []
+        if isinstance(column, dict) and column.get("name") and not column.get("relationship")
+    }
+
+
+def _column_map(model: dict) -> dict[str, dict]:
+    return {
+        column.get("name"): column
         for column in model.get("columns", []) or []
         if isinstance(column, dict) and column.get("name") and not column.get("relationship")
     }
@@ -56,6 +89,55 @@ def _primary_key(model: dict) -> str:
             return candidate
 
     return ""
+
+
+def _model_terms(model: dict) -> set[str]:
+    properties = model.get("properties")
+    properties = properties if isinstance(properties, dict) else {}
+    base_terms = (
+        _identifier_terms(model.get("name"))
+        | _identifier_terms(properties.get("displayName"))
+        | _identifier_terms(properties.get("description"))
+    )
+    return base_terms | _term_abbreviations(_non_generic_terms(base_terms))
+
+
+def _column_terms(column_name: str, column: dict | None = None) -> set[str]:
+    column = column or {}
+    properties = column.get("properties")
+    properties = properties if isinstance(properties, dict) else {}
+    return (
+        _identifier_terms(column_name)
+        | _identifier_terms(properties.get("displayName"))
+        | _identifier_terms(properties.get("description"))
+    )
+
+
+def _non_generic_terms(value: set[str]) -> set[str]:
+    return value - _GENERIC_IDENTIFIER_TERMS
+
+
+def _is_ordered_abbreviation(short_term: str, long_term: str) -> bool:
+    if len(short_term) < 3 or len(short_term) > 6:
+        return False
+    if len(long_term) <= len(short_term):
+        return False
+
+    position = 0
+    for character in long_term:
+        if position < len(short_term) and character == short_term[position]:
+            position += 1
+    return position == len(short_term)
+
+
+def _has_ordered_abbreviation_match(
+    short_terms: set[str], long_terms: set[str]
+) -> bool:
+    return any(
+        _is_ordered_abbreviation(short_term, long_term)
+        for short_term in short_terms
+        for long_term in long_terms
+    )
 
 
 def _relationship_name(from_model: str, to_model: str) -> str:
@@ -78,6 +160,8 @@ def _deterministic_relationship_candidates(mdl: dict) -> dict:
         if isinstance(model, dict) and model.get("name")
     ]
     model_columns = {model["name"]: _column_names(model) for model in models}
+    model_column_maps = {model["name"]: _column_map(model) for model in models}
+    model_terms = {model["name"]: _model_terms(model) for model in models}
     primary_keys = {
         model["name"]: _primary_key(model)
         for model in models
@@ -95,11 +179,14 @@ def _deterministic_relationship_candidates(mdl: dict) -> dict:
     }
 
     relationships = []
+    scored_candidates = []
     seen = set()
     for source_model in models:
         source_name = source_model["name"]
-        for source_column in model_columns.get(source_name, set()):
-            source_column_terms = _identifier_terms(source_column)
+        for source_column, source_column_payload in model_column_maps.get(
+            source_name, {}
+        ).items():
+            source_column_terms = _column_terms(source_column, source_column_payload)
             if not source_column_terms:
                 continue
 
@@ -112,16 +199,43 @@ def _deterministic_relationship_candidates(mdl: dict) -> dict:
                 if not target_pk:
                     continue
 
-                target_terms = _identifier_terms(target_name)
-                target_pk_terms = _identifier_terms(target_pk)
-                if not (
-                    source_column == target_pk
-                    and target_terms & _identifier_terms(source_name)
-                ) and not (
-                    target_terms
-                    and target_terms.issubset(source_column_terms | target_pk_terms)
-                    and target_pk_terms & source_column_terms
+                target_pk_payload = model_column_maps.get(target_name, {}).get(
+                    target_pk, {}
+                )
+                target_terms = model_terms.get(target_name, set())
+                target_pk_terms = _column_terms(target_pk, target_pk_payload)
+                source_model_terms = model_terms.get(source_name, set())
+                source_specific_terms = _non_generic_terms(source_column_terms)
+                target_specific_terms = _non_generic_terms(target_terms)
+                target_pk_specific_terms = _non_generic_terms(target_pk_terms)
+
+                score = 0
+                if source_column == target_pk and (
+                    source_specific_terms & target_specific_terms
                 ):
+                    score += 6
+                if source_column.endswith(f"_{target_pk}"):
+                    score += 8
+                if target_specific_terms & source_column_terms:
+                    score += 8
+                if _has_ordered_abbreviation_match(
+                    source_specific_terms, target_specific_terms
+                ):
+                    score += 8
+                if target_pk_terms & source_column_terms:
+                    score += 4
+                if _non_generic_terms(source_model_terms) & target_terms:
+                    score += 3
+                if source_column.lower().endswith("_id") and target_pk.lower() == "id":
+                    score += 2
+                if (
+                    source_column == target_pk
+                    and not (source_specific_terms & target_specific_terms)
+                    and not (source_specific_terms & target_pk_specific_terms)
+                ):
+                    score = 0
+
+                if score < 8:
                     continue
 
                 key = (source_name, source_column, target_name, target_pk)
@@ -129,19 +243,37 @@ def _deterministic_relationship_candidates(mdl: dict) -> dict:
                     continue
 
                 seen.add(key)
-                relationships.append(
-                    {
-                        "name": _relationship_name(source_name, target_name),
-                        "fromModel": source_name,
-                        "fromColumn": source_column,
-                        "type": "MANY_TO_ONE",
-                        "toModel": target_name,
-                        "toColumn": target_pk,
-                        "reason": _relationship_reason(
-                            source_name, source_column, target_name
-                        ),
-                    }
+                relation_type = "ONE_TO_ONE" if source_column == _primary_key(
+                    source_model
+                ) else "MANY_TO_ONE"
+                scored_candidates.append(
+                    (
+                        score,
+                        {
+                            "name": _relationship_name(source_name, target_name),
+                            "fromModel": source_name,
+                            "fromColumn": source_column,
+                            "type": relation_type,
+                            "toModel": target_name,
+                            "toColumn": target_pk,
+                            "reason": _relationship_reason(
+                                source_name, source_column, target_name
+                            ),
+                        },
+                    )
                 )
+
+    for _, relationship in sorted(
+        scored_candidates,
+        key=lambda item: (
+            item[0],
+            item[1]["fromModel"],
+            item[1]["fromColumn"],
+            item[1]["toModel"],
+        ),
+        reverse=True,
+    ):
+        relationships.append(relationship)
 
     return {"relationships": relationships}
 

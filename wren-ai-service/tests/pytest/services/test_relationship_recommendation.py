@@ -392,6 +392,111 @@ async def test_timeout_finishes_with_empty_relationships_when_metadata_has_no_ca
     assert response.response == {"relationships": []}
 
 
+@pytest.mark.asyncio
+async def test_fallback_recommends_foreign_key_style_relationship(mock_pipeline):
+    service = RelationshipRecommendation(
+        {"relationship_recommendation": mock_pipeline},
+        max_llm_models=1,
+    )
+    request = RelationshipRecommendation.Input(
+        id="test_id",
+        mdl="""
+        {
+          "models": [
+            {
+              "name": "customer",
+              "primaryKey": "customer_key",
+              "columns": [{"name": "customer_key"}, {"name": "name"}]
+            },
+            {
+              "name": "order_header",
+              "primaryKey": "order_key",
+              "columns": [{"name": "order_key"}, {"name": "customer_key"}]
+            }
+          ],
+          "relationships": []
+        }
+        """,
+    )
+
+    await service.recommend(request)
+    response = service[request.id]
+
+    assert response.status == "finished"
+    assert response.response["relationships"] == [
+        {
+            "name": "order_header_customer",
+            "fromModel": "order_header",
+            "fromColumn": "customer_key",
+            "type": "MANY_TO_ONE",
+            "toModel": "customer",
+            "toColumn": "customer_key",
+            "reason": (
+                "Records in order_header can be analyzed with related records "
+                "in customer through customer_key."
+            ),
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_fallback_recommends_shared_key_bridge_relationships(mock_pipeline):
+    service = RelationshipRecommendation(
+        {"relationship_recommendation": mock_pipeline},
+        max_llm_models=1,
+    )
+    request = RelationshipRecommendation.Input(
+        id="test_id",
+        mdl="""
+        {
+          "models": [
+            {
+              "name": "employee",
+              "primaryKey": "emp_no",
+              "columns": [{"name": "emp_no"}, {"name": "name"}]
+            },
+            {
+              "name": "department",
+              "primaryKey": "dept_no",
+              "columns": [{"name": "dept_no"}, {"name": "name"}]
+            },
+            {
+              "name": "department_employee",
+              "columns": [{"name": "emp_no"}, {"name": "dept_no"}]
+            }
+          ],
+          "relationships": []
+        }
+        """,
+    )
+
+    await service.recommend(request)
+    response = service[request.id]
+    pairs = {
+        (
+            relationship["fromModel"],
+            relationship["fromColumn"],
+            relationship["toModel"],
+            relationship["toColumn"],
+        )
+        for relationship in response.response["relationships"]
+    }
+
+    assert response.status == "finished"
+    assert (
+        "department_employee",
+        "emp_no",
+        "employee",
+        "emp_no",
+    ) in pairs
+    assert (
+        "department_employee",
+        "dept_no",
+        "department",
+        "dept_no",
+    ) in pairs
+
+
 def test_relationship_timeout_scales_with_model_count(mock_pipeline):
     service = RelationshipRecommendation(
         {"relationship_recommendation": mock_pipeline},
