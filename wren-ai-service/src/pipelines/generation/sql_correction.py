@@ -17,6 +17,7 @@ from src.pipelines.generation.utils.sql import (
     SQLGenPostProcessor,
     build_executable_schema_contract,
     construct_instructions,
+    get_sql_dialect_instructions,
     get_text_to_sql_rules,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
@@ -71,6 +72,10 @@ sql_correction_user_prompt_template = """
 {% endfor %}
 {% endif %}
 
+{% if sql_dialect_instructions %}
+{{ sql_dialect_instructions }}
+{% endif %}
+
 {% if instructions %}
 ### USER INSTRUCTIONS ###
 {% for instruction in instructions %}
@@ -119,9 +124,11 @@ def prompt(
     instructions: list[dict] | None = None,
     sql_functions: list[SqlFunction] | None = None,
     schema_contracts: list[dict] | None = None,
+    data_source: str | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         documents=documents,
+        sql_dialect_instructions=get_sql_dialect_instructions(data_source),
         executable_schema_contract=build_executable_schema_contract(schema_contracts),
         invalid_generation_result=invalid_generation_result,
         query=query or "",
@@ -194,6 +201,7 @@ class SQLCorrection(BasicPipeline):
                 template=sql_correction_user_prompt_template
             ),
             "post_processor": SQLGenPostProcessor(engine=engine),
+            "data_source": kwargs.get("data_source", "local_file"),
         }
 
         super().__init__(
@@ -226,6 +234,9 @@ class SQLCorrection(BasicPipeline):
             )
         else:
             metadata = {}
+        data_source = metadata.get("data_source") or self._components.get(
+            "data_source", "local_file"
+        )
 
         return await self._pipe.execute(
             ["post_process"],
@@ -239,7 +250,7 @@ class SQLCorrection(BasicPipeline):
                 "mdl_hash": mdl_hash,
                 "use_dry_plan": use_dry_plan,
                 "allow_dry_plan_fallback": allow_dry_plan_fallback,
-                "data_source": metadata.get("data_source", "local_file"),
+                "data_source": data_source,
                 "sql_knowledge": sql_knowledge,
                 "schema_contracts": schema_contracts,
                 **self._components,

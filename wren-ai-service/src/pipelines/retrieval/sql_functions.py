@@ -115,7 +115,9 @@ class SqlFunctions(BasicPipeline):
             self._retriever,
             mdl_hash=mdl_hash,
         )
-        _data_source = metadata.get("data_source", "local_file")
+        _data_source = metadata.get("data_source") or getattr(
+            self._components["engine"], "_source", None
+        ) or "local_file"
 
         if _data_source in self._cache:
             logger.info(f"Hit cache of SQL Functions for {_data_source}")

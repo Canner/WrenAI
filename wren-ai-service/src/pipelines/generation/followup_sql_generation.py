@@ -20,6 +20,7 @@ from src.pipelines.generation.utils.sql import (
     get_calculated_field_instructions,
     get_json_field_instructions,
     get_metric_instructions,
+    get_sql_dialect_instructions,
     get_sql_generation_system_prompt,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
@@ -57,6 +58,10 @@ generate one SQL query to best answer the user's question.
 {% for function in sql_functions %}
 {{ function }}
 {% endfor %}
+{% endif %}
+
+{% if sql_dialect_instructions %}
+{{ sql_dialect_instructions }}
 {% endif %}
 
 {% if sql_samples %}
@@ -120,10 +125,12 @@ def prompt(
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
     schema_contracts: list[dict] | None = None,
+    data_source: str | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
+        sql_dialect_instructions=get_sql_dialect_instructions(data_source),
         executable_schema_contract=build_executable_schema_contract(schema_contracts),
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
@@ -211,6 +218,7 @@ class FollowUpSQLGeneration(BasicPipeline):
                 template=text_to_sql_with_followup_user_prompt_template
             ),
             "post_processor": SQLGenPostProcessor(engine=engine),
+            "data_source": kwargs.get("data_source", "local_file"),
         }
 
         super().__init__(
@@ -247,6 +255,9 @@ class FollowUpSQLGeneration(BasicPipeline):
             )
         else:
             metadata = {}
+        data_source = metadata.get("data_source") or self._components.get(
+            "data_source", "local_file"
+        )
 
         return await self._pipe.execute(
             ["post_process"],
@@ -265,7 +276,7 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "sql_functions": sql_functions,
                 "use_dry_plan": use_dry_plan,
                 "allow_dry_plan_fallback": allow_dry_plan_fallback,
-                "data_source": metadata.get("data_source", "local_file"),
+                "data_source": data_source,
                 "sql_knowledge": sql_knowledge,
                 "schema_contracts": schema_contracts,
                 **self._components,

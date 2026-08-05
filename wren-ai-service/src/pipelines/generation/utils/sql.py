@@ -1442,6 +1442,29 @@ SQL_GENERATION_MODEL_KWARGS = {
 }
 
 
+def get_sql_dialect_instructions(data_source: str | None = None) -> str:
+    normalized = (data_source or "").strip().lower()
+
+    if normalized in {"mssql", "sqlserver", "sql_server", "microsoft_sql_server"}:
+        return """
+### SQL DIALECT ###
+Target database: Microsoft SQL Server.
+- Do not use EXTRACT(... FROM ...); SQL Server does not support that syntax.
+- Prefer bounded date ranges for month/year filters.
+- If a date part is required, use SQL Server functions such as MONTH(date_column) and YEAR(date_column).
+- Do not use LIMIT; use TOP only when a row limit is explicitly requested.
+"""
+
+    if normalized and normalized != "local_file":
+        return f"""
+### SQL DIALECT ###
+Target database: {normalized}.
+Use only SQL syntax and functions supported by this target database and by SQL FUNCTIONS.
+"""
+
+    return ""
+
+
 def construct_instructions(
     instructions: list[dict] | None = None,
 ):
