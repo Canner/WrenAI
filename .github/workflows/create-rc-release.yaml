@@ -93,6 +93,7 @@ jobs:
             ./wren-launcher/dist/wren-launcher-darwin-arm64.tar.gz
             ./wren-launcher/dist/wren-launcher-linux-arm64.tar.gz
           tag_name: ${{ steps.parse_release_version.outputs.release_version }}
+          target_commitish: ${{ github.sha }}
           prerelease: ${{ contains(steps.parse_release_version.outputs.release_version, '-rc.') }}
           generate_release_notes: true
         env:
