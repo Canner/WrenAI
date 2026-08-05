@@ -1,7 +1,7 @@
 import asyncio
 import logging
+import re
 import sys
-from html import escape
 from typing import Any, Optional
 
 from hamilton import base
@@ -162,20 +162,20 @@ class SQLAnswer(BasicPipeline):
 
     def _build_deterministic_answer(self, query: str, sql_data: dict) -> str:
         row_records = sql_data.get("row_records") or _build_row_records(sql_data)
-        columns = _column_names(sql_data)
         if not row_records:
             return "No matching records were returned for this question."
 
         visible_rows = row_records[:_MAX_ROWS_IN_DETERMINISTIC_ANSWER]
         prefix = _answer_prefix(query, row_records)
-        table = _markdown_table(columns, visible_rows)
+        explanation = _explain_rows(query, visible_rows)
         suffix = ""
         if len(row_records) > len(visible_rows):
             suffix = (
-                f"\n\nShowing {len(visible_rows)} of {len(row_records)} returned rows."
+                f" The answer is based on the first {len(visible_rows)} of "
+                f"{len(row_records)} returned rows."
             )
 
-        return f"{prefix}\n\n{table}{suffix}"
+        return f"{prefix} {explanation}{suffix}".strip()
 
     @observe(name="SQL Answer Generation")
     async def run(
@@ -243,10 +243,10 @@ def _build_row_records(sql_data: dict) -> list[dict]:
 
 def _answer_prefix(query: str, row_records: list[dict]) -> str:
     if len(row_records) == 1:
-        return "I found 1 matching record."
+        return "I found 1 matching result."
     if _looks_analytical_result(row_records):
         return f"I found {len(row_records)} summarized results for this question."
-    return f"I found {len(row_records)} matching records."
+    return f"I found {len(row_records)} matching results."
 
 
 def _looks_analytical_result(row_records: list[dict]) -> bool:
@@ -258,24 +258,83 @@ def _looks_analytical_result(row_records: list[dict]) -> bool:
     ) <= 4
 
 
-def _markdown_table(columns: list[str], rows: list[dict]) -> str:
-    if not columns and rows:
-        columns = list(rows[0].keys())
-    if not columns:
+def _explain_rows(query: str, rows: list[dict]) -> str:
+    if not rows:
         return ""
 
-    header = "| " + " | ".join(_format_cell(column) for column in columns) + " |"
-    separator = "| " + " | ".join("---" for _ in columns) + " |"
-    body = [
-        "| "
-        + " | ".join(_format_cell(row.get(column)) for column in columns)
-        + " |"
-        for row in rows
+    if _looks_analytical_result(rows):
+        return _explain_analytical_rows(rows)
+
+    if len(rows) == 1:
+        return _explain_detail_row(rows[0])
+
+    examples = "; ".join(_row_phrase(row) for row in rows[:5])
+    return f"Examples include {examples}."
+
+
+def _explain_analytical_rows(rows: list[dict]) -> str:
+    measure_column = _first_numeric_column(rows)
+    if not measure_column:
+        return _explain_detail_row(rows[0])
+
+    dimension_columns = [
+        column for column in rows[0].keys() if column != measure_column
     ]
-    return "\n".join([header, separator, *body])
+    ranked_rows = sorted(
+        rows,
+        key=lambda row: row.get(measure_column)
+        if isinstance(row.get(measure_column), (int, float))
+        else float("-inf"),
+        reverse=True,
+    )
+    top_phrases = []
+    for row in ranked_rows[:5]:
+        dimension_value = " / ".join(
+            _format_value(row.get(column))
+            for column in dimension_columns
+            if row.get(column) is not None
+        )
+        if not dimension_value:
+            dimension_value = "the result"
+        top_phrases.append(
+            f"{dimension_value} has {_format_value(row.get(measure_column))} "
+            f"for {_humanize_name(measure_column)}"
+        )
+
+    return "The leading results are " + "; ".join(top_phrases) + "."
 
 
-def _format_cell(value: Any) -> str:
+def _explain_detail_row(row: dict) -> str:
+    return "The matching result has " + _row_phrase(row) + "."
+
+
+def _row_phrase(row: dict) -> str:
+    parts = [
+        f"{_humanize_name(column)} {_format_value(value)}"
+        for column, value in row.items()
+        if value is not None
+    ]
+    if not parts:
+        return "no populated fields"
+    if len(parts) == 1:
+        return parts[0]
+    return ", ".join(parts[:-1]) + f", and {parts[-1]}"
+
+
+def _first_numeric_column(rows: list[dict]) -> str | None:
+    for column in rows[0].keys():
+        if any(isinstance(row.get(column), (int, float)) for row in rows):
+            return column
+    return None
+
+
+def _humanize_name(name: str) -> str:
+    words = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", str(name))
+    words = words.replace("_", " ").replace("-", " ")
+    return " ".join(words.split()).lower()
+
+
+def _format_value(value: Any) -> str:
     if value is None:
-        return ""
-    return escape(str(value)).replace("|", "\\|")
+        return "blank"
+    return str(value)

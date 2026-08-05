@@ -106,6 +106,7 @@ async def test_sql_answer_streams_deterministic_table_result_without_llm():
         chunks.append(chunk)
 
     answer = "".join(chunks)
-    assert "I found 1 matching record" in answer
-    assert "| username | name |" in answer
-    assert "| jdoe | Jane Doe |" in answer
+    assert "I found 1 matching result" in answer
+    assert "username jdoe" in answer
+    assert "name Jane Doe" in answer
+    assert "| username | name |" not in answer
