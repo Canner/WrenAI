@@ -396,11 +396,49 @@ def test_relationship_timeout_scales_with_model_count(mock_pipeline):
     service = RelationshipRecommendation(
         {"relationship_recommendation": mock_pipeline},
         generation_timeout_seconds=45,
+        max_generation_timeout_seconds=90,
     )
 
     assert service._request_timeout_seconds({"models": [{}] * 1}) == 45
     assert service._request_timeout_seconds({"models": [{}] * 20}) == 45
     assert service._request_timeout_seconds({"models": [{}] * 21}) == 90
+    assert service._request_timeout_seconds({"models": [{}] * 200}) == 90
+
+
+@pytest.mark.asyncio
+async def test_large_mdl_skips_llm_and_finishes_with_metadata_fallback(mock_pipeline):
+    service = RelationshipRecommendation(
+        {"relationship_recommendation": mock_pipeline},
+        max_llm_models=1,
+    )
+    request = RelationshipRecommendation.Input(
+        id="test_id",
+        mdl="""
+        {
+          "models": [
+            {
+              "name": "parent",
+              "primaryKey": "id",
+              "columns": [{"name": "id"}, {"name": "label"}]
+            },
+            {
+              "name": "child",
+              "primaryKey": "id",
+              "columns": [{"name": "id"}, {"name": "parent_id"}]
+            }
+          ],
+          "relationships": []
+        }
+        """,
+    )
+
+    await service.recommend(request)
+    response = service[request.id]
+
+    assert response.status == "finished"
+    assert response.response["relationships"][0]["fromModel"] == "child"
+    assert response.response["relationships"][0]["toModel"] == "parent"
+    mock_pipeline.run.assert_not_called()
 
 
 def test_cleaned_models_uses_compact_relationship_relevant_payload():

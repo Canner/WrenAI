@@ -169,17 +169,28 @@ class RelationshipRecommendation:
         maxsize: int = 1_000_000,
         ttl: int = 120,
         generation_timeout_seconds: int = 45,
+        max_generation_timeout_seconds: int = 90,
+        max_llm_models: int = 80,
     ):
         self._pipelines = pipelines
         self._cache: Dict[str, RelationshipRecommendation.Resource] = TTLCache(
             maxsize=maxsize, ttl=ttl
         )
         self._generation_timeout_seconds = generation_timeout_seconds
+        self._max_generation_timeout_seconds = max_generation_timeout_seconds
+        self._max_llm_models = max_llm_models
 
     def _request_timeout_seconds(self, mdl: dict) -> int:
         model_count = len(mdl.get("models", []) or [])
         waves = max(1, math.ceil(model_count / 20))
-        return self._generation_timeout_seconds * waves
+        return min(
+            self._generation_timeout_seconds * waves,
+            self._max_generation_timeout_seconds,
+        )
+
+    def _should_use_llm(self, mdl: dict) -> bool:
+        model_count = len(mdl.get("models", []) or [])
+        return model_count <= self._max_llm_models
 
     def _handle_exception(
         self,
@@ -213,29 +224,39 @@ class RelationshipRecommendation:
             }
             request_timeout_seconds = self._request_timeout_seconds(mdl_dict)
 
-            try:
-                logger.info(
-                    "Calling configured LLM for relationship recommendations. "
-                    "timeout_seconds=%s",
-                    request_timeout_seconds,
-                )
-                resp = await asyncio.wait_for(
-                    self._pipelines["relationship_recommendation"].run(**input),
-                    timeout=request_timeout_seconds,
-                )
-                response = resp.get("validated")
-                if response is None:
-                    raise ValueError(
-                        "Relationship recommendation pipeline returned no validated response"
-                    )
-            except (asyncio.TimeoutError, TimeoutError, ValueError) as e:
+            if not self._should_use_llm(mdl_dict):
                 response = _deterministic_relationship_candidates(mdl_dict)
-                logger.warning(
-                    "Relationship recommendation LLM path failed; using "
-                    "metadata-grounded fallback. error=%s, fallback_count=%s",
-                    str(e),
+                logger.info(
+                    "Relationship recommendation skipped LLM for large MDL. "
+                    "model_count=%s, fallback_count=%s",
+                    len(mdl_dict.get("models", []) or []),
                     len(response.get("relationships", [])),
                 )
+            else:
+                try:
+                    logger.info(
+                        "Calling configured LLM for relationship recommendations. "
+                        "timeout_seconds=%s",
+                        request_timeout_seconds,
+                    )
+                    resp = await asyncio.wait_for(
+                        self._pipelines["relationship_recommendation"].run(**input),
+                        timeout=request_timeout_seconds,
+                    )
+                    response = resp.get("validated")
+                    if response is None:
+                        raise ValueError(
+                            "Relationship recommendation pipeline returned no "
+                            "validated response"
+                        )
+                except (asyncio.TimeoutError, TimeoutError, ValueError) as e:
+                    response = _deterministic_relationship_candidates(mdl_dict)
+                    logger.warning(
+                        "Relationship recommendation LLM path failed; using "
+                        "metadata-grounded fallback. error=%s, fallback_count=%s",
+                        str(e),
+                        len(response.get("relationships", [])),
+                    )
 
             self._cache[request.id] = self.Resource(
                 id=request.id,
