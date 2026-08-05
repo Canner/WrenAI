@@ -42,7 +42,7 @@ const StyledButton = styled(Button)`
 
 const CloudCTA = styled(Link)`
   display: block;
-  margin: 12px 12px 8px;
+  margin: 12px 12px 0;
   padding: 8px 12px;
   border: 1px solid var(--geekblue-3);
   border-radius: 8px;
@@ -66,6 +66,10 @@ const CloudCTATitle = styled.div`
   font-size: 13px;
   font-weight: 600;
   color: var(--geekblue-6);
+`;
+
+const CloudCTAContact = styled.div`
+  margin: 8px 12px 8px;
 `;
 
 type Props = (ModelingSidebarProps | HomeSidebarProps) & {
@@ -116,7 +120,7 @@ export default function Sidebar(props: Props) {
       <DynamicSidebar {...props} pathname={router.pathname} />
       <LearningSection />
       <CloudCTA
-        href="https://cloud.getwren.ai/?utm_campaign=383986378-OSS"
+        href="https://cloud.getwren.ai/?utm_campaign=383986378-OSS%20Paid%20Conversion&utm_source=OSS%20UI&utm_medium=cta&utm_content=upgrade_cta"
         target="_blank"
         rel="noopener noreferrer"
         data-ph-capture="true"
@@ -127,9 +131,23 @@ export default function Sidebar(props: Props) {
           Upgrade to Wren AI Cloud
         </CloudCTATitle>
         <div className="text-xs gray-8 mt-1">
-          Team collaboration, hosted deployment, and API access
+          Shared projects, embedded AI API, and enterprise-grade access control.
         </div>
       </CloudCTA>
+      <CloudCTAContact className="text-xs gray-8">
+        Need air-gapped or on-prem?{' '}
+        <Link
+          className="geekblue-6"
+          style={{ textDecoration: 'underline' }}
+          href="https://www.getwren.ai/en/contact?utm_campaign=383986378-OSS%20Paid%20Conversion&utm_source=OSS%20UI&utm_medium=cta&utm_content=talk_to_sales"
+          target="_blank"
+          rel="noopener noreferrer"
+          data-ph-capture="true"
+          data-ph-capture-attribute-name="cta_talk_to_sales"
+        >
+          Talk to sales
+        </Link>
+      </CloudCTAContact>
       <div className="border-t border-gray-4 pt-2">
         <StyledButton type="text" block onClick={onSettingsClick}>
           <SettingOutlined className="text-md" />
