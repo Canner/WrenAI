@@ -341,8 +341,38 @@ def build_fallback_chart_result(query: str, data: Dict[str, Any]) -> Dict[str, A
             },
         )
 
-    if not numeric_columns and len(categorical_columns) == 1:
-        x_field = categorical_columns[0]
+    if not numeric_columns:
+        count_chart_columns = categorical_columns or temporal_columns
+        if not count_chart_columns:
+            return _empty_chart_result(
+                "No chart was generated because the result is not suitable for visualization."
+            )
+
+        x_field = _best_named_column(query, count_chart_columns) or count_chart_columns[0]
+        secondary_categories = [
+            column for column in categorical_columns if column != x_field
+        ]
+        if len(secondary_categories) >= 1 and (
+            _GROUPED_QUERY_PATTERN.search(query or "") or len(categorical_columns) >= 2
+        ):
+            group_field = (
+                _group_field_from_each_clause(query, secondary_categories)
+                or secondary_categories[0]
+            )
+            return _chart_result(
+                chart_type="grouped_bar",
+                chart_schema={
+                    "title": _title(query),
+                    "mark": {"type": "bar"},
+                    "encoding": {
+                        "x": _encoding(x_field, "nominal", title=x_field),
+                        "y": _count_encoding(query),
+                        "xOffset": _encoding(group_field, "nominal", title=group_field),
+                        "color": _encoding(group_field, "nominal", title=group_field),
+                    },
+                },
+            )
+
         return _chart_result(
             chart_type="bar",
             chart_schema={
@@ -350,18 +380,10 @@ def build_fallback_chart_result(query: str, data: Dict[str, Any]) -> Dict[str, A
                 "mark": {"type": "bar"},
                 "encoding": {
                     "x": _encoding(x_field, "nominal", title=x_field),
-                    "y": {
-                        "aggregate": "count",
-                        "type": "quantitative",
-                        "title": _count_title(query),
-                    },
+                    "y": _count_encoding(query),
+                    "color": _encoding(x_field, "nominal", title=x_field),
                 },
             },
-        )
-
-    if not numeric_columns:
-        return _empty_chart_result(
-            "No chart was generated because the result has no numeric measure."
         )
 
     y_field = _best_numeric_column(query, numeric_columns)

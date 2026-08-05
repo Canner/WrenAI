@@ -243,10 +243,10 @@ def _build_row_records(sql_data: dict) -> list[dict]:
 
 def _answer_prefix(query: str, row_records: list[dict]) -> str:
     if len(row_records) == 1:
-        return "I found 1 matching result."
+        return "The data returned 1 matching result."
     if _looks_analytical_result(row_records):
-        return f"I found {len(row_records)} summarized results for this question."
-    return f"I found {len(row_records)} matching results."
+        return f"The data returned {len(row_records)} summarized results."
+    return f"The data returned {len(row_records)} matching results."
 
 
 def _looks_analytical_result(row_records: list[dict]) -> bool:
@@ -268,8 +268,8 @@ def _explain_rows(query: str, rows: list[dict]) -> str:
     if len(rows) == 1:
         return _explain_detail_row(rows[0])
 
-    examples = "; ".join(_row_phrase(row) for row in rows[:5])
-    return f"Examples include {examples}."
+    examples = "; ".join(_detail_summary(row) for row in rows[:5])
+    return f"A few examples are {examples}."
 
 
 def _explain_analytical_rows(rows: list[dict]) -> str:
@@ -301,21 +301,58 @@ def _explain_analytical_rows(rows: list[dict]) -> str:
             f"for {_humanize_name(measure_column)}"
         )
 
-    return "The leading results are " + "; ".join(top_phrases) + "."
+    return "The strongest values are " + "; ".join(top_phrases) + "."
 
 
 def _explain_detail_row(row: dict) -> str:
-    return "The matching result has " + _row_phrase(row) + "."
+    return "It shows " + _detail_summary(row) + "."
 
 
-def _row_phrase(row: dict) -> str:
-    parts = [
-        f"{_humanize_name(column)} {_format_value(value)}"
-        for column, value in row.items()
-        if value is not None
+def _detail_summary(row: dict) -> str:
+    populated_items = [
+        (column, value) for column, value in row.items() if value is not None
     ]
+    if not populated_items:
+        return "a result with no populated fields"
+
+    label_column, label_value = _best_label_item(populated_items)
+    supporting_items = [
+        (column, value)
+        for column, value in populated_items
+        if column != label_column
+    ][:3]
+
+    if not supporting_items:
+        return f"{_format_value(label_value)}"
+
+    supporting_text = _join_phrases(
+        [
+            f"{_humanize_name(column)} is {_format_value(value)}"
+            for column, value in supporting_items
+        ]
+    )
+    return f"{_format_value(label_value)}, where {supporting_text}"
+
+
+def _best_label_item(items: list[tuple[str, Any]]) -> tuple[str, Any]:
+    exact_label_names = {"name", "title", "label", "description"}
+    for column, value in items:
+        if str(column).lower() in exact_label_names:
+            return column, value
+
+    for pattern in [
+        r"(name|title|description|label)$",
+        r"(number|no|code|id|identifier)$",
+    ]:
+        for column, value in items:
+            if re.search(pattern, str(column), re.I):
+                return column, value
+    return items[0]
+
+
+def _join_phrases(parts: list[str]) -> str:
     if not parts:
-        return "no populated fields"
+        return ""
     if len(parts) == 1:
         return parts[0]
     return ", ".join(parts[:-1]) + f", and {parts[-1]}"

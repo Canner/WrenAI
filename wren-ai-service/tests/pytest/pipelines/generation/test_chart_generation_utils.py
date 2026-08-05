@@ -41,6 +41,29 @@ def test_fallback_chart_counts_categorical_only_results():
     }
 
 
+def test_fallback_chart_counts_multi_categorical_results():
+    result = build_fallback_chart_result(
+        "Show matching records by status and owner.",
+        {
+            "columns": [{"name": "Status"}, {"name": "Owner"}],
+            "data": [
+                ["active", "Asha"],
+                ["active", "Ben"],
+                ["inactive", "Asha"],
+            ],
+        },
+    )
+
+    assert result["chart_type"] == "grouped_bar"
+    assert result["chart_schema"]["encoding"]["x"]["field"] == "Status"
+    assert result["chart_schema"]["encoding"]["y"] == {
+        "aggregate": "count",
+        "type": "quantitative",
+        "title": "Count",
+    }
+    assert result["chart_schema"]["encoding"]["color"]["field"] == "Owner"
+
+
 def test_fallback_chart_uses_grouped_bar_for_two_business_dimensions():
     result = build_fallback_chart_result(
         "Which Customers have the highest New Orders in each Market?",
