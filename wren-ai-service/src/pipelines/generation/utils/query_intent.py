@@ -35,6 +35,24 @@ STOP_TERMS = {
 
 DETAIL_TERMS = {"display", "find", "get", "list", "show"}
 RANKING_TERMS = {"bottom", "highest", "least", "lowest", "most", "top"}
+RELATIONSHIP_TERMS = {
+    "attach",
+    "attached",
+    "attachment",
+    "associate",
+    "associated",
+    "connect",
+    "connected",
+    "join",
+    "joined",
+    "link",
+    "linked",
+    "map",
+    "mapped",
+    "mapping",
+    "relate",
+    "related",
+}
 COUNT_TERMS = {"count", "counts", "number", "order", "orders", "row", "rows"}
 COUNT_AGGREGATE_TERMS = {"count", "counts", "number", "row", "rows"}
 SUM_TERMS = {
@@ -70,10 +88,12 @@ GENERIC_BUSINESS_TERMS = {
 @dataclass(frozen=True)
 class QueryIntent:
     terms: set[str]
+    business_terms: set[str]
     requested_dimension_terms: set[str]
     requests_aggregate: bool
     requests_ranking: bool
     requests_detail: bool
+    requests_relationship: bool
 
 
 def normalize_term(term: str) -> set[str]:
@@ -110,9 +130,12 @@ def identifier_terms(value: str) -> set[str]:
 
 def analyze_query(query: str) -> QueryIntent:
     query_terms = terms(query)
+    business_terms = _business_terms(query)
     requested_dimension_terms = _requested_dimension_terms(query)
+    requests_relationship = _requests_relationship(query, query_terms, business_terms)
     return QueryIntent(
         terms=query_terms,
+        business_terms=business_terms,
         requested_dimension_terms=requested_dimension_terms,
         requests_aggregate=bool(
             query_terms
@@ -128,6 +151,7 @@ def analyze_query(query: str) -> QueryIntent:
         or bool(query_terms & {"breakdown", "compare", "trend"}),
         requests_ranking=bool(query_terms & RANKING_TERMS),
         requests_detail=bool(query_terms & DETAIL_TERMS),
+        requests_relationship=requests_relationship,
     )
 
 
@@ -172,6 +196,39 @@ def _requested_dimension_terms(query: str) -> set[str]:
                 requested.add(following)
 
     return requested
+
+
+def _business_terms(query: str) -> set[str]:
+    return {
+        token
+        for token in (
+            canonical_term(token) for token in WORD_PATTERN.findall(query or "")
+        )
+        if _is_business_dimension_term(token) and token not in RELATIONSHIP_TERMS
+    }
+
+
+def _requests_relationship(
+    query: str,
+    query_terms: set[str],
+    business_terms: set[str],
+) -> bool:
+    normalized = " ".join(
+        canonical_term(token) for token in WORD_PATTERN.findall(query or "")
+    )
+    if query_terms & RELATIONSHIP_TERMS:
+        return True
+
+    if len(business_terms) < 2:
+        return False
+
+    return bool(
+        re.search(
+            r"\b(with|having|against|between|across)\b",
+            normalized,
+            flags=re.IGNORECASE,
+        )
+    )
 
 
 def _is_business_dimension_term(term: str) -> bool:

@@ -508,6 +508,110 @@ async def test_sql_post_processor_allows_join_with_declared_relationship():
 
 
 @pytest.mark.asyncio
+async def test_sql_post_processor_rejects_single_table_for_relationship_intent():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        [
+            (
+                '{"sql": "SELECT parent_id, child_id '
+                'FROM model_alpha ORDER BY parent_id"}'
+            )
+        ],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "model_alpha",
+                "column_names": ["parent_id", "child_id"],
+                "relationship_constraints": [
+                    "FOREIGN KEY (child_id) REFERENCES model_beta(id)"
+                ],
+                "table_semantic_terms": ["parent", "record"],
+                "column_semantic_terms": {
+                    "parent_id": ["parent", "identifier"],
+                    "child_id": ["child", "identifier"],
+                },
+            },
+            {
+                "table_name": "model_beta",
+                "column_names": ["id", "label"],
+                "relationship_constraints": [],
+                "table_semantic_terms": ["child", "record"],
+                "column_semantic_terms": {
+                    "id": ["child", "identifier"],
+                    "label": ["child", "label"],
+                },
+            },
+        ],
+        query="show parent records linked to child records",
+    )
+
+    assert engine.executed is False
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "RELATIONSHIP_GROUNDING"
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_rejects_missing_relationship_metadata():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        ['{"sql": "SELECT parent_id FROM model_alpha"}'],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "model_alpha",
+                "column_names": ["parent_id"],
+                "relationship_constraints": [],
+                "table_semantic_terms": ["parent", "record"],
+                "column_semantic_terms": {
+                    "parent_id": ["parent", "identifier"],
+                },
+            }
+        ],
+        query="show parent records linked to child records",
+    )
+
+    assert engine.executed is False
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "RELATIONSHIP_GROUNDING"
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_allows_relationship_query_with_approved_join_path():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        [
+            (
+                '{"sql": "SELECT model_alpha.parent_id, model_beta.label '
+                "FROM model_alpha JOIN model_beta "
+                "ON model_alpha.child_id = model_beta.id\"}"
+            )
+        ],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "model_alpha",
+                "column_names": ["parent_id", "child_id"],
+                "relationship_constraints": [
+                    "FOREIGN KEY (child_id) REFERENCES model_beta(id)"
+                ],
+            },
+            {
+                "table_name": "model_beta",
+                "column_names": ["id", "label"],
+                "relationship_constraints": [],
+            },
+        ],
+        query="show parent records linked to child records",
+    )
+
+    assert engine.executed is True
+    assert result["invalid_generation_result"] == {}
+
+
+@pytest.mark.asyncio
 async def test_sql_post_processor_allows_intent_shaped_analytical_query():
     engine = CapturingEngine()
 
