@@ -49,6 +49,22 @@ _TIME_QUERY_PATTERN = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+_TIMEFRAME_FILTER_QUERY_PATTERN = re.compile(
+    r"\b(today|yesterday)\b|"
+    r"\b(?:in|from|for|during|since|between|before|after|on)\b.{0,50}"
+    r"\b(?:january|february|march|april|may|june|july|august|september|"
+    r"october|november|december|20\d{2}|week|month|quarter|year)\b|"
+    r"\b(?:current|this|last|previous|next)\s+(?:week|month|quarter|year)\b",
+    re.IGNORECASE,
+)
+_LITERAL_FILTER_QUERY_PATTERN = re.compile(
+    r"\b(?:from|for|in|where|with|of)\s+(?:the\s+)?"
+    r"(?:country|market|business\s+unit|bu|region|state|city|customer|"
+    r"vendor|supplier|payment\s+type|status|category)\b|"
+    r"\b(?:country|market|business\s+unit|bu|region|state|city|customer|"
+    r"vendor|supplier|payment\s+type|status|category)\s+['\"]?[a-z0-9]",
+    re.IGNORECASE,
+)
 _DATE_LITERAL_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2})?$")
 
 _BROAD_TABLE_PREVIEW_COLUMN_THRESHOLD = 8
@@ -616,6 +632,12 @@ def _table_preview_shape_error(sql: str | None, query: str | None = None) -> str
     query_has_shape = bool(query and _ANALYTICAL_OR_FILTER_QUERY_PATTERN.search(query))
     query_has_aggregate_shape = bool(query and _AGGREGATE_QUERY_PATTERN.search(query))
     query_has_ranking_shape = bool(query and _RANKING_QUERY_PATTERN.search(query))
+    query_has_timeframe_filter = bool(
+        query and _TIMEFRAME_FILTER_QUERY_PATTERN.search(query)
+    )
+    query_has_literal_filter = bool(
+        query and _LITERAL_FILTER_QUERY_PATTERN.search(query)
+    )
 
     for statement in sqlparse.parse(sql):
         if not str(statement).strip().strip(";").strip():
@@ -634,6 +656,12 @@ def _table_preview_shape_error(sql: str | None, query: str | None = None) -> str
         cte_names = _collect_cte_names(statement)
         source_tables = referenced_tables - cte_names
         is_single_source_scan = len(source_tables) <= 1
+
+        if query_has_timeframe_filter and is_single_source_scan and not has_filter:
+            return "Generated SQL does not apply the requested timeframe filter."
+
+        if query_has_literal_filter and is_single_source_scan and not has_filter:
+            return "Generated SQL does not apply the requested literal filter value."
 
         if (
             query_has_aggregate_shape
@@ -1179,6 +1207,7 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - Do not add implicit filters, latest-period logic, maximum-date logic, row limits, distinctness, aggregation, or ordering unless the current user request requires it.
 - If the user asks for a filtered result, include the filter only when the filtered concept is represented by an exact schema field. If the filter field is not present, return null for sql instead of ignoring the filter.
 - If the user provides a literal filter value, copy that current request value into the SQL string literal exactly as the user provided it, except for normal SQL string escaping. Do not invent, translate, summarize, describe, or substitute filter values.
+- For detail-list requests filtered by country, market, business unit, customer, status, or another entity value, include a WHERE predicate on the grounded filter field. Do not answer with an unfiltered preview.
 - If the user asks for a specific or particular entity but does not provide the required value, return null for sql instead of adding a stand-in value. Omit a missing filter only when the requested answer remains correct without it.
 - Never use schema descriptions, column comments, aliases, display labels, source names, physical names, lineage names, reasoning text, or error messages as string literal data values.
 - If the user asks "which", "who", or "what" for a ranked entity, select and group by the exact schema field that represents that requested entity. Do not replace the requested entity with a context field or unrelated dimension.
@@ -1189,7 +1218,7 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - For comparison questions, include each requested comparison group or time period and compute the requested difference, change, growth, or ranking when the required fields are grounded.
 - Do not answer a comparison question with only one comparison side, one period, or one group unless the user explicitly asks for only that side.
 - For detail-list questions, return only the fields needed to identify and describe the requested records, plus requested filters and timeframes.
-- Do not answer a timeframe request with an unfiltered table scan.
+- For detail-list timeframe questions, apply a bounded WHERE range on the grounded date/time field. Do not answer a timeframe request with an unfiltered table scan.
 - Prefer one model, view, or metric that already contains the requested fields. Do not join tables just because they were retrieved together. Do not invent join predicates from similar column names. Join only through relationships declared in DATABASE SCHEMA.
 - Treat retrieved schema objects as ranked candidates for grounding, not as datasets to merge automatically. Do not combine parallel or similar retrieved models with UNION, UNION ALL, INTERSECT, or EXCEPT unless the current user explicitly asks to combine separate result sets and the retrieved DATABASE SCHEMA grounds every branch with identical result shape and compatible measures.
 - If multiple retrieved schema objects are needed for the same result, use them only when the required columns and relationship path are present.

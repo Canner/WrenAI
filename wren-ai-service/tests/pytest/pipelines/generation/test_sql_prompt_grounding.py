@@ -37,6 +37,8 @@ def test_sql_generation_system_prompt_requires_retrieved_semantic_authority():
     assert "role-hint metadata only as semantic hints" in prompt
     assert "Metadata role labels are never SQL identifiers" in prompt
     assert "Do not answer a timeframe request with an unfiltered table scan" in prompt
+    assert "For detail-list requests filtered by country" in prompt
+    assert "For detail-list timeframe questions" in prompt
     assert "produce an analytical query shape" in prompt
     assert "contributed" in prompt
     assert "aggregate the exact requested measure with SUM" in prompt
@@ -117,6 +119,8 @@ def test_sql_generation_prompt_includes_executable_schema_contract():
     assert "- numeric_measure" in built_prompt
     assert "Generate an intent-shaped query, not a table preview" in built_prompt
     assert "filter an actual declared column" in built_prompt
+    assert "For detail-list requests such as show/list orders filtered by country" in built_prompt
+    assert "For detail-list timeframe requests such as show/list orders in July 2026" in built_prompt
     assert "aggregate actual declared measure columns" in built_prompt
     assert "aggregate the exact requested measure with SUM" in built_prompt
     assert "Metadata role labels are not executable column names" in built_prompt
@@ -138,6 +142,8 @@ def test_followup_sql_generation_prompt_requires_intent_shaped_query():
 
     assert "Generate an intent-shaped query, not a table preview" in result["prompt"]
     assert "Never return template SQL" in result["prompt"]
+    assert "For detail-list requests such as show/list orders filtered by country" in result["prompt"]
+    assert "For detail-list timeframe requests such as show/list orders in July 2026" in result["prompt"]
     assert "aggregate the exact requested measure with SUM" in result["prompt"]
     assert "not automatic datasets to merge" in result["prompt"]
     assert "Do not use UNION, UNION ALL, INTERSECT, or EXCEPT" in result["prompt"]
@@ -160,7 +166,10 @@ def test_sql_correction_prompt_keeps_failed_sql_diagnostic_and_question():
     assert "Failed SQL: SELECT 1" in built_prompt
     assert "DIAGNOSTIC CONTEXT" in built_prompt
     assert "Correct into an intent-shaped query, not a table preview" in built_prompt
+    assert "If the error says the SQL uses SELECT *" in built_prompt
     assert "rebuild the query shape from the user's question" in built_prompt
+    assert "missing literal filter value" in built_prompt
+    assert "include a WHERE predicate on the grounded filter field" in built_prompt
     assert "Do not preserve AVG, subtraction, margin" in built_prompt
     assert "Never return template SQL" in built_prompt
     assert "not automatic datasets to merge" in built_prompt
@@ -214,6 +223,7 @@ def test_sql_regeneration_prompt_includes_executable_schema_contract():
     assert "TABLE: retrieved_model" in built_prompt
     assert "Regenerate an intent-shaped query, not a table preview" in built_prompt
     assert "filter an actual declared time/date column" in built_prompt
+    assert "include a WHERE predicate on the grounded filter field" in built_prompt
     assert "Do not write role labels" in built_prompt
     assert "aggregate the exact requested measure with SUM" in built_prompt
     assert "Never return template SQL" in built_prompt

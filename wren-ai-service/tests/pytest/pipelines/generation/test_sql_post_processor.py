@@ -327,6 +327,35 @@ async def test_sql_post_processor_rejects_unfiltered_timeframe_table_preview():
     assert engine.executed is False
     assert result["valid_generation_result"] == {}
     assert result["invalid_generation_result"]["type"] == "SQL_INTENT_MISMATCH"
+    assert (
+        result["invalid_generation_result"]["error"]
+        == "Generated SQL does not apply the requested timeframe filter."
+    )
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_rejects_unfiltered_literal_filter_table_preview():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        ['{"sql": "SELECT order_id, country FROM model_alpha"}'],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "model_alpha",
+                "column_names": ["order_id", "country"],
+            }
+        ],
+        query="show orders from the country france",
+    )
+
+    assert engine.executed is False
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "SQL_INTENT_MISMATCH"
+    assert (
+        result["invalid_generation_result"]["error"]
+        == "Generated SQL does not apply the requested literal filter value."
+    )
 
 
 @pytest.mark.asyncio
