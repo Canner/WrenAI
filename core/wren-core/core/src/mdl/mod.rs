@@ -5418,4 +5418,137 @@ mod test {
             Ok(())
         }
     }
+
+    /// A derived context keeps one `ModelAnalyzeRule` instance for its whole
+    /// lifetime, so concurrent `optimize()` calls share it — the RLAC
+    /// cycle-detection stack must therefore be per-invocation state.
+    ///
+    /// This stress test widens the race window but remains probabilistic;
+    /// a passing run does not prove the absence of shared invocation state.
+    mod analyzer_concurrency {
+        use super::*;
+        use datafusion::common::plan_err;
+        use std::sync::Barrier;
+        use std::thread;
+
+        /// Acyclic chain: `customer`'s RLAC subquery selects from `allowed`,
+        /// so planning holds the cycle stack across the nested analysis — a
+        /// wide enough window for concurrent invocations to collide.
+        fn rlac_chain_manifest() -> Manifest {
+            ManifestBuilder::new()
+                .catalog("wren")
+                .schema("test")
+                .model(
+                    ModelBuilder::new("customer")
+                        .table_reference("customer_remote")
+                        .column(ColumnBuilder::new("c_custkey", "int").build())
+                        .add_row_level_access_control(
+                            "by_allowed",
+                            vec![SessionProperty::new_required("session_user")],
+                            "c_custkey IN (SELECT allowed_id FROM allowed WHERE allowed_user = @session_user)",
+                        )
+                        .build(),
+                )
+                .model(
+                    ModelBuilder::new("allowed")
+                        .table_reference("allowed_remote")
+                        .column(ColumnBuilder::new("allowed_id", "int").build())
+                        .column(ColumnBuilder::new("allowed_user", "string").build())
+                        .build(),
+                )
+                .build()
+        }
+
+        /// Valid (acyclic) queries planned concurrently on one shared
+        /// derived context must never report a spurious RLAC cycle.
+        ///
+        /// Derive once and share — mirrors wren-core-py's long-lived
+        /// exec_ctx. Drive plans through `SessionState::optimize`: the
+        /// Analyzer only runs there, and `transform_sql_with_ctx` builds
+        /// fresh rule instances per call — either shortcut would make the
+        /// race unobservable.
+        #[test]
+        fn concurrent_valid_rlac_queries_never_report_spurious_cycle() -> Result<()> {
+            const N_THREADS: usize = 8;
+            const ITERATIONS: usize = 50;
+            const SQL: &str = "SELECT c_custkey FROM wren.test.customer";
+
+            let base_ctx = create_wren_ctx(None, None);
+            let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+                rlac_chain_manifest(),
+                Arc::new(HashMap::default()),
+                Mode::LocalRuntime,
+            )?);
+            let headers = Arc::new(build_headers(&[(
+                "session_user".to_string(),
+                Some("'alice'".to_string()),
+            )]));
+
+            let setup_rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            let derived_ctx = Arc::new(setup_rt.block_on(apply_wren_on_ctx(
+                &base_ctx,
+                Arc::clone(&analyzed_mdl),
+                headers,
+                Mode::LocalRuntime,
+            ))?);
+
+            // Serial sanity check: the fixture must plan cleanly without
+            // concurrency, so any failure below is attributable to it.
+            setup_rt.block_on(async {
+                let state = derived_ctx.state();
+                let plan = state.create_logical_plan(SQL).await?;
+                state.optimize(&plan).map(|_| ())
+            })?;
+
+            let barrier = Arc::new(Barrier::new(N_THREADS));
+            let handles: Vec<_> = (0..N_THREADS)
+                .map(|tid| {
+                    let ctx = Arc::clone(&derived_ctx);
+                    let barrier = Arc::clone(&barrier);
+                    thread::Builder::new()
+                        // 8 MiB matches CI's RUST_MIN_STACK and this file's
+                        // convention for plan-analysis tests (see
+                        // test_multiple_relationship_calculated_columns):
+                        // stack-heavy debug planning can exceed Rust's
+                        // platform-dependent thread default and obscure the
+                        // concurrency check.
+                        .stack_size(8 * 1024 * 1024)
+                        .spawn(move || -> Result<()> {
+                            let rt = tokio::runtime::Builder::new_current_thread()
+                                .enable_all()
+                                .build()
+                                .unwrap();
+                            barrier.wait();
+                            rt.block_on(async move {
+                                for iter in 0..ITERATIONS {
+                                    let state = ctx.state();
+                                    let plan = state.create_logical_plan(SQL).await?;
+                                    // Propagate optimizer failures through
+                                    // the thread's `Result`: a panic reaches
+                                    // `join()` as `Box<dyn Any>` and loses
+                                    // this diagnostic context.
+                                    if let Err(e) = state.optimize(&plan) {
+                                        return plan_err!(
+                                            "thread {tid} iter {iter}: valid \
+                                             acyclic RLAC query failed under \
+                                             same-context concurrency: {e}"
+                                        );
+                                    }
+                                }
+                                Ok(())
+                            })
+                        })
+                        .expect("failed to spawn analyzer stress thread")
+                })
+                .collect();
+
+            for handle in handles {
+                handle.join().expect("analyzer stress thread panicked")?;
+            }
+            Ok(())
+        }
+    }
 }
