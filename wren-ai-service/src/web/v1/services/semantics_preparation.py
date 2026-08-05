@@ -7,6 +7,7 @@ from langfuse.decorators import observe
 from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
+from src.pipelines.indexing.semantic_enrichment import enrich_mdl_str_for_retrieval
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest
 
@@ -76,8 +77,9 @@ class SemanticsPreparationService:
         try:
             logger.info(f"MDL: {prepare_semantics_request.mdl}")
 
+            enriched_mdl = enrich_mdl_str_for_retrieval(prepare_semantics_request.mdl)
             input = {
-                "mdl_str": prepare_semantics_request.mdl,
+                "mdl_str": enriched_mdl,
                 "project_id": prepare_semantics_request.project_id,
                 "mdl_hash": prepare_semantics_request.mdl_hash,
             }
