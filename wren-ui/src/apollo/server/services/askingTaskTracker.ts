@@ -328,11 +328,7 @@ export class AskingTaskTracker implements IAskingTaskTracker {
 
             // Poll for updates
             logger.debug(`Polling for updates for task ${queryId}`);
-            const resultFromAIService =
-              await this.wrenAIAdaptor.getAskResult(queryId);
-            const result = this.isMissingInAIService(resultFromAIService)
-              ? this.createExpiredTaskResult()
-              : resultFromAIService;
+            const result = await this.wrenAIAdaptor.getAskResult(queryId);
             task.lastPolled = now;
             const resultChanged = this.isResultChanged(task.result, result);
             this.scheduleNextPoll(task, result.status, resultChanged);
@@ -421,26 +417,26 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     );
 
     // Run all jobs in parallel
-    const results = await Promise.allSettled(jobs.map((job) => job()));
+    Promise.allSettled(jobs.map((job) => job())).then((results) => {
+      // Log any rejected promises
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          logger.error(`Job ${index} failed: ${result.reason}`);
+        }
+      });
 
-    // Log any rejected promises
-    results.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        logger.error(`Job ${index} failed: ${result.reason}`);
+      // Clean up tasks that have been in memory too long
+      if (tasksToRemove.length > 0) {
+        logger.info(
+          `Cleaning up tasks that have been in memory too long. Tasks: ${tasksToRemove.join(
+            ', ',
+          )}`,
+        );
+      }
+      for (const queryId of tasksToRemove) {
+        this.trackedTasks.delete(queryId);
       }
     });
-
-    // Clean up tasks that have been in memory too long
-    if (tasksToRemove.length > 0) {
-      logger.info(
-        `Cleaning up tasks that have been in memory too long. Tasks: ${tasksToRemove.join(
-          ', ',
-        )}`,
-      );
-    }
-    for (const queryId of tasksToRemove) {
-      this.trackedTasks.delete(queryId);
-    }
   }
 
   private async updateThreadResponseWhenTaskFinalized(
@@ -568,15 +564,7 @@ export class AskingTaskTracker implements IAskingTaskTracker {
   }
 
   private async finalizeStaleTask(taskRecord: AskingTask): Promise<void> {
-    const result = this.createExpiredTaskResult();
-
-    await this.askingTaskRepository.updateOne(taskRecord.id, {
-      detail: result,
-    });
-  }
-
-  private createExpiredTaskResult(): AskResult {
-    return {
+    const result: AskResult = {
       type: AskResultType.TEXT_TO_SQL,
       status: AskResultStatus.FAILED,
       response: null,
@@ -586,13 +574,10 @@ export class AskingTaskTracker implements IAskingTaskTracker {
           'The previous asking task expired after the service restarted. Please ask again.',
       },
     };
-  }
 
-  private isMissingInAIService(result: AskResult): boolean {
-    return (
-      result.status === AskResultStatus.FAILED &&
-      result.error?.code === Errors.GeneralErrorCodes.ASK_RESULT_NOT_FOUND
-    );
+    await this.askingTaskRepository.updateOne(taskRecord.id, {
+      detail: result,
+    });
   }
 
   private isResultChanged(

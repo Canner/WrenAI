@@ -2,14 +2,11 @@ import asyncio
 import logging
 from typing import Dict, Literal, Optional
 
-import orjson
 from cachetools import TTLCache
 from langfuse.decorators import observe
 from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
-from src.pipelines.indexing.semantic_enrichment import enrich_mdl_str_for_retrieval
-from src.pipelines.indexing.semantic_overlay import apply_semantic_overlay_file
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest
 
@@ -52,10 +49,8 @@ class SemanticsPreparationService:
         pipelines: Dict[str, BasicPipeline],
         maxsize: int = 1_000_000,
         ttl: int = 120,
-        semantic_overlay_path: str = "",
     ):
         self._pipelines = pipelines
-        self._semantic_overlay_path = semantic_overlay_path
         self._prepare_semantics_statuses: Dict[
             str, SemanticsPreparationStatusResponse
         ] = TTLCache(maxsize=maxsize, ttl=ttl)
@@ -81,16 +76,8 @@ class SemanticsPreparationService:
         try:
             logger.info(f"MDL: {prepare_semantics_request.mdl}")
 
-            enriched_mdl = enrich_mdl_str_for_retrieval(prepare_semantics_request.mdl)
-            if self._semantic_overlay_path:
-                enriched_mdl = orjson.dumps(
-                    apply_semantic_overlay_file(
-                        orjson.loads(enriched_mdl),
-                        self._semantic_overlay_path,
-                    )
-                ).decode("utf-8")
             input = {
-                "mdl_str": enriched_mdl,
+                "mdl_str": prepare_semantics_request.mdl,
                 "project_id": prepare_semantics_request.project_id,
                 "mdl_hash": prepare_semantics_request.mdl_hash,
             }

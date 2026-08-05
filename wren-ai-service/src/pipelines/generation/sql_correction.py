@@ -17,7 +17,6 @@ from src.pipelines.generation.utils.sql import (
     SQLGenPostProcessor,
     build_executable_schema_contract,
     construct_instructions,
-    get_sql_dialect_instructions,
     get_text_to_sql_rules,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
@@ -52,12 +51,17 @@ Make sure you follow the SQL Rules strictly.
 The final answer must be in JSON format:
 
 {{
-    "sql": "complete executable corrected SQL query string using only identifiers declared in DATABASE SCHEMA, or null"
+    "sql": "corrected SQL query string using only identifiers declared in DATABASE SCHEMA, or null"
 }}
 """
 
 
 sql_correction_user_prompt_template = """
+{% if executable_schema_contract %}
+{{ executable_schema_contract }}
+
+{% endif %}
+
 {% if documents %}
 ### DATABASE SCHEMA ###
 {% for document in documents %}
@@ -70,10 +74,6 @@ sql_correction_user_prompt_template = """
 {% for function in sql_functions %}
 {{ function }}
 {% endfor %}
-{% endif %}
-
-{% if sql_dialect_instructions %}
-{{ sql_dialect_instructions }}
 {% endif %}
 
 {% if instructions %}
@@ -99,20 +99,7 @@ Error Message: {{ invalid_generation_result.error }}
 
 Regenerate from the user's question and DATABASE SCHEMA only when a user question is available. Otherwise, correct the failed SQL only by using exact executable identifiers declared in DATABASE SCHEMA or SQL FUNCTIONS. Do not copy table names, column names, functions, literals, aliases, or SQL structure from the failed SQL unless each one is declared in DATABASE SCHEMA or SQL FUNCTIONS.
 Correct into an intent-shaped query, not a table preview. Select explicit columns, filters, groupings, measures, joins, ordering, and limits needed by the question. For metric questions, return dimensions plus the requested measure or grounded expression; never use SELECT * as a substitute.
-If the error says the SQL uses SELECT *, replace it with explicit grounded columns needed by the current question and keep every requested filter, timeframe, grouping, measure, ordering, and limit.
-If the error says the SQL contains placeholders, unresolved identifiers, or unsupported identifiers, discard the failed SQL shape completely. Rebuild from the user's question, DATABASE SCHEMA, WREN SQL IDENTIFIER CONTRACT, SQL FUNCTIONS, and declared relationships only. Do not preserve placeholder columns, placeholder aliases, placeholder CTEs, inferred join conditions, or subqueries from the failed SQL.
-If the error says the SQL is a broad table preview, table preview, missing requested aggregation, missing requested grouping, missing timeframe, missing literal filter value, or missing ordering/ranking, rebuild the query shape from the user's question. When DATABASE SCHEMA contains role or semantic hints, use those hints only to choose actual declared columns. Do not write role labels, sample schema names, placeholder table names, placeholder column names, or replacement markers as SQL identifiers or SQL literal values. For timeframe requests, filter an actual declared time/date column with a bounded range. For detail-list requests filtered by country, market, business unit, customer, status, or another entity value, include a WHERE predicate on the grounded filter field. For aggregate, "by", trend, or ranking requests, aggregate actual declared measure columns or count rows, group by actual declared dimension/date columns, order by the selected aggregate alias when ranking, and limit only when requested.
-For "highest", "lowest", "top", "bottom", "most", "least", or "contributed" questions about a named value, amount, sales, cost, revenue, quantity, or numeric measure, rebuild the SQL with the requested contributing dimension, SUM of the exact requested measure unless another aggregation is explicitly requested, ORDER BY that selected aggregate alias in the requested direction, and the requested ranked row limit. Do not preserve AVG, subtraction, margin, cost, percentage, or another derived metric from the failed SQL unless the user explicitly asks for that metric.
-String literals in WHERE or HAVING must come from the current user question or current user instructions only. Never use schema descriptions, column comments, aliases, display labels, source names, or lineage names as data values.
-Copy user-provided filter values exactly into SQL string literals, except for normal SQL string escaping. Do not replace them with descriptive labels, unresolved variables, or values to be filled in later.
-If the diagnostic says string filter values are not grounded, discard every unsupported literal predicate from the failed SQL and rebuild from the current user question and current user instructions. Do not replace an unsupported literal with another literal. Keep only literal values explicitly present in the current question or instructions, plus concrete date/time boundaries derived from an explicit timeframe.
-A WHERE predicate is allowed only when the current user question or current user instructions explicitly request that filter or comparison, or when it is a date/time boundary derived directly from an explicit timeframe. Do not add filters to narrow the result, choose a default segment, or satisfy an assumed business rule.
-If the current question asks for a specific entity but omits the entity value, return null for sql instead of fabricating a placeholder, ID, name, or code.
-When correcting missing ranking or ordering, add only the requested grouping, ordering, and limit using grounded selected fields or measures. Do not add unrelated WHERE predicates.
-Never return template SQL. If any required table, column, join, filter value, timeframe boundary, measure, or function is not fully grounded now, return null for sql instead of a partial query.
-Do not invent generic table names, generic column names, join keys, common-column placeholders, or substitute identifiers from the failed SQL or the wording of the user's question.
-Retrieved schema objects are ranked candidates, not automatic datasets to merge. Prefer one grounded model, view, or metric that answers the question. Do not use UNION, UNION ALL, INTERSECT, or EXCEPT to combine similar retrieved candidates unless the current user explicitly asks to combine separate result sets and DATABASE SCHEMA grounds each branch with the same result shape and compatible measure meaning.
-For comparison requests, include every requested comparison group or period in the SQL result and compute the requested difference, change, growth, or ranking when the required fields and date operations are grounded. Do not answer a comparison request with only one side of the comparison.
+If the error says the SQL is a broad table preview, table preview, missing requested aggregation, missing requested grouping, missing timeframe, or missing ordering/ranking, rebuild the query shape from the user's question. When DATABASE SCHEMA contains column_role_hints_not_identifiers, use those roles only to map intent to exact declared columns. For timeframe requests, filter an exact date_time_candidate column with a bounded range. For aggregate, "by", trend, or ranking requests, aggregate exact numeric_measure_candidate columns or count rows, group by exact dimension/date expressions, order by the selected aggregate alias when ranking, and limit only when requested.
 Return only the final JSON SQL response.
 """
 
@@ -127,11 +114,9 @@ def prompt(
     instructions: list[dict] | None = None,
     sql_functions: list[SqlFunction] | None = None,
     schema_contracts: list[dict] | None = None,
-    data_source: str | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         documents=documents,
-        sql_dialect_instructions=get_sql_dialect_instructions(data_source),
         executable_schema_contract=build_executable_schema_contract(schema_contracts),
         invalid_generation_result=invalid_generation_result,
         query=query or "",
@@ -204,7 +189,6 @@ class SQLCorrection(BasicPipeline):
                 template=sql_correction_user_prompt_template
             ),
             "post_processor": SQLGenPostProcessor(engine=engine),
-            "data_source": kwargs.get("data_source", "local_file"),
         }
 
         super().__init__(
@@ -237,9 +221,6 @@ class SQLCorrection(BasicPipeline):
             )
         else:
             metadata = {}
-        data_source = metadata.get("data_source") or self._components.get(
-            "data_source", "local_file"
-        )
 
         return await self._pipe.execute(
             ["post_process"],
@@ -253,7 +234,7 @@ class SQLCorrection(BasicPipeline):
                 "mdl_hash": mdl_hash,
                 "use_dry_plan": use_dry_plan,
                 "allow_dry_plan_fallback": allow_dry_plan_fallback,
-                "data_source": data_source,
+                "data_source": metadata.get("data_source", "local_file"),
                 "sql_knowledge": sql_knowledge,
                 "schema_contracts": schema_contracts,
                 **self._components,

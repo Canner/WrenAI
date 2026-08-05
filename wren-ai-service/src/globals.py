@@ -90,10 +90,6 @@ def create_service_container(
                     **pipe_components["semantics_description"],
                 )
             },
-            generation_timeout_seconds=settings.semantics_description_timeout_seconds,
-            max_models_per_batch=settings.semantics_description_max_models_per_batch,
-            max_columns_per_batch=settings.semantics_description_max_columns_per_batch,
-            max_concurrent_tasks=settings.semantics_description_max_concurrent_tasks,
             **query_cache,
         ),
         semantics_preparation_service=services.SemanticsPreparationService(
@@ -114,7 +110,6 @@ def create_service_container(
                     **pipe_components["project_meta_indexing"],
                 ),
             },
-            semantic_overlay_path=settings.semantic_overlay_path,
             **query_cache,
         ),
         ask_service=services.AskService(

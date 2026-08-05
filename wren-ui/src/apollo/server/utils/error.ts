@@ -9,7 +9,6 @@ export enum GeneralErrorCodes {
   RESOURCE_NOT_FOUND = 'RESOURCE_NOT_FOUND',
   MDL_PARSE_ERROR = 'MDL_PARSE_ERROR',
   NO_CHART = 'NO_CHART',
-  ASK_RESULT_NOT_FOUND = 'ASK_RESULT_NOT_FOUND',
 
   // Exception error for AI service (e.g., network connection error)
   AI_SERVICE_UNDEFINED_ERROR = 'OTHERS',
@@ -73,8 +72,6 @@ export const errorMessages = {
     "Could you please provide more details or specify the information you're seeking?",
   [GeneralErrorCodes.NO_CHART]:
     "The chart couldn't be generated this time. Please try regenerating the chart or rephrasing your question for better results.",
-  [GeneralErrorCodes.ASK_RESULT_NOT_FOUND]:
-    'The asking task result is no longer available',
 
   // Connector errors
   [GeneralErrorCodes.CONNECTION_ERROR]: 'Can not connect to data source',
@@ -163,8 +160,6 @@ export const shortMessages = {
   [GeneralErrorCodes.FAILED_TO_GENERATE_VEGA_SCHEMA]:
     'Failed to generate Vega spec',
   [GeneralErrorCodes.POLLING_TIMEOUT]: 'Polling timeout',
-  [GeneralErrorCodes.ASK_RESULT_NOT_FOUND]:
-    'The asking task result is no longer available',
   [GeneralErrorCodes.SQL_EXECUTION_ERROR]: 'SQL execution error',
 };
 

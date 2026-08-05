@@ -48,12 +48,17 @@ Treat physical/source/lineage names from the original SQL, reasoning, samples, c
 The final answer must be JSON. Return a SQL string only when it is fully grounded in DATABASE SCHEMA and SQL FUNCTIONS and answers the user's requested intent. Do not create table or column identifiers from the user's wording. If no fully grounded SQL can be generated, return null for sql.
 
 {{
-    "sql": "complete executable SQL query string using only identifiers declared in DATABASE SCHEMA, or null"
+    "sql": "SQL query string using only identifiers declared in DATABASE SCHEMA, or null"
 }}
 """
 
 
 sql_regeneration_user_prompt_template = """
+{% if executable_schema_contract %}
+{{ executable_schema_contract }}
+
+{% endif %}
+
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
@@ -99,14 +104,7 @@ User's Question: {{ query }}
 Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, user question words, or inferred names into executable SQL. If a needed table, output column, filter column, grouping column, relation, date field, measure, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, return null for sql instead of inventing, substituting, or approximating a similar name. If the retrieved schema does not ground the user's primary requested intent, return null for sql instead of querying an unrelated object.
 Regenerate with executable identifiers from the current DATABASE SCHEMA only.
 Regenerate an intent-shaped query, not a table preview. Select explicit columns, filters, groupings, measures, joins, ordering, and limits needed by the question. For metric questions, return dimensions plus the requested measure or grounded expression; never use SELECT * as a substitute.
-When DATABASE SCHEMA contains role or semantic hints, use those hints only to choose actual declared columns. Do not write role labels, sample schema names, placeholder table names, placeholder column names, or replacement markers as SQL identifiers or SQL literal values. For timeframe requests, filter an actual declared time/date column with a bounded range. For detail-list requests filtered by country, market, business unit, customer, status, or another entity value, include a WHERE predicate on the grounded filter field and select explicit detail columns. For aggregate, "by", trend, or ranking requests, aggregate actual declared measure columns or count rows, group by actual declared dimension/date columns, order by the selected aggregate alias when ranking, and limit only when requested. Do not return a raw table preview.
-For "highest", "lowest", "top", "bottom", "most", "least", or "contributed" questions about a named value, amount, sales, cost, revenue, quantity, or numeric measure, group by the requested contributing dimension, aggregate the exact requested measure with SUM unless another aggregation is explicitly requested, order by that selected aggregate alias in the requested direction, and return only the requested ranked rows. Do not use AVG, subtraction, margin, cost, percentage, or another derived metric unless the user explicitly asks for that metric.
-String literals in WHERE or HAVING must come from the current user question or current user instructions only. Never use schema descriptions, column comments, aliases, display labels, source names, or lineage names as data values.
-Copy user-provided filter values exactly into SQL string literals, except for normal SQL string escaping. Do not replace them with descriptive labels, unresolved variables, or values to be filled in later.
-Never return template SQL. If any required table, column, join, filter value, timeframe boundary, measure, or function is not fully grounded now, return null for sql instead of a partial query.
-Do not invent generic table names, generic column names, join keys, common-column placeholders, or substitute identifiers from the original SQL, reasoning, or the wording of the user's question.
-Retrieved schema objects are ranked candidates, not automatic datasets to merge. Prefer one grounded model, view, or metric that answers the question. Do not use UNION, UNION ALL, INTERSECT, or EXCEPT to combine similar retrieved candidates unless the current user explicitly asks to combine separate result sets and DATABASE SCHEMA grounds each branch with the same result shape and compatible measure meaning.
-For comparison requests, include every requested comparison group or period in the SQL result and compute the requested difference, change, growth, or ranking when the required fields and date operations are grounded. Do not answer a comparison request with only one side of the comparison.
+When DATABASE SCHEMA contains column_role_hints_not_identifiers, use those roles only to map intent to exact declared columns. For timeframe requests, filter an exact date_time_candidate column with a bounded range. For aggregate, "by", trend, or ranking requests, aggregate exact numeric_measure_candidate columns or count rows, group by exact dimension/date expressions, order by the selected aggregate alias when ranking, and limit only when requested. Do not return a raw table preview.
 
 {% if executable_schema_contract %}
 ### ALLOWED EXECUTABLE IDENTIFIERS FOR THIS REGENERATION ###

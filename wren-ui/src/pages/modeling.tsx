@@ -274,7 +274,7 @@ const renderIcon = (IconComponent) => React.createElement(IconComponent as any);
 const ASSISTANT_CANCELLED = 'ASSISTANT_CANCELLED';
 const ASSISTANT_SAVE_MESSAGE_KEY = 'modeling-ai-assistant-save';
 const ASSISTANT_POLL_INTERVAL_MS = 1000;
-const ASSISTANT_MAX_POLL_ATTEMPTS = 1800;
+const ASSISTANT_MAX_POLL_ATTEMPTS = 240;
 
 export default function Modeling() {
   const router = useRouter();
@@ -654,18 +654,10 @@ export default function Modeling() {
         throw new Error(ASSISTANT_CANCELLED);
       }
       const payload = res.data?.[fieldName];
-      if (!payload) {
-        throw new Error(
-          'AI assistant result is unavailable. Restart the services and run the assistant again.',
-        );
-      }
       const status = String(payload?.status || '').toLowerCase();
       if (status === 'finished') return payload.response || [];
       if (status === 'failed') {
         throw new Error(payload.error?.message || 'AI assistant failed.');
-      }
-      if (!status) {
-        throw new Error('AI assistant returned an invalid status.');
       }
       await new Promise((resolve) =>
         setTimeout(resolve, ASSISTANT_POLL_INTERVAL_MS),

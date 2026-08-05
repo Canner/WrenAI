@@ -87,31 +87,14 @@ class SemanticsDescription:
         ]
 
         chunks = []
-        pending_models = []
+        for i in range(0, len(selected_models), chunk_size):
+            for model in selected_models[i : i + chunk_size]:
+                columns = model.get("columns", [])
+                column_chunks = [
+                    columns[j : j + self._max_columns_per_batch]
+                    for j in range(0, len(columns), self._max_columns_per_batch)
+                ] or [[]]
 
-        def flush_pending_models() -> None:
-            if not pending_models:
-                return
-            chunks.append(
-                {
-                    **template,
-                    "mdl": {"models": list(pending_models)},
-                    "selected_models": [
-                        model["name"] for model in pending_models if model.get("name")
-                    ],
-                }
-            )
-            pending_models.clear()
-
-        for model in selected_models:
-            columns = model.get("columns", [])
-            column_chunks = [
-                columns[j : j + self._max_columns_per_batch]
-                for j in range(0, len(columns), self._max_columns_per_batch)
-            ] or [[]]
-
-            if len(column_chunks) > 1:
-                flush_pending_models()
                 for column_chunk in column_chunks:
                     chunks.append(
                         {
@@ -120,13 +103,6 @@ class SemanticsDescription:
                             "selected_models": [model["name"]],
                         }
                     )
-                continue
-
-            pending_models.append({**model, "columns": column_chunks[0]})
-            if len(pending_models) >= chunk_size:
-                flush_pending_models()
-
-        flush_pending_models()
 
         return chunks
 

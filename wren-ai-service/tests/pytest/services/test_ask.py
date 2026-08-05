@@ -13,7 +13,6 @@ from src.web.v1.services.ask import (
     AskRequest,
     AskResultRequest,
     AskService,
-    should_attempt_sql_correction,
     should_skip_sql_diagnosis,
 )
 from src.web.v1.services.semantics_preparation import (
@@ -165,22 +164,11 @@ def test_ask_service_uses_single_sql_correction_retry_by_default():
 
 
 def test_should_skip_sql_diagnosis_for_deterministic_validation_errors():
-    assert should_skip_sql_diagnosis({"type": "SQL_INTENT_MISMATCH"}) is True
     assert should_skip_sql_diagnosis({"type": "SQL_SHAPE"}) is True
     assert should_skip_sql_diagnosis({"type": "SCHEMA_GROUNDING"}) is True
     assert should_skip_sql_diagnosis({"type": "SQL_VALUE_GROUNDING"}) is True
     assert should_skip_sql_diagnosis({"type": "DRY_RUN"}) is False
     assert should_skip_sql_diagnosis({}) is False
-
-
-def test_should_not_attempt_sql_correction_for_contract_validation_errors():
-    assert should_attempt_sql_correction({"type": "SQL_INTENT_MISMATCH"}) is True
-    assert should_attempt_sql_correction({"type": "SQL_SHAPE"}) is False
-    assert should_attempt_sql_correction({"type": "SCHEMA_GROUNDING"}) is False
-    assert should_attempt_sql_correction({"type": "SQL_VALUE_GROUNDING"}) is True
-    assert should_attempt_sql_correction({"type": "NO_RELEVANT_SQL"}) is False
-    assert should_attempt_sql_correction({"type": "TIME_OUT"}) is False
-    assert should_attempt_sql_correction({"type": "SQL_SYNTAX"}) is True
 
 
 class _EmptyRetrievalPipeline:
@@ -254,7 +242,7 @@ class _FailingDiagnosisPipeline:
 
 
 @pytest.mark.asyncio
-async def test_ask_does_not_repair_local_validation_error():
+async def test_ask_skips_sql_diagnosis_for_local_validation_error():
     correction = _CapturingCorrectionPipeline()
     diagnosis = _FailingDiagnosisPipeline()
     ask_service = AskService(
@@ -281,11 +269,12 @@ async def test_ask_does_not_repair_local_validation_error():
     ask_result_response = ask_service.get_ask_result(
         AskResultRequest(query_id=query_id)
     )
-    assert ask_result_response.status == "failed"
+    assert ask_result_response.status == "finished"
     assert diagnosis.calls == []
-    assert correction.calls == []
-    assert ask_result_response.error.code == "NO_RELEVANT_SQL"
-    assert ask_result_response.invalid_sql == "SELECT entity_id FROM model_alpha"
+    assert correction.calls[0]["invalid_generation_result"] == {
+        "sql": "SELECT entity_id FROM model_alpha",
+        "error": "Generated SQL is a table preview.",
+    }
 
 
 @pytest.mark.asyncio

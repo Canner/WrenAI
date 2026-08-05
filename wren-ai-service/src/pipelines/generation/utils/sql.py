@@ -38,10 +38,6 @@ _AGGREGATE_QUERY_PATTERN = re.compile(
     r")\b",
     re.IGNORECASE,
 )
-_RANKING_QUERY_PATTERN = re.compile(
-    r"\b(top|bottom|highest|lowest|most|least|largest|smallest|fastest|slowest)\b",
-    re.IGNORECASE,
-)
 _TIME_QUERY_PATTERN = re.compile(
     r"\b("
     r"today|yesterday|week|month|quarter|year|january|february|march|april|"
@@ -49,30 +45,9 @@ _TIME_QUERY_PATTERN = re.compile(
     r")\b",
     re.IGNORECASE,
 )
-_TIMEFRAME_FILTER_QUERY_PATTERN = re.compile(
-    r"\b(today|yesterday)\b|"
-    r"\b(?:in|from|for|during|since|between|before|after|on)\b.{0,50}"
-    r"\b(?:january|february|march|april|may|june|july|august|september|"
-    r"october|november|december|20\d{2}|week|month|quarter|year)\b|"
-    r"\b(?:current|this|last|previous|next)\s+(?:week|month|quarter|year)\b",
-    re.IGNORECASE,
-)
-_LITERAL_FILTER_QUERY_PATTERN = re.compile(
-    r"\b(?:from|for|in|where|with|of)\s+(?:the\s+)?"
-    r"(?:country|market|business\s+unit|bu|region|state|city|customer|"
-    r"vendor|supplier|payment\s+type|status|category)\b|"
-    r"\b(?:country|market|business\s+unit|bu|region|state|city|customer|"
-    r"vendor|supplier|payment\s+type|status|category)\s+['\"]?[a-z0-9]",
-    re.IGNORECASE,
-)
 _DATE_LITERAL_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2})?$")
 
 _BROAD_TABLE_PREVIEW_COLUMN_THRESHOLD = 8
-_PLACEHOLDER_SQL_PATTERN = re.compile(
-    r"(?:would_be|to_be_filled|placeholder|replace_me|sample_|example_|"
-    r"your_|insert_|unknown_|unresolved_|<[^>]+>|\{[^}]+\})",
-    re.IGNORECASE,
-)
 
 
 def _is_timeout_error(error_message: str) -> bool:
@@ -261,248 +236,6 @@ def _table_grounding_error(
     return None
 
 
-def _normalize_identifier_part(identifier: str | None) -> str:
-    if not identifier:
-        return ""
-
-    return identifier.strip().strip('"`[]').lower()
-
-
-def _schema_contract_index(
-    schema_contracts: list[dict] | None,
-) -> dict[str, dict[str, Any]]:
-    index: dict[str, dict[str, Any]] = {}
-    for contract in schema_contracts or []:
-        table_name = contract.get("table_name")
-        normalized_table_name = _normalize_identifier_part(table_name)
-        if not table_name or not normalized_table_name:
-            continue
-
-        column_names = [
-            column_name for column_name in contract.get("column_names", []) if column_name
-        ]
-        index[normalized_table_name] = {
-            "table_name": table_name,
-            "columns": {
-                _normalize_identifier_part(column_name) for column_name in column_names
-            },
-            "has_column_contract": bool(column_names),
-        }
-
-    return index
-
-
-def _identifier_contains_subquery(identifier: Identifier) -> bool:
-    return any(
-        isinstance(child, Parenthesis) and _contains_select(child)
-        for child in identifier.tokens
-    )
-
-
-def _mark_identifier_tree(identifier: Identifier, marked_ids: set[int]) -> None:
-    marked_ids.add(id(identifier))
-    for child in identifier.tokens:
-        if isinstance(child, Identifier):
-            _mark_identifier_tree(child, marked_ids)
-        elif isinstance(child, IdentifierList):
-            for child_identifier in child.get_identifiers():
-                _mark_identifier_tree(child_identifier, marked_ids)
-        elif isinstance(child, TokenList):
-            for nested_child in child.tokens:
-                if isinstance(nested_child, Identifier):
-                    _mark_identifier_tree(nested_child, marked_ids)
-
-
-def _collect_table_context(
-    token: TokenList,
-    schema_index: dict[str, dict[str, Any]],
-    cte_names: set[str],
-) -> tuple[dict[str, str], set[int]]:
-    aliases: dict[str, str] = {}
-    table_identifier_ids: set[int] = set()
-    tokens = _meaningful_tokens(token)
-    expect_table = False
-
-    def add_table_identifier(identifier: Identifier) -> None:
-        if _identifier_contains_subquery(identifier):
-            for child in identifier.tokens:
-                if isinstance(child, Parenthesis):
-                    child_aliases, child_table_ids = _collect_table_context(
-                        child, schema_index, cte_names
-                    )
-                    aliases.update(child_aliases)
-                    table_identifier_ids.update(child_table_ids)
-            return
-
-        table_name = _table_reference_name(identifier)
-        normalized_table_name = _normalize_identifier_part(table_name)
-        if not normalized_table_name or normalized_table_name in cte_names:
-            _mark_identifier_tree(identifier, table_identifier_ids)
-            return
-
-        if normalized_table_name not in schema_index:
-            _mark_identifier_tree(identifier, table_identifier_ids)
-            return
-
-        _mark_identifier_tree(identifier, table_identifier_ids)
-        aliases[normalized_table_name] = normalized_table_name
-
-        real_name = _normalize_identifier_part(identifier.get_real_name())
-        if real_name:
-            aliases[real_name] = normalized_table_name
-
-        alias = _normalize_identifier_part(identifier.get_alias())
-        if alias:
-            aliases[alias] = normalized_table_name
-
-    for current in tokens:
-        normalized = current.normalized
-
-        if isinstance(current, Parenthesis):
-            if _contains_select(current):
-                child_aliases, child_table_ids = _collect_table_context(
-                    current, schema_index, cte_names
-                )
-                aliases.update(child_aliases)
-                table_identifier_ids.update(child_table_ids)
-            continue
-
-        if current.ttype == sqlparse_tokens.Keyword and (
-            normalized == "FROM" or normalized == "JOIN" or normalized.endswith(" JOIN")
-        ):
-            expect_table = True
-            continue
-
-        if expect_table:
-            if isinstance(current, IdentifierList):
-                for identifier in current.get_identifiers():
-                    add_table_identifier(identifier)
-            elif isinstance(current, Identifier):
-                add_table_identifier(current)
-            expect_table = False
-
-    return aliases, table_identifier_ids
-
-
-def _iter_identifier_nodes(
-    token: TokenList, parent: TokenList | None = None
-) -> list[tuple[Identifier, TokenList | None]]:
-    identifiers: list[tuple[Identifier, TokenList | None]] = []
-    if isinstance(token, Identifier):
-        identifiers.append((token, parent))
-
-    if isinstance(token, TokenList):
-        for child in token.tokens:
-            if isinstance(child, TokenList):
-                identifiers.extend(_iter_identifier_nodes(child, token))
-
-    return identifiers
-
-
-def _select_aliases(statement: TokenList) -> set[str]:
-    return {
-        _normalize_identifier_part(item.get_alias())
-        for item in _select_items(statement)
-        if isinstance(item, Identifier) and item.get_alias()
-    }
-
-
-def _identifier_has_function_child(identifier: Identifier) -> bool:
-    return any(isinstance(child, Function) for child in identifier.tokens)
-
-
-def _column_grounding_error(
-    sql: str | None, schema_contracts: list[dict] | None
-) -> str | None:
-    if not sql or not schema_contracts:
-        return None
-
-    schema_index = _schema_contract_index(schema_contracts)
-    if not schema_index:
-        return None
-
-    for statement in sqlparse.parse(sql):
-        cte_names = {
-            _normalize_identifier_part(cte_name)
-            for cte_name in _collect_cte_names(statement)
-        }
-        table_aliases, table_identifier_ids = _collect_table_context(
-            statement, schema_index, cte_names
-        )
-        referenced_tables = set(table_aliases.values())
-        if not referenced_tables:
-            continue
-
-        allowed_unqualified_columns = set()
-        all_referenced_tables_have_column_contract = True
-        for table_name in referenced_tables:
-            table_contract = schema_index.get(table_name)
-            if not table_contract:
-                continue
-            allowed_unqualified_columns.update(table_contract["columns"])
-            all_referenced_tables_have_column_contract = (
-                all_referenced_tables_have_column_contract
-                and table_contract["has_column_contract"]
-            )
-
-        select_aliases = _select_aliases(statement)
-
-        for identifier, parent in _iter_identifier_nodes(statement):
-            if id(identifier) in table_identifier_ids:
-                continue
-
-            if isinstance(parent, Function):
-                function_name = _normalize_identifier_part(parent.get_name())
-                if _normalize_identifier_part(_identifier_name(identifier)) == function_name:
-                    continue
-
-            if _identifier_has_function_child(identifier):
-                continue
-
-            column_name = _normalize_identifier_part(identifier.get_real_name())
-            if not column_name:
-                continue
-
-            parent_name = _normalize_identifier_part(identifier.get_parent_name())
-            if parent_name:
-                if parent_name in cte_names:
-                    continue
-
-                source_table_name = table_aliases.get(parent_name)
-                if not source_table_name:
-                    return (
-                        "Generated SQL references column identifiers outside the "
-                        "retrieved deployed schema."
-                    )
-
-                table_contract = schema_index.get(source_table_name)
-                if (
-                    table_contract
-                    and table_contract["has_column_contract"]
-                    and column_name not in table_contract["columns"]
-                ):
-                    return (
-                        "Generated SQL references column identifiers outside the "
-                        "retrieved deployed schema."
-                    )
-                continue
-
-            if column_name in select_aliases or column_name in cte_names:
-                continue
-            if column_name in table_aliases:
-                continue
-            if column_name in allowed_unqualified_columns:
-                continue
-
-            if all_referenced_tables_have_column_contract:
-                return (
-                    "Generated SQL references column identifiers outside the "
-                    "retrieved deployed schema."
-                )
-
-    return None
-
-
 def _sql_statement_shape_error(sql: str | None) -> str | None:
     if not sql:
         return None
@@ -573,19 +306,6 @@ def _select_wildcard_error(sql: str | None) -> str | None:
     return None
 
 
-def _placeholder_sql_error(sql: str | None) -> str | None:
-    if not sql:
-        return None
-
-    if _PLACEHOLDER_SQL_PATTERN.search(sql):
-        return (
-            "Generated SQL contains placeholder or unresolved identifiers; "
-            "regenerate using only exact deployed schema columns."
-        )
-
-    return None
-
-
 def _is_aggregate_item(token: Any) -> bool:
     token_text = str(token).upper()
     return any(
@@ -649,13 +369,6 @@ def _table_preview_shape_error(sql: str | None, query: str | None = None) -> str
 
     query_has_shape = bool(query and _ANALYTICAL_OR_FILTER_QUERY_PATTERN.search(query))
     query_has_aggregate_shape = bool(query and _AGGREGATE_QUERY_PATTERN.search(query))
-    query_has_ranking_shape = bool(query and _RANKING_QUERY_PATTERN.search(query))
-    query_has_timeframe_filter = bool(
-        query and _TIMEFRAME_FILTER_QUERY_PATTERN.search(query)
-    )
-    query_has_literal_filter = bool(
-        query and _LITERAL_FILTER_QUERY_PATTERN.search(query)
-    )
 
     for statement in sqlparse.parse(sql):
         if not str(statement).strip().strip(";").strip():
@@ -675,12 +388,6 @@ def _table_preview_shape_error(sql: str | None, query: str | None = None) -> str
         source_tables = referenced_tables - cte_names
         is_single_source_scan = len(source_tables) <= 1
 
-        if query_has_timeframe_filter and is_single_source_scan and not has_filter:
-            return "Generated SQL does not apply the requested timeframe filter."
-
-        if query_has_literal_filter and is_single_source_scan and not has_filter:
-            return "Generated SQL does not apply the requested literal filter value."
-
         if (
             query_has_aggregate_shape
             and is_single_source_scan
@@ -691,11 +398,6 @@ def _table_preview_shape_error(sql: str | None, query: str | None = None) -> str
             return (
                 "Generated SQL does not apply the requested aggregation, grouping, "
                 "ranking, or measure calculation."
-            )
-
-        if query_has_ranking_shape and has_aggregate_item and not has_ordering:
-            return (
-                "Generated SQL does not apply the requested ranking or ordering."
             )
 
         if (
@@ -833,91 +535,13 @@ class SQLGenPostProcessor:
         query: str | None = None,
     ) -> dict:
         try:
-            if not replies:
-                (
-                    valid_generation_result,
-                    invalid_generation_result,
-                ) = await self._classify_generation_result(
-                    None,
-                    project_id=project_id,
-                    use_dry_plan=use_dry_plan,
-                    allow_dry_plan_fallback=allow_dry_plan_fallback,
-                    data_source=data_source,
-                    allow_data_preview=allow_data_preview,
-                )
-                return {
-                    "valid_generation_result": valid_generation_result,
-                    "invalid_generation_result": invalid_generation_result,
-                }
-
-            raw_generation_result = replies[0]
-            if isinstance(raw_generation_result, list):
-                raw_generation_result = (
-                    raw_generation_result[0] if raw_generation_result else None
-                )
-
-            if (
-                not isinstance(raw_generation_result, str)
-                or not raw_generation_result.strip()
-            ):
-                (
-                    valid_generation_result,
-                    invalid_generation_result,
-                ) = await self._classify_generation_result(
-                    None,
-                    project_id=project_id,
-                    use_dry_plan=use_dry_plan,
-                    allow_dry_plan_fallback=allow_dry_plan_fallback,
-                    data_source=data_source,
-                    allow_data_preview=allow_data_preview,
-                )
-                return {
-                    "valid_generation_result": valid_generation_result,
-                    "invalid_generation_result": invalid_generation_result,
-                }
-
-            cleaned_generation_result = clean_generation_result(raw_generation_result)
-            if not cleaned_generation_result:
-                (
-                    valid_generation_result,
-                    invalid_generation_result,
-                ) = await self._classify_generation_result(
-                    None,
-                    project_id=project_id,
-                    use_dry_plan=use_dry_plan,
-                    allow_dry_plan_fallback=allow_dry_plan_fallback,
-                    data_source=data_source,
-                    allow_data_preview=allow_data_preview,
-                )
-                return {
-                    "valid_generation_result": valid_generation_result,
-                    "invalid_generation_result": invalid_generation_result,
-                }
+            cleaned_generation_result = clean_generation_result(replies[0])
 
             # test if cleaned_generation_result in string format is actually a dictionary with key 'sql'
             if cleaned_generation_result.startswith("{"):
                 cleaned_generation_result = orjson.loads(cleaned_generation_result).get(
                     "sql"
                 )
-                if (
-                    not isinstance(cleaned_generation_result, str)
-                    or not cleaned_generation_result.strip()
-                ):
-                    (
-                        valid_generation_result,
-                        invalid_generation_result,
-                    ) = await self._classify_generation_result(
-                        None,
-                        project_id=project_id,
-                        use_dry_plan=use_dry_plan,
-                        allow_dry_plan_fallback=allow_dry_plan_fallback,
-                        data_source=data_source,
-                        allow_data_preview=allow_data_preview,
-                    )
-                    return {
-                        "valid_generation_result": valid_generation_result,
-                        "invalid_generation_result": invalid_generation_result,
-                    }
                 cleaned_generation_result = clean_generation_result(
                     cleaned_generation_result
                 )
@@ -954,19 +578,6 @@ class SQLGenPostProcessor:
                     },
                 }
 
-            placeholder_error = _placeholder_sql_error(cleaned_generation_result)
-            if placeholder_error:
-                return {
-                    "valid_generation_result": {},
-                    "invalid_generation_result": {
-                        "sql": cleaned_generation_result,
-                        "original_sql": cleaned_generation_result,
-                        "type": "SQL_SYNTAX",
-                        "error": placeholder_error,
-                        "correlation_id": "",
-                    },
-                }
-
             wildcard_error = _select_wildcard_error(cleaned_generation_result)
             if wildcard_error:
                 return {
@@ -976,21 +587,6 @@ class SQLGenPostProcessor:
                         "original_sql": cleaned_generation_result,
                         "type": "SQL_SYNTAX",
                         "error": wildcard_error,
-                        "correlation_id": "",
-                    },
-                }
-
-            column_grounding_error = _column_grounding_error(
-                cleaned_generation_result, schema_contracts
-            )
-            if column_grounding_error:
-                return {
-                    "valid_generation_result": {},
-                    "invalid_generation_result": {
-                        "sql": cleaned_generation_result,
-                        "original_sql": cleaned_generation_result,
-                        "type": "SCHEMA_GROUNDING",
-                        "error": column_grounding_error,
                         "correlation_id": "",
                     },
                 }
@@ -1021,7 +617,7 @@ class SQLGenPostProcessor:
                     "invalid_generation_result": {
                         "sql": cleaned_generation_result,
                         "original_sql": cleaned_generation_result,
-                        "type": "SQL_INTENT_MISMATCH",
+                        "type": "SQL_SHAPE",
                         "error": table_preview_error,
                         "correlation_id": "",
                     },
@@ -1046,20 +642,9 @@ class SQLGenPostProcessor:
         except Exception as e:
             logger.exception(f"Error in SQLGenPostProcessor: {e}")
 
-            (
-                valid_generation_result,
-                invalid_generation_result,
-            ) = await self._classify_generation_result(
-                None,
-                project_id=project_id,
-                use_dry_plan=use_dry_plan,
-                allow_dry_plan_fallback=allow_dry_plan_fallback,
-                data_source=data_source,
-                allow_data_preview=allow_data_preview,
-            )
             return {
-                "valid_generation_result": valid_generation_result,
-                "invalid_generation_result": invalid_generation_result,
+                "valid_generation_result": {},
+                "invalid_generation_result": {},
             }
 
     async def _classify_generation_result(
@@ -1224,63 +809,97 @@ class SQLGenPostProcessor:
 
 _MANDATORY_SQL_GROUNDING_RULES = """
 ### MANDATORY SQL GROUNDING RULES ###
-- Treat the retrieved semantic context as the only authoritative source for this request.
-- Do not use pretrained knowledge, common warehouse schemas, example schemas, or memorized business definitions as executable truth.
-- Use the retrieved DATABASE SCHEMA and WREN SQL IDENTIFIER CONTRACT as the only executable context.
-- Before generating SQL, silently validate that every model, column, metric, relationship, join path, filter field, grouping field, ordering field, and SQL function is present in the retrieved context.
-- Use comments, aliases, descriptions, display labels, metrics, calculated fields, and relationships only to understand business meaning.
-- Use role-hint metadata only as semantic hints for choosing exact declared columns. Metadata role labels are never SQL identifiers or SQL literal values.
-- Copy executable table, column, metric, and relationship identifiers exactly from DATABASE SCHEMA. Do not create identifiers from user wording, descriptions, samples, history, physical names, lineage names, or error messages.
-- Never output template SQL. Every table, column, metric, relationship, join key, function, filter value, grouping, ordering, and limit in the final SQL must be complete and executable for the current request.
-- Never output generic, unresolved, variable-like, or placeholder identifiers or literal values. If a value or identifier would need to be filled in later, return null for sql.
-- The SQL must answer every supported part of the user's request: requested subject, requested entity, requested filter value, timeframe, grouping, measure, ordering, and limit.
-- Preserve the user's requested result shape exactly. Do not convert a detail-list request into a count, distinct count, latest-row query, top query, or summary unless the user explicitly asks for that operation.
-- Do not add implicit filters, latest-period logic, maximum-date logic, row limits, distinctness, aggregation, or ordering unless the current user request requires it.
-- If the user asks for a filtered result, include the filter only when the filtered concept is represented by an exact schema field. If the filter field is not present, return null for sql instead of ignoring the filter.
-- If the user provides a literal filter value, copy that current request value into the SQL string literal exactly as the user provided it, except for normal SQL string escaping. Do not invent, translate, summarize, describe, or substitute filter values.
-- For detail-list requests filtered by country, market, business unit, customer, status, or another entity value, include a WHERE predicate on the grounded filter field. Do not answer with an unfiltered preview.
-- If the user asks for a specific or particular entity but does not provide the required value, return null for sql instead of adding a stand-in value. Omit a missing filter only when the requested answer remains correct without it.
-- Never use schema descriptions, column comments, aliases, display labels, source names, physical names, lineage names, reasoning text, or error messages as string literal data values.
-- If the user asks "which", "who", or "what" for a ranked entity, select and group by the exact schema field that represents that requested entity. Do not replace the requested entity with a context field or unrelated dimension.
-- Use row counting for record or entity volume questions when no numeric business measure is requested. Use numeric measures only when the question asks for a value, amount, quantity, rate, cost, or other declared measure.
-- For analytical questions, return dimensions plus the requested measure expression or metric field. Do not return a raw table preview.
-- For aggregate, ranking, grouped, or trend questions, produce an analytical query shape.
-- For "highest", "lowest", "top", "bottom", "most", "least", or "contributed" questions about a named value, amount, sales, cost, revenue, quantity, or numeric measure, group by the requested contributing dimension, aggregate the exact requested measure with SUM unless another aggregation is explicitly requested, order by that selected aggregate alias in the requested direction, and return only the requested ranked rows. Do not use AVG, subtraction, margin, cost, percentage, or another derived metric unless the user explicitly asks for that metric.
-- For comparison questions, include each requested comparison group or time period and compute the requested difference, change, growth, or ranking when the required fields are grounded.
-- Do not answer a comparison question with only one comparison side, one period, or one group unless the user explicitly asks for only that side.
-- For detail-list questions, return only the fields needed to identify and describe the requested records, plus requested filters and timeframes.
-- For detail-list timeframe questions, apply a bounded WHERE range on the grounded date/time field. Do not answer a timeframe request with an unfiltered table scan.
-- Prefer one model, view, or metric that already contains the requested fields. Do not join tables just because they were retrieved together. Do not invent join predicates from similar column names. Join only through relationships declared in DATABASE SCHEMA.
-- Treat retrieved schema objects as ranked candidates for grounding, not as datasets to merge automatically. Do not combine parallel or similar retrieved models with UNION, UNION ALL, INTERSECT, or EXCEPT unless the current user explicitly asks to combine separate result sets and the retrieved DATABASE SCHEMA grounds every branch with identical result shape and compatible measures.
-- If multiple retrieved schema objects are needed for the same result, use them only when the required columns and relationship path are present.
+- Treat the retrieved semantic context as the only authoritative source for this request. Do not use pretrained knowledge, common warehouse schemas, example schemas, or memorized business definitions as executable truth.
+- Treat the DATABASE SCHEMA section as the only source of executable table and column identifiers.
+- Use only deployed semantic models, views, metrics, relationships, and columns that are present in the retrieved DATABASE SCHEMA, WREN SQL IDENTIFIER CONTRACT, EXECUTABLE WREN IDENTIFIER CATALOG, SQL FUNCTIONS, or current USER INSTRUCTIONS.
+- Before generating SQL, silently validate that every model, column, metric, relationship, join path, filter field, grouping field, ordering field, and SQL function is present in the retrieved context. Generate SQL only after this validation succeeds.
+- Every table and column referenced in SELECT, FROM, JOIN, WHERE, GROUP BY, HAVING, and ORDER BY must appear exactly in the CREATE TABLE, CREATE VIEW, or metric schema text provided in DATABASE SCHEMA.
+- Comments, aliases, display labels, descriptions, reasoning text, SQL samples, and user wording are semantic hints only. They are never source table or source column identifiers.
+- Physical datasource names, source database names, source schema names, source table names, source column names, lineage names, and names embedded inside descriptions or comments are semantic context only. Never use them as executable Wren table or column identifiers unless the exact same identifier is declared in DATABASE SCHEMA.
+- Interpret the user's intent from the question wording, schema descriptions, aliases, display labels, calculated fields, metrics, and relationships, then express that intent with exact executable identifiers from DATABASE SCHEMA.
+- When DATABASE SCHEMA contains WREN RETRIEVED SEMANTIC CONTEXT blocks, first use those blocks to understand each retrieved object's exact SQL identifier contract, semantic meaning, relationships, views, metrics, and calculated fields.
+- When DATABASE SCHEMA contains WREN SQL IDENTIFIER CONTRACT sections, treat them as the compact authoritative list of executable identifiers for each retrieved object before reading semantic descriptions.
+- In WREN RETRIEVED SEMANTIC CONTEXT, copy executable identifiers only from sql_table_name_use_exactly, sql_column_name_use_exactly, sql_column_names_use_exactly, relationship_constraints_use_exactly, or the following DDL declarations.
+- Values under semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier are meaning only. Do not combine words, labels, ordinals, prefixes, suffixes, abbreviations, comments, or descriptions from those values into a table or column identifier.
+- Values under column_role_hints_not_identifiers are semantic roles only. Use them to decide whether an exact declared column can serve as a date/time field, measure, identifier, or dimension, but copy executable column names only from the columns list or DDL.
+- When a business term is represented by a column alias, display label, or description, use the corresponding real table and column name from DATABASE SCHEMA in the SQL, not the display text.
+- The executable identifier is the name in the CREATE TABLE, CREATE VIEW, or metric field declaration. Do not derive executable identifiers by rewriting, translating, singularizing, pluralizing, spacing, casing, or abbreviating natural language, comments, aliases, display labels, or descriptions.
+- Never generate SQL from assumptions such as "assuming the table contains", "assuming this column exists", or "a possible table/column". Use only schema-confirmed identifiers.
+- Never generate placeholder identifiers, placeholder table names, or template markers in the SQL. If the retrieved metadata does not contain an executable object or column for a requested concept, omit that unsupported concept.
+- Never invent string literal filter values. Use a string value in WHERE, HAVING, CASE, or JOIN conditions only when that value is explicitly present in the user's current question or grounded by a current USER INSTRUCTION. For relative time requests, bounded date literals may be generated only from the requested timeframe and an exact date/time column.
+- Never create an identifier from user question wording by changing spaces, casing, punctuation, singular/plural form, abbreviations, prefixes, or suffixes. If the exact requested table or column concept is not represented by a retrieved schema identifier, return null for sql.
+- If a requested concept, output column, filter, sort, join, grouping, measure, or time field is not represented by an exact table or column in DATABASE SCHEMA, do not invent a field for it. If that field is required to answer the request, return null for sql.
+- When a dry run error reports an invalid object name or invalid column name, remove that identifier unless it appears exactly in DATABASE SCHEMA. Correct it only to an exact schema identifier.
+- Do not replace an invalid identifier with a similar-looking physical, source, lineage, alias, display, description, sample, or error-message name. Regenerate from the user's intent and the current DATABASE SCHEMA, and omit unsupported parts instead of substituting non-schema identifiers.
+- Prefer a single table, view, or metric that already contains the requested fields. Do not join tables just because they were retrieved together.
+- When using multiple tables to combine fields into the same output row, join only through the exact FOREIGN KEY constraints shown in DATABASE SCHEMA. If no relationship is shown for the needed tables, return null for sql or use one schema object that already contains the requested fields.
 - If multiple semantic interpretations exist and the retrieved context does not make one interpretation authoritative, return null for sql instead of choosing one.
-- If SQL execution or correction is needed, repair the query only when the repair can be verified using DATABASE SCHEMA, WREN SQL IDENTIFIER CONTRACT, and SQL FUNCTIONS. Never introduce a new schema object during repair.
-- Return null for sql when the retrieved schema does not ground a required subject, entity, filter field, timeframe field, measure, or relationship.
-- Generate Wren SQL only, using supported functions from SQL FUNCTIONS when functions are needed.
+- When the same requested result can be answered from multiple schema objects with compatible columns or metrics, include all relevant schema objects by combining separate result rows with UNION ALL instead of choosing only one object.
+- Use UNION ALL only when each SELECT branch is independently valid from DATABASE SCHEMA and returns the same result shape. Do not use UNION ALL to combine unrelated concepts or to compensate for missing columns.
+- If the question requires fields that are spread across multiple schema objects, use all required related tables, views, or metrics only when the DATABASE SCHEMA provides the needed columns and an exact relationship path. Do not invent join predicates from similar column names.
+- Do not query INFORMATION_SCHEMA, system catalogs, metadata tables, or table-existence checks to answer the user. Query only the business tables, views, and metrics in DATABASE SCHEMA.
+- SQL samples and query history are examples of intent and style only. Never copy a table name, column name, alias, literal value, or function from them unless it is also valid for the current DATABASE SCHEMA and SQL FUNCTIONS.
+- Generate Wren SQL only. Do not use warehouse-specific functions unless they are explicitly listed in SQL FUNCTIONS for this request.
+- Apply relative date or time filters only when DATABASE SCHEMA contains an exact date/time field for the requested time concept and the predicate can be expressed with normal SQL comparison syntax or an operation listed in SQL FUNCTIONS. Do not compare text fields to date functions.
+- For explicit month/year or relative timeframe requests, prefer a bounded range predicate on one exact date_time_candidate column when available. The lower bound is inclusive and the upper bound is exclusive. Do not answer a timeframe request with an unfiltered table scan.
+- Treat reasoning plans, correction notes, and error messages as non-executable context. Never copy SQL fragments, inferred identifiers, placeholder names, template markers, literal values, or unsupported functions from them.
+- If SQL execution or validation fails, repair the query only when the repair can be verified using the same retrieved DATABASE SCHEMA, WREN SQL IDENTIFIER CONTRACT, and SQL FUNCTIONS. Never introduce a new schema object during repair.
+- If a column comment, alias, display label, or description names a business concept, first locate the exact declared source column for that concept in DATABASE SCHEMA. If no exact declared source column exists, omit that concept.
+- For aggregate sorting, select the aggregate with an alias and order by that alias instead of ordering directly by an aggregate expression.
+- Before returning the final SQL, silently check that each identifier and function in the SQL is grounded in DATABASE SCHEMA or SQL FUNCTIONS. If any identifier or function is ungrounded, remove that part. If the ungrounded part is needed to answer the user's requested intent, return null for sql.
+- If the retrieved DATABASE SCHEMA does not contain a table, column, relationship, or supported function needed for part of the user's request, leave that part out instead of inventing a replacement.
+- If a requested noun, output column, grouping, filter, or measure appears only in the user's wording and not in DATABASE SCHEMA, do not translate it into a generic object name. Use only schema-supported concepts and omit unsupported parts.
+- If the user's primary requested subject, output column, grouping, filter, timeframe, measure, or required relationship cannot be grounded by the retrieved DATABASE SCHEMA, return null for sql instead of producing an approximate query.
+- Do not answer by selecting a nearby table only because it was retrieved. A retrieved object is usable only when its declared table, columns, relationships, or metric fields support the user's requested intent.
+- Do not answer a specific business question with a broad table scan. The SQL shape must match the user's requested output columns, filters, groupings, measures, joins, ordering, and limits.
+- For analytical or metric questions, select only the requested dimensions and measures. Use declared metric columns, calculated fields, relationship paths, and schema-grounded aggregate expressions. If the required metric components are not grounded, return null for sql instead of returning raw rows.
+- For questions asking total, count, average, minimum, maximum, ratio, per, by, top, bottom, highest, lowest, trend, month, week, year, or ranking, produce an analytical query shape: select exact dimension columns or date buckets, aggregate exact numeric_measure_candidate columns or count rows, GROUP BY every non-aggregated selected expression, ORDER BY the selected aggregate alias when ranking, and apply LIMIT only when requested.
+- If the question asks for an entity list with a timeframe or filter but no metric, select only the entity identifier, relevant dimensions, and exact date/time column needed by the request; include the requested WHERE predicate. Do not select every column from the table.
 """
 
 
 _DEFAULT_TEXT_TO_SQL_RULES = """
 ### SQL RULES ###
-- Generate exactly one SELECT statement.
-- Never use "*" in the SELECT list.
-- Use only Wren SQL syntax and only schema objects declared in DATABASE SCHEMA.
-- Quote table and column identifiers with double quotes. Quote string literals with single quotes. Do not quote numeric literals.
-- Never use SELECT *. Select only columns and expressions needed for the user's requested answer.
-- Preserve the requested answer shape. For record-list requests, return the requested records with explicit identifying columns and filters; do not replace them with COUNT, DISTINCT, MAX, latest-row, ranking, or summary logic.
-- Use COUNT, DISTINCT, SUM, AVG, MIN, MAX, GROUP BY, ORDER BY, LIMIT, date predicates, and joins only when the user's request requires that operation and the required identifiers are grounded in DATABASE SCHEMA.
-- Do not include SQL comments.
-- Use CTEs when they make multi-step SQL clearer.
-- Use joins only when DATABASE SCHEMA declares the needed relationship.
-- Use set operations only when the user explicitly requests combined result sets and the DATABASE SCHEMA grounds each branch. Do not use set operations to merge retrieved candidates that merely have similar dimensions or measures.
-- Use declared views or metrics when they directly match the user's requested result.
-- For metric-style requests, expose the requested dimensions and measure expressions or metric fields instead of returning raw table columns.
-- Put aggregate expressions in SELECT or HAVING, not WHERE.
-- For ranking requests, order by a selected column or selected aggregate alias and use LIMIT when the user requests a limit.
-- For contribution ranking requests, use SUM of the requested numeric measure by the contributing dimension, not AVG or a different derived metric, unless the user explicitly asks for that aggregation or metric.
-- For timeframe requests, apply a bounded predicate only when an exact date/time field and required date operation are supported by the retrieved context.
-- Output aliases may label result expressions, but aliases are not source identifiers.
-- Do not use connector-specific syntax such as SELECT TOP, square brackets, backticks, INTERVAL, unsupported date formatting, or unsupported statistical functions.
+- ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
+- ONLY USE the tables and columns mentioned in the database schema.
+- Never use "*" in the SELECT list. Select explicit deployed schema columns needed for the question. When the user asks for all records, all rows, all users, all orders, or similar, treat "all" as row scope and still select explicit columns relevant to the requested entity or metric.
+- ONLY CHOOSE columns belong to the tables mentioned in the database schema.
+- DON'T INCLUDE comments in the generated SQL query.
+- Use JOIN only when selected columns come from multiple tables and DATABASE SCHEMA declares the exact FOREIGN KEY relationship needed for the join. Do not invent join predicates from similar-looking column names.
+- PREFER USING CTEs over subqueries.
+- When generating SQL query, always:
+    - Put double quotes around column and table names.
+    - Use Wren SQL identifier quoting with double quotes only; the engine rewrite step converts grounded Wren SQL to the active connector dialect.
+    - Put single quotes around string literals.
+    - Never quote numeric literals.
+- Generate Wren SQL syntax only, not connector-specific SQL syntax.
+- Never use SELECT TOP, TOP(...), FETCH FIRST, square-bracket identifiers, or backtick identifiers. For top or limit requests, sort with ORDER BY and put LIMIT at the end of the query.
+- Preserve every deployed table and column identifier exactly as it appears in DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT, including spaces, digits, underscores, case, and punctuation, then wrap that exact identifier in double quotes in SQL.
+- Do not convert deployed identifiers into display-friendly variants by replacing spaces with underscores, removing prefixes, changing case, shortening names, or expanding abbreviations.
+- For case-insensitive comparisons, use only functions or operators that are supported by SQL FUNCTIONS for this request. If SQL FUNCTIONS does not provide a safe case-insensitive function, use a normal equality or LIKE comparison on an exact schema column.
+- For date/time questions, first choose an exact schema column whose type or metadata clearly represents the requested time concept. Use only date/time functions and casts whose exact syntax is provided in SQL FUNCTIONS for this request.
+- If the question asks for a specific or relative date, generate a bounded date/time filter only when the exact date/time schema column is available and the predicate can be expressed with normal SQL comparison syntax or a SQL FUNCTIONS-supported operation. If either the column or required operation is missing, do not invent a field or function.
+- When DATABASE SCHEMA includes column_role_hints_not_identifiers, use date_time_candidate, numeric_measure_candidate, identifier_candidate, and dimension_candidate roles to map the question intent to exact declared columns. These role names are never executable SQL identifiers.
+- For explicit calendar month and year requests, use an inclusive lower bound and exclusive upper bound on the exact date/time column, rather than formatting the column into text.
+- USE THE VIEW TO SIMPLIFY THE QUERY.
+- DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
+- Output aliases may be used only to name expressions in the final SELECT list. Output aliases are labels for result columns only; they are not source identifiers.
+- For metric-style requests, the final SELECT list must expose the requested dimension columns and measure expressions or metric fields. Do not return every raw column from a retrieved model as a substitute for the requested metric.
+- For aggregate, ranking, or "by" requests, do not add unrelated string filters to make the SQL look specific. If the user did not provide a filter value, leave it out.
+- For total, count, average, minimum, maximum, per, by, trend, top, bottom, highest, lowest, or ranking requests, the final SQL must include the requested aggregate expression or metric field, GROUP BY required dimensions, ORDER BY required ranking expression, and LIMIT only when requested. A raw row list is not a valid answer.
+- For record-list requests with a filter or timeframe, the final SQL must include the requested WHERE predicate and only the columns needed to identify and describe the matching records.
+- Comments, aliases, display labels, and descriptions from DATABASE SCHEMA may guide which exact source column to select, but they must not be copied into FROM, JOIN, WHERE, GROUP BY, HAVING, or ORDER BY as table or column names.
+- Physical/source/lineage names from metadata may guide meaning, but generated SQL must use only the declared Wren model, view, metric, and column identifiers from DATABASE SCHEMA.
+- DON'T USE '.' in output aliases, replace '.' with '_' in output aliases.
+- DON'T USE "FILTER(WHERE <expression>)" clause in the generated SQL query.
+- DON'T USE "EXTRACT(EPOCH FROM <expression>)" clause in the generated SQL query.
+- DON'T USE "EXTRACT()" function with INTERVAL data types as arguments
+- DON'T USE INTERVAL or generate INTERVAL-like expression in the generated SQL query.
+- DON'T USE "TO_CHAR" function in the generated SQL query.
+- DON'T USE unsupported statistical, date/time, or formatting functions. If SQL FUNCTIONS does not list a function needed by the requested intent, omit the function-dependent part. If that function is required to answer the request, return null for sql.
+- Aggregate functions are not allowed in the WHERE clause. Instead, they belong in the HAVING clause, which is used to filter after aggregation.
+- You can only add "ORDER BY" and "LIMIT" to the final "UNION" result.
+- For top, bottom, highest, lowest, first, or last requests, sort by an exact selected column or aggregate alias and use LIMIT unless the user explicitly asks for rank values.
 """
 
 
@@ -1470,21 +1089,20 @@ Given the user's question and database schema, generate one grounded Wren SQL qu
 6. YOU MUST first read any WREN SQL IDENTIFIER CONTRACT and WREN RETRIEVED SEMANTIC CONTEXT block attached to each schema object. Use sql_table_name_use_exactly, sql_column_name_use_exactly, sql_column_names_use_exactly, relationship_constraints_use_exactly, and the following DDL declarations as executable grounding. Use semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier only to understand business meaning.
 7. When DATABASE SCHEMA contains EXECUTABLE WREN IDENTIFIER CATALOG sections, treat those sections as the first and clearest list of allowed executable identifiers.
 8. If the user asks for fields that exist across multiple related schema objects, include those objects only when DATABASE SCHEMA shows the exact columns and relationship path needed to join them.
-9. If the user asks for fields that require multiple schema objects, combine them only when DATABASE SCHEMA provides the exact relationship path and the result shape is grounded by the request. Retrieved schema objects are alternatives until the user request and DATABASE SCHEMA prove they must be combined. Do not use UNION, UNION ALL, INTERSECT, or EXCEPT unless the user explicitly asks to combine separate result sets and each branch is grounded with the same selected columns, compatible measure meaning, and any required grouping inside each branch.
-10. Before finalizing the JSON response, YOU MUST perform a silent grounding check: every table, column, join key, filter field, grouping field, ordering field, and function in the SQL must be present in DATABASE SCHEMA or SQL FUNCTIONS. Every string literal used as a data value must be copied from the current user question or USER INSTRUCTIONS, or be a concrete date/time boundary derived directly from the user's explicit timeframe using supported SQL FUNCTIONS. If a planned element is not grounded, omit that element. If the element is needed to answer the user's requested subject, output column, filter, grouping, measure, timeframe, or relationship, return null for sql.
+9. If the user asks for a result that is represented in multiple schema objects with compatible fields, include all relevant objects using independently valid SELECT branches combined with UNION ALL. Use joins only for relationship-backed row-level combinations.
+10. Before finalizing the JSON response, YOU MUST perform a silent grounding check: every table, column, join key, filter field, grouping field, ordering field, and function in the SQL must be present in DATABASE SCHEMA or SQL FUNCTIONS. If a planned element is not grounded, omit that element. If the element is needed to answer the user's requested subject, output column, filter, grouping, measure, timeframe, or relationship, return null for sql.
 11. YOU MUST treat source database/schema/table names, physical datasource names, lineage names, comments, aliases, and display labels as semantic context only. Never use them as executable identifiers unless the exact same identifier appears in DATABASE SCHEMA.
 12. If an identifier, literal value, placeholder, template marker, or function appears only in SQL samples, failed SQL, descriptions, lineage, reasoning text, or error messages, it is not executable for this request; ignore those parts when generating executable SQL.
 13. If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA, EXECUTABLE WREN IDENTIFIER CATALOG, or WREN SQL IDENTIFIER CONTRACT, return null for sql. Never create a table or column from the user's wording.
-14. If any planned SQL literal would be an unresolved variable, descriptive label, instruction to be replaced later, or placeholder value, return null for sql. The SQL field must never contain a partially completed query.
-15. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
+14. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be JSON. Return a SQL string only when it is fully grounded in DATABASE SCHEMA and SQL FUNCTIONS, contains no placeholders or template parts, and answers the user's requested intent. Do not create table or column identifiers from the user's wording. If the retrieved schema does not ground the requested subject, output column, filter, grouping, measure, timeframe, or relationship, return null for sql.
+The final answer must be JSON. Return a SQL string only when it is fully grounded in DATABASE SCHEMA and SQL FUNCTIONS and it answers the user's requested intent. Do not create table or column identifiers from the user's wording. If the retrieved schema does not ground the requested subject, output column, filter, grouping, measure, timeframe, or relationship, return null for sql.
 
 {{
-    "sql": "complete executable SQL query string using only identifiers declared in DATABASE SCHEMA, or null"
+    "sql": "SQL query string using only identifiers declared in DATABASE SCHEMA, or null"
 }}
 """
 
@@ -1502,29 +1120,6 @@ SQL_GENERATION_MODEL_KWARGS = {
         },
     }
 }
-
-
-def get_sql_dialect_instructions(data_source: str | None = None) -> str:
-    normalized = (data_source or "").strip().lower()
-
-    if normalized in {"mssql", "sqlserver", "sql_server", "microsoft_sql_server"}:
-        return """
-### SQL DIALECT ###
-Target database: Microsoft SQL Server.
-- Do not use EXTRACT(... FROM ...); SQL Server does not support that syntax.
-- Prefer bounded date ranges for month/year filters.
-- If a date part is required, use SQL Server functions such as MONTH(date_column) and YEAR(date_column).
-- Do not use LIMIT; use TOP only when a row limit is explicitly requested.
-"""
-
-    if normalized and normalized != "local_file":
-        return f"""
-### SQL DIALECT ###
-Target database: {normalized}.
-Use only SQL syntax and functions supported by this target database and by SQL FUNCTIONS.
-"""
-
-    return ""
 
 
 def construct_instructions(

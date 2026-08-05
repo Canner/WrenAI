@@ -133,8 +133,7 @@ _QUERY_TERM_STOPWORDS = {
 }
 
 _MAX_SCHEMA_SEMANTIC_TABLE_CANDIDATES = 5
-_MAX_RELATED_SCHEMA_TABLE_CANDIDATES = 12
-_MAX_RELATED_SCHEMA_EXPANSION_HOPS = 2
+_MAX_RELATED_SCHEMA_TABLE_CANDIDATES = 5
 _MAX_SQL_GENERATION_SCHEMA_RESULTS = 10
 _MAX_SQL_GENERATION_COLUMNS_PER_TABLE = 16
 _MAX_SQL_GENERATION_ROLE_COLUMNS = 4
@@ -191,8 +190,7 @@ def _relationship_constraints(content: dict) -> list[str]:
     return [
         column.get("constraint", "")
         for column in content.get("columns", [])
-        if column.get("type") in {"FOREIGN_KEY", "JOIN_PATH"}
-        and column.get("constraint")
+        if column.get("type") == "FOREIGN_KEY" and column.get("constraint")
     ]
 
 
@@ -312,14 +310,12 @@ def _compact_sql_generation_columns(content: dict, query: str) -> Optional[set[s
 
 
 def _build_metric_ddl(content: dict) -> str:
-    columns = _dedupe_named_columns(
-        [
-            column
-            for column in content["columns"]
-            if column["data_type"].lower()
-            != "unknown"  # quick fix: filtering out UNKNOWN column type
-        ]
-    )
+    columns = [
+        column
+        for column in content["columns"]
+        if column["data_type"].lower()
+        != "unknown"  # quick fix: filtering out UNKNOWN column type
+    ]
     context = _format_semantic_context(
         {
             "object_type": "metric",
@@ -357,122 +353,25 @@ def _build_metric_ddl(content: dict) -> str:
 
 
 def _content_column_names(content: dict) -> list[str]:
-    column_names = []
-    seen = set()
-    for column in content.get("columns", []):
-        column_name = column.get("name", "")
-        normalized_column_name = str(column_name).lower()
-        if not column_name or normalized_column_name in seen:
-            continue
-        column_names.append(column_name)
-        seen.add(normalized_column_name)
-    return column_names
-
-
-def _dedupe_named_columns(columns: list[dict]) -> list[dict]:
-    deduped_columns = []
-    seen = set()
-    for column in columns:
-        column_name = column.get("name")
-        normalized_column_name = str(column_name or "").lower()
-        if not column_name or normalized_column_name in seen:
-            continue
-        deduped_columns.append(column)
-        seen.add(normalized_column_name)
-    return deduped_columns
+    return [
+        column.get("name", "")
+        for column in content.get("columns", [])
+        if column.get("name")
+    ]
 
 
 def _format_semantic_context(context: dict) -> str:
-    lines = [
-        "/*",
-        "WREN RETRIEVED SEMANTIC CONTEXT",
-        f"object_type: {context.get('object_type', '')}",
-    ]
-
-    contract = context.get("sql_identifier_contract") or {}
-    if contract.get("sql_table_name_use_exactly"):
-        lines.append(
-            "sql_table_name_use_exactly: "
-            + str(contract["sql_table_name_use_exactly"])
-        )
-    if contract.get("sql_column_names_use_exactly"):
-        lines.append("sql_column_names_use_exactly:")
-        lines.extend(
-            f"- {column_name}"
-            for column_name in contract["sql_column_names_use_exactly"]
-        )
-    if contract.get("relationship_constraints_use_exactly"):
-        lines.append("relationship_constraints_use_exactly:")
-        lines.extend(
-            f"- {relationship_constraint}"
-            for relationship_constraint in contract[
-                "relationship_constraints_use_exactly"
-            ]
-        )
-
-    semantic_context = context.get("semantic_context_not_sql_identifiers") or {}
-    for key, value in semantic_context.items():
-        if value:
-            lines.append(f"semantic_context_not_sql_identifiers.{key}: {value}")
-
-    columns = [
-        column
-        for column in context.get("columns", [])
-        if column.get("sql_column_name_use_exactly")
-    ]
-    if columns:
-        lines.append("columns:")
-        for column in columns:
-            column_parts = [
-                f"sql_column_name_use_exactly={column['sql_column_name_use_exactly']}",
-                f"data_type={column.get('data_type', '')}",
-            ]
-            roles = column.get("semantic_roles_not_identifiers") or []
-            if roles:
-                column_parts.append(
-                    "column_role_hints_not_identifiers="
-                    + ", ".join(str(role) for role in roles)
-                )
-            semantic_note = column.get("semantic_context_not_sql_identifier")
-            if semantic_note:
-                column_parts.append(
-                    "semantic_context_not_sql_identifier"
-                    f"(description_not_filter_value)={semantic_note}"
-                )
-            lines.append("- " + " | ".join(column_parts))
-
-    relationships = [
-        relationship
-        for relationship in context.get("relationships", [])
-        if relationship.get("sql_relationship_constraint_use_exactly")
-    ]
-    if relationships:
-        lines.append("relationships:")
-        for relationship in relationships:
-            relationship_parts = [
-                "sql_relationship_constraint_use_exactly="
-                + relationship["sql_relationship_constraint_use_exactly"]
-            ]
-            semantic_note = relationship.get("semantic_context_not_sql_identifier")
-            if semantic_note:
-                relationship_parts.append(
-                    "semantic_context_not_sql_identifier"
-                    f"(description_not_filter_value)={semantic_note}"
-                )
-            lines.append("- " + " | ".join(relationship_parts))
-
-    lines.extend(
-        [
-            "Only values in sql_identifier_contract, sql_column_name_use_exactly, and identifiers declared in the following DDL are executable in Wren SQL.",
-            "Values under semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier explain meaning only and are not executable identifiers or data values.",
-            "Never use semantic descriptions, aliases, display labels, source names, physical names, or lineage names as string literals in WHERE or HAVING predicates.",
-            "Values under column_role_hints_not_identifiers and semantic_roles_not_identifiers are meaning only; use them to map intent to exact declared columns, not as executable identifiers.",
-            "*/",
-            _format_executable_identifier_catalog(context),
-        ]
+    return (
+        "/*\n"
+        "WREN RETRIEVED SEMANTIC CONTEXT\n"
+        f"{orjson.dumps(context).decode('utf-8')}\n"
+        f"{_format_identifier_contract(context)}"
+        "Only values in sql_identifier_contract, sql_column_name_use_exactly, and identifiers declared in the following DDL are executable in Wren SQL.\n"
+        "Values under semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier explain meaning only and must not be copied, combined, or rewritten as executable SQL identifiers.\n"
+        "Values under column_role_hints_not_identifiers and semantic_roles_not_identifiers are meaning only; use them to map intent to exact declared columns, not as executable identifiers.\n"
+        "*/\n"
+        f"{_format_executable_identifier_catalog(context)}"
     )
-
-    return "\n".join(lines)
 
 
 def _normalized_data_type(column: dict) -> str:
@@ -623,17 +522,12 @@ def _format_identifier_contract(context: dict) -> str:
 
 
 def _included_relationship_columns(content: dict, tables: Optional[set[str]]) -> set:
-    relationship_columns = set()
-    for column in content["columns"]:
-        if column["type"] not in {"FOREIGN_KEY", "JOIN_PATH"}:
-            continue
-        if tables and not set(column.get("tables", [])).issubset(tables):
-            continue
-
-        if column.get("column"):
-            relationship_columns.add(column.get("column"))
-        relationship_columns.update(column.get("columns", []) or [])
-
+    relationship_columns = {
+        column.get("column")
+        for column in content["columns"]
+        if column["type"] == "FOREIGN_KEY"
+        and (not tables or set(column.get("tables", [])).issubset(tables))
+    }
     relationship_columns.discard(None)
     return relationship_columns
 
@@ -642,7 +536,7 @@ def _included_columns(
     content: dict, columns: Optional[set[str]], tables: Optional[set[str]]
 ) -> list[dict]:
     relationship_columns = _included_relationship_columns(content, tables)
-    return _dedupe_named_columns([
+    return [
         column
         for column in content["columns"]
         if column["type"] == "COLUMN"
@@ -657,14 +551,14 @@ def _included_columns(
             or get_engine_supported_data_type(column["data_type"]).lower()
             != "unknown"
         )
-    ])
+    ]
 
 
 def _included_relationships(content: dict, tables: Optional[set[str]]) -> list[dict]:
     return [
         column
         for column in content["columns"]
-        if column["type"] in {"FOREIGN_KEY", "JOIN_PATH"}
+        if column["type"] == "FOREIGN_KEY"
         and (not tables or set(column.get("tables", [])).issubset(tables))
     ]
 
@@ -724,14 +618,12 @@ def _build_table_context_ddl(
 
 
 def _build_view_ddl(content: dict) -> str:
-    columns = _dedupe_named_columns(
-        [
-            column
-            for column in content.get("columns", [])
-            if column.get("name")
-            and str(column.get("data_type", "")).lower() != "unknown"
-        ]
-    )
+    columns = [
+        column
+        for column in content.get("columns", [])
+        if column.get("name")
+        and str(column.get("data_type", "")).lower() != "unknown"
+    ]
     column_names = [column["name"] for column in columns]
     context = _format_semantic_context(
         {
@@ -968,7 +860,7 @@ async def dbschema_retrieval(
                 continue
 
             for column in content.get("columns", []):
-                if column.get("type") not in {"FOREIGN_KEY", "JOIN_PATH"}:
+                if column.get("type") != "FOREIGN_KEY":
                     continue
 
                 candidates = list(column.get("tables", []) or [])
@@ -1041,21 +933,9 @@ async def dbschema_retrieval(
     current_documents = await _fetch_by_names(table_names)
     _extend_unique_documents(documents, current_documents, seen_documents)
 
-    frontier_documents = current_documents
-    remaining_related_budget = _MAX_RELATED_SCHEMA_TABLE_CANDIDATES
-    for _ in range(_MAX_RELATED_SCHEMA_EXPANSION_HOPS):
-        related_names = _related_table_names(frontier_documents, visited)[
-            :remaining_related_budget
-        ]
-        if not related_names:
-            break
-
-        related_documents = await _fetch_by_names(related_names)
-        _extend_unique_documents(documents, related_documents, seen_documents)
-        frontier_documents = related_documents
-        remaining_related_budget -= len(related_names)
-        if remaining_related_budget <= 0:
-            break
+    related_names = _related_table_names(current_documents, visited)
+    related_documents = await _fetch_by_names(related_names)
+    _extend_unique_documents(documents, related_documents, seen_documents)
 
     return documents
 
@@ -1063,25 +943,6 @@ async def dbschema_retrieval(
 
 @observe()
 def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[dict]:
-    def _column_key(column: dict) -> tuple[str, str]:
-        if column.get("type") in {"FOREIGN_KEY", "JOIN_PATH"}:
-            return (
-                column.get("type", ""),
-                str(column.get("constraint", "")).lower(),
-            )
-        return (column.get("type", ""), str(column.get("name", "")).lower())
-
-    def _dedupe_columns(columns: list[dict]) -> list[dict]:
-        deduped_columns = []
-        seen = set()
-        for column in columns:
-            key = _column_key(column)
-            if key in seen:
-                continue
-            deduped_columns.append(column)
-            seen.add(key)
-        return deduped_columns
-
     db_schemas = {}
     for document in dbschema_retrieval:
         content = ast.literal_eval(document.content)
@@ -1104,8 +965,6 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[dict]:
 
     # remove incomplete schemas
     db_schemas = {k: v for k, v in db_schemas.items() if "type" in v and "columns" in v}
-    for db_schema in db_schemas.values():
-        db_schema["columns"] = _dedupe_columns(db_schema["columns"])
 
     return list(db_schemas.values())
 

@@ -15,17 +15,10 @@ logger = logging.getLogger("wren-ai-service")
 
 _DETERMINISTIC_SQL_VALIDATION_TYPES = {
     "SCHEMA_GROUNDING",
-    "SQL_INTENT_MISMATCH",
     "SQL_SHAPE",
     "SQL_SYNTAX",
     "SQL_VALUE_GROUNDING",
     "NO_RELEVANT_SQL",
-}
-
-_NON_REPAIRABLE_SQL_VALIDATION_TYPES = {
-    "NO_RELEVANT_SQL",
-    "SCHEMA_GROUNDING",
-    "SQL_SHAPE",
 }
 
 
@@ -34,26 +27,6 @@ def should_skip_sql_diagnosis(failed_generation_result: dict | None) -> bool:
         return False
 
     return failed_generation_result.get("type") in _DETERMINISTIC_SQL_VALIDATION_TYPES
-
-
-def should_attempt_sql_correction(failed_generation_result: dict | None) -> bool:
-    if not failed_generation_result:
-        return False
-
-    failure_type = failed_generation_result.get("type")
-    if not failure_type or failure_type == "TIME_OUT":
-        return False
-
-    if failure_type in _NON_REPAIRABLE_SQL_VALIDATION_TYPES:
-        return False
-
-    if failure_type == "SCHEMA_GROUNDING" and not (
-        failed_generation_result.get("sql")
-        or failed_generation_result.get("original_sql")
-    ):
-        return False
-
-    return True
 
 
 async def run_pipeline_with_timeout(awaitable, timeout_seconds: float, operation: str):
@@ -115,12 +88,7 @@ class AskResult(BaseModel):
 
 
 class AskError(BaseModel):
-    code: Literal[
-        "NO_RELEVANT_DATA",
-        "NO_RELEVANT_SQL",
-        "ASK_RESULT_NOT_FOUND",
-        "OTHERS",
-    ]
+    code: Literal["NO_RELEVANT_DATA", "NO_RELEVANT_SQL", "OTHERS"]
     message: str
 
 
@@ -594,12 +562,9 @@ class AskService:
                         "SQL generation",
                     )
 
-                generation_post_process = (
-                    text_to_sql_generation_results.get("post_process") or {}
-                )
-                if sql_valid_result := generation_post_process.get(
+                if sql_valid_result := text_to_sql_generation_results["post_process"][
                     "valid_generation_result"
-                ):
+                ]:
                     api_results = [
                         AskResult(
                             **{
@@ -608,24 +573,17 @@ class AskService:
                             }
                         )
                     ]
-                elif failed_dry_run_result := generation_post_process.get(
-                    "invalid_generation_result"
-                ):
-                    original_sql = failed_dry_run_result.get("original_sql") or ""
-                    invalid_sql = failed_dry_run_result.get("sql") or original_sql
-                    error_message = (
-                        failed_dry_run_result.get("error") or "No relevant SQL"
-                    )
+                elif failed_dry_run_result := text_to_sql_generation_results[
+                    "post_process"
+                ]["invalid_generation_result"]:
                     schema_grounding_correction_attempted = False
                     while current_sql_correction_retries < max_sql_correction_retries:
-                        if not should_attempt_sql_correction(failed_dry_run_result):
+                        if failed_dry_run_result["type"] == "TIME_OUT":
                             break
 
-                        original_sql = failed_dry_run_result.get("original_sql") or ""
-                        invalid_sql = failed_dry_run_result.get("sql") or original_sql
-                        error_message = (
-                            failed_dry_run_result.get("error") or "No relevant SQL"
-                        )
+                        original_sql = failed_dry_run_result["original_sql"]
+                        invalid_sql = failed_dry_run_result["sql"]
+                        error_message = failed_dry_run_result["error"]
                         skip_sql_diagnosis = should_skip_sql_diagnosis(
                             failed_dry_run_result
                         )
@@ -681,8 +639,11 @@ class AskService:
                                 query=user_query,
                                 instructions=instructions,
                                 invalid_generation_result={
-                                    "original_sql": original_sql,
-                                    "sql": invalid_sql,
+                                    "sql": (
+                                        ""
+                                        if is_schema_grounding_error
+                                        else original_sql
+                                    ),
                                     "error": correction_error_message,
                                 },
                                 project_id=ask_request.project_id,
@@ -697,12 +658,9 @@ class AskService:
                             "SQL correction",
                         )
 
-                        correction_post_process = (
-                            sql_correction_results.get("post_process") or {}
-                        )
-                        if valid_generation_result := correction_post_process.get(
-                            "valid_generation_result"
-                        ):
+                        if valid_generation_result := sql_correction_results[
+                            "post_process"
+                        ]["valid_generation_result"]:
                             api_results = [
                                 AskResult(
                                     **{
@@ -713,11 +671,9 @@ class AskService:
                             ]
                             break
 
-                        next_failed_dry_run_result = correction_post_process.get(
-                            "invalid_generation_result"
-                        )
-                        if not next_failed_dry_run_result:
-                            break
+                        next_failed_dry_run_result = sql_correction_results[
+                            "post_process"
+                        ]["invalid_generation_result"]
                         if (
                             next_failed_dry_run_result
                             and next_failed_dry_run_result.get("sql") == invalid_sql
@@ -799,15 +755,14 @@ class AskService:
         ask_result_request: AskResultRequest,
     ) -> AskResultResponse:
         if (result := self._ask_results.get(ask_result_request.query_id)) is None:
-            logger.warning(
-                "ask pipeline - ASK_RESULT_NOT_FOUND: "
-                f"{ask_result_request.query_id} is not found"
+            logger.exception(
+                f"ask pipeline - OTHERS: {ask_result_request.query_id} is not found"
             )
             return AskResultResponse(
                 status="failed",
                 type="TEXT_TO_SQL",
                 error=AskError(
-                    code="ASK_RESULT_NOT_FOUND",
+                    code="OTHERS",
                     message=f"{ask_result_request.query_id} is not found",
                 ),
             )

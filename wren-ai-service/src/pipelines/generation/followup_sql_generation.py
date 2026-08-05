@@ -2,6 +2,7 @@ import logging
 import sys
 from typing import Any
 
+import orjson
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
@@ -11,6 +12,7 @@ from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.common import clean_up_new_lines, retrieve_metadata
+from src.pipelines.generation.utils.deterministic_sql import generate_grounded_sql
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
@@ -20,7 +22,6 @@ from src.pipelines.generation.utils.sql import (
     get_calculated_field_instructions,
     get_json_field_instructions,
     get_metric_instructions,
-    get_sql_dialect_instructions,
     get_sql_generation_system_prompt,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
@@ -35,6 +36,11 @@ text_to_sql_with_followup_user_prompt_template = """
 ### TASK ###
 Given the user's current follow-up question and the current retrieved DATABASE SCHEMA,
 generate one SQL query to best answer the user's question.
+
+{% if executable_schema_contract %}
+{{ executable_schema_contract }}
+
+{% endif %}
 
 ### DATABASE SCHEMA ###
 {% for document in documents %}
@@ -60,10 +66,6 @@ generate one SQL query to best answer the user's question.
 {% endfor %}
 {% endif %}
 
-{% if sql_dialect_instructions %}
-{{ sql_dialect_instructions }}
-{% endif %}
-
 {% if sql_samples %}
 ### SQL SAMPLES ###
 These samples are examples of intent and style only. Their SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
@@ -82,27 +84,11 @@ Summary:
 
 ### QUESTION ###
 User's Follow-up Question: {{ query }}
-Generate one Wren SQL query that answers the full follow-up request using only DATABASE SCHEMA and SQL FUNCTIONS.
-Generate an intent-shaped query, not a table preview.
-Use schema descriptions, aliases, display labels, metrics, calculated fields, and relationships only to understand meaning.
-The SQL must include every supported requested part: subject, entity, filters, timeframe, grouping, measure, ordering, and limit.
-If a required part of the request is not grounded by an exact deployed schema object, column, relationship, metric, or supported function, return null for sql.
-Do not answer a specific analytical question with a broad table preview or with an unrelated nearby table.
-Do not ignore a literal filter value from the user; apply it to the exact schema field representing that filter concept, or return null when that field is unavailable.
-For detail-list requests such as show/list orders filtered by country, market, business unit, customer, status, or another entity value, include a WHERE predicate on the exact grounded filter field and select only useful identifying/detail columns. Do not return an unfiltered table preview.
-String literals in WHERE or HAVING must come from the current user question or current user instructions only. Never use schema descriptions, column comments, aliases, display labels, source names, or lineage names as data values.
-Copy user-provided filter values exactly into SQL string literals, except for normal SQL string escaping. Do not replace them with descriptive labels, unresolved variables, or values to be filled in later.
-Never return template SQL. If any required table, column, join, filter value, timeframe boundary, measure, or function is not fully grounded now, return null for sql instead of a partial query.
-Do not invent generic table names, generic column names, join keys, common-column placeholders, or substitute identifiers from the wording of the user's question.
-For ranked entity questions, select and group by the exact schema field representing the requested entity, not only context fields.
-For record or entity volume questions, count rows unless the user requests a declared numeric measure. For value, amount, quantity, rate, cost, or metric questions, use the declared measure that represents the request.
-For timeframe requests, filter an actual declared column whose metadata marks it as the requested time concept. Metadata role labels are not executable column names.
-For detail-list timeframe requests such as show/list orders in July 2026 or the current month, include a bounded WHERE range on the grounded date/time field and select explicit detail columns. Do not return an unfiltered table preview.
-For aggregate, trend, ranking, or grouped requests, aggregate actual declared measure columns or count rows as appropriate for the user's requested measure. Metadata role labels are not executable column names.
-For "highest", "lowest", "top", "bottom", "most", "least", or "contributed" questions about a named value, amount, sales, cost, revenue, quantity, or numeric measure, group by the requested contributing dimension, aggregate the exact requested measure with SUM unless another aggregation is explicitly requested, order by that selected aggregate alias in the requested direction, and return only the requested ranked rows. Do not use AVG, subtraction, margin, cost, percentage, or another derived metric unless the user explicitly asks for that metric.
-Retrieved schema objects are ranked candidates, not automatic datasets to merge. Prefer one grounded model, view, or metric that answers the question. Do not use UNION, UNION ALL, INTERSECT, or EXCEPT to combine similar retrieved candidates unless the current user explicitly asks to combine separate result sets and DATABASE SCHEMA grounds each branch with the same result shape and compatible measure meaning.
-For comparison requests, include every requested comparison group or period in the SQL result and compute the requested difference, change, growth, or ranking when the required fields and date operations are grounded. Do not answer a comparison request with only one side of the comparison.
-Do not copy executable identifiers, SQL fragments, functions, or literal values from reasoning plans, SQL samples, failed SQL, source metadata, comments, or user wording unless they are also exact deployed schema identifiers or current user-provided literal values.
+Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, user question words, or inferred names into executable SQL. If a needed table, output column, filter column, grouping column, relation, date field, measure, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, return null for sql instead of inventing, substituting, or approximating a similar name. If the retrieved schema does not ground the user's primary requested intent, return null for sql instead of querying an unrelated object.
+If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT, stop and return null for sql. Never create a table or column from the user's wording, even when the wording looks like a business term or object name.
+Do not generate SQL from a reasoning plan. The reasoning plan is not executable context and cannot provide table names, column names, filters, functions, joins, or examples.
+Generate an intent-shaped query, not a table preview. Select explicit columns, filters, groupings, measures, joins, ordering, and limits needed by the question. For metric questions, return dimensions plus the requested measure or grounded expression; never use SELECT * as a substitute.
+When DATABASE SCHEMA contains column_role_hints_not_identifiers, use those roles only to map intent to exact declared columns. For timeframe requests, filter an exact date_time_candidate column with a bounded range. For aggregate, "by", trend, or ranking requests, aggregate exact numeric_measure_candidate columns or count rows, group by exact dimension/date expressions, order by the selected aggregate alias when ranking, and limit only when requested. Do not return a raw table preview.
 
 {% if executable_schema_contract %}
 ### ALLOWED EXECUTABLE IDENTIFIERS FOR THIS REQUEST ###
@@ -128,12 +114,10 @@ def prompt(
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
     schema_contracts: list[dict] | None = None,
-    data_source: str | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
-        sql_dialect_instructions=get_sql_dialect_instructions(data_source),
         executable_schema_contract=build_executable_schema_contract(schema_contracts),
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
@@ -160,11 +144,21 @@ def prompt(
 @trace_cost
 async def generate_sql_in_followup(
     prompt: dict,
+    query: str,
+    documents: list[str],
     generator: Any,
     histories: list[AskHistory],
     generator_name: str,
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
+    deterministic_sql = generate_grounded_sql(query, documents)
+    if deterministic_sql:
+        logger.info("Follow-Up SQL Generation used deterministic grounded SQL fast path.")
+        return {
+            "replies": [orjson.dumps({"sql": deterministic_sql}).decode("utf-8")],
+            "metadata": [{"finish_reason": "deterministic_grounded_sql"}],
+        }, generator_name
+
     history_messages = construct_ask_history_messages(histories)
     current_system_prompt = get_sql_generation_system_prompt(sql_knowledge)
     return await generator(
@@ -221,7 +215,6 @@ class FollowUpSQLGeneration(BasicPipeline):
                 template=text_to_sql_with_followup_user_prompt_template
             ),
             "post_processor": SQLGenPostProcessor(engine=engine),
-            "data_source": kwargs.get("data_source", "local_file"),
         }
 
         super().__init__(
@@ -258,9 +251,6 @@ class FollowUpSQLGeneration(BasicPipeline):
             )
         else:
             metadata = {}
-        data_source = metadata.get("data_source") or self._components.get(
-            "data_source", "local_file"
-        )
 
         return await self._pipe.execute(
             ["post_process"],
@@ -279,7 +269,7 @@ class FollowUpSQLGeneration(BasicPipeline):
                 "sql_functions": sql_functions,
                 "use_dry_plan": use_dry_plan,
                 "allow_dry_plan_fallback": allow_dry_plan_fallback,
-                "data_source": data_source,
+                "data_source": metadata.get("data_source", "local_file"),
                 "sql_knowledge": sql_knowledge,
                 "schema_contracts": schema_contracts,
                 **self._components,

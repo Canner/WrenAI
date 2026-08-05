@@ -99,23 +99,6 @@ def test_clean_generation_result_preserves_internal_statement_separators():
 
 
 @pytest.mark.asyncio
-async def test_sql_post_processor_returns_structured_failure_for_null_sql():
-    engine = CapturingEngine()
-
-    result = await SQLGenPostProcessor(engine).run(['{"sql": null}'])
-
-    assert engine.executed is False
-    assert result["valid_generation_result"] == {}
-    assert result["invalid_generation_result"] == {
-        "sql": "",
-        "original_sql": "",
-        "type": "NO_RELEVANT_SQL",
-        "error": "No grounded SQL was generated from the current schema.",
-        "correlation_id": "",
-    }
-
-
-@pytest.mark.asyncio
 async def test_sql_post_processor_converts_select_top_to_wren_limit():
     engine = CapturingEngine()
 
@@ -278,37 +261,6 @@ async def test_sql_post_processor_allows_count_star():
 
 
 @pytest.mark.asyncio
-async def test_sql_post_processor_rejects_placeholder_identifiers_before_wildcard():
-    engine = CapturingEngine()
-
-    result = await SQLGenPostProcessor(engine).run(
-        [
-            (
-                '{"sql": "SELECT * FROM supported_model '
-                'WHERE Period__would_be_order_date = OrderDate"}'
-            )
-        ],
-        project_id="project-id",
-        schema_contracts=[
-            {
-                "table_name": "supported_model",
-                "column_names": ["id", "OrderDate"],
-            }
-        ],
-        query="show orders from last week",
-    )
-
-    assert engine.executed is False
-    assert result["valid_generation_result"] == {}
-    assert result["invalid_generation_result"]["type"] == "SQL_SYNTAX"
-    assert (
-        result["invalid_generation_result"]["error"]
-        == "Generated SQL contains placeholder or unresolved identifiers; "
-        "regenerate using only exact deployed schema columns."
-    )
-
-
-@pytest.mark.asyncio
 async def test_sql_post_processor_rejects_unshaped_analytical_table_preview():
     engine = CapturingEngine()
 
@@ -331,7 +283,7 @@ async def test_sql_post_processor_rejects_unshaped_analytical_table_preview():
 
     assert engine.executed is False
     assert result["valid_generation_result"] == {}
-    assert result["invalid_generation_result"]["type"] == "SQL_INTENT_MISMATCH"
+    assert result["invalid_generation_result"]["type"] == "SQL_SHAPE"
     assert (
         result["invalid_generation_result"]["error"]
         == "Generated SQL does not apply the requested aggregation, grouping, "
@@ -357,36 +309,7 @@ async def test_sql_post_processor_rejects_unfiltered_timeframe_table_preview():
 
     assert engine.executed is False
     assert result["valid_generation_result"] == {}
-    assert result["invalid_generation_result"]["type"] == "SQL_INTENT_MISMATCH"
-    assert (
-        result["invalid_generation_result"]["error"]
-        == "Generated SQL does not apply the requested timeframe filter."
-    )
-
-
-@pytest.mark.asyncio
-async def test_sql_post_processor_rejects_unfiltered_literal_filter_table_preview():
-    engine = CapturingEngine()
-
-    result = await SQLGenPostProcessor(engine).run(
-        ['{"sql": "SELECT order_id, country FROM model_alpha"}'],
-        project_id="project-id",
-        schema_contracts=[
-            {
-                "table_name": "model_alpha",
-                "column_names": ["order_id", "country"],
-            }
-        ],
-        query="show orders from the country france",
-    )
-
-    assert engine.executed is False
-    assert result["valid_generation_result"] == {}
-    assert result["invalid_generation_result"]["type"] == "SQL_INTENT_MISMATCH"
-    assert (
-        result["invalid_generation_result"]["error"]
-        == "Generated SQL does not apply the requested literal filter value."
-    )
+    assert result["invalid_generation_result"]["type"] == "SQL_SHAPE"
 
 
 @pytest.mark.asyncio
@@ -448,7 +371,7 @@ async def test_sql_post_processor_rejects_aggregate_intent_without_aggregate_sha
 
     assert engine.executed is False
     assert result["valid_generation_result"] == {}
-    assert result["invalid_generation_result"]["type"] == "SQL_INTENT_MISMATCH"
+    assert result["invalid_generation_result"]["type"] == "SQL_SHAPE"
     assert (
         result["invalid_generation_result"]["error"]
         == "Generated SQL does not apply the requested aggregation, grouping, "
