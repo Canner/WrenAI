@@ -192,3 +192,83 @@ def test_load_index_preserves_falsy_schema_version(tmp_path: Path) -> None:
 
     data = load_index(tmp_path)
     assert data["schema_version"] == 0
+
+
+def test_get_app_skips_non_dict_entry(tmp_path: Path) -> None:
+    from wren.genbi.index import get_app, save_index
+
+    idx = {
+        "schema_version": 1,
+        "apps": {"bad": "not-a-map", "good": {"source": "apps/good"}},
+    }
+    save_index(tmp_path, idx)
+    assert get_app(tmp_path, "bad") is None
+    assert get_app(tmp_path, "good") == {"source": "apps/good"}
+    assert get_app(tmp_path, "missing") is None
+
+
+def test_register_app_replaces_non_dict_entry(tmp_path: Path) -> None:
+    from wren.genbi.index import register_app, save_index
+
+    project = _make_project(tmp_path, with_app="bad")
+    save_index(
+        project,
+        {"schema_version": 1, "apps": {"bad": "not-a-map"}},
+    )
+    entry = register_app(project, "bad", data_mode="snapshot")
+    assert isinstance(entry, dict)
+    assert entry["data_mode"] == "snapshot"
+    assert entry["source"] == "apps/bad"
+    assert entry["status"] == "scaffolded"
+
+
+def test_update_app_rejects_missing_and_non_dict(tmp_path: Path) -> None:
+    from wren.genbi.index import save_index, update_app
+
+    save_index(
+        tmp_path,
+        {
+            "schema_version": 1,
+            "apps": {
+                "bad": "not-a-map",
+                "good": {"source": "apps/good", "status": "scaffolded"},
+            },
+        },
+    )
+    with pytest.raises(KeyError):
+        update_app(tmp_path, "missing", status="built")
+    with pytest.raises(KeyError):
+        update_app(tmp_path, "bad", status="built")
+    updated = update_app(tmp_path, "good", status="built")
+    assert updated["status"] == "built"
+    assert updated["source"] == "apps/good"
+    # Persistence: re-load and confirm
+    data = load_index(tmp_path)
+    assert data["apps"]["good"]["status"] == "built"
+    assert data["apps"]["bad"] == "not-a-map"
+
+
+def test_list_skips_non_dict_entries(tmp_path: Path) -> None:
+    from wren.genbi.index import save_index
+
+    project = _make_project(tmp_path, with_app="good")
+    save_index(
+        project,
+        {
+            "schema_version": 1,
+            "apps": {
+                "bad": "not-a-map",
+                "good": {
+                    "source": "apps/good",
+                    "data_mode": "snapshot",
+                    "status": "scaffolded",
+                },
+            },
+        },
+    )
+    result = runner.invoke(app, ["genbi", "list", "-p", str(project)])
+    assert result.exit_code == 0, result.output
+    assert "good" in result.output
+    assert "snapshot" in result.output
+    # Must not traceback; bad entry is skipped (lenient listing).
+    assert "Traceback" not in result.output

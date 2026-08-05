@@ -80,11 +80,17 @@ def save_index(project_path: Path, index: dict) -> None:
 def register_app(project_path: Path, name: str, *, data_mode: str) -> dict:
     """Create or update the entry for ``name``. Returns the entry."""
     index = load_index(project_path)
-    entry = index["apps"].get(name) or {
-        "source": f"apps/{name}",
-        "status": "scaffolded",
-        "created_at": date.today().isoformat(),
-    }
+    existing = index["apps"].get(name)
+    # Hand-edited truthy non-dicts (e.g. a string) must not fall through the
+    # ``or`` default — assignment would raise TypeError. Treat like missing.
+    if not isinstance(existing, dict):
+        entry = {
+            "source": f"apps/{name}",
+            "status": "scaffolded",
+            "created_at": date.today().isoformat(),
+        }
+    else:
+        entry = existing
     entry["data_mode"] = data_mode
     index["apps"][name] = entry
     save_index(project_path, index)

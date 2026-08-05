@@ -204,6 +204,10 @@ def list_apps(path: ProjectPathOpt = None) -> None:
         return
 
     for name, entry in apps.items():
+        # Hand-edited non-dict entries: skip rather than AttributeError on .get
+        # (same lenient stance as get_app treating them as unregistered).
+        if not isinstance(entry, dict):
+            continue
         deploy = entry.get("deploy") or {}
         suffix = f" → {deploy['last_url']}" if deploy.get("last_url") else ""
         typer.echo(
