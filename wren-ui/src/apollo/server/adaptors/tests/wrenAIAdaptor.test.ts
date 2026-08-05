@@ -4,7 +4,6 @@ import {
   AskInput,
   RecommendationQuestionsInput,
   RecommendationQuestionStatus,
-  WrenAISystemStatus,
 } from '@server/models/adaptor';
 import { Manifest } from '../../mdl/type';
 
@@ -64,32 +63,6 @@ describe('WrenAIAdaptor', () => {
         {
           params: {
             project_id: mockInput.projectId.toString(),
-          },
-        },
-      );
-    });
-  });
-
-  describe('getDeployStatus', () => {
-    it('should return FAILED when semantic preparation failed with an error payload', async () => {
-      mockedAxios.get.mockResolvedValueOnce({
-        data: {
-          status: 'failed',
-          error: {
-            code: 'OTHERS',
-            message: 'Failed to prepare semantics: cannot connect to embedder',
-          },
-        },
-      });
-
-      const status = await adaptor.getDeployStatus('deploy-hash', 123);
-
-      expect(status).toEqual(WrenAISystemStatus.FAILED);
-      expect(mockedAxios.get).toHaveBeenCalledWith(
-        `${baseEndpoint}/v1/semantics-preparations/deploy-hash/status`,
-        {
-          params: {
-            project_id: '123',
           },
         },
       );

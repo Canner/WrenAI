@@ -12,8 +12,6 @@ from src.web.v1.services import BaseRequest
 
 logger = logging.getLogger("wren-ai-service")
 
-SEMANTICS_PREPARATION_STATUS_TTL_SECONDS = 60 * 60
-
 
 # POST /v1/semantics-preparations
 class SemanticsPreparationRequest(BaseRequest):
@@ -50,7 +48,7 @@ class SemanticsPreparationService:
         self,
         pipelines: Dict[str, BasicPipeline],
         maxsize: int = 1_000_000,
-        ttl: int = SEMANTICS_PREPARATION_STATUS_TTL_SECONDS,
+        ttl: int = 120,
     ):
         self._pipelines = pipelines
         self._prepare_semantics_statuses: Dict[
