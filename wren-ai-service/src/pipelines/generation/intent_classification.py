@@ -1,6 +1,5 @@
 import ast
 import logging
-import re
 import sys
 from typing import Any, Literal, Optional
 
@@ -25,50 +24,6 @@ from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
-
-
-_DATA_QUERY_ACTION_PATTERN = re.compile(
-    r"\b("
-    r"show|list|find|get|give|tell|count|sum|total|average|avg|min|max|"
-    r"top|bottom|highest|lowest|which|who|what|where|filter|compare|"
-    r"breakdown|group|trend"
-    r")\b",
-    re.IGNORECASE,
-)
-_DATA_QUERY_CONTEXT_PATTERN = re.compile(
-    r"\b("
-    r"order|orders|sale|sales|customer|customers|invoice|invoices|market|"
-    r"business unit|country|record|records|row|rows|amount|quantity|date|"
-    r"today|yesterday|week|month|quarter|year|january|february|march|april|"
-    r"may|june|july|august|september|october|november|december|current"
-    r")\b|\b\d{4}\b",
-    re.IGNORECASE,
-)
-_USER_GUIDE_SHAPE_PATTERN = re.compile(
-    r"\b("
-    r"how do i|how can i|what can wren|help me use|delete a project|"
-    r"reset a project|connect to|draw a chart"
-    r")\b",
-    re.IGNORECASE,
-)
-
-
-def should_force_text_to_sql_intent(
-    query: str | None,
-    intent: str | None,
-    db_schemas: list[str] | None,
-) -> bool:
-    if intent == "TEXT_TO_SQL" or intent == "USER_GUIDE":
-        return False
-    if not query or not db_schemas:
-        return False
-    if _USER_GUIDE_SHAPE_PATTERN.search(query):
-        return False
-
-    return bool(
-        _DATA_QUERY_ACTION_PATTERN.search(query)
-        and _DATA_QUERY_CONTEXT_PATTERN.search(query)
-    )
 
 
 intent_classification_system_prompt = """
@@ -351,17 +306,12 @@ async def classify_intent(prompt: dict, generator: Any, generator_name: str) -> 
 
 
 @observe(capture_input=False)
-def post_process(
-    classify_intent: dict, construct_db_schemas: list[str], query: str
-) -> dict:
+def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict:
     try:
         results = orjson.loads(classify_intent.get("replies")[0])
-        intent = results["results"]
-        if should_force_text_to_sql_intent(query, intent, construct_db_schemas):
-            intent = "TEXT_TO_SQL"
         return {
             "rephrased_question": results["rephrased_question"],
-            "intent": intent,
+            "intent": results["results"],
             "reasoning": results["reasoning"],
             "db_schemas": construct_db_schemas,
         }

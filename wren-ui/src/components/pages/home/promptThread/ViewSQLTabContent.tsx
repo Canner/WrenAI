@@ -56,7 +56,6 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
   });
 
   const onPreviewData = async () => {
-    if (!threadResponse.sql) return;
     await previewData({ variables: { where: { responseId: id } } });
   };
 
@@ -69,17 +68,12 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
 
   // when is the last step of the last thread response, auto trigger preview data button
   useEffect(() => {
-    if (isLastThreadResponse && threadResponse.sql) {
+    if (isLastThreadResponse) {
       autoTriggerPreviewDataButton();
     }
   }, [isLastThreadResponse, threadResponse.sql]);
 
   const { id, sql } = threadResponse;
-  const displaySql =
-    sql ||
-    threadResponse.askingTask?.invalidSql ||
-    threadResponse.adjustmentTask?.invalidSql ||
-    '';
 
   const { hasNativeSQL, dataSourceType } = nativeSQLResult;
   const showNativeSQL = hasNativeSQL;
@@ -90,7 +84,7 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
   const sqls =
     nativeSQLResult.nativeSQLMode && nativeSQLResult.loading === false
       ? nativeSQLResult.data
-      : displaySql;
+      : sql;
 
   const onChangeNativeSQL = async (checked: boolean) => {
     nativeSQLResult.setNativeSQLMode(checked);
@@ -188,10 +182,7 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
               data-ph-capture-attribute-name="view_sql_copy_sql"
               icon={<CodeFilled />}
               size="small"
-              onClick={() =>
-                onOpenAdjustSQLModal({ sql: displaySql, responseId: id })
-              }
-              disabled={!displaySql}
+              onClick={() => onOpenAdjustSQLModal({ sql, responseId: id })}
             >
               Adjust SQL
             </Button>
@@ -207,14 +198,6 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
         />
       </StyledPre>
       <div className="mt-6">
-        {!sql && (
-          <Alert
-            className="mb-3"
-            message="SQL generation needs a fix before results or charts can be generated."
-            type="warning"
-            showIcon
-          />
-        )}
         <Button
           size="small"
           icon={
@@ -227,7 +210,6 @@ export default function ViewSQLTabContent(props: AnswerResultProps) {
           }
           loading={previewDataResult.loading}
           onClick={onPreviewData}
-          disabled={!sql}
           data-ph-capture="true"
           data-ph-capture-attribute-name="view_sql_preview_data"
         >
