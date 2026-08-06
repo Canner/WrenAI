@@ -1270,6 +1270,25 @@ def _make_v1_project(tmp_path: Path) -> Path:
     return tmp_path
 
 
+def _set_v1_entity_name(project_path: Path, entity: str, name: str) -> None:
+    replacements = {
+        "model": ("models/orders.yml", "name: orders\n", f"name: {name}\n"),
+        "view": ("views.yml", "  - name: summary\n", f"  - name: {name}\n"),
+        "cube": (
+            "cubes/order_metrics.yml",
+            "name: order_metrics\n",
+            f"name: {name}\n",
+        ),
+    }
+    relative_path, original, replacement = replacements[entity]
+    source_path = project_path / relative_path
+    content = source_path.read_text(encoding="utf-8")
+    source_path.write_text(
+        content.replace(original, replacement, 1),
+        encoding="utf-8",
+    )
+
+
 def test_plan_upgrade_v1_to_v2(tmp_path):
     _make_v1_project(tmp_path)
     result = plan_upgrade(tmp_path, target_version=2)
@@ -1281,6 +1300,21 @@ def test_plan_upgrade_v1_to_v2(tmp_path):
     assert any("models/orders.yml" in f for f in result.files_deleted)
     assert any("cubes/order_metrics.yml" in f for f in result.files_deleted)
     assert any("views.yml" in f for f in result.files_deleted)
+
+
+@pytest.mark.parametrize("entity", ["model", "view", "cube"])
+def test_plan_upgrade_v1_to_v2_rejects_traversal_names(tmp_path, entity):
+    _make_v1_project(tmp_path)
+    outside_dir = tmp_path.parent / f"{tmp_path.name}-{entity}-outside"
+    _set_v1_entity_name(tmp_path, entity, f"../../{outside_dir.name}")
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="resolves outside"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    assert not outside_dir.exists()
+    assert get_schema_version(tmp_path) == 1
 
 
 def test_plan_upgrade_v1_to_v3(tmp_path):
@@ -1480,6 +1514,27 @@ def test_apply_upgrade_v1_to_v2_does_not_crash_on_non_mapping_view(tmp_path):
     assert not (tmp_path / "views.yml").exists()
     # Only the well-formed view became a directory — no junk siblings.
     assert [d.name for d in (tmp_path / "views").iterdir()] == ["summary"]
+
+
+@pytest.mark.parametrize("entity", ["model", "view", "cube"])
+def test_apply_upgrade_v1_to_v2_rejects_traversal_names_before_writing(
+    tmp_path, entity
+):
+    _make_v1_project(tmp_path)
+    result = plan_upgrade(tmp_path, target_version=2)
+    outside_dir = tmp_path.parent / f"{tmp_path.name}-{entity}-outside"
+    _set_v1_entity_name(tmp_path, entity, f"../../{outside_dir.name}")
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="resolves outside"):
+        apply_upgrade(tmp_path, result)
+
+    assert not outside_dir.exists()
+    assert (tmp_path / "models" / "orders.yml").exists()
+    assert (tmp_path / "views.yml").exists()
+    assert (tmp_path / "cubes" / "order_metrics.yml").exists()
+    assert get_schema_version(tmp_path) == 1
 
 
 def test_apply_upgrade_v2_to_v3(tmp_path):

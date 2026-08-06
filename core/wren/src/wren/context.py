@@ -1376,6 +1376,41 @@ class UpgradeError(Exception):
     """Raised when a project upgrade cannot proceed."""
 
 
+def _resolve_upgrade_directory(
+    project_path: Path,
+    collection: str,
+    entity: str,
+    name: Any,
+) -> Path:
+    """Resolve one v1 migration directory without leaving its collection."""
+    if not isinstance(name, str) or not name:
+        raise UpgradeError(
+            f"Cannot upgrade: {entity} name must be a non-empty string, got {name!r}"
+        )
+
+    project_root = project_path.resolve()
+    collection_root = (project_root / collection).resolve()
+    try:
+        collection_root.relative_to(project_root)
+    except ValueError as exc:
+        raise UpgradeError(
+            f"Cannot upgrade: {collection}/ resolves outside the project directory"
+        ) from exc
+
+    target_directory = (collection_root / name).resolve()
+    try:
+        target_directory.relative_to(collection_root)
+    except ValueError as exc:
+        raise UpgradeError(
+            f"Cannot upgrade: {entity} name {name!r} resolves outside {collection}/"
+        ) from exc
+    if target_directory == collection_root:
+        raise UpgradeError(
+            f"Cannot upgrade: {entity} name {name!r} does not identify a directory"
+        )
+    return target_directory
+
+
 def _knowledge_skeleton_targets() -> list[str]:
     """Canonical relative paths of a fresh knowledge/ skeleton.
 
@@ -1462,13 +1497,15 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
     """Plan the v1→v2 file restructuring. Returns (files_created, files_deleted)."""
     created: list[str] = []
     deleted: list[str] = []
+    project_root = project_path.resolve()
 
     # Models: flat files → directories
     models = _load_models_v1(project_path)
     for model in models:
         source_dir = model.pop("_source_dir", None)
         name = model.get("name", source_dir or "unknown")
-        dir_path = f"models/{name}"
+        model_dir = _resolve_upgrade_directory(project_path, "models", "model", name)
+        dir_path = model_dir.relative_to(project_root).as_posix()
 
         ref_sql = model.get("ref_sql")
         if ref_sql:
@@ -1485,7 +1522,8 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
         name = view.get("name")
         if not name:
             continue
-        dir_path = f"views/{name}"
+        view_dir = _resolve_upgrade_directory(project_path, "views", "view", name)
+        dir_path = view_dir.relative_to(project_root).as_posix()
 
         statement = view.get("statement")
         if statement and "\n" in statement.strip():
@@ -1502,7 +1540,9 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
     cubes = _load_cubes_v1(project_path)
     for cube in cubes:
         source_file = cube.pop("_source_file", None)
-        _, target = _cube_migration_target(cube, source_file)
+        name, _ = _cube_migration_target(cube, source_file)
+        cube_dir = _resolve_upgrade_directory(project_path, "cubes", "cube", name)
+        target = (cube_dir / "metadata.yml").relative_to(project_root).as_posix()
         if target in seen_cube_targets:
             raise UpgradeError(
                 f"Cannot upgrade: multiple legacy cube files map to '{target}'"
@@ -1551,12 +1591,15 @@ def apply_upgrade(project_path: Path, result: UpgradeResult) -> None:
 
 def _apply_v1_to_v2(project_path: Path) -> None:
     """Execute the v1→v2 restructuring: write new files, delete old ones."""
+    # Validate every user-derived target before the first filesystem mutation.
+    _plan_v1_to_v2(project_path)
+
     # Write new model directories
     models = _load_models_v1(project_path)
     for model in models:
         source_dir = model.pop("_source_dir", None)
         name = model.get("name", source_dir or "unknown")
-        model_dir = project_path / "models" / name
+        model_dir = _resolve_upgrade_directory(project_path, "models", "model", name)
         model_dir.mkdir(parents=True, exist_ok=True)
 
         ref_sql = model.pop("ref_sql", None)
@@ -1581,7 +1624,7 @@ def _apply_v1_to_v2(project_path: Path) -> None:
         name = view.get("name")
         if not name:
             continue
-        view_dir = project_path / "views" / name
+        view_dir = _resolve_upgrade_directory(project_path, "views", "view", name)
         view_dir.mkdir(parents=True, exist_ok=True)
 
         statement = view.pop("statement", None)
@@ -1620,7 +1663,7 @@ def _apply_v1_to_v2(project_path: Path) -> None:
             )
         seen_cube_targets.add(target)
 
-        cube_dir = project_path / "cubes" / name
+        cube_dir = _resolve_upgrade_directory(project_path, "cubes", "cube", name)
         cube_dir.mkdir(parents=True, exist_ok=True)
 
         (cube_dir / "metadata.yml").write_text(
