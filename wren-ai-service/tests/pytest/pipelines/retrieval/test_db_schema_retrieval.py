@@ -546,18 +546,17 @@ async def test_dbschema_retrieval_expands_direct_declared_relationships():
         embedding={},
     )
 
-    assert retriever.calls == [[selected_model], [related_model], [downstream_model]]
+    assert retriever.calls == [[selected_model], [related_model]]
     assert [document.meta["name"] for document in documents] == [
         selected_model,
         selected_model,
         related_model,
         related_model,
-        downstream_model,
     ]
 
 
 @pytest.mark.asyncio
-async def test_dbschema_retrieval_expands_second_hop_for_relationship_intent():
+async def test_dbschema_retrieval_does_not_recursively_expand_relationships():
     selected_model = "model_alpha"
     related_model = "model_beta"
     downstream_model = "model_gamma"
@@ -662,13 +661,12 @@ async def test_dbschema_retrieval_expands_second_hop_for_relationship_intent():
         query="show model alpha records linked to model gamma records",
     )
 
-    assert retriever.calls == [[selected_model], [related_model], [downstream_model]]
+    assert retriever.calls == [[selected_model], [related_model]]
     assert [document.meta["name"] for document in documents] == [
         selected_model,
         selected_model,
         related_model,
         related_model,
-        downstream_model,
     ]
 
 
@@ -845,7 +843,7 @@ async def test_relationship_semantic_schema_rescue_keeps_deploy_scope():
 
 
 @pytest.mark.asyncio
-async def test_dbschema_retrieval_combines_description_and_schema_semantic_hits():
+async def test_dbschema_retrieval_does_not_merge_semantic_hits_when_descriptions_match():
     described_model = "described_dataset"
     semantic_model = "semantic_dataset"
 
@@ -924,15 +922,8 @@ async def test_dbschema_retrieval_combines_description_and_schema_semantic_hits(
         embedding={"embedding": [0.25]},
     )
 
-    assert [call["query_embedding"] for call in retriever.calls] == [[0.25], []]
+    assert [call["query_embedding"] for call in retriever.calls] == [[]]
     assert retriever.calls[0]["filters"] == {
-        "operator": "AND",
-        "conditions": [
-            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-            {"field": "project_id", "operator": "==", "value": "project-1"},
-        ],
-    }
-    assert retriever.calls[1]["filters"] == {
         "operator": "AND",
         "conditions": [
             {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
@@ -940,16 +931,13 @@ async def test_dbschema_retrieval_combines_description_and_schema_semantic_hits(
                 "operator": "OR",
                 "conditions": [
                     {"field": "name", "operator": "==", "value": described_model},
-                    {"field": "name", "operator": "==", "value": semantic_model},
                 ],
             },
             {"field": "project_id", "operator": "==", "value": "project-1"},
         ],
     }
     assert [document.meta["name"] for document in documents] == [
-        semantic_model,
         described_model,
-        semantic_model,
     ]
 
 

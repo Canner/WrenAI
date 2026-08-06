@@ -491,31 +491,29 @@ async def dbschema_retrieval(
         table_retrieval.get("documents", [])
     )
     documents = []
-    if embedding:
+    if embedding and not table_names:
         semantic_documents = await _retrieve_semantic_schema_documents(
             embedding, project_id, mdl_hash, dbschema_retriever
         )
         documents = _dedupe_documents(documents + semantic_documents)
-        table_names = _merge_names(
-            table_names,
-            _table_names_from_schema_documents(semantic_documents),
-        )
+        table_names = _table_names_from_schema_documents(semantic_documents)
 
     if table_names:
-        retrieved_table_names = set()
-        pending_table_names = table_names
-
-        while pending_table_names:
-            retrieved_table_names.update(pending_table_names)
-            retrieved_documents = await _retrieve_schema_documents(
-                pending_table_names, project_id, mdl_hash, dbschema_retriever
+        selected_documents = await _retrieve_schema_documents(
+            table_names, project_id, mdl_hash, dbschema_retriever
+        )
+        documents = _dedupe_documents(documents + selected_documents)
+        selected_table_names = set(table_names)
+        related_table_names = [
+            table_name
+            for table_name in _related_table_names(selected_documents)
+            if table_name not in selected_table_names
+        ]
+        if related_table_names:
+            related_documents = await _retrieve_schema_documents(
+                related_table_names, project_id, mdl_hash, dbschema_retriever
             )
-            documents = _dedupe_documents(documents + retrieved_documents)
-            pending_table_names = [
-                table_name
-                for table_name in _related_table_names(documents)
-                if table_name not in retrieved_table_names
-            ]
+            documents = _dedupe_documents(documents + related_documents)
 
         return documents
 
@@ -566,20 +564,6 @@ def _table_names_from_schema_documents(documents: list[Document]) -> list[str]:
             seen.add(table_name)
 
     return table_names
-
-
-def _merge_names(*name_groups: list[str]) -> list[str]:
-    merged = []
-    seen = set()
-
-    for names in name_groups:
-        for name in names:
-            if name in seen:
-                continue
-            merged.append(name)
-            seen.add(name)
-
-    return merged
 
 
 def _table_names_from_description_documents(documents: list[Document]) -> list[str]:
