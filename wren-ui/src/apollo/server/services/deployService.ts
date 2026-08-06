@@ -108,6 +108,28 @@ export class DeployService implements IDeployService {
       logger.warn(
         `Deployment ${lastDeploy.hash} does not match current manifest hash ${activeHash}; preparing current hash.`,
       );
+      try {
+        const status = await this.wrenAIAdaptor.getDeployStatus(
+          activeHash,
+          projectId,
+        );
+        if (status === WrenAISystemStatus.FINISHED) {
+          await this.deployLogRepository.updateOne(lastDeploy.id, {
+            manifest: normalizeManifest(lastDeploy.manifest),
+            hash: activeHash,
+            status: DeployStatusEnum.SUCCESS,
+            error: undefined,
+          });
+          return activeHash;
+        }
+        logger.warn(
+          `Deployment ${activeHash} is not ready in AI service: ${status}`,
+        );
+      } catch (err: any) {
+        logger.warn(
+          `Deployment ${activeHash} is not available in AI service: ${err.message}`,
+        );
+      }
     }
 
     const result = await this.deploy(lastDeploy.manifest, projectId);

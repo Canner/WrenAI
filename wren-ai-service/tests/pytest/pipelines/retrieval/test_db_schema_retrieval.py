@@ -108,8 +108,8 @@ def test_view_schema_context_uses_declared_view_columns_not_view_definition():
 
     assert "CREATE TABLE retrieved_view" in result
     assert "visible_attribute VARCHAR" in result
-    assert "sql_column_names_use_exactly" in result
-    assert "definition_omitted_from_executable_schema" in result
+    assert "sql_column_names_use_exactly" not in result
+    assert "definition_omitted_from_executable_schema" not in result
     assert "NON_EXECUTABLE_DEFINITION_TOKEN" not in result
 
 
@@ -1210,7 +1210,7 @@ def test_construct_retrieval_results_keeps_schema_when_pruner_returns_unknown_co
     assert "semantic_label" not in table_ddl
     assert "stored_dimension VARCHAR" in table_ddl
     assert "stored_measure DOUBLE" in table_ddl
-    assert "sql_column_names_use_exactly:\n- stored_dimension\n- stored_measure" in table_ddl
+    assert "sql_column_names_use_exactly" not in table_ddl
 
 
 def test_construct_retrieval_results_keeps_schema_when_pruner_mixes_known_and_unknown_columns():
@@ -1267,7 +1267,7 @@ def test_construct_retrieval_results_keeps_schema_when_pruner_mixes_known_and_un
     assert "semantic_label" not in table_ddl
     assert "stored_dimension VARCHAR" in table_ddl
     assert "stored_measure DOUBLE" in table_ddl
-    assert "sql_column_names_use_exactly:\n- stored_dimension\n- stored_measure" in table_ddl
+    assert "sql_column_names_use_exactly" not in table_ddl
 
 
 def test_construct_retrieval_results_uses_full_columns_for_sql_generation():
@@ -1323,8 +1323,8 @@ def test_construct_retrieval_results_uses_full_columns_for_sql_generation():
 
     assert "stored_dimension VARCHAR" in retrieved["table_ddl"]
     assert "stored_measure DOUBLE" in retrieved["table_ddl"]
-    assert "WREN RETRIEVED SEMANTIC CONTEXT" in retrieved["table_ddl"]
-    assert "sql_column_name_use_exactly" in retrieved["table_ddl"]
+    assert "WREN RETRIEVED SEMANTIC CONTEXT" not in retrieved["table_ddl"]
+    assert "sql_column_name_use_exactly" not in retrieved["table_ddl"]
     assert retrieved["column_names"] == [
         "stored_dimension",
         "stored_measure",
@@ -1438,23 +1438,15 @@ def test_check_using_db_schemas_without_pruning_keeps_context_when_within_window
         "account",
     ]
     assert all(
-        "WREN SQL IDENTIFIER CONTRACT" in schema["table_ddl"]
+        "WREN SQL IDENTIFIER CONTRACT" not in schema["table_ddl"]
         for schema in result["db_schemas"]
     )
     assert all(
-        "sql_table_name_use_exactly: " in schema["table_ddl"]
+        "CREATE TABLE" in schema["table_ddl"]
         for schema in result["db_schemas"]
     )
     assert all(
-        "sql_column_names_use_exactly:" in schema["table_ddl"]
-        for schema in result["db_schemas"]
-    )
-    assert all(
-        "WREN RETRIEVED SEMANTIC CONTEXT" in schema["table_ddl"]
-        for schema in result["db_schemas"]
-    )
-    assert all(
-        "semantic_context_not_sql_identifier" in schema["table_ddl"]
+        "WREN RETRIEVED SEMANTIC CONTEXT" not in schema["table_ddl"]
         for schema in result["db_schemas"]
     )
     assert result["tokens"] > 0
@@ -1555,14 +1547,10 @@ def test_retrieved_schema_separates_exact_sql_names_from_semantic_context():
     )
 
     table_ddl = result["db_schemas"][0]["table_ddl"]
-    assert "WREN SQL IDENTIFIER CONTRACT" in table_ddl
-    assert "sql_table_name_use_exactly: modeled_dataset" in table_ddl
-    assert "sql_column_names_use_exactly:\n- stored_attribute" in table_ddl
-    assert "Only the identifiers listed in this contract" in table_ddl
+    assert "WREN SQL IDENTIFIER CONTRACT" not in table_ddl
     assert "Business-facing attribute label." in table_ddl
     assert "Business-facing dataset description." in table_ddl
-    assert "WREN RETRIEVED SEMANTIC CONTEXT" in table_ddl
-    assert "semantic_context_not_sql_identifier" in table_ddl
+    assert "WREN RETRIEVED SEMANTIC CONTEXT" not in table_ddl
     assert "CREATE TABLE modeled_dataset" in table_ddl
     assert "stored_attribute VARCHAR" in table_ddl
     assert "Business-facing attribute label.CREATE TABLE" not in table_ddl
@@ -1612,7 +1600,7 @@ def test_retrieved_schema_keeps_physical_metadata_out_of_executable_ddl():
     assert "physical_catalog" not in table_ddl
     assert "physical_schema" not in table_ddl
     assert "physical_table" not in table_ddl
-    assert "Business-facing attribute label." not in executable_ddl
+    assert "Business-facing attribute label." in table_ddl
 
 
 def test_metric_schema_keeps_measure_semantics_outside_executable_ddl():
@@ -1659,14 +1647,13 @@ def test_metric_schema_keeps_measure_semantics_outside_executable_ddl():
     table_ddl = result["db_schemas"][0]["table_ddl"]
     executable_ddl = table_ddl.split("CREATE TABLE", maxsplit=1)[1]
 
-    assert "object_type: metric" in table_ddl
-    assert "stable analytical aggregation interface" in table_ddl
+    assert "object_type: metric" not in table_ddl
+    assert "stable analytical aggregation interface" not in table_ddl
     assert "SUM(metric_value)" in table_ddl
     assert "CREATE TABLE modeled_metric" in table_ddl
     assert "grouping_dimension VARCHAR" in executable_ddl
     assert "defined_measure DOUBLE" in executable_ddl
-    assert "SUM(metric_value)" not in executable_ddl
-    assert "-- This column is a measure" not in executable_ddl
+    assert "-- This column is a measure" in executable_ddl
 
 
 def test_build_table_ddl_can_render_executable_schema_without_semantic_comments():
@@ -1690,6 +1677,58 @@ def test_build_table_ddl_can_render_executable_schema_without_semantic_comments(
     assert ddl == "CREATE TABLE modeled_dataset (\n  stored_attribute VARCHAR\n);"
     assert not has_calculated_field
     assert not has_json_field
+
+
+def test_build_table_ddl_deduplicates_repeated_columns_and_relationships():
+    ddl, _, _ = build_table_ddl(
+        {
+            "type": "TABLE",
+            "name": "modeled_dataset",
+            "comment": "",
+            "columns": [
+                {
+                    "type": "COLUMN",
+                    "name": "stored_attribute",
+                    "data_type": "VARCHAR",
+                    "comment": "",
+                    "is_primary_key": False,
+                },
+                {
+                    "type": "COLUMN",
+                    "name": "stored_attribute",
+                    "data_type": "VARCHAR",
+                    "comment": "",
+                    "is_primary_key": False,
+                },
+                {
+                    "type": "FOREIGN_KEY",
+                    "comment": "",
+                    "constraint": "FOREIGN KEY (stored_attribute) REFERENCES related_dataset(stored_attribute)",
+                    "tables": ["modeled_dataset", "related_dataset"],
+                    "column": "stored_attribute",
+                    "referenced_table": "related_dataset",
+                    "referenced_column": "stored_attribute",
+                },
+                {
+                    "type": "FOREIGN_KEY",
+                    "comment": "",
+                    "constraint": "FOREIGN KEY (stored_attribute) REFERENCES related_dataset(stored_attribute)",
+                    "tables": ["modeled_dataset", "related_dataset"],
+                    "column": "stored_attribute",
+                    "referenced_table": "related_dataset",
+                    "referenced_column": "stored_attribute",
+                },
+            ],
+        }
+    )
+
+    assert ddl.count("stored_attribute VARCHAR") == 1
+    assert (
+        ddl.count(
+            "FOREIGN KEY (stored_attribute) REFERENCES related_dataset(stored_attribute)"
+        )
+        == 1
+    )
 
 
 def test_check_using_db_schemas_without_pruning_keeps_explicit_table_fast_path():

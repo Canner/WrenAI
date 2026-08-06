@@ -18,6 +18,7 @@ from src.pipelines.generation.sql_regeneration import (
     prompt as build_sql_regeneration_prompt,
     sql_regeneration_user_prompt_template,
 )
+from src.pipelines.generation.utils.sql import SQL_GENERATION_MODEL_KWARGS
 
 
 def test_sql_generation_system_prompt_uses_schema_without_extra_catalog_layer():
@@ -37,6 +38,11 @@ def test_sql_correction_system_prompt_uses_current_schema_for_repair():
     assert "DATABASE SCHEMA" in prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in prompt
     assert 'ONLY USE "*" if the user query asks' in prompt
+
+
+def test_sql_generation_model_kwargs_include_overridable_output_budget():
+    assert SQL_GENERATION_MODEL_KWARGS["max_tokens"] == 4096
+    assert SQL_GENERATION_MODEL_KWARGS["response_format"]["type"] == "json_schema"
 
 
 def test_sql_generation_prompt_omits_sample_sql_body():

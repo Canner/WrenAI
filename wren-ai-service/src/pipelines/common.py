@@ -48,6 +48,14 @@ def get_engine_supported_data_type(data_type: str | None) -> str:
             return data_type.upper()
 
 
+def format_schema_comment(comment: str | None, indentation: str = "") -> str:
+    if not comment:
+        return ""
+    if comment[-1].isspace():
+        return comment
+    return f"{comment}\n{indentation}"
+
+
 def build_table_ddl(
     content: dict,
     columns: Optional[set[str]] = None,
@@ -57,6 +65,8 @@ def build_table_ddl(
     columns_ddl = []
     has_calculated_field = False
     has_json_field = False
+    seen_columns = set()
+    seen_relationships = set()
     relationship_columns = {
         column.get("column")
         for column in content["columns"]
@@ -67,13 +77,16 @@ def build_table_ddl(
 
     for column in content["columns"]:
         if column["type"] == "COLUMN":
+            column_name = column["name"]
+            if column_name in seen_columns:
+                continue
             raw_data_type = column["data_type"]
             supported_data_type = get_engine_supported_data_type(raw_data_type)
             if (
                 (
                     not columns
-                    or column["name"] in columns
-                    or column["name"] in relationship_columns
+                    or column_name in columns
+                    or column_name in relationship_columns
                     or column["is_primary_key"]
                 )
                 and (
@@ -86,19 +99,32 @@ def build_table_ddl(
                     has_calculated_field = True
                 if supported_data_type.lower() == "json":
                     has_json_field = True
-                column_comment = column["comment"] if include_semantic_comments else ""
-                column_ddl = f"{column_comment}{column['name']} {supported_data_type}"
+                column_comment = (
+                    format_schema_comment(column["comment"], "  ")
+                    if include_semantic_comments
+                    else ""
+                )
+                column_ddl = f"{column_comment}{column_name} {supported_data_type}"
                 if column["is_primary_key"]:
                     column_ddl += " PRIMARY KEY"
                 columns_ddl.append(column_ddl)
+                seen_columns.add(column_name)
         elif column["type"] == "FOREIGN_KEY":
             if not tables or (tables and set(column.get("tables", [])).issubset(tables)):
+                constraint = column["constraint"]
+                if constraint in seen_relationships:
+                    continue
                 relationship_comment = (
-                    column["comment"] if include_semantic_comments else ""
+                    format_schema_comment(column["comment"], "  ")
+                    if include_semantic_comments
+                    else ""
                 )
-                columns_ddl.append(f"{relationship_comment}{column['constraint']}")
+                columns_ddl.append(f"{relationship_comment}{constraint}")
+                seen_relationships.add(constraint)
 
-    table_comment = content["comment"] if include_semantic_comments else ""
+    table_comment = (
+        format_schema_comment(content["comment"]) if include_semantic_comments else ""
+    )
     return (
         (
             f"{table_comment}CREATE TABLE {content['name']} (\n  "

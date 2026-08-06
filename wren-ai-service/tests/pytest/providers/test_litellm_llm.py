@@ -29,6 +29,7 @@ async def test_model_kwargs_override_component_generation_defaults(mocker):
         api_base="https://api.openai.com/v1",
         kwargs={
             "temperature": 1,
+            "max_tokens": 2048,
             "response_format": {"type": "text"},
         },
     )
@@ -46,6 +47,7 @@ async def test_model_kwargs_override_component_generation_defaults(mocker):
     await generator(prompt="Return SQL")
 
     assert captured_kwargs["temperature"] == 1
+    assert captured_kwargs["max_tokens"] == 2048
     assert "response_format" not in captured_kwargs
 
 

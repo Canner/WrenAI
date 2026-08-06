@@ -167,18 +167,42 @@ describe('DeployService', () => {
         hash: activeHash,
         manifest,
       });
+    mockWrenAIAdaptor.getDeployStatus.mockRejectedValue(new Error('not found'));
     mockWrenAIAdaptor.deploy.mockResolvedValue({ status: 'SUCCESS' });
     mockDeployLogRepository.createOne.mockResolvedValue({ id: 456 });
 
     const preparedHash = await deployService.ensureDeploymentPrepared(1);
 
     expect(preparedHash).toEqual(activeHash);
-    expect(mockWrenAIAdaptor.getDeployStatus).not.toHaveBeenCalled();
+    expect(mockWrenAIAdaptor.getDeployStatus).toHaveBeenCalledWith(activeHash, 1);
     expect(mockWrenAIAdaptor.deploy).toHaveBeenCalledWith({
       manifest,
       hash: activeHash,
       projectId: 1,
     });
+  });
+
+  it('should persist the current hash when ai-service already prepared a stale saved deployment', async () => {
+    const manifest = { key: 'value' };
+    const activeHash = deployService.createMDLHash(manifest, 1);
+
+    mockDeployLogRepository.findLastProjectDeployLog.mockResolvedValue({
+      id: 123,
+      hash: 'legacy-saved-hash',
+      manifest,
+    });
+    mockWrenAIAdaptor.getDeployStatus.mockResolvedValue('FINISHED');
+
+    const preparedHash = await deployService.ensureDeploymentPrepared(1);
+
+    expect(preparedHash).toEqual(activeHash);
+    expect(mockDeployLogRepository.updateOne).toHaveBeenCalledWith(123, {
+      manifest,
+      hash: activeHash,
+      status: DeployStatusEnum.SUCCESS,
+      error: undefined,
+    });
+    expect(mockWrenAIAdaptor.deploy).not.toHaveBeenCalled();
   });
 
   it('should create the same deployment hash for equivalent manifests', () => {
