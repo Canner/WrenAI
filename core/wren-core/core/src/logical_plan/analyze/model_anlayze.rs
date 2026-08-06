@@ -448,10 +448,11 @@ impl ModelAnalyzeRule {
         match plan {
             LogicalPlan::SubqueryAlias(SubqueryAlias { input, alias, .. }) => {
                 // `shortcut_aliased_table_scan` consumes `SubqueryAlias -> TableScan`
-                // over a model in `f_down`, so a model scan no longer reaches either
-                // arm below: the `SubqueryAlias` arm only rejects an already-analyzed
-                // `ModelPlanNode`, and the `TableScan` arm sees only the scans the
-                // shortcut declined (tables outside the MDL).
+                // over a model in `f_down`, so no model scan reaches the arms below.
+                // The `SubqueryAlias` arm rejects any `Extension` input and flattens
+                // everything else onto the outer alias; the `TableScan` arm sees only
+                // the scans the shortcut declined — tables outside the MDL, or inside
+                // it but not a model.
                 match Arc::unwrap_or_clone(Arc::clone(&input)) {
                     LogicalPlan::SubqueryAlias(subquery_alias) => {
                         self.analyze_subquery_alias_model(subquery_alias, alias)
@@ -784,8 +785,9 @@ impl ModelAnalyzeRule {
         }
     }
 
-    /// Handles the input of a `SubqueryAlias -> SubqueryAlias -> ...` shape. Any
-    /// `Extension` input is rejected; everything else is passed through unchanged.
+    /// Handles the input of a `SubqueryAlias -> SubqueryAlias -> ...` shape. An
+    /// `Extension` input is rejected; any other input is flattened onto the outer
+    /// `alias`, dropping the inner one.
     fn analyze_subquery_alias_model(
         &self,
         subquery_alias: SubqueryAlias,
