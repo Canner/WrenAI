@@ -4,9 +4,7 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 
 from src.pipelines.common import build_table_ddl
 from src.pipelines.retrieval.db_schema_retrieval import (
-    active_mdl_hash,
     _build_view_ddl,
-    _tables_matching_query_terms,
     check_using_db_schemas_without_pruning,
     construct_retrieval_results,
     dbschema_retrieval,
@@ -50,80 +48,6 @@ async def test_embedding_uses_current_query_without_history_text():
     assert embedder.query == "current request"
 
 
-@pytest.mark.asyncio
-async def test_embedding_skips_semantic_search_when_deployed_schema_exists():
-    class Embedder:
-        def __init__(self):
-            self.called = False
-
-        async def run(self, query):
-            self.called = True
-            return {"embedding": [1.0]}
-
-    schema_store = StoreCounter(count=1)
-    embedder = Embedder()
-
-    result = await embedding(
-        query="current request",
-        embedder=embedder,
-        histories=[],
-        project_id="project-1",
-        mdl_hash="deploy-1",
-        dbschema_store=schema_store,
-    )
-
-    assert result == {}
-    assert embedder.called is False
-    assert schema_store.filters == [
-        {
-            "operator": "AND",
-            "conditions": [
-                {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-                {"field": "project_id", "operator": "==", "value": "project-1"},
-                {"field": "mdl_hash", "operator": "==", "value": "deploy-1"},
-            ],
-        }
-    ]
-
-
-@pytest.mark.asyncio
-async def test_embedding_uses_table_description_search_when_deploy_descriptions_exist():
-    class Embedder:
-        def __init__(self):
-            self.query = None
-
-        async def run(self, query):
-            self.query = query
-            return {"embedding": [1.0]}
-
-    schema_store = StoreCounter(count=1)
-    table_description_store = StoreCounter(count=1)
-    embedder = Embedder()
-
-    result = await embedding(
-        query="show orders from last month",
-        embedder=embedder,
-        histories=[],
-        project_id="project-1",
-        mdl_hash="deploy-1",
-        dbschema_store=schema_store,
-        table_description_store=table_description_store,
-    )
-
-    assert result == {"embedding": [1.0]}
-    assert embedder.query == "show orders from last month"
-    assert table_description_store.filters == [
-        {
-            "operator": "AND",
-            "conditions": [
-                {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
-                {"field": "project_id", "operator": "==", "value": "project-1"},
-                {"field": "mdl_hash", "operator": "==", "value": "deploy-1"},
-            ],
-        }
-    ]
-
-
 def test_column_pruning_prompt_uses_current_query_without_history_text():
     result = build_column_selection_prompt(
         query="current request",
@@ -163,90 +87,6 @@ def test_table_selection_prompt_keeps_multiple_relevant_datasets():
     assert "compatible fields for the same requested result shape" in (
         table_columns_selection_system_prompt
     )
-
-
-def test_table_term_matching_uses_semantic_columns_and_relationships():
-    matched = _tables_matching_query_terms(
-        "summarize lifecycle value by segment",
-        [
-            {
-                "type": "TABLE",
-                "name": "model_alpha",
-                "comment": "",
-                "properties": {},
-                "columns": [
-                    {
-                        "type": "COLUMN",
-                        "name": "metric_col",
-                        "data_type": "DOUBLE",
-                        "comment": "Lifecycle value used for analysis.",
-                    },
-                    {
-                        "type": "FOREIGN_KEY",
-                        "constraint": "FOREIGN KEY (segment_id) REFERENCES model_beta(id)",
-                        "tables": ["model_alpha", "model_beta"],
-                        "referenced_table": "model_beta",
-                        "referenced_column": "id",
-                    },
-                ],
-            },
-            {
-                "type": "TABLE",
-                "name": "model_gamma",
-                "comment": "",
-                "properties": {},
-                "columns": [
-                    {
-                        "type": "COLUMN",
-                        "name": "other_col",
-                        "data_type": "VARCHAR",
-                        "comment": "Unrelated text.",
-                    }
-                ],
-            },
-        ],
-    )
-
-    assert matched == {"model_alpha"}
-
-
-@pytest.mark.asyncio
-async def test_active_mdl_hash_keeps_hash_when_deploy_documents_are_indexed():
-    table_store = StoreCounter(count=1)
-    schema_store = StoreCounter(count=0)
-
-    result = await active_mdl_hash(
-        project_id="project-1",
-        mdl_hash="deploy-1",
-        table_description_store=table_store,
-        dbschema_store=schema_store,
-    )
-
-    expected_filters = {
-        "operator": "AND",
-        "conditions": [
-            {"field": "project_id", "operator": "==", "value": "project-1"},
-            {"field": "mdl_hash", "operator": "==", "value": "deploy-1"},
-        ],
-    }
-    assert result == "deploy-1"
-    assert table_store.filters == [expected_filters]
-    assert schema_store.filters == [expected_filters]
-
-
-@pytest.mark.asyncio
-async def test_active_mdl_hash_keeps_hash_when_deploy_documents_are_absent():
-    table_store = StoreCounter(count=0)
-    schema_store = StoreCounter(count=0)
-
-    result = await active_mdl_hash(
-        project_id="project-1",
-        mdl_hash="deploy-1",
-        table_description_store=table_store,
-        dbschema_store=schema_store,
-    )
-
-    assert result == "deploy-1"
 
 
 def test_view_schema_context_uses_declared_view_columns_not_view_definition():
@@ -387,7 +227,6 @@ async def test_table_retrieval_falls_back_to_request_hash_when_active_hash_is_ab
         embedding={"embedding": [0.25]},
         project_id="project-1",
         mdl_hash="deploy-1",
-        active_mdl_hash="",
         tables=[],
         table_retriever=retriever,
     )
@@ -707,12 +546,13 @@ async def test_dbschema_retrieval_expands_direct_declared_relationships():
         embedding={},
     )
 
-    assert retriever.calls == [[selected_model], [related_model]]
+    assert retriever.calls == [[selected_model], [related_model], [downstream_model]]
     assert [document.meta["name"] for document in documents] == [
         selected_model,
         selected_model,
         related_model,
         related_model,
+        downstream_model,
     ]
 
 
@@ -833,257 +673,6 @@ async def test_dbschema_retrieval_expands_second_hop_for_relationship_intent():
 
 
 @pytest.mark.asyncio
-async def test_dbschema_retrieval_caps_related_table_expansion():
-    selected_model = "model_anchor"
-    related_models = [f"related_model_{index}" for index in range(8)]
-
-    class Retriever:
-        def __init__(self):
-            self.calls = []
-
-        async def run(self, query_embedding, filters):
-            names = [
-                condition["value"]
-                for condition in filters["conditions"][1]["conditions"]
-            ]
-            self.calls.append(names)
-
-            if names == [selected_model]:
-                return {
-                    "documents": [
-                        Document(
-                            content=str(
-                                {
-                                    "type": "TABLE",
-                                    "name": selected_model,
-                                }
-                            ),
-                            meta={"type": "TABLE_SCHEMA", "name": selected_model},
-                        ),
-                        Document(
-                            content=str(
-                                {
-                                    "type": "TABLE_COLUMNS",
-                                    "columns": [
-                                        {
-                                            "type": "FOREIGN_KEY",
-                                            "tables": [
-                                                selected_model,
-                                                related_model,
-                                            ],
-                                            "column": f"related_id_{index}",
-                                            "referenced_table": related_model,
-                                            "referenced_column": "id",
-                                        }
-                                        for index, related_model in enumerate(
-                                            related_models
-                                        )
-                                    ],
-                                }
-                            ),
-                            meta={"type": "TABLE_SCHEMA", "name": selected_model},
-                        ),
-                    ]
-                }
-
-            return {
-                "documents": [
-                    Document(
-                        content=str(
-                            {
-                                "type": "TABLE",
-                                "name": name,
-                            }
-                        ),
-                        meta={"type": "TABLE_SCHEMA", "name": name},
-                    )
-                    for name in names
-                ]
-            }
-
-    retriever = Retriever()
-
-    documents = await dbschema_retrieval(
-        table_retrieval={
-            "documents": [
-                Document(
-                    content=str({"name": selected_model}),
-                    meta={"type": "TABLE_DESCRIPTION", "name": selected_model},
-                )
-            ]
-        },
-        project_id="project-1",
-        dbschema_retriever=retriever,
-        embedding={},
-    )
-
-    assert retriever.calls == [
-        [selected_model],
-        related_models[:5],
-    ]
-    assert [document.meta["name"] for document in documents] == [
-        selected_model,
-        selected_model,
-        *related_models[:5],
-    ]
-
-
-@pytest.mark.asyncio
-async def test_relationship_table_retrieval_prefers_connected_business_metadata():
-    connected_model = "modeled_parent"
-    unrelated_model = "raw_parent_snapshot"
-
-    class Retriever:
-        async def run(self, query_embedding, filters):
-            return {
-                "documents": [
-                    Document(
-                        content=str(
-                            {
-                                "name": unrelated_model,
-                                "resource_type": "MODEL",
-                                "description": "technical copied parent records",
-                                "columns": "parent_id",
-                                "source": "staging.raw_parent_snapshot",
-                            }
-                        ),
-                        meta={"type": "TABLE_DESCRIPTION", "name": unrelated_model},
-                    ),
-                    Document(
-                        content=str(
-                            {
-                                "name": connected_model,
-                                "resource_type": "MODEL",
-                                "description": "curated parent business records",
-                                "columns": "parent_id, child_id",
-                                "relationships": (
-                                    "parent_child MANY_TO_ONE "
-                                    "modeled_parent.child_id = modeled_child.id "
-                                    "models modeled_parent <-> modeled_child"
-                                ),
-                            }
-                        ),
-                        meta={"type": "TABLE_DESCRIPTION", "name": connected_model},
-                    ),
-                ]
-            }
-
-    result = await table_retrieval(
-        embedding={"embedding": [0.2]},
-        project_id="project-1",
-        tables=[],
-        table_retriever=Retriever(),
-        query="show parent records linked to child records",
-    )
-
-    assert [document.meta["name"] for document in result["documents"]] == [
-        connected_model,
-        unrelated_model,
-    ]
-
-
-@pytest.mark.asyncio
-async def test_table_retrieval_filters_to_explicit_source_table():
-    requested_model = "synthetic_SourceModel"
-
-    class Retriever:
-        async def run(self, query_embedding, filters):
-            return {
-                "documents": [
-                    Document(
-                        content=str(
-                            {
-                                "name": "synthetic_xStageSourceModel_Test",
-                                "resource_type": "MODEL",
-                                "description": "staging test copy",
-                                "columns": "customer_name, quantity",
-                            }
-                        ),
-                        meta={
-                            "type": "TABLE_DESCRIPTION",
-                            "name": "synthetic_xStageSourceModel_Test",
-                        },
-                    ),
-                    Document(
-                        content=str(
-                            {
-                                "name": requested_model,
-                                "resource_type": "MODEL",
-                                "description": "curated requested records",
-                                "columns": "customer_name, record_id",
-                            }
-                        ),
-                        meta={"type": "TABLE_DESCRIPTION", "name": requested_model},
-                    ),
-                ]
-            }
-
-    result = await table_retrieval(
-        embedding={"embedding": [0.2]},
-        project_id="project-1",
-        tables=[],
-        table_retriever=Retriever(),
-        query=(
-            "From synthetic_SourceModel, show top customers by record count "
-            "using customer_name."
-        ),
-    )
-
-    assert [document.meta["name"] for document in result["documents"]] == [
-        requested_model
-    ]
-
-
-@pytest.mark.asyncio
-async def test_table_retrieval_penalizes_stage_and_test_candidates():
-    curated_model = "modeled_activity"
-    technical_model = "synthetic_xStageActivity_Test"
-
-    class Retriever:
-        async def run(self, query_embedding, filters):
-            return {
-                "documents": [
-                    Document(
-                        content=str(
-                            {
-                                "name": technical_model,
-                                "resource_type": "MODEL",
-                                "description": "activity rows",
-                                "columns": "activity_name, quantity",
-                                "source": "warehouse.xStageActivity_Test",
-                            }
-                        ),
-                        meta={"type": "TABLE_DESCRIPTION", "name": technical_model},
-                    ),
-                    Document(
-                        content=str(
-                            {
-                                "name": curated_model,
-                                "resource_type": "MODEL",
-                                "description": "curated activity analytics",
-                                "columns": "activity_name, quantity",
-                            }
-                        ),
-                        meta={"type": "TABLE_DESCRIPTION", "name": curated_model},
-                    ),
-                ]
-            }
-
-    result = await table_retrieval(
-        embedding={"embedding": [0.2]},
-        project_id="project-1",
-        tables=[],
-        table_retriever=Retriever(),
-        query="show total quantity by activity",
-    )
-
-    assert [document.meta["name"] for document in result["documents"]] == [
-        curated_model,
-        technical_model,
-    ]
-
-
-@pytest.mark.asyncio
 async def test_dbschema_retrieval_uses_semantic_schema_hits_when_table_retrieval_misses():
     semantic_model = "semantic_dataset"
 
@@ -1174,6 +763,7 @@ async def test_dbschema_retrieval_uses_semantic_schema_hits_when_table_retrieval
         ],
     }
     assert [document.meta["name"] for document in documents] == [
+        semantic_model,
         semantic_model,
     ]
 
@@ -1357,92 +947,10 @@ async def test_dbschema_retrieval_combines_description_and_schema_semantic_hits(
         ],
     }
     assert [document.meta["name"] for document in documents] == [
+        semantic_model,
         described_model,
         semantic_model,
     ]
-
-
-@pytest.mark.asyncio
-async def test_dbschema_retrieval_caps_schema_semantic_table_rescue():
-    class Retriever:
-        def __init__(self):
-            self.calls = []
-
-        async def run(self, query_embedding, filters):
-            self.calls.append(
-                {
-                    "query_embedding": query_embedding,
-                    "filters": filters,
-                }
-            )
-
-            if query_embedding:
-                return {
-                    "documents": [
-                        Document(
-                            content=str(
-                                {
-                                    "type": "TABLE_COLUMNS",
-                                    "columns": [
-                                        {
-                                            "type": "COLUMN",
-                                            "name": "semantic_value",
-                                            "data_type": "DOUBLE",
-                                            "comment": "",
-                                            "is_primary_key": False,
-                                        }
-                                    ],
-                                }
-                            ),
-                            meta={
-                                "type": "TABLE_SCHEMA",
-                                "name": f"semantic_model_{index}",
-                            },
-                        )
-                        for index in range(25)
-                    ]
-                }
-
-            selected_names = [
-                condition["value"]
-                for condition in filters["conditions"][1]["conditions"]
-            ]
-            return {
-                "documents": [
-                    Document(
-                        content=str(
-                            {
-                                "type": "TABLE",
-                                "name": name,
-                                "comment": "",
-                                "columns": [],
-                                "properties": {},
-                                "primaryKey": "",
-                            }
-                        ),
-                        meta={"type": "TABLE_SCHEMA", "name": name},
-                    )
-                    for name in selected_names
-                ]
-            }
-
-    retriever = Retriever()
-
-    documents = await dbschema_retrieval(
-        table_retrieval={"documents": []},
-        project_id="project-1",
-        dbschema_retriever=retriever,
-        embedding={"embedding": [0.25]},
-    )
-
-    selected_names = [
-        condition["value"]
-        for condition in retriever.calls[1]["filters"]["conditions"][1]["conditions"]
-    ]
-
-    assert len(selected_names) == 5
-    assert selected_names == [f"semantic_model_{index}" for index in range(5)]
-    assert [document.meta["name"] for document in documents] == selected_names
 
 
 def test_check_using_db_schemas_without_pruning_triggers_legacy_column_pruning():
@@ -1839,75 +1347,6 @@ def test_construct_retrieval_results_uses_full_columns_for_sql_generation():
     ]
 
 
-def test_construct_retrieval_results_adds_query_matching_tables_after_pruning():
-    def order_schema(name):
-        return {
-            "type": "TABLE",
-            "name": name,
-            "comment": "",
-            "columns": [
-                {
-                    "type": "COLUMN",
-                    "name": "order_id",
-                    "data_type": "VARCHAR",
-                    "comment": "",
-                    "is_primary_key": False,
-                }
-            ],
-            "properties": {},
-            "primaryKey": "",
-        }
-
-    result = construct_retrieval_results(
-        check_using_db_schemas_without_pruning={},
-        filter_columns_in_tables={
-            "replies": [
-                """
-                {
-                    "results": [
-                        {
-                            "table_name": "regional_orders",
-                            "table_selection_reason": "Selected for the current request.",
-                            "table_contents": {
-                                "chain_of_thought_reasoning": ["Needed field."],
-                                "columns": ["order_id"]
-                            }
-                        }
-                    ]
-                }
-                """
-            ]
-        },
-        construct_db_schemas=[
-            order_schema("regional_orders"),
-            order_schema("archived_orders"),
-            {
-                "type": "TABLE",
-                "name": "customers",
-                "comment": "",
-                "columns": [
-                    {
-                        "type": "COLUMN",
-                        "name": "customer_id",
-                        "data_type": "VARCHAR",
-                        "comment": "",
-                        "is_primary_key": False,
-                    }
-                ],
-                "properties": {},
-                "primaryKey": "",
-            },
-        ],
-        dbschema_retrieval=[],
-        query="show orders from last month",
-    )
-
-    assert [item["table_name"] for item in result["retrieval_results"]] == [
-        "regional_orders",
-        "archived_orders",
-    ]
-
-
 def test_construct_retrieval_results_does_not_add_column_only_term_matches():
     result = construct_retrieval_results(
         check_using_db_schemas_without_pruning={},
@@ -1972,56 +1411,6 @@ def test_construct_retrieval_results_does_not_add_column_only_term_matches():
     ]
 
 
-def test_construct_retrieval_results_caps_pruned_generation_context():
-    def table_schema(index):
-        return {
-            "type": "TABLE",
-            "name": f"model_{index}",
-            "comment": "",
-            "columns": [
-                {
-                    "type": "COLUMN",
-                    "name": "id",
-                    "data_type": "INTEGER",
-                    "comment": "",
-                    "is_primary_key": False,
-                }
-            ],
-            "properties": {},
-            "primaryKey": "",
-        }
-
-    result = construct_retrieval_results(
-        check_using_db_schemas_without_pruning={},
-        filter_columns_in_tables={
-            "replies": [
-                """
-                {
-                    "results": [
-                        {
-                            "table_name": "model_0",
-                            "table_selection_reason": "Selected for the current request.",
-                            "table_contents": {
-                                "chain_of_thought_reasoning": ["Needed field."],
-                                "columns": ["id"]
-                            }
-                        }
-                    ]
-                }
-                """
-            ]
-        },
-        construct_db_schemas=[table_schema(index) for index in range(20)],
-        dbschema_retrieval=[],
-        query="show model records",
-    )
-
-    assert len(result["retrieval_results"]) == 10
-    assert [item["table_name"] for item in result["retrieval_results"]] == [
-        f"model_{index}" for index in range(10)
-    ]
-
-
 def test_check_using_db_schemas_without_pruning_keeps_context_when_within_window():
     class Encoding:
         def encode(self, value):
@@ -2075,43 +1464,6 @@ def test_check_using_db_schemas_without_pruning_keeps_context_when_within_window
         for schema in result["db_schemas"]
     )
     assert result["tokens"] > 0
-
-
-def test_check_using_db_schemas_without_pruning_caps_generation_context():
-    class Encoding:
-        def encode(self, value):
-            return value.split()
-
-    def table_schema(index):
-        return {
-            "type": "TABLE",
-            "name": f"model_{index}",
-            "comment": "",
-            "columns": [
-                {
-                    "type": "COLUMN",
-                    "name": "id",
-                    "data_type": "INTEGER",
-                    "comment": "",
-                    "is_primary_key": False,
-                }
-            ],
-            "properties": {},
-            "primaryKey": "",
-        }
-
-    result = check_using_db_schemas_without_pruning(
-        construct_db_schemas=[table_schema(index) for index in range(20)],
-        dbschema_retrieval=[],
-        encoding=Encoding(),
-        enable_column_pruning=False,
-        context_window_size=10000,
-    )
-
-    assert len(result["db_schemas"]) == 10
-    assert [schema["table_name"] for schema in result["db_schemas"]] == [
-        f"model_{index}" for index in range(10)
-    ]
 
 
 def test_check_using_db_schemas_without_pruning_keeps_wide_tables_by_query():
@@ -2321,69 +1673,6 @@ def test_metric_schema_keeps_measure_semantics_outside_executable_ddl():
     assert "defined_measure DOUBLE" in executable_ddl
     assert "SUM(metric_value)" not in executable_ddl
     assert "-- This column is a measure" not in executable_ddl
-
-
-def test_retrieved_schema_adds_generic_column_role_hints_without_comments():
-    class Encoding:
-        def encode(self, value):
-            return value.split()
-
-    result = check_using_db_schemas_without_pruning(
-        construct_db_schemas=[
-            {
-                "type": "TABLE",
-                "name": "modeled_dataset",
-                "comment": "Business-facing dataset description.",
-                "columns": [
-                    {
-                        "type": "COLUMN",
-                        "name": "entity_id",
-                        "data_type": "INTEGER",
-                        "comment": "Business identifier label.",
-                        "is_primary_key": True,
-                    },
-                    {
-                        "type": "COLUMN",
-                        "name": "event_date",
-                        "data_type": "DATE",
-                        "comment": "Business date label.",
-                        "is_primary_key": False,
-                    },
-                    {
-                        "type": "COLUMN",
-                        "name": "measure_value",
-                        "data_type": "DOUBLE",
-                        "comment": "Business measure label.",
-                        "is_primary_key": False,
-                    },
-                    {
-                        "type": "COLUMN",
-                        "name": "category_label",
-                        "data_type": "VARCHAR",
-                        "comment": "Business category label.",
-                        "is_primary_key": False,
-                    },
-                ],
-                "properties": {},
-                "primaryKey": "",
-            }
-        ],
-        dbschema_retrieval=[],
-        encoding=Encoding(),
-        enable_column_pruning=False,
-        context_window_size=1000,
-    )
-
-    table_ddl = result["db_schemas"][0]["table_ddl"]
-    executable_ddl = table_ddl.split("CREATE TABLE", maxsplit=1)[1]
-
-    assert "column_role_hints_not_identifiers" in table_ddl
-    assert "- entity_id: identifier_candidate" in table_ddl
-    assert "- event_date: date_time_candidate" in table_ddl
-    assert "- measure_value: numeric_measure_candidate" in table_ddl
-    assert "- category_label: dimension_candidate" in table_ddl
-    assert "Business measure label." not in executable_ddl
-    assert "Business category label." not in executable_ddl
 
 
 def test_build_table_ddl_can_render_executable_schema_without_semantic_comments():

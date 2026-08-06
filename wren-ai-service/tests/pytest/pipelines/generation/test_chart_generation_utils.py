@@ -8,7 +8,7 @@ from src.pipelines.generation.utils.chart import (
 from src.web.v1.services.chart import ChartRequest, ChartService
 
 
-def test_chart_preprocessor_uses_deterministic_sql_result_order():
+def test_chart_preprocessor_preserves_sql_result_order():
     data = {
         "columns": [{"name": "Market"}, {"name": "Revenue"}],
         "data": [[f"Market {index}", index] for index in range(20)],

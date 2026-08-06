@@ -1,8 +1,6 @@
 import logging
 import sys
 from typing import Any
-
-import orjson
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
@@ -12,7 +10,6 @@ from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.common import clean_up_new_lines, retrieve_metadata
-from src.pipelines.generation.utils.deterministic_sql import generate_grounded_sql
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
@@ -84,8 +81,6 @@ If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA or W
 Do not generate SQL from a reasoning plan. The reasoning plan is not executable context and cannot provide table names, column names, filters, functions, joins, or examples.
 Generate an intent-shaped query, not a table preview. Select explicit columns, filters, groupings, measures, joins, ordering, and limits needed by the question. For metric questions, return dimensions plus the requested measure or grounded expression; never use SELECT * as a substitute.
 For relationship wording such as linked, related, associated, connected, with, by, per, or across multiple business concepts, use only relationship_constraints_use_exactly or declared FOREIGN KEY relationships from DATABASE SCHEMA for joins. If the relationship path is not declared, return null for sql instead of querying one nearby table.
-When DATABASE SCHEMA contains column_role_hints_not_identifiers, use those roles only to map intent to exact declared columns. For timeframe requests, filter an exact date_time_candidate column with a bounded range. For aggregate, "by", trend, or ranking requests, aggregate exact numeric_measure_candidate columns or count rows, group by exact dimension/date expressions, order by the selected aggregate alias when ranking, and limit only when requested. Do not return a raw table preview.
-
 {% if executable_schema_contract %}
 ### ALLOWED EXECUTABLE IDENTIFIERS FOR THIS REQUEST ###
 {{ executable_schema_contract }}
@@ -145,20 +140,10 @@ def prompt(
 @trace_cost
 async def generate_sql(
     prompt: dict,
-    query: str,
-    documents: list[str],
     generator: Any,
     generator_name: str,
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
-    deterministic_sql = generate_grounded_sql(query, documents)
-    if deterministic_sql:
-        logger.info("SQL Generation used deterministic grounded SQL fast path.")
-        return {
-            "replies": [orjson.dumps({"sql": deterministic_sql}).decode("utf-8")],
-            "metadata": [{"finish_reason": "deterministic_grounded_sql"}],
-        }, generator_name
-
     current_system_prompt = get_sql_generation_system_prompt(sql_knowledge)
     return await generator(
         prompt=prompt.get("prompt"), current_system_prompt=current_system_prompt
