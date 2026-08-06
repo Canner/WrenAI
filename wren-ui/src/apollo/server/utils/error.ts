@@ -45,6 +45,7 @@ export enum GeneralErrorCodes {
   WREN_ENGINE_ERROR = 'WREN_ENGINE_ERROR',
 
   // asking task error
+  ASK_RESULT_NOT_FOUND = 'ASK_RESULT_NOT_FOUND',
   // when rerun from cancelled, the task is identified as general or misleading query
   IDENTIED_AS_GENERAL = 'IDENTIED_AS_GENERAL',
   IDENTIED_AS_MISLEADING_QUERY = 'IDENTIED_AS_MISLEADING_QUERY',
@@ -109,6 +110,8 @@ export const errorMessages = {
     'Invalid SQL, please check your SQL syntax',
 
   // asking task error
+  [GeneralErrorCodes.ASK_RESULT_NOT_FOUND]:
+    'The asking task result is no longer available',
   [GeneralErrorCodes.IDENTIED_AS_GENERAL]:
     'The question is identified as a general question, please follow-up ask with more specific questions.',
   [GeneralErrorCodes.IDENTIED_AS_MISLEADING_QUERY]:
@@ -150,6 +153,7 @@ export const shortMessages = {
   [GeneralErrorCodes.GENERATE_QUESTIONS_ERROR]: 'Generate questions error',
   [GeneralErrorCodes.INVALID_SQL_ERROR]:
     'Invalid SQL, please check your SQL syntax',
+  [GeneralErrorCodes.ASK_RESULT_NOT_FOUND]: 'Ask result not found',
   [GeneralErrorCodes.IDENTIED_AS_GENERAL]: 'Identified as general question',
   [GeneralErrorCodes.IDENTIED_AS_MISLEADING_QUERY]:
     'Identified as misleading query',

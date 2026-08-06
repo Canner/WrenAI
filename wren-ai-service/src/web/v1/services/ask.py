@@ -88,7 +88,9 @@ class AskResult(BaseModel):
 
 
 class AskError(BaseModel):
-    code: Literal["NO_RELEVANT_DATA", "NO_RELEVANT_SQL", "OTHERS"]
+    code: Literal[
+        "NO_RELEVANT_DATA", "NO_RELEVANT_SQL", "ASK_RESULT_NOT_FOUND", "OTHERS"
+    ]
     message: str
 
 
@@ -762,7 +764,7 @@ class AskService:
                 status="failed",
                 type="TEXT_TO_SQL",
                 error=AskError(
-                    code="OTHERS",
+                    code="ASK_RESULT_NOT_FOUND",
                     message=f"{ask_result_request.query_id} is not found",
                 ),
             )
