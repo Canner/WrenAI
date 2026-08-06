@@ -79,6 +79,7 @@ class LitellmLLMProvider(LLMProvider):
 
         def _normalize_generation_kwargs(
             kwargs: Optional[Dict[str, Any]],
+            explicit_response_format: bool = False,
         ) -> Dict[str, Any]:
             normalized = dict(kwargs or {})
             response_format = normalized.get("response_format")
@@ -98,7 +99,10 @@ class LitellmLLMProvider(LLMProvider):
                 and isinstance(response_format, dict)
                 and response_format.get("type") == "json_schema"
             ):
-                normalized["response_format"] = {"type": "json_object"}
+                if explicit_response_format:
+                    normalized["response_format"] = {"type": "json_object"}
+                else:
+                    normalized.pop("response_format", None)
 
             if self._api_base and not _is_openai_api_base(self._api_base):
                 # Some local OpenAI-compatible servers reject non-OpenAI keys.
@@ -135,12 +139,19 @@ class LitellmLLMProvider(LLMProvider):
                 convert_message_to_openai_format(message) for message in messages
             ]
 
+            runtime_generation_kwargs = generation_kwargs or {}
+            model_generation_kwargs = self._model_kwargs or {}
+            explicit_response_format = (
+                "response_format" in model_generation_kwargs
+                or "response_format" in runtime_generation_kwargs
+            )
             generation_kwargs = _normalize_generation_kwargs(
                 {
-                    **(self._model_kwargs or {}),
                     **component_generation_kwargs,
-                    **(generation_kwargs or {}),
-                }
+                    **model_generation_kwargs,
+                    **runtime_generation_kwargs,
+                },
+                explicit_response_format=explicit_response_format,
             )
             completion_timeout = generation_kwargs.pop("timeout", self._timeout)
             should_stream = (
