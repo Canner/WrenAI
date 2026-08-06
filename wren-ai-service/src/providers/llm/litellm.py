@@ -29,11 +29,6 @@ def _is_openai_api_base(api_base: Optional[str]) -> bool:
     return bool(api_base) and "api.openai.com" in api_base.lower()
 
 
-def _uses_codestral_json_object_compat(model: str) -> bool:
-    normalized = model.lower()
-    return "codestral" in normalized or "mistral" in normalized
-
-
 @provider("litellm_llm")
 class LitellmLLMProvider(LLMProvider):
     def __init__(
@@ -100,7 +95,6 @@ class LitellmLLMProvider(LLMProvider):
             if (
                 self._api_base
                 and not _is_openai_api_base(self._api_base)
-                and _uses_codestral_json_object_compat(self._model)
                 and isinstance(response_format, dict)
                 and response_format.get("type") == "json_schema"
             ):

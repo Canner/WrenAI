@@ -5,7 +5,7 @@ import { DataSourceName } from '@server/types';
 import { Manifest } from '@server/mdl/type';
 import * as Errors from '@server/utils/error';
 import { getConfig } from '@server/config';
-import { toDockerHost } from '@server/utils';
+import { encodeManifest, toDockerHost } from '@server/utils';
 import {
   CompactColumn,
   CompactTable,
@@ -272,7 +272,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     const { dataSource, mdl, sql, allowFallback } = options;
     const body = {
       sql,
-      manifestStr: Buffer.from(JSON.stringify(mdl)).toString('base64'),
+      manifestStr: encodeManifest(mdl),
     };
     try {
       const res = await axios.post(
@@ -307,7 +307,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     const body = {
       sql: query,
       connectionInfo: ibisConnectionInfo,
-      manifestStr: Buffer.from(JSON.stringify(mdl)).toString('base64'),
+      manifestStr: encodeManifest(mdl),
     };
     try {
       const res = await axios.post(
@@ -350,7 +350,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     const body = {
       sql: query,
       connectionInfo: ibisConnectionInfo,
-      manifestStr: Buffer.from(JSON.stringify(mdl)).toString('base64'),
+      manifestStr: encodeManifest(mdl),
     };
     logger.debug(`Dry run sql from ibis with body:`);
     try {
@@ -458,7 +458,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
     const body = {
       connectionInfo: ibisConnectionInfo,
-      manifestStr: Buffer.from(JSON.stringify(mdl)).toString('base64'),
+      manifestStr: encodeManifest(mdl),
       parameters,
     };
     try {
@@ -495,7 +495,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     const body = {
       sql,
       connectionInfo: ibisConnectionInfo,
-      manifestStr: Buffer.from(JSON.stringify(mdl)).toString('base64'),
+      manifestStr: encodeManifest(mdl),
     };
     try {
       logger.debug(`Running model substitution with ibis`);

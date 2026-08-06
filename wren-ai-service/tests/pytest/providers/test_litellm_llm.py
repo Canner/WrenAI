@@ -26,7 +26,7 @@ async def test_component_generation_kwargs_override_model_defaults(mocker):
 
     provider = LitellmLLMProvider(
         model="test-model",
-        api_base="http://localhost/v1",
+        api_base="https://api.openai.com/v1",
         kwargs={
             "temperature": 1,
             "response_format": {"type": "text"},
@@ -50,13 +50,15 @@ async def test_component_generation_kwargs_override_model_defaults(mocker):
 
 
 @pytest.mark.asyncio
-async def test_codestral_uses_json_object_for_local_json_schema_requests(mocker):
+async def test_local_openai_compatible_endpoint_uses_json_object_for_json_schema_requests(
+    mocker,
+):
     captured_kwargs = {}
 
     async def fake_acompletion(**kwargs):
         captured_kwargs.update(kwargs)
         return SimpleNamespace(
-            model="openai/codestral:22b",
+            model="openai/local-model",
             choices=[
                 SimpleNamespace(
                     index=0,
@@ -69,7 +71,7 @@ async def test_codestral_uses_json_object_for_local_json_schema_requests(mocker)
     mocker.patch("src.providers.llm.litellm.acompletion", side_effect=fake_acompletion)
 
     provider = LitellmLLMProvider(
-        model="openai/codestral:22b",
+        model="openai/local-model",
         api_base="http://localhost/v1",
         kwargs={"speed": 0},
     )

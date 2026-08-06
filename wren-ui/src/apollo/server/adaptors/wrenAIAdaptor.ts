@@ -34,7 +34,7 @@ import {
   AskFeedbackResult,
   AskFeedbackStatus,
 } from '@server/models/adaptor';
-import { getLogger } from '@server/utils';
+import { getLogger, normalizeManifest } from '@server/utils';
 import * as Errors from '@server/utils/error';
 import { SqlPair } from '../repositories';
 import { ThreadResponse } from '@server/repositories';
@@ -377,7 +377,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       const res = await axios.post(
         `${this.wrenAIBaseEndpoint}/v1/semantics-preparations`,
         {
-          mdl: JSON.stringify(manifest),
+          mdl: JSON.stringify(normalizeManifest(manifest)),
           id: hash,
           project_id: projectId.toString(),
         },
@@ -411,7 +411,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
     input: RecommendationQuestionsInput,
   ): Promise<AsyncQueryResponse> {
     const body = {
-      mdl: JSON.stringify(input.manifest),
+      mdl: JSON.stringify(normalizeManifest(input.manifest)),
       previous_questions: input.previousQuestions,
       project_id: input.projectId,
       max_questions: input.maxQuestions,
@@ -462,7 +462,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       const res = await axios.post(
         `${this.wrenAIBaseEndpoint}/v1/semantics-descriptions`,
         {
-          mdl: JSON.stringify(input.manifest),
+          mdl: JSON.stringify(normalizeManifest(input.manifest)),
           selected_models: input.selectedModels,
           user_prompt: input.userPrompt,
           project_id: String(input.projectId),
@@ -499,7 +499,7 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       const res = await axios.post(
         `${this.wrenAIBaseEndpoint}/v1/relationship-recommendations`,
         {
-          mdl: JSON.stringify(input.manifest),
+          mdl: JSON.stringify(normalizeManifest(input.manifest)),
           project_id: String(input.projectId),
         },
       );

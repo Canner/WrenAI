@@ -91,8 +91,25 @@ async def generate_sql_diagnosis(
 @observe(capture_input=False)
 async def post_process(
     generate_sql_diagnosis: dict,
-) -> str:
-    return orjson.loads(generate_sql_diagnosis.get("replies")[0])
+) -> dict:
+    replies = generate_sql_diagnosis.get("replies") or []
+    reply = replies[0].strip() if replies and isinstance(replies[0], str) else ""
+    if not reply:
+        logger.warning("SQL diagnosis returned an empty response; skipping diagnosis.")
+        return {"reasoning": ""}
+
+    try:
+        result = orjson.loads(reply)
+    except orjson.JSONDecodeError:
+        logger.warning("SQL diagnosis returned invalid JSON; skipping diagnosis.")
+        return {"reasoning": ""}
+
+    if not isinstance(result, dict):
+        logger.warning("SQL diagnosis returned a non-object response; skipping diagnosis.")
+        return {"reasoning": ""}
+
+    reasoning = result.get("reasoning", "")
+    return {"reasoning": reasoning if isinstance(reasoning, str) else ""}
 
 
 ## End of Pipeline

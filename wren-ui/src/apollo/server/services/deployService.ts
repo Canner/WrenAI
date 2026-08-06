@@ -10,7 +10,7 @@ import {
 } from '../repositories/deployLogRepository';
 import { Manifest } from '../mdl/type';
 import { createHash } from 'node:crypto';
-import { getLogger } from '@server/utils';
+import { getLogger, normalizeManifest } from '@server/utils';
 import {
   PostHogTelemetry,
   TelemetryEvent,
@@ -146,6 +146,7 @@ export class DeployService implements IDeployService {
     const eventName = TelemetryEvent.MODELING_DEPLOY_MDL;
     let deploy: Deploy | null = null;
     try {
+      manifest = normalizeManifest(manifest);
       // generate hash of manifest
       const hash = this.createMDLHash(manifest, projectId);
       logger.debug(`Deploying model, hash: ${hash}`);
@@ -248,7 +249,7 @@ export class DeployService implements IDeployService {
   }
 
   public createMDLHash(manifest: Manifest, projectId: number) {
-    const manifestStr = this.canonicalStringify(manifest);
+    const manifestStr = this.canonicalStringify(normalizeManifest(manifest));
     const content = `${projectId} ${manifestStr}`;
     const hash = createHash('sha1').update(content).digest('hex');
     return hash;
@@ -268,8 +269,8 @@ export class DeployService implements IDeployService {
     }
 
     return (
-      this.canonicalStringify(deployment.manifest) ===
-      this.canonicalStringify(manifest)
+      this.canonicalStringify(normalizeManifest(deployment.manifest)) ===
+      this.canonicalStringify(normalizeManifest(manifest))
     );
   }
 
@@ -298,7 +299,9 @@ export class DeployService implements IDeployService {
       return null;
     }
     // return base64 encoded manifest
-    return Buffer.from(JSON.stringify(deploy.manifest)).toString('base64');
+    return Buffer.from(JSON.stringify(normalizeManifest(deploy.manifest))).toString(
+      'base64',
+    );
   }
 
   public async deleteAllByProjectId(projectId: number): Promise<void> {

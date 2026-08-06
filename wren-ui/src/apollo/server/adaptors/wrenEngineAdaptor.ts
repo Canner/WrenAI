@@ -1,6 +1,6 @@
 import axios, { AxiosResponse } from 'axios';
 import { Manifest } from '../mdl/type';
-import { getLogger } from '@server/utils';
+import { getLogger, normalizeManifest } from '@server/utils';
 import * as Errors from '@server/utils/error';
 import { CompactTable, DEFAULT_PREVIEW_LIMIT } from '../services';
 
@@ -268,7 +268,7 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
     try {
       const props = {
         modelingOnly: options?.modelingOnly ? true : false,
-        manifest: options?.manifest,
+        manifest: normalizeManifest(options?.manifest),
       };
 
       const url = new URL(this.dryPlanUrlPath, this.wrenEngineBaseEndpoint);
@@ -302,7 +302,7 @@ export class WrenEngineAdaptor implements IWrenEngineAdaptor {
       const { manifest } = options;
       const body = {
         sql,
-        manifest,
+        manifest: normalizeManifest(manifest),
       };
       logger.debug(
         `Dry run wren engine with body: ${JSON.stringify(sql, null, 2)}`,

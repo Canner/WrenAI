@@ -4,6 +4,7 @@ export * from './encode';
 export * from './string';
 export * from './docker';
 export * from './model';
+export * from './manifest';
 export * from './helper';
 export * from './regex';
 export * from './sseTypes';
