@@ -178,6 +178,10 @@ describe('AskingService', () => {
         deployId: 'latest-deploy-hash',
         projectId: '1',
         configurations: { language: 'EN' },
+        ignoreSqlGenerationReasoning: true,
+        enableColumnPruning: true,
+        useDryPlan: true,
+        allowDryPlanFallback: true,
         rerunFromCancelled: undefined,
         previousTaskId: undefined,
         threadResponseId: undefined,
@@ -218,6 +222,10 @@ describe('AskingService', () => {
           deployId: 'latest-deploy-hash',
           projectId: '1',
           configurations: { language: 'EN' },
+          ignoreSqlGenerationReasoning: true,
+          enableColumnPruning: true,
+          useDryPlan: true,
+          allowDryPlanFallback: true,
         }),
       );
       expect(

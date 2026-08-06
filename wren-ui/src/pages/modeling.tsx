@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useSearchParams } from 'next/navigation';
 import React, { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Button,
   Dropdown,
   Input,
@@ -287,6 +288,7 @@ export default function Modeling() {
     'semantics' | 'relationships' | null
   >(null);
   const [assistantLoading, setAssistantLoading] = useState(false);
+  const [assistantError, setAssistantError] = useState<string | null>(null);
   const [selectedModels, setSelectedModels] = useState<string[]>([]);
   const [semanticPrompt, setSemanticPrompt] = useState('');
   const [semanticStep, setSemanticStep] = useState<
@@ -757,6 +759,7 @@ export default function Modeling() {
   const openAssistant = (mode: 'semantics' | 'relationships') => {
     assistantRunIdRef.current += 1;
     setAssistantMode(mode);
+    setAssistantError(null);
     setSemanticStep('pick');
     setSemanticSearch('');
     setSelectedModels(
@@ -774,6 +777,7 @@ export default function Modeling() {
     assistantRunIdRef.current = runId;
     try {
       setAssistantLoading(true);
+      setAssistantError(null);
       if (assistantMode === 'semantics') {
         if (!selectedModels.length) {
           throw new Error('Select at least one model.');
@@ -821,7 +825,10 @@ export default function Modeling() {
       }
     } catch (error: any) {
       if (error.message !== ASSISTANT_CANCELLED) {
-        message.error(error.message || 'Failed to run Modeling AI Assistant.');
+        const errorMessage =
+          error.message || 'Failed to run Modeling AI Assistant.';
+        setAssistantError(errorMessage);
+        message.error(errorMessage);
       }
     } finally {
       if (assistantRunIdRef.current === runId) {
@@ -903,6 +910,7 @@ export default function Modeling() {
   const closeAssistant = () => {
     assistantRunIdRef.current += 1;
     setAssistantMode(null);
+    setAssistantError(null);
     setAssistantLoading(false);
     setSemanticStep('pick');
     setSemanticSearch('');
@@ -1301,13 +1309,22 @@ export default function Modeling() {
               </AssistantCenter>
             ) : (
               <>
-                {!relationshipResult.length && (
+                {assistantError ? (
+                  <AssistantCenter>
+                    <Alert
+                      showIcon
+                      type="error"
+                      message="Relationship generation failed"
+                      description={assistantError}
+                    />
+                  </AssistantCenter>
+                ) : !relationshipResult.length ? (
                   <AssistantCenter>
                     <div style={{ color: '#5f6368' }}>
                       No relationship suggestions were generated.
                     </div>
                   </AssistantCenter>
-                )}
+                ) : null}
 
                 {Object.entries(relationshipGroups).map(
                   ([modelName, relationships]) => (

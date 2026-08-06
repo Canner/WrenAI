@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from src.pipelines.generation.relationship_recommendation import cleaned_models
 from src.web.v1.services.relationship_recommendation import RelationshipRecommendation
 
 
@@ -213,8 +214,14 @@ def test_getitem_not_found(relationship_recommendation_service):
     assert "not found" in response.error.message
 
 
+def test_default_relationship_generation_timeout_is_long_running_safe(
+    relationship_recommendation_service,
+):
+    assert relationship_recommendation_service._generation_timeout_seconds == 180.0
+
+
 @pytest.mark.asyncio
-async def test_recommend_timeout_fails_without_fallback_relationships(
+async def test_recommend_timeout_fails_without_relationship_suggestions(
     mock_pipeline, mdl_with_project_relationship_candidate
 ):
     service = RelationshipRecommendation(
@@ -234,8 +241,12 @@ async def test_recommend_timeout_fails_without_fallback_relationships(
     response = service[request.id]
 
     assert response.status == "failed"
+    assert response.response is None
     assert response.error.code == "OTHERS"
-    assert "timed out" in response.error.message
+    assert (
+        "An error occurred during relationship recommendation generation"
+        in response.error.message
+    )
 
 
 @pytest.mark.asyncio
@@ -268,8 +279,9 @@ async def test_recommend_missing_validated_response_fails(
     response = relationship_recommendation_service[request.id]
 
     assert response.status == "failed"
+    assert response.response is None
     assert response.error.code == "OTHERS"
-    assert "no validated response" in response.error.message
+    assert "returned no validated response" in response.error.message
 
 
 @pytest.mark.asyncio
@@ -333,3 +345,56 @@ def test_setitem(relationship_recommendation_service):
     relationship_recommendation_service[id] = value
 
     assert relationship_recommendation_service._cache["test_id"] == value
+
+
+def test_cleaned_models_uses_compact_relationship_relevant_payload():
+    result = cleaned_models(
+        {
+            "models": [
+                {
+                    "name": "model_alpha",
+                    "primaryKey": "id",
+                    "baseObject": "physical_source",
+                    "properties": {
+                        "displayName": "Alpha",
+                        "description": "Business alpha records",
+                        "unused": "omitted",
+                    },
+                    "columns": [
+                        {
+                            "name": "id",
+                            "type": "INTEGER",
+                            "expression": "complex expression",
+                            "properties": {
+                                "description": "Primary identifier",
+                                "unused": "omitted",
+                            },
+                        },
+                        {
+                            "name": "model_beta_id",
+                            "type": "INTEGER",
+                            "relationship": "existing",
+                        },
+                    ],
+                }
+            ]
+        }
+    )
+
+    assert result == [
+        {
+            "name": "model_alpha",
+            "primaryKey": "id",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "INTEGER",
+                    "properties": {"description": "Primary identifier"},
+                }
+            ],
+            "properties": {
+                "displayName": "Alpha",
+                "description": "Business alpha records",
+            },
+        }
+    ]

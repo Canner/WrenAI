@@ -36,7 +36,7 @@ class RelationshipRecommendation:
         pipelines: Dict[str, BasicPipeline],
         maxsize: int = 1_000_000,
         ttl: int = 120,
-        generation_timeout_seconds: int = 45,
+        generation_timeout_seconds: float = 180.0,
     ):
         self._pipelines = pipelines
         self._cache: Dict[str, RelationshipRecommendation.Resource] = TTLCache(
@@ -75,25 +75,26 @@ class RelationshipRecommendation:
                 "language": request.configurations.language,
             }
 
+            logger.info(
+                "Calling configured LLM for relationship recommendations. "
+                "timeout_seconds=%s",
+                self._generation_timeout_seconds,
+            )
             try:
-                logger.info(
-                    "Calling configured LLM for relationship recommendations. "
-                    "timeout_seconds=%s",
-                    self._generation_timeout_seconds,
-                )
                 resp = await asyncio.wait_for(
                     self._pipelines["relationship_recommendation"].run(**input),
                     timeout=self._generation_timeout_seconds,
                 )
-                response = resp.get("validated")
-                if response is None:
-                    raise ValueError(
-                        "Relationship recommendation pipeline returned no validated response"
-                    )
             except TimeoutError:
                 raise TimeoutError(
-                    "Relationship recommendation LLM call timed out after "
+                    "Relationship recommendation generation timed out after "
                     f"{self._generation_timeout_seconds} seconds"
+                )
+            response = resp.get("validated")
+            if response is None:
+                raise ValueError(
+                    "Relationship recommendation pipeline returned no "
+                    "validated response"
                 )
 
             self._cache[request.id] = self.Resource(

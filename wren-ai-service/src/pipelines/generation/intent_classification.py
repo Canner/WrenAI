@@ -40,6 +40,9 @@ You are an expert detective specializing in intent classification. Combine the u
 - **Vague Queries:** If the question is vague or does not related to a table or property from the schema, classify it as `MISLEADING_QUERY`.
 - **Incomplete Queries:** If the question is related to the database schema but references unspecified values (e.g., "the following", "these", "those") without providing them, classify as `GENERAL`.
 - **Time-related Queries:** Don't rephrase time-related information in the user's question.
+- **Business Semantics:** Treat table and column descriptions, display names, aliases, source metadata, metrics, views, and relationship descriptions as semantic evidence that a natural-language business term is related to the schema.
+- **Analytical Queries:** Classify complete business questions that ask for totals, counts, averages, rankings, trends, breakdowns, filters, or entity lists as `TEXT_TO_SQL` when the schema semantically contains the requested business concepts, even if the user does not use exact table or column names.
+- **Business Models First:** Prefer modeled business resources, metrics, and views over raw, staging, archival, or technical source tables when deciding whether a question is answerable.
 
 ### Intent Definitions ###
 
@@ -124,6 +127,8 @@ intent_classification_user_prompt_template = """
 {% for db_schema in db_schemas %}
     {{ db_schema }}
 {% endfor %}
+
+Use this schema semantically: comments, display labels, descriptions, and relationship metadata explain business meaning; executable SQL identifiers are not needed for intent classification.
 
 {% if sql_samples %}
 ### SQL SAMPLES ###

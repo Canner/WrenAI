@@ -349,6 +349,47 @@ async def test_sql_post_processor_rejects_broad_preview_with_placeholder_filter(
 
 
 @pytest.mark.asyncio
+async def test_sql_post_processor_rejects_broad_derived_table_preview():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        [
+            (
+                '{"sql": "SELECT category_col, SUM(quantity_col) AS total_value '
+                "FROM (SELECT col_1, col_2, col_3, col_4, col_5, col_6, "
+                "col_7, col_8, col_9, category_col, quantity_col "
+                "FROM model_alpha) AS preview_source "
+                'GROUP BY category_col"}'
+            )
+        ],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "model_alpha",
+                "column_names": [
+                    "col_1",
+                    "col_2",
+                    "col_3",
+                    "col_4",
+                    "col_5",
+                    "col_6",
+                    "col_7",
+                    "col_8",
+                    "col_9",
+                    "category_col",
+                    "quantity_col",
+                ],
+            }
+        ],
+        query="show total quantity by category",
+    )
+
+    assert engine.executed is False
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "SQL_SHAPE"
+
+
+@pytest.mark.asyncio
 async def test_sql_post_processor_rejects_aggregate_intent_without_aggregate_shape():
     engine = CapturingEngine()
 
@@ -377,6 +418,238 @@ async def test_sql_post_processor_rejects_aggregate_intent_without_aggregate_sha
         == "Generated SQL does not apply the requested aggregation, grouping, "
         "ranking, or measure calculation."
     )
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_rejects_aggregate_using_wrong_business_dimension():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        [
+            (
+                '{"sql": "SELECT invoice_number, COUNT(*) AS invoice_count '
+                "FROM open_invoices GROUP BY invoice_number "
+                "ORDER BY invoice_count DESC LIMIT 10\"}"
+            )
+        ],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "open_invoices",
+                "column_names": ["invoice_number", "part_number"],
+                "column_semantic_terms": {
+                    "invoice_number": ["invoice", "number", "identifier"],
+                    "part_number": ["part", "number", "identifier"],
+                },
+            }
+        ],
+        query="Which suppliers have the highest number of invoices?",
+    )
+
+    assert engine.executed is False
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "INTENT_GROUNDING"
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_allows_aggregate_using_requested_business_dimension():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        [
+            (
+                '{"sql": "SELECT supplier_name, COUNT(*) AS invoice_count '
+                "FROM supplier_invoices GROUP BY supplier_name "
+                "ORDER BY invoice_count DESC LIMIT 10\"}"
+            )
+        ],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "supplier_invoices",
+                "column_names": ["supplier_name", "invoice_number"],
+                "column_semantic_terms": {
+                    "supplier_name": ["supplier", "name", "dimension"],
+                    "invoice_number": ["invoice", "number", "identifier"],
+                },
+            }
+        ],
+        query="Which suppliers have the highest number of invoices?",
+    )
+
+    assert engine.executed is True
+    assert result["invalid_generation_result"] == {}
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_rejects_join_without_declared_relationship():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        [
+            (
+                '{"sql": "SELECT customers.name, COUNT(*) AS order_count '
+                "FROM orders JOIN customers ON orders.customer_id = customers.id "
+                "GROUP BY customers.name\"}"
+            )
+        ],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "orders",
+                "column_names": ["customer_id"],
+                "relationship_constraints": [],
+            },
+            {
+                "table_name": "customers",
+                "column_names": ["id", "name"],
+                "relationship_constraints": [],
+            },
+        ],
+        query="orders by customer",
+    )
+
+    assert engine.executed is False
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "RELATIONSHIP_GROUNDING"
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_allows_join_with_declared_relationship():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        [
+            (
+                '{"sql": "SELECT customers.name, COUNT(*) AS order_count '
+                "FROM orders JOIN customers ON orders.customer_id = customers.id "
+                "GROUP BY customers.name\"}"
+            )
+        ],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "orders",
+                "column_names": ["customer_id"],
+                "relationship_constraints": [
+                    "FOREIGN KEY (customer_id) REFERENCES customers(id)"
+                ],
+            },
+            {
+                "table_name": "customers",
+                "column_names": ["id", "name"],
+                "relationship_constraints": [],
+            },
+        ],
+        query="orders by customer",
+    )
+
+    assert engine.executed is True
+    assert result["invalid_generation_result"] == {}
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_rejects_single_table_for_relationship_intent():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        [
+            (
+                '{"sql": "SELECT parent_id, child_id '
+                'FROM model_alpha ORDER BY parent_id"}'
+            )
+        ],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "model_alpha",
+                "column_names": ["parent_id", "child_id"],
+                "relationship_constraints": [
+                    "FOREIGN KEY (child_id) REFERENCES model_beta(id)"
+                ],
+                "table_semantic_terms": ["parent", "record"],
+                "column_semantic_terms": {
+                    "parent_id": ["parent", "identifier"],
+                    "child_id": ["child", "identifier"],
+                },
+            },
+            {
+                "table_name": "model_beta",
+                "column_names": ["id", "label"],
+                "relationship_constraints": [],
+                "table_semantic_terms": ["child", "record"],
+                "column_semantic_terms": {
+                    "id": ["child", "identifier"],
+                    "label": ["child", "label"],
+                },
+            },
+        ],
+        query="show parent records linked to child records",
+    )
+
+    assert engine.executed is False
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "RELATIONSHIP_GROUNDING"
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_rejects_missing_relationship_metadata():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        ['{"sql": "SELECT parent_id FROM model_alpha"}'],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "model_alpha",
+                "column_names": ["parent_id"],
+                "relationship_constraints": [],
+                "table_semantic_terms": ["parent", "record"],
+                "column_semantic_terms": {
+                    "parent_id": ["parent", "identifier"],
+                },
+            }
+        ],
+        query="show parent records linked to child records",
+    )
+
+    assert engine.executed is False
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"]["type"] == "RELATIONSHIP_GROUNDING"
+
+
+@pytest.mark.asyncio
+async def test_sql_post_processor_allows_relationship_query_with_approved_join_path():
+    engine = CapturingEngine()
+
+    result = await SQLGenPostProcessor(engine).run(
+        [
+            (
+                '{"sql": "SELECT model_alpha.parent_id, model_beta.label '
+                "FROM model_alpha JOIN model_beta "
+                "ON model_alpha.child_id = model_beta.id\"}"
+            )
+        ],
+        project_id="project-id",
+        schema_contracts=[
+            {
+                "table_name": "model_alpha",
+                "column_names": ["parent_id", "child_id"],
+                "relationship_constraints": [
+                    "FOREIGN KEY (child_id) REFERENCES model_beta(id)"
+                ],
+            },
+            {
+                "table_name": "model_beta",
+                "column_names": ["id", "label"],
+                "relationship_constraints": [],
+            },
+        ],
+        query="show parent records linked to child records",
+    )
+
+    assert engine.executed is True
+    assert result["invalid_generation_result"] == {}
 
 
 @pytest.mark.asyncio

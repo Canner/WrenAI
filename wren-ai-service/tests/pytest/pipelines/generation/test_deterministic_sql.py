@@ -93,6 +93,41 @@ def test_total_orders_prefers_count_even_when_numeric_measure_exists():
     assert "LIMIT 5" in sql
 
 
+def test_ranking_by_measure_groups_by_requested_dimension_only():
+    document = _schema_document(
+        "business_activity",
+        [
+            {
+                "name": "entity_name",
+                "data_type": "VARCHAR",
+                "comment": "Business entity",
+                "roles": ["dimension_candidate"],
+            },
+            {
+                "name": "document_code",
+                "data_type": "VARCHAR",
+                "comment": "Transaction document code",
+                "roles": ["identifier_candidate"],
+            },
+            {
+                "name": "metric_value",
+                "data_type": "DOUBLE",
+                "comment": "Transaction value",
+                "roles": ["numeric_measure_candidate"],
+            },
+        ],
+    )
+
+    sql = generate_grounded_sql("Show top 10 entities by transaction value.", [document])
+
+    assert "entity_name" in sql
+    assert "SUM(metric_value) AS TotalValue" in sql
+    assert "GROUP BY\n  entity_name" in sql
+    assert "GROUP BY\n  entity_name, document_code" not in sql
+    assert "ORDER BY\n  TotalValue DESC" in sql
+    assert "LIMIT 10" in sql
+
+
 def test_generates_filtered_detail_sql_with_deployed_identifiers_only():
     document = _schema_document(
         "analytics_model",

@@ -300,6 +300,37 @@ def _requested_aggregate(
     return "COUNT", "TotalCount"
 
 
+def _aggregate_dimension_terms(
+    query: str, table: _Table, query_terms: set[str]
+) -> set[str]:
+    noise_terms = (
+        _STOP_TERMS
+        | _RANKING_TERMS
+        | _SUM_TERMS
+        | _AVG_TERMS
+        | _MIN_TERMS
+        | _MAX_TERMS
+        | _COUNT_TERMS
+        | {"compare", "generating"}
+    )
+    normalized = f" {query or ''} "
+
+    for separator in (" by ", " per "):
+        if separator not in normalized.lower():
+            continue
+
+        before, after = re.split(separator, normalized, maxsplit=1, flags=re.IGNORECASE)
+        before_terms = _terms(before) - noise_terms
+        after_terms = _terms(after) - noise_terms
+
+        if before_terms and _best_columns(table, before_terms, _is_dimension, limit=1):
+            return before_terms
+        if after_terms and _best_columns(table, after_terms, _is_dimension, limit=1):
+            return after_terms
+
+    return (query_terms - noise_terms) or query_terms
+
+
 def _build_aggregate_sql(
     query: str,
     query_terms: set[str],
@@ -309,7 +340,9 @@ def _build_aggregate_sql(
     if not _query_requests_aggregate(query_terms):
         return None
 
-    dimensions = _best_columns(table, query_terms, _is_dimension, limit=2)
+    dimensions = _best_columns(
+        table, _aggregate_dimension_terms(query, table, query_terms), _is_dimension, limit=2
+    )
     if not dimensions and not (query_terms & _COUNT_TERMS):
         return None
 
