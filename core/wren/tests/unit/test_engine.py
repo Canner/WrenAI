@@ -14,7 +14,7 @@ import pytest
 from wren import WrenEngine
 from wren.config import WrenConfig
 from wren.model.data_source import DataSource
-from wren.model.error import ErrorCode, WrenError
+from wren.model.error import DatabaseTimeoutError, ErrorCode, WrenError
 
 pytestmark = pytest.mark.unit
 
@@ -168,3 +168,44 @@ def test_non_strict_mode_allows_unknown_table(duckdb_engine: WrenEngine):
         duckdb_engine.dry_plan("SELECT * FROM unknown_table")
     except WrenError as e:
         assert e.error_code != ErrorCode.MODEL_NOT_FOUND
+
+
+# ------------------------------------------------------------------
+# Connector-level TimeoutError classification (#2153)
+# ------------------------------------------------------------------
+
+
+class _TimeoutConnector:
+    """Fake connector standing in for one that re-raises a bare TimeoutError,
+    e.g. postgres.py on a canceled statement (see connector/postgres.py)."""
+
+    def query(self, sql: str, limit: int | None = None):
+        raise TimeoutError("canceling statement due to statement timeout")
+
+    def dry_run(self, sql: str) -> None:
+        raise TimeoutError("canceling statement due to statement timeout")
+
+    def close(self) -> None:
+        pass
+
+
+def test_query_classifies_bare_timeout_as_database_timeout():
+    conn_info = {"url": "/tmp", "format": "duckdb"}
+    with WrenEngine(
+        _MANIFEST_STR, DataSource.duckdb, conn_info, fallback=False
+    ) as engine:
+        engine._connector = _TimeoutConnector()
+        with pytest.raises(DatabaseTimeoutError) as exc_info:
+            engine.query('SELECT o_orderkey FROM "orders" LIMIT 1')
+        assert exc_info.value.error_code == ErrorCode.DATABASE_TIMEOUT
+
+
+def test_dry_run_classifies_bare_timeout_as_database_timeout():
+    conn_info = {"url": "/tmp", "format": "duckdb"}
+    with WrenEngine(
+        _MANIFEST_STR, DataSource.duckdb, conn_info, fallback=False
+    ) as engine:
+        engine._connector = _TimeoutConnector()
+        with pytest.raises(DatabaseTimeoutError) as exc_info:
+            engine.dry_run('SELECT o_orderkey FROM "orders" LIMIT 1')
+        assert exc_info.value.error_code == ErrorCode.DATABASE_TIMEOUT
