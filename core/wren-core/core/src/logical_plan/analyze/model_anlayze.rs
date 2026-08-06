@@ -447,19 +447,15 @@ impl ModelAnalyzeRule {
     ) -> Result<Transformed<LogicalPlan>> {
         match plan {
             LogicalPlan::SubqueryAlias(SubqueryAlias { input, alias, .. }) => {
-                // Because the bottom-up transformation is used, the table_scan is already transformed
-                // to the ModelPlanNode before the SubqueryAlias. We should check the patten of Wren-generated model plan like:
-                //      SubqueryAlias -> SubqueryAlias -> Extension -> ModelPlanNode
-                // to get the correct required columns
+                // `shortcut_aliased_table_scan` consumes `SubqueryAlias -> TableScan`
+                // over a model in `f_down`, so a model scan no longer reaches either
+                // arm below: the `SubqueryAlias` arm only rejects an already-analyzed
+                // `ModelPlanNode`, and the `TableScan` arm sees only the scans the
+                // shortcut declined (tables outside the MDL).
                 match Arc::unwrap_or_clone(Arc::clone(&input)) {
-                    LogicalPlan::SubqueryAlias(subquery_alias) => self
-                        .analyze_subquery_alias_model(
-                            subquery_alias,
-                            scope_manager,
-                            current_scope_id,
-                            alias,
-                            cycle_stack,
-                        ),
+                    LogicalPlan::SubqueryAlias(subquery_alias) => {
+                        self.analyze_subquery_alias_model(subquery_alias, alias)
+                    }
                     LogicalPlan::TableScan(table_scan) => {
                         let model_plan = self
                             .analyze_table_scan(
@@ -788,22 +784,25 @@ impl ModelAnalyzeRule {
         }
     }
 
-    /// Rebuilds a `SubqueryAlias -> SubqueryAlias -> Extension -> ModelPlanNode` shape.
-    /// `shortcut_aliased_table_scan` (`f_down`) now intercepts every aliased `TableScan`
-    /// before that nested shape can be produced, so the branch below is defense-in-depth.
+    /// Handles the input of a `SubqueryAlias -> SubqueryAlias -> ...` shape. Any
+    /// `Extension` input is rejected; everything else is passed through unchanged.
     fn analyze_subquery_alias_model(
         &self,
         subquery_alias: SubqueryAlias,
-        _scope_manager: &mut ScopeManager,
-        _current_scope_id: ScopeId,
         alias: TableReference,
-        _cycle_stack: &ModelStack,
     ) -> Result<Transformed<LogicalPlan>> {
         let SubqueryAlias { input, .. } = subquery_alias;
         if let LogicalPlan::Extension(Extension { node }) =
             Arc::unwrap_or_clone(Arc::clone(&input))
         {
             if let Some(model_node) = node.as_any().downcast_ref::<ModelPlanNode>() {
+                // Unreachable: `shortcut_aliased_table_scan` consumes every
+                // `SubqueryAlias -> TableScan` over a model in `f_down`, and the only
+                // producer of a directly-nested `SubqueryAlias` is `ExpandWrenViewRule`,
+                // which plans view bodies with `SessionState::create_logical_plan`
+                // (unoptimized). A view body therefore always has a `Projection` root,
+                // so the inner node is never a bare `TableScan` and this shape never
+                // forms. Revisit if view planning starts handing back optimized plans.
                 internal_err!(
                     "SubqueryAlias wrapping an already-analyzed ModelPlanNode ({}) \
                      reached the bottom-up rebuild path; shortcut_aliased_table_scan \
