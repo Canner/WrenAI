@@ -24,9 +24,10 @@ from src.pipelines.generation.utils.sql import SQL_GENERATION_MODEL_KWARGS
 def test_sql_generation_system_prompt_uses_schema_without_extra_catalog_layer():
     prompt = get_sql_generation_system_prompt()
 
-    assert "DATABASE SCHEMA section as the only source" in prompt
-    assert "Do not use pretrained knowledge" in prompt
+    assert "DATABASE SCHEMA is the only source" in prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in prompt
+    assert "WREN SQL IDENTIFIER CONTRACT" not in prompt
+    assert "WREN RETRIEVED SEMANTIC CONTEXT" not in prompt
     assert "return null for sql instead of choosing one" not in prompt
     assert 'ONLY USE "*" if the user query asks' in prompt
 
@@ -37,11 +38,12 @@ def test_sql_correction_system_prompt_uses_current_schema_for_repair():
     assert "regenerate one grounded Wren SQL query" in prompt
     assert "DATABASE SCHEMA" in prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in prompt
+    assert "WREN SQL IDENTIFIER CONTRACT" not in prompt
     assert 'ONLY USE "*" if the user query asks' in prompt
 
 
-def test_sql_generation_model_kwargs_include_overridable_output_budget():
-    assert SQL_GENERATION_MODEL_KWARGS["max_tokens"] == 4096
+def test_sql_generation_model_kwargs_do_not_set_output_budget_in_code():
+    assert "max_tokens" not in SQL_GENERATION_MODEL_KWARGS
     assert SQL_GENERATION_MODEL_KWARGS["response_format"]["type"] == "json_schema"
 
 
@@ -63,6 +65,7 @@ def test_sql_generation_prompt_omits_sample_sql_body():
     assert "sample intent" in built_prompt
     assert "SELECT 1" not in built_prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in built_prompt
+    assert "WREN SQL IDENTIFIER CONTRACT" not in built_prompt
 
 
 def test_followup_sql_generation_prompt_uses_retrieved_schema_context():
@@ -77,6 +80,7 @@ def test_followup_sql_generation_prompt_uses_retrieved_schema_context():
 
     assert "CREATE TABLE model_1" in result["prompt"]
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in result["prompt"]
+    assert "WREN SQL IDENTIFIER CONTRACT" not in result["prompt"]
 
 
 def test_sql_correction_prompt_keeps_failed_sql_diagnostic_and_question():
@@ -96,6 +100,7 @@ def test_sql_correction_prompt_keeps_failed_sql_diagnostic_and_question():
     assert "Failed SQL: SELECT 1" in built_prompt
     assert "DIAGNOSTIC CONTEXT" in built_prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in built_prompt
+    assert "WREN SQL IDENTIFIER CONTRACT" not in built_prompt
 
 
 def test_sql_regeneration_prompt_uses_current_schema_without_failed_sql_body():
@@ -113,3 +118,4 @@ def test_sql_regeneration_prompt_uses_current_schema_without_failed_sql_body():
     assert "The original SQL is intentionally omitted" in built_prompt
     assert "SELECT 1" not in built_prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in built_prompt
+    assert "WREN SQL IDENTIFIER CONTRACT" not in built_prompt

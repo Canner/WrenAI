@@ -15,6 +15,7 @@ logger = logging.getLogger("wren-ai-service")
 
 _DETERMINISTIC_SQL_VALIDATION_TYPES = {
     "SCHEMA_GROUNDING",
+    "SQL_GENERATION",
     "SQL_SHAPE",
     "SQL_SYNTAX",
     "SQL_VALUE_GROUNDING",

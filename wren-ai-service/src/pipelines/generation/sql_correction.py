@@ -143,6 +143,7 @@ async def post_process(
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
+        meta=generate_sql_correction.get("meta"),
     )
 
 

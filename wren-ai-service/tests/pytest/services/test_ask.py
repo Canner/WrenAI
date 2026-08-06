@@ -166,6 +166,7 @@ def test_ask_service_uses_single_sql_correction_retry_by_default():
 def test_should_skip_sql_diagnosis_for_deterministic_validation_errors():
     assert should_skip_sql_diagnosis({"type": "SQL_SHAPE"}) is True
     assert should_skip_sql_diagnosis({"type": "SCHEMA_GROUNDING"}) is True
+    assert should_skip_sql_diagnosis({"type": "SQL_GENERATION"}) is True
     assert should_skip_sql_diagnosis({"type": "SQL_VALUE_GROUNDING"}) is True
     assert should_skip_sql_diagnosis({"type": "DRY_RUN"}) is False
     assert should_skip_sql_diagnosis({}) is False
