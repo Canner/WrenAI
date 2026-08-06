@@ -18,7 +18,6 @@ import { getConfig } from '@server/config';
 import { DataSourceName } from '../types';
 
 const logger = getLogger('MDLBuilder');
-logger.level = 'debug';
 
 const config = getConfig();
 
@@ -41,6 +40,7 @@ export interface IMDLBuilder {
 // responsible to generate a valid manifest json
 export class MDLBuilder implements IMDLBuilder {
   private manifest: Manifest;
+  private skippedDuplicateColumns = new Map<string, Set<string>>();
 
   private project: Project;
   private readonly models: Model[];
@@ -91,7 +91,37 @@ export class MDLBuilder implements IMDLBuilder {
     );
   }
 
+  private recordSkippedDuplicateColumn(modelName: string, columnName: string) {
+    const columns =
+      this.skippedDuplicateColumns.get(modelName) || new Set<string>();
+    columns.add(columnName);
+    this.skippedDuplicateColumns.set(modelName, columns);
+  }
+
+  private logSkippedDuplicateColumns() {
+    if (this.skippedDuplicateColumns.size === 0) {
+      return;
+    }
+
+    const duplicateCount = [...this.skippedDuplicateColumns.values()].reduce(
+      (count, columns) => count + columns.size,
+      0,
+    );
+    const examples = [...this.skippedDuplicateColumns.entries()]
+      .slice(0, 5)
+      .map(
+        ([modelName, columns]) =>
+          `${modelName}: ${[...columns].slice(0, 5).join(', ')}`,
+      )
+      .join('; ');
+
+    logger.debug(
+      `Skipped ${duplicateCount} duplicated MDL columns across ${this.skippedDuplicateColumns.size} models. Examples: ${examples}`,
+    );
+  }
+
   public build(): Manifest {
+    this.skippedDuplicateColumns.clear();
     this.addProject();
     this.addModel();
     this.addNormalField();
@@ -99,6 +129,7 @@ export class MDLBuilder implements IMDLBuilder {
     this.addCalculatedField();
     this.addView();
     this.postProcessManifest();
+    this.logSkippedDuplicateColumns();
     return this.getManifest();
   }
 
@@ -202,9 +233,7 @@ export class MDLBuilder implements IMDLBuilder {
           model.columns = [];
         }
         if (this.hasModelColumn(model, column.referenceName)) {
-          logger.warn(
-            `Skip duplicated MDL column "${column.referenceName}" in model "${modelRefName}"`,
-          );
+          this.recordSkippedDuplicateColumn(modelRefName, column.referenceName);
           return;
         }
         const properties = column.properties
@@ -268,8 +297,9 @@ export class MDLBuilder implements IMDLBuilder {
           return;
         }
         if (this.hasModelColumn(model, column.referenceName)) {
-          logger.warn(
-            `Skip duplicated MDL column "${column.referenceName}" in model "${relatedModel.referenceName}"`,
+          this.recordSkippedDuplicateColumn(
+            relatedModel.referenceName,
+            column.referenceName,
           );
           return;
         }
