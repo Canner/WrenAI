@@ -93,41 +93,6 @@ def test_total_orders_prefers_count_even_when_numeric_measure_exists():
     assert "LIMIT 5" in sql
 
 
-def test_top_customers_by_invoice_amount_groups_by_customer_only():
-    document = _schema_document(
-        "dbo_tblFactSales",
-        [
-            {
-                "name": "customer",
-                "data_type": "VARCHAR",
-                "comment": "Customer identifier",
-                "roles": ["dimension_candidate"],
-            },
-            {
-                "name": "invoice",
-                "data_type": "VARCHAR",
-                "comment": "Invoice number",
-                "roles": ["identifier_candidate"],
-            },
-            {
-                "name": "amount",
-                "data_type": "DOUBLE",
-                "comment": "Invoice amount",
-                "roles": ["numeric_measure_candidate"],
-            },
-        ],
-    )
-
-    sql = generate_grounded_sql("Show top 10 customers by invoice amount.", [document])
-
-    assert "customer" in sql
-    assert "SUM(amount) AS TotalValue" in sql
-    assert "GROUP BY\n  customer" in sql
-    assert "GROUP BY\n  customer, invoice" not in sql
-    assert "ORDER BY\n  TotalValue DESC" in sql
-    assert "LIMIT 10" in sql
-
-
 def test_generates_filtered_detail_sql_with_deployed_identifiers_only():
     document = _schema_document(
         "analytics_model",

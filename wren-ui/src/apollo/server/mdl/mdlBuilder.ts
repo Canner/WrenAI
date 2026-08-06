@@ -83,14 +83,6 @@ export class MDLBuilder implements IMDLBuilder {
     this.manifest = {};
   }
 
-  private hasModelColumn(model: Partial<ModelMDL>, columnName: string): boolean {
-    return Boolean(
-      model.columns?.some(
-        (column) => column.name.toLowerCase() === columnName.toLowerCase(),
-      ),
-    );
-  }
-
   public build(): Manifest {
     this.addProject();
     this.addModel();
@@ -201,12 +193,6 @@ export class MDLBuilder implements IMDLBuilder {
         if (!model.columns) {
           model.columns = [];
         }
-        if (this.hasModelColumn(model, column.referenceName)) {
-          logger.warn(
-            `Skip duplicated MDL column "${column.referenceName}" in model "${modelRefName}"`,
-          );
-          return;
-        }
         const properties = column.properties
           ? JSON.parse(column.properties)
           : {};
@@ -264,12 +250,6 @@ export class MDLBuilder implements IMDLBuilder {
         if (!model) {
           logger.debug(
             `Build MDL Column Error: can not find model, modelId "${column.modelId}", columnId: "${column.id}"`,
-          );
-          return;
-        }
-        if (this.hasModelColumn(model, column.referenceName)) {
-          logger.warn(
-            `Skip duplicated MDL column "${column.referenceName}" in model "${relatedModel.referenceName}"`,
           );
           return;
         }

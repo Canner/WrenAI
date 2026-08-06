@@ -77,10 +77,6 @@ export interface AskInput {
   projectId?: string;
   histories?: ThreadResponse[];
   configurations?: ProjectConfigurations;
-  ignoreSqlGenerationReasoning?: boolean;
-  enableColumnPruning?: boolean;
-  useDryPlan?: boolean;
-  allowDryPlanFallback?: boolean;
 }
 
 export interface AsyncQueryResponse {

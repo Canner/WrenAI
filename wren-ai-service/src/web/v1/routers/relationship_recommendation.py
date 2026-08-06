@@ -1,9 +1,8 @@
-import asyncio
 import uuid
 from dataclasses import asdict
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from pydantic import BaseModel
 
 from src.globals import (
@@ -31,6 +30,7 @@ class PostResponse(BaseModel):
 )
 async def recommend(
     request: PostRequest,
+    background_tasks: BackgroundTasks,
     service_container: ServiceContainer = Depends(get_service_container),
     service_metadata: ServiceMetadata = Depends(get_service_metadata),
 ) -> PostResponse:
@@ -45,8 +45,8 @@ async def recommend(
         configuration=request.configurations,
     )
 
-    asyncio.create_task(
-        service.recommend(input, service_metadata=asdict(service_metadata))
+    background_tasks.add_task(
+        service.recommend, input, service_metadata=asdict(service_metadata)
     )
 
     return PostResponse(id=id)

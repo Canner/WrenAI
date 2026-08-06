@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import re
 import sys
 from typing import Any, Optional
 
@@ -16,8 +15,6 @@ from src.utils import trace_cost
 from src.web.v1.services import Configuration
 
 logger = logging.getLogger("wren-ai-service")
-
-_MAX_ROWS_IN_DETERMINISTIC_ANSWER = 10
 
 sql_to_answer_system_prompt = """
 ### TASK
@@ -153,30 +150,6 @@ class SQLAnswer(BasicPipeline):
             except TimeoutError:
                 break
 
-    def _enqueue_deterministic_answer(self, query_id: str, answer: str) -> None:
-        if query_id not in self._user_queues:
-            self._user_queues[query_id] = asyncio.Queue()
-
-        self._user_queues[query_id].put_nowait(answer)
-        self._user_queues[query_id].put_nowait("<DONE>")
-
-    def _build_deterministic_answer(self, query: str, sql_data: dict) -> str:
-        row_records = sql_data.get("row_records") or _build_row_records(sql_data)
-        if not row_records:
-            return "No matching records were returned for this question."
-
-        visible_rows = row_records[:_MAX_ROWS_IN_DETERMINISTIC_ANSWER]
-        prefix = _answer_prefix(query, row_records)
-        explanation = _explain_rows(query, visible_rows)
-        suffix = ""
-        if len(row_records) > len(visible_rows):
-            suffix = (
-                f" The answer is based on the first {len(visible_rows)} of "
-                f"{len(row_records)} returned rows."
-            )
-
-        return f"{prefix} {explanation}{suffix}".strip()
-
     @observe(name="SQL Answer Generation")
     async def run(
         self,
@@ -189,16 +162,6 @@ class SQLAnswer(BasicPipeline):
         custom_instruction: Optional[str] = None,
     ) -> dict:
         logger.info("Sql_Answer Generation pipeline is running...")
-        deterministic_answer = self._build_deterministic_answer(query, sql_data or {})
-        if query_id:
-            self._enqueue_deterministic_answer(query_id, deterministic_answer)
-            return {
-                "generate_answer": (
-                    {"replies": [deterministic_answer], "metadata": []},
-                    self._components["generator_name"],
-                )
-            }
-
         return await self._pipe.execute(
             ["generate_answer"],
             inputs={
@@ -212,166 +175,3 @@ class SQLAnswer(BasicPipeline):
                 **self._components,
             },
         )
-
-
-def _column_names(sql_data: dict) -> list[str]:
-    return [
-        column.get("name", "") if isinstance(column, dict) else str(column)
-        for column in sql_data.get("columns", []) or []
-        if column
-    ]
-
-
-def _build_row_records(sql_data: dict) -> list[dict]:
-    columns = _column_names(sql_data)
-    rows = sql_data.get("data", []) or []
-    records = []
-    for row in rows:
-        if isinstance(row, dict):
-            records.append({column: row.get(column) for column in columns})
-            continue
-        if not isinstance(row, (list, tuple)):
-            row = [row]
-        records.append(
-            {
-                column: row[index] if index < len(row) else None
-                for index, column in enumerate(columns)
-            }
-        )
-    return records
-
-
-def _answer_prefix(query: str, row_records: list[dict]) -> str:
-    if len(row_records) == 1:
-        return "The data returned 1 matching result."
-    if _looks_analytical_result(row_records):
-        return f"The data returned {len(row_records)} summarized results."
-    return f"The data returned {len(row_records)} matching results."
-
-
-def _looks_analytical_result(row_records: list[dict]) -> bool:
-    if not row_records:
-        return False
-    first_row = row_records[0]
-    return any(isinstance(value, (int, float)) for value in first_row.values()) and len(
-        first_row
-    ) <= 4
-
-
-def _explain_rows(query: str, rows: list[dict]) -> str:
-    if not rows:
-        return ""
-
-    if _looks_analytical_result(rows):
-        return _explain_analytical_rows(rows)
-
-    if len(rows) == 1:
-        return _explain_detail_row(rows[0])
-
-    examples = "; ".join(_detail_summary(row) for row in rows[:5])
-    return f"A few examples are {examples}."
-
-
-def _explain_analytical_rows(rows: list[dict]) -> str:
-    measure_column = _first_numeric_column(rows)
-    if not measure_column:
-        return _explain_detail_row(rows[0])
-
-    dimension_columns = [
-        column for column in rows[0].keys() if column != measure_column
-    ]
-    ranked_rows = sorted(
-        rows,
-        key=lambda row: row.get(measure_column)
-        if isinstance(row.get(measure_column), (int, float))
-        else float("-inf"),
-        reverse=True,
-    )
-    top_phrases = []
-    for row in ranked_rows[:5]:
-        dimension_value = " / ".join(
-            _format_value(row.get(column))
-            for column in dimension_columns
-            if row.get(column) is not None
-        )
-        if not dimension_value:
-            dimension_value = "the result"
-        top_phrases.append(
-            f"{dimension_value} has {_format_value(row.get(measure_column))} "
-            f"for {_humanize_name(measure_column)}"
-        )
-
-    return "The strongest values are " + "; ".join(top_phrases) + "."
-
-
-def _explain_detail_row(row: dict) -> str:
-    return "It shows " + _detail_summary(row) + "."
-
-
-def _detail_summary(row: dict) -> str:
-    populated_items = [
-        (column, value) for column, value in row.items() if value is not None
-    ]
-    if not populated_items:
-        return "a result with no populated fields"
-
-    label_column, label_value = _best_label_item(populated_items)
-    supporting_items = [
-        (column, value)
-        for column, value in populated_items
-        if column != label_column
-    ][:3]
-
-    if not supporting_items:
-        return f"{_format_value(label_value)}"
-
-    supporting_text = _join_phrases(
-        [
-            f"{_humanize_name(column)} is {_format_value(value)}"
-            for column, value in supporting_items
-        ]
-    )
-    return f"{_format_value(label_value)}, where {supporting_text}"
-
-
-def _best_label_item(items: list[tuple[str, Any]]) -> tuple[str, Any]:
-    exact_label_names = {"name", "title", "label", "description"}
-    for column, value in items:
-        if str(column).lower() in exact_label_names:
-            return column, value
-
-    for pattern in [
-        r"(name|title|description|label)$",
-        r"(number|no|code|id|identifier)$",
-    ]:
-        for column, value in items:
-            if re.search(pattern, str(column), re.I):
-                return column, value
-    return items[0]
-
-
-def _join_phrases(parts: list[str]) -> str:
-    if not parts:
-        return ""
-    if len(parts) == 1:
-        return parts[0]
-    return ", ".join(parts[:-1]) + f", and {parts[-1]}"
-
-
-def _first_numeric_column(rows: list[dict]) -> str | None:
-    for column in rows[0].keys():
-        if any(isinstance(row.get(column), (int, float)) for row in rows):
-            return column
-    return None
-
-
-def _humanize_name(name: str) -> str:
-    words = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", str(name))
-    words = words.replace("_", " ").replace("-", " ")
-    return " ".join(words.split()).lower()
-
-
-def _format_value(value: Any) -> str:
-    if value is None:
-        return "blank"
-    return str(value)

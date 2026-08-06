@@ -22,11 +22,6 @@ from src.pipelines.common import (
     clean_up_new_lines,
     get_engine_supported_data_type,
 )
-from src.pipelines.generation.utils.query_intent import (
-    analyze_query,
-    explicit_table_name_candidates,
-    identifier_terms,
-)
 from src.utils import trace_cost
 from src.web.v1.services.ask import AskHistory
 
@@ -138,38 +133,10 @@ _QUERY_TERM_STOPWORDS = {
 }
 
 _MAX_SCHEMA_SEMANTIC_TABLE_CANDIDATES = 5
-_MAX_SCHEMA_RELATIONSHIP_TABLE_CANDIDATES = 12
 _MAX_RELATED_SCHEMA_TABLE_CANDIDATES = 5
-_MAX_RELATED_SCHEMA_RELATIONSHIP_CANDIDATES = 12
 _MAX_SQL_GENERATION_SCHEMA_RESULTS = 10
 _MAX_SQL_GENERATION_COLUMNS_PER_TABLE = 16
 _MAX_SQL_GENERATION_ROLE_COLUMNS = 4
-_TECHNICAL_OBJECT_PATTERN = re.compile(
-    r"(^|[_\s.-])(raw|stage|staging|stg|tmp|temp|backup|archive|load|etl|landing|"
-    r"snapshot|technical|system|audit|test|empty|sample|demo)([_\s.-]|$)",
-    re.I,
-)
-_TECHNICAL_OBJECT_TERMS = {
-    "archive",
-    "audit",
-    "backup",
-    "demo",
-    "empty",
-    "etl",
-    "landing",
-    "load",
-    "raw",
-    "sample",
-    "snapshot",
-    "stage",
-    "staging",
-    "stg",
-    "system",
-    "technical",
-    "temp",
-    "test",
-    "tmp",
-}
 
 _DATE_TIME_TYPE_TERMS = {
     "date",
@@ -205,8 +172,7 @@ _MEASURE_QUERY_PATTERN = re.compile(
 _DETAIL_QUERY_PATTERN = re.compile(r"\b(show|list|detail|details|orders|records|rows)\b", re.I)
 
 
-def _normalize_terms(value: str | None) -> set[str]:
-    value = "" if value is None else str(value)
+def _normalize_terms(value: str) -> set[str]:
     terms = {
         term
         for term in re.findall(r"[a-zA-Z0-9]+", value.lower())
@@ -251,184 +217,6 @@ def _schema_semantic_text(content: dict) -> str:
     return " ".join(part for part in parts if part)
 
 
-def _table_description_semantic_text(content: dict) -> str:
-    parts = [
-        str(content.get("name", "") or ""),
-        str(content.get("displayName", "") or ""),
-        str(content.get("description", "") or ""),
-        str(content.get("columns", "") or ""),
-        str(content.get("column_context", "") or ""),
-        str(content.get("relationships", "") or ""),
-        str(content.get("semantic_context", "") or ""),
-    ]
-    return " ".join(part for part in parts if part)
-
-
-def _relationship_semantic_text(content: dict) -> str:
-    parts = []
-    for column in content.get("columns", []) or []:
-        if column.get("type") != "FOREIGN_KEY":
-            continue
-        parts.extend(
-            [
-                str(column.get("comment", "") or ""),
-                str(column.get("constraint", "") or ""),
-                str(column.get("column", "") or ""),
-                str(column.get("referenced_table", "") or ""),
-                str(column.get("referenced_column", "") or ""),
-                " ".join(str(table) for table in column.get("tables", []) or []),
-            ]
-        )
-
-    return " ".join(part for part in parts if part)
-
-
-def _object_type_priority(content: dict, query: str) -> int:
-    resource_type = str(content.get("resource_type", "") or "").upper()
-    intent = analyze_query(query)
-
-    if resource_type == "METRIC":
-        return 8 if intent.requests_aggregate else 4
-    if resource_type == "VIEW":
-        return 5
-    if resource_type == "MODEL":
-        return 3
-    return 0
-
-
-def _is_explicit_table_match(table_name: str, query: str) -> bool:
-    requested_names = {
-        name.lower() for name in explicit_table_name_candidates(query)
-    }
-    return bool(table_name and table_name.lower() in requested_names)
-
-
-def _technical_object_penalty(content: dict, query: str = "") -> int:
-    name = str(content.get("name", "") or "")
-    if _is_explicit_table_match(name, query):
-        return 0
-
-    source = str(content.get("source", "") or "")
-    resource_type = str(content.get("resource_type", "") or "").upper()
-    object_terms = identifier_terms(f"{name} {source}")
-    penalty = 0
-
-    if _TECHNICAL_OBJECT_PATTERN.search(name):
-        penalty += 8
-    if _TECHNICAL_OBJECT_PATTERN.search(source):
-        penalty += 4
-    if technical_terms := object_terms & _TECHNICAL_OBJECT_TERMS:
-        penalty += 6 * len(technical_terms)
-    if resource_type not in {"METRIC", "VIEW", "MODEL"}:
-        penalty += 2
-
-    return penalty
-
-
-def _semantic_document_score(content: dict, query: str) -> int:
-    query_terms = _normalize_terms(query)
-    if not query_terms:
-        return 0
-
-    intent = analyze_query(query)
-    name_terms = _normalize_terms(str(content.get("name", "") or ""))
-    semantic_terms = _normalize_terms(_table_description_semantic_text(content))
-    relationship_terms = _normalize_terms(str(content.get("relationships", "") or ""))
-    requested_dimension_terms = intent.requested_dimension_terms
-
-    score = 0
-    if _is_explicit_table_match(str(content.get("name", "") or ""), query):
-        score += 100
-    score += 6 * len(query_terms & name_terms)
-    score += 3 * len(query_terms & semantic_terms)
-    score += 5 * len(requested_dimension_terms & semantic_terms)
-    if intent.requests_relationship:
-        score += 8 if content.get("relationships") else 0
-        score += 6 * len(query_terms & relationship_terms)
-        score += 5 * len(intent.business_terms & relationship_terms)
-    score += _object_type_priority(content, query)
-    score -= _technical_object_penalty(content, query=query)
-    return score
-
-
-def _schema_document_score(document: Document, query: str) -> int:
-    query_terms = _normalize_terms(query)
-    if not query_terms:
-        return 0
-
-    try:
-        content = ast.literal_eval(document.content)
-    except Exception:
-        return 0
-
-    intent = analyze_query(query)
-    table_name = document.meta.get("name", "")
-    table_terms = _normalize_terms(table_name)
-    schema_terms = _normalize_terms(_schema_semantic_text(content))
-    relationship_terms = _normalize_terms(_relationship_semantic_text(content))
-
-    score = 0
-    if _is_explicit_table_match(table_name, query):
-        score += 100
-    score += 6 * len(query_terms & table_terms)
-    score += 3 * len(query_terms & schema_terms)
-    score += 5 * len(intent.business_terms & schema_terms)
-    if intent.requests_relationship:
-        score += 10 if relationship_terms else 0
-        score += 7 * len(query_terms & relationship_terms)
-        score += 6 * len(intent.business_terms & relationship_terms)
-    return score
-
-
-def _document_table_description_name(document: Document) -> str:
-    try:
-        content = ast.literal_eval(document.content)
-    except Exception:
-        return document.meta.get("name", "")
-
-    return str(content.get("name") or document.meta.get("name", "") or "")
-
-
-def _filter_explicit_table_documents(
-    documents: list[Document], query: str
-) -> list[Document]:
-    requested_names = {
-        name.lower() for name in explicit_table_name_candidates(query)
-    }
-    if not requested_names:
-        return documents
-
-    exact_documents = [
-        document
-        for document in documents
-        if _document_table_description_name(document).lower() in requested_names
-    ]
-    return exact_documents or documents
-
-
-def _rerank_table_description_documents(
-    documents: list[Document], query: str
-) -> list[Document]:
-    scored_documents = []
-    for index, document in enumerate(documents):
-        try:
-            content = ast.literal_eval(document.content)
-        except Exception:
-            scored_documents.append((0, -index, document))
-            continue
-
-        scored_documents.append(
-            (_semantic_document_score(content, query), -index, document)
-        )
-
-    return [
-        document
-        for _, _, document in sorted(
-            scored_documents, key=lambda item: (item[0], item[1]), reverse=True
-        )
-    ]
-
-
 def _tables_matching_query_terms(
     query: str,
     construct_db_schemas: list[dict],
@@ -460,38 +248,6 @@ def _column_search_terms(column: dict) -> set[str]:
                 str(column.get("comment", "") or ""),
                 str(column.get("data_type", "") or ""),
             ]
-        )
-    )
-
-
-def _column_contract_terms(column: dict) -> list[str]:
-    role_terms = {
-        term for role in _column_roles(column) for term in identifier_terms(role)
-    }
-    return sorted(
-        _normalize_terms(
-            " ".join(
-                [
-                    str(column.get("name", "") or ""),
-                    str(column.get("comment", "") or ""),
-                    str(column.get("data_type", "") or ""),
-                ]
-            )
-        )
-        | role_terms
-    )
-
-
-def _table_contract_terms(content: dict) -> list[str]:
-    return sorted(
-        _normalize_terms(
-            " ".join(
-                [
-                    str(content.get("name", "") or ""),
-                    str(content.get("comment", "") or ""),
-                    str(content.get("properties", {}) or ""),
-                ]
-            )
         )
     )
 
@@ -906,51 +662,8 @@ def _build_view_ddl(content: dict) -> str:
     )
 
 
-def _retrieval_result_score(retrieval_result: dict, query: str) -> int:
-    query_terms = _normalize_terms(query)
-    if not query_terms:
-        return 0
-
-    intent = analyze_query(query)
-    table_terms = set(retrieval_result.get("table_semantic_terms", []) or [])
-    column_terms = {
-        term
-        for terms in (retrieval_result.get("column_semantic_terms", {}) or {}).values()
-        for term in terms
-    }
-    relationship_text = " ".join(
-        str(constraint)
-        for constraint in retrieval_result.get("relationship_constraints", []) or []
-    )
-    relationship_terms = _normalize_terms(relationship_text)
-
-    score = 0
-    score += 5 * len(query_terms & table_terms)
-    score += 3 * len(query_terms & column_terms)
-    score += 5 * len(intent.business_terms & (table_terms | column_terms))
-    if intent.requests_relationship:
-        score += 8 if relationship_terms else 0
-        score += 6 * len(query_terms & relationship_terms)
-        score += 5 * len(intent.business_terms & relationship_terms)
-    return score
-
-
-def _limit_retrieval_results(
-    retrieval_results: list[dict], query: str = ""
-) -> list[dict]:
-    if not query:
-        return retrieval_results[:_MAX_SQL_GENERATION_SCHEMA_RESULTS]
-
-    scored_results = [
-        (_retrieval_result_score(retrieval_result, query), -index, retrieval_result)
-        for index, retrieval_result in enumerate(retrieval_results)
-    ]
-    return [
-        retrieval_result
-        for _, _, retrieval_result in sorted(
-            scored_results, key=lambda item: (item[0], item[1]), reverse=True
-        )[:_MAX_SQL_GENERATION_SCHEMA_RESULTS]
-    ]
+def _limit_retrieval_results(retrieval_results: list[dict]) -> list[dict]:
+    return retrieval_results[:_MAX_SQL_GENERATION_SCHEMA_RESULTS]
 
 
 ## Start of Pipeline
@@ -1048,7 +761,6 @@ async def table_retrieval(
     table_retriever: Any,
     active_mdl_hash: Optional[str] = None,
     mdl_hash: str = "",
-    query: str = "",
 ) -> dict:
     effective_mdl_hash = active_mdl_hash or mdl_hash
     filters = {
@@ -1069,17 +781,10 @@ async def table_retrieval(
         )
 
     if embedding:
-        result = await table_retriever.run(
+        return await table_retriever.run(
             query_embedding=embedding.get("embedding"),
             filters=filters,
         )
-        ranked_documents = _rerank_table_description_documents(
-            result.get("documents", []), query=query
-        )
-        result["documents"] = _filter_explicit_table_documents(
-            ranked_documents, query=query
-        )
-        return result
 
     if not tables:
         return {"documents": []}
@@ -1100,10 +805,8 @@ async def dbschema_retrieval(
     active_mdl_hash: Optional[str] = None,
     mdl_hash: str = "",
     embedding: Optional[dict] = None,
-    query: str = "",
 ) -> list[Document]:
     effective_mdl_hash = active_mdl_hash or mdl_hash
-    intent = analyze_query(query)
 
     def _base_filters() -> dict:
         project_deploy_filter = build_project_deploy_filter(
@@ -1150,11 +853,6 @@ async def dbschema_retrieval(
         return document.meta.get("name", "")
 
     def _related_table_names(documents: list[Document], visited: set[str]) -> list[str]:
-        limit = (
-            _MAX_RELATED_SCHEMA_RELATIONSHIP_CANDIDATES
-            if intent.requests_relationship
-            else _MAX_RELATED_SCHEMA_TABLE_CANDIDATES
-        )
         related_names = []
         for document in documents:
             content = ast.literal_eval(document.content)
@@ -1173,7 +871,10 @@ async def dbschema_retrieval(
                     if table_name and table_name not in visited:
                         visited.add(table_name)
                         related_names.append(table_name)
-                        if len(related_names) >= limit:
+                        if (
+                            len(related_names)
+                            >= _MAX_RELATED_SCHEMA_TABLE_CANDIDATES
+                        ):
                             return related_names
 
         return related_names
@@ -1216,27 +917,16 @@ async def dbschema_retrieval(
             query_embedding=embedding.get("embedding"),
             filters=_base_filters(),
         )
-        semantic_limit = (
-            _MAX_SCHEMA_RELATIONSHIP_TABLE_CANDIDATES
-            if intent.requests_relationship
-            else _MAX_SCHEMA_SEMANTIC_TABLE_CANDIDATES
-        )
         added_schema_table_names = 0
-        semantic_documents = (
-            sorted(
-                results["documents"],
-                key=lambda document: _schema_document_score(document, query),
-                reverse=True,
-            )
-            if query
-            else results["documents"]
-        )
-        for document in semantic_documents:
+        for document in results["documents"]:
             table_name = _document_name(document)
             if table_name and table_name not in table_names:
                 table_names.append(table_name)
                 added_schema_table_names += 1
-                if added_schema_table_names >= semantic_limit:
+                if (
+                    added_schema_table_names
+                    >= _MAX_SCHEMA_SEMANTIC_TABLE_CANDIDATES
+                ):
                     break
 
     visited = set(table_names)
@@ -1246,13 +936,6 @@ async def dbschema_retrieval(
     related_names = _related_table_names(current_documents, visited)
     related_documents = await _fetch_by_names(related_names)
     _extend_unique_documents(documents, related_documents, seen_documents)
-
-    if intent.requests_relationship:
-        second_hop_related_names = _related_table_names(related_documents, visited)
-        second_hop_related_documents = await _fetch_by_names(second_hop_related_names)
-        _extend_unique_documents(
-            documents, second_hop_related_documents, seen_documents
-        )
 
     return documents
 
@@ -1312,13 +995,6 @@ def check_using_db_schemas_without_pruning(
                     "table_ddl": ddl,
                     "column_names": column_names,
                     "manifest_column_names": column_names,
-                    "table_semantic_terms": _table_contract_terms(table_schema),
-                    "column_semantic_terms": {
-                        column["name"]: _column_contract_terms(column)
-                        for column in table_schema.get("columns", [])
-                        if column.get("type") == "COLUMN"
-                        and column.get("name") in column_names
-                    },
                     "relationship_constraints": _relationship_constraints(
                         table_schema
                     ),
@@ -1340,12 +1016,6 @@ def check_using_db_schemas_without_pruning(
                     "table_ddl": _build_metric_ddl(content),
                     "column_names": column_names,
                     "manifest_column_names": column_names,
-                    "table_semantic_terms": _table_contract_terms(content),
-                    "column_semantic_terms": {
-                        column["name"]: _column_contract_terms(column)
-                        for column in content.get("columns", [])
-                        if column.get("name") in column_names
-                    },
                     "relationship_constraints": [],
                 }
             )
@@ -1358,12 +1028,6 @@ def check_using_db_schemas_without_pruning(
                     "table_ddl": _build_view_ddl(content),
                     "column_names": column_names,
                     "manifest_column_names": column_names,
-                    "table_semantic_terms": _table_contract_terms(content),
-                    "column_semantic_terms": {
-                        column["name"]: _column_contract_terms(column)
-                        for column in content.get("columns", [])
-                        if column.get("name") in column_names
-                    },
                     "relationship_constraints": [],
                 }
             )
@@ -1382,7 +1046,7 @@ def check_using_db_schemas_without_pruning(
         }
 
     return {
-        "db_schemas": _limit_retrieval_results(retrieval_results, query=query),
+        "db_schemas": _limit_retrieval_results(retrieval_results),
         "tokens": _token_count,
         "has_calculated_field": has_calculated_field,
         "has_metric": has_metric,
@@ -1465,13 +1129,6 @@ def construct_retrieval_results(
                         "table_ddl": ddl,
                         "column_names": column_names,
                         "manifest_column_names": column_names,
-                        "table_semantic_terms": _table_contract_terms(table_schema),
-                        "column_semantic_terms": {
-                            column["name"]: _column_contract_terms(column)
-                            for column in table_schema.get("columns", [])
-                            if column.get("type") == "COLUMN"
-                            and column.get("name") in column_names
-                        },
                         "relationship_constraints": _relationship_constraints(
                             table_schema
                         ),
@@ -1489,12 +1146,6 @@ def construct_retrieval_results(
                         "table_ddl": _build_metric_ddl(content),
                         "column_names": column_names,
                         "manifest_column_names": column_names,
-                        "table_semantic_terms": _table_contract_terms(content),
-                        "column_semantic_terms": {
-                            column["name"]: _column_contract_terms(column)
-                            for column in content.get("columns", [])
-                            if column.get("name") in column_names
-                        },
                         "relationship_constraints": [],
                     }
                 )
@@ -1507,28 +1158,19 @@ def construct_retrieval_results(
                         "table_ddl": _build_view_ddl(content),
                         "column_names": column_names,
                         "manifest_column_names": column_names,
-                        "table_semantic_terms": _table_contract_terms(content),
-                        "column_semantic_terms": {
-                            column["name"]: _column_contract_terms(column)
-                            for column in content.get("columns", [])
-                            if column.get("name") in column_names
-                        },
                         "relationship_constraints": [],
                     }
                 )
 
         return {
-            "retrieval_results": _limit_retrieval_results(
-                retrieval_results, query=query
-            ),
+            "retrieval_results": _limit_retrieval_results(retrieval_results),
             "has_calculated_field": has_calculated_field,
             "has_metric": has_metric,
             "has_json_field": has_json_field,
         }
     else:
         retrieval_results = _limit_retrieval_results(
-            check_using_db_schemas_without_pruning["db_schemas"],
-            query=query,
+            check_using_db_schemas_without_pruning["db_schemas"]
         )
 
         return {

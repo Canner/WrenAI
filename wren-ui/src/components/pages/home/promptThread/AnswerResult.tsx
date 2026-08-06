@@ -21,9 +21,7 @@ import ViewSQLTabContent from '@/components/pages/home/promptThread/ViewSQLTabCo
 import TextBasedAnswer, {
   getAnswerIsFinished,
 } from '@/components/pages/home/promptThread/TextBasedAnswer';
-import ChartAnswer, {
-  getIsChartFinished,
-} from '@/components/pages/home/promptThread/ChartAnswer';
+import ChartAnswer from '@/components/pages/home/promptThread/ChartAnswer';
 import Preparation from '@/components/pages/home/preparation';
 import {
   AskingTaskStatus,
@@ -237,7 +235,6 @@ export default function AnswerResult(props: Props) {
     adjustment,
   } = threadResponse;
   const autoGenerateAnswerRef = useRef<number | null>(null);
-  const autoGenerateChartRef = useRef<number | null>(null);
 
   const resultStyle = isLastThreadResponse
     ? { minHeight: 'calc(100vh - (194px))' }
@@ -305,42 +302,6 @@ export default function AnswerResult(props: Props) {
       autoGenerateAnswerRef.current = null;
     }
   }, [answerDetail?.status]);
-
-  useEffect(() => {
-    if (!sql) return;
-    if (autoGenerateChartRef.current === id) return;
-    if (threadResponse.chartDetail) return;
-    if (!canGenerateAnswer(askingTask, adjustmentTask)) return;
-
-    autoGenerateChartRef.current = id;
-    const debouncedGenerateChart = debounce(
-      () => {
-        onGenerateChartAnswer(id);
-      },
-      250,
-      { leading: false, trailing: true },
-    );
-    debouncedGenerateChart();
-
-    return () => {
-      debouncedGenerateChart.cancel();
-    };
-  }, [
-    id,
-    sql,
-    askingTask?.status,
-    adjustmentTask?.status,
-    threadResponse.chartDetail?.status,
-  ]);
-
-  useEffect(() => {
-    if (
-      threadResponse.chartDetail?.status &&
-      getIsChartFinished(threadResponse.chartDetail.status)
-    ) {
-      autoGenerateChartRef.current = null;
-    }
-  }, [threadResponse.chartDetail?.status]);
 
   const onTabClick = (activeKey: string) => {
     if (
