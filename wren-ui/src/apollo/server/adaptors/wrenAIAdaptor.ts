@@ -257,13 +257,28 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
 
   public async ask(input: AskInput): Promise<AsyncQueryResponse> {
     try {
-      const res = await axios.post(`${this.wrenAIBaseEndpoint}/v1/asks`, {
+      const body: Record<string, any> = {
         query: input.query,
         id: input.deployId,
         project_id: input.projectId,
         histories: this.transformHistoryInput(input.histories),
         configurations: input.configurations,
-      });
+      };
+      if (input.ignoreSqlGenerationReasoning !== undefined) {
+        body['ignore_sql_generation_reasoning'] =
+          input.ignoreSqlGenerationReasoning;
+      }
+      if (input.enableColumnPruning !== undefined) {
+        body['enable_column_pruning'] = input.enableColumnPruning;
+      }
+      if (input.useDryPlan !== undefined) {
+        body['use_dry_plan'] = input.useDryPlan;
+      }
+      if (input.allowDryPlanFallback !== undefined) {
+        body['allow_dry_plan_fallback'] = input.allowDryPlanFallback;
+      }
+
+      const res = await axios.post(`${this.wrenAIBaseEndpoint}/v1/asks`, body);
       return { queryId: res.data.query_id };
     } catch (err: any) {
       logger.debug(`Got error when asking wren AI: ${getAIServiceError(err)}`);
