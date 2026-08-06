@@ -452,6 +452,7 @@ def test_cli_parse_types_skip_report_truncates_past_limit() -> None:
     assert "Warning: skipped 12 non-mapping row(s)" in result.stderr
     assert "[1] int: 0" in result.stderr
     assert "... and 2 more" in result.stderr
+    assert "[11] int: 10" not in result.stderr
 
 
 def test_cli_parse_types_corrupt_value_repr_is_bounded() -> None:
@@ -463,6 +464,7 @@ def test_cli_parse_types_corrupt_value_repr_is_bounded() -> None:
     )
     _assert_success(result)
     line = next(ln for ln in result.stderr.splitlines() if ln.startswith("  [1]"))
+    assert "… (5002 chars)" in line
     assert len(line) < 200
 
 
