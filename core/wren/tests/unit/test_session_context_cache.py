@@ -20,6 +20,10 @@ class _FakeSessionContext:
 @pytest.fixture()
 def fake_session_context(monkeypatch):
     # Keep this unit test fast and isolated from the native SessionContext.
+    # setattr targets the shared wren_core module object (wren.mdl does
+    # `import wren_core`), so the fake is process-wide until monkeypatch
+    # restores it; clearing the cache on both sides of the yield keeps
+    # fake-backed entries from leaking into other tests.
     monkeypatch.setattr(wren.mdl.wren_core, "SessionContext", _FakeSessionContext)
     get_session_context.cache_clear()
     yield
