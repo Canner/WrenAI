@@ -87,9 +87,7 @@ class QuestionRecommendation:
             )
             return None
 
-        async def _document_retrieval() -> tuple[
-            list[str], list[dict], bool, bool, bool
-        ]:
+        async def _document_retrieval() -> tuple[list[str], bool, bool, bool]:
             retrieval_result = await self._pipelines["db_schema_retrieval"].run(
                 query=candidate["question"],
                 project_id=project_id,
@@ -97,22 +95,11 @@ class QuestionRecommendation:
             _retrieval_result = retrieval_result.get("construct_retrieval_results", {})
             documents = _retrieval_result.get("retrieval_results", [])
             table_ddls = [document.get("table_ddl") for document in documents]
-            schema_contracts = [
-                {
-                    "table_name": document.get("table_name"),
-                    "column_names": document.get("manifest_column_names")
-                    or document.get("column_names")
-                    or [],
-                }
-                for document in documents
-                if document.get("table_name")
-            ]
             has_calculated_field = _retrieval_result.get("has_calculated_field", False)
             has_metric = _retrieval_result.get("has_metric", False)
             has_json_field = _retrieval_result.get("has_json_field", False)
             return (
                 table_ddls,
-                schema_contracts,
                 has_calculated_field,
                 has_metric,
                 has_json_field,
@@ -143,7 +130,6 @@ class QuestionRecommendation:
             )
             (
                 table_ddls,
-                schema_contracts,
                 has_calculated_field,
                 has_metric,
                 has_json_field,
@@ -177,7 +163,6 @@ class QuestionRecommendation:
                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                 allow_data_preview=allow_data_preview,
                 sql_knowledge=sql_knowledge,
-                schema_contracts=schema_contracts,
             )
 
             post_process = generated_sql["post_process"]

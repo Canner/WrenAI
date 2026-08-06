@@ -14,7 +14,6 @@ from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
-    build_executable_schema_contract,
     construct_instructions,
     get_calculated_field_instructions,
     get_json_field_instructions,
@@ -54,11 +53,6 @@ The final answer must be JSON. Return a SQL string only when it is fully grounde
 
 
 sql_regeneration_user_prompt_template = """
-{% if executable_schema_contract %}
-{{ executable_schema_contract }}
-
-{% endif %}
-
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
@@ -103,11 +97,6 @@ Question:
 User's Question: {{ query }}
 Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, physical names, lineage names, calculated fields, metrics, and relationships only to understand meaning; the SQL must use exact declared table and column names from DATABASE SCHEMA. Do not copy semantic labels, source/physical/lineage names, user question words, or inferred names into executable SQL. If a needed table, output column, filter column, grouping column, relation, date field, measure, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, return null for sql instead of inventing, substituting, or approximating a similar name. If the retrieved schema does not ground the user's primary requested intent, return null for sql instead of querying an unrelated object.
 Regenerate with executable identifiers from the current DATABASE SCHEMA only.
-Regenerate an intent-shaped query, not a table preview. Select explicit columns, filters, groupings, measures, joins, ordering, and limits needed by the question. For metric questions, return dimensions plus the requested measure or grounded expression; never use SELECT * as a substitute.
-{% if executable_schema_contract %}
-### ALLOWED EXECUTABLE IDENTIFIERS FOR THIS REGENERATION ###
-{{ executable_schema_contract }}
-{% endif %}
 
 ### ORIGINAL SQL QUERY ###
 The original SQL is intentionally omitted so it cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
@@ -131,13 +120,11 @@ def prompt(
     has_json_field: bool = False,
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
-    schema_contracts: list[dict] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
         sql=sql,
         documents=documents,
-        executable_schema_contract=build_executable_schema_contract(schema_contracts),
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
@@ -177,15 +164,11 @@ async def regenerate_sql(
 async def post_process(
     regenerate_sql: dict,
     post_processor: SQLGenPostProcessor,
-    query: str,
     project_id: str | None = None,
-    schema_contracts: list[dict] | None = None,
 ) -> dict:
     return await post_processor.run(
         regenerate_sql.get("replies"),
         project_id=project_id,
-        schema_contracts=schema_contracts,
-        query=query,
     )
 
 
@@ -230,7 +213,6 @@ class SQLRegeneration(BasicPipeline):
         has_json_field: bool = False,
         sql_functions: list[SqlFunction] | None = None,
         sql_knowledge: SqlKnowledge | None = None,
-        schema_contracts: list[dict] | None = None,
     ):
         logger.info("SQL Regeneration pipeline is running...")
 
@@ -249,7 +231,6 @@ class SQLRegeneration(BasicPipeline):
                 "has_json_field": has_json_field,
                 "sql_functions": sql_functions,
                 "sql_knowledge": sql_knowledge,
-                "schema_contracts": schema_contracts,
                 **self._components,
             },
         )

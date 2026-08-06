@@ -9,9 +9,9 @@ class DbSchemaRetrievalPipeline:
             "construct_retrieval_results": {
                 "retrieval_results": [
                     {
-                        "table_name": "dbo_qosSales",
-                        "table_ddl": "CREATE TABLE dbo_qosSales (BU VARCHAR, SalesVal FLOAT)",
-                        "manifest_column_names": ["BU", "SalesVal"],
+                        "table_name": "model_1",
+                        "table_ddl": "CREATE TABLE model_1 (attribute_1 VARCHAR, measure_1 FLOAT)",
+                        "manifest_column_names": ["attribute_1", "measure_1"],
                     }
                 ]
             }
@@ -25,12 +25,12 @@ class EmptyFormattedPipeline:
 
 class CapturingSqlGenerationPipeline:
     def __init__(self):
-        self.schema_contracts = None
+        self.kwargs = {}
         self.run_count = 0
 
     async def run(self, **kwargs):
         self.run_count += 1
-        self.schema_contracts = kwargs.get("schema_contracts")
+        self.kwargs = kwargs
         return {
             "post_process": {
                 "valid_generation_result": {},
@@ -45,7 +45,7 @@ class CapturingSqlGenerationPipeline:
 
 
 @pytest.mark.asyncio
-async def test_question_recommendation_passes_schema_contracts_to_sql_generation():
+async def test_question_recommendation_passes_schema_context_to_sql_generation():
     sql_generation = CapturingSqlGenerationPipeline()
     service = QuestionRecommendation(
         pipelines={
@@ -59,16 +59,17 @@ async def test_question_recommendation_passes_schema_contracts_to_sql_generation
     )
 
     await service._validate_question(
-        {"question": "show orders", "category": "General"},
+        {"question": "show model records", "category": "General"},
         request_id="request-id",
         max_questions=5,
         max_categories=3,
         project_id="11",
     )
 
-    assert sql_generation.schema_contracts == [
-        {"table_name": "dbo_qosSales", "column_names": ["BU", "SalesVal"]}
+    assert sql_generation.kwargs["contexts"] == [
+        "CREATE TABLE model_1 (attribute_1 VARCHAR, measure_1 FLOAT)"
     ]
+    assert "schema_contracts" not in sql_generation.kwargs
 
 
 class MalformedRecommendationPipeline:

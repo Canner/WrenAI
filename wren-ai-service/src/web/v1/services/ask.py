@@ -399,25 +399,6 @@ class AskService:
                 documents = _retrieval_result.get("retrieval_results", [])
                 table_names = [document.get("table_name") for document in documents]
                 table_ddls = [document.get("table_ddl") for document in documents]
-                schema_contracts = [
-                    {
-                        "table_name": document.get("table_name"),
-                        "column_names": document.get("manifest_column_names")
-                        or document.get("column_names")
-                        or [],
-                        "relationship_constraints": document.get(
-                            "relationship_constraints", []
-                        ),
-                        "table_semantic_terms": document.get(
-                            "table_semantic_terms", []
-                        ),
-                        "column_semantic_terms": document.get(
-                            "column_semantic_terms", {}
-                        ),
-                    }
-                    for document in documents
-                    if document.get("table_name")
-                ]
 
                 if not documents:
                     logger.exception(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
@@ -542,7 +523,6 @@ class AskService:
                             use_dry_plan=use_dry_plan,
                             allow_dry_plan_fallback=allow_dry_plan_fallback,
                             sql_knowledge=sql_knowledge,
-                            schema_contracts=schema_contracts,
                         ),
                         self._sql_generation_timeout_seconds,
                         "Follow-up SQL generation",
@@ -564,7 +544,6 @@ class AskService:
                             use_dry_plan=use_dry_plan,
                             allow_dry_plan_fallback=allow_dry_plan_fallback,
                             sql_knowledge=sql_knowledge,
-                            schema_contracts=schema_contracts,
                         ),
                         self._sql_generation_timeout_seconds,
                         "SQL generation",
@@ -660,7 +639,6 @@ class AskService:
                                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                                 sql_functions=sql_functions,
                                 sql_knowledge=sql_knowledge,
-                                schema_contracts=schema_contracts,
                             ),
                             self._sql_generation_timeout_seconds,
                             "SQL correction",

@@ -15,7 +15,6 @@ from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
-    build_executable_schema_contract,
     construct_instructions,
     get_text_to_sql_rules,
 )
@@ -57,11 +56,6 @@ The final answer must be in JSON format:
 
 
 sql_correction_user_prompt_template = """
-{% if executable_schema_contract %}
-{{ executable_schema_contract }}
-
-{% endif %}
-
 {% if documents %}
 ### DATABASE SCHEMA ###
 {% for document in documents %}
@@ -88,19 +82,11 @@ sql_correction_user_prompt_template = """
 User's Question: {{ query }}
 {% endif %}
 
-{% if executable_schema_contract %}
-### ALLOWED EXECUTABLE IDENTIFIERS FOR THIS CORRECTION ###
-{{ executable_schema_contract }}
-{% endif %}
-
 ### FAILED SQL DIAGNOSTIC CONTEXT ###
 Failed SQL: {{ invalid_generation_result.sql }}
 Error Message: {{ invalid_generation_result.error }}
 
 Regenerate from the user's question and DATABASE SCHEMA only when a user question is available. Otherwise, correct the failed SQL only by using exact executable identifiers declared in DATABASE SCHEMA or SQL FUNCTIONS. Do not copy table names, column names, functions, literals, aliases, or SQL structure from the failed SQL unless each one is declared in DATABASE SCHEMA or SQL FUNCTIONS.
-Correct into an intent-shaped query, not a table preview. Select explicit columns, filters, groupings, measures, joins, ordering, and limits needed by the question. For metric questions, return dimensions plus the requested measure or grounded expression; never use SELECT * as a substitute.
-For relationship wording such as linked, related, associated, connected, with, by, per, or across multiple business concepts, use only relationship_constraints_use_exactly or declared FOREIGN KEY relationships from DATABASE SCHEMA for joins. If the relationship path is not declared, return null for sql instead of querying one nearby table.
-If the error says the SQL is a broad table preview, table preview, missing requested aggregation, missing requested grouping, missing timeframe, or missing ordering/ranking, rebuild the query shape from the user's question using exact declared table and column names from DATABASE SCHEMA.
 Return only the final JSON SQL response.
 """
 
@@ -114,11 +100,9 @@ def prompt(
     query: str | None = None,
     instructions: list[dict] | None = None,
     sql_functions: list[SqlFunction] | None = None,
-    schema_contracts: list[dict] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         documents=documents,
-        executable_schema_contract=build_executable_schema_contract(schema_contracts),
         invalid_generation_result=invalid_generation_result,
         query=query or "",
         instructions=construct_instructions(
@@ -152,7 +136,6 @@ async def post_process(
     project_id: str | None = None,
     use_dry_plan: bool = False,
     allow_dry_plan_fallback: bool = False,
-    schema_contracts: list[dict] | None = None,
 ) -> dict:
     return await post_processor.run(
         generate_sql_correction.get("replies"),
@@ -160,8 +143,6 @@ async def post_process(
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
-        schema_contracts=schema_contracts,
-        query=query,
     )
 
 
@@ -210,7 +191,6 @@ class SQLCorrection(BasicPipeline):
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = False,
         sql_knowledge: SqlKnowledge | None = None,
-        schema_contracts: list[dict] | None = None,
     ):
         logger.info("SQLCorrection pipeline is running...")
 
@@ -237,7 +217,6 @@ class SQLCorrection(BasicPipeline):
                 "allow_dry_plan_fallback": allow_dry_plan_fallback,
                 "data_source": metadata.get("data_source", "local_file"),
                 "sql_knowledge": sql_knowledge,
-                "schema_contracts": schema_contracts,
                 **self._components,
             },
         )

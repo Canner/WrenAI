@@ -34,60 +34,6 @@ def _normalize_engine_addition(addition: Any) -> dict:
 
     return {}
 
-def build_executable_schema_contract(schema_contracts: list[dict] | None) -> str:
-    if not schema_contracts:
-        return ""
-
-    sections = [
-        "### EXECUTABLE WREN IDENTIFIER CATALOG ###",
-        "Copy executable table and column identifiers only from this catalog or the matching DATABASE SCHEMA DDL.",
-        "Use descriptions, aliases, source names, and user wording only to understand meaning.",
-    ]
-
-    for contract in schema_contracts:
-        table_name = contract.get("table_name")
-        if not table_name:
-            continue
-
-        sections.append(f"TABLE: {table_name}")
-        column_names = [
-            column_name
-            for column_name in contract.get("column_names", [])
-            if column_name
-        ]
-        if column_names:
-            sections.append("COLUMNS:")
-            sections.extend(f"- {column_name}" for column_name in column_names)
-        else:
-            sections.append("COLUMNS: declared in the matching DATABASE SCHEMA DDL")
-
-        relationship_constraints = [
-            constraint
-            for constraint in contract.get("relationship_constraints", [])
-            if constraint
-        ]
-        if relationship_constraints:
-            sections.append("RELATIONSHIPS:")
-            sections.extend(
-                f"- {constraint}" for constraint in relationship_constraints
-            )
-
-        table_semantic_terms = [
-            term for term in contract.get("table_semantic_terms", []) if term
-        ]
-        if table_semantic_terms:
-            sections.append("TABLE_SEMANTIC_TERMS_NOT_IDENTIFIERS:")
-            sections.append("- " + ", ".join(table_semantic_terms[:50]))
-
-        column_semantic_terms = contract.get("column_semantic_terms") or {}
-        if column_semantic_terms:
-            sections.append("COLUMN_SEMANTIC_TERMS_NOT_IDENTIFIERS:")
-            for column_name, terms in column_semantic_terms.items():
-                if column_name and terms:
-                    sections.append(f"- {column_name}: {', '.join(terms[:30])}")
-
-    return "\n".join(sections)
-
 
 @component
 class SQLGenPostProcessor:
@@ -106,10 +52,7 @@ class SQLGenPostProcessor:
         allow_dry_plan_fallback: bool = False,
         data_source: str = "",
         allow_data_preview: bool = False,
-        schema_contracts: list[dict] | None = None,
-        query: str | None = None,
     ) -> dict:
-        _ = schema_contracts, query
         try:
             cleaned_generation_result = clean_generation_result(replies[0])
 
@@ -310,7 +253,7 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 ### MANDATORY SQL GROUNDING RULES ###
 - Treat the retrieved semantic context as the only authoritative source for this request. Do not use pretrained knowledge, common warehouse schemas, example schemas, or memorized business definitions as executable truth.
 - Treat the DATABASE SCHEMA section as the only source of executable table and column identifiers.
-- Use only deployed semantic models, views, metrics, relationships, and columns that are present in the retrieved DATABASE SCHEMA, WREN SQL IDENTIFIER CONTRACT, EXECUTABLE WREN IDENTIFIER CATALOG, SQL FUNCTIONS, or current USER INSTRUCTIONS.
+- Use only deployed semantic models, views, metrics, relationships, and columns that are present in the retrieved DATABASE SCHEMA, WREN SQL IDENTIFIER CONTRACT, SQL FUNCTIONS, or current USER INSTRUCTIONS.
 - Before generating SQL, silently validate that every model, column, metric, relationship, join path, filter field, grouping field, ordering field, and SQL function is present in the retrieved context. Generate SQL only after this validation succeeds.
 - Every table and column referenced in SELECT, FROM, JOIN, WHERE, GROUP BY, HAVING, and ORDER BY must appear exactly in the CREATE TABLE, CREATE VIEW, or metric schema text provided in DATABASE SCHEMA.
 - Comments, aliases, display labels, descriptions, reasoning text, SQL samples, and user wording are semantic hints only. They are never source table or source column identifiers.
@@ -331,7 +274,6 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - Do not replace an invalid identifier with a similar-looking physical, source, lineage, alias, display, description, sample, or error-message name. Regenerate from the user's intent and the current DATABASE SCHEMA, and omit unsupported parts instead of substituting non-schema identifiers.
 - Prefer a single table, view, or metric that already contains the requested fields. Do not join tables just because they were retrieved together.
 - When using multiple tables to combine fields into the same output row, join only through the exact FOREIGN KEY constraints shown in DATABASE SCHEMA. If no relationship is shown for the needed tables, return null for sql or use one schema object that already contains the requested fields.
-- If multiple semantic interpretations exist and the retrieved context does not make one interpretation authoritative, return null for sql instead of choosing one.
 - When the same requested result can be answered from multiple schema objects with compatible columns or metrics, include all relevant schema objects by combining separate result rows with UNION ALL instead of choosing only one object.
 - Use UNION ALL only when each SELECT branch is independently valid from DATABASE SCHEMA and returns the same result shape. Do not use UNION ALL to combine unrelated concepts or to compensate for missing columns.
 - If the question requires fields that are spread across multiple schema objects, use all required related tables, views, or metrics only when the DATABASE SCHEMA provides the needed columns and an exact relationship path. Do not invent join predicates from similar column names.
@@ -349,7 +291,7 @@ _MANDATORY_SQL_GROUNDING_RULES = """
 - If a requested noun, output column, grouping, filter, or measure appears only in the user's wording and not in DATABASE SCHEMA, do not translate it into a generic object name. Use only schema-supported concepts and omit unsupported parts.
 - If the user's primary requested subject, output column, grouping, filter, timeframe, measure, or required relationship cannot be grounded by the retrieved DATABASE SCHEMA, return null for sql instead of producing an approximate query.
 - Do not answer by selecting a nearby table only because it was retrieved. A retrieved object is usable only when its declared table, columns, relationships, or metric fields support the user's requested intent.
-- Do not answer a specific business question with a broad table scan. The SQL shape must match the user's requested output columns, filters, groupings, measures, joins, ordering, and limits.
+- When the question asks for a broad entity list without specific columns, filters, groupings, measures, joins, ordering, or limits, a table scan of the matching schema object is a valid answer.
 - For analytical or metric questions, select only the requested dimensions and measures. Use declared metric columns, calculated fields, relationship paths, and schema-grounded aggregate expressions. If the required metric components are not grounded, return null for sql instead of returning raw rows.
 - For questions asking total, count, average, minimum, maximum, ratio, per, by, top, bottom, highest, lowest, trend, month, week, year, or ranking, produce an analytical query shape: select exact dimension columns or date buckets, aggregate exact numeric columns or count rows, GROUP BY every non-aggregated selected expression, ORDER BY the selected aggregate alias when ranking, and apply LIMIT only when requested.
 - If the question asks for an entity list with a timeframe or filter but no metric, select only the entity identifier, relevant dimensions, and exact date/time column needed by the request; include the requested WHERE predicate. Do not select every column from the table.
@@ -360,7 +302,7 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 ### SQL RULES ###
 - ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
 - ONLY USE the tables and columns mentioned in the database schema.
-- Never use "*" in the SELECT list. Select explicit deployed schema columns needed for the question. When the user asks for all records, all rows, all users, all orders, or similar, treat "all" as row scope and still select explicit columns relevant to the requested entity or metric.
+- ONLY USE "*" if the user query asks for all the columns of a table or a broad entity list without specific requested output columns.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - DON'T INCLUDE comments in the generated SQL query.
 - Use JOIN only when selected columns come from multiple tables and DATABASE SCHEMA declares the exact FOREIGN KEY relationship needed for the join. Do not invent join predicates from similar-looking column names.
@@ -381,7 +323,7 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
 - Output aliases may be used only to name expressions in the final SELECT list. Output aliases are labels for result columns only; they are not source identifiers.
-- For metric-style requests, the final SELECT list must expose the requested dimension columns and measure expressions or metric fields. Do not return every raw column from a retrieved model as a substitute for the requested metric.
+- For metric-style requests, the final SELECT list must expose the requested dimension columns and measure expressions or metric fields.
 - For aggregate, ranking, or "by" requests, do not add unrelated string filters to make the SQL look specific. If the user did not provide a filter value, leave it out.
 - For total, count, average, minimum, maximum, per, by, trend, top, bottom, highest, lowest, or ranking requests, the final SQL must include the requested aggregate expression or metric field, GROUP BY required dimensions, ORDER BY required ranking expression, and LIMIT only when requested. A raw row list is not a valid answer.
 - For record-list requests with a filter or timeframe, the final SQL must include the requested WHERE predicate and only the columns needed to identify and describe the matching records.
@@ -584,15 +526,14 @@ Given the user's question and database schema, generate one grounded Wren SQL qu
 4. YOU MUST treat the reasoning plan as semantic context for intent only. Do not copy identifiers, functions, literal values, SQL fragments, template markers, or placeholders from the reasoning plan. Choose every executable identifier only from DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT, and every function only from SQL FUNCTIONS.
 5. YOU MUST answer the user's intent, not just exact wording. Use schema aliases, descriptions, calculated fields, metrics, and relationships to understand intent, then generate SQL with exact DATABASE SCHEMA identifiers only.
 6. YOU MUST first read any WREN SQL IDENTIFIER CONTRACT and WREN RETRIEVED SEMANTIC CONTEXT block attached to each schema object. Use sql_table_name_use_exactly, sql_column_name_use_exactly, sql_column_names_use_exactly, relationship_constraints_use_exactly, and the following DDL declarations as executable grounding. Use semantic_context_not_sql_identifiers and semantic_context_not_sql_identifier only to understand business meaning.
-7. When DATABASE SCHEMA contains EXECUTABLE WREN IDENTIFIER CATALOG sections, treat those sections as the first and clearest list of allowed executable identifiers.
-8. If the user asks for fields that exist across multiple related schema objects, include those objects only when DATABASE SCHEMA shows the exact columns and relationship path needed to join them.
-9. If the user asks for a result that is represented in multiple schema objects with compatible fields, include all relevant objects using independently valid SELECT branches combined with UNION ALL. Use joins only for relationship-backed row-level combinations.
-10. For relationship wording such as linked, related, associated, connected, with, by, per, or across multiple business concepts, use only relationship_constraints_use_exactly or declared FOREIGN KEY relationships from DATABASE SCHEMA for joins. If the relationship path is not declared, return null for sql instead of querying one nearby table.
-11. Before finalizing the JSON response, YOU MUST perform a silent grounding check: every table, column, join key, filter field, grouping field, ordering field, and function in the SQL must be present in DATABASE SCHEMA or SQL FUNCTIONS. If a planned element is not grounded, omit that element. If the element is needed to answer the user's requested subject, output column, filter, grouping, measure, timeframe, or relationship, return null for sql.
-12. YOU MUST treat source database/schema/table names, physical datasource names, lineage names, comments, aliases, and display labels as semantic context only. Never use them as executable identifiers unless the exact same identifier appears in DATABASE SCHEMA.
-13. If an identifier, literal value, placeholder, template marker, or function appears only in SQL samples, failed SQL, descriptions, lineage, reasoning text, or error messages, it is not executable for this request; ignore those parts when generating executable SQL.
-14. If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA, EXECUTABLE WREN IDENTIFIER CATALOG, or WREN SQL IDENTIFIER CONTRACT, return null for sql. Never create a table or column from the user's wording.
-15. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
+7. If the user asks for fields that exist across multiple related schema objects, include those objects only when DATABASE SCHEMA shows the exact columns and relationship path needed to join them.
+8. If the user asks for a result that is represented in multiple schema objects with compatible fields, include all relevant objects using independently valid SELECT branches combined with UNION ALL. Use joins only for relationship-backed row-level combinations.
+9. For relationship wording such as linked, related, associated, connected, with, by, per, or across multiple business concepts, use only relationship_constraints_use_exactly or declared FOREIGN KEY relationships from DATABASE SCHEMA for joins. If the relationship path is not declared, return null for sql instead of querying one nearby table.
+10. Before finalizing the JSON response, YOU MUST perform a silent grounding check: every table, column, join key, filter field, grouping field, ordering field, and function in the SQL must be present in DATABASE SCHEMA or SQL FUNCTIONS. If a planned element is not grounded, omit that element. If the element is needed to answer the user's requested subject, output column, filter, grouping, measure, timeframe, or relationship, return null for sql.
+11. YOU MUST treat source database/schema/table names, physical datasource names, lineage names, comments, aliases, and display labels as semantic context only. Never use them as executable identifiers unless the exact same identifier appears in DATABASE SCHEMA.
+12. If an identifier, literal value, placeholder, template marker, or function appears only in SQL samples, failed SQL, descriptions, lineage, reasoning text, or error messages, it is not executable for this request; ignore those parts when generating executable SQL.
+13. If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT, return null for sql. Never create a table or column from the user's wording.
+14. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {text_to_sql_rules}
 

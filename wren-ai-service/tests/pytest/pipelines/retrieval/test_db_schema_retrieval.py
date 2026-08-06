@@ -1210,7 +1210,7 @@ def test_construct_retrieval_results_keeps_schema_when_pruner_returns_unknown_co
     assert "semantic_label" not in table_ddl
     assert "stored_dimension VARCHAR" in table_ddl
     assert "stored_measure DOUBLE" in table_ddl
-    assert "columns:\n- stored_dimension\n- stored_measure" in table_ddl
+    assert "sql_column_names_use_exactly:\n- stored_dimension\n- stored_measure" in table_ddl
 
 
 def test_construct_retrieval_results_keeps_schema_when_pruner_mixes_known_and_unknown_columns():
@@ -1267,7 +1267,7 @@ def test_construct_retrieval_results_keeps_schema_when_pruner_mixes_known_and_un
     assert "semantic_label" not in table_ddl
     assert "stored_dimension VARCHAR" in table_ddl
     assert "stored_measure DOUBLE" in table_ddl
-    assert "columns:\n- stored_dimension\n- stored_measure" in table_ddl
+    assert "sql_column_names_use_exactly:\n- stored_dimension\n- stored_measure" in table_ddl
 
 
 def test_construct_retrieval_results_uses_full_columns_for_sql_generation():
@@ -1438,11 +1438,17 @@ def test_check_using_db_schemas_without_pruning_keeps_context_when_within_window
         "account",
     ]
     assert all(
-        "EXECUTABLE WREN IDENTIFIER CATALOG" in schema["table_ddl"]
+        "WREN SQL IDENTIFIER CONTRACT" in schema["table_ddl"]
         for schema in result["db_schemas"]
     )
-    assert all("table: " in schema["table_ddl"] for schema in result["db_schemas"])
-    assert all("columns:" in schema["table_ddl"] for schema in result["db_schemas"])
+    assert all(
+        "sql_table_name_use_exactly: " in schema["table_ddl"]
+        for schema in result["db_schemas"]
+    )
+    assert all(
+        "sql_column_names_use_exactly:" in schema["table_ddl"]
+        for schema in result["db_schemas"]
+    )
     assert all(
         "WREN RETRIEVED SEMANTIC CONTEXT" in schema["table_ddl"]
         for schema in result["db_schemas"]
@@ -1549,10 +1555,10 @@ def test_retrieved_schema_separates_exact_sql_names_from_semantic_context():
     )
 
     table_ddl = result["db_schemas"][0]["table_ddl"]
-    assert "EXECUTABLE WREN IDENTIFIER CATALOG" in table_ddl
-    assert "table: modeled_dataset" in table_ddl
-    assert "columns:\n- stored_attribute" in table_ddl
-    assert "Do not create identifiers from user wording" in table_ddl
+    assert "WREN SQL IDENTIFIER CONTRACT" in table_ddl
+    assert "sql_table_name_use_exactly: modeled_dataset" in table_ddl
+    assert "sql_column_names_use_exactly:\n- stored_attribute" in table_ddl
+    assert "Only the identifiers listed in this contract" in table_ddl
     assert "Business-facing attribute label." in table_ddl
     assert "Business-facing dataset description." in table_ddl
     assert "WREN RETRIEVED SEMANTIC CONTEXT" in table_ddl

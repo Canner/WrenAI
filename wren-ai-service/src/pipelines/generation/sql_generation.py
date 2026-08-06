@@ -13,7 +13,6 @@ from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
-    build_executable_schema_contract,
     construct_instructions,
     get_calculated_field_instructions,
     get_json_field_instructions,
@@ -28,11 +27,6 @@ logger = logging.getLogger("wren-ai-service")
 
 
 sql_generation_user_prompt_template = """
-{% if executable_schema_contract %}
-{{ executable_schema_contract }}
-
-{% endif %}
-
 ### DATABASE SCHEMA ###
 {% for document in documents %}
     {{ document }}
@@ -79,12 +73,6 @@ Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliase
 If a needed table, output column, filter column, grouping column, relation, date field, measure, or function is not declared in DATABASE SCHEMA or SQL FUNCTIONS, return null for sql instead of inventing, substituting, or approximating a similar name. If the retrieved schema does not ground the user's primary requested intent, return null for sql instead of querying an unrelated object.
 If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA or WREN SQL IDENTIFIER CONTRACT, stop and return null for sql. Never create a table or column from the user's wording, even when the wording looks like a business term or object name.
 Do not generate SQL from a reasoning plan. The reasoning plan is not executable context and cannot provide table names, column names, filters, functions, joins, or examples.
-Generate an intent-shaped query, not a table preview. Select explicit columns, filters, groupings, measures, joins, ordering, and limits needed by the question. For metric questions, return dimensions plus the requested measure or grounded expression; never use SELECT * as a substitute.
-For relationship wording such as linked, related, associated, connected, with, by, per, or across multiple business concepts, use only relationship_constraints_use_exactly or declared FOREIGN KEY relationships from DATABASE SCHEMA for joins. If the relationship path is not declared, return null for sql instead of querying one nearby table.
-{% if executable_schema_contract %}
-### ALLOWED EXECUTABLE IDENTIFIERS FOR THIS REQUEST ###
-{{ executable_schema_contract }}
-{% endif %}
 
 {% if sql_generation_reasoning %}
 ### REASONING PLAN ###
@@ -109,12 +97,10 @@ def prompt(
     has_json_field: bool = False,
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
-    schema_contracts: list[dict] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
-        executable_schema_contract=build_executable_schema_contract(schema_contracts),
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
@@ -155,12 +141,10 @@ async def post_process(
     generate_sql: dict,
     post_processor: SQLGenPostProcessor,
     data_source: str,
-    query: str,
     project_id: str | None = None,
     use_dry_plan: bool = False,
     allow_dry_plan_fallback: bool = False,
     allow_data_preview: bool = False,
-    schema_contracts: list[dict] | None = None,
 ) -> dict:
     return await post_processor.run(
         generate_sql.get("replies"),
@@ -169,8 +153,6 @@ async def post_process(
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
         allow_data_preview=allow_data_preview,
-        schema_contracts=schema_contracts,
-        query=query,
     )
 
 
@@ -223,7 +205,6 @@ class SQLGeneration(BasicPipeline):
         allow_dry_plan_fallback: bool = False,
         allow_data_preview: bool = False,
         sql_knowledge: SqlKnowledge | None = None,
-        schema_contracts: list[dict] | None = None,
     ):
         logger.info("SQL Generation pipeline is running...")
 
@@ -255,7 +236,6 @@ class SQLGeneration(BasicPipeline):
                 "data_source": metadata.get("data_source", "local_file"),
                 "allow_data_preview": allow_data_preview,
                 "sql_knowledge": sql_knowledge,
-                "schema_contracts": schema_contracts,
                 **self._components,
             },
         )
