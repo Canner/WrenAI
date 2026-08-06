@@ -144,33 +144,6 @@ _MAX_RELATED_SCHEMA_RELATIONSHIP_CANDIDATES = 12
 _MAX_SQL_GENERATION_SCHEMA_RESULTS = 10
 _MAX_SQL_GENERATION_COLUMNS_PER_TABLE = 16
 _MAX_SQL_GENERATION_ROLE_COLUMNS = 4
-_TECHNICAL_OBJECT_PATTERN = re.compile(
-    r"(^|[_\s.-])(raw|stage|staging|stg|tmp|temp|backup|archive|load|etl|landing|"
-    r"snapshot|technical|system|audit|test|empty|sample|demo)([_\s.-]|$)",
-    re.I,
-)
-_TECHNICAL_OBJECT_TERMS = {
-    "archive",
-    "audit",
-    "backup",
-    "demo",
-    "empty",
-    "etl",
-    "landing",
-    "load",
-    "raw",
-    "sample",
-    "snapshot",
-    "stage",
-    "staging",
-    "stg",
-    "system",
-    "technical",
-    "temp",
-    "test",
-    "tmp",
-}
-
 _DATE_TIME_TYPE_TERMS = {
     "date",
     "datetime",
@@ -189,20 +162,16 @@ _NUMERIC_TYPE_TERMS = {
     "smallint",
 }
 _DATE_TIME_NAME_PATTERN = re.compile(r"(date|time|timestamp|period|month|year)", re.I)
-_MEASURE_NAME_PATTERN = re.compile(
-    r"(amount|value|qty|quantity|count|total|sum|cost|price|rate|score|percent)",
-    re.I,
-)
 _IDENTIFIER_NAME_PATTERN = re.compile(r"(^id$|[_\s-]?id$|key|code|number|num|no$)", re.I)
 _TIME_QUERY_PATTERN = re.compile(
     r"\b(date|day|week|month|quarter|year|today|yesterday|last|next|from|to|between|period|recent)\b",
     re.I,
 )
 _MEASURE_QUERY_PATTERN = re.compile(
-    r"\b(total|sum|average|avg|mean|count|number|top|highest|lowest|most|least|value|amount|sales|cost|price|rate|quantity|qty|score|percent)\b",
+    r"\b(total|sum|average|avg|mean|count|number|top|highest|lowest|most|least)\b",
     re.I,
 )
-_DETAIL_QUERY_PATTERN = re.compile(r"\b(show|list|detail|details|orders|records|rows)\b", re.I)
+_DETAIL_QUERY_PATTERN = re.compile(r"\b(show|list|detail|details|records|rows)\b", re.I)
 
 
 def _normalize_terms(value: str | None) -> set[str]:
@@ -303,28 +272,6 @@ def _is_explicit_table_match(table_name: str, query: str) -> bool:
     return bool(table_name and table_name.lower() in requested_names)
 
 
-def _technical_object_penalty(content: dict, query: str = "") -> int:
-    name = str(content.get("name", "") or "")
-    if _is_explicit_table_match(name, query):
-        return 0
-
-    source = str(content.get("source", "") or "")
-    resource_type = str(content.get("resource_type", "") or "").upper()
-    object_terms = identifier_terms(f"{name} {source}")
-    penalty = 0
-
-    if _TECHNICAL_OBJECT_PATTERN.search(name):
-        penalty += 8
-    if _TECHNICAL_OBJECT_PATTERN.search(source):
-        penalty += 4
-    if technical_terms := object_terms & _TECHNICAL_OBJECT_TERMS:
-        penalty += 6 * len(technical_terms)
-    if resource_type not in {"METRIC", "VIEW", "MODEL"}:
-        penalty += 2
-
-    return penalty
-
-
 def _semantic_document_score(content: dict, query: str) -> int:
     query_terms = _normalize_terms(query)
     if not query_terms:
@@ -347,7 +294,6 @@ def _semantic_document_score(content: dict, query: str) -> int:
         score += 6 * len(query_terms & relationship_terms)
         score += 5 * len(intent.business_terms & relationship_terms)
     score += _object_type_priority(content, query)
-    score -= _technical_object_penalty(content, query=query)
     return score
 
 
@@ -640,9 +586,7 @@ def _column_roles(column: dict) -> list[str]:
         _IDENTIFIER_NAME_PATTERN.search(name)
     )
     is_numeric = _has_data_type_term(data_type, _NUMERIC_TYPE_TERMS)
-    is_measure = (is_numeric or bool(_MEASURE_NAME_PATTERN.search(searchable_text))) and (
-        not is_identifier
-    )
+    is_measure = is_numeric and not is_identifier
 
     if is_date_time:
         roles.append("date_time_candidate")

@@ -59,20 +59,9 @@ RELATIONSHIP_TERMS = {
     "relate",
     "related",
 }
-COUNT_TERMS = {"count", "counts", "number", "order", "orders", "row", "rows"}
+COUNT_TERMS = {"count", "counts", "number", "row", "rows"}
 COUNT_AGGREGATE_TERMS = {"count", "counts", "number", "row", "rows"}
-SUM_TERMS = {
-    "amount",
-    "cost",
-    "quantity",
-    "qty",
-    "revenue",
-    "sales",
-    "sold",
-    "sum",
-    "total",
-    "value",
-}
+SUM_TERMS = {"sum", "total"}
 AVG_TERMS = {"average", "avg", "mean"}
 MIN_TERMS = {"minimum", "min"}
 MAX_TERMS = {"maximum", "max"}
@@ -203,16 +192,16 @@ def semantic_terms(value: str) -> set[str]:
 
 
 def _requested_dimension_terms(query: str) -> set[str]:
-    raw_tokens = WORD_PATTERN.findall(query or "")
-    normalized_tokens = [canonical_term(token) for token in raw_tokens]
+    source_tokens = WORD_PATTERN.findall(query or "")
+    normalized_tokens = [canonical_term(token) for token in source_tokens]
     requested: set[str] = set()
 
-    def add_requested(raw_token: str, token: str) -> None:
+    def add_requested(source_token: str, token: str) -> None:
         if _is_business_dimension_term(token):
             requested.add(token)
             requested.update(
                 term
-                for term in identifier_terms(raw_token)
+                for term in identifier_terms(source_token)
                 if _is_business_dimension_term(term)
             )
 
@@ -226,7 +215,7 @@ def _requested_dimension_terms(query: str) -> set[str]:
     )
 
     for index, token in enumerate(normalized_tokens[:first_aggregate_index]):
-        add_requested(raw_tokens[index], token)
+        add_requested(source_tokens[index], token)
 
     for index, token in enumerate(normalized_tokens):
         if token not in {"by", "per", "using"} and not (
@@ -241,7 +230,7 @@ def _requested_dimension_terms(query: str) -> set[str]:
                 break
             if following in STOP_TERMS:
                 continue
-            add_requested(raw_tokens[following_index], following)
+            add_requested(source_tokens[following_index], following)
 
     return requested - explicit_table_terms(query)
 

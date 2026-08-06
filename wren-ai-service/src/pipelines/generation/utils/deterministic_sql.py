@@ -42,29 +42,8 @@ _STOP_TERMS = {
 }
 _DETAIL_TERMS = {"show", "list", "display", "find", "get"}
 _RANKING_TERMS = {"top", "bottom", "highest", "lowest", "most", "least"}
-_COUNT_TERMS = {"count", "counts", "number", "orders", "order"}
-_SUM_TERMS = {
-    "amount",
-    "cost",
-    "qty",
-    "quantity",
-    "revenue",
-    "sales",
-    "sold",
-    "sum",
-    "total",
-    "value",
-}
-_VALUE_MEASURE_TERMS = {
-    "amount",
-    "cost",
-    "qty",
-    "quantity",
-    "revenue",
-    "sales",
-    "sold",
-    "value",
-}
+_COUNT_TERMS = {"count", "counts", "number", "row", "rows"}
+_SUM_TERMS = {"sum", "total"}
 _AVG_TERMS = {"average", "avg", "mean"}
 _MIN_TERMS = {"minimum", "min", "lowest"}
 _MAX_TERMS = {"maximum", "max", "highest", "most"}
@@ -155,8 +134,8 @@ def _parse_table(document: str) -> _Table | None:
         return None
 
     columns = []
-    for raw_column in ddl_match.group(2).split(","):
-        pieces = raw_column.strip().split()
+    for source_column in ddl_match.group(2).split(","):
+        pieces = source_column.strip().split()
         if len(pieces) >= 2:
             columns.append(
                 _Column(name=_unquote_identifier(pieces[0]), data_type=pieces[1])
@@ -291,8 +270,8 @@ def _requested_aggregate(
         return "AVG", "AverageValue"
     if query_terms & _MIN_TERMS:
         return "MIN", "MinimumValue"
-    if query_terms & _COUNT_TERMS and not (query_terms & _VALUE_MEASURE_TERMS):
-        return "COUNT", "TotalOrders"
+    if query_terms & _COUNT_TERMS:
+        return "COUNT", "TotalCount"
     if query_terms & _MAX_TERMS and measure and not (query_terms & {"most", "top"}):
         return "MAX", "MaximumValue"
     if measure:

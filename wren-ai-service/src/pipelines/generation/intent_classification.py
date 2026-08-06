@@ -42,7 +42,7 @@ You are an expert detective specializing in intent classification. Combine the u
 - **Time-related Queries:** Don't rephrase time-related information in the user's question.
 - **Business Semantics:** Treat table and column descriptions, display names, aliases, source metadata, metrics, views, and relationship descriptions as semantic evidence that a natural-language business term is related to the schema.
 - **Analytical Queries:** Classify complete business questions that ask for totals, counts, averages, rankings, trends, breakdowns, filters, or entity lists as `TEXT_TO_SQL` when the schema semantically contains the requested business concepts, even if the user does not use exact table or column names.
-- **Business Models First:** Prefer modeled business resources, metrics, and views over raw, staging, archival, or technical source tables when deciding whether a question is answerable.
+- **Modeled Resources First:** Prefer modeled resources, metrics, and views when their deployed metadata describes them as the curated or intended analytical interface.
 
 ### Intent Definitions ###
 
@@ -60,9 +60,9 @@ You are an expert detective specializing in intent classification. Combine the u
 - Reference phrases from the user's inputs that clearly relate to the schema.
 
 **Examples:**  
-- "What is the total sales for last quarter?"
-- "Show me all customers who purchased product X."
-- "List the top 10 products by revenue."
+- "What is the total metric for last quarter?"
+- "Show me all entities that match condition X."
+- "List the top 10 categories by metric."
 </TEXT_TO_SQL>
 
 <GENERAL>
@@ -79,8 +79,8 @@ You are an expert detective specializing in intent classification. Combine the u
 **Examples:**
 - "What is the dataset about?"
 - "Tell me more about the database."
-- "How can I analyze customer behavior with this data?"
-- "Show me orders for these products" (without specifying which products)
+- "How can I analyze entity behavior with this data?"
+- "Show me records for these categories" (without specifying which categories)
 - "Filter by the criteria I mentioned" (without previous context defining criteria)
 </GENERAL>
 

@@ -21,21 +21,6 @@ _TREND_QUERY_PATTERN = re.compile(
 )
 _GROUPED_QUERY_PATTERN = re.compile(r"\b(each|across|within|by .+ by|per .+ per)\b", re.I)
 _TOP_QUERY_PATTERN = re.compile(r"\b(top|highest|lowest|most|least|rank)\b", re.I)
-_MEASURE_TERMS = {
-    "amount",
-    "cost",
-    "count",
-    "price",
-    "qty",
-    "quantity",
-    "revenue",
-    "sale",
-    "sales",
-    "sum",
-    "total",
-    "value",
-}
-
 
 chart_generation_instructions = """
 ### INSTRUCTIONS ###
@@ -70,7 +55,7 @@ chart_generation_instructions = """
 1. Understanding Your Data Types
 - Nominal (Categorical): Names or labels without a specific order (e.g., types of fruits, countries).
 - Ordinal: Categorical data with a meaningful order but no fixed intervals (e.g., rankings, satisfaction levels).
-- Quantitative: Numerical values representing counts or measurements (e.g., sales figures, temperatures).
+- Quantitative: Numerical values representing counts or measurements.
 - Temporal: Date or time data (e.g., timestamps, dates).
 2. Chart Types and When to Use Them
 - Bar Chart
@@ -78,19 +63,19 @@ chart_generation_instructions = """
     - Data Requirements:
         - One categorical variable (x-axis).
         - One quantitative variable (y-axis).
-    - Example: Comparing sales numbers for different product categories.
+    - Example: Comparing metric values for different categories.
 - Grouped Bar Chart
     - Use When: Comparing sub-categories within main categories.
     - Data Requirements:
         - Two categorical variables (x-axis grouped by one, color-coded by another).
         - One quantitative variable (y-axis).
-        - Example: Sales numbers for different products across various regions.
+        - Example: Comparing metric values for subcategories across categories.
 - Line Chart
     - Use When: Displaying trends over continuous data, especially time.
     - Data Requirements:
         - One temporal or ordinal variable (x-axis).
         - One quantitative variable (y-axis).
-    - Example: Tracking monthly revenue over a year.
+    - Example: Tracking a monthly metric over a year.
 - Multi Line Chart
     - Use When: Displaying trends over continuous data, especially time.
     - Data Requirements:
@@ -114,7 +99,7 @@ chart_generation_instructions = """
 - Stacked Bar Chart
     - Use When: Showing composition and comparison across categories.
     - Data Requirements: Same as grouped bar chart.
-    - Example: Sales by region and product type.
+    - Example: Metric by category and subcategory.
 - Guidelines for Selecting Chart Types
     - Comparing Categories:
         - Bar Chart: Best for simple comparisons across categories.
@@ -132,28 +117,28 @@ chart_generation_instructions = """
 1. Bar Chart
 - Sample Data:
  [
-    {"Region": "North", "Sales": 100},
-    {"Region": "South", "Sales": 200},
-    {"Region": "East", "Sales": 300},
-    {"Region": "West", "Sales": 400}
+    {"Category": "A", "Metric": 100},
+    {"Category": "B", "Metric": 200},
+    {"Category": "C", "Metric": 300},
+    {"Category": "D", "Metric": 400}
 ]
 - Chart Schema:
 {
     "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>,
     "mark": {"type": "bar"},
     "encoding": {
-        "x": {"field": "Region", "type": "nominal", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>},
-        "y": {"field": "Sales", "type": "quantitative", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>},
-        "color": {"field": "Region", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"}
+        "x": {"field": "Category", "type": "nominal", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>},
+        "y": {"field": "Metric", "type": "quantitative", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>},
+        "color": {"field": "Category", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"}
     }
 }
 2. Line Chart
 - Sample Data:
 [
-    {"Date": "2022-01-01", "Sales": 100},
-    {"Date": "2022-01-02", "Sales": 200},
-    {"Date": "2022-01-03", "Sales": 300},
-    {"Date": "2022-01-04", "Sales": 400}
+    {"Date": "2022-01-01", "Metric": 100},
+    {"Date": "2022-01-02", "Metric": 200},
+    {"Date": "2022-01-03", "Metric": 300},
+    {"Date": "2022-01-04", "Metric": 400}
 ]
 - Chart Schema:
 {
@@ -161,7 +146,7 @@ chart_generation_instructions = """
     "mark": {"type": "line"},
     "encoding": {
         "x": {"field": "Date", "type": "temporal", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>},
-        "y": {"field": "Sales", "type": "quantitative", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>}
+        "y": {"field": "Metric", "type": "quantitative", "title": <TITLE_IN_LANGUAGE_PROVIDED_BY_USER>}
     }
 }
 3. Pie Chart
@@ -184,10 +169,10 @@ chart_generation_instructions = """
 4. Area Chart
 - Sample Data:
 [
-    {"Date": "2022-01-01", "Sales": 100},
-    {"Date": "2022-01-02", "Sales": 200},
-    {"Date": "2022-01-03", "Sales": 300},
-    {"Date": "2022-01-04", "Sales": 400}
+    {"Date": "2022-01-01", "Metric": 100},
+    {"Date": "2022-01-02", "Metric": 200},
+    {"Date": "2022-01-03", "Metric": 300},
+    {"Date": "2022-01-04", "Metric": 400}
 ]
 - Chart Schema:
 {
@@ -195,52 +180,52 @@ chart_generation_instructions = """
     "mark": {"type": "area"},
     "encoding": {
         "x": {"field": "Date", "type": "temporal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
-        "y": {"field": "Sales", "type": "quantitative", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"}
+        "y": {"field": "Metric", "type": "quantitative", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"}
     }
 }
 5. Stacked Bar Chart
 - Sample Data:
 [
-    {"Region": "North", "Product": "A", "Sales": 100},
-    {"Region": "North", "Product": "B", "Sales": 150},
-    {"Region": "South", "Product": "A", "Sales": 200},
-    {"Region": "South", "Product": "B", "Sales": 250},
-    {"Region": "East", "Product": "A", "Sales": 300},
-    {"Region": "East", "Product": "B", "Sales": 350},
-    {"Region": "West", "Product": "A", "Sales": 400},
-    {"Region": "West", "Product": "B", "Sales": 450}
+    {"Category": "A", "Subcategory": "One", "Metric": 100},
+    {"Category": "A", "Subcategory": "Two", "Metric": 150},
+    {"Category": "B", "Subcategory": "One", "Metric": 200},
+    {"Category": "B", "Subcategory": "Two", "Metric": 250},
+    {"Category": "C", "Subcategory": "One", "Metric": 300},
+    {"Category": "C", "Subcategory": "Two", "Metric": 350},
+    {"Category": "D", "Subcategory": "One", "Metric": 400},
+    {"Category": "D", "Subcategory": "Two", "Metric": 450}
 ]
 - Chart Schema:
 {
     "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>",
     "mark": {"type": "bar"},
     "encoding": {
-        "x": {"field": "Region", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
-        "y": {"field": "Sales", "type": "quantitative", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>", "stack": "zero"},
-        "color": {"field": "Product", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"}
+        "x": {"field": "Category", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
+        "y": {"field": "Metric", "type": "quantitative", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>", "stack": "zero"},
+        "color": {"field": "Subcategory", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"}
     }
 }
 6. Grouped Bar Chart
 - Sample Data:
 [
-    {"Region": "North", "Product": "A", "Sales": 100},
-    {"Region": "North", "Product": "B", "Sales": 150},
-    {"Region": "South", "Product": "A", "Sales": 200},
-    {"Region": "South", "Product": "B", "Sales": 250},
-    {"Region": "East", "Product": "A", "Sales": 300},
-    {"Region": "East", "Product": "B", "Sales": 350},
-    {"Region": "West", "Product": "A", "Sales": 400},
-    {"Region": "West", "Product": "B", "Sales": 450}
+    {"Category": "A", "Subcategory": "One", "Metric": 100},
+    {"Category": "A", "Subcategory": "Two", "Metric": 150},
+    {"Category": "B", "Subcategory": "One", "Metric": 200},
+    {"Category": "B", "Subcategory": "Two", "Metric": 250},
+    {"Category": "C", "Subcategory": "One", "Metric": 300},
+    {"Category": "C", "Subcategory": "Two", "Metric": 350},
+    {"Category": "D", "Subcategory": "One", "Metric": 400},
+    {"Category": "D", "Subcategory": "Two", "Metric": 450}
 ]
 - Chart Schema:
 {
     "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>",
     "mark": {"type": "bar"},
     "encoding": {
-        "x": {"field": "Region", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
-        "y": {"field": "Sales", "type": "quantitative", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
-        "xOffset": {"field": "Product", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
-        "color": {"field": "Product", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"}
+        "x": {"field": "Category", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
+        "y": {"field": "Metric", "type": "quantitative", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
+        "xOffset": {"field": "Subcategory", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"},
+        "color": {"field": "Subcategory", "type": "nominal", "title": "<TITLE_IN_LANGUAGE_PROVIDED_BY_USER>"}
     }
 }
 7. Multi Line Chart
@@ -525,10 +510,6 @@ def _best_named_column(query: str, columns: list[str]) -> str | None:
 
 
 def _best_numeric_column(query: str, columns: list[str]) -> str:
-    for column in columns:
-        if _terms(column) & _MEASURE_TERMS:
-            return column
-
     named = _best_named_column(query, columns)
     if named and len(_terms(named) & _terms(query)) > 0:
         return named

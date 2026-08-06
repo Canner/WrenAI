@@ -14,7 +14,7 @@ def _schema_document(table_name: str, columns: list[dict]) -> str:
             "sql_column_names_use_exactly": [column["name"] for column in columns],
         },
         "semantic_context_not_sql_identifiers": {
-            "description": "Synthetic sales and order analytics model.",
+            "description": "Synthetic analytical model.",
         },
         "columns": [
             {
@@ -38,36 +38,36 @@ def _schema_document(table_name: str, columns: list[dict]) -> str:
     )
 
 
-def test_generates_count_ranking_for_orders_without_using_sales_sum():
+def test_generates_count_ranking_without_using_measure_sum():
     document = _schema_document(
         "analytics_model",
         [
             {
                 "name": "division_name",
                 "data_type": "VARCHAR",
-                "comment": "Business division",
+                "comment": "Analytical division",
                 "roles": ["dimension_candidate"],
             },
             {
-                "name": "sales_value",
+                "name": "metric_value",
                 "data_type": "DOUBLE",
-                "comment": "Sales amount",
+                "comment": "Metric value",
                 "roles": ["numeric_measure_candidate"],
             },
         ],
     )
 
     sql = generate_grounded_sql(
-        "Which divisions are generating the most orders?", [document]
+        "Which divisions have the highest count?", [document]
     )
 
-    assert "COUNT(*) AS TotalOrders" in sql
-    assert "SUM(sales_value)" not in sql
+    assert "COUNT(*) AS TotalCount" in sql
+    assert "SUM(metric_value)" not in sql
     assert "GROUP BY\n  division_name" in sql
-    assert "ORDER BY\n  TotalOrders DESC" in sql
+    assert "ORDER BY\n  TotalCount DESC" in sql
 
 
-def test_total_orders_prefers_count_even_when_numeric_measure_exists():
+def test_total_count_prefers_count_even_when_numeric_measure_exists():
     document = _schema_document(
         "analytics_model",
         [
@@ -78,52 +78,52 @@ def test_total_orders_prefers_count_even_when_numeric_measure_exists():
                 "roles": ["dimension_candidate"],
             },
             {
-                "name": "sales_value",
+                "name": "metric_value",
                 "data_type": "DOUBLE",
-                "comment": "Sales amount",
+                "comment": "Metric value",
                 "roles": ["numeric_measure_candidate"],
             },
         ],
     )
 
-    sql = generate_grounded_sql("Show top 5 countries by total orders.", [document])
+    sql = generate_grounded_sql("Show top 5 countries by total count.", [document])
 
-    assert "COUNT(*) AS TotalOrders" in sql
-    assert "SUM(sales_value)" not in sql
+    assert "COUNT(*) AS TotalCount" in sql
+    assert "SUM(metric_value)" not in sql
     assert "LIMIT 5" in sql
 
 
 def test_ranking_by_measure_groups_by_requested_dimension_only():
     document = _schema_document(
-        "business_activity",
+        "analytics_model",
         [
             {
-                "name": "entity_name",
+                "name": "entity_label",
                 "data_type": "VARCHAR",
-                "comment": "Business entity",
+                "comment": "Analytical entity",
                 "roles": ["dimension_candidate"],
             },
             {
-                "name": "document_code",
+                "name": "record_code",
                 "data_type": "VARCHAR",
-                "comment": "Transaction document code",
+                "comment": "Analytical record code",
                 "roles": ["identifier_candidate"],
             },
             {
                 "name": "metric_value",
                 "data_type": "DOUBLE",
-                "comment": "Transaction value",
+                "comment": "Requested metric",
                 "roles": ["numeric_measure_candidate"],
             },
         ],
     )
 
-    sql = generate_grounded_sql("Show top 10 entities by transaction value.", [document])
+    sql = generate_grounded_sql("Show top 10 entities by metric.", [document])
 
-    assert "entity_name" in sql
+    assert "entity_label" in sql
     assert "SUM(metric_value) AS TotalValue" in sql
-    assert "GROUP BY\n  entity_name" in sql
-    assert "GROUP BY\n  entity_name, document_code" not in sql
+    assert "GROUP BY\n  entity_label" in sql
+    assert "GROUP BY\n  entity_label, record_code" not in sql
     assert "ORDER BY\n  TotalValue DESC" in sql
     assert "LIMIT 10" in sql
 
@@ -133,65 +133,65 @@ def test_generates_filtered_detail_sql_with_deployed_identifiers_only():
         "analytics_model",
         [
             {
-                "name": "customer_country",
+                "name": "segment_label",
                 "data_type": "VARCHAR",
-                "comment": "Country",
+                "comment": "Segment label",
                 "roles": ["dimension_candidate"],
             },
             {
-                "name": "order_date",
+                "name": "event_date",
                 "data_type": "DATE",
-                "comment": "Order placed date",
+                "comment": "Event date",
                 "roles": ["date_time_candidate"],
             },
             {
-                "name": "order_number",
+                "name": "record_code",
                 "data_type": "VARCHAR",
-                "comment": "Order number",
+                "comment": "Record code",
                 "roles": ["identifier_candidate"],
             },
             {
-                "name": "amount",
+                "name": "metric_value",
                 "data_type": "DOUBLE",
-                "comment": "Transaction amount",
+                "comment": "Metric value",
                 "roles": ["numeric_measure_candidate"],
             },
         ],
     )
 
-    sql = generate_grounded_sql("show order placed from the country India", [document])
+    sql = generate_grounded_sql("show records for segment Alpha", [document])
 
     assert "FROM\n  analytics_model" in sql
-    assert "customer_country = 'India'" in sql
-    assert "order_date" in sql
+    assert "segment_label = 'Alpha'" in sql
+    assert "event_date" in sql
     assert "LIMIT 500" in sql
 
 
-def test_generates_sales_comparison_by_matching_dimension():
+def test_generates_metric_comparison_by_matching_dimension():
     document = _schema_document(
         "analytics_model",
         [
             {
                 "name": "market_segment",
                 "data_type": "VARCHAR",
-                "comment": "Domestic or international market",
+                "comment": "Domestic or international segment",
                 "roles": ["dimension_candidate"],
             },
             {
-                "name": "sales_value",
+                "name": "metric_value",
                 "data_type": "DOUBLE",
-                "comment": "Sales value",
+                "comment": "Metric value",
                 "roles": ["numeric_measure_candidate"],
             },
         ],
     )
 
     sql = generate_grounded_sql(
-        "Compare sales between domestic and international markets.", [document]
+        "Compare metric between domestic and international segments.", [document]
     )
 
     assert "market_segment" in sql
-    assert "SUM(sales_value) AS TotalValue" in sql
+    assert "SUM(metric_value) AS TotalValue" in sql
     assert "GROUP BY\n  market_segment" in sql
 
 
@@ -200,27 +200,27 @@ def test_generates_average_by_requested_dimension():
         "analytics_model",
         [
             {
-                "name": "product_type",
+                "name": "category_type",
                 "data_type": "VARCHAR",
-                "comment": "Product type",
+                "comment": "Category type",
                 "roles": ["dimension_candidate"],
             },
             {
-                "name": "sales_value",
+                "name": "metric_value",
                 "data_type": "DOUBLE",
-                "comment": "Sales value",
+                "comment": "Metric value",
                 "roles": ["numeric_measure_candidate"],
             },
         ],
     )
 
     sql = generate_grounded_sql(
-        "Show average sales value by product type.", [document]
+        "Show average metric by category type.", [document]
     )
 
-    assert "product_type" in sql
-    assert "AVG(sales_value) AS AverageValue" in sql
-    assert "GROUP BY\n  product_type" in sql
+    assert "category_type" in sql
+    assert "AVG(metric_value) AS AverageValue" in sql
+    assert "GROUP BY\n  category_type" in sql
 
 
 @pytest.mark.asyncio
@@ -235,9 +235,9 @@ async def test_generation_fast_path_does_not_call_llm_when_grounded():
                 "roles": ["dimension_candidate"],
             },
             {
-                "name": "order_key",
+                "name": "record_key",
                 "data_type": "VARCHAR",
-                "comment": "Order identifier",
+                "comment": "Record identifier",
                 "roles": ["identifier_candidate"],
             },
         ],
@@ -248,11 +248,11 @@ async def test_generation_fast_path_does_not_call_llm_when_grounded():
 
     result = await generate_sql(
         prompt={"prompt": "unused"},
-        query="Show top 5 countries by total orders.",
+        query="Show top 5 countries by total count.",
         documents=[document],
         generator=failing_generator,
         generator_name="test-model",
     )
 
     assert result["replies"]
-    assert "COUNT(*) AS TotalOrders" in result["replies"][0]
+    assert "COUNT(*) AS TotalCount" in result["replies"][0]
