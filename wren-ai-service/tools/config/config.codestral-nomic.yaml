@@ -23,7 +23,6 @@ models:
     api_base: http://10.104.74.10:8002/v1
     api_key_name: EMBEDDER_API_KEY
     timeout: 600
-    max_input_chars: 6000
 
 ---
 type: engine

@@ -16,7 +16,7 @@ from src.utils import remove_trailing_slash
 
 logger = logging.getLogger("wren-ai-service")
 
-DEFAULT_MAX_EMBED_INPUT_CHARS = 900
+DEFAULT_MAX_EMBED_INPUT_CHARS = None
 MIN_EMBED_INPUT_CHARS = 128
 
 
@@ -158,8 +158,10 @@ async def _create_embedding(
     )
 
 
-def _truncate_text_for_embedding(text: str, max_input_chars: int) -> str:
-    if len(text) <= max_input_chars:
+def _truncate_text_for_embedding(
+    text: str, max_input_chars: Optional[int]
+) -> str:
+    if max_input_chars is None or len(text) <= max_input_chars:
         return text
 
     return text[:max_input_chars].rstrip() + "..."
@@ -179,7 +181,7 @@ def _is_input_too_large_error(error: Exception) -> bool:
 
 
 def _prepare_texts_to_embed(
-    documents: List[Document], max_input_chars: int
+    documents: List[Document], max_input_chars: Optional[int]
 ) -> List[str]:
     """
     Prepare the texts to embed by concatenating the Document text with the metadata fields to embed.
@@ -212,7 +214,7 @@ class AsyncTextEmbedder:
         api_key: Optional[str] = None,
         api_base_url: Optional[str] = None,
         timeout: Optional[float] = None,
-        max_input_chars: int = DEFAULT_MAX_EMBED_INPUT_CHARS,
+        max_input_chars: Optional[int] = DEFAULT_MAX_EMBED_INPUT_CHARS,
         query_prefix: str = "",
         **kwargs,
     ):
@@ -220,7 +222,9 @@ class AsyncTextEmbedder:
         self._model = model
         self._api_base_url = api_base_url
         self._timeout = timeout
-        self._max_input_chars = max(max_input_chars, 1)
+        self._max_input_chars = (
+            max(max_input_chars, 1) if max_input_chars is not None else None
+        )
         self._query_prefix = query_prefix
         self._kwargs = kwargs
 
@@ -271,7 +275,7 @@ class AsyncDocumentEmbedder:
         api_key: Optional[str] = None,
         api_base_url: Optional[str] = None,
         timeout: Optional[float] = None,
-        max_input_chars: int = DEFAULT_MAX_EMBED_INPUT_CHARS,
+        max_input_chars: Optional[int] = DEFAULT_MAX_EMBED_INPUT_CHARS,
         document_prefix: str = "",
         **kwargs,
     ):
@@ -280,7 +284,9 @@ class AsyncDocumentEmbedder:
         self._batch_size = batch_size
         self._api_base_url = api_base_url
         self._timeout = timeout
-        self._max_input_chars = max(max_input_chars, 1)
+        self._max_input_chars = (
+            max(max_input_chars, 1) if max_input_chars is not None else None
+        )
         self._document_prefix = document_prefix
         self._kwargs = kwargs
 
@@ -430,8 +436,6 @@ class LitellmEmbedderProvider(EmbedderProvider):
         )
         if "provider" in kwargs:
             del kwargs["provider"]
-        if is_nomic_embed_text and "max_input_chars" not in kwargs:
-            kwargs["max_input_chars"] = 6000
         self._kwargs = kwargs
 
     def get_text_embedder(self):
