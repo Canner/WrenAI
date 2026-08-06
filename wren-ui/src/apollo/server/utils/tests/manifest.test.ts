@@ -2,24 +2,27 @@ import { normalizeManifest } from '../manifest';
 
 describe('normalizeManifest', () => {
   it('removes duplicate model columns case-insensitively', () => {
+    const duplicateName = 'field_alpha';
+    const duplicateNameWithDifferentCase = 'Field_Alpha';
+    const retainedName = 'field_beta';
     const manifest = normalizeManifest({
       models: [
         {
-          name: 'orders',
+          name: 'model_fixture',
           cached: false,
           columns: [
             {
-              name: 'taskowner',
+              name: duplicateName,
               type: 'STRING',
               isCalculated: false,
             },
             {
-              name: 'TaskOwner',
+              name: duplicateNameWithDifferentCase,
               type: 'STRING',
               isCalculated: false,
             },
             {
-              name: 'taskdue',
+              name: retainedName,
               type: 'DATE',
               isCalculated: false,
             },
@@ -29,8 +32,8 @@ describe('normalizeManifest', () => {
     })!;
 
     expect(manifest.models[0].columns.map((column) => column.name)).toEqual([
-      'taskowner',
-      'taskdue',
+      duplicateName,
+      retainedName,
     ]);
   });
 });

@@ -97,6 +97,100 @@ describe('MDLBuilder', () => {
       expect((manifest.models[0] as ModelMDL).columns[0].name).toBe('status');
     });
 
+    it('should build an explicit projection when source columns are duplicated', () => {
+      const catalogName = 'catalog_fixture';
+      const schemaName = 'schema_fixture';
+      const physicalTableName = 'physical_entity_fixture';
+      const modelName = 'model_entity_fixture';
+      const duplicateSourceName = 'field_alpha';
+      const duplicateSourceNameWithDifferentCase = 'Field_Alpha';
+      const retainedSourceName = 'field_beta';
+      const project = {
+        id: 1,
+        type: DataSourceName.MSSQL,
+        displayName: 'my project',
+      } as Project;
+      const models = [
+        {
+          id: 1,
+          projectId: 1,
+          displayName: 'Model Entity Fixture',
+          sourceTableName: physicalTableName,
+          referenceName: modelName,
+          refSql: null,
+          cached: false,
+          refreshTime: null,
+          properties: JSON.stringify({
+            catalog: catalogName,
+            schema: schemaName,
+            table: physicalTableName,
+          }),
+        },
+      ] as Model[];
+      const columns = [
+        {
+          id: 1,
+          modelId: 1,
+          isCalculated: false,
+          displayName: duplicateSourceName,
+          referenceName: duplicateSourceName,
+          sourceColumnName: duplicateSourceName,
+          type: 'STRING',
+          notNull: false,
+          isPk: false,
+          properties: null,
+        },
+        {
+          id: 2,
+          modelId: 1,
+          isCalculated: false,
+          displayName: duplicateSourceNameWithDifferentCase,
+          referenceName: duplicateSourceNameWithDifferentCase,
+          sourceColumnName: duplicateSourceNameWithDifferentCase,
+          type: 'STRING',
+          notNull: false,
+          isPk: false,
+          properties: null,
+        },
+        {
+          id: 3,
+          modelId: 1,
+          isCalculated: false,
+          displayName: retainedSourceName,
+          referenceName: retainedSourceName,
+          sourceColumnName: retainedSourceName,
+          type: 'DATE',
+          notNull: false,
+          isPk: false,
+          properties: null,
+        },
+      ] as ModelColumn[];
+      const builderOptions = {
+        project,
+        models,
+        columns,
+        nestedColumns: [],
+        relations: [],
+        views: [],
+        relatedModels: models,
+        relatedColumns: columns,
+        relatedRelations: [],
+      } as MDLBuilderBuildFromOptions;
+
+      mdlBuilder = new MDLBuilder(builderOptions);
+
+      const manifest = mdlBuilder.build();
+
+      expect(manifest.models[0].tableReference).toBeNull();
+      expect(manifest.models[0].refSql).toEqual(
+        `SELECT "${duplicateSourceName}", "${retainedSourceName}" FROM "${catalogName}"."${schemaName}"."${physicalTableName}"`,
+      );
+      expect(manifest.models[0].columns.map((column) => column.name)).toEqual([
+        duplicateSourceName,
+        retainedSourceName,
+      ]);
+    });
+
     it('should return a manifest with models & columns & relations.', () => {
       // Arrange
       const project = {
