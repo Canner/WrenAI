@@ -48,3 +48,42 @@ async def test_component_generation_kwargs_override_model_defaults(mocker):
     assert captured_kwargs["temperature"] == 0
     assert captured_kwargs["response_format"]["type"] == "json_schema"
 
+
+@pytest.mark.asyncio
+async def test_codestral_uses_json_object_for_local_json_schema_requests(mocker):
+    captured_kwargs = {}
+
+    async def fake_acompletion(**kwargs):
+        captured_kwargs.update(kwargs)
+        return SimpleNamespace(
+            model="openai/codestral:22b",
+            choices=[
+                SimpleNamespace(
+                    index=0,
+                    finish_reason="stop",
+                    message=SimpleNamespace(content='{"sql": null}'),
+                )
+            ],
+        )
+
+    mocker.patch("src.providers.llm.litellm.acompletion", side_effect=fake_acompletion)
+
+    provider = LitellmLLMProvider(
+        model="openai/codestral:22b",
+        api_base="http://localhost/v1",
+        kwargs={"speed": 0},
+    )
+
+    generator = provider.get_generator(
+        generation_kwargs={
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {"name": "result", "schema": {}},
+            },
+        }
+    )
+
+    await generator(prompt="Return SQL")
+
+    assert captured_kwargs["response_format"]["type"] == "json_object"
+    assert "speed" not in captured_kwargs

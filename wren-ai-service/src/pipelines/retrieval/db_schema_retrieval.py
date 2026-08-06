@@ -850,6 +850,97 @@ def _build_view_ddl(content: dict) -> str:
     )
 
 
+def _build_retrieval_results_from_schemas(
+    construct_db_schemas: list[dict],
+    dbschema_retrieval: list[Document],
+    query: str = "",
+    compact_wide_tables: bool = False,
+) -> dict[str, Any]:
+    retrieval_results = []
+    has_calculated_field = False
+    has_metric = False
+    has_json_field = False
+
+    for table_schema in construct_db_schemas:
+        if table_schema["type"] == "TABLE":
+            compact_columns = (
+                _compact_sql_generation_columns(table_schema, query)
+                if compact_wide_tables
+                else None
+            )
+            ddl, _has_calculated_field, _has_json_field, column_names = (
+                _build_table_context_ddl(table_schema, columns=compact_columns)
+            )
+            retrieval_results.append(
+                {
+                    "table_name": table_schema["name"],
+                    "table_ddl": ddl,
+                    "column_names": column_names,
+                    "manifest_column_names": column_names,
+                    "table_semantic_terms": _table_contract_terms(table_schema),
+                    "column_semantic_terms": {
+                        column["name"]: _column_contract_terms(column)
+                        for column in table_schema.get("columns", [])
+                        if column.get("type") == "COLUMN"
+                        and column.get("name") in column_names
+                    },
+                    "relationship_constraints": _relationship_constraints(
+                        table_schema
+                    ),
+                }
+            )
+            if _has_calculated_field:
+                has_calculated_field = True
+            if _has_json_field:
+                has_json_field = True
+
+    for document in dbschema_retrieval:
+        content = ast.literal_eval(document.content)
+
+        if content["type"] == "METRIC":
+            column_names = _content_column_names(content)
+            retrieval_results.append(
+                {
+                    "table_name": content["name"],
+                    "table_ddl": _build_metric_ddl(content),
+                    "column_names": column_names,
+                    "manifest_column_names": column_names,
+                    "table_semantic_terms": _table_contract_terms(content),
+                    "column_semantic_terms": {
+                        column["name"]: _column_contract_terms(column)
+                        for column in content.get("columns", [])
+                        if column.get("name") in column_names
+                    },
+                    "relationship_constraints": [],
+                }
+            )
+            has_metric = True
+        elif content["type"] == "VIEW":
+            column_names = _content_column_names(content)
+            retrieval_results.append(
+                {
+                    "table_name": content["name"],
+                    "table_ddl": _build_view_ddl(content),
+                    "column_names": column_names,
+                    "manifest_column_names": column_names,
+                    "table_semantic_terms": _table_contract_terms(content),
+                    "column_semantic_terms": {
+                        column["name"]: _column_contract_terms(column)
+                        for column in content.get("columns", [])
+                        if column.get("name") in column_names
+                    },
+                    "relationship_constraints": [],
+                }
+            )
+
+    return {
+        "retrieval_results": retrieval_results,
+        "has_calculated_field": has_calculated_field,
+        "has_metric": has_metric,
+        "has_json_field": has_json_field,
+    }
+
+
 def _retrieval_result_score(retrieval_result: dict, query: str) -> int:
     query_terms = _normalize_terms(query)
     if not query_terms:
@@ -1239,78 +1330,13 @@ def check_using_db_schemas_without_pruning(
     context_window_size: int,
     query: str = "",
 ) -> dict:
-    retrieval_results = []
-    has_calculated_field = False
-    has_metric = False
-    has_json_field = False
-
-    for table_schema in construct_db_schemas:
-        if table_schema["type"] == "TABLE":
-            compact_columns = _compact_sql_generation_columns(table_schema, query)
-            ddl, _has_calculated_field, _has_json_field, column_names = (
-                _build_table_context_ddl(table_schema, columns=compact_columns)
-            )
-            retrieval_results.append(
-                {
-                    "table_name": table_schema["name"],
-                    "table_ddl": ddl,
-                    "column_names": column_names,
-                    "manifest_column_names": column_names,
-                    "table_semantic_terms": _table_contract_terms(table_schema),
-                    "column_semantic_terms": {
-                        column["name"]: _column_contract_terms(column)
-                        for column in table_schema.get("columns", [])
-                        if column.get("type") == "COLUMN"
-                        and column.get("name") in column_names
-                    },
-                    "relationship_constraints": _relationship_constraints(
-                        table_schema
-                    ),
-                }
-            )
-            if _has_calculated_field:
-                has_calculated_field = True
-            if _has_json_field:
-                has_json_field = True
-
-    for document in dbschema_retrieval:
-        content = ast.literal_eval(document.content)
-
-        if content["type"] == "METRIC":
-            column_names = _content_column_names(content)
-            retrieval_results.append(
-                {
-                    "table_name": content["name"],
-                    "table_ddl": _build_metric_ddl(content),
-                    "column_names": column_names,
-                    "manifest_column_names": column_names,
-                    "table_semantic_terms": _table_contract_terms(content),
-                    "column_semantic_terms": {
-                        column["name"]: _column_contract_terms(column)
-                        for column in content.get("columns", [])
-                        if column.get("name") in column_names
-                    },
-                    "relationship_constraints": [],
-                }
-            )
-            has_metric = True
-        elif content["type"] == "VIEW":
-            column_names = _content_column_names(content)
-            retrieval_results.append(
-                {
-                    "table_name": content["name"],
-                    "table_ddl": _build_view_ddl(content),
-                    "column_names": column_names,
-                    "manifest_column_names": column_names,
-                    "table_semantic_terms": _table_contract_terms(content),
-                    "column_semantic_terms": {
-                        column["name"]: _column_contract_terms(column)
-                        for column in content.get("columns", [])
-                        if column.get("name") in column_names
-                    },
-                    "relationship_constraints": [],
-                }
-            )
+    built_results = _build_retrieval_results_from_schemas(
+        construct_db_schemas=construct_db_schemas,
+        dbschema_retrieval=dbschema_retrieval,
+        query=query,
+        compact_wide_tables=False,
+    )
+    retrieval_results = built_results["retrieval_results"]
 
     table_ddls = [
         retrieval_result["table_ddl"] for retrieval_result in retrieval_results
@@ -1320,17 +1346,17 @@ def check_using_db_schemas_without_pruning(
         return {
             "db_schemas": [],
             "tokens": _token_count,
-            "has_calculated_field": has_calculated_field,
-            "has_metric": has_metric,
-            "has_json_field": has_json_field,
+            "has_calculated_field": built_results["has_calculated_field"],
+            "has_metric": built_results["has_metric"],
+            "has_json_field": built_results["has_json_field"],
         }
 
     return {
         "db_schemas": _limit_retrieval_results(retrieval_results, query=query),
         "tokens": _token_count,
-        "has_calculated_field": has_calculated_field,
-        "has_metric": has_metric,
-        "has_json_field": has_json_field,
+        "has_calculated_field": built_results["has_calculated_field"],
+        "has_metric": built_results["has_metric"],
+        "has_json_field": built_results["has_json_field"],
     }
 
 
@@ -1360,9 +1386,15 @@ async def filter_columns_in_tables(
     prompt: dict, table_columns_selection_generator: Any, generator_name: str
 ) -> dict:
     if prompt:
-        return await table_columns_selection_generator(
-            prompt=prompt.get("prompt")
-        ), generator_name
+        try:
+            return await table_columns_selection_generator(
+                prompt=prompt.get("prompt")
+            ), generator_name
+        except Exception:
+            logger.exception(
+                "Column-selection generation failed; falling back to schema retrieval without LLM pruning."
+            )
+            return {}, generator_name
     else:
         return {}, generator_name
 
@@ -1376,9 +1408,29 @@ def construct_retrieval_results(
     query: str = "",
 ) -> dict[str, Any]:
     if filter_columns_in_tables:
-        columns_and_tables_needed = orjson.loads(
-            filter_columns_in_tables["replies"][0]
-        )["results"]
+        try:
+            columns_and_tables_needed = orjson.loads(
+                filter_columns_in_tables["replies"][0]
+            )["results"]
+        except Exception:
+            logger.exception(
+                "Column-selection response was invalid; falling back to schema retrieval without LLM pruning."
+            )
+            fallback_results = _build_retrieval_results_from_schemas(
+                construct_db_schemas=construct_db_schemas,
+                dbschema_retrieval=dbschema_retrieval,
+                query=query,
+                compact_wide_tables=True,
+            )
+            return {
+                "retrieval_results": _limit_retrieval_results(
+                    fallback_results["retrieval_results"],
+                    query=query,
+                ),
+                "has_calculated_field": fallback_results["has_calculated_field"],
+                "has_metric": fallback_results["has_metric"],
+                "has_json_field": fallback_results["has_json_field"],
+            }
 
         # we need to change the below code to match the new schema of structured output
         # the objective of this loop is to change the structure of JSON to match the needed format
@@ -1470,18 +1522,36 @@ def construct_retrieval_results(
             "has_json_field": has_json_field,
         }
     else:
-        retrieval_results = _limit_retrieval_results(
-            check_using_db_schemas_without_pruning["db_schemas"],
-            query=query,
-        )
+        if check_using_db_schemas_without_pruning["db_schemas"]:
+            retrieval_results = _limit_retrieval_results(
+                check_using_db_schemas_without_pruning["db_schemas"],
+                query=query,
+            )
+            has_calculated_field = check_using_db_schemas_without_pruning[
+                "has_calculated_field"
+            ]
+            has_metric = check_using_db_schemas_without_pruning["has_metric"]
+            has_json_field = check_using_db_schemas_without_pruning["has_json_field"]
+        else:
+            fallback_results = _build_retrieval_results_from_schemas(
+                construct_db_schemas=construct_db_schemas,
+                dbschema_retrieval=dbschema_retrieval,
+                query=query,
+                compact_wide_tables=True,
+            )
+            retrieval_results = _limit_retrieval_results(
+                fallback_results["retrieval_results"],
+                query=query,
+            )
+            has_calculated_field = fallback_results["has_calculated_field"]
+            has_metric = fallback_results["has_metric"]
+            has_json_field = fallback_results["has_json_field"]
 
         return {
             "retrieval_results": retrieval_results,
-            "has_calculated_field": check_using_db_schemas_without_pruning[
-                "has_calculated_field"
-            ],
-            "has_metric": check_using_db_schemas_without_pruning["has_metric"],
-            "has_json_field": check_using_db_schemas_without_pruning["has_json_field"],
+            "has_calculated_field": has_calculated_field,
+            "has_metric": has_metric,
+            "has_json_field": has_json_field,
         }
 
 

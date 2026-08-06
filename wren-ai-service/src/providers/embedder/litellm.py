@@ -213,6 +213,7 @@ class AsyncTextEmbedder:
         api_base_url: Optional[str] = None,
         timeout: Optional[float] = None,
         max_input_chars: int = DEFAULT_MAX_EMBED_INPUT_CHARS,
+        query_prefix: str = "",
         **kwargs,
     ):
         self._api_key = api_key
@@ -220,6 +221,7 @@ class AsyncTextEmbedder:
         self._api_base_url = api_base_url
         self._timeout = timeout
         self._max_input_chars = max(max_input_chars, 1)
+        self._query_prefix = query_prefix
         self._kwargs = kwargs
 
     @component.output_types(embedding=List[float], meta=Dict[str, Any])
@@ -239,6 +241,8 @@ class AsyncTextEmbedder:
         # copied from OpenAI embedding_utils (https://github.com/openai/openai-python/blob/main/openai/embeddings_utils.py)
         # replace newlines, which can negatively affect performance.
         text_to_embed = text.replace("\n", " ")
+        if self._query_prefix and not text_to_embed.startswith(self._query_prefix):
+            text_to_embed = f"{self._query_prefix}{text_to_embed}"
         text_to_embed = _truncate_text_for_embedding(
             text_to_embed,
             self._max_input_chars,
@@ -268,6 +272,7 @@ class AsyncDocumentEmbedder:
         api_base_url: Optional[str] = None,
         timeout: Optional[float] = None,
         max_input_chars: int = DEFAULT_MAX_EMBED_INPUT_CHARS,
+        document_prefix: str = "",
         **kwargs,
     ):
         self._api_key = api_key
@@ -276,6 +281,7 @@ class AsyncDocumentEmbedder:
         self._api_base_url = api_base_url
         self._timeout = timeout
         self._max_input_chars = max(max_input_chars, 1)
+        self._document_prefix = document_prefix
         self._kwargs = kwargs
 
     async def _embed_batch(
@@ -374,6 +380,13 @@ class AsyncDocumentEmbedder:
             documents=documents,
             max_input_chars=self._max_input_chars,
         )
+        if self._document_prefix:
+            texts_to_embed = [
+                text
+                if text.startswith(self._document_prefix)
+                else f"{self._document_prefix}{text}"
+                for text in texts_to_embed
+            ]
 
         embeddings, meta = await self._embed_batch(
             texts_to_embed=texts_to_embed,
@@ -396,14 +409,29 @@ class LitellmEmbedderProvider(EmbedderProvider):
         ] = None,  # e.g. EMBEDDER_OPENAI_API_KEY, EMBEDDER_ANTHROPIC_API_KEY, etc.
         api_base: Optional[str] = None,
         timeout: float = 120.0,
+        query_prefix: Optional[str] = None,
+        document_prefix: Optional[str] = None,
         **kwargs,
     ):
         self._api_key = os.getenv(api_key_name) if api_key_name else None
         self._api_base = remove_trailing_slash(api_base) if api_base else None
         self._embedding_model = model
         self._timeout = timeout
+        is_nomic_embed_text = "nomic-embed-text" in model.lower()
+        self._query_prefix = (
+            "search_query: "
+            if query_prefix is None and is_nomic_embed_text
+            else query_prefix or ""
+        )
+        self._document_prefix = (
+            "search_document: "
+            if document_prefix is None and is_nomic_embed_text
+            else document_prefix or ""
+        )
         if "provider" in kwargs:
             del kwargs["provider"]
+        if is_nomic_embed_text and "max_input_chars" not in kwargs:
+            kwargs["max_input_chars"] = 6000
         self._kwargs = kwargs
 
     def get_text_embedder(self):
@@ -412,6 +440,7 @@ class LitellmEmbedderProvider(EmbedderProvider):
             api_base_url=self._api_base,
             model=self._embedding_model,
             timeout=self._timeout,
+            query_prefix=self._query_prefix,
             **self._kwargs,
         )
 
@@ -421,5 +450,6 @@ class LitellmEmbedderProvider(EmbedderProvider):
             api_base_url=self._api_base,
             model=self._embedding_model,
             timeout=self._timeout,
+            document_prefix=self._document_prefix,
             **self._kwargs,
         )

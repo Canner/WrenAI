@@ -86,6 +86,7 @@ class SemanticsPreparationService:
                 "historical_question",
                 "table_description",
                 "sql_pairs",
+                "instructions",
                 "project_meta",
             ]
 
@@ -95,7 +96,7 @@ class SemanticsPreparationService:
                         project_id=prepare_semantics_request.project_id,
                         delete_all=True,
                     )
-                    if name == "sql_pairs"
+                    if name in {"sql_pairs", "instructions"}
                     else self._pipelines[name].clean(
                         project_id=prepare_semantics_request.project_id
                     )

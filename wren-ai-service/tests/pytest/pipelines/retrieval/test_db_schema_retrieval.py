@@ -2070,7 +2070,7 @@ def test_check_using_db_schemas_without_pruning_caps_generation_context():
     ]
 
 
-def test_check_using_db_schemas_without_pruning_compacts_wide_tables_by_query():
+def test_check_using_db_schemas_without_pruning_keeps_wide_tables_by_query():
     class Encoding:
         def encode(self, value):
             return value.split()
@@ -2128,10 +2128,10 @@ def test_check_using_db_schemas_without_pruning_compacts_wide_tables_by_query():
     )
 
     column_names = result["db_schemas"][0]["column_names"]
-    assert len(column_names) <= 16
+    assert len(column_names) == 28
     assert "OrderDate" in column_names
     assert "OrderNo" in column_names
-    assert "Filler24" not in column_names
+    assert "Filler24" in column_names
 
 
 def test_retrieved_schema_separates_exact_sql_names_from_semantic_context():

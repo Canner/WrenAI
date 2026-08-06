@@ -25,6 +25,15 @@ def normalize_litellm_model_name(model: str, api_base: Optional[str] = None) -> 
     return model
 
 
+def _is_openai_api_base(api_base: Optional[str]) -> bool:
+    return bool(api_base) and "api.openai.com" in api_base.lower()
+
+
+def _uses_codestral_json_object_compat(model: str) -> bool:
+    normalized = model.lower()
+    return "codestral" in normalized or "mistral" in normalized
+
+
 @provider("litellm_llm")
 class LitellmLLMProvider(LLMProvider):
     def __init__(
@@ -87,6 +96,19 @@ class LitellmLLMProvider(LLMProvider):
                 and response_format.get("type") == "text"
             ):
                 normalized.pop("response_format", None)
+
+            if (
+                self._api_base
+                and not _is_openai_api_base(self._api_base)
+                and _uses_codestral_json_object_compat(self._model)
+                and isinstance(response_format, dict)
+                and response_format.get("type") == "json_schema"
+            ):
+                normalized["response_format"] = {"type": "json_object"}
+
+            if self._api_base and not _is_openai_api_base(self._api_base):
+                # Some local OpenAI-compatible servers reject non-OpenAI keys.
+                normalized.pop("speed", None)
 
             return normalized
 

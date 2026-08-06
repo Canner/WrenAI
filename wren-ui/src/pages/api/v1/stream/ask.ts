@@ -133,9 +133,6 @@ export default async function handler(
     }
     const deployId = await deployService.ensureDeploymentPrepared(project.id);
 
-    // Get current project's prepared deployment
-    const deployId = await deployService.ensureDeploymentPrepared(project.id);
-
     // Create a new thread if it's a new question
     const newThreadId = threadId || uuidv4();
 

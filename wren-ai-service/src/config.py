@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     max_histories: int = Field(default=5)
     max_sql_correction_retries: int = Field(default=1)
     sql_generation_timeout_seconds: float = Field(default=45.0)
+    # Kept for compatibility with deployed configs. This controls the bounded
+    # generation/correction calls when present.
+    pipeline_timeout_seconds: float | None = Field(default=None)
     relationship_recommendation_timeout_seconds: float = Field(default=180.0)
 
     # engine config
