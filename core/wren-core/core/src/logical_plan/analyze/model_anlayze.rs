@@ -38,10 +38,12 @@ thread_local! {
 ///
 /// There are three main steps in this rule:
 /// 1. Analyze the scope of the logical plan and collect the required columns for models and visited tables. (button-up and depth-first)
-/// 2. Analyze the model and generate the ModelPlanNode according to the scope analysis. (button-up and depth-first)
+/// 2. Analyze the model and generate the ModelPlanNode according to the scope analysis. (button-up and depth-first, except the `SubqueryAlias -> TableScan` shortcut in `f_down`, which handles that shape pre-order and skips its subtree)
 /// 3. Remove the catalog and schema prefix of Wren for the column and refresh the schema. (top-down)
 ///
-/// The traverse path of step 1 and step 2 should be same.
+/// Step 2's shortcut may skip a subtree only when no skipped node can carry a subquery
+/// (a bare `TableScan` never does: filter pushdown is an optimizer rule, so `filters`
+/// is always empty at analyzer time). Elsewhere, the traverse path of step 1 and step 2 should be same.
 /// The corresponding scope will be pushed to or popped from the childs of [Scope] sequentially.
 pub struct ModelAnalyzeRule {
     analyzed_wren_mdl: Arc<AnalyzedWrenMDL>,
@@ -701,7 +703,7 @@ impl ModelAnalyzeRule {
 
     /// Pre-order shortcut for `SubqueryAlias -> TableScan` (e.g. `FROM a_model AS alias`).
     /// Builds the `ModelPlanNode` directly with the alias's own required columns,
-    /// mirroring [`Self::analyze_subquery_alias_model`], instead of the bottom-up pass.
+    /// replacing the bottom-up path for this shape entirely (see [`Self::analyze_subquery_alias_model`]).
     fn shortcut_aliased_table_scan(
         &self,
         plan: LogicalPlan,
@@ -786,51 +788,28 @@ impl ModelAnalyzeRule {
         }
     }
 
-    /// Because the bottom-up transformation is used, the table_scan is already transformed
-    /// to the ModelPlanNode before the SubqueryAlias. We should check the patten of Wren-generated model plan like:
-    ///      SubqueryAlias -> SubqueryAlias -> Extension -> ModelPlanNode
-    /// to get the correct required columns
+    /// Rebuilds a `SubqueryAlias -> SubqueryAlias -> Extension -> ModelPlanNode` shape.
+    /// `shortcut_aliased_table_scan` (`f_down`) now intercepts every aliased `TableScan`
+    /// before that nested shape can be produced, so the branch below is defense-in-depth.
     fn analyze_subquery_alias_model(
         &self,
         subquery_alias: SubqueryAlias,
-        scope_manager: &mut ScopeManager,
-        current_scope_id: ScopeId,
+        _scope_manager: &mut ScopeManager,
+        _current_scope_id: ScopeId,
         alias: TableReference,
-        cycle_stack: &ModelStack,
+        _cycle_stack: &ModelStack,
     ) -> Result<Transformed<LogicalPlan>> {
         let SubqueryAlias { input, .. } = subquery_alias;
         if let LogicalPlan::Extension(Extension { node }) =
             Arc::unwrap_or_clone(Arc::clone(&input))
         {
             if let Some(model_node) = node.as_any().downcast_ref::<ModelPlanNode>() {
-                if let Some(model) = self
-                    .analyzed_wren_mdl
-                    .wren_mdl()
-                    .get_model(model_node.plan_name())
-                {
-                    let field = self.resolve_required_fields(
-                        scope_manager,
-                        current_scope_id,
-                        &alias,
-                    )?;
-                    let model_plan_node = self.build_model_plan_node(
-                        Arc::clone(&model),
-                        field,
-                        None,
-                        cycle_stack,
-                    )?;
-                    let model_plan = LogicalPlan::Extension(Extension {
-                        node: Arc::new(model_plan_node),
-                    });
-                    let subquery =
-                        LogicalPlanBuilder::from(model_plan).alias(alias)?.build()?;
-                    Ok(Transformed::yes(subquery))
-                } else {
-                    internal_err!(
-                        "Model {} not found in the WrenMDL",
-                        model_node.plan_name()
-                    )
-                }
+                internal_err!(
+                    "SubqueryAlias wrapping an already-analyzed ModelPlanNode ({}) \
+                     reached the bottom-up rebuild path; shortcut_aliased_table_scan \
+                     should have handled this shape in f_down",
+                    model_node.plan_name()
+                )
             } else {
                 internal_err!("ModelPlanNode not found in the Extension node")
             }
