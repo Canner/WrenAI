@@ -1549,6 +1549,50 @@ def test_construct_retrieval_results_preserves_retrieved_metric_when_pruning():
     assert result["has_metric"] is True
 
 
+def test_construct_retrieval_results_falls_back_when_pruner_omits_results():
+    result = construct_retrieval_results(
+        check_using_db_schemas_without_pruning={},
+        filter_columns_in_tables={
+            "replies": [
+                """
+                {
+                    "tables": [
+                        {
+                            "table_name": "modeled_dataset",
+                            "table_contents": {
+                                "columns": ["stored_attribute"]
+                            }
+                        }
+                    ]
+                }
+                """
+            ]
+        },
+        construct_db_schemas=[
+            {
+                "type": "TABLE",
+                "name": "modeled_dataset",
+                "comment": "",
+                "columns": [
+                    {
+                        "type": "COLUMN",
+                        "name": "stored_attribute",
+                        "data_type": "VARCHAR",
+                        "comment": "",
+                        "is_primary_key": False,
+                    }
+                ],
+                "properties": {},
+                "primaryKey": "",
+            }
+        ],
+        dbschema_retrieval=[],
+    )
+
+    assert result["retrieval_results"][0]["table_name"] == "modeled_dataset"
+    assert result["retrieval_results"][0]["column_names"] == ["stored_attribute"]
+
+
 def test_construct_retrieval_results_preserves_retrieved_view_columns_when_pruning():
     result = construct_retrieval_results(
         check_using_db_schemas_without_pruning={},

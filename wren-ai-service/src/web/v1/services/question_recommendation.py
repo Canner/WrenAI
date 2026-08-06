@@ -59,6 +59,16 @@ class QuestionRecommendation:
         )
         logger.error(error_message)
 
+    @staticmethod
+    def _is_valid_candidate(candidate: dict) -> bool:
+        return (
+            isinstance(candidate, dict)
+            and isinstance(candidate.get("question"), str)
+            and bool(candidate["question"].strip())
+            and isinstance(candidate.get("category"), str)
+            and bool(candidate["category"].strip())
+        )
+
     @observe(name="Validate Question")
     async def _validate_question(
         self,
@@ -71,6 +81,12 @@ class QuestionRecommendation:
         use_dry_plan: bool = True,
         allow_dry_plan_fallback: bool = False,
     ):
+        if not self._is_valid_candidate(candidate):
+            logger.warning(
+                f"Request {request_id}: Skipping invalid recommended question payload."
+            )
+            return None
+
         async def _document_retrieval() -> tuple[
             list[str], list[dict], bool, bool, bool
         ]:
@@ -207,7 +223,17 @@ class QuestionRecommendation:
 
     async def _recommend(self, request: dict):
         resp = await self._pipelines["question_recommendation"].run(**request)
-        questions = resp.get("normalized", {}).get("questions", [])
+        normalized = resp.get("normalized", {})
+        if isinstance(normalized, list):
+            questions = normalized
+        elif isinstance(normalized, dict):
+            questions = normalized.get("questions", [])
+        else:
+            questions = []
+
+        questions = [
+            question for question in questions if self._is_valid_candidate(question)
+        ]
         validation_tasks = [
             self._validate_question(
                 question,

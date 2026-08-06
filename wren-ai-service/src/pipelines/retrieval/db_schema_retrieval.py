@@ -1407,35 +1407,56 @@ def construct_retrieval_results(
     dbschema_retrieval: list[Document],
     query: str = "",
 ) -> dict[str, Any]:
+    def _fallback_results() -> dict[str, Any]:
+        fallback_results = _build_retrieval_results_from_schemas(
+            construct_db_schemas=construct_db_schemas,
+            dbschema_retrieval=dbschema_retrieval,
+            query=query,
+            compact_wide_tables=True,
+        )
+        return {
+            "retrieval_results": _limit_retrieval_results(
+                fallback_results["retrieval_results"],
+                query=query,
+            ),
+            "has_calculated_field": fallback_results["has_calculated_field"],
+            "has_metric": fallback_results["has_metric"],
+            "has_json_field": fallback_results["has_json_field"],
+        }
+
     if filter_columns_in_tables:
         try:
-            columns_and_tables_needed = orjson.loads(
-                filter_columns_in_tables["replies"][0]
-            )["results"]
+            column_selection = orjson.loads(filter_columns_in_tables["replies"][0])
         except Exception:
             logger.exception(
                 "Column-selection response was invalid; falling back to schema retrieval without LLM pruning."
             )
-            fallback_results = _build_retrieval_results_from_schemas(
-                construct_db_schemas=construct_db_schemas,
-                dbschema_retrieval=dbschema_retrieval,
-                query=query,
-                compact_wide_tables=True,
+            return _fallback_results()
+
+        columns_and_tables_needed = (
+            column_selection.get("results")
+            if isinstance(column_selection, dict)
+            else column_selection
+        )
+        if not isinstance(columns_and_tables_needed, list):
+            logger.warning(
+                "Column-selection response did not include a results list; falling back to schema retrieval without LLM pruning."
             )
-            return {
-                "retrieval_results": _limit_retrieval_results(
-                    fallback_results["retrieval_results"],
-                    query=query,
-                ),
-                "has_calculated_field": fallback_results["has_calculated_field"],
-                "has_metric": fallback_results["has_metric"],
-                "has_json_field": fallback_results["has_json_field"],
-            }
+            return _fallback_results()
 
         # we need to change the below code to match the new schema of structured output
         # the objective of this loop is to change the structure of JSON to match the needed format
         reformated_json = {}
         for table in columns_and_tables_needed:
+            if (
+                not isinstance(table, dict)
+                or not isinstance(table.get("table_name"), str)
+                or not isinstance(table.get("table_contents"), dict)
+            ):
+                logger.warning(
+                    "Column-selection response contained an invalid table item; falling back to schema retrieval without LLM pruning."
+                )
+                return _fallback_results()
             reformated_json[table["table_name"]] = table["table_contents"]
         columns_and_tables_needed = reformated_json
         tables = set(columns_and_tables_needed.keys())
