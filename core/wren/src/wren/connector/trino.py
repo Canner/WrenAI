@@ -485,10 +485,12 @@ class TrinoConnector(ConnectorABC):
         limit = coerce_limit(limit)
         trino = _import_trino()
 
+        # Align unlimited execute with other connectors (mysql/mssql/etc.):
+        # strip a terminating `;` before send. Limited composition still needs
+        # a clean inner SQL so `;` cannot break the subquery wrap.
+        sql = strip_trailing_semicolon(sql)
         if limit is not None:
-            sql = (
-                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS _sub LIMIT {limit}"
-            )
+            sql = f"SELECT * FROM ({sql}) AS _sub LIMIT {limit}"
         try:
             with contextlib.closing(self.connection.cursor()) as cursor:
                 cursor.execute(sql)
