@@ -485,10 +485,12 @@ class TrinoConnector(ConnectorABC):
         limit = coerce_limit(limit)
         trino = _import_trino()
 
+        # Strip terminating `;` for unlimited execute too — Trino's statement
+        # path is stricter than most engines about bare terminators (CLI also
+        # strips client-side). Limited path already strips inside the wrap.
+        sql = strip_trailing_semicolon(sql)
         if limit is not None:
-            sql = (
-                f"SELECT * FROM ({strip_trailing_semicolon(sql)}) AS _sub LIMIT {limit}"
-            )
+            sql = f"SELECT * FROM ({sql}) AS _sub LIMIT {limit}"
         try:
             with contextlib.closing(self.connection.cursor()) as cursor:
                 cursor.execute(sql)
