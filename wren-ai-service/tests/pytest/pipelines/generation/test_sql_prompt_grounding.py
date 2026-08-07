@@ -15,6 +15,7 @@ from src.pipelines.generation.sql_generation import (
     sql_generation_user_prompt_template,
 )
 from src.pipelines.generation.sql_regeneration import (
+    get_sql_regeneration_system_prompt,
     prompt as build_sql_regeneration_prompt,
     sql_regeneration_user_prompt_template,
 )
@@ -30,6 +31,11 @@ def test_sql_generation_system_prompt_uses_schema_without_extra_catalog_layer():
     assert "WREN RETRIEVED SEMANTIC CONTEXT" not in prompt
     assert "return null for sql instead of choosing one" not in prompt
     assert 'ONLY USE "*" if the user query asks' in prompt
+    assert (
+        "COUNT, SUM, AVG, MIN, and MAX do not need to appear in SQL FUNCTIONS"
+        in prompt
+    )
+    assert "every non-standard function only from SQL FUNCTIONS" in prompt
 
 
 def test_sql_correction_system_prompt_uses_current_schema_for_repair():
@@ -40,6 +46,17 @@ def test_sql_correction_system_prompt_uses_current_schema_for_repair():
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in prompt
     assert "WREN SQL IDENTIFIER CONTRACT" not in prompt
     assert 'ONLY USE "*" if the user query asks' in prompt
+    assert (
+        "Standard Wren SQL aggregate functions COUNT, SUM, AVG, MIN, and MAX are allowed"
+        in prompt
+    )
+
+
+def test_sql_regeneration_system_prompt_allows_standard_aggregates_without_sql_functions():
+    prompt = get_sql_regeneration_system_prompt()
+
+    assert "standard Wren SQL aggregate functions when needed" in prompt
+    assert "SQL FUNCTIONS for non-standard functions" in prompt
 
 
 def test_sql_generation_model_kwargs_do_not_set_output_budget_in_code():

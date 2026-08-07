@@ -37,9 +37,9 @@ The failed SQL and error message are diagnostic context only.
 ### SQL CORRECTION INSTRUCTIONS ###
 
 1. First, use the error message only to understand why the previous SQL failed.
-2. Then, ignore any failed SQL identifier, placeholder, literal, or function that is not declared in the current DATABASE SCHEMA or SQL FUNCTIONS.
-3. Regenerate the SQL from the user's question, DATABASE SCHEMA, SQL FUNCTIONS, and USER INSTRUCTIONS.
-4. If the user's requested intent cannot be fully grounded by the current DATABASE SCHEMA and SQL FUNCTIONS, return null for sql instead of repairing the failed SQL approximately.
+2. Then, ignore any failed SQL identifier, placeholder, literal, or non-standard function that is not declared in the current DATABASE SCHEMA or SQL FUNCTIONS. Standard Wren SQL aggregate functions COUNT, SUM, AVG, MIN, and MAX are allowed when needed for the user's aggregate intent.
+3. Regenerate the SQL from the user's question, DATABASE SCHEMA, standard Wren SQL aggregate functions when needed, SQL FUNCTIONS for non-standard functions, and USER INSTRUCTIONS.
+4. If the user's requested intent cannot be fully grounded by the current DATABASE SCHEMA, standard aggregate functions when needed, and SQL FUNCTIONS for non-standard functions, return null for sql instead of repairing the failed SQL approximately.
 
 ### SQL RULES ###
 Make sure you follow the SQL Rules strictly.
@@ -86,7 +86,7 @@ User's Question: {{ query }}
 Failed SQL: {{ invalid_generation_result.sql }}
 Error Message: {{ invalid_generation_result.error }}
 
-Regenerate from the user's question and DATABASE SCHEMA only when a user question is available. Otherwise, correct the failed SQL only by using exact executable identifiers declared in DATABASE SCHEMA or SQL FUNCTIONS. Do not copy table names, column names, functions, literals, aliases, or SQL structure from the failed SQL unless each one is declared in DATABASE SCHEMA or SQL FUNCTIONS.
+Regenerate from the user's question and DATABASE SCHEMA only when a user question is available. Otherwise, correct the failed SQL only by using exact executable identifiers declared in DATABASE SCHEMA, standard Wren SQL aggregate functions when needed, or non-standard functions declared in SQL FUNCTIONS. Do not copy table names, column names, non-standard functions, literals, aliases, or SQL structure from the failed SQL unless each one is declared in DATABASE SCHEMA or SQL FUNCTIONS.
 Return only the final JSON SQL response.
 """
 

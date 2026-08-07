@@ -353,6 +353,7 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - For metric-style requests, the final SELECT list must expose the requested dimension columns and measure expressions or metric fields.
 - For aggregate, ranking, or "by" requests, do not add unrelated string filters to make the SQL look specific. If the user did not provide a filter value, leave it out.
 - For total, count, average, minimum, maximum, per, by, trend, top, bottom, highest, lowest, or ranking requests, the final SQL must include the requested aggregate expression or metric field, GROUP BY required dimensions, ORDER BY required ranking expression, and LIMIT only when requested. A raw row list is not a valid answer.
+- Standard Wren SQL aggregate functions COUNT, SUM, AVG, MIN, and MAX are allowed for aggregate requests even when no SQL FUNCTIONS section is provided, as long as every table and column identifier used by the aggregate is declared in DATABASE SCHEMA.
 - For record-list requests with a filter or timeframe, the final SQL must include the requested WHERE predicate and only the columns needed to identify and describe the matching records.
 - Comments, aliases, display labels, and descriptions from DATABASE SCHEMA may guide which exact source column to select, but they must not be copied into FROM, JOIN, WHERE, GROUP BY, HAVING, or ORDER BY as table or column names.
 - Physical/source/lineage names from metadata may guide meaning, but generated SQL must use only the declared Wren model, view, metric, and column identifiers from DATABASE SCHEMA.
@@ -362,7 +363,7 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - DON'T USE "EXTRACT()" function with INTERVAL data types as arguments
 - DON'T USE INTERVAL or generate INTERVAL-like expression in the generated SQL query.
 - DON'T USE "TO_CHAR" function in the generated SQL query.
-- DON'T USE unsupported statistical, date/time, or formatting functions. If SQL FUNCTIONS does not list a function needed by the requested intent, omit the function-dependent part. If that function is required to answer the request, return null for sql.
+- DON'T USE unsupported non-standard statistical, date/time, or formatting functions. If SQL FUNCTIONS does not list a non-standard function needed by the requested intent, omit the function-dependent part. If that non-standard function is required to answer the request, return null for sql.
 - Aggregate functions are not allowed in the WHERE clause. Instead, they belong in the HAVING clause, which is used to filter after aggregation.
 - You can only add "ORDER BY" and "LIMIT" to the final "UNION" result.
 - For top, bottom, highest, lowest, first, or last requests, sort by an exact selected column or aggregate alias and use LIMIT unless the user explicitly asks for rank values.
@@ -548,15 +549,15 @@ Given the user's question and database schema, generate one grounded Wren SQL qu
 ### GENERAL RULES ###
 
 1. YOU MUST FOLLOW the instructions strictly to generate the SQL query if the section of USER INSTRUCTIONS is available in user's input.
-2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input. Use the exact supported syntax shown there; otherwise omit the function-dependent part of the request.
+2. YOU MUST ONLY CHOOSE the appropriate non-standard functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input. Standard Wren SQL aggregate functions COUNT, SUM, AVG, MIN, and MAX do not need to appear in SQL FUNCTIONS. For non-standard functions, use the exact supported syntax shown there; otherwise omit the function-dependent part of the request.
 3. YOU MUST REFER to the sql samples only as examples of intent and style if the section of SQL SAMPLES is available in user's input. Do not copy identifiers, literals, placeholders, SQL patterns, or functions from samples.
-4. YOU MUST treat the reasoning plan as semantic context for intent only. Do not copy identifiers, functions, literal values, SQL fragments, template markers, or placeholders from the reasoning plan. Choose every executable identifier only from DATABASE SCHEMA, and every function only from SQL FUNCTIONS.
+4. YOU MUST treat the reasoning plan as semantic context for intent only. Do not copy identifiers, functions, literal values, SQL fragments, template markers, or placeholders from the reasoning plan. Choose every executable identifier only from DATABASE SCHEMA, every non-standard function only from SQL FUNCTIONS, and standard aggregate functions only when they are needed for the user's aggregate intent.
 5. YOU MUST answer the user's intent, not just exact wording. Use schema aliases, descriptions, calculated fields, metrics, and relationships to understand intent, then generate SQL with exact DATABASE SCHEMA identifiers only.
 6. YOU MUST use the CREATE TABLE, CREATE VIEW, metric field declarations, comments, aliases, descriptions, relationships, and SQL FUNCTIONS in DATABASE SCHEMA to understand the user's intent and select executable identifiers.
 7. If the user asks for fields that exist across multiple related schema objects, include those objects only when DATABASE SCHEMA shows the exact columns and relationship path needed to join them.
 8. If the user asks for a result that is represented in multiple schema objects with compatible fields, include all relevant objects using independently valid SELECT branches combined with UNION ALL. Use joins only for relationship-backed row-level combinations.
 9. For relationship wording such as linked, related, associated, connected, with, by, per, or across multiple business concepts, use only declared FOREIGN KEY relationships from DATABASE SCHEMA for joins. If the relationship path is not declared, return null for sql instead of querying one nearby table.
-10. Before finalizing the JSON response, YOU MUST perform a silent grounding check: every table, column, join key, filter field, grouping field, ordering field, and function in the SQL must be present in DATABASE SCHEMA or SQL FUNCTIONS. If a planned element is not grounded, omit that element. If the element is needed to answer the user's requested subject, output column, filter, grouping, measure, timeframe, or relationship, return null for sql.
+10. Before finalizing the JSON response, YOU MUST perform a silent grounding check: every table, column, join key, filter field, grouping field, ordering field, and non-standard function in the SQL must be present in DATABASE SCHEMA or SQL FUNCTIONS. Standard Wren SQL aggregate functions COUNT, SUM, AVG, MIN, and MAX are grounded by Wren SQL itself and may be used with DATABASE SCHEMA identifiers. If a planned element is not grounded, omit that element. If the element is needed to answer the user's requested subject, output column, filter, grouping, measure, timeframe, or relationship, return null for sql.
 11. YOU MUST treat source database/schema/table names, physical datasource names, lineage names, comments, aliases, and display labels as semantic context only. Never use them as executable identifiers unless the exact same identifier appears in DATABASE SCHEMA.
 12. If an identifier, literal value, placeholder, template marker, or function appears only in SQL samples, failed SQL, descriptions, lineage, reasoning text, or error messages, it is not executable for this request; ignore those parts when generating executable SQL.
 13. If any planned SQL identifier cannot be copied exactly from DATABASE SCHEMA, return null for sql. Never create a table or column from the user's wording.
@@ -565,7 +566,7 @@ Given the user's question and database schema, generate one grounded Wren SQL qu
 {text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be JSON. Return a SQL string only when it is fully grounded in DATABASE SCHEMA and SQL FUNCTIONS and it answers the user's requested intent. Do not create table or column identifiers from the user's wording. If the retrieved schema does not ground the requested subject, output column, filter, grouping, measure, timeframe, or relationship, return null for sql.
+The final answer must be JSON. Return a SQL string only when it is fully grounded in DATABASE SCHEMA, standard Wren SQL aggregate functions when needed, and SQL FUNCTIONS for non-standard functions, and it answers the user's requested intent. Do not create table or column identifiers from the user's wording. If the retrieved schema does not ground the requested subject, output column, filter, grouping, measure, timeframe, or relationship, return null for sql.
 
 {{
     "sql": "SQL query string using only identifiers declared in DATABASE SCHEMA, or null"

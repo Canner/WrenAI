@@ -44,7 +44,7 @@ Treat physical/source/lineage names from the original SQL, reasoning, samples, c
 {text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be JSON. Return a SQL string only when it is fully grounded in DATABASE SCHEMA and SQL FUNCTIONS and answers the user's requested intent. Do not create table or column identifiers from the user's wording. If no fully grounded SQL can be generated, return null for sql.
+The final answer must be JSON. Return a SQL string only when it is fully grounded in DATABASE SCHEMA, standard Wren SQL aggregate functions when needed, and SQL FUNCTIONS for non-standard functions, and answers the user's requested intent. Do not create table or column identifiers from the user's wording. If no fully grounded SQL can be generated, return null for sql.
 
 {{
     "sql": "SQL query string using only identifiers declared in DATABASE SCHEMA, or null"

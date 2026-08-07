@@ -211,6 +211,22 @@ class _ShapeInvalidSqlGenerationPipeline:
         }
 
 
+class _NoRelevantSqlGenerationPipeline:
+    async def run(self, **_):
+        return {
+            "post_process": {
+                "valid_generation_result": {},
+                "invalid_generation_result": {
+                    "sql": "",
+                    "original_sql": "",
+                    "type": "NO_RELEVANT_SQL",
+                    "error": "No grounded SQL was generated from the current schema.",
+                    "correlation_id": "",
+                },
+            }
+        }
+
+
 class _SlowSqlGenerationPipeline:
     async def run(self, **_):
         await asyncio.sleep(60)
@@ -275,6 +291,49 @@ async def test_ask_skips_sql_diagnosis_for_local_validation_error():
     assert correction.calls[0]["invalid_generation_result"] == {
         "sql": "SELECT entity_id FROM model_alpha",
         "error": "Generated SQL is a table preview.",
+    }
+
+
+@pytest.mark.asyncio
+async def test_ask_correction_recovers_no_relevant_sql_with_schema_context():
+    correction = _CapturingCorrectionPipeline()
+    diagnosis = _FailingDiagnosisPipeline()
+    ask_service = AskService(
+        {
+            "historical_question": _EmptyRetrievalPipeline(),
+            "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
+            "instructions_retrieval": _EmptyRetrievalPipeline(),
+            "db_schema_retrieval": _SchemaRetrievalPipeline(),
+            "sql_generation": _NoRelevantSqlGenerationPipeline(),
+            "sql_correction": correction,
+            "sql_diagnosis": diagnosis,
+        },
+        allow_intent_classification=False,
+        allow_sql_functions_retrieval=False,
+        allow_sql_knowledge_retrieval=False,
+        allow_sql_diagnosis=True,
+    )
+    query_id = str(uuid.uuid4())
+    ask_request = AskRequest(query="count records by model", mdl_hash=None)
+    ask_request.query_id = query_id
+
+    await ask_service.ask(ask_request)
+
+    ask_result_response = ask_service.get_ask_result(
+        AskResultRequest(query_id=query_id)
+    )
+    assert ask_result_response.status == "finished"
+    assert ask_result_response.response[0].sql == (
+        "SELECT COUNT(*) AS record_count FROM model_alpha"
+    )
+    assert diagnosis.calls == []
+    assert correction.calls[0]["query"] == "count records by model"
+    assert correction.calls[0]["contexts"] == [
+        "CREATE TABLE model_alpha (entity_id INTEGER)"
+    ]
+    assert correction.calls[0]["invalid_generation_result"] == {
+        "sql": "",
+        "error": "No grounded SQL was generated from the current schema.",
     }
 
 
