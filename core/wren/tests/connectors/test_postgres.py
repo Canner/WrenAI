@@ -90,6 +90,38 @@ def test_constrained_numeric_above_decimal128_uses_decimal256() -> None:
     assert result.column("value").to_pylist() == [value]
 
 
+@pytest.mark.parametrize(
+    "value",
+    [Decimal("NaN"), Decimal("Infinity"), Decimal("-Infinity")],
+)
+def test_constrained_non_finite_numeric_falls_back_to_exact_string(
+    value: Decimal,
+) -> None:
+    result = _build_pg_arrow_table(
+        _cursor([_column(1700, precision=38, scale=9)], [(value,)])
+    )
+
+    assert result.schema.field("value").type == pa.string()
+    assert result.column("value").to_pylist() == [str(value)]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [Decimal("NaN"), Decimal("Infinity"), Decimal("-Infinity")],
+)
+def test_constrained_non_finite_numeric_array_falls_back_to_exact_strings(
+    value: Decimal,
+) -> None:
+    values = [Decimal("1.5"), value, None]
+
+    result = _build_pg_arrow_table(
+        _cursor([_column(1231, precision=38, scale=9)], [(values,)])
+    )
+
+    assert result.schema.field("value").type == pa.list_(pa.string())
+    assert result.column("value").to_pylist() == [["1.5", str(value), None]]
+
+
 def test_unrepresentable_numeric_falls_back_to_exact_string() -> None:
     value = Decimal("1" * 77)
 

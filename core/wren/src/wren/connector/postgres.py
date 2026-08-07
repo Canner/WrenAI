@@ -127,6 +127,13 @@ def _infer_pg_decimal_type(values: list) -> pa.DataType | None:
 
 def _get_pg_decimal_type(column, values: list | None = None) -> pa.DataType | None:
     """Use numeric typmod when representable, otherwise infer from values."""
+    if values is not None and any(
+        value is not None
+        and (not isinstance(value, PyDecimal) or not value.is_finite())
+        for value in values
+    ):
+        return None
+
     precision = column.precision
     scale = column.scale
     if precision is not None and scale is not None:
