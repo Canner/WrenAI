@@ -60,10 +60,9 @@ class SnowflakeConnector(ConnectorABC):
         # bigquery/duckdb/redshift): strip a terminating `;` before send.
         executed = strip_trailing_semicolon(sql)
         # Push LIMIT into Snowflake when requested so we do not download a
-        # full result set only to slice it in Python. Wrap as a subquery so a
-        # trailing semicolon in the user SQL cannot break composition, and so
+        # full result set only to slice it in Python. Wrap as a subquery so
         # statements that already contain an ORDER BY keep their ordering
-        # under the outer LIMIT.
+        # under the outer LIMIT. (Trailing `;` is already stripped above.)
         if limit is not None:
             # Place the user SQL on its own line so a trailing line comment
             # (`-- ...`) cannot swallow the closing paren, alias, or LIMIT.
