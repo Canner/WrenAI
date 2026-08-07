@@ -1377,6 +1377,111 @@ def test_apply_upgrade_v1_to_v2(tmp_path):
     assert cubes[0]["name"] == "order_metrics"
 
 
+# ── Regression: v1 views.yml with non-mapping entries (issue #2597) ────────
+#
+# A hand-edited legacy views.yml can contain a non-mapping list entry (e.g.
+# `- null`). _load_views_v1 must drop it, matching the other v1/v2 loaders,
+# so every consumer below still works instead of crashing with a bare
+# AttributeError — and validate_project must additionally report it rather
+# than silently ignore it.
+
+
+def _corrupt_v1_views_yml(tmp_path: Path) -> None:
+    """Overwrite views.yml with a non-mapping entry alongside a valid one."""
+    (tmp_path / "views.yml").write_text(
+        'views:\n  - null\n  - "junk"\n  - name: summary\n    statement: SELECT 1\n'
+    )
+
+
+def test_validate_project_reports_v1_views_yml_non_mapping_entries(tmp_path):
+    _make_v1_project(tmp_path)
+    _corrupt_v1_views_yml(tmp_path)
+    errors = validate_project(tmp_path)
+    hard = [e for e in errors if e.level == "error"]
+    # Both malformed entries are reported, each at its own index.
+    entry_errors = [e for e in hard if "must be a mapping" in e.message]
+    assert {e.path for e in entry_errors} == {
+        "views.yml > views[0]",
+        "views.yml > views[1]",
+    }
+    assert any("NoneType" in e.message for e in entry_errors)
+    assert any("str" in e.message for e in entry_errors)
+    # The well-formed sibling entry is unaffected.
+    assert not any("summary" in e.message for e in errors)
+
+
+def test_validate_project_accepts_empty_v1_views_key(tmp_path):
+    """A bare ``views:`` means "no views" and must not be reported."""
+    _make_v1_project(tmp_path)
+    (tmp_path / "views.yml").write_text("views:\n")
+    assert build_manifest(tmp_path)["views"] == []
+    assert not [e for e in validate_project(tmp_path) if "views" in e.path]
+
+
+@pytest.mark.parametrize(
+    ("views_yml", "expected_type"),
+    [
+        ("views: junk\n", "str"),
+        ("views: 3\n", "int"),
+        ("views:\n  a: 1\n", "dict"),
+    ],
+)
+def test_validate_project_reports_non_list_v1_views_container(
+    tmp_path, views_yml, expected_type
+):
+    """A non-list under ``views:`` is malformed — report it once, don't crash."""
+    _make_v1_project(tmp_path)
+    (tmp_path / "views.yml").write_text(views_yml)
+
+    hard = [e for e in validate_project(tmp_path) if e.level == "error"]
+    container = [e for e in hard if e.path == "views.yml > views"]
+    assert len(container) == 1
+    assert f"must be a list, got {expected_type}" in container[0].message
+    # Not additionally reported once per character/key of the container.
+    assert not [e for e in hard if "must be a mapping" in e.message]
+
+    # Every consumer degrades to "no views" rather than raising.
+    assert build_manifest(tmp_path)["views"] == []
+    assert build_json(tmp_path)["views"] == []
+    plan = plan_upgrade(tmp_path, target_version=2)
+    assert not [f for f in plan.files_created if f.startswith("views/")]
+    apply_upgrade(tmp_path, plan)
+    assert not (tmp_path / "views").exists()
+
+
+def test_build_manifest_drops_v1_views_yml_non_mapping_entries(tmp_path):
+    _make_v1_project(tmp_path)
+    _corrupt_v1_views_yml(tmp_path)
+    manifest = build_manifest(tmp_path)
+    assert [v["name"] for v in manifest["views"]] == ["summary"]
+
+
+def test_build_json_does_not_crash_on_v1_views_yml_non_mapping_entries(tmp_path):
+    _make_v1_project(tmp_path)
+    _corrupt_v1_views_yml(tmp_path)
+    manifest = build_json(tmp_path)
+    assert [v["name"] for v in manifest["views"]] == ["summary"]
+
+
+def test_plan_upgrade_v1_to_v2_does_not_crash_on_non_mapping_view(tmp_path):
+    _make_v1_project(tmp_path)
+    _corrupt_v1_views_yml(tmp_path)
+    result = plan_upgrade(tmp_path, target_version=2)
+    view_files = [f for f in result.files_created if f.startswith("views/")]
+    assert view_files == ["views/summary/metadata.yml"]
+
+
+def test_apply_upgrade_v1_to_v2_does_not_crash_on_non_mapping_view(tmp_path):
+    _make_v1_project(tmp_path)
+    _corrupt_v1_views_yml(tmp_path)
+    result = plan_upgrade(tmp_path, target_version=2)
+    apply_upgrade(tmp_path, result)
+    assert (tmp_path / "views" / "summary" / "metadata.yml").exists()
+    assert not (tmp_path / "views.yml").exists()
+    # Only the well-formed view became a directory — no junk siblings.
+    assert [d.name for d in (tmp_path / "views").iterdir()] == ["summary"]
+
+
 def test_apply_upgrade_v2_to_v3(tmp_path):
     _make_v2_project(tmp_path)
     result = plan_upgrade(tmp_path, target_version=3)

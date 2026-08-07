@@ -605,7 +605,13 @@ def _load_views_v1(project_path: Path) -> list[dict]:
     if not views_file.exists():
         return []
     data = yaml.safe_load(views_file.read_text(encoding="utf-8")) or {}
-    return data.get("views", []) if isinstance(data, dict) else []
+    views = data.get("views") if isinstance(data, dict) else None
+    # A bare ``views:`` parses to None and means "no views", same as a missing
+    # key. Any other non-list value is malformed; return nothing here and let
+    # ``validate_project`` be the one to report it.
+    if not isinstance(views, list):
+        return []
+    return [v for v in views if isinstance(v, dict)]
 
 
 def _load_views_v2(project_path: Path) -> list[dict]:
@@ -1101,6 +1107,35 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                         f"unknown dialect '{model_dialect}'",
                     )
                 )
+
+    # v1 legacy views.yml may contain non-mapping entries (e.g. `- null`).
+    # load_views() silently drops those (matching the other loaders), but
+    # validate_project's job is to tell the user about hand-edited mistakes
+    # rather than let them vanish quietly, so re-check the raw entries here.
+    if sv == 1:
+        views_file = project_path / "views.yml"
+        if views_file.exists():
+            raw = yaml.safe_load(views_file.read_text(encoding="utf-8")) or {}
+            raw_views = raw.get("views") if isinstance(raw, dict) else None
+            if raw_views is not None and not isinstance(raw_views, list):
+                # A bare ``views:`` (None) legitimately means "no views"; a
+                # scalar or mapping there does not.
+                errors.append(
+                    ValidationError(
+                        "error",
+                        "views.yml > views",
+                        f"'views' must be a list, got {type(raw_views).__name__}",
+                    )
+                )
+            for i, v in enumerate(raw_views if isinstance(raw_views, list) else []):
+                if not isinstance(v, dict):
+                    errors.append(
+                        ValidationError(
+                            "error",
+                            f"views.yml > views[{i}]",
+                            f"view entry must be a mapping, got {type(v).__name__}",
+                        )
+                    )
 
     # Check views
     for i, view in enumerate(views):
