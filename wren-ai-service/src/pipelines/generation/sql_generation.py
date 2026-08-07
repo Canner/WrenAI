@@ -76,7 +76,7 @@ User's Question: {{ query }}
 {{ sql_generation_reasoning }}
 {% endif %}
 
-Let's think step by step.
+Think through the request silently. Return only the final JSON SQL response.
 """
 
 

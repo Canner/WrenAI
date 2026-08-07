@@ -80,7 +80,7 @@ User's Follow-up Question: {{ query }}
 ### REASONING PLAN ###
 {{ sql_generation_reasoning }}
 
-Let's think step by step.
+Think through the request silently. Return only the final JSON SQL response.
 """
 
 

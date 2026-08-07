@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from haystack import Document
 
 from src.pipelines.retrieval.sql_functions import SqlFunction, SqlFunctions
 
@@ -25,7 +26,19 @@ def mock_engine():
 
 @pytest.fixture
 def sql_functions_pipeline(mock_engine):
-    return SqlFunctions(engine=mock_engine)
+    retriever = MagicMock()
+    retriever.run = AsyncMock(
+        return_value={"documents": [Document(content="", meta={"data_source": "postgres"})]}
+    )
+    document_store_provider = MagicMock()
+    document_store_provider.get_store.return_value = MagicMock()
+    document_store_provider.get_retriever.return_value = retriever
+    pipeline = SqlFunctions(
+        engine=mock_engine,
+        document_store_provider=document_store_provider,
+    )
+    pipeline._test_retriever = retriever
+    return pipeline
 
 
 def test_sql_function_init():
@@ -56,6 +69,11 @@ async def test_sql_functions_pipeline_run(sql_functions_pipeline):
 
 @pytest.mark.asyncio
 async def test_sql_functions_pipeline_different_datasource(sql_functions_pipeline):
+    sql_functions_pipeline._test_retriever.run.side_effect = [
+        {"documents": [Document(content="", meta={"data_source": "postgres"})]},
+        {"documents": [Document(content="", meta={"data_source": "mysql"})]},
+    ]
+
     await sql_functions_pipeline.run("postgres")
     await sql_functions_pipeline.run("mysql")
 
@@ -64,6 +82,11 @@ async def test_sql_functions_pipeline_different_datasource(sql_functions_pipelin
 
 @pytest.mark.asyncio
 async def test_sql_functions_pipeline_case_insensitive(sql_functions_pipeline):
+    sql_functions_pipeline._test_retriever.run.side_effect = [
+        {"documents": [Document(content="", meta={"data_source": "POSTGRES"})]},
+        {"documents": [Document(content="", meta={"data_source": "postgres"})]},
+    ]
+
     result1 = await sql_functions_pipeline.run("POSTGRES")
     result2 = await sql_functions_pipeline.run("postgres")
 
@@ -94,3 +117,18 @@ def test_sql_function_return_type_same_as_args():
         }
     )
     assert str(func) == "test_func($0: int, $1: text) -> ['int', 'text']"
+
+
+def test_sql_function_includes_description_when_available():
+    func = SqlFunction(
+        {
+            "name": "dateadd",
+            "param_types": ["varchar", "int", "datetime"],
+            "return_type": "Datetime",
+            "description": "Adds a signed number of dateparts to a date.",
+        }
+    )
+    assert (
+        str(func)
+        == "dateadd($0: varchar, $1: int, $2: datetime) -> Datetime: Adds a signed number of dateparts to a date."
+    )

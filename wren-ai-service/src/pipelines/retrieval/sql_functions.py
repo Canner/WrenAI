@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import List, Optional
+from typing import List, Optional, Sequence
 
 import aiohttp
 from cachetools import TTLCache
@@ -21,24 +21,66 @@ class SqlFunction:
     _expr: str = None
 
     def __init__(self, definition: dict):
-        def _extract() -> tuple[str, list, str]:
+        def _extract() -> tuple[
+            str,
+            str | Sequence[str | None] | None,
+            str | None,
+            str | None,
+        ]:
             return (
-                definition.get("name", "").upper(),
-                definition.get("function_type", ""),
+                definition.get("name", ""),
+                definition.get("param_types"),
+                definition.get("return_type"),
                 definition.get("description", ""),
             )
 
-        name, function_type, description = _extract()
+        name, param_types, return_type, description = _extract()
+        params = self._format_params(param_types)
+        return_type = self._format_return_type(return_type, param_types)
 
-        self._expr = f"type: {function_type}, name: {name}, description: {description}"
+        self._expr = f"{name}({params}) -> {return_type}"
+        if description:
+            self._expr = f"{self._expr}: {description}"
+
+    @staticmethod
+    def _format_params(param_types: str | Sequence[str | None] | None) -> str:
+        if not param_types:
+            return "any"
+
+        if isinstance(param_types, str):
+            param_types = param_types.split(",")
+
+        return ", ".join(
+            f"${index}: {param_type.strip()}"
+            for index, param_type in enumerate(param_types)
+            if param_type and param_type.strip()
+        )
+
+    @staticmethod
+    def _format_return_type(
+        return_type: str | None,
+        param_types: str | Sequence[str | None] | None,
+    ) -> str:
+        if not return_type:
+            return "any"
+
+        if return_type == "same as arg types" and param_types:
+            if isinstance(param_types, str):
+                param_types = param_types.split(",")
+
+            return str(
+                [
+                    param_type.strip()
+                    for param_type in param_types
+                    if param_type and param_type.strip()
+                ]
+            )
+
+        return return_type
 
     @classmethod
     def empty(cls, definition: dict):
-        return (
-            not definition.get("name", "")
-            or not definition.get("function_type", "")
-            or not definition.get("description", "")
-        )
+        return not definition.get("name", "")
 
     def __str__(self):
         return self._expr
@@ -115,7 +157,7 @@ class SqlFunctions(BasicPipeline):
             self._retriever,
             mdl_hash=mdl_hash,
         )
-        _data_source = metadata.get("data_source", "local_file")
+        _data_source = metadata.get("data_source", "local_file").lower()
 
         if _data_source in self._cache:
             logger.info(f"Hit cache of SQL Functions for {_data_source}")

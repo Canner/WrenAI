@@ -36,7 +36,8 @@ def test_sql_generation_system_prompt_uses_schema_without_extra_catalog_layer():
     assert "WREN RETRIEVED SEMANTIC CONTEXT" not in prompt
     assert "return null for sql" not in prompt
     assert 'ONLY USE "*" if the user query asks' in prompt
-    assert "<SQL_QUERY_STRING>" in prompt
+    assert 'exactly one key named "sql"' in prompt
+    assert '"query"' in prompt
 
 
 def test_sql_correction_system_prompt_uses_current_schema_for_repair():
@@ -48,13 +49,15 @@ def test_sql_correction_system_prompt_uses_current_schema_for_repair():
     assert "WREN SQL IDENTIFIER CONTRACT" not in prompt
     assert 'ONLY USE "*" if the user query asks' in prompt
     assert "return null for sql" not in prompt
+    assert 'exactly one key named "sql"' in prompt
+    assert '"sql_function"' in prompt
 
 
 def test_sql_regeneration_system_prompt_allows_standard_aggregates_without_sql_functions():
     prompt = get_sql_regeneration_system_prompt()
 
     assert "SQL generation reasoning and an original SQL query" in prompt
-    assert "<SQL_QUERY_STRING>" in prompt
+    assert 'exactly one key named "sql"' in prompt
     assert "return null for sql" not in prompt
 
 
@@ -110,6 +113,8 @@ def test_sql_generation_prompt_includes_sample_sql_body():
 
     assert "sample intent" in built_prompt
     assert "SELECT 1" in built_prompt
+    assert "Return only the final JSON SQL response" in built_prompt
+    assert "Let's think step by step" not in built_prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in built_prompt
     assert "WREN SQL IDENTIFIER CONTRACT" not in built_prompt
 
@@ -125,6 +130,8 @@ def test_followup_sql_generation_prompt_uses_retrieved_schema_context():
     )
 
     assert "CREATE TABLE model_1" in result["prompt"]
+    assert "Return only the final JSON SQL response" in result["prompt"]
+    assert "Let's think step by step" not in result["prompt"]
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in result["prompt"]
     assert "WREN SQL IDENTIFIER CONTRACT" not in result["prompt"]
 
@@ -145,6 +152,8 @@ def test_sql_correction_prompt_uses_failed_sql_without_user_question():
     assert "User's Question: summarize model records" not in built_prompt
     assert "SQL: SELECT 1" in built_prompt
     assert "Error Message: dry run failed" in built_prompt
+    assert "Return only the final JSON SQL response" in built_prompt
+    assert "Let's think step by step" not in built_prompt
     assert "DIAGNOSTIC CONTEXT" not in built_prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in built_prompt
     assert "WREN SQL IDENTIFIER CONTRACT" not in built_prompt
@@ -163,5 +172,7 @@ def test_sql_regeneration_prompt_keeps_original_sql_as_legacy_reference():
 
     assert "CREATE TABLE model_1" in built_prompt
     assert "Original SQL query: SELECT 1" in built_prompt
+    assert "Return only the final JSON SQL response" in built_prompt
+    assert "Let's think step by step" not in built_prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in built_prompt
     assert "WREN SQL IDENTIFIER CONTRACT" not in built_prompt

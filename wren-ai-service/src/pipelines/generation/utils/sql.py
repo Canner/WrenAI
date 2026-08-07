@@ -333,7 +333,7 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - Do not convert deployed identifiers into display-friendly variants by replacing spaces with underscores, removing prefixes, changing case, shortening names, or expanding abbreviations.
 - For case-insensitive comparisons, use only functions or operators that are supported by SQL FUNCTIONS for this request. If SQL FUNCTIONS does not provide a safe case-insensitive function, use a normal equality or LIKE comparison on an exact schema column.
 - For date/time questions, first choose an exact schema column whose type or metadata clearly represents the requested time concept. Use only date/time functions and casts whose exact syntax is provided in SQL FUNCTIONS for this request.
-- If the question asks for a specific or relative date, generate a bounded date/time filter only when the exact date/time schema column is available and the predicate can be expressed with normal SQL comparison syntax or a SQL FUNCTIONS-supported operation. If either the column or required operation is missing, do not invent a field or function.
+- If the question asks for a specific or relative date, generate a bounded date/time filter only when the exact date/time schema column is available and the predicate can be expressed with normal SQL comparison syntax or exact SQL FUNCTIONS syntax. If either the column or required operation is missing, do not invent a field or function.
 - For explicit calendar month and year requests, use an inclusive lower bound and exclusive upper bound on the exact date/time column, rather than formatting the column into text.
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
@@ -445,9 +445,7 @@ You are a helpful data analyst who is great at thinking deeply and reasoning abo
 
 ### INSTRUCTIONS ###
 1. Think deeply and reason about the user's question, the database schema, and the user's query history if provided.
-2. Explicitly state the following information in the reasoning plan:
-if the user puts any specific timeframe(e.g. YYYY-MM-DD) in the user's question(excluding the value of the current time), you will put the absolute time frame in the SQL query;
-otherwise, you will put the relative timeframe in the SQL query.
+2. Explicitly state the requested timeframe in the reasoning plan. Keep it in natural language unless DATABASE SCHEMA and SQL FUNCTIONS provide the exact date/time column and function syntax needed to express it.
 3. For the ranking problem(e.g. "top x", "bottom x", "first x", "last x"), you must use the ranking function, `DENSE_RANK()` to rank the results and then use `WHERE` clause to filter the results.
 4. For the ranking problem(e.g. "top x", "bottom x", "first x", "last x"), you must add the ranking column to the final SELECT clause.
 5. If USER INSTRUCTIONS section is provided, make sure to consider them in the reasoning plan.
@@ -529,15 +527,18 @@ Given user's question, database schema, etc., you should think deeply and carefu
 2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
 3. YOU MUST REFER to the sql samples and learn the usage of the schema structures and how SQL is written based on them if the section of SQL SAMPLES is available in user's input.
 4. YOU MUST FOLLOW the reasoning plan step by step strictly to generate the SQL query if the section of REASONING PLAN is available in user's input.
-5. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
+5. For date/time filters, use normal comparisons or exact function syntax from SQL FUNCTIONS. Do not invent date arithmetic, INTERVAL expressions, or connector-specific date functions that are not shown in SQL FUNCTIONS.
+6. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be a Wren SQL query in JSON format:
+The final answer must be one JSON object and nothing else. Do not return markdown, explanations, reasoning, or a query plan object.
+The JSON object must have exactly one key named "sql". Do not use keys such as "query", "sql_function", "arguments", "columns", "table", or "where".
+The value of "sql" must be one Wren SQL SELECT statement string.
 
 {{
-    "sql": <SQL_QUERY_STRING>
+    "sql": "SELECT ..."
 }}
 """
 

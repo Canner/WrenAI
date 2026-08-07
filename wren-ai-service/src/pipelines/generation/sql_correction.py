@@ -43,10 +43,12 @@ Make sure you follow the SQL Rules strictly.
 {text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be in JSON format:
+The final answer must be one JSON object and nothing else. Do not return markdown, explanations, reasoning, or a query plan object.
+The JSON object must have exactly one key named "sql". Do not use keys such as "query", "sql_function", "arguments", "columns", "table", or "where".
+The value of "sql" must be one corrected Wren SQL SELECT statement string.
 
 {{
-    "sql": <CORRECTED_SQL_QUERY_STRING>
+    "sql": "SELECT ..."
 }}
 """
 
@@ -77,7 +79,7 @@ sql_correction_user_prompt_template = """
 SQL: {{ invalid_generation_result.sql }}
 Error Message: {{ invalid_generation_result.error }}
 
-Let's think step by step.
+Think through the error silently. Return only the final JSON SQL response.
 """
 
 
