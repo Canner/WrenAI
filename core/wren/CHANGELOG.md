@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.13.3](https://github.com/Canner/WrenAI/compare/wren-v0.13.2...wren-v0.13.3) (2026-08-07)
+
+
+### Bug Fixes
+
+* **context:** filter non-mapping entries in _load_views_v1 ([#2604](https://github.com/Canner/WrenAI/issues/2604)) ([9bdae39](https://github.com/Canner/WrenAI/commit/9bdae39c99a818faa91229bd4a3972c00643f041))
+* **genbi:** reject non-object Vercel API JSON ([#2582](https://github.com/Canner/WrenAI/issues/2582)) ([4cd4bf8](https://github.com/Canner/WrenAI/commit/4cd4bf8d7ee1e3f27c2deca4d9f1eabb799ae99a))
+* **memory:** reject non-list relationship models in schema_indexer ([#2605](https://github.com/Canner/WrenAI/issues/2605)) ([73c1255](https://github.com/Canner/WrenAI/commit/73c1255439795ac9cf538b706ec4c208d6d3f25b))
+* **memory:** skip non-dict rows in extract_schema_items/describe ([#2586](https://github.com/Canner/WrenAI/issues/2586)) ([32d76bf](https://github.com/Canner/WrenAI/commit/32d76bfdab57260e24ebb4cd12d22ab4111e090d))
+* **spark:** apply limit via DataFrame.limit before toPandas ([#2574](https://github.com/Canner/WrenAI/issues/2574)) ([4483ce8](https://github.com/Canner/WrenAI/commit/4483ce8c7eaccf7a8ebc454586884b4d4869f206))
+* **wren-cli:** surface skipped non-mapping rows in parse/translate-types ([#2570](https://github.com/Canner/WrenAI/issues/2570)) ([fc4ebf0](https://github.com/Canner/WrenAI/commit/fc4ebf01130040623abaf2defc500e53a98baee1))
+* **wren:** bound the session-context cache to 32 LRU entries ([#2628](https://github.com/Canner/WrenAI/issues/2628)) ([f92e681](https://github.com/Canner/WrenAI/commit/f92e681fd5731f477dadfed963b63397cf95a283))
+* **wren:** validate import paths before force cleanup ([#2580](https://github.com/Canner/WrenAI/issues/2580)) ([60ee894](https://github.com/Canner/WrenAI/commit/60ee8947670661e0a3faeafbb464e217921f7f6b))
+
 ## [0.13.2](https://github.com/Canner/WrenAI/compare/wren-v0.13.1...wren-v0.13.2) (2026-07-28)
 
 
