@@ -168,6 +168,7 @@ class SQLGeneration(BasicPipeline):
         engine: Engine,
         **kwargs,
     ):
+        self.generation_timeout_seconds = llm_provider.get_timeout()
         self._retriever = document_store_provider.get_retriever(
             document_store_provider.get_store("project_meta")
         )

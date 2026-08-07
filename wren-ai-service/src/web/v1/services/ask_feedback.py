@@ -12,6 +12,7 @@ from src.web.v1.services import BaseRequest
 from src.web.v1.services.ask import (
     AskError,
     AskResult,
+    get_pipeline_timeout_seconds,
     run_pipeline_with_timeout,
     should_skip_sql_diagnosis,
 )
@@ -185,8 +186,9 @@ class AskFeedbackService:
                     trace_id=trace_id,
                 )
 
+                sql_regeneration_pipeline = self._pipelines["sql_regeneration"]
                 text_to_sql_generation_results = await run_pipeline_with_timeout(
-                    self._pipelines["sql_regeneration"].run(
+                    sql_regeneration_pipeline.run(
                         contexts=table_ddls,
                         query=ask_feedback_request.question,
                         sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
@@ -200,7 +202,10 @@ class AskFeedbackService:
                         sql_functions=sql_functions,
                         sql_knowledge=sql_knowledge,
                     ),
-                    self._sql_generation_timeout_seconds,
+                    get_pipeline_timeout_seconds(
+                        sql_regeneration_pipeline,
+                        self._sql_generation_timeout_seconds,
+                    ),
                     "SQL regeneration",
                 )
 
@@ -238,15 +243,21 @@ class AskFeedbackService:
                         )
 
                         if allow_sql_diagnosis and not skip_sql_diagnosis:
+                            sql_diagnosis_pipeline = self._pipelines[
+                                "sql_diagnosis"
+                            ]
                             sql_diagnosis_results = await run_pipeline_with_timeout(
-                                self._pipelines["sql_diagnosis"].run(
+                                sql_diagnosis_pipeline.run(
                                     contexts=table_ddls,
                                     original_sql=original_sql,
                                     invalid_sql=invalid_sql,
                                     error_message=error_message,
                                     language=ask_feedback_request.configurations.language,
                                 ),
-                                self._sql_generation_timeout_seconds,
+                                get_pipeline_timeout_seconds(
+                                    sql_diagnosis_pipeline,
+                                    self._sql_generation_timeout_seconds,
+                                ),
                                 "SQL diagnosis",
                             )
                             sql_diagnosis_reasoning = sql_diagnosis_results[
@@ -259,8 +270,9 @@ class AskFeedbackService:
                                 f"{error_message}\nDiagnosis: {sql_diagnosis_reasoning}"
                             )
 
+                        sql_correction_pipeline = self._pipelines["sql_correction"]
                         sql_correction_results = await run_pipeline_with_timeout(
-                            self._pipelines["sql_correction"].run(
+                            sql_correction_pipeline.run(
                                 contexts=table_ddls,
                                 query=ask_feedback_request.question,
                                 sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
@@ -279,7 +291,10 @@ class AskFeedbackService:
                                 sql_functions=sql_functions,
                                 sql_knowledge=sql_knowledge,
                             ),
-                            self._sql_generation_timeout_seconds,
+                            get_pipeline_timeout_seconds(
+                                sql_correction_pipeline,
+                                self._sql_generation_timeout_seconds,
+                            ),
                             "SQL correction",
                         )
 

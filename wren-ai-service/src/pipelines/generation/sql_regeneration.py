@@ -184,6 +184,7 @@ class SQLRegeneration(BasicPipeline):
         engine: Engine,
         **kwargs,
     ):
+        self.generation_timeout_seconds = llm_provider.get_timeout()
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=get_sql_regeneration_system_prompt(None),

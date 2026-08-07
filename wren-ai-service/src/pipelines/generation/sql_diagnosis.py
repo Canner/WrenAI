@@ -136,6 +136,7 @@ class SQLDiagnosis(BasicPipeline):
         llm_provider: LLMProvider,
         **kwargs,
     ):
+        self.generation_timeout_seconds = llm_provider.get_timeout()
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_diagnosis_system_prompt,

@@ -49,6 +49,18 @@ async def run_pipeline_with_timeout(awaitable, timeout_seconds: float, operation
         ) from exc
 
 
+def get_pipeline_timeout_seconds(
+    pipeline: BasicPipeline,
+    default_timeout_seconds: float,
+) -> float:
+    pipeline_timeout_seconds = getattr(pipeline, "generation_timeout_seconds", None)
+
+    if pipeline_timeout_seconds is None:
+        return default_timeout_seconds
+
+    return max(default_timeout_seconds, pipeline_timeout_seconds)
+
+
 class AskHistory(BaseModel):
     sql: str
     question: str
@@ -507,8 +519,11 @@ class AskService:
                 has_json_field = _retrieval_result.get("has_json_field", False)
 
                 if histories:
+                    sql_generation_pipeline = self._pipelines[
+                        "followup_sql_generation"
+                    ]
                     text_to_sql_generation_results = await run_pipeline_with_timeout(
-                        self._pipelines["followup_sql_generation"].run(
+                        sql_generation_pipeline.run(
                             query=user_query,
                             contexts=table_ddls,
                             sql_generation_reasoning=sql_generation_reasoning,
@@ -525,12 +540,16 @@ class AskService:
                             allow_dry_plan_fallback=allow_dry_plan_fallback,
                             sql_knowledge=sql_knowledge,
                         ),
-                        self._sql_generation_timeout_seconds,
+                        get_pipeline_timeout_seconds(
+                            sql_generation_pipeline,
+                            self._sql_generation_timeout_seconds,
+                        ),
                         "Follow-up SQL generation",
                     )
                 else:
+                    sql_generation_pipeline = self._pipelines["sql_generation"]
                     text_to_sql_generation_results = await run_pipeline_with_timeout(
-                        self._pipelines["sql_generation"].run(
+                        sql_generation_pipeline.run(
                             query=user_query,
                             contexts=table_ddls,
                             sql_generation_reasoning=sql_generation_reasoning,
@@ -546,7 +565,10 @@ class AskService:
                             allow_dry_plan_fallback=allow_dry_plan_fallback,
                             sql_knowledge=sql_knowledge,
                         ),
-                        self._sql_generation_timeout_seconds,
+                        get_pipeline_timeout_seconds(
+                            sql_generation_pipeline,
+                            self._sql_generation_timeout_seconds,
+                        ),
                         "SQL generation",
                     )
 
@@ -602,15 +624,21 @@ class AskService:
 
                         sql_diagnosis_reasoning = None
                         if allow_sql_diagnosis and not skip_sql_diagnosis:
+                            sql_diagnosis_pipeline = self._pipelines[
+                                "sql_diagnosis"
+                            ]
                             sql_diagnosis_results = await run_pipeline_with_timeout(
-                                self._pipelines["sql_diagnosis"].run(
+                                sql_diagnosis_pipeline.run(
                                     contexts=table_ddls,
                                     original_sql=original_sql,
                                     invalid_sql=invalid_sql,
                                     error_message=error_message,
                                     language=ask_request.configurations.language,
                                 ),
-                                self._sql_generation_timeout_seconds,
+                                get_pipeline_timeout_seconds(
+                                    sql_diagnosis_pipeline,
+                                    self._sql_generation_timeout_seconds,
+                                ),
                                 "SQL diagnosis",
                             )
                             sql_diagnosis_reasoning = sql_diagnosis_results[
@@ -621,8 +649,9 @@ class AskService:
                         if sql_diagnosis_reasoning:
                             correction_error_message = sql_diagnosis_reasoning
 
+                        sql_correction_pipeline = self._pipelines["sql_correction"]
                         sql_correction_results = await run_pipeline_with_timeout(
-                            self._pipelines["sql_correction"].run(
+                            sql_correction_pipeline.run(
                                 contexts=table_ddls,
                                 query=user_query,
                                 instructions=instructions,
@@ -641,7 +670,10 @@ class AskService:
                                 sql_functions=sql_functions,
                                 sql_knowledge=sql_knowledge,
                             ),
-                            self._sql_generation_timeout_seconds,
+                            get_pipeline_timeout_seconds(
+                                sql_correction_pipeline,
+                                self._sql_generation_timeout_seconds,
+                            ),
                             "SQL correction",
                         )
 
