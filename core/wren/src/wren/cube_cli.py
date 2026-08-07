@@ -165,13 +165,24 @@ def list_cubes(mdl: _MdlOpt = None) -> None:
         typer.echo("No cubes defined.")
         return
     for cube in cubes:
+        if not isinstance(cube, dict):
+            continue
         name = cube.get("name", "<unnamed>")
         base = cube.get("baseObject", "?")
-        measures = ", ".join(m.get("name", "") for m in cube.get("measures", []))
-        dims = ", ".join(d.get("name", "") for d in cube.get("dimensions", []))
-        time_dims = ", ".join(
-            td.get("name", "") for td in cube.get("timeDimensions", [])
-        )
+
+        def _names(key: str) -> str:
+            raw = cube.get(key, []) or []
+            if not isinstance(raw, list):
+                return ""
+            return ", ".join(
+                m["name"]
+                for m in raw
+                if isinstance(m, dict) and isinstance(m.get("name"), str)
+            )
+
+        measures = _names("measures")
+        dims = _names("dimensions")
+        time_dims = _names("timeDimensions")
         typer.echo(f"  {name} (base: {base})")
         if measures:
             typer.echo(f"    measures: {measures}")
