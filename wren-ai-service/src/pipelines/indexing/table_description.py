@@ -206,15 +206,6 @@ class TableDescriptionChunker:
             if relationships:
                 description["relationships"] = relationships
 
-            semantic_parts = [
-                description.get("displayName", ""),
-                description.get("source", ""),
-                column_context,
-                relationships,
-            ]
-            if semantic_context := "; ".join(part for part in semantic_parts if part):
-                description["semantic_context"] = semantic_context
-
             return description
 
         return [

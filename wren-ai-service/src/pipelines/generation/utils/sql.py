@@ -74,6 +74,7 @@ class SQLGenPostProcessor:
         self,
         replies: List[str] | List[List[str]],
         project_id: str | None = None,
+        mdl_hash: str | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = False,
         data_source: str = "",
@@ -141,6 +142,7 @@ class SQLGenPostProcessor:
             ) = await self._classify_generation_result(
                 cleaned_generation_result,
                 project_id=project_id,
+                mdl_hash=mdl_hash,
                 use_dry_plan=use_dry_plan,
                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                 data_source=data_source,
@@ -166,6 +168,7 @@ class SQLGenPostProcessor:
         self,
         generation_result: str | None,
         project_id: str | None = None,
+        mdl_hash: str | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = False,
         data_source: str = "",
@@ -182,6 +185,7 @@ class SQLGenPostProcessor:
                     generation_result,
                     data_source,
                     project_id=project_id,
+                    mdl_hash=mdl_hash,
                     allow_fallback=allow_dry_plan_fallback,
                 )
 
@@ -216,6 +220,7 @@ class SQLGenPostProcessor:
                     generation_result,
                     session,
                     project_id=project_id,
+                    mdl_hash=mdl_hash,
                     limit=1,
                     dry_run=True,
                 )
@@ -247,6 +252,7 @@ class SQLGenPostProcessor:
                     generation_result,
                     session,
                     project_id=project_id,
+                    mdl_hash=mdl_hash,
                     limit=1,
                     dry_run=True,
                 )
@@ -278,6 +284,7 @@ class SQLGenPostProcessor:
                     generation_result,
                     session,
                     project_id=project_id,
+                    mdl_hash=mdl_hash,
                     limit=1,
                     dry_run=False,
                 )
@@ -426,7 +433,7 @@ For each sample, you should:
 1. Study the question that explains what the query aims to accomplish
 2. Use these samples as intent and style context only, but treat the DATABASE SCHEMA as the only valid source of executable table and column names
 3. Adapt the intent patterns to match new query requirements while maintaining consistent style and approach
-4. Never copy table names, column names, aliases, literal values, placeholders, or functions from samples
+4. Never copy table names, column names, aliases, literal values, placeholders, or functions from samples unless the same identifier or function is present in the current DATABASE SCHEMA or SQL FUNCTIONS
 
 The samples will help you understand:
 - Common analytical intents
@@ -449,15 +456,17 @@ You are a helpful data analyst who is great at thinking deeply and reasoning abo
 3. For the ranking problem(e.g. "top x", "bottom x", "first x", "last x"), you must use the ranking function, `DENSE_RANK()` to rank the results and then use `WHERE` clause to filter the results.
 4. For the ranking problem(e.g. "top x", "bottom x", "first x", "last x"), you must add the ranking column to the final SELECT clause.
 5. If USER INSTRUCTIONS section is provided, make sure to consider them in the reasoning plan.
-6. If SQL SAMPLES section is provided, make sure to consider them in the reasoning plan.
-7. Give a step by step reasoning plan in order to answer user's question.
-8. The reasoning plan should be in the language same as the language user provided in the input.
-9. Don't include SQL in the reasoning plan.
-10. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
-11. Do not include ```markdown or ``` in the answer.
-12. A table name in the reasoning plan must be in this format: `table: <table_name>`.
-13. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
-14. ONLY SHOWING the reasoning plan in bullet points.
+6. If SQL SAMPLES section is provided, consider only their intent and style. Do not use sample table names, column names, aliases, literal values, placeholders, or functions unless the same identifier or function is present in the current DATABASE SCHEMA or SQL FUNCTIONS.
+7. When naming any table or column in the reasoning plan, copy the exact identifier from the CREATE TABLE or CREATE VIEW statements in DATABASE SCHEMA. Do not convert business terms from the user's wording into table or column identifiers.
+8. If a business term in the user question maps to a differently named model or column, explicitly map it to the exact DATABASE SCHEMA identifier in the reasoning plan.
+9. Give a step by step reasoning plan in order to answer user's question.
+10. The reasoning plan should be in the language same as the language user provided in the input.
+11. Don't include SQL in the reasoning plan.
+12. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
+13. Do not include ```markdown or ``` in the answer.
+14. A table name in the reasoning plan must be in this format: `table: <table_name>`.
+15. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
+16. ONLY SHOWING the reasoning plan in bullet points.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
@@ -525,10 +534,11 @@ Given user's question, database schema, etc., you should think deeply and carefu
 
 1. YOU MUST FOLLOW the instructions strictly to generate the SQL query if the section of USER INSTRUCTIONS is available in user's input.
 2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
-3. YOU MUST REFER to the sql samples and learn the usage of the schema structures and how SQL is written based on them if the section of SQL SAMPLES is available in user's input.
-4. YOU MUST FOLLOW the reasoning plan step by step strictly to generate the SQL query if the section of REASONING PLAN is available in user's input.
+3. YOU MUST REFER to the sql samples for intent and style only if the section of SQL SAMPLES is available in user's input. SQL samples are not a source of executable identifiers for the current query.
+4. YOU MUST FOLLOW the reasoning plan step by step strictly to generate the SQL query if the section of REASONING PLAN is available in user's input, but table and column identifiers in the final SQL must still be copied from DATABASE SCHEMA.
 5. For date/time filters, use normal comparisons or exact function syntax from SQL FUNCTIONS. Do not invent date arithmetic, INTERVAL expressions, or connector-specific date functions that are not shown in SQL FUNCTIONS.
-6. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
+6. If the question, SQL SAMPLES, USER INSTRUCTIONS, or REASONING PLAN mention a table or column name that is not declared in DATABASE SCHEMA, treat that text as business context only and choose the exact matching identifier from DATABASE SCHEMA.
+7. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {text_to_sql_rules}
 

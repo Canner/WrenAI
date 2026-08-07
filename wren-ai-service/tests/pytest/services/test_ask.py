@@ -14,7 +14,6 @@ from src.web.v1.services.ask import (
     AskResultRequest,
     AskService,
     get_pipeline_timeout_seconds,
-    should_skip_sql_diagnosis,
 )
 from src.web.v1.services.semantics_preparation import (
     SemanticsPreparationRequest,
@@ -145,23 +144,23 @@ def mdl_str():
         return orjson.dumps(json.load(f)).decode("utf-8")
 
 
-def test_ask_request_skips_sql_generation_reasoning_by_default():
+def test_ask_request_uses_sql_generation_reasoning_by_default():
     ask_request = AskRequest(query="question", mdl_hash="deploy")
 
-    assert ask_request.ignore_sql_generation_reasoning is True
+    assert ask_request.ignore_sql_generation_reasoning is False
 
 
-def test_ask_request_uses_strict_dry_plan_by_default():
+def test_ask_request_uses_preview_validation_by_default():
     ask_request = AskRequest(query="question", mdl_hash="deploy")
 
-    assert ask_request.use_dry_plan is True
-    assert ask_request.allow_dry_plan_fallback is False
+    assert ask_request.use_dry_plan is False
+    assert ask_request.allow_dry_plan_fallback is True
 
 
-def test_ask_service_uses_single_sql_correction_retry_by_default():
+def test_ask_service_uses_legacy_sql_correction_retries_by_default():
     ask_service = AskService({})
 
-    assert ask_service._max_sql_correction_retries == 1
+    assert ask_service._max_sql_correction_retries == 3
 
 
 def test_pipeline_timeout_uses_provider_timeout_when_longer():
@@ -177,15 +176,6 @@ def test_pipeline_timeout_keeps_default_when_provider_timeout_is_shorter_or_miss
 
     assert get_pipeline_timeout_seconds(short_timeout_pipeline, 120) == 120
     assert get_pipeline_timeout_seconds(object(), 120) == 120
-
-
-def test_should_skip_sql_diagnosis_for_deterministic_validation_errors():
-    assert should_skip_sql_diagnosis({"type": "SQL_SHAPE"}) is True
-    assert should_skip_sql_diagnosis({"type": "SCHEMA_GROUNDING"}) is True
-    assert should_skip_sql_diagnosis({"type": "SQL_GENERATION"}) is True
-    assert should_skip_sql_diagnosis({"type": "SQL_VALUE_GROUNDING"}) is True
-    assert should_skip_sql_diagnosis({"type": "DRY_RUN"}) is False
-    assert should_skip_sql_diagnosis({}) is False
 
 
 class _EmptyRetrievalPipeline:
@@ -291,7 +281,7 @@ class _FailingDiagnosisPipeline:
 
 
 @pytest.mark.asyncio
-async def test_ask_skips_sql_diagnosis_for_local_validation_error():
+async def test_ask_runs_sql_correction_for_validation_error():
     correction = _CapturingCorrectionPipeline()
     diagnosis = _FailingDiagnosisPipeline()
     ask_service = AskService(
@@ -305,9 +295,10 @@ async def test_ask_skips_sql_diagnosis_for_local_validation_error():
             "sql_diagnosis": diagnosis,
         },
         allow_intent_classification=False,
+        allow_sql_generation_reasoning=False,
         allow_sql_functions_retrieval=False,
         allow_sql_knowledge_retrieval=False,
-        allow_sql_diagnosis=True,
+        allow_sql_diagnosis=False,
     )
     query_id = str(uuid.uuid4())
     ask_request = AskRequest(query="count records by model", mdl_hash=None)
@@ -341,9 +332,10 @@ async def test_ask_correction_recovers_no_relevant_sql_with_schema_context():
             "sql_diagnosis": diagnosis,
         },
         allow_intent_classification=False,
+        allow_sql_generation_reasoning=False,
         allow_sql_functions_retrieval=False,
         allow_sql_knowledge_retrieval=False,
-        allow_sql_diagnosis=True,
+        allow_sql_diagnosis=False,
     )
     query_id = str(uuid.uuid4())
     ask_request = AskRequest(query="count records by model", mdl_hash=None)
@@ -380,6 +372,7 @@ async def test_ask_times_out_slow_sql_generation_instead_of_hanging():
             "sql_generation": _SlowSqlGenerationPipeline(),
         },
         allow_intent_classification=False,
+        allow_sql_generation_reasoning=False,
         allow_sql_functions_retrieval=False,
         allow_sql_knowledge_retrieval=False,
         sql_generation_timeout_seconds=0.01,
@@ -411,6 +404,7 @@ async def test_ask_uses_provider_timeout_for_slow_local_sql_generation():
             "sql_generation": _SlowButProviderAllowedSqlGenerationPipeline(),
         },
         allow_intent_classification=False,
+        allow_sql_generation_reasoning=False,
         allow_sql_functions_retrieval=False,
         allow_sql_knowledge_retrieval=False,
         sql_generation_timeout_seconds=0.01,

@@ -1,6 +1,14 @@
 import pytest
 
-from src.pipelines.generation.sql_diagnosis import post_process
+from src.pipelines.generation.sql_diagnosis import (
+    post_process,
+    sql_diagnosis_system_prompt,
+)
+
+
+def test_sql_diagnosis_uses_database_schema_as_identifier_authority():
+    assert "DATABASE SCHEMA as the only source" in sql_diagnosis_system_prompt
+    assert "diagnose that identifier as ungrounded" in sql_diagnosis_system_prompt
 
 
 @pytest.mark.asyncio

@@ -98,6 +98,7 @@ export interface CheckCalculatedFieldCanQueryData {
 export interface PreviewSQLData {
   sql: string;
   projectId?: string;
+  hash?: string;
   limit?: number;
   dryRun?: boolean;
 }
@@ -105,5 +106,6 @@ export interface PreviewSQLData {
 export interface DryPlanSQLData {
   sql: string;
   projectId?: string;
+  hash?: string;
   allowFallback?: boolean;
 }

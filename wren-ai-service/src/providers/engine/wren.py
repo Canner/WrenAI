@@ -28,6 +28,7 @@ class WrenUI(Engine):
         sql: str,
         session: aiohttp.ClientSession,
         project_id: str | None = None,
+        mdl_hash: str | None = None,
         dry_run: bool = True,
         timeout: float = settings.engine_timeout,
         limit: int = 500,
@@ -37,6 +38,8 @@ class WrenUI(Engine):
             "sql": remove_limit_statement(sql),
             "projectId": project_id,
         }
+        if mdl_hash:
+            data["hash"] = mdl_hash
         if dry_run:
             data["dryRun"] = True
             data["limit"] = 1
@@ -144,6 +147,7 @@ class WrenUI(Engine):
         sql: str,
         data_source: str,
         project_id: str | None = None,
+        mdl_hash: str | None = None,
         timeout: float = settings.engine_timeout,
         allow_fallback: bool = False,
         **kwargs,
@@ -153,6 +157,8 @@ class WrenUI(Engine):
             "projectId": project_id,
             "allowFallback": allow_fallback,
         }
+        if mdl_hash:
+            data["hash"] = mdl_hash
 
         try:
             async with session.post(

@@ -27,6 +27,7 @@ class DataFetcher:
         self,
         sql: str,
         project_id: str | None = None,
+        mdl_hash: str | None = None,
         limit: int = 500,
     ):
         async with aiohttp.ClientSession() as session:
@@ -34,6 +35,7 @@ class DataFetcher:
                 sql,
                 session,
                 project_id=project_id,
+                mdl_hash=mdl_hash,
                 dry_run=False,
                 limit=limit,
             )
@@ -49,11 +51,13 @@ async def execute_sql(
     sql: str,
     data_fetcher: DataFetcher,
     project_id: str | None = None,
+    mdl_hash: str | None = None,
     limit: int = 500,
 ) -> dict:
     return await data_fetcher.run(
         sql=sql,
         project_id=project_id,
+        mdl_hash=mdl_hash,
         limit=limit,
     )
 
@@ -78,7 +82,11 @@ class SQLExecutor(BasicPipeline):
 
     @observe(name="SQL Execution")
     async def run(
-        self, sql: str, project_id: str | None = None, limit: int = 500
+        self,
+        sql: str,
+        project_id: str | None = None,
+        mdl_hash: str | None = None,
+        limit: int = 500,
     ) -> dict:
         logger.info("SQL Execution pipeline is running...")
         return await self._pipe.execute(
@@ -86,6 +94,7 @@ class SQLExecutor(BasicPipeline):
             inputs={
                 "sql": sql,
                 "project_id": project_id,
+                "mdl_hash": mdl_hash,
                 "limit": limit,
                 **self._components,
             },

@@ -76,9 +76,11 @@ sql_correction_user_prompt_template = """
 {% endif %}
 
 ### QUESTION ###
+User's Question: {{ query }}
 SQL: {{ invalid_generation_result.sql }}
 Error Message: {{ invalid_generation_result.error }}
 
+Use DATABASE SCHEMA as the only source for executable table and column identifiers. The invalid SQL and error message explain what failed, but they must not introduce identifiers that are absent from DATABASE SCHEMA.
 Think through the error silently. Return only the final JSON SQL response.
 """
 
@@ -127,12 +129,14 @@ async def post_process(
     data_source: str,
     query: str | None = None,
     project_id: str | None = None,
+    mdl_hash: str | None = None,
     use_dry_plan: bool = False,
     allow_dry_plan_fallback: bool = False,
 ) -> dict:
     return await post_processor.run(
         generate_sql_correction.get("replies"),
         project_id=project_id,
+        mdl_hash=mdl_hash,
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,

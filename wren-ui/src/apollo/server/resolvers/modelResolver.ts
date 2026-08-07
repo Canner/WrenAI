@@ -1368,11 +1368,13 @@ export class ModelResolver {
     args: { data: PreviewSQLData },
     ctx: IContext,
   ) {
-    const { sql, projectId, limit, dryRun } = args.data;
+    const { sql, projectId, hash, limit, dryRun } = args.data;
     const project = projectId
       ? await ctx.projectService.getProjectById(parseInt(projectId))
       : await ctx.projectService.getCurrentProject();
-    const manifest = await this.getLastDeployedManifest(ctx, project.id);
+    const manifest = hash
+      ? await ctx.deployService.getMDLByHash(hash)
+      : await this.getLastDeployedManifest(ctx, project.id);
     return await ctx.queryService.preview(sql, {
       project,
       limit: limit,
@@ -1387,11 +1389,13 @@ export class ModelResolver {
     args: { data: DryPlanSQLData },
     ctx: IContext,
   ): Promise<boolean> {
-    const { sql, projectId, allowFallback } = args.data;
+    const { sql, projectId, hash, allowFallback } = args.data;
     const project = projectId
       ? await ctx.projectService.getProjectById(parseInt(projectId))
       : await ctx.projectService.getCurrentProject();
-    const manifest = await this.getLastDeployedManifest(ctx, project.id);
+    const manifest = hash
+      ? await ctx.deployService.getMDLByHash(hash)
+      : await this.getLastDeployedManifest(ctx, project.id);
 
     try {
       if (project.type === DataSourceName.DUCKDB) {

@@ -25,6 +25,7 @@ from src.pipelines.generation.sql_regeneration import (
     sql_regeneration_user_prompt_template,
 )
 from src.pipelines.generation.utils.sql import SQL_GENERATION_MODEL_KWARGS
+from src.pipelines.generation.utils.sql import sql_generation_reasoning_system_prompt
 
 
 def test_sql_generation_system_prompt_uses_schema_without_extra_catalog_layer():
@@ -64,6 +65,14 @@ def test_sql_regeneration_system_prompt_allows_standard_aggregates_without_sql_f
 def test_sql_generation_model_kwargs_preserve_structured_output_only():
     assert "max_tokens" not in SQL_GENERATION_MODEL_KWARGS
     assert SQL_GENERATION_MODEL_KWARGS["response_format"]["type"] == "json_schema"
+
+
+def test_sql_generation_reasoning_maps_business_terms_to_schema_identifiers():
+    prompt = sql_generation_reasoning_system_prompt
+
+    assert "copy the exact identifier from the CREATE TABLE or CREATE VIEW statements" in prompt
+    assert "Do not convert business terms from the user's wording" in prompt
+    assert "explicitly map it to the exact DATABASE SCHEMA identifier" in prompt
 
 
 @pytest.mark.asyncio
@@ -113,6 +122,7 @@ def test_sql_generation_prompt_includes_sample_sql_body():
 
     assert "sample intent" in built_prompt
     assert "SELECT 1" in built_prompt
+    assert "Use DATABASE SCHEMA as the only source" in built_prompt
     assert "Return only the final JSON SQL response" in built_prompt
     assert "Let's think step by step" not in built_prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in built_prompt
@@ -136,7 +146,7 @@ def test_followup_sql_generation_prompt_uses_retrieved_schema_context():
     assert "WREN SQL IDENTIFIER CONTRACT" not in result["prompt"]
 
 
-def test_sql_correction_prompt_uses_failed_sql_without_user_question():
+def test_sql_correction_prompt_uses_failed_sql_with_user_question():
     result = build_sql_correction_prompt(
         documents=[],
         invalid_generation_result={
@@ -149,9 +159,10 @@ def test_sql_correction_prompt_uses_failed_sql_without_user_question():
 
     built_prompt = result["prompt"]
 
-    assert "User's Question: summarize model records" not in built_prompt
+    assert "User's Question: summarize model records" in built_prompt
     assert "SQL: SELECT 1" in built_prompt
     assert "Error Message: dry run failed" in built_prompt
+    assert "Use DATABASE SCHEMA as the only source" in built_prompt
     assert "Return only the final JSON SQL response" in built_prompt
     assert "Let's think step by step" not in built_prompt
     assert "DIAGNOSTIC CONTEXT" not in built_prompt
@@ -171,7 +182,9 @@ def test_sql_regeneration_prompt_keeps_original_sql_as_legacy_reference():
     built_prompt = result["prompt"]
 
     assert "CREATE TABLE model_1" in built_prompt
+    assert "User's Question: summarize model records" in built_prompt
     assert "Original SQL query: SELECT 1" in built_prompt
+    assert "Use DATABASE SCHEMA as the only source" in built_prompt
     assert "Return only the final JSON SQL response" in built_prompt
     assert "Let's think step by step" not in built_prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in built_prompt

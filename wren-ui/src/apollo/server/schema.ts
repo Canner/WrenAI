@@ -927,6 +927,7 @@ export const typeDefs = gql`
   input PreviewSQLDataInput {
     sql: String!
     projectId: String
+    hash: String
     limit: Int
     dryRun: Boolean
   }
@@ -934,6 +935,7 @@ export const typeDefs = gql`
   input DryPlanSQLDataInput {
     sql: String!
     projectId: String
+    hash: String
     allowFallback: Boolean
   }
 

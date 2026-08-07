@@ -95,9 +95,11 @@ SQL:
 {% endif %}
 
 ### QUESTION ###
+User's Question: {{ query }}
 SQL generation reasoning: {{ sql_generation_reasoning }}
 Original SQL query: {{ sql }}
 
+Use DATABASE SCHEMA as the only source for executable table and column identifiers. The original SQL and reasoning plan can explain intent, but they must not introduce identifiers that are absent from DATABASE SCHEMA.
 Think through the request silently. Return only the final JSON SQL response.
 """
 
@@ -163,10 +165,12 @@ async def post_process(
     regenerate_sql: dict,
     post_processor: SQLGenPostProcessor,
     project_id: str | None = None,
+    mdl_hash: str | None = None,
 ) -> dict:
     return await post_processor.run(
         regenerate_sql.get("replies"),
         project_id=project_id,
+        mdl_hash=mdl_hash,
         meta=regenerate_sql.get("meta"),
     )
 
@@ -208,6 +212,7 @@ class SQLRegeneration(BasicPipeline):
         sql_samples: list[dict] | None = None,
         instructions: list[dict] | None = None,
         project_id: str | None = None,
+        mdl_hash: str | None = None,
         has_calculated_field: bool = False,
         has_metric: bool = False,
         has_json_field: bool = False,
@@ -226,6 +231,7 @@ class SQLRegeneration(BasicPipeline):
                 "sql_samples": sql_samples,
                 "instructions": instructions,
                 "project_id": project_id,
+                "mdl_hash": mdl_hash,
                 "has_calculated_field": has_calculated_field,
                 "has_metric": has_metric,
                 "has_json_field": has_json_field,

@@ -80,6 +80,7 @@ User's Follow-up Question: {{ query }}
 ### REASONING PLAN ###
 {{ sql_generation_reasoning }}
 
+Use DATABASE SCHEMA as the only source for executable table and column identifiers. The follow-up question, SQL samples, query history, and reasoning plan can explain intent, but they must not introduce identifiers that are absent from DATABASE SCHEMA.
 Think through the request silently. Return only the final JSON SQL response.
 """
 
@@ -147,12 +148,14 @@ async def post_process(
     post_processor: SQLGenPostProcessor,
     data_source: str,
     project_id: str | None = None,
+    mdl_hash: str | None = None,
     use_dry_plan: bool = False,
     allow_dry_plan_fallback: bool = False,
 ) -> dict:
     return await post_processor.run(
         generate_sql_in_followup.get("replies"),
         project_id=project_id,
+        mdl_hash=mdl_hash,
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,

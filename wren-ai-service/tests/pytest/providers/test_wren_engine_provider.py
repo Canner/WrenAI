@@ -23,6 +23,7 @@ async def test_wren_ui_dry_plan_calls_graphql_planner():
                 sql="SELECT 1",
                 data_source="source",
                 project_id="project-id",
+                mdl_hash="deploy-hash",
                 allow_fallback=False,
             )
 
@@ -34,9 +35,42 @@ async def test_wren_ui_dry_plan_calls_graphql_planner():
             "data": {
                 "sql": "SELECT 1",
                 "projectId": "project-id",
+                "hash": "deploy-hash",
                 "allowFallback": False,
             }
         },
+    }
+
+
+@pytest.mark.asyncio
+async def test_wren_ui_execute_sql_sends_deployment_hash_to_preview():
+    endpoint = "http://engine-host"
+    captured_request = {}
+
+    def callback(_url, **kwargs):
+        captured_request.update(kwargs)
+        return CallbackResult(payload={"data": {"previewSql": {"data": [{"ok": 1}]}}})
+
+    with aioresponses() as mocked:
+        mocked.post(f"{endpoint}/api/graphql", callback=callback)
+
+        async with aiohttp.ClientSession() as session:
+            success, _, addition = await WrenUI(endpoint=endpoint).execute_sql(
+                "SELECT 1",
+                session,
+                project_id="project-id",
+                mdl_hash="deploy-hash",
+                dry_run=True,
+            )
+
+    assert success is True
+    assert addition == {"correlation_id": ""}
+    assert captured_request["json"]["variables"]["data"] == {
+        "sql": "SELECT 1",
+        "projectId": "project-id",
+        "hash": "deploy-hash",
+        "dryRun": True,
+        "limit": 1,
     }
 
 

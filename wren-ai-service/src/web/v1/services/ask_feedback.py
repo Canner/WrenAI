@@ -193,6 +193,7 @@ class AskFeedbackService:
                         sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
                         sql=ask_feedback_request.sql,
                         project_id=ask_feedback_request.project_id,
+                        mdl_hash=ask_feedback_request.mdl_hash,
                         sql_samples=sql_samples,
                         instructions=instructions,
                         has_calculated_field=has_calculated_field,

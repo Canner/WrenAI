@@ -208,11 +208,6 @@ def test_table_description_includes_column_semantic_context():
                 "AttributeOne varchar Generic generated attribute description.; "
                 "MeasureOne float Generic generated measure description."
             ),
-            "semantic_context": (
-                "Resource; "
-                "AttributeOne varchar Generic generated attribute description.; "
-                "MeasureOne float Generic generated measure description."
-            ),
         }
     )
 
