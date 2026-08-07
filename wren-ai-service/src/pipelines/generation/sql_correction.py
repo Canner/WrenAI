@@ -61,6 +61,12 @@ sql_correction_user_prompt_template = """
 {% endfor %}
 {% endif %}
 
+{% if schema_grounding %}
+### RETRIEVED EXECUTABLE SCHEMA ###
+The following identifiers come from Ask Retrieval for this question. Use these exact model/table and column names when correcting SQL.
+{{ schema_grounding }}
+{% endif %}
+
 {% if sql_functions %}
 ### SQL FUNCTIONS ###
 {% for function in sql_functions %}
@@ -80,7 +86,8 @@ User's Question: {{ query }}
 SQL: {{ invalid_generation_result.sql }}
 Error Message: {{ invalid_generation_result.error }}
 
-Use DATABASE SCHEMA as the only source for executable table and column identifiers. The invalid SQL and error message explain what failed, but they must not introduce identifiers that are absent from DATABASE SCHEMA.
+Use DATABASE SCHEMA and RETRIEVED EXECUTABLE SCHEMA as the only sources for executable table and column identifiers. The invalid SQL and error message explain what failed, but they must not introduce identifiers that are absent from the retrieved schema.
+If the invalid SQL contains a table or column name that is not listed as a retrieved model/table or column identifier, replace it using the retrieved schema rather than preserving it.
 Think through the error silently. Return only the final JSON SQL response.
 """
 
@@ -92,11 +99,13 @@ def prompt(
     invalid_generation_result: Dict,
     prompt_builder: PromptBuilder,
     query: str | None = None,
+    schema_grounding: str | None = None,
     instructions: list[dict] | None = None,
     sql_functions: list[SqlFunction] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         documents=documents,
+        schema_grounding=schema_grounding,
         invalid_generation_result=invalid_generation_result,
         query=query or "",
         instructions=construct_instructions(
@@ -183,6 +192,7 @@ class SQLCorrection(BasicPipeline):
         invalid_generation_result: Dict[str, str],
         query: str | None = None,
         sql_generation_reasoning: str | None = None,
+        schema_grounding: str | None = None,
         instructions: list[dict] | None = None,
         sql_functions: list[SqlFunction] | None = None,
         project_id: str | None = None,
@@ -208,6 +218,7 @@ class SQLCorrection(BasicPipeline):
                 "invalid_generation_result": invalid_generation_result,
                 "query": query,
                 "documents": contexts,
+                "schema_grounding": schema_grounding,
                 "instructions": instructions,
                 "sql_functions": sql_functions,
                 "project_id": project_id,

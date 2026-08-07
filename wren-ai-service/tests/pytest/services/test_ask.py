@@ -13,6 +13,7 @@ from src.web.v1.services.ask import (
     AskRequest,
     AskResultRequest,
     AskService,
+    build_schema_grounding_context,
     get_pipeline_timeout_seconds,
 )
 from src.web.v1.services.semantics_preparation import (
@@ -178,6 +179,27 @@ def test_pipeline_timeout_keeps_default_when_provider_timeout_is_shorter_or_miss
     assert get_pipeline_timeout_seconds(object(), 120) == 120
 
 
+def test_schema_grounding_context_uses_retrieved_identifiers():
+    context = build_schema_grounding_context(
+        [
+            {
+                "table_name": "deployed_order_model",
+                "column_names": ["ship_country", "order_date"],
+                "manifest_column_names": ["id", "ship_country", "order_date"],
+                "relationship_constraints": [
+                    "FOREIGN KEY (customer_id) REFERENCES customer(id)"
+                ],
+            }
+        ]
+    )
+
+    assert '- model/table: "deployed_order_model"' in context
+    assert '- "ship_country"' in context
+    assert '- "order_date"' in context
+    assert "FOREIGN KEY" in context
+    assert '"orders"' not in context
+
+
 class _EmptyRetrievalPipeline:
     async def run(self, **_):
         return {"formatted_output": {"documents": []}}
@@ -218,7 +240,11 @@ class _ShapeInvalidSqlGenerationPipeline:
 
 
 class _NoRelevantSqlGenerationPipeline:
+    def __init__(self):
+        self.calls = []
+
     async def run(self, **_):
+        self.calls.append(_)
         return {
             "post_process": {
                 "valid_generation_result": {},
@@ -321,13 +347,14 @@ async def test_ask_runs_sql_correction_for_validation_error():
 async def test_ask_correction_recovers_no_relevant_sql_with_schema_context():
     correction = _CapturingCorrectionPipeline()
     diagnosis = _FailingDiagnosisPipeline()
+    generation = _NoRelevantSqlGenerationPipeline()
     ask_service = AskService(
         {
             "historical_question": _EmptyRetrievalPipeline(),
             "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
             "instructions_retrieval": _EmptyRetrievalPipeline(),
             "db_schema_retrieval": _SchemaRetrievalPipeline(),
-            "sql_generation": _NoRelevantSqlGenerationPipeline(),
+            "sql_generation": generation,
             "sql_correction": correction,
             "sql_diagnosis": diagnosis,
         },
@@ -355,6 +382,16 @@ async def test_ask_correction_recovers_no_relevant_sql_with_schema_context():
     assert correction.calls[0]["contexts"] == [
         "CREATE TABLE model_alpha (entity_id INTEGER)"
     ]
+    assert generation.calls[0]["schema_grounding"] == (
+        '- model/table: "model_alpha"\n'
+        "  columns:\n"
+        '    - "entity_id"'
+    )
+    assert correction.calls[0]["schema_grounding"] == (
+        '- model/table: "model_alpha"\n'
+        "  columns:\n"
+        '    - "entity_id"'
+    )
     assert correction.calls[0]["invalid_generation_result"] == {
         "sql": "",
         "error": "No grounded SQL was generated from the current schema.",

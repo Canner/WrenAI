@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from cachetools import TTLCache
 from langfuse.decorators import observe
@@ -47,6 +47,41 @@ def get_pipeline_timeout_seconds(
 class AskHistory(BaseModel):
     sql: str
     question: str
+
+
+def build_schema_grounding_context(documents: list[dict[str, Any]]) -> str:
+    lines: list[str] = []
+
+    for document in documents:
+        table_name = document.get("table_name")
+        if not table_name:
+            continue
+
+        lines.append(f'- model/table: "{table_name}"')
+
+        selected_columns = [
+            column for column in document.get("column_names", []) if column
+        ]
+        manifest_columns = [
+            column for column in document.get("manifest_column_names", []) if column
+        ]
+        columns = selected_columns or manifest_columns
+        if columns:
+            lines.append("  columns:")
+            lines.extend(f'    - "{column}"' for column in columns)
+
+        relationship_constraints = [
+            constraint
+            for constraint in document.get("relationship_constraints", [])
+            if constraint
+        ]
+        if relationship_constraints:
+            lines.append("  relationships:")
+            lines.extend(
+                f"    - {constraint}" for constraint in relationship_constraints
+            )
+
+    return "\n".join(lines)
 
 
 # POST /v1/asks
@@ -194,6 +229,7 @@ class AskService:
         instructions = []
         api_results = []
         table_names = []
+        schema_grounding = ""
         error_message = None
         invalid_sql = None
         allow_sql_generation_reasoning = (
@@ -395,6 +431,7 @@ class AskService:
                 documents = _retrieval_result.get("retrieval_results", [])
                 table_names = [document.get("table_name") for document in documents]
                 table_ddls = [document.get("table_ddl") for document in documents]
+                schema_grounding = build_schema_grounding_context(documents)
 
                 if not documents:
                     logger.exception(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
@@ -435,6 +472,7 @@ class AskService:
                         await self._pipelines["followup_sql_generation_reasoning"].run(
                             query=user_query,
                             contexts=table_ddls,
+                            schema_grounding=schema_grounding,
                             histories=histories,
                             sql_samples=sql_samples,
                             instructions=instructions,
@@ -447,6 +485,7 @@ class AskService:
                         await self._pipelines["sql_generation_reasoning"].run(
                             query=user_query,
                             contexts=table_ddls,
+                            schema_grounding=schema_grounding,
                             sql_samples=sql_samples,
                             instructions=instructions,
                             configuration=ask_request.configurations,
@@ -509,6 +548,7 @@ class AskService:
                         sql_generation_pipeline.run(
                             query=user_query,
                             contexts=table_ddls,
+                            schema_grounding=schema_grounding,
                             sql_generation_reasoning=sql_generation_reasoning,
                             histories=histories,
                             project_id=ask_request.project_id,
@@ -535,6 +575,7 @@ class AskService:
                         sql_generation_pipeline.run(
                             query=user_query,
                             contexts=table_ddls,
+                            schema_grounding=schema_grounding,
                             sql_generation_reasoning=sql_generation_reasoning,
                             project_id=ask_request.project_id,
                             mdl_hash=ask_request.mdl_hash,
@@ -620,6 +661,7 @@ class AskService:
                         sql_correction_results = await run_pipeline_with_timeout(
                             sql_correction_pipeline.run(
                                 contexts=table_ddls,
+                                schema_grounding=schema_grounding,
                                 query=user_query,
                                 instructions=instructions,
                                 invalid_generation_result={

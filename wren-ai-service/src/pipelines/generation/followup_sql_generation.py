@@ -38,6 +38,12 @@ generate one SQL query to best answer user's question.
     {{ document }}
 {% endfor %}
 
+{% if schema_grounding %}
+### RETRIEVED EXECUTABLE SCHEMA ###
+The following identifiers come from Ask Retrieval for this question. Use these exact model/table and column names when writing SQL.
+{{ schema_grounding }}
+{% endif %}
+
 {% if calculated_field_instructions %}
 {{ calculated_field_instructions }}
 {% endif %}
@@ -80,7 +86,8 @@ User's Follow-up Question: {{ query }}
 ### REASONING PLAN ###
 {{ sql_generation_reasoning }}
 
-Use DATABASE SCHEMA as the only source for executable table and column identifiers. The follow-up question, SQL samples, query history, and reasoning plan can explain intent, but they must not introduce identifiers that are absent from DATABASE SCHEMA.
+Use DATABASE SCHEMA and RETRIEVED EXECUTABLE SCHEMA as the only sources for executable table and column identifiers. The follow-up question, SQL samples, query history, and reasoning plan can explain intent, but they must not introduce identifiers that are absent from the retrieved schema.
+If a word from the user's question or query history is not listed as a retrieved model/table or column identifier, do not use that word as an SQL identifier.
 Think through the request silently. Return only the final JSON SQL response.
 """
 
@@ -92,6 +99,7 @@ def prompt(
     documents: list[str],
     sql_generation_reasoning: str,
     prompt_builder: PromptBuilder,
+    schema_grounding: str | None = None,
     sql_samples: list[dict] | None = None,
     instructions: list[dict] | None = None,
     has_calculated_field: bool = False,
@@ -103,6 +111,7 @@ def prompt(
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
+        schema_grounding=schema_grounding,
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
@@ -202,6 +211,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         contexts: list[str],
         sql_generation_reasoning: str,
         histories: list[AskHistory],
+        schema_grounding: str | None = None,
         sql_samples: list[dict] | None = None,
         instructions: list[dict] | None = None,
         project_id: str | None = None,
@@ -230,6 +240,7 @@ class FollowUpSQLGeneration(BasicPipeline):
             inputs={
                 "query": query,
                 "documents": contexts,
+                "schema_grounding": schema_grounding,
                 "sql_generation_reasoning": sql_generation_reasoning,
                 "histories": histories,
                 "project_id": project_id,

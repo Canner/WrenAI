@@ -32,6 +32,12 @@ sql_generation_user_prompt_template = """
     {{ document }}
 {% endfor %}
 
+{% if schema_grounding %}
+### RETRIEVED EXECUTABLE SCHEMA ###
+The following identifiers come from Ask Retrieval for this question. Use these exact model/table and column names when writing SQL.
+{{ schema_grounding }}
+{% endif %}
+
 {% if calculated_field_instructions %}
 {{ calculated_field_instructions }}
 {% endif %}
@@ -76,7 +82,8 @@ User's Question: {{ query }}
 {{ sql_generation_reasoning }}
 {% endif %}
 
-Use DATABASE SCHEMA as the only source for executable table and column identifiers. The question, SQL samples, and reasoning plan can explain intent, but they must not introduce identifiers that are absent from DATABASE SCHEMA.
+Use DATABASE SCHEMA and RETRIEVED EXECUTABLE SCHEMA as the only sources for executable table and column identifiers. The question, SQL samples, and reasoning plan can explain intent, but they must not introduce identifiers that are absent from the retrieved schema.
+If a word from the user's question is not listed as a retrieved model/table or column identifier, do not use that word as an SQL identifier.
 Think through the request silently. Return only the final JSON SQL response.
 """
 
@@ -88,6 +95,7 @@ def prompt(
     documents: list[str],
     prompt_builder: PromptBuilder,
     sql_generation_reasoning: str | None = None,
+    schema_grounding: str | None = None,
     sql_samples: list[dict] | None = None,
     instructions: list[dict] | None = None,
     has_calculated_field: bool = False,
@@ -99,6 +107,7 @@ def prompt(
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
+        schema_grounding=schema_grounding,
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
@@ -196,6 +205,7 @@ class SQLGeneration(BasicPipeline):
         query: str,
         contexts: list[str],
         sql_generation_reasoning: str | None = None,
+        schema_grounding: str | None = None,
         sql_samples: list[dict] | None = None,
         instructions: list[dict] | None = None,
         project_id: str | None = None,
@@ -226,6 +236,7 @@ class SQLGeneration(BasicPipeline):
                 "query": query,
                 "documents": contexts,
                 "sql_generation_reasoning": sql_generation_reasoning,
+                "schema_grounding": schema_grounding,
                 "sql_samples": sql_samples,
                 "instructions": instructions,
                 "project_id": project_id,

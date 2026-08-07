@@ -109,6 +109,7 @@ def test_sql_generation_prompt_includes_sample_sql_body():
     result = build_sql_generation_prompt(
         query="summarize model records",
         documents=[],
+        schema_grounding='- model/table: "model_1"\n  columns:\n    - "attribute_1"',
         prompt_builder=PromptBuilder(template=sql_generation_user_prompt_template),
         sql_samples=[
             {
@@ -122,7 +123,10 @@ def test_sql_generation_prompt_includes_sample_sql_body():
 
     assert "sample intent" in built_prompt
     assert "SELECT 1" in built_prompt
-    assert "Use DATABASE SCHEMA as the only source" in built_prompt
+    assert "RETRIEVED EXECUTABLE SCHEMA" in built_prompt
+    assert '- model/table: "model_1"' in built_prompt
+    assert '- "attribute_1"' in built_prompt
+    assert "Use DATABASE SCHEMA and RETRIEVED EXECUTABLE SCHEMA" in built_prompt
     assert "Return only the final JSON SQL response" in built_prompt
     assert "Let's think step by step" not in built_prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in built_prompt
@@ -133,6 +137,7 @@ def test_followup_sql_generation_prompt_uses_retrieved_schema_context():
     result = build_followup_sql_generation_prompt(
         query="show related model records",
         documents=["CREATE TABLE model_1 (attribute_1 VARCHAR)"],
+        schema_grounding='- model/table: "model_1"\n  columns:\n    - "attribute_1"',
         sql_generation_reasoning="",
         prompt_builder=PromptBuilder(
             template=text_to_sql_with_followup_user_prompt_template
@@ -140,6 +145,8 @@ def test_followup_sql_generation_prompt_uses_retrieved_schema_context():
     )
 
     assert "CREATE TABLE model_1" in result["prompt"]
+    assert "RETRIEVED EXECUTABLE SCHEMA" in result["prompt"]
+    assert '- model/table: "model_1"' in result["prompt"]
     assert "Return only the final JSON SQL response" in result["prompt"]
     assert "Let's think step by step" not in result["prompt"]
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in result["prompt"]
@@ -149,6 +156,7 @@ def test_followup_sql_generation_prompt_uses_retrieved_schema_context():
 def test_sql_correction_prompt_uses_failed_sql_with_user_question():
     result = build_sql_correction_prompt(
         documents=[],
+        schema_grounding='- model/table: "model_1"\n  columns:\n    - "attribute_1"',
         invalid_generation_result={
             "sql": "SELECT 1",
             "error": "dry run failed",
@@ -162,7 +170,9 @@ def test_sql_correction_prompt_uses_failed_sql_with_user_question():
     assert "User's Question: summarize model records" in built_prompt
     assert "SQL: SELECT 1" in built_prompt
     assert "Error Message: dry run failed" in built_prompt
-    assert "Use DATABASE SCHEMA as the only source" in built_prompt
+    assert "RETRIEVED EXECUTABLE SCHEMA" in built_prompt
+    assert '- model/table: "model_1"' in built_prompt
+    assert "Use DATABASE SCHEMA and RETRIEVED EXECUTABLE SCHEMA" in built_prompt
     assert "Return only the final JSON SQL response" in built_prompt
     assert "Let's think step by step" not in built_prompt
     assert "DIAGNOSTIC CONTEXT" not in built_prompt

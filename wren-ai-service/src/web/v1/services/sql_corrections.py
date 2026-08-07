@@ -8,6 +8,7 @@ from pydantic import AliasChoices, BaseModel, Field
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest, MetadataTraceable
+from src.web.v1.services.ask import build_schema_grounding_context
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -118,9 +119,11 @@ class SqlCorrectionService:
                 .get("retrieval_results", [])
             )
             table_ddls = [document.get("table_ddl") for document in documents]
+            schema_grounding = build_schema_grounding_context(documents)
 
             res = await self._pipelines["sql_correction"].run(
                 contexts=table_ddls,
+                schema_grounding=schema_grounding,
                 invalid_generation_result=_invalid,
                 project_id=project_id,
                 mdl_hash=request.mdl_hash,
