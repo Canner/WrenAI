@@ -44,3 +44,4 @@ def test_list_tolerates_non_dict_deploy_block(tmp_path: Path) -> None:
     result = CliRunner().invoke(genbi_app, ["list", "--path", str(tmp_path)])
     assert result.exit_code == 0, result.exception
     assert "good" in result.stdout
+    assert "https://x" not in result.stdout
