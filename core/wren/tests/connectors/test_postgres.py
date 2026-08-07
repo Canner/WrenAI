@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 from decimal import Decimal
+from types import SimpleNamespace
 from urllib.parse import urlparse
 
 import duckdb
@@ -20,12 +21,132 @@ from testcontainers.postgres import PostgresContainer
 from tests.suite.manifests import make_tpch_manifest
 from tests.suite.query import WrenQueryTestSuite
 from wren import WrenEngine
-from wren.connector.postgres import PostgresConnector
+from wren.connector.postgres import (
+    PostgresConnector,
+    _build_pg_arrow_table,
+    _build_pg_column,
+)
 from wren.model.data_source import DataSource
 
 pytestmark = pytest.mark.postgres
 
 _SCHEMA = "public"
+
+
+def _column(
+    type_code: int,
+    precision: int | None = None,
+    scale: int | None = None,
+    name: str = "value",
+):
+    return SimpleNamespace(
+        name=name,
+        type_code=type_code,
+        precision=precision,
+        scale=scale,
+    )
+
+
+def _cursor(columns: list, rows: list[tuple]):
+    return SimpleNamespace(description=columns, fetchall=lambda: rows)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected_type"),
+    [
+        (Decimal("1.123456789012345"), pa.decimal128(16, 15)),
+        (
+            Decimal("12345678901234567890.123456789012345"),
+            pa.decimal128(35, 15),
+        ),
+    ],
+)
+def test_unconstrained_numeric_infers_exact_decimal_type(
+    value: Decimal, expected_type: pa.DataType
+) -> None:
+    result = _build_pg_arrow_table(_cursor([_column(1700)], [(value,), (None,)]))
+
+    assert result.schema.field("value").type == expected_type
+    assert result.column("value").to_pylist() == [value, None]
+
+
+def test_unconstrained_zero_numeric_preserves_scale() -> None:
+    value = Decimal("0.00")
+
+    result = _build_pg_arrow_table(_cursor([_column(1700)], [(value,)]))
+
+    assert result.schema.field("value").type == pa.decimal128(2, 2)
+    assert result.column("value").to_pylist() == [value]
+
+
+def test_unconstrained_numeric_array_infers_exact_decimal_type() -> None:
+    values = [Decimal("1.123456789012345"), Decimal("20.5"), None]
+
+    result = _build_pg_arrow_table(_cursor([_column(1231)], [(values,)]))
+
+    assert result.schema.field("value").type == pa.list_(pa.decimal128(17, 15))
+    assert result.column("value").to_pylist() == [values]
+
+
+def test_constrained_numeric_above_decimal128_uses_decimal256() -> None:
+    value = Decimal("12345678901234567890123456789012345.123456789012345")
+
+    result = _build_pg_arrow_table(
+        _cursor([_column(1700, precision=50, scale=15)], [(value,)])
+    )
+
+    assert result.schema.field("value").type == pa.decimal256(50, 15)
+    assert result.column("value").to_pylist() == [value]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [Decimal("NaN"), Decimal("Infinity"), Decimal("-Infinity")],
+)
+def test_constrained_non_finite_numeric_falls_back_to_exact_string(
+    value: Decimal,
+) -> None:
+    result = _build_pg_arrow_table(
+        _cursor([_column(1700, precision=38, scale=9)], [(value,)])
+    )
+
+    assert result.schema.field("value").type == pa.string()
+    assert result.column("value").to_pylist() == [str(value)]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [Decimal("NaN"), Decimal("Infinity"), Decimal("-Infinity")],
+)
+def test_constrained_non_finite_numeric_array_falls_back_to_exact_strings(
+    value: Decimal,
+) -> None:
+    values = [Decimal("1.5"), value, None]
+
+    result = _build_pg_arrow_table(
+        _cursor([_column(1231, precision=38, scale=9)], [(values,)])
+    )
+
+    assert result.schema.field("value").type == pa.list_(pa.string())
+    assert result.column("value").to_pylist() == [["1.5", str(value), None]]
+
+
+def test_unrepresentable_numeric_falls_back_to_exact_string() -> None:
+    value = Decimal("1" * 77)
+
+    result = _build_pg_arrow_table(_cursor([_column(1700)], [(value,)]))
+
+    assert result.schema.field("value").type == pa.string()
+    assert result.column("value").to_pylist() == [str(value)]
+
+
+def test_unrepresentable_numeric_array_falls_back_to_exact_strings() -> None:
+    value = Decimal("1" * 77)
+    arrow_type = pa.list_(pa.string())
+
+    result = _build_pg_column([[value, None]], arrow_type, 1231)
+
+    assert result.to_pylist() == [[str(value), None]]
 
 
 def _load_tpch(conn_str: str) -> None:
@@ -112,7 +233,10 @@ def _build_type_table(conn_str: str) -> None:
                     c_tstz        TIMESTAMPTZ,
                     c_int4_arr    INTEGER[],
                     c_text_arr    TEXT[],
-                    c_numeric_arr NUMERIC(38, 9)[]
+                    c_numeric_arr NUMERIC(38, 9)[],
+                    c_numeric_wide NUMERIC(50, 15),
+                    c_numeric_scale_gt_precision NUMERIC(3, 5),
+                    c_numeric_negative_scale NUMERIC(3, -2)
                 )
             """)
             cur.execute(
@@ -120,7 +244,7 @@ def _build_type_table(conn_str: str) -> None:
                 INSERT INTO type_zoo VALUES (
                     %s, %s, %s, %s, %s, %s, %s, %s::jsonb,
                     %s::timestamp, %s::timestamptz,
-                    %s::int[], %s::text[], %s::numeric[]
+                    %s::int[], %s::text[], %s::numeric[], %s, %s, %s
                 )
                 """,
                 (
@@ -137,6 +261,9 @@ def _build_type_table(conn_str: str) -> None:
                     [1, 2, 3],
                     ["a", "b", "c"],
                     [Decimal("1.5"), Decimal("2.25")],
+                    Decimal("12345678901234567890123456789012345.123456789012345"),
+                    Decimal("0.00123"),
+                    Decimal("12345"),
                 ),
             )
             cur.execute("INSERT INTO type_zoo (c_int4) VALUES (NULL)")
@@ -186,6 +313,9 @@ class TestPostgresConnectorTypes:
             "c_int4_arr": pa.list_(pa.int32()),
             "c_text_arr": pa.list_(pa.string()),
             "c_numeric_arr": pa.list_(pa.decimal128(38, 9)),
+            "c_numeric_wide": pa.decimal256(50, 15),
+            "c_numeric_scale_gt_precision": pa.decimal128(5, 5),
+            "c_numeric_negative_scale": pa.decimal128(5, 0),
         }
         for name, expected in expected_types.items():
             assert result.schema.field(name).type == expected, (
@@ -208,6 +338,49 @@ class TestPostgresConnectorTypes:
         assert row["c_int4_arr"] == [1, 2, 3]
         assert row["c_text_arr"] == ["a", "b", "c"]
         assert row["c_numeric_arr"] == [Decimal("1.500000000"), Decimal("2.250000000")]
+        assert row["c_numeric_wide"] == Decimal(
+            "12345678901234567890123456789012345.123456789012345"
+        )
+        assert row["c_numeric_scale_gt_precision"] == Decimal("0.00123")
+        assert row["c_numeric_negative_scale"] == Decimal("12300")
+
+    def test_computed_numeric_expressions_remain_decimal(
+        self, connector: PostgresConnector
+    ) -> None:
+        result = connector.query(
+            "SELECT SUM(c_numeric) AS total, AVG(c_numeric) AS average, "
+            "c_numeric * 2 AS doubled FROM type_zoo "
+            "WHERE c_numeric IS NOT NULL GROUP BY c_numeric"
+        )
+
+        assert result.schema.field("total").type == pa.decimal128(14, 9)
+        assert result.schema.field("average").type == pa.decimal128(21, 16)
+        assert result.schema.field("doubled").type == pa.decimal128(14, 9)
+        assert result.to_pylist() == [
+            {
+                "total": Decimal("12345.123456789"),
+                "average": Decimal("12345.123456789"),
+                "doubled": Decimal("24690.246913578"),
+            }
+        ]
+
+    def test_unconstrained_numeric_array_remains_decimal(
+        self, connector: PostgresConnector
+    ) -> None:
+        values = [
+            Decimal("1.123456789012345"),
+            Decimal("12345678901234567890.123456789012345"),
+        ]
+
+        result = connector.query(
+            "SELECT ARRAY["
+            "1.123456789012345::numeric, "
+            "12345678901234567890.123456789012345::numeric"
+            "] AS values"
+        )
+
+        assert result.schema.field("values").type == pa.list_(pa.decimal128(35, 15))
+        assert result.column("values").to_pylist() == [values]
 
     def test_nulls(self, connector: PostgresConnector) -> None:
         # Row inserted as `(NULL)` should produce a NULL in every column.

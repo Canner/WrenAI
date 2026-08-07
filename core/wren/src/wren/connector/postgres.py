@@ -87,30 +87,76 @@ _PG_OID_TO_ARROW: dict[int, pa.DataType] = {
 }
 
 
-def _get_pg_decimal_type(column) -> pa.DataType:
-    """Map a psycopg numeric column to the narrowest Arrow decimal type we can represent."""
-    if column.scale is None:
-        logger.debug(
-            "Postgres NUMERIC column has no scale metadata; defaulting to decimal128(38, 9)"
-        )
-    scale = column.scale if column.scale is not None else 9
-    scale = max(0, min(scale, 38))
-
-    precision = column.precision if column.precision is not None else 38
-    if precision <= 0 or precision > 38:
-        precision = 38
-    precision = max(precision, scale, 1)
-    precision = min(precision, 38)
-
-    return pa.decimal128(precision, scale)
+def _make_pg_decimal_type(precision: int, scale: int) -> pa.DataType | None:
+    """Return the Arrow decimal type that can represent *precision*."""
+    if precision <= 0:
+        return None
+    if precision <= 38:
+        return pa.decimal128(precision, scale)
+    if precision <= 76:
+        return pa.decimal256(precision, scale)
+    return None
 
 
-def _get_pg_arrow_type(column) -> pa.DataType:
-    """Map a psycopg cursor description column to an Arrow type."""
+def _infer_pg_decimal_type(values: list) -> pa.DataType | None:
+    """Infer one exact Arrow decimal type for returned psycopg values."""
+    max_integer_digits = 0
+    max_scale = 0
+    saw_decimal = False
+
+    for value in values:
+        if value is None:
+            continue
+        if not isinstance(value, PyDecimal) or not value.is_finite():
+            return None
+        saw_decimal = True
+        if value.is_zero():
+            max_scale = max(max_scale, max(-value.as_tuple().exponent, 0))
+            continue
+
+        digits = len(value.as_tuple().digits)
+        exponent = value.as_tuple().exponent
+        scale = max(-exponent, 0)
+        integer_digits = digits + exponent if exponent >= 0 else max(digits - scale, 0)
+        max_integer_digits = max(max_integer_digits, integer_digits)
+        max_scale = max(max_scale, scale)
+
+    if not saw_decimal:
+        # No returned value exposes precision or scale; use the smallest valid type.
+        return pa.decimal128(1, 0)
+    return _make_pg_decimal_type(max(max_integer_digits + max_scale, 1), max_scale)
+
+
+def _get_pg_decimal_type(column, values: list | None = None) -> pa.DataType | None:
+    """Use numeric typmod when representable, otherwise infer from values."""
+    if values is not None and any(
+        value is not None
+        and (not isinstance(value, PyDecimal) or not value.is_finite())
+        for value in values
+    ):
+        return None
+
+    precision = column.precision
+    scale = column.scale
+    if precision is not None and scale is not None and 0 <= scale <= precision:
+        arrow_type = _make_pg_decimal_type(precision, scale)
+        if arrow_type is not None:
+            return arrow_type
+
+    return _infer_pg_decimal_type(values) if values is not None else None
+
+
+def _get_pg_arrow_type(column, values: list | None = None) -> pa.DataType:
+    """Map a psycopg column to Arrow, inferring numeric schemas from values as needed."""
     if column.type_code == 1700:
-        return _get_pg_decimal_type(column)
+        decimal_type = _get_pg_decimal_type(column, values)
+        return decimal_type if decimal_type is not None else pa.string()
     if column.type_code == 1231:
-        return pa.list_(_get_pg_decimal_type(column))
+        items = None
+        if values is not None:
+            items = [item for value in values if value is not None for item in value]
+        inner_type = _get_pg_decimal_type(column, items)
+        return pa.list_(inner_type) if inner_type is not None else pa.list_(pa.string())
     return _PG_OID_TO_ARROW.get(column.type_code, pa.string())
 
 
@@ -120,9 +166,16 @@ def _build_pg_arrow_table(cursor) -> pa.Table:
         return pa.table({})
 
     rows = cursor.fetchall()
+    column_values = [
+        [row[index] for row in rows] for index in range(len(cursor.description))
+    ]
     fields = [
-        pa.field(column.name, _get_pg_arrow_type(column), nullable=True)
-        for column in cursor.description
+        pa.field(
+            column.name,
+            _get_pg_arrow_type(column, column_values[index]),
+            nullable=True,
+        )
+        for index, column in enumerate(cursor.description)
     ]
     schema = pa.schema(fields)
 
@@ -131,7 +184,7 @@ def _build_pg_arrow_table(cursor) -> pa.Table:
     else:
         arrays = [
             _build_pg_column(
-                [row[index] for row in rows],
+                column_values[index],
                 field.type,
                 cursor.description[index].type_code,
             )
