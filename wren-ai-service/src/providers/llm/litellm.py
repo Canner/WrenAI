@@ -29,6 +29,10 @@ def _is_openai_api_base(api_base: Optional[str]) -> bool:
     return bool(api_base) and "api.openai.com" in api_base.lower()
 
 
+def _is_ollama_native_model(model: str) -> bool:
+    return model.startswith(("ollama/", "ollama_chat/"))
+
+
 @provider("litellm_llm")
 class LitellmLLMProvider(LLMProvider):
     def __init__(
@@ -107,6 +111,13 @@ class LitellmLLMProvider(LLMProvider):
             if self._api_base and not _is_openai_api_base(self._api_base):
                 # Some local OpenAI-compatible servers reject non-OpenAI keys.
                 normalized.pop("speed", None)
+
+            if (
+                _is_ollama_native_model(self._model)
+                and "max_tokens" in normalized
+                and "num_predict" not in normalized
+            ):
+                normalized["num_predict"] = normalized["max_tokens"]
 
             return normalized
 

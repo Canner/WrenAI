@@ -588,7 +588,7 @@ class SqlGenerationResult(BaseModel):
 
 
 SQL_GENERATION_MODEL_KWARGS = {
-    "max_tokens": 4096,
+    "max_tokens": 8192,
     "response_format": {
         "type": "json_schema",
         "json_schema": {

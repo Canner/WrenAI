@@ -65,7 +65,7 @@ def test_sql_regeneration_system_prompt_allows_standard_aggregates_without_sql_f
 
 
 def test_sql_generation_model_kwargs_set_legacy_output_budget():
-    assert SQL_GENERATION_MODEL_KWARGS["max_tokens"] == 4096
+    assert SQL_GENERATION_MODEL_KWARGS["max_tokens"] == 8192
     assert SQL_GENERATION_MODEL_KWARGS["response_format"]["type"] == "json_schema"
 
 
@@ -96,7 +96,7 @@ async def test_sql_generation_calls_pass_legacy_output_budget(
         **extra_kwargs,
     )
 
-    assert captured_kwargs["generation_kwargs"]["max_tokens"] == 4096
+    assert captured_kwargs["generation_kwargs"]["max_tokens"] == 8192
 
 
 def test_sql_generation_prompt_omits_sample_sql_body():

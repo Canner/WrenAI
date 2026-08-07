@@ -165,3 +165,68 @@ async def test_local_openai_compatible_endpoint_preserves_configured_response_fo
     await generator(prompt="Return SQL")
 
     assert captured_kwargs["response_format"]["type"] == "json_object"
+
+
+@pytest.mark.asyncio
+async def test_ollama_chat_maps_max_tokens_to_num_predict(mocker):
+    captured_kwargs = {}
+
+    async def fake_acompletion(**kwargs):
+        captured_kwargs.update(kwargs)
+        return SimpleNamespace(
+            model="ollama_chat/gemma4:31b",
+            choices=[
+                SimpleNamespace(
+                    index=0,
+                    finish_reason="stop",
+                    message=SimpleNamespace(content='{"sql": "SELECT 1"}'),
+                )
+            ],
+        )
+
+    mocker.patch("src.providers.llm.litellm.acompletion", side_effect=fake_acompletion)
+
+    provider = LitellmLLMProvider(
+        model="ollama_chat/gemma4:31b",
+        api_base="http://localhost:11434",
+    )
+
+    generator = provider.get_generator()
+
+    await generator(prompt="Return SQL", generation_kwargs={"max_tokens": 4096})
+
+    assert captured_kwargs["max_tokens"] == 4096
+    assert captured_kwargs["num_predict"] == 4096
+
+
+@pytest.mark.asyncio
+async def test_ollama_chat_preserves_explicit_num_predict(mocker):
+    captured_kwargs = {}
+
+    async def fake_acompletion(**kwargs):
+        captured_kwargs.update(kwargs)
+        return SimpleNamespace(
+            model="ollama_chat/gemma4:31b",
+            choices=[
+                SimpleNamespace(
+                    index=0,
+                    finish_reason="stop",
+                    message=SimpleNamespace(content='{"sql": "SELECT 1"}'),
+                )
+            ],
+        )
+
+    mocker.patch("src.providers.llm.litellm.acompletion", side_effect=fake_acompletion)
+
+    provider = LitellmLLMProvider(
+        model="ollama_chat/gemma4:31b",
+        api_base="http://localhost:11434",
+        kwargs={"num_predict": 2048},
+    )
+
+    generator = provider.get_generator()
+
+    await generator(prompt="Return SQL", generation_kwargs={"max_tokens": 4096})
+
+    assert captured_kwargs["max_tokens"] == 4096
+    assert captured_kwargs["num_predict"] == 2048
