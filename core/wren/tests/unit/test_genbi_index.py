@@ -192,3 +192,35 @@ def test_load_index_preserves_falsy_schema_version(tmp_path: Path) -> None:
 
     data = load_index(tmp_path)
     assert data["schema_version"] == 0
+
+
+def test_get_app_skips_non_dict_entry(tmp_path: Path) -> None:
+    from wren.genbi.index import get_app, save_index
+
+    save_index(
+        tmp_path,
+        {"schema_version": 1, "apps": {"bad": "not-a-map", "good": {"source": "apps/good"}}},
+    )
+    assert get_app(tmp_path, "bad") is None
+    assert get_app(tmp_path, "good") == {"source": "apps/good"}
+    assert get_app(tmp_path, "missing") is None
+
+
+def test_register_app_replaces_non_dict_entry(tmp_path: Path) -> None:
+    from wren.genbi.index import load_index, register_app, save_index
+
+    save_index(tmp_path, {"schema_version": 1, "apps": {"bad": "not-a-map"}})
+    entry = register_app(tmp_path, "bad", data_mode="snapshot")
+    assert isinstance(entry, dict)
+    assert entry["data_mode"] == "snapshot"
+    assert entry["source"] == "apps/bad"
+    assert isinstance(load_index(tmp_path)["apps"]["bad"], dict)
+
+
+def test_update_app_rejects_non_dict_entry(tmp_path: Path) -> None:
+    from wren.genbi.index import save_index, update_app
+    import pytest
+
+    save_index(tmp_path, {"schema_version": 1, "apps": {"bad": "not-a-map"}})
+    with pytest.raises(KeyError):
+        update_app(tmp_path, "bad", status="deployed")
