@@ -212,6 +212,51 @@ def test_table_description_includes_column_semantic_context():
     )
 
 
+def test_table_description_excludes_physical_source_metadata():
+    chunker = TableDescriptionChunker()
+    mdl = {
+        "models": [
+            {
+                "name": "orders_model",
+                "tableReference": {
+                    "catalog": "warehouse",
+                    "schema": "raw",
+                    "table": "refunds",
+                },
+                "properties": {
+                    "description": "Business-facing order and refund activity."
+                },
+                "columns": [
+                    {
+                        "name": "refund_date",
+                        "type": "date",
+                        "expression": "raw_refund_timestamp",
+                        "properties": {
+                            "description": "Date when a refund was issued."
+                        },
+                    }
+                ],
+            }
+        ],
+        "views": [],
+        "relationships": [],
+        "metrics": [],
+    }
+
+    actual = chunker.run(mdl)
+
+    document: Document = actual["documents"][0]
+    assert "orders_model" in document.content
+    assert "refund_date" in document.content
+    assert "Date when a refund was issued." in document.content
+    assert "warehouse" not in document.content
+    assert "raw" not in document.content
+    assert "refunds" not in document.content
+    assert "raw_refund_timestamp" not in document.content
+    assert "'source':" not in document.content
+    assert "'expression':" not in document.content
+
+
 def test_table_description_includes_relationship_context():
     chunker = TableDescriptionChunker()
     mdl = {

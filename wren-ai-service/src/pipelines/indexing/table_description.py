@@ -68,18 +68,6 @@ class TableDescriptionChunker:
         def _text(value: Any) -> str:
             return "" if value is None else str(value)
 
-        def _source_context(payload: Dict[str, Any]) -> str:
-            table_reference = payload.get("tableReference")
-            if isinstance(table_reference, dict):
-                reference_parts = [
-                    _text(table_reference.get("catalog", "")),
-                    _text(table_reference.get("schema", "")),
-                    _text(table_reference.get("table", "")),
-                ]
-                return ".".join(part for part in reference_parts if part)
-
-            return _text(payload.get("baseObject", ""))
-
         def _columns(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
             columns = payload.get("columns", [])
             if columns:
@@ -106,13 +94,11 @@ class TableDescriptionChunker:
                 "mdl_type": mdl_type,
                 "name": payload.get("name"),
                 "displayName": _text(properties.get("displayName", "")),
-                "source": _source_context(payload),
                 "columns": [
                     {
                         "name": _text(column.get("name", "")),
                         "type": _text(column.get("type", "")),
                         "role": _text(column.get("role", "")),
-                        "expression": _text(column.get("expression", "")),
                         "description": _text(
                             self._properties(column).get("description", "")
                         ),
@@ -162,7 +148,6 @@ class TableDescriptionChunker:
                     column["role"],
                     column["displayName"],
                     column["description"],
-                    column["expression"],
                 ]
                 if not any(semantic_parts):
                     continue
@@ -196,9 +181,6 @@ class TableDescriptionChunker:
 
             if resource["displayName"]:
                 description["displayName"] = resource["displayName"]
-
-            if resource["source"]:
-                description["source"] = resource["source"]
 
             if column_context:
                 description["column_context"] = column_context
