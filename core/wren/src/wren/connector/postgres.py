@@ -111,6 +111,7 @@ def _infer_pg_decimal_type(values: list) -> pa.DataType | None:
             return None
         saw_decimal = True
         if value.is_zero():
+            max_scale = max(max_scale, max(-value.as_tuple().exponent, 0))
             continue
 
         digits = len(value.as_tuple().digits)

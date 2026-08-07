@@ -70,6 +70,15 @@ def test_unconstrained_numeric_infers_exact_decimal_type(
     assert result.column("value").to_pylist() == [value, None]
 
 
+def test_unconstrained_zero_numeric_preserves_scale() -> None:
+    value = Decimal("0.00")
+
+    result = _build_pg_arrow_table(_cursor([_column(1700)], [(value,)]))
+
+    assert result.schema.field("value").type == pa.decimal128(2, 2)
+    assert result.column("value").to_pylist() == [value]
+
+
 def test_unconstrained_numeric_array_infers_exact_decimal_type() -> None:
     values = [Decimal("1.123456789012345"), Decimal("20.5"), None]
 
