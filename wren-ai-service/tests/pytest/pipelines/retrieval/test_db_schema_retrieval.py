@@ -1270,7 +1270,7 @@ def test_construct_retrieval_results_keeps_schema_when_pruner_mixes_known_and_un
     assert "sql_column_names_use_exactly" not in table_ddl
 
 
-def test_construct_retrieval_results_uses_full_columns_for_sql_generation():
+def test_construct_retrieval_results_uses_selected_columns_for_sql_generation():
     result = construct_retrieval_results(
         check_using_db_schemas_without_pruning={},
         filter_columns_in_tables={
@@ -1321,12 +1321,11 @@ def test_construct_retrieval_results_uses_full_columns_for_sql_generation():
 
     retrieved = result["retrieval_results"][0]
 
-    assert "stored_dimension VARCHAR" in retrieved["table_ddl"]
+    assert "stored_dimension VARCHAR" not in retrieved["table_ddl"]
     assert "stored_measure DOUBLE" in retrieved["table_ddl"]
     assert "WREN RETRIEVED SEMANTIC CONTEXT" not in retrieved["table_ddl"]
     assert "sql_column_name_use_exactly" not in retrieved["table_ddl"]
     assert retrieved["column_names"] == [
-        "stored_dimension",
         "stored_measure",
     ]
     assert retrieved["manifest_column_names"] == [

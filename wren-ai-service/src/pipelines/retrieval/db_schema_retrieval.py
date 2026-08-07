@@ -167,16 +167,21 @@ def _included_relationship_columns(content: dict, tables: Optional[set[str]]) ->
     relationship_columns = {
         column.get("column")
         for column in content["columns"]
-        if column["type"] == "FOREIGN_KEY"
+        if column.get("type") == "FOREIGN_KEY"
         and (not tables or set(column.get("tables", [])).issubset(tables))
     }
     relationship_columns.discard(None)
     return relationship_columns
 
 
-def _content_column_names(content: dict) -> list[str]:
+def _content_column_names(
+    content: dict,
+    columns: Optional[set[str]] = None,
+    tables: Optional[set[str]] = None,
+) -> list[str]:
     column_names = []
     seen_columns = set()
+    relationship_columns = _included_relationship_columns(content, tables)
     for column in content.get("columns", []):
         column_name = column.get("name", "")
         if column_name in seen_columns:
@@ -184,6 +189,12 @@ def _content_column_names(content: dict) -> list[str]:
         if (
             column.get("type", "COLUMN") == "COLUMN"
             and column_name
+            and (
+                columns is None
+                or column_name in columns
+                or column_name in relationship_columns
+                or column.get("is_primary_key")
+            )
             and (
                 column.get("data_type") is None
                 or get_engine_supported_data_type(column.get("data_type")).lower()
@@ -208,16 +219,31 @@ def _relationship_constraints(content: dict) -> list[str]:
     return constraints
 
 
+def _valid_selected_columns(
+    content: dict, columns: Optional[set[str]]
+) -> Optional[set[str]]:
+    if not columns:
+        return None
+
+    known_columns = set(_content_column_names(content))
+    if not columns.issubset(known_columns):
+        return None
+
+    return columns
+
+
 def _retrieval_result(
     table_name: str,
     table_ddl: str,
     content: dict,
     include_relationships: bool = True,
+    columns: Optional[set[str]] = None,
+    tables: Optional[set[str]] = None,
 ) -> dict:
     return {
         "table_name": table_name,
         "table_ddl": table_ddl,
-        "column_names": _content_column_names(content),
+        "column_names": _content_column_names(content, columns=columns, tables=tables),
         "manifest_column_names": _content_column_names(content),
         "relationship_constraints": _relationship_constraints(content)
         if include_relationships
@@ -692,9 +718,17 @@ def construct_retrieval_results(
 
         for table_schema in construct_db_schemas:
             if table_schema["type"] == "TABLE" and table_schema["name"] in tables:
+                selected_columns = set(
+                    columns_and_tables_needed[table_schema["name"]].get("columns")
+                    or []
+                )
+                selected_columns = _valid_selected_columns(
+                    table_schema, selected_columns
+                )
                 ddl, _has_calculated_field, _has_json_field = (
                     _build_table_retrieval_context(
                         table_schema,
+                        columns=selected_columns,
                         tables=tables,
                     )
                 )
@@ -704,7 +738,13 @@ def construct_retrieval_results(
                     has_json_field = True
 
                 retrieval_results.append(
-                    _retrieval_result(table_schema["name"], ddl, table_schema)
+                    _retrieval_result(
+                        table_schema["name"],
+                        ddl,
+                        table_schema,
+                        columns=selected_columns,
+                        tables=tables,
+                    )
                 )
 
         for document in dbschema_retrieval:
