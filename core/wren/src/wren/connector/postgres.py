@@ -121,6 +121,7 @@ def _infer_pg_decimal_type(values: list) -> pa.DataType | None:
         max_scale = max(max_scale, scale)
 
     if not saw_decimal:
+        # No returned value exposes precision or scale; use the smallest valid type.
         return pa.decimal128(1, 0)
     return _make_pg_decimal_type(max(max_integer_digits + max_scale, 1), max_scale)
 
@@ -136,7 +137,7 @@ def _get_pg_decimal_type(column, values: list | None = None) -> pa.DataType | No
 
     precision = column.precision
     scale = column.scale
-    if precision is not None and scale is not None:
+    if precision is not None and scale is not None and 0 <= scale <= precision:
         arrow_type = _make_pg_decimal_type(precision, scale)
         if arrow_type is not None:
             return arrow_type
@@ -145,7 +146,7 @@ def _get_pg_decimal_type(column, values: list | None = None) -> pa.DataType | No
 
 
 def _get_pg_arrow_type(column, values: list | None = None) -> pa.DataType:
-    """Map a psycopg cursor description column to an Arrow type."""
+    """Map a psycopg column to Arrow, inferring numeric schemas from values as needed."""
     if column.type_code == 1700:
         decimal_type = _get_pg_decimal_type(column, values)
         return decimal_type if decimal_type is not None else pa.string()

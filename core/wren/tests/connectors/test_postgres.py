@@ -225,7 +225,9 @@ def _build_type_table(conn_str: str) -> None:
                     c_int4_arr    INTEGER[],
                     c_text_arr    TEXT[],
                     c_numeric_arr NUMERIC(38, 9)[],
-                    c_numeric_wide NUMERIC(50, 15)
+                    c_numeric_wide NUMERIC(50, 15),
+                    c_numeric_scale_gt_precision NUMERIC(3, 5),
+                    c_numeric_negative_scale NUMERIC(3, -2)
                 )
             """)
             cur.execute(
@@ -233,7 +235,7 @@ def _build_type_table(conn_str: str) -> None:
                 INSERT INTO type_zoo VALUES (
                     %s, %s, %s, %s, %s, %s, %s, %s::jsonb,
                     %s::timestamp, %s::timestamptz,
-                    %s::int[], %s::text[], %s::numeric[], %s
+                    %s::int[], %s::text[], %s::numeric[], %s, %s, %s
                 )
                 """,
                 (
@@ -251,6 +253,8 @@ def _build_type_table(conn_str: str) -> None:
                     ["a", "b", "c"],
                     [Decimal("1.5"), Decimal("2.25")],
                     Decimal("12345678901234567890123456789012345.123456789012345"),
+                    Decimal("0.00123"),
+                    Decimal("12345"),
                 ),
             )
             cur.execute("INSERT INTO type_zoo (c_int4) VALUES (NULL)")
@@ -301,6 +305,8 @@ class TestPostgresConnectorTypes:
             "c_text_arr": pa.list_(pa.string()),
             "c_numeric_arr": pa.list_(pa.decimal128(38, 9)),
             "c_numeric_wide": pa.decimal256(50, 15),
+            "c_numeric_scale_gt_precision": pa.decimal128(5, 5),
+            "c_numeric_negative_scale": pa.decimal128(5, 0),
         }
         for name, expected in expected_types.items():
             assert result.schema.field(name).type == expected, (
@@ -326,6 +332,8 @@ class TestPostgresConnectorTypes:
         assert row["c_numeric_wide"] == Decimal(
             "12345678901234567890123456789012345.123456789012345"
         )
+        assert row["c_numeric_scale_gt_precision"] == Decimal("0.00123")
+        assert row["c_numeric_negative_scale"] == Decimal("12300")
 
     def test_computed_numeric_expressions_remain_decimal(
         self, connector: PostgresConnector
