@@ -166,7 +166,7 @@ class SemanticsPreparationService:
             dbschema_count,
             table_description_count,
         )
-        return dbschema_count > 0
+        return dbschema_count > 0 and table_description_count > 0
 
     async def get_prepare_semantics_status(
         self, prepare_semantics_status_request: SemanticsPreparationStatusRequest
