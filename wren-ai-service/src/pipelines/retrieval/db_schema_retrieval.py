@@ -782,7 +782,7 @@ class DbSchemaRetrieval(BasicPipeline):
         llm_provider: LLMProvider,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
-        table_retrieval_size: int = 50,
+        table_retrieval_size: int = 10,
         table_column_retrieval_size: int = 100,
         **kwargs,
     ):

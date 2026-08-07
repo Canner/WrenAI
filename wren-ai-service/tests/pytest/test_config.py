@@ -12,7 +12,7 @@ def test_settings_default_values():
         assert settings.port == 5555
 
         assert settings.column_indexing_batch_size == 50
-        assert settings.table_retrieval_size == 50
+        assert settings.table_retrieval_size == 10
         assert settings.table_column_retrieval_size == 100
 
         assert settings.query_cache_ttl == 3600

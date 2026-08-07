@@ -27,7 +27,7 @@ class Settings(BaseSettings):
 
     # indexing and retrieval config
     column_indexing_batch_size: int = Field(default=50)
-    table_retrieval_size: int = Field(default=50)
+    table_retrieval_size: int = Field(default=10)
     table_column_retrieval_size: int = Field(default=100)
     enable_column_pruning: bool = Field(default=True)
     historical_question_retrieval_similarity_threshold: float = Field(default=0.9)
