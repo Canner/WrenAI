@@ -127,6 +127,38 @@ async def test_local_openai_compatible_endpoint_converts_component_json_schema_t
 
 
 @pytest.mark.asyncio
+async def test_litellm_provider_uses_configured_model_name_without_rewriting(mocker):
+    captured_kwargs = {}
+
+    async def fake_acompletion(**kwargs):
+        captured_kwargs.update(kwargs)
+        return SimpleNamespace(
+            model="configured-model",
+            choices=[
+                SimpleNamespace(
+                    index=0,
+                    finish_reason="stop",
+                    message=SimpleNamespace(content='{"sql": null}'),
+                )
+            ],
+        )
+
+    mocker.patch("src.providers.llm.litellm.acompletion", side_effect=fake_acompletion)
+
+    provider = LitellmLLMProvider(
+        model="configured-model",
+        api_base="http://localhost/v1",
+        kwargs={},
+    )
+
+    generator = provider.get_generator()
+
+    await generator(prompt="Return SQL")
+
+    assert captured_kwargs["model"] == "configured-model"
+
+
+@pytest.mark.asyncio
 async def test_local_openai_compatible_endpoint_preserves_configured_response_format(
     mocker,
 ):
@@ -168,13 +200,13 @@ async def test_local_openai_compatible_endpoint_preserves_configured_response_fo
 
 
 @pytest.mark.asyncio
-async def test_ollama_chat_maps_max_tokens_to_num_predict(mocker):
+async def test_litellm_provider_does_not_infer_num_predict(mocker):
     captured_kwargs = {}
 
     async def fake_acompletion(**kwargs):
         captured_kwargs.update(kwargs)
         return SimpleNamespace(
-            model="ollama_chat/gemma4:31b",
+            model="configured-model",
             choices=[
                 SimpleNamespace(
                     index=0,
@@ -187,7 +219,7 @@ async def test_ollama_chat_maps_max_tokens_to_num_predict(mocker):
     mocker.patch("src.providers.llm.litellm.acompletion", side_effect=fake_acompletion)
 
     provider = LitellmLLMProvider(
-        model="ollama_chat/gemma4:31b",
+        model="configured-model",
         api_base="http://localhost:11434",
     )
 
@@ -196,17 +228,17 @@ async def test_ollama_chat_maps_max_tokens_to_num_predict(mocker):
     await generator(prompt="Return SQL", generation_kwargs={"max_tokens": 4096})
 
     assert captured_kwargs["max_tokens"] == 4096
-    assert captured_kwargs["num_predict"] == 4096
+    assert "num_predict" not in captured_kwargs
 
 
 @pytest.mark.asyncio
-async def test_ollama_chat_preserves_explicit_num_predict(mocker):
+async def test_litellm_provider_preserves_configured_num_predict(mocker):
     captured_kwargs = {}
 
     async def fake_acompletion(**kwargs):
         captured_kwargs.update(kwargs)
         return SimpleNamespace(
-            model="ollama_chat/gemma4:31b",
+            model="configured-model",
             choices=[
                 SimpleNamespace(
                     index=0,
@@ -219,7 +251,7 @@ async def test_ollama_chat_preserves_explicit_num_predict(mocker):
     mocker.patch("src.providers.llm.litellm.acompletion", side_effect=fake_acompletion)
 
     provider = LitellmLLMProvider(
-        model="ollama_chat/gemma4:31b",
+        model="configured-model",
         api_base="http://localhost:11434",
         kwargs={"num_predict": 2048},
     )

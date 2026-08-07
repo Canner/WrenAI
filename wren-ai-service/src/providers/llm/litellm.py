@@ -19,18 +19,8 @@ from src.providers.loader import provider
 from src.utils import extract_braces_content, remove_trailing_slash
 
 
-def normalize_litellm_model_name(model: str, api_base: Optional[str] = None) -> str:
-    if api_base and "/" not in model:
-        return f"openai/{model}"
-    return model
-
-
 def _is_openai_api_base(api_base: Optional[str]) -> bool:
     return bool(api_base) and "api.openai.com" in api_base.lower()
-
-
-def _is_ollama_native_model(model: str) -> bool:
-    return model.startswith(("ollama/", "ollama_chat/"))
 
 
 @provider("litellm_llm")
@@ -50,7 +40,7 @@ class LitellmLLMProvider(LLMProvider):
         fallback_testing: bool = False,
         **_,
     ):
-        self._model = normalize_litellm_model_name(model, api_base)
+        self._model = model
         # TODO: remove _api_key, _api_base, _api_version in the future, as it is not used in litellm
         self._api_key = os.getenv(api_key_name) if api_key_name else None
         self._api_base = remove_trailing_slash(api_base) if api_base else None
@@ -111,13 +101,6 @@ class LitellmLLMProvider(LLMProvider):
             if self._api_base and not _is_openai_api_base(self._api_base):
                 # Some local OpenAI-compatible servers reject non-OpenAI keys.
                 normalized.pop("speed", None)
-
-            if (
-                _is_ollama_native_model(self._model)
-                and "max_tokens" in normalized
-                and "num_predict" not in normalized
-            ):
-                normalized["num_predict"] = normalized["max_tokens"]
 
             return normalized
 

@@ -35,34 +35,28 @@ def _normalize_engine_addition(addition: Any) -> dict:
     return {}
 
 
-def _first_finish_reason(meta: List[Dict[str, Any]] | None) -> str:
-    if not meta:
-        return ""
-
-    first_meta = meta[0] or {}
-    return first_meta.get("finish_reason") or ""
-
-
 def _generation_output_failure(
     raw_reply: Any,
-    meta: List[Dict[str, Any]] | None = None,
     error: str | None = None,
 ) -> Dict[str, Any]:
     raw_sql = raw_reply if isinstance(raw_reply, str) else ""
-    finish_reason = _first_finish_reason(meta)
     message = error or "SQL generation did not return a valid JSON SQL response."
-
-    if finish_reason == "length":
-        message = (
-            "SQL generation response was truncated before a complete SQL response "
-            "was returned."
-        )
 
     return {
         "sql": raw_sql,
         "original_sql": raw_sql,
         "type": "SQL_GENERATION",
         "error": message,
+        "correlation_id": "",
+    }
+
+
+def _empty_sql_generation_failure(error: str) -> Dict[str, Any]:
+    return {
+        "sql": "",
+        "original_sql": "",
+        "type": "SQL_GENERATION",
+        "error": error,
         "correlation_id": "",
     }
 
@@ -93,21 +87,11 @@ class SQLGenPostProcessor:
                     "valid_generation_result": {},
                     "invalid_generation_result": _generation_output_failure(
                         raw_reply,
-                        meta,
                         "SQL generation returned no response.",
                     ),
                 }
 
             raw_reply = replies[0]
-            if _first_finish_reason(meta) == "length":
-                return {
-                    "valid_generation_result": {},
-                    "invalid_generation_result": _generation_output_failure(
-                        raw_reply,
-                        meta,
-                    ),
-                }
-
             cleaned_generation_result = clean_generation_result(raw_reply)
 
             # test if cleaned_generation_result in string format is actually a dictionary with key 'sql'
@@ -119,7 +103,6 @@ class SQLGenPostProcessor:
                         "valid_generation_result": {},
                         "invalid_generation_result": _generation_output_failure(
                             raw_reply,
-                            meta,
                         ),
                     }
 
@@ -128,7 +111,6 @@ class SQLGenPostProcessor:
                         "valid_generation_result": {},
                         "invalid_generation_result": _generation_output_failure(
                             raw_reply,
-                            meta,
                         ),
                     }
 
@@ -137,7 +119,6 @@ class SQLGenPostProcessor:
                         "valid_generation_result": {},
                         "invalid_generation_result": _generation_output_failure(
                             raw_reply,
-                            meta,
                         ),
                     }
 
@@ -145,6 +126,14 @@ class SQLGenPostProcessor:
                 cleaned_generation_result = (
                     clean_generation_result(sql) if isinstance(sql, str) else sql
                 )
+
+            if not cleaned_generation_result:
+                return {
+                    "valid_generation_result": {},
+                    "invalid_generation_result": _empty_sql_generation_failure(
+                        "SQL generation returned an empty SQL response.",
+                    ),
+                }
 
             (
                 valid_generation_result,
@@ -169,7 +158,6 @@ class SQLGenPostProcessor:
                 "valid_generation_result": {},
                 "invalid_generation_result": _generation_output_failure(
                     raw_reply,
-                    meta,
                     f"SQL generation post-processing failed: {e}",
                 ),
             }
@@ -186,15 +174,6 @@ class SQLGenPostProcessor:
         valid_generation_result = {}
         invalid_generation_result = {}
         use_dry_run = not allow_data_preview
-
-        if not generation_result:
-            return valid_generation_result, {
-                "sql": "",
-                "original_sql": "",
-                "type": "NO_RELEVANT_SQL",
-                "error": "No grounded SQL was generated from the current schema.",
-                "correlation_id": "",
-            }
 
         async with aiohttp.ClientSession() as session:
             if use_dry_plan:

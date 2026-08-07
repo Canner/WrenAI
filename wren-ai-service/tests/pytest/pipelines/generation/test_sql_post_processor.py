@@ -21,11 +21,11 @@ async def test_post_processor_returns_generation_failure_for_truncated_json():
     invalid = result["invalid_generation_result"]
     assert invalid["type"] == "SQL_GENERATION"
     assert invalid["sql"] == '{"sql": "SELECT'
-    assert "truncated" in invalid["error"]
+    assert "valid JSON SQL response" in invalid["error"]
 
 
 @pytest.mark.asyncio
-async def test_post_processor_keeps_truncated_null_sql_as_generation_failure():
+async def test_post_processor_keeps_null_sql_as_generation_failure_for_correction():
     processor = SQLGenPostProcessor(engine=_NoopEngine())
 
     result = await processor.run(
@@ -36,20 +36,23 @@ async def test_post_processor_keeps_truncated_null_sql_as_generation_failure():
     assert result["valid_generation_result"] == {}
     invalid = result["invalid_generation_result"]
     assert invalid["type"] == "SQL_GENERATION"
-    assert invalid["sql"] == '{"sql": null}'
-    assert "truncated" in invalid["error"]
+    assert invalid["sql"] == ""
+    assert invalid["original_sql"] == ""
+    assert "empty SQL response" in invalid["error"]
 
 
 @pytest.mark.asyncio
-async def test_post_processor_keeps_null_sql_as_no_relevant_sql():
+async def test_post_processor_keeps_null_sql_without_finish_reason_as_generation_failure():
     processor = SQLGenPostProcessor(engine=_NoopEngine())
 
     result = await processor.run(['{"sql": null}'])
 
     assert result["valid_generation_result"] == {}
     invalid = result["invalid_generation_result"]
-    assert invalid["type"] == "NO_RELEVANT_SQL"
+    assert invalid["type"] == "SQL_GENERATION"
     assert invalid["sql"] == ""
+    assert invalid["original_sql"] == ""
+    assert "empty SQL response" in invalid["error"]
 
 
 @pytest.mark.asyncio
