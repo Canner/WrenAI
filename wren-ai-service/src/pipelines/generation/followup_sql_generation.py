@@ -65,11 +65,10 @@ The following identifiers come from Ask Retrieval for this question. Use these e
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
+These samples are intent examples only. Their SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 {% for sample in sql_samples %}
 Summary:
 {{sample.summary}}
-SQL:
-{{sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -85,6 +84,7 @@ User's Follow-up Question: {{ query }}
 
 ### REASONING PLAN ###
 {{ sql_generation_reasoning }}
+The reasoning plan is non-executable intent context only. Do not copy table names, column names, aliases, functions, clauses, literal values, or SQL fragments from it unless they appear exactly in DATABASE SCHEMA, RETRIEVED EXECUTABLE SCHEMA, or SQL FUNCTIONS.
 
 Use DATABASE SCHEMA and RETRIEVED EXECUTABLE SCHEMA as the only sources for executable table and column identifiers. The follow-up question, SQL samples, query history, and reasoning plan can explain intent, but they must not introduce identifiers that are absent from the retrieved schema.
 If a word from the user's question or query history is not listed as a retrieved model/table or column identifier, do not use that word as an SQL identifier.

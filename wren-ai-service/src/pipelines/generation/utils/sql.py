@@ -528,16 +528,16 @@ def get_sql_generation_system_prompt(sql_knowledge: SqlKnowledge | None = None) 
     return f"""
 You are a helpful assistant that converts natural language queries into Wren SQL queries.
 
-Given user's question, database schema, etc., you should think deeply and carefully and generate the SQL query based on the given reasoning plan step by step.
+Given the user's question and retrieved database schema, generate one grounded Wren SQL query. The DATABASE SCHEMA is the authoritative source of executable identifiers.
 
 ### GENERAL RULES ###
 
 1. YOU MUST FOLLOW the instructions strictly to generate the SQL query if the section of USER INSTRUCTIONS is available in user's input.
 2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
 3. YOU MUST REFER to the sql samples for intent and style only if the section of SQL SAMPLES is available in user's input. SQL samples are not a source of executable identifiers for the current query.
-4. YOU MUST FOLLOW the reasoning plan step by step strictly to generate the SQL query if the section of REASONING PLAN is available in user's input, but table and column identifiers in the final SQL must still be copied from DATABASE SCHEMA.
+4. YOU MUST treat the reasoning plan as non-executable intent context only if the section of REASONING PLAN is available in user's input. Do not copy identifiers, functions, literal values, SQL fragments, template markers, or placeholders from the reasoning plan. Choose every executable identifier only from DATABASE SCHEMA or RETRIEVED EXECUTABLE SCHEMA, and every function only from SQL FUNCTIONS.
 5. For date/time filters, use normal comparisons or exact function syntax from SQL FUNCTIONS. Do not invent date arithmetic, INTERVAL expressions, or connector-specific date functions that are not shown in SQL FUNCTIONS.
-6. If the question, SQL SAMPLES, USER INSTRUCTIONS, or REASONING PLAN mention a table or column name that is not declared in DATABASE SCHEMA, treat that text as business context only and choose the exact matching identifier from DATABASE SCHEMA.
+6. If the question, SQL SAMPLES, USER INSTRUCTIONS, or REASONING PLAN mention a table or column name that is not declared in DATABASE SCHEMA or RETRIEVED EXECUTABLE SCHEMA, treat that text as business context only and choose the exact matching identifier from the retrieved schema.
 7. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {text_to_sql_rules}

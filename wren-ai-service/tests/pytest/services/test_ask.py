@@ -145,10 +145,16 @@ def mdl_str():
         return orjson.dumps(json.load(f)).decode("utf-8")
 
 
-def test_ask_request_uses_sql_generation_reasoning_by_default():
+def test_ask_request_skips_sql_generation_reasoning_by_default():
     ask_request = AskRequest(query="question", mdl_hash="deploy")
 
-    assert ask_request.ignore_sql_generation_reasoning is False
+    assert ask_request.ignore_sql_generation_reasoning is True
+
+
+def test_ask_service_skips_sql_generation_reasoning_by_default():
+    ask_service = AskService({})
+
+    assert ask_service._allow_sql_generation_reasoning is False
 
 
 def test_ask_request_uses_dry_plan_validation_by_default():

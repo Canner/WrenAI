@@ -79,11 +79,10 @@ sql_regeneration_user_prompt_template = """
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
+These samples are intent examples only. Their SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 {% for sample in sql_samples %}
 Question:
 {{sample.question}}
-SQL:
-{{sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -97,6 +96,7 @@ SQL:
 ### QUESTION ###
 User's Question: {{ query }}
 SQL generation reasoning: {{ sql_generation_reasoning }}
+The reasoning text is non-executable intent context only. Do not copy table names, column names, aliases, functions, clauses, literal values, or SQL fragments from it unless they appear exactly in DATABASE SCHEMA or SQL FUNCTIONS.
 Original SQL query: {{ sql }}
 
 Use DATABASE SCHEMA as the only source for executable table and column identifiers. The original SQL and reasoning plan can explain intent, but they must not introduce identifiers that are absent from DATABASE SCHEMA.

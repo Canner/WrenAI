@@ -35,11 +35,10 @@ The following identifiers come from Ask Retrieval for this question. Use these e
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
+These samples are intent examples only. Their SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 {% for sql_sample in sql_samples %}
 Question:
 {{sql_sample.question}}
-SQL:
-{{sql_sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -57,6 +56,7 @@ Current Time: {{ current_time }}
 
 Let's think step by step.
 When the user uses a business term, map it only to an identifier listed in DATABASE SCHEMA or RETRIEVED EXECUTABLE SCHEMA. Do not turn a user word into a table or column name unless it is listed there.
+Do not copy table names, column names, aliases, literal values, functions, clauses, or SQL-shaped text from SQL samples or the user wording.
 """
 
 
