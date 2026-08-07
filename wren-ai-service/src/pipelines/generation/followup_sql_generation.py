@@ -138,6 +138,7 @@ async def generate_sql_in_followup(
         prompt=prompt.get("prompt"),
         history_messages=history_messages,
         current_system_prompt=current_system_prompt,
+        generation_kwargs={"max_tokens": SQL_GENERATION_MODEL_KWARGS["max_tokens"]},
     ), generator_name
 
 

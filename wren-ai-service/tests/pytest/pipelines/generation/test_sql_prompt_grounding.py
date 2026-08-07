@@ -1,20 +1,25 @@
+import pytest
 from haystack.components.builders.prompt_builder import PromptBuilder
 
 from src.pipelines.generation.sql_correction import (
+    generate_sql_correction,
     get_sql_correction_system_prompt,
     prompt as build_sql_correction_prompt,
     sql_correction_user_prompt_template,
 )
 from src.pipelines.generation.followup_sql_generation import (
+    generate_sql_in_followup,
     prompt as build_followup_sql_generation_prompt,
     text_to_sql_with_followup_user_prompt_template,
 )
 from src.pipelines.generation.sql_generation import (
+    generate_sql,
     get_sql_generation_system_prompt,
     prompt as build_sql_generation_prompt,
     sql_generation_user_prompt_template,
 )
 from src.pipelines.generation.sql_regeneration import (
+    regenerate_sql,
     get_sql_regeneration_system_prompt,
     prompt as build_sql_regeneration_prompt,
     sql_regeneration_user_prompt_template,
@@ -59,9 +64,39 @@ def test_sql_regeneration_system_prompt_allows_standard_aggregates_without_sql_f
     assert "SQL FUNCTIONS for non-standard functions" in prompt
 
 
-def test_sql_generation_model_kwargs_do_not_set_output_budget_in_code():
-    assert "max_tokens" not in SQL_GENERATION_MODEL_KWARGS
+def test_sql_generation_model_kwargs_set_legacy_output_budget():
+    assert SQL_GENERATION_MODEL_KWARGS["max_tokens"] == 4096
     assert SQL_GENERATION_MODEL_KWARGS["response_format"]["type"] == "json_schema"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "generate_fn,extra_kwargs",
+    [
+        (generate_sql, {}),
+        (generate_sql_in_followup, {"histories": []}),
+        (generate_sql_correction, {}),
+        (regenerate_sql, {}),
+    ],
+)
+async def test_sql_generation_calls_pass_legacy_output_budget(
+    generate_fn,
+    extra_kwargs,
+):
+    captured_kwargs = {}
+
+    async def fake_generator(**kwargs):
+        captured_kwargs.update(kwargs)
+        return {"replies": ['{"sql": "SELECT 1"}'], "meta": [{"finish_reason": "stop"}]}
+
+    await generate_fn(
+        prompt={"prompt": "Return SQL"},
+        generator=fake_generator,
+        generator_name="test-model",
+        **extra_kwargs,
+    )
+
+    assert captured_kwargs["generation_kwargs"]["max_tokens"] == 4096
 
 
 def test_sql_generation_prompt_omits_sample_sql_body():

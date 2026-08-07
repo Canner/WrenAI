@@ -99,6 +99,15 @@ class SQLGenPostProcessor:
                 }
 
             raw_reply = replies[0]
+            if _first_finish_reason(meta) == "length":
+                return {
+                    "valid_generation_result": {},
+                    "invalid_generation_result": _generation_output_failure(
+                        raw_reply,
+                        meta,
+                    ),
+                }
+
             cleaned_generation_result = clean_generation_result(raw_reply)
 
             # test if cleaned_generation_result in string format is actually a dictionary with key 'sql'
@@ -579,6 +588,7 @@ class SqlGenerationResult(BaseModel):
 
 
 SQL_GENERATION_MODEL_KWARGS = {
+    "max_tokens": 4096,
     "response_format": {
         "type": "json_schema",
         "json_schema": {
