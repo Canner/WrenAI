@@ -1,6 +1,12 @@
 import { Knex } from 'knex';
 import { BaseRepository, IBasicRepository } from './baseRepository';
-import { camelCase, isPlainObject, mapKeys, mapValues } from 'lodash';
+import {
+  camelCase,
+  isPlainObject,
+  mapKeys,
+  mapValues,
+  snakeCase,
+} from 'lodash';
 
 export interface Deploy {
   id: number; // ID
@@ -104,6 +110,20 @@ export class DeployLogRepository
       return value;
     });
     return formattedData as Deploy;
+  };
+
+  protected override transformToDBData = (data: Partial<Deploy>) => {
+    if (!isPlainObject(data)) {
+      throw new Error('Unexpected dbdata');
+    }
+    const snakeCaseData = mapKeys(data, (_value, key) => snakeCase(key));
+    const formattedData = mapValues(snakeCaseData, (value, key) => {
+      if (key === 'manifest' && typeof value !== 'string') {
+        return JSON.stringify(value);
+      }
+      return value;
+    });
+    return formattedData;
   };
 
   private isMssql = () =>
