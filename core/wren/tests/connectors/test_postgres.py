@@ -20,12 +20,47 @@ from testcontainers.postgres import PostgresContainer
 from tests.suite.manifests import make_tpch_manifest
 from tests.suite.query import WrenQueryTestSuite
 from wren import WrenEngine
-from wren.connector.postgres import PostgresConnector
+from wren.connector.postgres import (
+    PostgresConnector,
+    _build_pg_column,
+    _get_pg_arrow_type,
+)
 from wren.model.data_source import DataSource
 
 pytestmark = pytest.mark.postgres
 
 _SCHEMA = "public"
+
+
+def _column(type_code: int, precision: int | None = None, scale: int | None = None):
+    class _Column:
+        pass
+
+    column = _Column()
+    column.type_code = type_code
+    column.precision = precision
+    column.scale = scale
+    return column
+
+
+def test_unconstrained_numeric_arrow_type_falls_back_to_string() -> None:
+    assert _get_pg_arrow_type(_column(1700)) == pa.string()
+    assert _get_pg_arrow_type(_column(1231)) == pa.list_(pa.string())
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        Decimal("1.123456789012345"),
+        Decimal("12345678901234567890.123456789012345"),
+    ],
+)
+def test_unconstrained_numeric_preserves_exact_value(value: Decimal) -> None:
+    arrow_type = _get_pg_arrow_type(_column(1700))
+
+    result = _build_pg_column([value, None], arrow_type, 1700)
+
+    assert result.to_pylist() == [str(value), None]
 
 
 def _load_tpch(conn_str: str) -> None:
@@ -208,6 +243,16 @@ class TestPostgresConnectorTypes:
         assert row["c_int4_arr"] == [1, 2, 3]
         assert row["c_text_arr"] == ["a", "b", "c"]
         assert row["c_numeric_arr"] == [Decimal("1.500000000"), Decimal("2.250000000")]
+
+    def test_unconstrained_numeric_preserves_exact_value(
+        self, connector: PostgresConnector
+    ) -> None:
+        value = "12345678901234567890.123456789012345"
+
+        result = connector.query(f"SELECT '{value}'::numeric AS n")
+
+        assert result.schema.field("n").type == pa.string()
+        assert result.to_pylist() == [{"n": value}]
 
     def test_nulls(self, connector: PostgresConnector) -> None:
         # Row inserted as `(NULL)` should produce a NULL in every column.

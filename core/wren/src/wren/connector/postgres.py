@@ -87,14 +87,15 @@ _PG_OID_TO_ARROW: dict[int, pa.DataType] = {
 }
 
 
-def _get_pg_decimal_type(column) -> pa.DataType:
-    """Map a psycopg numeric column to the narrowest Arrow decimal type we can represent."""
+def _get_pg_decimal_type(column) -> pa.DataType | None:
+    """Map a constrained numeric column to the narrowest Arrow decimal type.
+
+    Unconstrained NUMERIC has no fixed scale, so return ``None`` rather than
+    rounding values to an arbitrary Arrow decimal scale.
+    """
     if column.scale is None:
-        logger.debug(
-            "Postgres NUMERIC column has no scale metadata; defaulting to decimal128(38, 9)"
-        )
-    scale = column.scale if column.scale is not None else 9
-    scale = max(0, min(scale, 38))
+        return None
+    scale = max(0, min(column.scale, 38))
 
     precision = column.precision if column.precision is not None else 38
     if precision <= 0 or precision > 38:
@@ -108,9 +109,10 @@ def _get_pg_decimal_type(column) -> pa.DataType:
 def _get_pg_arrow_type(column) -> pa.DataType:
     """Map a psycopg cursor description column to an Arrow type."""
     if column.type_code == 1700:
-        return _get_pg_decimal_type(column)
+        return _get_pg_decimal_type(column) or pa.string()
     if column.type_code == 1231:
-        return pa.list_(_get_pg_decimal_type(column))
+        inner_type = _get_pg_decimal_type(column)
+        return pa.list_(inner_type) if inner_type is not None else pa.list_(pa.string())
     return _PG_OID_TO_ARROW.get(column.type_code, pa.string())
 
 
