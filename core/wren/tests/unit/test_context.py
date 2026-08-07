@@ -8,6 +8,8 @@ from pathlib import Path
 import pytest
 
 from wren.context import (
+    load_relationships,
+    validate_project,
     UpgradeError,
     _convert_keys,
     _snake_to_camel,
@@ -1733,3 +1735,34 @@ def test_validate_manifest_invalid_datasource():
     manifest = {**_SEM_BASE_MANIFEST, "views": [_VALID_VIEW]}
     result = validate_manifest(_b64(manifest), "not-a-datasource")
     assert len(result["errors"]) == 1
+
+
+def test_load_relationships_filters_non_dict_entries(tmp_path: Path) -> None:
+    (tmp_path / "relationships.yml").write_text(
+        "relationships:\n  - not-a-mapping\n  - 42\n  - name: ok\n    models: [a, b]\n    join_type: MANY_TO_ONE\n    condition: a.id = b.id\n",
+        encoding="utf-8",
+    )
+    rels = load_relationships(tmp_path)
+    assert len(rels) == 1
+    assert rels[0]["name"] == "ok"
+
+
+def test_validate_project_reports_non_dict_relationship_entries(tmp_path: Path) -> None:
+    # Minimal project scaffold for validate_project
+    (tmp_path / "wren_project.yml").write_text("schema_version: 1\n", encoding="utf-8")
+    (tmp_path / "relationships.yml").write_text(
+        "relationships:\n  - not-a-mapping\n  - 42\n",
+        encoding="utf-8",
+    )
+    errors = validate_project(tmp_path)
+    msgs = [e.message for e in errors]
+    assert any("relationship entry must be a mapping, got str" in m for m in msgs)
+    assert any("relationship entry must be a mapping, got int" in m for m in msgs)
+
+
+def test_validate_project_reports_relationships_not_list(tmp_path: Path) -> None:
+    (tmp_path / "wren_project.yml").write_text("schema_version: 1\n", encoding="utf-8")
+    (tmp_path / "relationships.yml").write_text("relationships: nope\n", encoding="utf-8")
+    errors = validate_project(tmp_path)
+    msgs = [e.message for e in errors]
+    assert any("'relationships' must be a list" in m for m in msgs)
