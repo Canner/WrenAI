@@ -204,8 +204,14 @@ def list_apps(path: ProjectPathOpt = None) -> None:
         return
 
     for name, entry in apps.items():
+        if not isinstance(entry, dict):
+            typer.echo(f"{name}  [invalid entry: {type(entry).__name__}]", err=True)
+            continue
         deploy = entry.get("deploy") or {}
-        suffix = f" → {deploy['last_url']}" if deploy.get("last_url") else ""
+        if not isinstance(deploy, dict):
+            deploy = {}
+        last_url = deploy.get("last_url")
+        suffix = f" → {last_url}" if last_url else ""
         typer.echo(
             f"{name}  [{entry.get('data_mode', '?')}, {entry.get('status', '?')}]"
             f"{suffix}"

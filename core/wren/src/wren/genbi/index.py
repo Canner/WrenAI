@@ -80,11 +80,17 @@ def save_index(project_path: Path, index: dict) -> None:
 def register_app(project_path: Path, name: str, *, data_mode: str) -> dict:
     """Create or update the entry for ``name``. Returns the entry."""
     index = load_index(project_path)
-    entry = index["apps"].get(name) or {
-        "source": f"apps/{name}",
-        "status": "scaffolded",
-        "created_at": date.today().isoformat(),
-    }
+    existing = index["apps"].get(name)
+    # Hand-edited truthy non-dicts (e.g. a string) must not fall through the
+    # ``or`` default — assignment would raise TypeError. Treat like missing.
+    if not isinstance(existing, dict):
+        entry = {
+            "source": f"apps/{name}",
+            "status": "scaffolded",
+            "created_at": date.today().isoformat(),
+        }
+    else:
+        entry = existing
     entry["data_mode"] = data_mode
     index["apps"][name] = entry
     save_index(project_path, index)
@@ -103,13 +109,25 @@ def remove_app(project_path: Path, name: str) -> bool:
 
 def get_app(project_path: Path, name: str) -> dict | None:
     """Return the entry for ``name`` or None if not registered."""
-    return load_index(project_path)["apps"].get(name)
+    entry = load_index(project_path)["apps"].get(name)
+    # Hand-edited apps.yml may put a scalar/list under an app key; treat as
+    # unregistered rather than letting callers AttributeError on mapping ops.
+    if entry is not None and not isinstance(entry, dict):
+        return None
+    return entry
 
 
 def update_app(project_path: Path, name: str, **fields) -> dict:
-    """Merge ``fields`` into the entry for ``name`` and persist."""
+    """Merge ``fields`` into the entry for ``name`` and persist.
+
+    Raises ``KeyError`` when the name is missing or the stored entry is not a
+    mapping (hand-edited scalar/list). Callers that need a friendlier message
+    should go through ``get_app`` / ``_require_registered`` first.
+    """
     index = load_index(project_path)
-    entry = index["apps"][name]
+    entry = index["apps"].get(name)
+    if not isinstance(entry, dict):
+        raise KeyError(name)
     entry.update(fields)
     save_index(project_path, index)
     return entry
