@@ -39,7 +39,7 @@ Uses `uv` (not Poetry). `pyproject.toml` uses `hatchling` as build backend.
 - **WrenEngine** is the main entry point. It accepts a base64-encoded MDL JSON string, a `DataSource`, and a connection dict.
 - **Query flow**: `_plan()` → wren-core `SessionContext.transform_sql()` → `_transpile()` via sqlglot → connector `.query()`.
 - **Manifest extraction**: `_plan()` tries to extract a minimal sub-manifest scoped to the query's referenced tables before calling wren-core — this reduces planning overhead. Falls back to the full manifest on error.
-- **`get_session_context` is `@cache`-decorated** — same `(manifest_str, function_path, properties, data_source)` tuple reuses the same SessionContext. Avoid mutating session state.
+- **`get_session_context` is `@lru_cache(maxsize=32)`-decorated** — same `(manifest_str, function_path, properties, data_source)` tuple reuses the same SessionContext; least-recently-used entries are evicted past 32. Never mutate session state: eviction makes the next call for the same tuple rebuild a fresh SessionContext, so any mutation silently disappears at an unpredictable point.
 - **Write dialect mapping**: `canner` → `trino`; file sources (`local_file`, `s3_file`, `minio_file`, `gcs_file`) → `duckdb`. All others use `data_source.name` directly.
 - **WrenEngine is a context manager** (`__enter__` / `__exit__` call `close()`).
 - **Profile-based workflow**: When no explicit `--connection-*` flags are given, the CLI auto-discovers the active profile from `~/.wren/profiles.yml`. Profiles store datasource type + connection fields.
