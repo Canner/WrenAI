@@ -1595,13 +1595,21 @@ _VALID_LEVELS = frozenset({"error", "warning", "strict"})
 
 
 def _prop_description(item: dict) -> str | None:
-    return (item.get("properties") or {}).get("description")
+    props = item.get("properties") or {}
+    if not isinstance(props, dict):
+        return None
+    return props.get("description")
 
 
 def _check_descriptions(manifest: dict, *, strict: bool = False) -> list[str]:
     warnings: list[str] = []
 
-    for model in manifest.get("models", []):
+    models = manifest.get("models", []) or []
+    if not isinstance(models, list):
+        models = []
+    for model in models:
+        if not isinstance(model, dict):
+            continue
         name = model.get("name", "<unknown>")
         if not _prop_description(model):
             warnings.append(
@@ -1609,14 +1617,24 @@ def _check_descriptions(manifest: dict, *, strict: bool = False) -> list[str]:
                 "add properties.description to improve memory search and agent comprehension"
             )
         if strict:
-            for col in model.get("columns", []):
+            cols = model.get("columns", []) or []
+            if not isinstance(cols, list):
+                cols = []
+            for col in cols:
+                if not isinstance(col, dict):
+                    continue
                 col_name = col.get("name", "<unknown>")
                 if not _prop_description(col):
                     warnings.append(
                         f"Column '{col_name}' in model '{name}' has no description"
                     )
 
-    for view in manifest.get("views", []):
+    views = manifest.get("views", []) or []
+    if not isinstance(views, list):
+        views = []
+    for view in views:
+        if not isinstance(view, dict):
+            continue
         view_name = view.get("name", "<unknown>")
         if not _prop_description(view):
             warnings.append(
