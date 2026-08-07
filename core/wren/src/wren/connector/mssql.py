@@ -99,10 +99,11 @@ class MSSqlConnector(ConnectorABC):
     ) -> str:
         """Inject a ``LIMIT n`` into a Select so sqlglot emits the tsql
         ``OFFSET 0 ROWS FETCH NEXT n ROWS ONLY`` clause."""
+        # Unlimited path: strip trailing terminators so client-pasted SQL
+        # matches dry_run / limit composition (connector consistency; see #2595).
+        sql = strip_trailing_semicolon(sql)
         if limit is None:
             return sql
-
-        sql = strip_trailing_semicolon(sql)
 
         try:
             parsed = parse_one(sql, dialect=input_dialect)
