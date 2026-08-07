@@ -84,7 +84,7 @@ async def test_runtime_generation_kwargs_override_model_defaults(mocker):
 
 
 @pytest.mark.asyncio
-async def test_local_openai_compatible_endpoint_drops_component_json_schema_by_default(
+async def test_local_openai_compatible_endpoint_converts_component_json_schema_to_json_object(
     mocker,
 ):
     captured_kwargs = {}
@@ -119,9 +119,10 @@ async def test_local_openai_compatible_endpoint_drops_component_json_schema_by_d
         }
     )
 
-    await generator(prompt="Return SQL")
+    await generator(prompt="Return SQL", generation_kwargs={"max_tokens": 4096})
 
-    assert "response_format" not in captured_kwargs
+    assert captured_kwargs["response_format"] == {"type": "json_object"}
+    assert captured_kwargs["max_tokens"] == 4096
     assert "speed" not in captured_kwargs
 
 

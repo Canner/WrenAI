@@ -142,7 +142,8 @@ class LitellmLLMProvider(LLMProvider):
             runtime_generation_kwargs = generation_kwargs or {}
             model_generation_kwargs = self._model_kwargs or {}
             explicit_response_format = (
-                "response_format" in model_generation_kwargs
+                "response_format" in component_generation_kwargs
+                or "response_format" in model_generation_kwargs
                 or "response_format" in runtime_generation_kwargs
             )
             generation_kwargs = _normalize_generation_kwargs(
