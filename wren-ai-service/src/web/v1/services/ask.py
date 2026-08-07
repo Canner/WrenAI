@@ -13,23 +13,6 @@ from src.web.v1.services import BaseRequest, SSEEvent
 logger = logging.getLogger("wren-ai-service")
 
 
-_DETERMINISTIC_SQL_VALIDATION_TYPES = {
-    "SCHEMA_GROUNDING",
-    "SQL_GENERATION",
-    "SQL_SHAPE",
-    "SQL_SYNTAX",
-    "SQL_VALUE_GROUNDING",
-    "NO_RELEVANT_SQL",
-}
-
-
-def should_skip_sql_diagnosis(failed_generation_result: dict | None) -> bool:
-    if not failed_generation_result:
-        return False
-
-    return failed_generation_result.get("type") in _DETERMINISTIC_SQL_VALIDATION_TYPES
-
-
 async def run_pipeline_with_timeout(awaitable, timeout_seconds: float, operation: str):
     try:
         logger.info(
@@ -73,10 +56,10 @@ class AskRequest(BaseRequest):
     # so we need to support as a choice, and will remove it in the future
     mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
     histories: Optional[list[AskHistory]] = Field(default_factory=list)
-    ignore_sql_generation_reasoning: bool = True
+    ignore_sql_generation_reasoning: bool = False
     enable_column_pruning: bool = False
-    use_dry_plan: bool = True
-    allow_dry_plan_fallback: bool = False
+    use_dry_plan: bool = False
+    allow_dry_plan_fallback: bool = True
     custom_instruction: Optional[str] = None
 
 
@@ -149,12 +132,12 @@ class AskService:
         self,
         pipelines: Dict[str, BasicPipeline],
         allow_intent_classification: bool = True,
-        allow_sql_generation_reasoning: bool = False,
+        allow_sql_generation_reasoning: bool = True,
         allow_sql_functions_retrieval: bool = True,
         allow_sql_diagnosis: bool = True,
         allow_sql_knowledge_retrieval: bool = True,
         enable_column_pruning: bool = False,
-        max_sql_correction_retries: int = 1,
+        max_sql_correction_retries: int = 3,
         sql_generation_timeout_seconds: float = 45.0,
         max_histories: int = 5,
         maxsize: int = 1_000_000,
@@ -586,7 +569,6 @@ class AskService:
                 elif failed_dry_run_result := text_to_sql_generation_results[
                     "post_process"
                 ]["invalid_generation_result"]:
-                    schema_grounding_correction_attempted = False
                     while current_sql_correction_retries < max_sql_correction_retries:
                         if failed_dry_run_result["type"] == "TIME_OUT":
                             break
@@ -594,21 +576,6 @@ class AskService:
                         original_sql = failed_dry_run_result["original_sql"]
                         invalid_sql = failed_dry_run_result["sql"]
                         error_message = failed_dry_run_result["error"]
-                        skip_sql_diagnosis = should_skip_sql_diagnosis(
-                            failed_dry_run_result
-                        )
-                        is_schema_grounding_error = (
-                            failed_dry_run_result.get("type") == "SCHEMA_GROUNDING"
-                        )
-                        if (
-                            is_schema_grounding_error
-                            and schema_grounding_correction_attempted
-                        ):
-                            break
-                        schema_grounding_correction_attempted = (
-                            schema_grounding_correction_attempted
-                            or is_schema_grounding_error
-                        )
                         current_sql_correction_retries += 1
 
                         self._ask_results[query_id] = AskResultResponse(
@@ -623,7 +590,7 @@ class AskService:
                         )
 
                         sql_diagnosis_reasoning = None
-                        if allow_sql_diagnosis and not skip_sql_diagnosis:
+                        if allow_sql_diagnosis:
                             sql_diagnosis_pipeline = self._pipelines[
                                 "sql_diagnosis"
                             ]
@@ -656,11 +623,7 @@ class AskService:
                                 query=user_query,
                                 instructions=instructions,
                                 invalid_generation_result={
-                                    "sql": (
-                                        ""
-                                        if is_schema_grounding_error
-                                        else original_sql
-                                    ),
+                                    "sql": original_sql,
                                     "error": correction_error_message,
                                 },
                                 project_id=ask_request.project_id,
@@ -693,15 +656,6 @@ class AskService:
                         next_failed_dry_run_result = sql_correction_results[
                             "post_process"
                         ]["invalid_generation_result"]
-                        if (
-                            next_failed_dry_run_result
-                            and next_failed_dry_run_result.get("sql") == invalid_sql
-                            and next_failed_dry_run_result.get("error")
-                            == error_message
-                        ):
-                            failed_dry_run_result = next_failed_dry_run_result
-                            break
-
                         failed_dry_run_result = next_failed_dry_run_result
 
             if api_results:

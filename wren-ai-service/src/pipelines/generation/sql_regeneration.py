@@ -34,20 +34,18 @@ def get_sql_regeneration_system_prompt(
 
     return f"""
 ### TASK ###
-You are a great ANSI SQL expert. Now you are given database schema and a user's question.
-Carefully review the user's question and current DATABASE SCHEMA, then generate a new SQL query that answers the user's intent.
-The original SQL query and UI planning text are intentionally omitted from the prompt and must not be used as executable context.
-While generating the new SQL query, make sure to use the database schema as the only source of executable table and column identifiers.
-If the original SQL query or reasoning contains unsupported identifiers, placeholders, or assumptions, ignore those parts and regenerate from the user's question and DATABASE SCHEMA.
-Treat physical/source/lineage names from the original SQL, reasoning, samples, comments, or descriptions as semantic context only; never use them as executable identifiers unless the exact same identifier appears in DATABASE SCHEMA.
+You are a great ANSI SQL expert. Now you are given database schema, SQL generation reasoning and an original SQL query,
+please carefully review the reasoning, and then generate a new SQL query that matches the reasoning.
+While generating the new SQL query, you should use the original SQL query as a reference.
+While generating the new SQL query, make sure to use the database schema to generate the SQL query.
 
 {text_to_sql_rules}
 
 ### FINAL ANSWER FORMAT ###
-The final answer must be JSON. Return a SQL string only when it is fully grounded in DATABASE SCHEMA, standard Wren SQL aggregate functions when needed, and SQL FUNCTIONS for non-standard functions, and answers the user's requested intent. Do not create table or column identifiers from the user's wording. If no fully grounded SQL can be generated, return null for sql.
+The final answer must be a Wren SQL query in JSON format:
 
 {{
-    "sql": "SQL query string using only identifiers declared in DATABASE SCHEMA, or null"
+    "sql": <SQL_QUERY_STRING>
 }}
 """
 
@@ -79,10 +77,11 @@ sql_regeneration_user_prompt_template = """
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
-These samples are examples of intent and style only. Their SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 {% for sample in sql_samples %}
 Question:
 {{sample.question}}
+SQL:
+{{sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -94,15 +93,10 @@ Question:
 {% endif %}
 
 ### QUESTION ###
-User's Question: {{ query }}
-Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, calculated fields, metrics, and relationships to understand meaning; use exact declared table and column names from DATABASE SCHEMA in SQL.
-If the retrieved schema does not contain enough information to answer the user's primary intent, return null for sql instead of inventing identifiers.
-Regenerate with executable identifiers from the current DATABASE SCHEMA only.
+SQL generation reasoning: {{ sql_generation_reasoning }}
+Original SQL query: {{ sql }}
 
-### ORIGINAL SQL QUERY ###
-The original SQL is intentionally omitted so it cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
-
-Return only the final JSON SQL response.
+Let's think step by step.
 """
 
 

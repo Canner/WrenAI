@@ -14,7 +14,6 @@ from src.web.v1.services.ask import (
     AskResult,
     get_pipeline_timeout_seconds,
     run_pipeline_with_timeout,
-    should_skip_sql_diagnosis,
 )
 
 logger = logging.getLogger("wren-ai-service")
@@ -227,12 +226,6 @@ class AskFeedbackService:
                         original_sql = failed_dry_run_result["original_sql"]
                         invalid_sql = failed_dry_run_result["sql"]
                         error_message = failed_dry_run_result["error"]
-                        skip_sql_diagnosis = should_skip_sql_diagnosis(
-                            failed_dry_run_result
-                        )
-                        is_schema_grounding_error = (
-                            failed_dry_run_result.get("type") == "SCHEMA_GROUNDING"
-                        )
                         sql_diagnosis_reasoning = None
 
                         self._ask_feedback_results[
@@ -242,7 +235,7 @@ class AskFeedbackService:
                             trace_id=trace_id,
                         )
 
-                        if allow_sql_diagnosis and not skip_sql_diagnosis:
+                        if allow_sql_diagnosis:
                             sql_diagnosis_pipeline = self._pipelines[
                                 "sql_diagnosis"
                             ]
@@ -278,12 +271,7 @@ class AskFeedbackService:
                                 sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
                                 instructions=instructions,
                                 invalid_generation_result={
-                                    "original_sql": original_sql,
-                                    "sql": (
-                                        ""
-                                        if is_schema_grounding_error
-                                        else invalid_sql
-                                    ),
+                                    "sql": original_sql,
                                     "error": correction_error_message,
                                 },
                                 project_id=ask_feedback_request.project_id,

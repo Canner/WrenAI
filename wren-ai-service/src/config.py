@@ -38,12 +38,12 @@ class Settings(BaseSettings):
 
     # generation config
     allow_intent_classification: bool = Field(default=True)
-    allow_sql_generation_reasoning: bool = Field(default=False)
+    allow_sql_generation_reasoning: bool = Field(default=True)
     allow_sql_functions_retrieval: bool = Field(default=True)
     allow_sql_diagnosis: bool = Field(default=True)
     allow_sql_knowledge_retrieval: bool = Field(default=False)
     max_histories: int = Field(default=5)
-    max_sql_correction_retries: int = Field(default=1)
+    max_sql_correction_retries: int = Field(default=3)
     sql_generation_timeout_seconds: float = Field(default=45.0)
     # Kept for compatibility with deployed configs. This controls the bounded
     # generation/correction calls when present.

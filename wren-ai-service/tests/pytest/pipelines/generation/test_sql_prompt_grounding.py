@@ -30,38 +30,32 @@ from src.pipelines.generation.utils.sql import SQL_GENERATION_MODEL_KWARGS
 def test_sql_generation_system_prompt_uses_schema_without_extra_catalog_layer():
     prompt = get_sql_generation_system_prompt()
 
-    assert "DATABASE SCHEMA is the only source" in prompt
+    assert "generate the SQL query based on the given reasoning plan" in prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in prompt
     assert "WREN SQL IDENTIFIER CONTRACT" not in prompt
     assert "WREN RETRIEVED SEMANTIC CONTEXT" not in prompt
-    assert "return null for sql instead of choosing one" not in prompt
+    assert "return null for sql" not in prompt
     assert 'ONLY USE "*" if the user query asks' in prompt
-    assert (
-        "COUNT, SUM, AVG, MIN, and MAX do not need to appear in SQL FUNCTIONS"
-        in prompt
-    )
-    assert "every non-standard function only from SQL FUNCTIONS" in prompt
+    assert "<SQL_QUERY_STRING>" in prompt
 
 
 def test_sql_correction_system_prompt_uses_current_schema_for_repair():
     prompt = get_sql_correction_system_prompt()
 
-    assert "regenerate one grounded Wren SQL query" in prompt
+    assert "fix the syntactically incorrect Wren SQL query" in prompt
     assert "DATABASE SCHEMA" in prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in prompt
     assert "WREN SQL IDENTIFIER CONTRACT" not in prompt
     assert 'ONLY USE "*" if the user query asks' in prompt
-    assert (
-        "Standard Wren SQL aggregate functions COUNT, SUM, AVG, MIN, and MAX are allowed"
-        in prompt
-    )
+    assert "return null for sql" not in prompt
 
 
 def test_sql_regeneration_system_prompt_allows_standard_aggregates_without_sql_functions():
     prompt = get_sql_regeneration_system_prompt()
 
-    assert "standard Wren SQL aggregate functions when needed" in prompt
-    assert "SQL FUNCTIONS for non-standard functions" in prompt
+    assert "SQL generation reasoning and an original SQL query" in prompt
+    assert "<SQL_QUERY_STRING>" in prompt
+    assert "return null for sql" not in prompt
 
 
 def test_sql_generation_model_kwargs_preserve_structured_output_only():
@@ -99,7 +93,7 @@ async def test_sql_generation_calls_do_not_inject_runtime_output_budget(
     assert "generation_kwargs" not in captured_kwargs
 
 
-def test_sql_generation_prompt_omits_sample_sql_body():
+def test_sql_generation_prompt_includes_sample_sql_body():
     result = build_sql_generation_prompt(
         query="summarize model records",
         documents=[],
@@ -115,7 +109,7 @@ def test_sql_generation_prompt_omits_sample_sql_body():
     built_prompt = result["prompt"]
 
     assert "sample intent" in built_prompt
-    assert "SELECT 1" not in built_prompt
+    assert "SELECT 1" in built_prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in built_prompt
     assert "WREN SQL IDENTIFIER CONTRACT" not in built_prompt
 
@@ -135,7 +129,7 @@ def test_followup_sql_generation_prompt_uses_retrieved_schema_context():
     assert "WREN SQL IDENTIFIER CONTRACT" not in result["prompt"]
 
 
-def test_sql_correction_prompt_keeps_failed_sql_diagnostic_and_question():
+def test_sql_correction_prompt_uses_failed_sql_without_user_question():
     result = build_sql_correction_prompt(
         documents=[],
         invalid_generation_result={
@@ -148,14 +142,15 @@ def test_sql_correction_prompt_keeps_failed_sql_diagnostic_and_question():
 
     built_prompt = result["prompt"]
 
-    assert "User's Question: summarize model records" in built_prompt
-    assert "Failed SQL: SELECT 1" in built_prompt
-    assert "DIAGNOSTIC CONTEXT" in built_prompt
+    assert "User's Question: summarize model records" not in built_prompt
+    assert "SQL: SELECT 1" in built_prompt
+    assert "Error Message: dry run failed" in built_prompt
+    assert "DIAGNOSTIC CONTEXT" not in built_prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in built_prompt
     assert "WREN SQL IDENTIFIER CONTRACT" not in built_prompt
 
 
-def test_sql_regeneration_prompt_uses_current_schema_without_failed_sql_body():
+def test_sql_regeneration_prompt_keeps_original_sql_as_legacy_reference():
     result = build_sql_regeneration_prompt(
         query="summarize model records",
         documents=["CREATE TABLE model_1 (attribute_1 VARCHAR)"],
@@ -167,7 +162,6 @@ def test_sql_regeneration_prompt_uses_current_schema_without_failed_sql_body():
     built_prompt = result["prompt"]
 
     assert "CREATE TABLE model_1" in built_prompt
-    assert "The original SQL is intentionally omitted" in built_prompt
-    assert "SELECT 1" not in built_prompt
+    assert "Original SQL query: SELECT 1" in built_prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in built_prompt
     assert "WREN SQL IDENTIFIER CONTRACT" not in built_prompt

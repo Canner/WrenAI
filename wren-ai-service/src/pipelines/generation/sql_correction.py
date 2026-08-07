@@ -30,16 +30,12 @@ def get_sql_correction_system_prompt(sql_knowledge: SqlKnowledge | None = None) 
 
     return f"""
 ### TASK ###
-You are an ANSI SQL expert with exceptional logical thinking skills and debugging skills.
-You need to regenerate one grounded Wren SQL query from the user's question and current DATABASE SCHEMA.
-The failed SQL and error message are diagnostic context only.
+You are an ANSI SQL expert with exceptional logical thinking skills and debugging skills, you need to fix the syntactically incorrect Wren SQL query.
 
 ### SQL CORRECTION INSTRUCTIONS ###
 
-1. First, use the error message only to understand why the previous SQL failed.
-2. Then, ignore any failed SQL identifier, placeholder, literal, or non-standard function that is not declared in the current DATABASE SCHEMA or SQL FUNCTIONS. Standard Wren SQL aggregate functions COUNT, SUM, AVG, MIN, and MAX are allowed when needed for the user's aggregate intent.
-3. Regenerate the SQL from the user's question, DATABASE SCHEMA, standard Wren SQL aggregate functions when needed, SQL FUNCTIONS for non-standard functions, and USER INSTRUCTIONS.
-4. If the user's requested intent cannot be fully grounded by the current DATABASE SCHEMA, standard aggregate functions when needed, and SQL FUNCTIONS for non-standard functions, return null for sql instead of repairing the failed SQL approximately.
+1. First, think hard about the error message, and figure out the root cause first(please use the DATABASE SCHEMA, SQL FUNCTIONS and USER INSTRUCTIONS to help you figure out the root cause).
+2. Then, generate the syntactically correct Wren SQL query to correct the error.
 
 ### SQL RULES ###
 Make sure you follow the SQL Rules strictly.
@@ -50,7 +46,7 @@ Make sure you follow the SQL Rules strictly.
 The final answer must be in JSON format:
 
 {{
-    "sql": "corrected SQL query string using only identifiers declared in DATABASE SCHEMA, or null"
+    "sql": <CORRECTED_SQL_QUERY_STRING>
 }}
 """
 
@@ -77,17 +73,11 @@ sql_correction_user_prompt_template = """
 {% endfor %}
 {% endif %}
 
-{% if query %}
 ### QUESTION ###
-User's Question: {{ query }}
-{% endif %}
-
-### FAILED SQL DIAGNOSTIC CONTEXT ###
-Failed SQL: {{ invalid_generation_result.sql }}
+SQL: {{ invalid_generation_result.sql }}
 Error Message: {{ invalid_generation_result.error }}
 
-Regenerate from the user's question and DATABASE SCHEMA only when a user question is available. Otherwise, correct the failed SQL only by using exact executable identifiers declared in DATABASE SCHEMA, standard Wren SQL aggregate functions when needed, or non-standard functions declared in SQL FUNCTIONS. Do not copy table names, column names, non-standard functions, literals, aliases, or SQL structure from the failed SQL unless each one is declared in DATABASE SCHEMA or SQL FUNCTIONS.
-Return only the final JSON SQL response.
+Let's think step by step.
 """
 
 

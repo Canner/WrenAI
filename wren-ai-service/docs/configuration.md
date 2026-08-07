@@ -54,7 +54,7 @@ The configuration file (`config.yaml`) is structured into several sections, each
        kwargs:
          temperature: 0
          n: 1
-         max_tokens: 4096
+         max_tokens: 8192
          response_format:
            type: "json_object"
      - model: gpt-4o-mini

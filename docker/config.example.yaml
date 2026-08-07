@@ -6,42 +6,42 @@ models:
     model: gpt-4.1-nano-2025-04-14
     context_window_size: 1000000
     kwargs:
-      max_tokens: 4096
+      max_tokens: 8192
       n: 1
       seed: 0
       temperature: 0
   - model: gpt-4.1-mini-2025-04-14
     context_window_size: 1000000
     kwargs:
-      max_tokens: 4096
+      max_tokens: 8192
       n: 1
       seed: 0
       temperature: 0
   - model: gpt-4.1-2025-04-14
     context_window_size: 1000000
     kwargs:
-      max_tokens: 4096
+      max_tokens: 8192
       n: 1
       seed: 0
       temperature: 0
   - model: gpt-5-nano-2025-08-07
     context_window_size: 380000
     kwargs:
-      max_completion_tokens: 4096
+      max_completion_tokens: 8192
       n: 1
       seed: 0
       reasoning_effort: minimal
   - model: gpt-5-mini-2025-08-07
     context_window_size: 380000
     kwargs:
-      max_completion_tokens: 4096
+      max_completion_tokens: 8192
       n: 1
       seed: 0
       reasoning_effort: minimal
   - model: gpt-5-2025-08-07
     context_window_size: 380000
     kwargs:
-      max_completion_tokens: 4096
+      max_completion_tokens: 8192
       n: 1
       seed: 0
       reasoning_effort: minimal

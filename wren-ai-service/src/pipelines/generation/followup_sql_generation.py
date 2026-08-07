@@ -30,8 +30,8 @@ logger = logging.getLogger("wren-ai-service")
 
 text_to_sql_with_followup_user_prompt_template = """
 ### TASK ###
-Given the user's current follow-up question and the current retrieved DATABASE SCHEMA,
-generate one SQL query to best answer the user's question.
+Given the following user's follow-up question and previous SQL query and summary,
+generate one SQL query to best answer user's question.
 
 ### DATABASE SCHEMA ###
 {% for document in documents %}
@@ -59,10 +59,11 @@ generate one SQL query to best answer the user's question.
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
-These samples are examples of intent and style only. Their SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 {% for sample in sql_samples %}
 Summary:
 {{sample.summary}}
+SQL:
+{{sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -75,12 +76,11 @@ Summary:
 
 ### QUESTION ###
 User's Follow-up Question: {{ query }}
-Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, calculated fields, metrics, and relationships to understand meaning; use exact declared table and column names from DATABASE SCHEMA in SQL.
-If the retrieved schema does not contain enough information to answer the user's primary intent, return null for sql instead of inventing identifiers.
-For broad entity-list questions, selecting all columns from the best matching retrieved schema object is valid.
-Do not generate SQL from a reasoning plan. The reasoning plan is not executable context and cannot provide table names, column names, filters, functions, joins, or examples.
 
-Return only the final JSON SQL response.
+### REASONING PLAN ###
+{{ sql_generation_reasoning }}
+
+Let's think step by step.
 """
 
 

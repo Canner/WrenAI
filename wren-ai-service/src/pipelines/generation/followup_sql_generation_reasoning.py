@@ -30,10 +30,11 @@ sql_generation_reasoning_user_prompt_template = """
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
-These samples are examples of intent and style only. Their SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 {% for sql_sample in sql_samples %}
 Question:
 {{sql_sample.question}}
+SQL:
+{{sql_sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -45,10 +46,11 @@ Question:
 {% endif %}
 
 ### User's QUERY HISTORY ###
-Query history is intent context only. Prior SQL is intentionally omitted so it cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 {% for history in histories %}
 Question:
 {{ history.question }}
+SQL:
+{{ history.sql }}
 {% endfor %}
 
 ### QUESTION ###
@@ -56,7 +58,7 @@ User's Question: {{ query }}
 Language: {{ language }}
 Current Time: {{ current_time }}
 
-Return only the reasoning plan described by the system instructions. When relevant, ground the plan by using the literal prefix `table:` followed by an exact declared table name from DATABASE SCHEMA, or the literal prefix `column:` followed by an exact declared table name, a dot, and an exact declared column name. Do not include SQL, SQL-like expressions, aliases, source names, physical names, lineage names, schema names, database names, literal values, placeholders, template markers, functions, or identifier-like labels.
+Let's think step by step.
 """
 
 

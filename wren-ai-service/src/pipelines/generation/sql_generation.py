@@ -53,10 +53,11 @@ sql_generation_user_prompt_template = """
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
-These samples are examples of intent and style only. Their SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
 {% for sample in sql_samples %}
 Question:
 {{sample.question}}
+SQL:
+{{sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -69,17 +70,13 @@ Question:
 
 ### QUESTION ###
 User's Question: {{ query }}
-Answer the user's intent using the current DATABASE SCHEMA. Use comments, aliases, descriptions, source metadata, calculated fields, metrics, and relationships to understand meaning; use exact declared table and column names from DATABASE SCHEMA in SQL.
-If the retrieved schema does not contain enough information to answer the user's primary intent, return null for sql instead of inventing identifiers.
-For broad entity-list questions, selecting all columns from the best matching retrieved schema object is valid.
-Do not generate SQL from a reasoning plan. The reasoning plan is not executable context and cannot provide table names, column names, filters, functions, joins, or examples.
 
 {% if sql_generation_reasoning %}
 ### REASONING PLAN ###
 {{ sql_generation_reasoning }}
 {% endif %}
 
-Return only the final JSON SQL response.
+Let's think step by step.
 """
 
 
