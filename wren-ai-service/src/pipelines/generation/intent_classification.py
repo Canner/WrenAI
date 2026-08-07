@@ -132,10 +132,12 @@ Use this schema semantically: comments, display labels, descriptions, and relati
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
-These samples are intent examples only. SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
+These samples are confirmed examples for this project deployment. Use them to understand how business terms map to the modeled schema.
 {% for sql_sample in sql_samples %}
 Question:
 {{sql_sample.question}}
+SQL:
+{{sql_sample.sql}}
 {% endfor %}
 {% endif %}
 

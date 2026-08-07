@@ -59,10 +59,12 @@ The following identifiers come from Ask Retrieval for this question. Use these e
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
-These samples are intent examples only. Their SQL bodies are intentionally omitted so they cannot provide executable identifiers, literal values, placeholders, functions, or SQL patterns.
+These samples are confirmed examples for this project deployment. Use them to learn how business terms map to the modeled schema, while still generating the final query from the retrieved DATABASE SCHEMA.
 {% for sample in sql_samples %}
 Question:
 {{sample.question}}
+SQL:
+{{sample.sql}}
 {% endfor %}
 {% endif %}
 
