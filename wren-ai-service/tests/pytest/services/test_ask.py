@@ -151,11 +151,11 @@ def test_ask_request_uses_sql_generation_reasoning_by_default():
     assert ask_request.ignore_sql_generation_reasoning is False
 
 
-def test_ask_request_uses_preview_validation_by_default():
+def test_ask_request_uses_dry_plan_validation_by_default():
     ask_request = AskRequest(query="question", mdl_hash="deploy")
 
-    assert ask_request.use_dry_plan is False
-    assert ask_request.allow_dry_plan_fallback is True
+    assert ask_request.use_dry_plan is True
+    assert ask_request.allow_dry_plan_fallback is False
 
 
 def test_ask_service_uses_legacy_sql_correction_retries_by_default():
