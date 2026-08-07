@@ -241,8 +241,9 @@ class SQLGenPostProcessor:
                         return valid_generation_result, invalid_generation_result
 
                     invalid_generation_result = {
-                        "sql": addition.get("error_sql", generation_result),
+                        "sql": generation_result,
                         "original_sql": generation_result,
+                        "engine_sql": addition.get("error_sql", ""),
                         "type": "DRY_RUN",
                         "error": error_message,
                         "correlation_id": addition.get("correlation_id", ""),
@@ -273,8 +274,9 @@ class SQLGenPostProcessor:
                         return valid_generation_result, invalid_generation_result
 
                     invalid_generation_result = {
-                        "sql": addition.get("error_sql", generation_result),
+                        "sql": generation_result,
                         "original_sql": generation_result,
+                        "engine_sql": addition.get("error_sql", ""),
                         "type": "DRY_RUN",
                         "error": error_message,
                         "correlation_id": addition.get("correlation_id", ""),
@@ -310,8 +312,9 @@ class SQLGenPostProcessor:
                         else "PREVIEW_FAILED"
                     )
                     invalid_generation_result = {
-                        "sql": addition.get("error_sql", generation_result),
+                        "sql": generation_result,
                         "original_sql": generation_result,
+                        "engine_sql": addition.get("error_sql", ""),
                         "type": preview_data_status,
                         "error": error_message,
                         "correlation_id": addition.get("correlation_id", ""),

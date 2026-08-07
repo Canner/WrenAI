@@ -36,12 +36,10 @@ The following identifiers come from Ask Retrieval for this question. Use these e
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
-These samples are confirmed examples for this project deployment. Use them to understand how business terms map to the modeled schema.
+These samples are confirmed question examples for this project deployment. Use them to understand intent and style only.
 {% for sql_sample in sql_samples %}
 Question:
 {{sql_sample.question}}
-SQL:
-{{sql_sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -56,8 +54,6 @@ SQL:
 {% for history in histories %}
 Question:
 {{ history.question }}
-SQL:
-{{ history.sql }}
 {% endfor %}
 
 ### QUESTION ###
@@ -67,7 +63,7 @@ Current Time: {{ current_time }}
 
 Let's think step by step.
 When the user uses a business term, map it only to an identifier listed in DATABASE SCHEMA or RETRIEVED EXECUTABLE SCHEMA. Do not turn a user word into a table or column name unless it is listed there.
-Use SQL samples and query history only as confirmed examples of how this deployment names modeled objects. Do not copy from the user's wording as an identifier unless it is listed in DATABASE SCHEMA, RETRIEVED EXECUTABLE SCHEMA, a same-deployment SQL sample, or query history.
+Use SQL sample questions and query history questions only as intent examples. Do not copy from the user's wording as an identifier unless it is listed in DATABASE SCHEMA or RETRIEVED EXECUTABLE SCHEMA.
 """
 
 

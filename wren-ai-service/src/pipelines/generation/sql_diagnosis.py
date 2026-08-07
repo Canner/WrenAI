@@ -45,6 +45,12 @@ sql_diagnosis_user_prompt_template = """
     {{ document }}
 {% endfor %}
 
+{% if schema_grounding %}
+### RETRIEVED EXECUTABLE SCHEMA ###
+The following identifiers come from Ask Retrieval for this question. Use these exact model/table and column names when diagnosing SQL.
+{{ schema_grounding }}
+{% endif %}
+
 ### INPUTS ###
 Original SQL:
 {{ original_sql }}
@@ -70,6 +76,7 @@ def prompt(
     error_message: str,
     language: str,
     prompt_builder: PromptBuilder,
+    schema_grounding: str | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         documents=documents,
@@ -77,6 +84,7 @@ def prompt(
         invalid_sql=invalid_sql,
         error_message=error_message,
         language=language,
+        schema_grounding=schema_grounding,
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
@@ -161,6 +169,7 @@ class SQLDiagnosis(BasicPipeline):
         invalid_sql: str,
         error_message: str,
         language: str,
+        schema_grounding: str | None = None,
     ):
         logger.info("SQLDiagnosis pipeline is running...")
 
@@ -172,6 +181,7 @@ class SQLDiagnosis(BasicPipeline):
                 "invalid_sql": invalid_sql,
                 "error_message": error_message,
                 "language": language,
+                "schema_grounding": schema_grounding,
                 **self._components,
             },
         )

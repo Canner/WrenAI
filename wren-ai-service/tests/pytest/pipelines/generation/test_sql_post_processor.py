@@ -22,6 +22,22 @@ class _CapturingEngine:
         return True, ""
 
 
+class _FailingEngine:
+    async def execute_sql(self, *_, **__):
+        return (
+            False,
+            {},
+            {
+                "error_message": "Invalid object name 'orders'.",
+                "error_sql": "SELECT * FROM orders",
+                "correlation_id": "cid",
+            },
+        )
+
+    async def dry_plan(self, *_, **__):
+        return True, ""
+
+
 @pytest.mark.asyncio
 async def test_post_processor_returns_generation_failure_for_truncated_json():
     processor = SQLGenPostProcessor(engine=_NoopEngine())
@@ -112,3 +128,18 @@ async def test_post_processor_passes_deployment_hash_to_dry_plan_validation():
     assert result["invalid_generation_result"] == {}
     assert engine.dry_plan_kwargs["project_id"] == "project-id"
     assert engine.dry_plan_kwargs["mdl_hash"] == "deploy-hash"
+
+
+@pytest.mark.asyncio
+async def test_post_processor_keeps_raw_wren_sql_when_engine_returns_planned_sql():
+    processor = SQLGenPostProcessor(engine=_FailingEngine())
+
+    result = await processor.run(
+        ['{"sql": "SELECT * FROM dbo_xStageNewOrders"}'],
+    )
+
+    invalid = result["invalid_generation_result"]
+    assert invalid["sql"] == "SELECT * FROM dbo_xStageNewOrders"
+    assert invalid["original_sql"] == "SELECT * FROM dbo_xStageNewOrders"
+    assert invalid["engine_sql"] == "SELECT * FROM orders"
+    assert invalid["error"] == "Invalid object name 'orders'."

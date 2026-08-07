@@ -22,6 +22,10 @@ from src.pipelines.generation.sql_generation_reasoning import (
     prompt as build_sql_generation_reasoning_prompt,
     sql_generation_reasoning_user_prompt_template,
 )
+from src.pipelines.generation.followup_sql_generation_reasoning import (
+    prompt as build_followup_sql_generation_reasoning_prompt,
+    sql_generation_reasoning_user_prompt_template as followup_reasoning_prompt_template,
+)
 from src.pipelines.generation.sql_regeneration import (
     regenerate_sql,
     get_sql_regeneration_system_prompt,
@@ -111,7 +115,7 @@ async def test_sql_generation_calls_do_not_inject_runtime_output_budget(
     assert "generation_kwargs" not in captured_kwargs
 
 
-def test_sql_generation_prompt_includes_confirmed_sample_sql_body():
+def test_sql_generation_prompt_omits_sample_sql_body():
     result = build_sql_generation_prompt(
         query="show orders from India",
         documents=['CREATE TABLE dbo_xStageNewOrders (ShipCountry VARCHAR)'],
@@ -128,9 +132,9 @@ def test_sql_generation_prompt_includes_confirmed_sample_sql_body():
     built_prompt = result["prompt"]
 
     assert "show orders from Taiwan" in built_prompt
-    assert "SELECT * FROM orders" in built_prompt
-    assert "WHERE country" in built_prompt
-    assert "confirmed examples for this project deployment" in built_prompt
+    assert "SELECT * FROM orders" not in built_prompt
+    assert "WHERE country" not in built_prompt
+    assert "confirmed question examples for this project deployment" in built_prompt
     assert "RETRIEVED EXECUTABLE SCHEMA" in built_prompt
     assert '- model/table: "dbo_xStageNewOrders"' in built_prompt
     assert '- "ShipCountry"' in built_prompt
@@ -141,7 +145,7 @@ def test_sql_generation_prompt_includes_confirmed_sample_sql_body():
     assert "WREN SQL IDENTIFIER CONTRACT" not in built_prompt
 
 
-def test_sql_generation_reasoning_prompt_includes_confirmed_sample_sql_body():
+def test_sql_generation_reasoning_prompt_omits_sample_sql_body():
     result = build_sql_generation_reasoning_prompt(
         query="show orders from India",
         documents=['CREATE TABLE dbo_xStageNewOrders (ShipCountry VARCHAR)'],
@@ -161,9 +165,40 @@ def test_sql_generation_reasoning_prompt_includes_confirmed_sample_sql_body():
     built_prompt = result["prompt"]
 
     assert "show orders from Taiwan" in built_prompt
-    assert "SELECT * FROM orders" in built_prompt
-    assert "WHERE country" in built_prompt
-    assert "confirmed examples for this project deployment" in built_prompt
+    assert "SELECT * FROM orders" not in built_prompt
+    assert "WHERE country" not in built_prompt
+    assert "confirmed question examples for this project deployment" in built_prompt
+    assert "dbo_xStageNewOrders" in built_prompt
+    assert "ShipCountry" in built_prompt
+
+
+def test_followup_sql_generation_reasoning_prompt_omits_sample_and_history_sql():
+    result = build_followup_sql_generation_reasoning_prompt(
+        query="from India",
+        documents=['CREATE TABLE dbo_xStageNewOrders (ShipCountry VARCHAR)'],
+        schema_grounding='- model/table: "dbo_xStageNewOrders"\n  columns:\n    - "ShipCountry"',
+        histories=[
+            {
+                "question": "show orders",
+                "sql": "SELECT * FROM orders",
+            }
+        ],
+        sql_samples=[
+            {
+                "question": "show orders from Taiwan",
+                "sql": "SELECT * FROM orders WHERE country = 'Taiwan'",
+            }
+        ],
+        instructions=[],
+        prompt_builder=PromptBuilder(template=followup_reasoning_prompt_template),
+    )
+
+    built_prompt = result["prompt"]
+
+    assert "show orders" in built_prompt
+    assert "show orders from Taiwan" in built_prompt
+    assert "SELECT * FROM orders" not in built_prompt
+    assert "WHERE country" not in built_prompt
     assert "dbo_xStageNewOrders" in built_prompt
     assert "ShipCountry" in built_prompt
 
@@ -190,9 +225,9 @@ def test_followup_sql_generation_prompt_uses_retrieved_schema_context():
     assert "CREATE TABLE dbo_xStageNewOrders" in built_prompt
     assert "RETRIEVED EXECUTABLE SCHEMA" in built_prompt
     assert '- model/table: "dbo_xStageNewOrders"' in built_prompt
-    assert "SELECT * FROM orders" in built_prompt
-    assert "WHERE country" in built_prompt
-    assert "confirmed examples for this project deployment" in built_prompt
+    assert "SELECT * FROM orders" not in built_prompt
+    assert "WHERE country" not in built_prompt
+    assert "confirmed question examples for this project deployment" in built_prompt
     assert "Return only the final JSON SQL response" in built_prompt
     assert "Let's think step by step" not in built_prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in built_prompt
@@ -226,7 +261,7 @@ def test_sql_correction_prompt_uses_failed_sql_with_user_question():
     assert "WREN SQL IDENTIFIER CONTRACT" not in built_prompt
 
 
-def test_sql_regeneration_prompt_keeps_original_sql_as_legacy_reference():
+def test_sql_regeneration_prompt_omits_sample_sql_body():
     result = build_sql_regeneration_prompt(
         query="summarize model records",
         documents=["CREATE TABLE model_1 (attribute_1 VARCHAR)"],
@@ -246,10 +281,10 @@ def test_sql_regeneration_prompt_keeps_original_sql_as_legacy_reference():
     assert "CREATE TABLE model_1" in built_prompt
     assert "User's Question: summarize model records" in built_prompt
     assert "Original SQL query: SELECT 1" in built_prompt
-    assert "SELECT * FROM orders" in built_prompt
-    assert "WHERE country" in built_prompt
-    assert "confirmed examples for this project deployment" in built_prompt
-    assert "Use DATABASE SCHEMA as the only source" in built_prompt
+    assert "SELECT * FROM orders" not in built_prompt
+    assert "WHERE country" not in built_prompt
+    assert "confirmed question examples for this project deployment" in built_prompt
+    assert "Use DATABASE SCHEMA and RETRIEVED EXECUTABLE SCHEMA" in built_prompt
     assert "Return only the final JSON SQL response" in built_prompt
     assert "Let's think step by step" not in built_prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in built_prompt

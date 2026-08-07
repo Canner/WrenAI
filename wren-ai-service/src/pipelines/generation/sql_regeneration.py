@@ -35,8 +35,8 @@ def get_sql_regeneration_system_prompt(
     return f"""
 ### TASK ###
 You are a great ANSI SQL expert. Now you are given database schema, SQL generation reasoning and an original SQL query,
-please carefully review the reasoning, and then generate a new SQL query that matches the reasoning.
-While generating the new SQL query, you should use the original SQL query as a reference.
+please carefully review the request and then generate a new SQL query grounded in the database schema.
+Use the original SQL query only as intent context. Do not preserve table or column names from it unless they appear in the database schema.
 While generating the new SQL query, make sure to use the database schema to generate the SQL query.
 
 {text_to_sql_rules}
@@ -57,6 +57,12 @@ sql_regeneration_user_prompt_template = """
 {% for document in documents %}
     {{ document }}
 {% endfor %}
+
+{% if schema_grounding %}
+### RETRIEVED EXECUTABLE SCHEMA ###
+The following identifiers come from Ask Retrieval for this question. Use these exact model/table and column names when writing SQL.
+{{ schema_grounding }}
+{% endif %}
 
 {% if calculated_field_instructions %}
 {{ calculated_field_instructions }}
@@ -79,12 +85,10 @@ sql_regeneration_user_prompt_template = """
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
-These samples are confirmed examples for this project deployment. Use them to learn how business terms map to the modeled schema, while still generating the final query from the retrieved DATABASE SCHEMA.
+These samples are confirmed question examples for this project deployment. Use them for intent and style only. They are not a source of executable SQL identifiers.
 {% for sample in sql_samples %}
 Question:
 {{sample.question}}
-SQL:
-{{sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -98,10 +102,10 @@ SQL:
 ### QUESTION ###
 User's Question: {{ query }}
 SQL generation reasoning: {{ sql_generation_reasoning }}
-The reasoning text is non-executable intent context only. Do not copy table names, column names, aliases, functions, clauses, literal values, or SQL fragments from it unless they appear exactly in DATABASE SCHEMA or SQL FUNCTIONS.
+The reasoning text is non-executable intent context only. Do not copy table names, column names, aliases, functions, clauses, literal values, or SQL fragments from it unless they appear exactly in DATABASE SCHEMA, RETRIEVED EXECUTABLE SCHEMA, or SQL FUNCTIONS.
 Original SQL query: {{ sql }}
 
-Use DATABASE SCHEMA as the only source for executable table and column identifiers. The original SQL and reasoning plan can explain intent, but they must not introduce identifiers that are absent from DATABASE SCHEMA.
+Use DATABASE SCHEMA and RETRIEVED EXECUTABLE SCHEMA as the only sources for executable table and column identifiers. The original SQL and reasoning plan can explain intent, but they must not introduce identifiers that are absent from DATABASE SCHEMA.
 Think through the request silently. Return only the final JSON SQL response.
 """
 
@@ -114,6 +118,7 @@ def prompt(
     sql_generation_reasoning: str,
     sql: str,
     prompt_builder: PromptBuilder,
+    schema_grounding: str | None = None,
     sql_samples: list[dict] | None = None,
     instructions: list[dict] | None = None,
     has_calculated_field: bool = False,
@@ -127,6 +132,7 @@ def prompt(
         sql=sql,
         documents=documents,
         sql_generation_reasoning=sql_generation_reasoning,
+        schema_grounding=schema_grounding,
         instructions=construct_instructions(
             instructions=instructions,
         ),
@@ -211,6 +217,7 @@ class SQLRegeneration(BasicPipeline):
         query: str,
         sql_generation_reasoning: str,
         sql: str,
+        schema_grounding: str | None = None,
         sql_samples: list[dict] | None = None,
         instructions: list[dict] | None = None,
         project_id: str | None = None,
@@ -230,6 +237,7 @@ class SQLRegeneration(BasicPipeline):
                 "query": query,
                 "sql_generation_reasoning": sql_generation_reasoning,
                 "sql": sql,
+                "schema_grounding": schema_grounding,
                 "sql_samples": sql_samples,
                 "instructions": instructions,
                 "project_id": project_id,

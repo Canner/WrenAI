@@ -132,12 +132,10 @@ Use this schema semantically: comments, display labels, descriptions, and relati
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
-These samples are confirmed examples for this project deployment. Use them to understand how business terms map to the modeled schema.
+These samples are confirmed question examples for this project deployment. Use them to understand user intent only.
 {% for sql_sample in sql_samples %}
 Question:
 {{sql_sample.question}}
-SQL:
-{{sql_sample.sql}}
 {% endfor %}
 {% endif %}
 

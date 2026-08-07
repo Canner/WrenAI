@@ -642,6 +642,7 @@ class AskService:
                                     invalid_sql=invalid_sql,
                                     error_message=error_message,
                                     language=ask_request.configurations.language,
+                                    schema_grounding=schema_grounding,
                                 ),
                                 get_pipeline_timeout_seconds(
                                     sql_diagnosis_pipeline,
