@@ -7,7 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from wren.context import load_relationships, validate_project, (
+from wren.context import (
+    load_relationships,
+    validate_project,
     UpgradeError,
     _convert_keys,
     _snake_to_camel,
