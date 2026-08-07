@@ -56,18 +56,20 @@ class SnowflakeConnector(ConnectorABC):
 
     def query(self, sql: str, limit: int | None = None) -> pa.Table:
         limit = coerce_limit(limit)
+        # Align unlimited execute with dry_run and other connectors (mysql/
+        # bigquery/duckdb/redshift): strip a terminating `;` before send.
+        executed = strip_trailing_semicolon(sql)
         # Push LIMIT into Snowflake when requested so we do not download a
         # full result set only to slice it in Python. Wrap as a subquery so a
         # trailing semicolon in the user SQL cannot break composition, and so
         # statements that already contain an ORDER BY keep their ordering
         # under the outer LIMIT.
-        executed = sql
         if limit is not None:
             # Place the user SQL on its own line so a trailing line comment
             # (`-- ...`) cannot swallow the closing paren, alias, or LIMIT.
             executed = (
                 "SELECT * FROM (\n"
-                f"{strip_trailing_semicolon(sql)}\n"
+                f"{executed}\n"
                 f") AS _wren_sub LIMIT {limit}"
             )
         try:
