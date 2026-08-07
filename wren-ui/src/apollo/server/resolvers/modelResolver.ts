@@ -1373,8 +1373,13 @@ export class ModelResolver {
       ? await ctx.projectService.getProjectById(parseInt(projectId))
       : await ctx.projectService.getCurrentProject();
     const manifest = hash
-      ? await ctx.deployService.getMDLByHash(hash)
+      ? await ctx.deployService.getManifestByHash(hash)
       : await this.getLastDeployedManifest(ctx, project.id);
+    if (!manifest) {
+      throw new Error(
+        'Project has not been deployed successfully yet. Deploy the model before previewing or validating SQL.',
+      );
+    }
     return await ctx.queryService.preview(sql, {
       project,
       limit: limit,
@@ -1394,8 +1399,13 @@ export class ModelResolver {
       ? await ctx.projectService.getProjectById(parseInt(projectId))
       : await ctx.projectService.getCurrentProject();
     const manifest = hash
-      ? await ctx.deployService.getMDLByHash(hash)
+      ? await ctx.deployService.getManifestByHash(hash)
       : await this.getLastDeployedManifest(ctx, project.id);
+    if (!manifest) {
+      throw new Error(
+        'Project has not been deployed successfully yet. Deploy the model before previewing or validating SQL.',
+      );
+    }
 
     try {
       if (project.type === DataSourceName.DUCKDB) {

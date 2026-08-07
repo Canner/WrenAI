@@ -15,6 +15,7 @@ describe('DeployService', () => {
     mockDeployLogRepository = {
       findLastProjectDeployLog: jest.fn(),
       findInProgressProjectDeployLog: jest.fn(),
+      findOneBy: jest.fn(),
       createOne: jest.fn(),
       updateOne: jest.fn(),
     };
@@ -284,6 +285,46 @@ describe('DeployService', () => {
         manifest: changedManifest,
       }),
     ).toBe(false);
+  });
+
+  it('should return manifest object by hash for runtime SQL validation', async () => {
+    const manifest = {
+      models: [
+        {
+          name: 'orders',
+          columns: [{ name: 'id' }, { name: 'ID' }, { name: 'amount' }],
+        },
+      ],
+    };
+    mockDeployLogRepository.findOneBy.mockResolvedValue({ manifest });
+
+    const result = await deployService.getManifestByHash('deploy-hash');
+
+    expect(mockDeployLogRepository.findOneBy).toHaveBeenCalledWith({
+      hash: 'deploy-hash',
+    });
+    expect(result).toEqual({
+      models: [
+        {
+          name: 'orders',
+          columns: [{ name: 'id' }, { name: 'amount' }],
+        },
+      ],
+    });
+  });
+
+  it('should keep getMDLByHash as base64 for the public getMDL API', async () => {
+    const manifest = {
+      models: [{ name: 'orders', columns: [{ name: 'id' }] }],
+    };
+    mockDeployLogRepository.findOneBy.mockResolvedValue({ manifest });
+
+    const result = await deployService.getMDLByHash('deploy-hash');
+
+    expect(result).not.toBeNull();
+    expect(Buffer.from(result as string, 'base64').toString()).toEqual(
+      JSON.stringify(manifest),
+    );
   });
 
   it('should clear stale in-progress deployments', async () => {

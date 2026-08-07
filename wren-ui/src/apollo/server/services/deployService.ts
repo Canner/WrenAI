@@ -47,7 +47,8 @@ export interface IDeployService {
     projectId: number,
     deployment?: Deploy | null,
   ): boolean;
-  getMDLByHash(hash: string): Promise<string>;
+  getManifestByHash(hash: string): Promise<Manifest | null>;
+  getMDLByHash(hash: string): Promise<string | null>;
   deleteAllByProjectId(projectId: number): Promise<void>;
 }
 
@@ -324,6 +325,15 @@ export class DeployService implements IDeployService {
     return Buffer.from(JSON.stringify(normalizeManifest(deploy.manifest))).toString(
       'base64',
     );
+  }
+
+  public async getManifestByHash(hash: string) {
+    const deploy = await this.deployLogRepository.findOneBy({ hash });
+    if (!deploy?.manifest) {
+      return null;
+    }
+
+    return normalizeManifest(deploy.manifest);
   }
 
   public async deleteAllByProjectId(projectId: number): Promise<void> {
