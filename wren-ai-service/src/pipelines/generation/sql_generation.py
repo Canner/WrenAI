@@ -134,7 +134,6 @@ async def generate_sql(
     return await generator(
         prompt=prompt.get("prompt"),
         current_system_prompt=current_system_prompt,
-        generation_kwargs={"max_tokens": SQL_GENERATION_MODEL_KWARGS["max_tokens"]},
     ), generator_name
 
 

@@ -14,6 +14,7 @@ models:
     timeout: 600
     kwargs:
       n: 1
+      num_predict: 8192
       temperature: 0
 
 ---
