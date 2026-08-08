@@ -12,13 +12,13 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
+    SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
     construct_ask_history_messages,
     construct_instructions,
     get_calculated_field_instructions,
     get_json_field_instructions,
     get_metric_instructions,
-    get_sql_generation_model_kwargs,
     get_sql_generation_system_prompt,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
@@ -56,13 +56,6 @@ generate one SQL query to best answer user's question.
 {% for function in sql_functions %}
 {{ function }}
 {% endfor %}
-{% endif %}
-
-{% if data_source %}
-### SQL DIALECT ###
-Configured data source: {{ data_source }}.
-Generate Wren SQL that dry-plans and dry-runs successfully for this configured data source through Wren Engine/IBIS.
-Follow SQL KNOWLEDGE and SQL FUNCTIONS for this data source. Do not use a function, cast style, interval literal, or date/time expression merely because it exists in another database dialect.
 {% endif %}
 
 {% if sql_samples %}
@@ -106,7 +99,6 @@ def prompt(
     has_json_field: bool = False,
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
-    data_source: str | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
@@ -128,7 +120,6 @@ def prompt(
         ),
         sql_samples=sql_samples,
         sql_functions=sql_functions,
-        data_source=data_source,
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
@@ -168,7 +159,6 @@ async def post_process(
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
-        meta=generate_sql_in_followup.get("meta"),
     )
 
 
@@ -183,7 +173,6 @@ class FollowUpSQLGeneration(BasicPipeline):
         engine: Engine,
         **kwargs,
     ):
-        self.generation_timeout_seconds = llm_provider.get_timeout()
         self._retriever = document_store_provider.get_retriever(
             document_store_provider.get_store("project_meta")
         )
@@ -191,7 +180,7 @@ class FollowUpSQLGeneration(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=get_sql_generation_system_prompt(None),
-                generation_kwargs=get_sql_generation_model_kwargs(llm_provider),
+                generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
             "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(

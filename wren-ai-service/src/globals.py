@@ -170,7 +170,6 @@ def create_service_container(
             max_histories=settings.max_histories,
             enable_column_pruning=settings.enable_column_pruning,
             max_sql_correction_retries=settings.max_sql_correction_retries,
-            sql_generation_timeout_seconds=sql_generation_timeout_seconds,
             **query_cache,
         ),
         ask_feedback_service=services.AskFeedbackService(
@@ -191,7 +190,6 @@ def create_service_container(
             allow_sql_functions_retrieval=settings.allow_sql_functions_retrieval,
             allow_sql_diagnosis=settings.allow_sql_diagnosis,
             allow_sql_knowledge_retrieval=settings.allow_sql_knowledge_retrieval,
-            sql_generation_timeout_seconds=sql_generation_timeout_seconds,
             **query_cache,
         ),
         chart_service=services.ChartService(

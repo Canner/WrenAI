@@ -13,9 +13,9 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
+    SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
     construct_instructions,
-    get_sql_generation_model_kwargs,
     get_text_to_sql_rules,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
@@ -66,13 +66,6 @@ sql_correction_user_prompt_template = """
 {% endfor %}
 {% endif %}
 
-{% if data_source %}
-### SQL DIALECT ###
-Configured data source: {{ data_source }}.
-Correct the SQL so it dry-plans and dry-runs successfully for this configured data source through Wren Engine/IBIS.
-Follow SQL KNOWLEDGE and SQL FUNCTIONS for this data source. Do not preserve unsupported functions, cast styles, interval literals, or date/time expressions from the failed SQL.
-{% endif %}
-
 {% if instructions %}
 ### USER INSTRUCTIONS ###
 {% for instruction in instructions %}
@@ -96,7 +89,6 @@ def prompt(
     prompt_builder: PromptBuilder,
     instructions: list[dict] | None = None,
     sql_functions: list[SqlFunction] | None = None,
-    data_source: str | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         documents=documents,
@@ -105,7 +97,6 @@ def prompt(
             instructions=instructions,
         ),
         sql_functions=sql_functions,
-        data_source=data_source,
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
@@ -142,7 +133,6 @@ async def post_process(
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
-        meta=generate_sql_correction.get("meta"),
     )
 
 
@@ -157,7 +147,6 @@ class SQLCorrection(BasicPipeline):
         engine: Engine,
         **kwargs,
     ):
-        self.generation_timeout_seconds = llm_provider.get_timeout()
         self._retriever = document_store_provider.get_retriever(
             document_store_provider.get_store("project_meta")
         )
@@ -165,7 +154,7 @@ class SQLCorrection(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=get_sql_correction_system_prompt(None),
-                generation_kwargs=get_sql_generation_model_kwargs(llm_provider),
+                generation_kwargs=SQL_GENERATION_MODEL_KWARGS,
             ),
             "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(

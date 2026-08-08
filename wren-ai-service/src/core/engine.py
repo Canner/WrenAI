@@ -30,16 +30,15 @@ def clean_generation_result(result: str) -> str:
     def _normalize_whitespace(s: str) -> str:
         return re.sub(r"\s+", " ", s).strip()
 
-    cleaned = (
+    return (
         _normalize_whitespace(result)
         .replace("```sql", "")
         .replace("```json", "")
         .replace('"""', "")
         .replace("'''", "")
         .replace("```", "")
-    ).strip()
-
-    return cleaned[:-1].strip() if cleaned.endswith(";") else cleaned
+        .replace(";", "")
+    )
 
 
 def remove_limit_statement(sql: str) -> str:

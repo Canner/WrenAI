@@ -54,8 +54,6 @@ Invalid SQL:
 Error Message:
 {{ error_message }}
 
-Configured data source: {{ data_source }}
-
 Language: {{ language }}
 
 Please think step by step.
@@ -71,7 +69,6 @@ def prompt(
     error_message: str,
     language: str,
     prompt_builder: PromptBuilder,
-    data_source: str | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         documents=documents,
@@ -79,7 +76,6 @@ def prompt(
         invalid_sql=invalid_sql,
         error_message=error_message,
         language=language,
-        data_source=data_source or "unknown",
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
@@ -95,25 +91,8 @@ async def generate_sql_diagnosis(
 @observe(capture_input=False)
 async def post_process(
     generate_sql_diagnosis: dict,
-) -> dict:
-    replies = generate_sql_diagnosis.get("replies") or []
-    reply = replies[0].strip() if replies and isinstance(replies[0], str) else ""
-    if not reply:
-        logger.warning("SQL diagnosis returned an empty response; skipping diagnosis.")
-        return {"reasoning": ""}
-
-    try:
-        result = orjson.loads(reply)
-    except orjson.JSONDecodeError:
-        logger.warning("SQL diagnosis returned invalid JSON; skipping diagnosis.")
-        return {"reasoning": ""}
-
-    if not isinstance(result, dict):
-        logger.warning("SQL diagnosis returned a non-object response; skipping diagnosis.")
-        return {"reasoning": ""}
-
-    reasoning = result.get("reasoning", "")
-    return {"reasoning": reasoning if isinstance(reasoning, str) else ""}
+) -> str:
+    return orjson.loads(generate_sql_diagnosis.get("replies")[0])
 
 
 ## End of Pipeline
@@ -140,7 +119,6 @@ class SQLDiagnosis(BasicPipeline):
         llm_provider: LLMProvider,
         **kwargs,
     ):
-        self.generation_timeout_seconds = llm_provider.get_timeout()
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=sql_diagnosis_system_prompt,
@@ -164,7 +142,6 @@ class SQLDiagnosis(BasicPipeline):
         invalid_sql: str,
         error_message: str,
         language: str,
-        data_source: str | None = None,
     ):
         logger.info("SQLDiagnosis pipeline is running...")
 
@@ -176,7 +153,6 @@ class SQLDiagnosis(BasicPipeline):
                 "invalid_sql": invalid_sql,
                 "error_message": error_message,
                 "language": language,
-                "data_source": data_source,
                 **self._components,
             },
         )

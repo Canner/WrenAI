@@ -12,12 +12,16 @@ class _CapturingEngine:
     def __init__(self):
         self.execute_kwargs = None
         self.dry_plan_kwargs = None
+        self.executed_sql = None
+        self.dry_planned_sql = None
 
-    async def execute_sql(self, *_, **kwargs):
+    async def execute_sql(self, *args, **kwargs):
+        self.executed_sql = args[0]
         self.execute_kwargs = kwargs
         return True, {}, {"correlation_id": ""}
 
-    async def dry_plan(self, *_, **kwargs):
+    async def dry_plan(self, *args, **kwargs):
+        self.dry_planned_sql = args[1]
         self.dry_plan_kwargs = kwargs
         return True, ""
 
@@ -44,7 +48,6 @@ async def test_post_processor_returns_empty_invalid_result_for_truncated_json():
 
     result = await processor.run(
         ['{"sql": "SELECT'],
-        meta=[{"finish_reason": "length"}],
     )
 
     assert result["valid_generation_result"] == {}
@@ -57,7 +60,6 @@ async def test_post_processor_returns_empty_invalid_result_for_null_sql():
 
     result = await processor.run(
         ['{"sql": null}'],
-        meta=[{"finish_reason": "length"}],
     )
 
     assert result["valid_generation_result"] == {}
@@ -247,3 +249,16 @@ async def test_post_processor_allows_raw_sql_when_grounded():
     assert result["invalid_generation_result"] == {}
     assert result["valid_generation_result"] != {}
     assert engine.execute_kwargs is not None
+
+
+@pytest.mark.asyncio
+async def test_post_processor_removes_semicolon_inside_json_sql_like_legacy():
+    engine = _CapturingEngine()
+    processor = SQLGenPostProcessor(engine=engine)
+
+    result = await processor.run(
+        ['{"sql": "SELECT COUNT(*) AS total FROM dbo_PO_Invoices;"}'],
+    )
+
+    assert result["invalid_generation_result"] == {}
+    assert engine.executed_sql == "SELECT COUNT(*) AS total FROM dbo_PO_Invoices"

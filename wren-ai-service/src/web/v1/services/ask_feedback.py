@@ -9,12 +9,7 @@ from pydantic import AliasChoices, BaseModel, Field
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest
-from src.web.v1.services.ask import (
-    AskError,
-    AskResult,
-    get_pipeline_timeout_seconds,
-    run_pipeline_with_timeout,
-)
+from src.web.v1.services.ask import AskError, AskResult
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -70,7 +65,6 @@ class AskFeedbackService:
         allow_sql_knowledge_retrieval: bool = True,
         allow_sql_functions_retrieval: bool = True,
         allow_sql_diagnosis: bool = True,
-        sql_generation_timeout_seconds: float = 45.0,
         maxsize: int = 1_000_000,
         ttl: int = 120,
     ):
@@ -81,7 +75,6 @@ class AskFeedbackService:
         self._allow_sql_knowledge_retrieval = allow_sql_knowledge_retrieval
         self._allow_sql_functions_retrieval = allow_sql_functions_retrieval
         self._allow_sql_diagnosis = allow_sql_diagnosis
-        self._sql_generation_timeout_seconds = sql_generation_timeout_seconds
 
     def _is_stopped(self, query_id: str, container: dict):
         if (
@@ -186,27 +179,21 @@ class AskFeedbackService:
                     trace_id=trace_id,
                 )
 
-                sql_regeneration_pipeline = self._pipelines["sql_regeneration"]
-                text_to_sql_generation_results = await run_pipeline_with_timeout(
-                    sql_regeneration_pipeline.run(
-                        contexts=table_ddls,
-                        sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
-                        sql=ask_feedback_request.sql,
-                        project_id=ask_feedback_request.project_id,
-                        mdl_hash=ask_feedback_request.mdl_hash,
-                        sql_samples=sql_samples,
-                        instructions=instructions,
-                        has_calculated_field=has_calculated_field,
-                        has_metric=has_metric,
-                        has_json_field=has_json_field,
-                        sql_functions=sql_functions,
-                        sql_knowledge=sql_knowledge,
-                    ),
-                    get_pipeline_timeout_seconds(
-                        sql_regeneration_pipeline,
-                        self._sql_generation_timeout_seconds,
-                    ),
-                    "SQL regeneration",
+                text_to_sql_generation_results = await self._pipelines[
+                    "sql_regeneration"
+                ].run(
+                    contexts=table_ddls,
+                    sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
+                    sql=ask_feedback_request.sql,
+                    project_id=ask_feedback_request.project_id,
+                    mdl_hash=ask_feedback_request.mdl_hash,
+                    sql_samples=sql_samples,
+                    instructions=instructions,
+                    has_calculated_field=has_calculated_field,
+                    has_metric=has_metric,
+                    has_json_field=has_json_field,
+                    sql_functions=sql_functions,
+                    sql_knowledge=sql_knowledge,
                 )
 
                 if sql_valid_result := text_to_sql_generation_results["post_process"][
@@ -237,49 +224,34 @@ class AskFeedbackService:
                         )
 
                         if allow_sql_diagnosis:
-                            sql_diagnosis_pipeline = self._pipelines[
+                            sql_diagnosis_results = await self._pipelines[
                                 "sql_diagnosis"
-                            ]
-                            sql_diagnosis_results = await run_pipeline_with_timeout(
-                                sql_diagnosis_pipeline.run(
-                                    contexts=table_ddls,
-                                    original_sql=original_sql,
-                                    invalid_sql=invalid_sql,
-                                    error_message=error_message,
-                                    language=ask_feedback_request.configurations.language,
-                                    data_source=failed_dry_run_result.get("data_source"),
-                                ),
-                                get_pipeline_timeout_seconds(
-                                    sql_diagnosis_pipeline,
-                                    self._sql_generation_timeout_seconds,
-                                ),
-                                "SQL diagnosis",
+                            ].run(
+                                contexts=table_ddls,
+                                original_sql=original_sql,
+                                invalid_sql=invalid_sql,
+                                error_message=error_message,
+                                language=ask_feedback_request.configurations.language,
                             )
                             sql_diagnosis_reasoning = sql_diagnosis_results[
                                 "post_process"
                             ].get("reasoning")
 
-                        sql_correction_pipeline = self._pipelines["sql_correction"]
-                        sql_correction_results = await run_pipeline_with_timeout(
-                            sql_correction_pipeline.run(
-                                contexts=table_ddls,
-                                instructions=instructions,
-                                invalid_generation_result={
-                                    "sql": original_sql,
-                                    "error": sql_diagnosis_reasoning
-                                    if allow_sql_diagnosis
-                                    else error_message,
-                                },
-                                project_id=ask_feedback_request.project_id,
-                                mdl_hash=ask_feedback_request.mdl_hash,
-                                sql_functions=sql_functions,
-                                sql_knowledge=sql_knowledge,
-                            ),
-                            get_pipeline_timeout_seconds(
-                                sql_correction_pipeline,
-                                self._sql_generation_timeout_seconds,
-                            ),
-                            "SQL correction",
+                        sql_correction_results = await self._pipelines[
+                            "sql_correction"
+                        ].run(
+                            contexts=table_ddls,
+                            instructions=instructions,
+                            invalid_generation_result={
+                                "sql": original_sql,
+                                "error": sql_diagnosis_reasoning
+                                if allow_sql_diagnosis
+                                else error_message,
+                            },
+                            project_id=ask_feedback_request.project_id,
+                            mdl_hash=ask_feedback_request.mdl_hash,
+                            sql_functions=sql_functions,
+                            sql_knowledge=sql_knowledge,
                         )
 
                         if valid_generation_result := sql_correction_results[

@@ -35,7 +35,6 @@ class SQLGenPostProcessor:
         allow_dry_plan_fallback: bool = True,
         data_source: str = "",
         allow_data_preview: bool = False,
-        meta: List[Dict[str, Any]] | None = None,
     ) -> dict:
         try:
             cleaned_generation_result = clean_generation_result(replies[0])
@@ -554,12 +553,6 @@ SQL_GENERATION_MODEL_KWARGS = {
         },
     }
 }
-
-
-def get_sql_generation_model_kwargs(llm_provider: Any | None = None) -> dict:
-    return SQL_GENERATION_MODEL_KWARGS
-
-
 def construct_instructions(
     instructions: list[dict] | None = None,
 ):

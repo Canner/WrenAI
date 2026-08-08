@@ -88,7 +88,7 @@ def test_sql_generation_prompt_uses_database_schema_documents():
     assert "RETRIEVED EXECUTABLE SCHEMA" not in built_prompt
 
 
-def test_sql_generation_prompt_preserves_datasource_metadata_section():
+def test_sql_generation_prompt_does_not_inject_datasource_dialect_section():
     result = build_sql_generation_prompt(
         query="show orders from last week",
         documents=['CREATE TABLE dbo_xStageNewOrders (OrderDate TIMESTAMP)'],
@@ -102,13 +102,12 @@ def test_sql_generation_prompt_preserves_datasource_metadata_section():
                 }
             )
         ],
-        data_source="trino",
     )
 
     built_prompt = result["prompt"]
 
-    assert "### SQL DIALECT ###" in built_prompt
-    assert "Configured data source: trino" in built_prompt
+    assert "### SQL DIALECT ###" not in built_prompt
+    assert "Configured data source: trino" not in built_prompt
     assert "date_trunc($0: varchar, $1: timestamp) -> timestamp" in built_prompt
 
 
@@ -206,12 +205,11 @@ def test_sql_correction_system_prompt_preserves_datasource_knowledge():
     assert "Use Wren SQL from the engine." in prompt
 
 
-def test_sql_regeneration_prompt_uses_legacy_inputs_and_datasource_metadata():
+def test_sql_regeneration_prompt_uses_legacy_inputs_without_datasource_dialect():
     result = build_sql_regeneration_prompt(
         documents=["CREATE TABLE model_1 (attribute_1 VARCHAR)"],
         sql_generation_reasoning="reason about the schema",
         sql="SELECT 1",
-        data_source="trino",
         prompt_builder=PromptBuilder(template=sql_regeneration_user_prompt_template),
     )
 
@@ -220,7 +218,7 @@ def test_sql_regeneration_prompt_uses_legacy_inputs_and_datasource_metadata():
     assert "CREATE TABLE model_1" in built_prompt
     assert "SQL generation reasoning: reason about the schema" in built_prompt
     assert "Original SQL query: SELECT 1" in built_prompt
-    assert "Configured data source: trino" in built_prompt
+    assert "Configured data source: trino" not in built_prompt
     assert "RETRIEVED EXECUTABLE SCHEMA" not in built_prompt
 
 

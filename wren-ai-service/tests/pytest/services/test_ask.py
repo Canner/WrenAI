@@ -13,7 +13,6 @@ from src.web.v1.services.ask import (
     AskRequest,
     AskResultRequest,
     AskService,
-    get_pipeline_timeout_seconds,
 )
 from src.web.v1.services.semantics_preparation import (
     SemanticsPreparationRequest,
@@ -199,21 +198,6 @@ def test_ask_service_uses_legacy_sql_correction_retries_by_default():
     assert ask_service._max_sql_correction_retries == 3
 
 
-def test_pipeline_timeout_uses_provider_timeout_when_longer():
-    pipeline = type("PipelineWithProviderTimeout", (), {})()
-    pipeline.generation_timeout_seconds = 600
-
-    assert get_pipeline_timeout_seconds(pipeline, 120) == 600
-
-
-def test_pipeline_timeout_keeps_default_when_provider_timeout_is_shorter_or_missing():
-    short_timeout_pipeline = type("PipelineWithShortProviderTimeout", (), {})()
-    short_timeout_pipeline.generation_timeout_seconds = 60
-
-    assert get_pipeline_timeout_seconds(short_timeout_pipeline, 120) == 120
-    assert get_pipeline_timeout_seconds(object(), 120) == 120
-
-
 class _EmptyRetrievalPipeline:
     async def run(self, **_):
         return {"formatted_output": {"documents": []}}
@@ -316,27 +300,6 @@ class _ValidSqlGenerationPipeline:
 
     async def run(self, **kwargs):
         self.calls.append(kwargs)
-        return {
-            "post_process": {
-                "valid_generation_result": {
-                    "sql": MODEL_ALPHA_COUNT_SQL,
-                    "correlation_id": "",
-                },
-                "invalid_generation_result": {},
-            }
-        }
-
-
-class _SlowSqlGenerationPipeline:
-    async def run(self, **_):
-        await asyncio.sleep(60)
-
-
-class _SlowButProviderAllowedSqlGenerationPipeline:
-    generation_timeout_seconds = 0.2
-
-    async def run(self, **_):
-        await asyncio.sleep(0.02)
         return {
             "post_process": {
                 "valid_generation_result": {
@@ -587,67 +550,6 @@ async def test_ask_returns_historical_sql_like_legacy():
     assert ask_result_response.status == "finished"
     assert ask_result_response.response[0].sql == "SELECT * FROM stale_model"
     assert generation.calls == []
-
-
-@pytest.mark.asyncio
-async def test_ask_times_out_slow_sql_generation_instead_of_hanging():
-    ask_service = AskService(
-        {
-            "historical_question": _EmptyRetrievalPipeline(),
-            "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
-            "instructions_retrieval": _EmptyRetrievalPipeline(),
-            "db_schema_retrieval": _SchemaRetrievalPipeline(),
-            "sql_generation": _SlowSqlGenerationPipeline(),
-        },
-        allow_intent_classification=False,
-        allow_sql_generation_reasoning=False,
-        allow_sql_functions_retrieval=False,
-        allow_sql_knowledge_retrieval=False,
-        sql_generation_timeout_seconds=0.01,
-    )
-    query_id = str(uuid.uuid4())
-    ask_request = AskRequest(query="count records by model", mdl_hash=None)
-    ask_request.query_id = query_id
-
-    await ask_service.ask(ask_request)
-
-    ask_result_response = ask_service.get_ask_result(
-        AskResultRequest(query_id=query_id)
-    )
-    assert ask_result_response.status == "failed"
-    assert ask_result_response.error.code == "OTHERS"
-    assert ask_result_response.error.message == (
-        "SQL generation timed out after 0.01 seconds"
-    )
-
-
-@pytest.mark.asyncio
-async def test_ask_uses_provider_timeout_for_slow_local_sql_generation():
-    ask_service = AskService(
-        {
-            "historical_question": _EmptyRetrievalPipeline(),
-            "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
-            "instructions_retrieval": _EmptyRetrievalPipeline(),
-            "db_schema_retrieval": _SchemaRetrievalPipeline(),
-            "sql_generation": _SlowButProviderAllowedSqlGenerationPipeline(),
-        },
-        allow_intent_classification=False,
-        allow_sql_generation_reasoning=False,
-        allow_sql_functions_retrieval=False,
-        allow_sql_knowledge_retrieval=False,
-        sql_generation_timeout_seconds=0.01,
-    )
-    query_id = str(uuid.uuid4())
-    ask_request = AskRequest(query="count records by model", mdl_hash=None)
-    ask_request.query_id = query_id
-
-    await ask_service.ask(ask_request)
-
-    ask_result_response = ask_service.get_ask_result(
-        AskResultRequest(query_id=query_id)
-    )
-    assert ask_result_response.status == "finished"
-    assert ask_result_response.response[0].sql == MODEL_ALPHA_COUNT_SQL
 
 
 @pytest.mark.asyncio
