@@ -84,6 +84,45 @@ def build_schema_grounding_context(documents: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def is_schema_grounding_error(failed_generation_result: dict[str, Any]) -> bool:
+    return failed_generation_result.get("type") == "SCHEMA_GROUNDING"
+
+
+def build_sql_correction_error_message(
+    error_message: str | None,
+    sql_diagnosis_reasoning: str | None = None,
+) -> str:
+    error_message = error_message or ""
+    sql_diagnosis_reasoning = sql_diagnosis_reasoning or ""
+
+    if not sql_diagnosis_reasoning:
+        return error_message
+
+    if sql_diagnosis_reasoning in error_message:
+        return error_message
+
+    return f"{error_message}\nDiagnostic reasoning: {sql_diagnosis_reasoning}"
+
+
+def build_sql_correction_input(
+    failed_generation_result: dict[str, Any],
+    correction_error_message: str,
+) -> dict[str, str]:
+    if is_schema_grounding_error(failed_generation_result):
+        return {
+            "sql": "",
+            "type": failed_generation_result.get("type", ""),
+            "error": correction_error_message,
+        }
+
+    return {
+        "sql": failed_generation_result.get("original_sql")
+        or failed_generation_result.get("sql", ""),
+        "type": failed_generation_result.get("type", ""),
+        "error": correction_error_message,
+    }
+
+
 # POST /v1/asks
 class AskRequest(BaseRequest):
     query: str
@@ -631,7 +670,9 @@ class AskService:
                         )
 
                         sql_diagnosis_reasoning = None
-                        if allow_sql_diagnosis:
+                        if allow_sql_diagnosis and not is_schema_grounding_error(
+                            failed_dry_run_result
+                        ):
                             sql_diagnosis_pipeline = self._pipelines[
                                 "sql_diagnosis"
                             ]
@@ -657,9 +698,10 @@ class AskService:
                                 "post_process"
                             ].get("reasoning")
 
-                        correction_error_message = error_message
-                        if sql_diagnosis_reasoning:
-                            correction_error_message = sql_diagnosis_reasoning
+                        correction_error_message = build_sql_correction_error_message(
+                            error_message,
+                            sql_diagnosis_reasoning,
+                        )
 
                         sql_correction_pipeline = self._pipelines["sql_correction"]
                         sql_correction_results = await run_pipeline_with_timeout(
@@ -668,10 +710,10 @@ class AskService:
                                 schema_grounding=schema_grounding,
                                 query=user_query,
                                 instructions=instructions,
-                                invalid_generation_result={
-                                    "sql": original_sql,
-                                    "error": correction_error_message,
-                                },
+                                invalid_generation_result=build_sql_correction_input(
+                                    failed_dry_run_result,
+                                    correction_error_message,
+                                ),
                                 project_id=ask_request.project_id,
                                 mdl_hash=ask_request.mdl_hash,
                                 use_dry_plan=use_dry_plan,

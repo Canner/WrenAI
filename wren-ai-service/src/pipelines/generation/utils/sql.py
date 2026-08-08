@@ -1062,6 +1062,23 @@ The value of "sql" must be one Wren SQL SELECT statement string.
 """
 
 
+def add_schema_grounding_to_system_prompt(
+    system_prompt: str,
+    schema_grounding: str | None = None,
+) -> str:
+    if not schema_grounding or not schema_grounding.strip():
+        return system_prompt
+
+    return f"""
+{system_prompt}
+
+### RETRIEVED SCHEMA CONTRACT ###
+The following model/table and column identifiers are the only executable identifiers retrieved for the current user question.
+Use them exactly as written. Do not use any table or column name from the user question, history, examples, invalid SQL, error messages, comments, or physical source metadata unless it appears in this contract.
+{schema_grounding.strip()}
+"""
+
+
 class SqlGenerationResult(BaseModel):
     sql: str
 

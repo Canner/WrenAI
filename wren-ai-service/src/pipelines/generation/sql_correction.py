@@ -15,6 +15,7 @@ from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
+    add_schema_grounding_to_system_prompt,
     construct_instructions,
     get_additional_sql_instructions,
     get_text_to_sql_rules,
@@ -102,10 +103,16 @@ Follow SQL KNOWLEDGE and SQL FUNCTIONS for this data source. Do not preserve uns
 
 ### QUESTION ###
 User's Question: {{ query }}
+Validation Type: {{ invalid_generation_result.type or "UNKNOWN" }}
+{% if invalid_generation_result.type == "SCHEMA_GROUNDING" %}
+Rejected SQL: omitted because it contains ungrounded executable identifiers.
+{% else %}
 SQL: {{ invalid_generation_result.sql }}
+{% endif %}
 Error Message: {{ invalid_generation_result.error }}
 
 Use DATABASE SCHEMA and RETRIEVED EXECUTABLE SCHEMA as the only sources for executable table and column identifiers. The invalid SQL and error message explain what failed, but they must not introduce identifiers that are absent from the retrieved schema.
+If Validation Type is SCHEMA_GROUNDING, regenerate the SQL from the user's question and retrieved schema. Do not reuse table names, column names, aliases, or SQL fragments from the rejected SQL.
 If the invalid SQL contains a table or column name that is not listed as a retrieved model/table or column identifier, replace it using the retrieved schema rather than preserving it.
 Think through the error silently. Return only the final JSON SQL response.
 """
@@ -144,8 +151,12 @@ async def generate_sql_correction(
     generator: Any,
     generator_name: str,
     sql_knowledge: SqlKnowledge | None = None,
+    schema_grounding: str | None = None,
 ) -> dict:
-    current_system_prompt = get_sql_correction_system_prompt(sql_knowledge)
+    current_system_prompt = add_schema_grounding_to_system_prompt(
+        get_sql_correction_system_prompt(sql_knowledge),
+        schema_grounding,
+    )
     return await generator(
         prompt=prompt.get("prompt"),
         current_system_prompt=current_system_prompt,

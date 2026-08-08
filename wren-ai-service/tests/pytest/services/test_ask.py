@@ -13,8 +13,11 @@ from src.web.v1.services.ask import (
     AskRequest,
     AskResultRequest,
     AskService,
+    build_sql_correction_error_message,
+    build_sql_correction_input,
     build_schema_grounding_context,
     get_pipeline_timeout_seconds,
+    is_schema_grounding_error,
 )
 from src.web.v1.services.semantics_preparation import (
     SemanticsPreparationRequest,
@@ -206,6 +209,38 @@ def test_schema_grounding_context_uses_retrieved_identifiers():
     assert '"orders"' not in context
 
 
+def test_schema_grounding_error_detection_uses_validation_type():
+    assert is_schema_grounding_error({"type": "SCHEMA_GROUNDING"})
+    assert not is_schema_grounding_error({"type": "DRY_RUN"})
+
+
+def test_sql_correction_error_keeps_validation_error_and_adds_diagnosis():
+    error = build_sql_correction_error_message(
+        "Invalid object name.",
+        "The table is not in the retrieved schema.",
+    )
+
+    assert "Invalid object name." in error
+    assert "Diagnostic reasoning: The table is not in the retrieved schema." in error
+
+
+def test_schema_grounding_correction_input_omits_rejected_sql():
+    correction_input = build_sql_correction_input(
+        {
+            "sql": "SELECT * FROM hallucinated_table",
+            "original_sql": "SELECT * FROM hallucinated_table",
+            "type": "SCHEMA_GROUNDING",
+        },
+        "Use only retrieved identifiers.",
+    )
+
+    assert correction_input == {
+        "sql": "",
+        "type": "SCHEMA_GROUNDING",
+        "error": "Use only retrieved identifiers.",
+    }
+
+
 class _EmptyRetrievalPipeline:
     async def run(self, **_):
         return {"formatted_output": {"documents": []}}
@@ -259,6 +294,31 @@ class _NoRelevantSqlGenerationPipeline:
                     "original_sql": "",
                     "type": "NO_RELEVANT_SQL",
                     "error": "No grounded SQL was generated from the current schema.",
+                    "correlation_id": "",
+                },
+            }
+        }
+
+
+class _SchemaGroundingSqlGenerationPipeline:
+    def __init__(self):
+        self.calls = []
+
+    async def run(self, **_):
+        self.calls.append(_)
+        return {
+            "post_process": {
+                "valid_generation_result": {},
+                "invalid_generation_result": {
+                    "sql": "SELECT * FROM hallucinated_table",
+                    "original_sql": "SELECT * FROM hallucinated_table",
+                    "type": "SCHEMA_GROUNDING",
+                    "error": (
+                        "Generated SQL references model/table identifiers that are "
+                        "not in the retrieved Wren schema: \"hallucinated_table\". "
+                        "Use only these retrieved model/table identifiers: "
+                        "\"model_alpha\"."
+                    ),
                     "correlation_id": "",
                 },
             }
@@ -345,6 +405,7 @@ async def test_ask_runs_sql_correction_for_validation_error():
     assert diagnosis.calls == []
     assert correction.calls[0]["invalid_generation_result"] == {
         "sql": "SELECT entity_id FROM model_alpha",
+        "type": "SQL_SHAPE",
         "error": "Generated SQL is a table preview.",
     }
 
@@ -400,8 +461,53 @@ async def test_ask_correction_recovers_no_relevant_sql_with_schema_context():
     )
     assert correction.calls[0]["invalid_generation_result"] == {
         "sql": "",
+        "type": "NO_RELEVANT_SQL",
         "error": "No grounded SQL was generated from the current schema.",
     }
+
+
+@pytest.mark.asyncio
+async def test_ask_schema_grounding_recovery_omits_hallucinated_sql():
+    correction = _CapturingCorrectionPipeline()
+    diagnosis = _FailingDiagnosisPipeline()
+    generation = _SchemaGroundingSqlGenerationPipeline()
+    ask_service = AskService(
+        {
+            "historical_question": _EmptyRetrievalPipeline(),
+            "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
+            "instructions_retrieval": _EmptyRetrievalPipeline(),
+            "db_schema_retrieval": _SchemaRetrievalPipeline(),
+            "sql_generation": generation,
+            "sql_correction": correction,
+            "sql_diagnosis": diagnosis,
+        },
+        allow_intent_classification=False,
+        allow_sql_generation_reasoning=False,
+        allow_sql_functions_retrieval=False,
+        allow_sql_knowledge_retrieval=False,
+        allow_sql_diagnosis=True,
+    )
+    query_id = str(uuid.uuid4())
+    ask_request = AskRequest(query="show hallucinated records", mdl_hash=None)
+    ask_request.query_id = query_id
+
+    await ask_service.ask(ask_request)
+
+    ask_result_response = ask_service.get_ask_result(
+        AskResultRequest(query_id=query_id)
+    )
+    assert ask_result_response.status == "finished"
+    assert diagnosis.calls == []
+    assert correction.calls[0]["invalid_generation_result"]["type"] == (
+        "SCHEMA_GROUNDING"
+    )
+    assert correction.calls[0]["invalid_generation_result"]["sql"] == ""
+    assert "hallucinated_table" in correction.calls[0]["invalid_generation_result"][
+        "error"
+    ]
+    assert "SELECT * FROM hallucinated_table" not in correction.calls[0][
+        "invalid_generation_result"
+    ]["error"]
 
 
 @pytest.mark.asyncio

@@ -32,7 +32,10 @@ from src.pipelines.generation.sql_regeneration import (
     prompt as build_sql_regeneration_prompt,
     sql_regeneration_user_prompt_template,
 )
-from src.pipelines.generation.utils.sql import SQL_GENERATION_MODEL_KWARGS
+from src.pipelines.generation.utils.sql import (
+    SQL_GENERATION_MODEL_KWARGS,
+    add_schema_grounding_to_system_prompt,
+)
 from src.pipelines.generation.utils.sql import sql_generation_reasoning_system_prompt
 from src.pipelines.retrieval.sql_functions import SqlFunction
 from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
@@ -78,6 +81,18 @@ def test_sql_generation_system_prompt_includes_engine_date_time_knowledge():
     assert "DATE_TRUNC" in prompt
     assert "INTERVAL '7' days" in prompt
     assert "calculated field text" not in prompt
+
+
+def test_schema_grounding_can_be_added_to_system_prompt():
+    prompt = add_schema_grounding_to_system_prompt(
+        "system prompt",
+        '- model/table: "model_1"\n  columns:\n    - "attribute_1"',
+    )
+
+    assert "### RETRIEVED SCHEMA CONTRACT ###" in prompt
+    assert '- model/table: "model_1"' in prompt
+    assert '- "attribute_1"' in prompt
+    assert "only executable identifiers retrieved" in prompt
 
 
 def test_sql_correction_system_prompt_uses_current_schema_for_repair():
@@ -378,6 +393,30 @@ def test_sql_correction_prompt_includes_configured_dialect_for_date_repair():
     assert "Configured data source: trino" in built_prompt
     assert "DATE(NOW()) - INTERVAL 7 DAY" in built_prompt
     assert "Do not preserve unsupported functions" in built_prompt
+
+
+def test_sql_correction_prompt_omits_rejected_sql_for_schema_grounding():
+    result = build_sql_correction_prompt(
+        documents=["CREATE TABLE model_1 (attribute_1 VARCHAR)"],
+        schema_grounding='- model/table: "model_1"\n  columns:\n    - "attribute_1"',
+        invalid_generation_result={
+            "sql": "SELECT * FROM hallucinated_table",
+            "type": "SCHEMA_GROUNDING",
+            "error": (
+                "Generated SQL references model/table identifiers that are not in "
+                "the retrieved Wren schema."
+            ),
+        },
+        query="show records",
+        prompt_builder=PromptBuilder(template=sql_correction_user_prompt_template),
+    )
+
+    built_prompt = result["prompt"]
+
+    assert "Validation Type: SCHEMA_GROUNDING" in built_prompt
+    assert "Rejected SQL: omitted" in built_prompt
+    assert "SELECT * FROM hallucinated_table" not in built_prompt
+    assert "regenerate the SQL from the user's question and retrieved schema" in built_prompt
 
 
 def test_sql_regeneration_prompt_omits_sample_sql_body():

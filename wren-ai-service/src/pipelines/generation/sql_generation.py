@@ -13,6 +13,7 @@ from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
+    add_schema_grounding_to_system_prompt,
     construct_instructions,
     get_calculated_field_instructions,
     get_json_field_instructions,
@@ -140,8 +141,12 @@ async def generate_sql(
     generator: Any,
     generator_name: str,
     sql_knowledge: SqlKnowledge | None = None,
+    schema_grounding: str | None = None,
 ) -> dict:
-    current_system_prompt = get_sql_generation_system_prompt(sql_knowledge)
+    current_system_prompt = add_schema_grounding_to_system_prompt(
+        get_sql_generation_system_prompt(sql_knowledge),
+        schema_grounding,
+    )
     return await generator(
         prompt=prompt.get("prompt"),
         current_system_prompt=current_system_prompt,

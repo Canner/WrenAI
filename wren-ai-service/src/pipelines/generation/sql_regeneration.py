@@ -14,6 +14,7 @@ from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
+    add_schema_grounding_to_system_prompt,
     construct_instructions,
     get_additional_sql_instructions,
     get_calculated_field_instructions,
@@ -172,8 +173,12 @@ async def regenerate_sql(
     generator: Any,
     generator_name: str,
     sql_knowledge: SqlKnowledge | None = None,
+    schema_grounding: str | None = None,
 ) -> dict:
-    current_system_prompt = get_sql_regeneration_system_prompt(sql_knowledge)
+    current_system_prompt = add_schema_grounding_to_system_prompt(
+        get_sql_regeneration_system_prompt(sql_knowledge),
+        schema_grounding,
+    )
     return await generator(
         prompt=prompt.get("prompt"),
         current_system_prompt=current_system_prompt,
