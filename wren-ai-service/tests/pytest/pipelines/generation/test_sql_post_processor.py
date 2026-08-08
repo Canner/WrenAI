@@ -131,6 +131,141 @@ async def test_post_processor_passes_deployment_hash_to_dry_plan_validation():
 
 
 @pytest.mark.asyncio
+async def test_post_processor_rejects_unretrieved_table_before_engine_validation():
+    processor = SQLGenPostProcessor(engine=_NoopEngine())
+
+    result = await processor.run(
+        ['{"sql": "SELECT * FROM orders"}'],
+        schema_grounding=(
+            '- model/table: "dbo_xStageNewOrders"\n'
+            "  columns:\n"
+            '    - "OrderDate"'
+        ),
+        data_source="mssql",
+    )
+
+    assert result["valid_generation_result"] == {}
+    invalid = result["invalid_generation_result"]
+    assert invalid["type"] == "SCHEMA_GROUNDING"
+    assert invalid["sql"] == "SELECT * FROM orders"
+    assert '"orders"' in invalid["error"]
+    assert '"dbo_xStageNewOrders"' in invalid["error"]
+    assert invalid["data_source"] == "mssql"
+
+
+@pytest.mark.asyncio
+async def test_post_processor_allows_cte_alias_when_underlying_table_is_grounded():
+    engine = _CapturingEngine()
+    processor = SQLGenPostProcessor(engine=engine)
+
+    result = await processor.run(
+        [
+            (
+                '{"sql": "WITH recent AS (SELECT * FROM \\"dbo_xStageNewOrders\\") '
+                'SELECT * FROM recent"}'
+            )
+        ],
+        schema_grounding=(
+            '- model/table: "dbo_xStageNewOrders"\n'
+            "  columns:\n"
+            '    - "OrderDate"'
+        ),
+    )
+
+    assert result["invalid_generation_result"] == {}
+    assert engine.execute_kwargs is not None
+
+
+@pytest.mark.asyncio
+async def test_post_processor_rejects_unretrieved_table_inside_cte():
+    processor = SQLGenPostProcessor(engine=_NoopEngine())
+
+    result = await processor.run(
+        [
+            (
+                '{"sql": "WITH recent AS (SELECT * FROM orders) '
+                'SELECT * FROM recent"}'
+            )
+        ],
+        schema_grounding=(
+            '- model/table: "dbo_xStageNewOrders"\n'
+            "  columns:\n"
+            '    - "OrderDate"'
+        ),
+    )
+
+    invalid = result["invalid_generation_result"]
+    assert invalid["type"] == "SCHEMA_GROUNDING"
+    assert '"orders"' in invalid["error"]
+
+
+@pytest.mark.asyncio
+async def test_post_processor_rejects_unretrieved_column_before_engine_validation():
+    processor = SQLGenPostProcessor(engine=_NoopEngine())
+
+    result = await processor.run(
+        ['{"sql": "SELECT \\"country\\" FROM \\"dbo_xStageNewOrders\\""}'],
+        schema_grounding=(
+            '- model/table: "dbo_xStageNewOrders"\n'
+            "  columns:\n"
+            '    - "ShipCountry"'
+        ),
+    )
+
+    invalid = result["invalid_generation_result"]
+    assert invalid["type"] == "SCHEMA_GROUNDING"
+    assert '"country"' in invalid["error"]
+    assert '"ShipCountry"' in invalid["error"]
+
+
+@pytest.mark.asyncio
+async def test_post_processor_allows_output_aliases_in_order_by():
+    engine = _CapturingEngine()
+    processor = SQLGenPostProcessor(engine=engine)
+
+    result = await processor.run(
+        [
+            (
+                '{"sql": "SELECT COUNT(*) AS \\"order_count\\" '
+                'FROM \\"dbo_xStageNewOrders\\" ORDER BY \\"order_count\\" DESC"}'
+            )
+        ],
+        schema_grounding=(
+            '- model/table: "dbo_xStageNewOrders"\n'
+            "  columns:\n"
+            '    - "OrderDate"'
+        ),
+    )
+
+    assert result["invalid_generation_result"] == {}
+    assert engine.execute_kwargs is not None
+
+
+@pytest.mark.asyncio
+async def test_post_processor_allows_string_literals_in_filters():
+    engine = _CapturingEngine()
+    processor = SQLGenPostProcessor(engine=engine)
+
+    result = await processor.run(
+        [
+            (
+                '{"sql": "SELECT \\"ShipCountry\\" FROM \\"dbo_xStageNewOrders\\" '
+                'WHERE \\"ShipCountry\\" = '
+                "'India'\"}"
+            )
+        ],
+        schema_grounding=(
+            '- model/table: "dbo_xStageNewOrders"\n'
+            "  columns:\n"
+            '    - "ShipCountry"'
+        ),
+    )
+
+    assert result["invalid_generation_result"] == {}
+    assert engine.execute_kwargs is not None
+
+
+@pytest.mark.asyncio
 async def test_post_processor_keeps_raw_wren_sql_when_engine_returns_planned_sql():
     processor = SQLGenPostProcessor(engine=_FailingEngine())
 

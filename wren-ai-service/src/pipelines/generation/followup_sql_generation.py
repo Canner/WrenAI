@@ -161,6 +161,7 @@ async def post_process(
     generate_sql_in_followup: dict,
     post_processor: SQLGenPostProcessor,
     data_source: str,
+    schema_grounding: str | None = None,
     project_id: str | None = None,
     mdl_hash: str | None = None,
     use_dry_plan: bool = False,
@@ -173,6 +174,7 @@ async def post_process(
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
+        schema_grounding=schema_grounding,
         meta=generate_sql_in_followup.get("meta"),
     )
 

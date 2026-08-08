@@ -1,11 +1,15 @@
 import logging
+import re
 from typing import Any, Dict, List
 
 import aiohttp
 import orjson
+import sqlparse
 from haystack import component
 from haystack.dataclasses import ChatMessage
 from pydantic import BaseModel
+from sqlparse.sql import Function, Identifier, IdentifierList, Parenthesis, TokenList
+from sqlparse.tokens import DML, Keyword, Literal, Name, Number, String, Whitespace
 
 from src.core.engine import (
     Engine,
@@ -15,6 +19,466 @@ from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
+
+_SCHEMA_GROUNDING_TABLE_RE = re.compile(r'-\s*model/table:\s*"([^"]+)"')
+_SCHEMA_GROUNDING_COLUMN_RE = re.compile(r'^\s*-\s*"([^"]+)"\s*$', re.MULTILINE)
+_RELATION_KEYWORDS = {"FROM", "JOIN"}
+_IGNORED_RELATION_FUNCTIONS = {"UNNEST"}
+
+
+def _strip_identifier_quotes(identifier: str) -> str:
+    identifier = identifier.strip()
+    if (
+        len(identifier) >= 2
+        and identifier[0] == identifier[-1]
+        and identifier[0] in {'"', "`", "["}
+    ):
+        return identifier[1:-1]
+    if identifier.startswith("[") and identifier.endswith("]"):
+        return identifier[1:-1]
+    return identifier
+
+
+def _is_ignored_token(token: Any) -> bool:
+    return token.is_whitespace or token.ttype is Whitespace
+
+
+def _is_relation_keyword(token: Any) -> bool:
+    if token.ttype not in Keyword:
+        return False
+
+    normalized = " ".join((token.normalized or token.value).upper().split())
+    return normalized in _RELATION_KEYWORDS or normalized.endswith(" JOIN")
+
+
+def _contains_select(token: TokenList) -> bool:
+    return any(
+        child.ttype is DML and child.normalized.upper() == "SELECT"
+        for child in token.flatten()
+    )
+
+
+def _add_relation_name(
+    relation_names: set[str],
+    relation_name: str | None,
+    cte_names: set[str],
+) -> None:
+    if not relation_name:
+        return
+
+    relation_name = _strip_identifier_quotes(relation_name)
+    if relation_name and relation_name not in cte_names:
+        relation_names.add(relation_name)
+
+
+def _extract_identifier_relation_names(
+    identifier: Identifier,
+    cte_names: set[str],
+) -> set[str]:
+    relation_names: set[str] = set()
+
+    child_tokens = [token for token in identifier.tokens if not _is_ignored_token(token)]
+    if child_tokens and isinstance(child_tokens[0], Parenthesis):
+        if _contains_select(child_tokens[0]):
+            relation_names.update(
+                _extract_relation_names_from_tokens(child_tokens[0], cte_names)
+            )
+        return relation_names
+
+    if any(isinstance(token, Function) for token in child_tokens):
+        function_name = identifier.get_real_name()
+        if function_name and function_name.upper() in _IGNORED_RELATION_FUNCTIONS:
+            return relation_names
+
+    _add_relation_name(relation_names, identifier.get_real_name(), cte_names)
+
+    for token in child_tokens:
+        if isinstance(token, Parenthesis) and _contains_select(token):
+            relation_names.update(_extract_relation_names_from_tokens(token, cte_names))
+
+    return relation_names
+
+
+def _collect_cte_names(statement: TokenList) -> set[str]:
+    cte_names: set[str] = set()
+    saw_with = False
+
+    for token in statement.tokens:
+        if _is_ignored_token(token):
+            continue
+
+        if token.ttype in Keyword and token.normalized.upper() == "WITH":
+            saw_with = True
+            continue
+
+        if not saw_with:
+            continue
+
+        if token.ttype is DML and token.normalized.upper() == "SELECT":
+            break
+
+        identifiers = (
+            token.get_identifiers()
+            if isinstance(token, IdentifierList)
+            else [token]
+            if isinstance(token, Identifier)
+            else []
+        )
+        for identifier in identifiers:
+            if not isinstance(identifier, Identifier):
+                continue
+            cte_name = identifier.get_name() or identifier.get_real_name()
+            if cte_name:
+                cte_names.add(_strip_identifier_quotes(cte_name))
+
+    return cte_names
+
+
+def _extract_relation_names_from_tokens(
+    token_list: TokenList,
+    cte_names: set[str],
+) -> set[str]:
+    relation_names: set[str] = set()
+    expect_relation = False
+
+    for token in token_list.tokens:
+        if _is_ignored_token(token):
+            continue
+
+        if isinstance(token, Parenthesis):
+            if _contains_select(token):
+                relation_names.update(
+                    _extract_relation_names_from_tokens(token, cte_names)
+                )
+            if expect_relation:
+                expect_relation = False
+            continue
+
+        if _is_relation_keyword(token):
+            expect_relation = True
+            continue
+
+        if expect_relation:
+            if isinstance(token, IdentifierList):
+                for identifier in token.get_identifiers():
+                    if isinstance(identifier, Identifier):
+                        relation_names.update(
+                            _extract_identifier_relation_names(identifier, cte_names)
+                        )
+                expect_relation = False
+                continue
+
+            if isinstance(token, Identifier):
+                relation_names.update(
+                    _extract_identifier_relation_names(token, cte_names)
+                )
+                expect_relation = False
+                continue
+
+            if isinstance(token, Function):
+                function_name = token.get_name()
+                if (
+                    function_name
+                    and function_name.upper() not in _IGNORED_RELATION_FUNCTIONS
+                ):
+                    _add_relation_name(relation_names, function_name, cte_names)
+                expect_relation = False
+                continue
+
+            if token.ttype in Name:
+                _add_relation_name(relation_names, token.value, cte_names)
+                expect_relation = False
+                continue
+
+            expect_relation = False
+
+        if isinstance(token, IdentifierList):
+            for identifier in token.get_identifiers():
+                if not isinstance(identifier, Identifier):
+                    continue
+                for child in identifier.tokens:
+                    if isinstance(child, Parenthesis) and _contains_select(child):
+                        relation_names.update(
+                            _extract_relation_names_from_tokens(child, cte_names)
+                        )
+            continue
+
+        if isinstance(token, Identifier):
+            for child in token.tokens:
+                if isinstance(child, Parenthesis) and _contains_select(child):
+                    relation_names.update(
+                        _extract_relation_names_from_tokens(child, cte_names)
+                    )
+            continue
+
+    return relation_names
+
+
+def _extract_relation_names(sql: str) -> set[str]:
+    relation_names: set[str] = set()
+
+    for statement in sqlparse.parse(sql):
+        cte_names = _collect_cte_names(statement)
+        relation_names.update(_extract_relation_names_from_tokens(statement, cte_names))
+
+    return relation_names
+
+
+def _is_literal_token(token: Any) -> bool:
+    return (
+        token.ttype in Literal or token.ttype in Number
+    ) and token.ttype is not String.Symbol
+
+
+def _collect_select_aliases(statement: TokenList) -> set[str]:
+    aliases: set[str] = set()
+    saw_select = False
+
+    for token in statement.tokens:
+        if _is_ignored_token(token):
+            continue
+
+        if token.ttype is DML and token.normalized.upper() == "SELECT":
+            saw_select = True
+            continue
+
+        if not saw_select:
+            continue
+
+        if token.ttype in Keyword and token.normalized.upper() == "FROM":
+            break
+
+        identifiers = (
+            token.get_identifiers()
+            if isinstance(token, IdentifierList)
+            else [token]
+            if isinstance(token, Identifier)
+            else []
+        )
+        for identifier in identifiers:
+            if not isinstance(identifier, Identifier):
+                continue
+            alias = identifier.get_alias()
+            if alias:
+                aliases.add(_strip_identifier_quotes(alias))
+
+    return aliases
+
+
+def _extract_function_column_names(
+    function: Function,
+    cte_names: set[str],
+    select_aliases: set[str],
+) -> set[str]:
+    column_names: set[str] = set()
+
+    for token in function.tokens:
+        if isinstance(token, Parenthesis):
+            column_names.update(
+                _extract_column_names_from_tokens(token, cte_names, select_aliases)
+            )
+
+    return column_names
+
+
+def _extract_identifier_column_names(
+    identifier: Identifier,
+    cte_names: set[str],
+    select_aliases: set[str],
+) -> set[str]:
+    column_names: set[str] = set()
+    child_tokens = [token for token in identifier.tokens if not _is_ignored_token(token)]
+
+    if child_tokens and isinstance(child_tokens[0], Parenthesis):
+        if _contains_select(child_tokens[0]):
+            column_names.update(
+                _extract_column_names_from_tokens(
+                    child_tokens[0], cte_names, select_aliases
+                )
+            )
+        return column_names
+
+    for token in child_tokens:
+        if isinstance(token, Function):
+            column_names.update(
+                _extract_function_column_names(token, cte_names, select_aliases)
+            )
+            return column_names
+
+    if child_tokens and _is_literal_token(child_tokens[0]):
+        return column_names
+
+    column_name = identifier.get_real_name()
+    column_name = _strip_identifier_quotes(column_name) if column_name else None
+    if column_name and column_name not in select_aliases and column_name not in cte_names:
+        column_names.add(column_name)
+
+    return column_names
+
+
+def _extract_column_names_from_tokens(
+    token_list: TokenList,
+    cte_names: set[str],
+    select_aliases: set[str],
+) -> set[str]:
+    column_names: set[str] = set()
+    expect_relation = False
+
+    for token in token_list.tokens:
+        if _is_ignored_token(token):
+            continue
+
+        if _is_relation_keyword(token):
+            expect_relation = True
+            continue
+
+        if expect_relation:
+            expect_relation = False
+            if isinstance(token, Identifier):
+                for child in token.tokens:
+                    if isinstance(child, Parenthesis) and _contains_select(child):
+                        column_names.update(
+                            _extract_column_names_from_tokens(
+                                child, cte_names, select_aliases
+                            )
+                        )
+            elif isinstance(token, Parenthesis) and _contains_select(token):
+                column_names.update(
+                    _extract_column_names_from_tokens(token, cte_names, select_aliases)
+                )
+            continue
+
+        if isinstance(token, IdentifierList):
+            for identifier in token.get_identifiers():
+                if isinstance(identifier, Identifier):
+                    column_names.update(
+                        _extract_identifier_column_names(
+                            identifier, cte_names, select_aliases
+                        )
+                    )
+            continue
+
+        if isinstance(token, Identifier):
+            column_names.update(
+                _extract_identifier_column_names(token, cte_names, select_aliases)
+            )
+            continue
+
+        if isinstance(token, Function):
+            column_names.update(
+                _extract_function_column_names(token, cte_names, select_aliases)
+            )
+            continue
+
+        if isinstance(token, Parenthesis) and _contains_select(token):
+            column_names.update(
+                _extract_column_names_from_tokens(token, cte_names, select_aliases)
+            )
+            continue
+
+        if isinstance(token, TokenList):
+            column_names.update(
+                _extract_column_names_from_tokens(token, cte_names, select_aliases)
+            )
+
+    return column_names
+
+
+def _extract_column_names(sql: str) -> set[str]:
+    column_names: set[str] = set()
+
+    for statement in sqlparse.parse(sql):
+        cte_names = _collect_cte_names(statement)
+        select_aliases = _collect_select_aliases(statement)
+        column_names.update(
+            _extract_column_names_from_tokens(statement, cte_names, select_aliases)
+        )
+
+    return column_names
+
+
+def _allowed_relation_names(schema_grounding: str | None) -> set[str]:
+    if not schema_grounding:
+        return set()
+
+    return {
+        _strip_identifier_quotes(match.group(1))
+        for match in _SCHEMA_GROUNDING_TABLE_RE.finditer(schema_grounding)
+    }
+
+
+def _allowed_column_names(schema_grounding: str | None) -> set[str]:
+    if not schema_grounding:
+        return set()
+
+    return {
+        _strip_identifier_quotes(match.group(1))
+        for match in _SCHEMA_GROUNDING_COLUMN_RE.finditer(schema_grounding)
+    }
+
+
+def _schema_grounding_failure(
+    sql: str,
+    schema_grounding: str | None,
+    data_source: str,
+) -> Dict[str, Any] | None:
+    allowed_relation_names = _allowed_relation_names(schema_grounding)
+    if not allowed_relation_names:
+        return None
+
+    referenced_relation_names = _extract_relation_names(sql)
+    ungrounded_relation_names = sorted(
+        relation_name
+        for relation_name in referenced_relation_names
+        if relation_name not in allowed_relation_names
+    )
+    if not ungrounded_relation_names:
+        allowed_column_names = _allowed_column_names(schema_grounding)
+        if not allowed_column_names:
+            return None
+
+        referenced_column_names = _extract_column_names(sql)
+        ungrounded_column_names = sorted(
+            column_name
+            for column_name in referenced_column_names
+            if column_name not in allowed_column_names
+        )
+        if not ungrounded_column_names:
+            return None
+
+        allowed_columns = ", ".join(f'"{name}"' for name in sorted(allowed_column_names))
+        ungrounded_columns = ", ".join(
+            f'"{name}"' for name in ungrounded_column_names
+        )
+        return {
+            "sql": sql,
+            "original_sql": sql,
+            "type": "SCHEMA_GROUNDING",
+            "error": (
+                "Generated SQL references column identifiers that are not in "
+                f"the retrieved Wren schema: {ungrounded_columns}. Use only these "
+                f"retrieved column identifiers: {allowed_columns}."
+            ),
+            "correlation_id": "",
+            "data_source": data_source,
+        }
+
+    allowed_relations = ", ".join(f'"{name}"' for name in sorted(allowed_relation_names))
+    ungrounded_relations = ", ".join(
+        f'"{name}"' for name in ungrounded_relation_names
+    )
+    return {
+        "sql": sql,
+        "original_sql": sql,
+        "type": "SCHEMA_GROUNDING",
+        "error": (
+            "Generated SQL references model/table identifiers that are not in "
+            f"the retrieved Wren schema: {ungrounded_relations}. Use only these "
+            f"retrieved model/table identifiers: {allowed_relations}."
+        ),
+        "correlation_id": "",
+        "data_source": data_source,
+    }
 
 
 def _is_timeout_error(error_message: str) -> bool:
@@ -79,6 +543,7 @@ class SQLGenPostProcessor:
         allow_dry_plan_fallback: bool = False,
         data_source: str = "",
         allow_data_preview: bool = False,
+        schema_grounding: str | None = None,
         meta: List[Dict[str, Any]] | None = None,
     ) -> dict:
         raw_reply = ""
@@ -134,6 +599,16 @@ class SQLGenPostProcessor:
                     "invalid_generation_result": _empty_sql_generation_failure(
                         "SQL generation returned an empty SQL response.",
                     ),
+                }
+
+            if schema_grounding_failure := _schema_grounding_failure(
+                cleaned_generation_result,
+                schema_grounding,
+                data_source,
+            ):
+                return {
+                    "valid_generation_result": {},
+                    "invalid_generation_result": schema_grounding_failure,
                 }
 
             (
