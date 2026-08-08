@@ -76,6 +76,7 @@ class LitellmLLMProvider(LLMProvider):
             explicit_response_format: bool = False,
         ) -> Dict[str, Any]:
             normalized = dict(kwargs or {})
+            preserve_json_schema = normalized.pop("preserve_json_schema", False)
             response_format = normalized.get("response_format")
 
             # Plain text is the default chat-completions behavior.
@@ -92,6 +93,7 @@ class LitellmLLMProvider(LLMProvider):
                 and not _is_openai_api_base(self._api_base)
                 and isinstance(response_format, dict)
                 and response_format.get("type") == "json_schema"
+                and not preserve_json_schema
             ):
                 if explicit_response_format:
                     normalized["response_format"] = {"type": "json_object"}

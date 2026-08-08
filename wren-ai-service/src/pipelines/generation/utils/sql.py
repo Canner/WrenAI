@@ -8,7 +8,7 @@ import orjson
 import sqlparse
 from haystack import component
 from haystack.dataclasses import ChatMessage
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlparse.sql import Function, Identifier, IdentifierList, Parenthesis, TokenList
 from sqlparse.tokens import DML, Keyword, Literal, Name, Number, String, Whitespace
 
@@ -960,6 +960,16 @@ def _empty_sql_generation_failure(error: str) -> Dict[str, Any]:
     }
 
 
+def _non_text_sql_generation_failure(error: str) -> Dict[str, Any]:
+    return {
+        "sql": "",
+        "original_sql": "",
+        "type": "SQL_GENERATION",
+        "error": error,
+        "correlation_id": "",
+    }
+
+
 @component
 class SQLGenPostProcessor:
     def __init__(self, engine: Engine):
@@ -996,7 +1006,9 @@ class SQLGenPostProcessor:
             cleaned_generation_result = clean_generation_result(raw_reply)
 
             # test if cleaned_generation_result in string format is actually a dictionary with key 'sql'
-            if cleaned_generation_result.startswith("{"):
+            if isinstance(
+                cleaned_generation_result, str
+            ) and cleaned_generation_result.startswith("{"):
                 try:
                     parsed_generation_result = orjson.loads(cleaned_generation_result)
                 except orjson.JSONDecodeError:
@@ -1033,6 +1045,14 @@ class SQLGenPostProcessor:
                     "valid_generation_result": {},
                     "invalid_generation_result": _empty_sql_generation_failure(
                         "SQL generation returned an empty SQL response.",
+                    ),
+                }
+
+            if not isinstance(cleaned_generation_result, str):
+                return {
+                    "valid_generation_result": {},
+                    "invalid_generation_result": _non_text_sql_generation_failure(
+                        "SQL generation did not return a text SQL response.",
                     ),
                 }
 
@@ -1524,14 +1544,18 @@ Build clauses from this contract: FROM must use a listed model/table; WHERE must
 
 
 class SqlGenerationResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     sql: str
 
 
 SQL_GENERATION_MODEL_KWARGS = {
+    "preserve_json_schema": True,
     "response_format": {
         "type": "json_schema",
         "json_schema": {
             "name": "sql_generation_result",
+            "strict": True,
             "schema": SqlGenerationResult.model_json_schema(),
         },
     }

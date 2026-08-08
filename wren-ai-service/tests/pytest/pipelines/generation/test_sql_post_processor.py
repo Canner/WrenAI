@@ -98,6 +98,23 @@ async def test_post_processor_returns_generation_failure_for_missing_sql_key():
 
 
 @pytest.mark.asyncio
+async def test_post_processor_rejects_structured_sql_object_before_grounding():
+    processor = SQLGenPostProcessor(engine=_NoopEngine())
+
+    result = await processor.run(
+        ['{"sql": {"select": ["purchase_order"], "from": "orders"}}'],
+        schema_grounding='- model/table: "orders"',
+    )
+
+    assert result["valid_generation_result"] == {}
+    invalid = result["invalid_generation_result"]
+    assert invalid["type"] == "SQL_GENERATION"
+    assert invalid["sql"] == ""
+    assert invalid["original_sql"] == ""
+    assert "text SQL response" in invalid["error"]
+
+
+@pytest.mark.asyncio
 async def test_post_processor_passes_deployment_hash_to_dry_run_validation():
     engine = _CapturingEngine()
     processor = SQLGenPostProcessor(engine=engine)
