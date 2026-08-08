@@ -950,25 +950,6 @@ def _generation_output_failure(
     }
 
 
-def _generation_output_failure_with_schema_grounding(
-    raw_reply: Any,
-    schema_grounding: str | None,
-    data_source: str,
-    error: str | None = None,
-) -> Dict[str, Any]:
-    raw_sql = raw_reply if isinstance(raw_reply, str) else ""
-    cleaned_sql = clean_generation_result(raw_sql) if raw_sql else ""
-    if cleaned_sql and not cleaned_sql.startswith("{"):
-        if schema_grounding_failure := _schema_grounding_failure(
-            cleaned_sql,
-            schema_grounding,
-            data_source,
-        ):
-            return schema_grounding_failure
-
-    return _generation_output_failure(raw_reply, error)
-
-
 def _empty_sql_generation_failure(error: str) -> Dict[str, Any]:
     return {
         "sql": "",
@@ -1005,10 +986,8 @@ class SQLGenPostProcessor:
             if not replies:
                 return {
                     "valid_generation_result": {},
-                    "invalid_generation_result": _generation_output_failure_with_schema_grounding(
+                    "invalid_generation_result": _generation_output_failure(
                         raw_reply,
-                        schema_grounding,
-                        data_source,
                         "SQL generation returned no response.",
                     ),
                 }
@@ -1023,30 +1002,24 @@ class SQLGenPostProcessor:
                 except orjson.JSONDecodeError:
                     return {
                         "valid_generation_result": {},
-                        "invalid_generation_result": _generation_output_failure_with_schema_grounding(
+                        "invalid_generation_result": _generation_output_failure(
                             raw_reply,
-                            schema_grounding,
-                            data_source,
                         ),
                     }
 
                 if not isinstance(parsed_generation_result, dict):
                     return {
                         "valid_generation_result": {},
-                        "invalid_generation_result": _generation_output_failure_with_schema_grounding(
+                        "invalid_generation_result": _generation_output_failure(
                             raw_reply,
-                            schema_grounding,
-                            data_source,
                         ),
                     }
 
                 if "sql" not in parsed_generation_result:
                     return {
                         "valid_generation_result": {},
-                        "invalid_generation_result": _generation_output_failure_with_schema_grounding(
+                        "invalid_generation_result": _generation_output_failure(
                             raw_reply,
-                            schema_grounding,
-                            data_source,
                         ),
                     }
 
