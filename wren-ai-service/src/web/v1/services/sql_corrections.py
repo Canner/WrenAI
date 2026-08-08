@@ -2,13 +2,13 @@ import logging
 from typing import List, Literal, Optional
 
 from cachetools import TTLCache
-from langfuse.decorators import observe
 from pydantic import AliasChoices, BaseModel, Field
 
+from langfuse.decorators import observe
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest, MetadataTraceable
-from src.web.v1.services.ask import build_schema_grounding_context
+from src.web.v1.services.ask import build_schema_grounding_context, build_sql_contexts
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -119,10 +119,11 @@ class SqlCorrectionService:
                 .get("retrieval_results", [])
             )
             table_ddls = [document.get("table_ddl") for document in documents]
+            unpruned_table_ddls = build_sql_contexts(documents, use_unpruned=True)
             schema_grounding = build_schema_grounding_context(documents)
 
             res = await self._pipelines["sql_correction"].run(
-                contexts=table_ddls,
+                contexts=unpruned_table_ddls or table_ddls,
                 schema_grounding=schema_grounding,
                 invalid_generation_result=_invalid,
                 project_id=project_id,

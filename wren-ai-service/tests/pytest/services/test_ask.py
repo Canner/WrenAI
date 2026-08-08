@@ -393,6 +393,48 @@ class _SchemaRetrievalPipeline:
         }
 
 
+class _PrunedSchemaRetrievalPipeline:
+    async def run(self, **_):
+        return {
+            "construct_retrieval_results": {
+                "retrieval_results": [
+                    {
+                        "table_name": "model_alpha",
+                        "table_ddl": (
+                            "CREATE TABLE model_alpha (selected_measure INTEGER)"
+                        ),
+                        "unpruned_table_ddl": (
+                            "CREATE TABLE model_alpha ("
+                            "selected_measure INTEGER, recovered_dimension VARCHAR)"
+                        ),
+                        "column_names": ["selected_measure"],
+                        "manifest_column_names": [
+                            "selected_measure",
+                            "recovered_dimension",
+                        ],
+                    }
+                ],
+                "has_calculated_field": False,
+                "has_metric": False,
+                "has_json_field": False,
+            }
+        }
+
+
+class _HistoricalQuestionPipeline:
+    async def run(self, **_):
+        return {
+            "formatted_output": {
+                "documents": [
+                    {
+                        "question": "previous analytical request",
+                        "statement": "SELECT * FROM stale_model",
+                    }
+                ]
+            }
+        }
+
+
 class _ShapeInvalidSqlGenerationPipeline:
     async def run(self, **_):
         return {
@@ -425,6 +467,23 @@ class _NoRelevantSqlGenerationPipeline:
                     "error": "No grounded SQL was generated from the current schema.",
                     "correlation_id": "",
                 },
+            }
+        }
+
+
+class _ValidSqlGenerationPipeline:
+    def __init__(self):
+        self.calls = []
+
+    async def run(self, **kwargs):
+        self.calls.append(kwargs)
+        return {
+            "post_process": {
+                "valid_generation_result": {
+                    "sql": "SELECT COUNT(*) AS record_count FROM model_alpha",
+                    "correlation_id": "",
+                },
+                "invalid_generation_result": {},
             }
         }
 
@@ -734,6 +793,122 @@ async def test_ask_regenerates_schema_grounding_failures_before_correction():
         "  columns:\n"
         '    - "entity_id"'
     )
+
+
+@pytest.mark.asyncio
+async def test_ask_uses_unpruned_deployed_metadata_for_generation_context():
+    generation = _ValidSqlGenerationPipeline()
+    ask_service = AskService(
+        {
+            "historical_question": _EmptyRetrievalPipeline(),
+            "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
+            "instructions_retrieval": _EmptyRetrievalPipeline(),
+            "db_schema_retrieval": _PrunedSchemaRetrievalPipeline(),
+            "sql_generation": generation,
+            "sql_correction": _FailingCorrectionPipeline(),
+            "sql_diagnosis": _FailingDiagnosisPipeline(),
+        },
+        allow_intent_classification=False,
+        allow_sql_generation_reasoning=False,
+        allow_sql_functions_retrieval=False,
+        allow_sql_knowledge_retrieval=False,
+        allow_sql_diagnosis=True,
+    )
+    query_id = str(uuid.uuid4())
+    ask_request = AskRequest(query="count records by retrieved dimension", mdl_hash=None)
+    ask_request.query_id = query_id
+
+    await ask_service.ask(ask_request)
+
+    ask_result_response = ask_service.get_ask_result(
+        AskResultRequest(query_id=query_id)
+    )
+    assert ask_result_response.status == "finished"
+    assert "recovered_dimension" in generation.calls[0]["contexts"][0]
+    assert generation.calls[0]["schema_grounding"] == (
+        '- model/table: "model_alpha"\n'
+        "  columns:\n"
+        '    - "selected_measure"\n'
+        '    - "recovered_dimension"'
+    )
+
+
+@pytest.mark.asyncio
+async def test_ask_regenerates_no_relevant_sql_with_unpruned_metadata():
+    generation = _NoRelevantSqlGenerationPipeline()
+    regeneration = _CapturingRegenerationPipeline()
+    correction = _FailingCorrectionPipeline()
+    ask_service = AskService(
+        {
+            "historical_question": _EmptyRetrievalPipeline(),
+            "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
+            "instructions_retrieval": _EmptyRetrievalPipeline(),
+            "db_schema_retrieval": _PrunedSchemaRetrievalPipeline(),
+            "sql_generation": generation,
+            "sql_regeneration": regeneration,
+            "sql_correction": correction,
+            "sql_diagnosis": _FailingDiagnosisPipeline(),
+        },
+        allow_intent_classification=False,
+        allow_sql_generation_reasoning=False,
+        allow_sql_functions_retrieval=False,
+        allow_sql_knowledge_retrieval=False,
+        allow_sql_diagnosis=True,
+    )
+    query_id = str(uuid.uuid4())
+    ask_request = AskRequest(query="count records by retrieved dimension", mdl_hash=None)
+    ask_request.query_id = query_id
+
+    await ask_service.ask(ask_request)
+
+    ask_result_response = ask_service.get_ask_result(
+        AskResultRequest(query_id=query_id)
+    )
+    assert ask_result_response.status == "finished"
+    assert correction.calls == []
+    assert "recovered_dimension" in regeneration.calls[0]["contexts"][0]
+    assert regeneration.calls[0]["sql"] == ""
+
+
+@pytest.mark.asyncio
+async def test_ask_historical_sql_does_not_bypass_current_metadata_validation():
+    generation = _ValidSqlGenerationPipeline()
+    ask_service = AskService(
+        {
+            "historical_question": _HistoricalQuestionPipeline(),
+            "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
+            "instructions_retrieval": _EmptyRetrievalPipeline(),
+            "db_schema_retrieval": _SchemaRetrievalPipeline(),
+            "sql_generation": generation,
+            "sql_correction": _FailingCorrectionPipeline(),
+            "sql_diagnosis": _FailingDiagnosisPipeline(),
+        },
+        allow_intent_classification=False,
+        allow_sql_generation_reasoning=False,
+        allow_sql_functions_retrieval=False,
+        allow_sql_knowledge_retrieval=False,
+        allow_sql_diagnosis=True,
+    )
+    query_id = str(uuid.uuid4())
+    ask_request = AskRequest(query="count records by model", mdl_hash=None)
+    ask_request.query_id = query_id
+
+    await ask_service.ask(ask_request)
+
+    ask_result_response = ask_service.get_ask_result(
+        AskResultRequest(query_id=query_id)
+    )
+    assert ask_result_response.status == "finished"
+    assert ask_result_response.response[0].sql == (
+        "SELECT COUNT(*) AS record_count FROM model_alpha"
+    )
+    assert generation.calls
+    assert generation.calls[0]["sql_samples"] == [
+        {
+            "question": "previous analytical request",
+            "sql": "SELECT * FROM stale_model",
+        }
+    ]
 
 
 @pytest.mark.asyncio

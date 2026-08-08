@@ -84,8 +84,28 @@ def build_schema_grounding_context(documents: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def build_sql_contexts(
+    documents: list[dict[str, Any]],
+    *,
+    use_unpruned: bool = False,
+) -> list[str]:
+    ddl_key = "unpruned_table_ddl" if use_unpruned else "table_ddl"
+    return [
+        ddl
+        for document in documents
+        if (ddl := document.get(ddl_key) or document.get("table_ddl"))
+    ]
+
+
 def is_schema_grounding_error(failed_generation_result: dict[str, Any]) -> bool:
     return failed_generation_result.get("type") == "SCHEMA_GROUNDING"
+
+
+def should_regenerate_sql(failed_generation_result: dict[str, Any]) -> bool:
+    return failed_generation_result.get("type") in {
+        "SCHEMA_GROUNDING",
+        "NO_RELEVANT_SQL",
+    }
 
 
 def build_sql_correction_error_message(
@@ -350,6 +370,7 @@ class AskService:
         api_results = []
         table_names = []
         schema_grounding = ""
+        unpruned_table_ddls = []
         error_message = None
         invalid_sql = None
         allow_sql_generation_reasoning = (
@@ -392,15 +413,13 @@ class AskService:
                 ).get("documents", [])[:1]
 
                 if historical_question_result:
-                    api_results = [
-                        AskResult(
-                            **{
-                                "sql": result.get("statement"),
-                                "type": "view" if result.get("viewId") else "llm",
-                                "viewId": result.get("viewId"),
-                            }
-                        )
+                    sql_samples = [
+                        {
+                            "question": result.get("question") or user_query,
+                            "sql": result.get("statement"),
+                        }
                         for result in historical_question_result
+                        if result.get("statement")
                     ]
                     sql_generation_reasoning = ""
                 else:
@@ -550,7 +569,11 @@ class AskService:
                 )
                 documents = _retrieval_result.get("retrieval_results", [])
                 table_names = [document.get("table_name") for document in documents]
-                table_ddls = [document.get("table_ddl") for document in documents]
+                table_ddls = build_sql_contexts(documents)
+                unpruned_table_ddls = build_sql_contexts(
+                    documents,
+                    use_unpruned=True,
+                )
                 schema_grounding = build_schema_grounding_context(documents)
 
                 if not documents:
@@ -591,7 +614,7 @@ class AskService:
                     sql_generation_reasoning = (
                         await self._pipelines["followup_sql_generation_reasoning"].run(
                             query=user_query,
-                            contexts=table_ddls,
+                            contexts=unpruned_table_ddls or table_ddls,
                             schema_grounding=schema_grounding,
                             histories=histories,
                             sql_samples=sql_samples,
@@ -604,7 +627,7 @@ class AskService:
                     sql_generation_reasoning = (
                         await self._pipelines["sql_generation_reasoning"].run(
                             query=user_query,
-                            contexts=table_ddls,
+                            contexts=unpruned_table_ddls or table_ddls,
                             schema_grounding=schema_grounding,
                             sql_samples=sql_samples,
                             instructions=instructions,
@@ -667,7 +690,7 @@ class AskService:
                     text_to_sql_generation_results = await run_pipeline_with_timeout(
                         sql_generation_pipeline.run(
                             query=user_query,
-                            contexts=table_ddls,
+                            contexts=unpruned_table_ddls or table_ddls,
                             schema_grounding=schema_grounding,
                             sql_generation_reasoning=sql_generation_reasoning,
                             histories=histories,
@@ -694,7 +717,7 @@ class AskService:
                     text_to_sql_generation_results = await run_pipeline_with_timeout(
                         sql_generation_pipeline.run(
                             query=user_query,
-                            contexts=table_ddls,
+                            contexts=unpruned_table_ddls or table_ddls,
                             schema_grounding=schema_grounding,
                             sql_generation_reasoning=sql_generation_reasoning,
                             project_id=ask_request.project_id,
@@ -751,7 +774,7 @@ class AskService:
                         )
 
                         sql_diagnosis_reasoning = None
-                        if is_schema_grounding_error(
+                        if should_regenerate_sql(
                             failed_dry_run_result
                         ) and self._pipelines.get("sql_regeneration"):
                             sql_regeneration_pipeline = self._pipelines[
@@ -760,7 +783,7 @@ class AskService:
                             sql_regeneration_results = (
                                 await run_pipeline_with_timeout(
                                     sql_regeneration_pipeline.run(
-                                        contexts=table_ddls,
+                                        contexts=unpruned_table_ddls or table_ddls,
                                         query=user_query,
                                         sql_generation_reasoning=build_sql_regeneration_reasoning_text(
                                             failed_dry_run_result,
@@ -815,7 +838,7 @@ class AskService:
                                 original_sql = failed_dry_run_result["original_sql"]
                                 invalid_sql = failed_dry_run_result["sql"]
                                 error_message = failed_dry_run_result["error"]
-                                if is_schema_grounding_error(failed_dry_run_result):
+                                if should_regenerate_sql(failed_dry_run_result):
                                     continue
 
                         if allow_sql_diagnosis and not is_schema_grounding_error(
@@ -826,7 +849,7 @@ class AskService:
                             ]
                             sql_diagnosis_results = await run_pipeline_with_timeout(
                                 sql_diagnosis_pipeline.run(
-                                    contexts=table_ddls,
+                                    contexts=unpruned_table_ddls or table_ddls,
                                     original_sql=original_sql,
                                     invalid_sql=invalid_sql,
                                     error_message=error_message,
@@ -854,7 +877,7 @@ class AskService:
                         sql_correction_pipeline = self._pipelines["sql_correction"]
                         sql_correction_results = await run_pipeline_with_timeout(
                             sql_correction_pipeline.run(
-                                contexts=table_ddls,
+                                contexts=unpruned_table_ddls or table_ddls,
                                 schema_grounding=schema_grounding,
                                 query=user_query,
                                 instructions=instructions,

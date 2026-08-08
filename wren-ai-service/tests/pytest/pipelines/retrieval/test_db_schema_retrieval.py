@@ -9,10 +9,12 @@ from src.pipelines.retrieval.db_schema_retrieval import (
     construct_retrieval_results,
     dbschema_retrieval,
     embedding,
-    prompt as build_column_selection_prompt,
-    table_retrieval,
     table_columns_selection_system_prompt,
     table_columns_selection_user_prompt_template,
+    table_retrieval,
+)
+from src.pipelines.retrieval.db_schema_retrieval import (
+    prompt as build_column_selection_prompt,
 )
 
 
@@ -1323,6 +1325,8 @@ def test_construct_retrieval_results_uses_selected_columns_for_sql_generation():
 
     assert "stored_dimension VARCHAR" not in retrieved["table_ddl"]
     assert "stored_measure DOUBLE" in retrieved["table_ddl"]
+    assert "stored_dimension VARCHAR" in retrieved["unpruned_table_ddl"]
+    assert "stored_measure DOUBLE" in retrieved["unpruned_table_ddl"]
     assert "WREN RETRIEVED SEMANTIC CONTEXT" not in retrieved["table_ddl"]
     assert "sql_column_name_use_exactly" not in retrieved["table_ddl"]
     assert retrieved["column_names"] == [
@@ -1593,8 +1597,6 @@ def test_retrieved_schema_keeps_physical_metadata_out_of_executable_ddl():
     )
 
     table_ddl = result["db_schemas"][0]["table_ddl"]
-    executable_ddl = table_ddl.split("CREATE TABLE", maxsplit=1)[1]
-
     assert "CREATE TABLE modeled_dataset" in table_ddl
     assert "physical_catalog" not in table_ddl
     assert "physical_schema" not in table_ddl

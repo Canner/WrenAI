@@ -9,9 +9,9 @@ from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
-from langfuse.decorators import observe
 from pydantic import BaseModel
 
+from langfuse.decorators import observe
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.common import (
@@ -239,10 +239,12 @@ def _retrieval_result(
     include_relationships: bool = True,
     columns: Optional[set[str]] = None,
     tables: Optional[set[str]] = None,
+    unpruned_table_ddl: str | None = None,
 ) -> dict:
     return {
         "table_name": table_name,
         "table_ddl": table_ddl,
+        "unpruned_table_ddl": unpruned_table_ddl or table_ddl,
         "column_names": _content_column_names(content, columns=columns, tables=tables),
         "manifest_column_names": _content_column_names(content),
         "relationship_constraints": _relationship_constraints(content)
@@ -732,6 +734,7 @@ def construct_retrieval_results(
                         tables=tables,
                     )
                 )
+                unpruned_ddl = _build_table_retrieval_context(table_schema)[0]
                 if _has_calculated_field:
                     has_calculated_field = True
                 if _has_json_field:
@@ -744,6 +747,7 @@ def construct_retrieval_results(
                         table_schema,
                         columns=selected_columns,
                         tables=tables,
+                        unpruned_table_ddl=unpruned_ddl,
                     )
                 )
 
