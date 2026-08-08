@@ -14,18 +14,16 @@ from src.web.v1.services.ask import (
     AskResultRequest,
     AskService,
     build_safe_invalid_sql,
-    build_retrieved_schema_context,
-    build_schema_grounding_context,
     build_schema_grounding_recovery_message,
     build_sql_correction_error_message,
     build_sql_correction_input,
-    build_sql_generation_reasoning_text,
-    build_sql_regeneration_reasoning_text,
-    build_sql_regeneration_samples,
-    build_sql_regeneration_source_sql,
     build_user_facing_error_message,
     get_pipeline_timeout_seconds,
     is_schema_grounding_error,
+)
+from src.web.v1.services.schema_context import (
+    build_retrieved_schema_context,
+    build_schema_grounding_context,
 )
 from src.web.v1.services.semantics_preparation import (
     SemanticsPreparationRequest,
@@ -364,67 +362,6 @@ def test_user_facing_schema_grounding_error_is_sanitized():
             "Syntax error near FROM.",
         )
         == "Syntax error near FROM."
-    )
-
-
-def test_schema_grounding_regeneration_source_omits_rejected_sql():
-    assert (
-        build_sql_regeneration_source_sql(
-            {
-                "sql": "SELECT * FROM hallucinated_table",
-                "original_sql": "SELECT * FROM hallucinated_table",
-                "type": "SCHEMA_GROUNDING",
-            }
-        )
-        == ""
-    )
-    assert (
-        build_sql_regeneration_source_sql(
-            {
-                "sql": MODEL_ALPHA_SELECT_SQL,
-                "original_sql": MODEL_ALPHA_SELECT_SQL,
-                "type": "DRY_RUN",
-            }
-        )
-        == MODEL_ALPHA_SELECT_SQL
-    )
-
-
-def test_sql_generation_reasoning_text_extracts_reasoning():
-    assert (
-        build_sql_generation_reasoning_text({"reasoning": "use modeled tables"})
-        == "use modeled tables"
-    )
-    assert build_sql_generation_reasoning_text("plain reasoning") == "plain reasoning"
-    assert build_sql_generation_reasoning_text(None) == ""
-
-
-def test_schema_grounding_regeneration_omits_bad_context_and_uses_recovery_feedback():
-    failed_schema_result = {"type": "SCHEMA_GROUNDING"}
-    failed_dry_run_result = {"type": "DRY_RUN"}
-    sql_samples = [{"question": "show records", "sql": MODEL_ALPHA_SELECT_SQL}]
-
-    assert (
-        build_sql_regeneration_reasoning_text(
-            failed_schema_result,
-            {"reasoning": "use hallucinated_table"},
-        )
-        == build_schema_grounding_recovery_message(failed_schema_result)
-    )
-    assert "hallucinated_table" not in build_sql_regeneration_reasoning_text(
-        failed_schema_result,
-        {"reasoning": "use hallucinated_table"},
-    )
-    assert build_sql_regeneration_samples(failed_schema_result, sql_samples) == []
-    assert (
-        build_sql_regeneration_reasoning_text(
-            failed_dry_run_result,
-            {"reasoning": f"use {MODEL_ALPHA}"},
-        )
-        == f"use {MODEL_ALPHA}"
-    )
-    assert build_sql_regeneration_samples(failed_dry_run_result, sql_samples) == (
-        sql_samples
     )
 
 

@@ -12,7 +12,6 @@ from src.web.v1.services import BaseRequest, SSEEvent
 from src.web.v1.services.schema_context import (
     RetrievedSchemaContext,
     build_retrieved_schema_context,
-    build_schema_grounding_context,
     build_sql_contexts,
 )
 
@@ -67,13 +66,6 @@ def is_local_generation_error(failed_generation_result: dict[str, Any]) -> bool:
     }
 
 
-def should_regenerate_sql(failed_generation_result: dict[str, Any]) -> bool:
-    return failed_generation_result.get("type") in {
-        "SCHEMA_GROUNDING",
-        "NO_RELEVANT_SQL",
-    }
-
-
 def build_sql_correction_error_message(
     error_message: str | None,
     sql_diagnosis_reasoning: str | None = None,
@@ -125,15 +117,6 @@ def build_schema_grounding_recovery_message(
     )
 
 
-def build_no_relevant_sql_recovery_message() -> str:
-    return (
-        "The previous attempt did not produce a grounded SQL statement. "
-        "Regenerate the SQL from the user question using only DATABASE SCHEMA, "
-        "RETRIEVED EXECUTABLE SCHEMA, SQL FUNCTIONS, USER INSTRUCTIONS, and the "
-        "configured datasource dialect."
-    )
-
-
 def build_user_facing_error_message(
     failed_generation_result: dict[str, Any] | None,
     error_message: str | None,
@@ -147,49 +130,6 @@ def build_user_facing_error_message(
         )
 
     return error_message or "No relevant SQL"
-
-
-def build_sql_regeneration_source_sql(
-    failed_generation_result: dict[str, Any],
-) -> str:
-    if is_schema_grounding_error(failed_generation_result):
-        return ""
-
-    return failed_generation_result.get("original_sql") or failed_generation_result.get(
-        "sql", ""
-    )
-
-
-def build_sql_generation_reasoning_text(
-    sql_generation_reasoning: Any,
-) -> str:
-    if isinstance(sql_generation_reasoning, dict):
-        return sql_generation_reasoning.get("reasoning", "") or ""
-
-    return sql_generation_reasoning or ""
-
-
-def build_sql_regeneration_reasoning_text(
-    failed_generation_result: dict[str, Any],
-    sql_generation_reasoning: Any,
-) -> str:
-    if is_schema_grounding_error(failed_generation_result):
-        return build_schema_grounding_recovery_message(failed_generation_result)
-
-    if failed_generation_result.get("type") == "NO_RELEVANT_SQL":
-        return build_no_relevant_sql_recovery_message()
-
-    return build_sql_generation_reasoning_text(sql_generation_reasoning)
-
-
-def build_sql_regeneration_samples(
-    failed_generation_result: dict[str, Any],
-    sql_samples: list[dict] | None,
-) -> list[dict]:
-    if is_schema_grounding_error(failed_generation_result):
-        return []
-
-    return sql_samples or []
 
 
 def build_safe_invalid_sql(
