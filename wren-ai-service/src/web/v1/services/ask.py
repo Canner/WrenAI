@@ -159,6 +159,15 @@ def build_schema_grounding_recovery_message(
     )
 
 
+def build_no_relevant_sql_recovery_message() -> str:
+    return (
+        "The previous attempt did not produce a grounded SQL statement. "
+        "Regenerate the SQL from the user question using only DATABASE SCHEMA, "
+        "RETRIEVED EXECUTABLE SCHEMA, SQL FUNCTIONS, USER INSTRUCTIONS, and the "
+        "configured datasource dialect."
+    )
+
+
 def build_user_facing_error_message(
     failed_generation_result: dict[str, Any] | None,
     error_message: str | None,
@@ -199,7 +208,10 @@ def build_sql_regeneration_reasoning_text(
     sql_generation_reasoning: Any,
 ) -> str:
     if is_schema_grounding_error(failed_generation_result):
-        return ""
+        return build_schema_grounding_recovery_message(failed_generation_result)
+
+    if failed_generation_result.get("type") == "NO_RELEVANT_SQL":
+        return build_no_relevant_sql_recovery_message()
 
     return build_sql_generation_reasoning_text(sql_generation_reasoning)
 
@@ -838,9 +850,6 @@ class AskService:
                                 original_sql = failed_dry_run_result["original_sql"]
                                 invalid_sql = failed_dry_run_result["sql"]
                                 error_message = failed_dry_run_result["error"]
-                                if should_regenerate_sql(failed_dry_run_result):
-                                    continue
-
                         if allow_sql_diagnosis and not is_schema_grounding_error(
                             failed_dry_run_result
                         ):

@@ -322,7 +322,7 @@ def test_sql_generation_reasoning_text_extracts_reasoning():
     assert build_sql_generation_reasoning_text(None) == ""
 
 
-def test_schema_grounding_regeneration_omits_reasoning_and_samples():
+def test_schema_grounding_regeneration_omits_bad_context_and_uses_recovery_feedback():
     failed_schema_result = {"type": "SCHEMA_GROUNDING"}
     failed_dry_run_result = {"type": "DRY_RUN"}
     sql_samples = [{"question": "show records", "sql": "SELECT * FROM model_alpha"}]
@@ -332,7 +332,11 @@ def test_schema_grounding_regeneration_omits_reasoning_and_samples():
             failed_schema_result,
             {"reasoning": "use hallucinated_table"},
         )
-        == ""
+        == build_schema_grounding_recovery_message(failed_schema_result)
+    )
+    assert "hallucinated_table" not in build_sql_regeneration_reasoning_text(
+        failed_schema_result,
+        {"reasoning": "use hallucinated_table"},
     )
     assert build_sql_regeneration_samples(failed_schema_result, sql_samples) == []
     assert (
@@ -578,6 +582,31 @@ class _CapturingRegenerationPipeline:
 
 
 class _SchemaGroundingRegenerationPipeline:
+    def __init__(self):
+        self.calls = []
+
+    async def run(self, **kwargs):
+        self.calls.append(kwargs)
+        return {
+            "post_process": {
+                "valid_generation_result": {},
+                "invalid_generation_result": {
+                    "sql": "SELECT * FROM hallucinated_table",
+                    "original_sql": "SELECT * FROM hallucinated_table",
+                    "type": "SCHEMA_GROUNDING",
+                    "error": (
+                        "Generated SQL references model/table identifiers that are "
+                        "not in the retrieved Wren schema: \"hallucinated_table\". "
+                        "Use only these retrieved model/table identifiers: "
+                        "\"model_alpha\"."
+                    ),
+                    "correlation_id": "",
+                },
+            }
+        }
+
+
+class _SchemaGroundingCorrectionPipeline:
     def __init__(self):
         self.calls = []
 
@@ -914,7 +943,7 @@ async def test_ask_historical_sql_does_not_bypass_current_metadata_validation():
 @pytest.mark.asyncio
 async def test_ask_retries_schema_regeneration_without_exposing_invalid_sql():
     regeneration = _SchemaGroundingRegenerationPipeline()
-    correction = _FailingCorrectionPipeline()
+    correction = _SchemaGroundingCorrectionPipeline()
     diagnosis = _FailingDiagnosisPipeline()
     generation = _SchemaGroundingSqlGenerationPipeline()
     ask_service = AskService(
@@ -949,9 +978,20 @@ async def test_ask_retries_schema_regeneration_without_exposing_invalid_sql():
     assert "hallucinated_table" not in ask_result_response.error.message
     assert "retrieved metadata was not sufficient" in ask_result_response.error.message
     assert diagnosis.calls == []
-    assert correction.calls == []
+    assert len(correction.calls) == 2
+    assert all(
+        call["invalid_generation_result"]["sql"] == "" for call in correction.calls
+    )
+    assert all(
+        "hallucinated_table" not in call["invalid_generation_result"]["error"]
+        for call in correction.calls
+    )
     assert len(regeneration.calls) == 2
     assert all(call["sql"] == "" for call in regeneration.calls)
+    assert all(
+        "hallucinated_table" not in call["sql_generation_reasoning"]
+        for call in regeneration.calls
+    )
 
 
 @pytest.mark.asyncio
