@@ -78,6 +78,8 @@ These samples are confirmed question examples for this project deployment. Use t
 {% for sample in sql_samples %}
 Summary:
 {{sample.summary}}
+SQL:
+{{sample.sql}}
 {% endfor %}
 {% endif %}
 

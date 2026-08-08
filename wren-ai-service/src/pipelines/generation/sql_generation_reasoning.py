@@ -39,6 +39,8 @@ These samples are confirmed question examples for this project deployment. Use t
 {% for sql_sample in sql_samples %}
 Question:
 {{sql_sample.question}}
+SQL:
+{{sql_sample.sql}}
 {% endfor %}
 {% endif %}
 

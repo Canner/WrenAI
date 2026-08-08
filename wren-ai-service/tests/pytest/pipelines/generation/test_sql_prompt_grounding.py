@@ -191,7 +191,7 @@ async def test_sql_generation_calls_do_not_inject_runtime_output_budget(
     assert "generation_kwargs" not in captured_kwargs
 
 
-def test_sql_generation_prompt_omits_sample_sql_body():
+def test_sql_generation_prompt_includes_sample_sql_body():
     result = build_sql_generation_prompt(
         query="show orders from India",
         documents=['CREATE TABLE dbo_xStageNewOrders (ShipCountry VARCHAR)'],
@@ -208,8 +208,8 @@ def test_sql_generation_prompt_omits_sample_sql_body():
     built_prompt = result["prompt"]
 
     assert "show orders from Taiwan" in built_prompt
-    assert "SELECT * FROM orders" not in built_prompt
-    assert "WHERE country" not in built_prompt
+    assert "SELECT * FROM orders" in built_prompt
+    assert "WHERE country" in built_prompt
     assert "confirmed question examples for this project deployment" in built_prompt
     assert "RETRIEVED EXECUTABLE SCHEMA" in built_prompt
     assert '- model/table: "dbo_xStageNewOrders"' in built_prompt
@@ -261,7 +261,7 @@ def test_sql_generation_prompt_includes_configured_dialect_and_functions():
     assert "Do not use a function, cast style, interval literal" in built_prompt
 
 
-def test_sql_generation_reasoning_prompt_omits_sample_sql_body():
+def test_sql_generation_reasoning_prompt_includes_sample_sql_body():
     result = build_sql_generation_reasoning_prompt(
         query="show orders from India",
         documents=['CREATE TABLE dbo_xStageNewOrders (ShipCountry VARCHAR)'],
@@ -281,14 +281,14 @@ def test_sql_generation_reasoning_prompt_omits_sample_sql_body():
     built_prompt = result["prompt"]
 
     assert "show orders from Taiwan" in built_prompt
-    assert "SELECT * FROM orders" not in built_prompt
-    assert "WHERE country" not in built_prompt
+    assert "SELECT * FROM orders" in built_prompt
+    assert "WHERE country" in built_prompt
     assert "confirmed question examples for this project deployment" in built_prompt
     assert "dbo_xStageNewOrders" in built_prompt
     assert "ShipCountry" in built_prompt
 
 
-def test_followup_sql_generation_reasoning_prompt_omits_sample_and_history_sql():
+def test_followup_sql_generation_reasoning_prompt_includes_sample_and_history_sql():
     result = build_followup_sql_generation_reasoning_prompt(
         query="from India",
         documents=['CREATE TABLE dbo_xStageNewOrders (ShipCountry VARCHAR)'],
@@ -313,8 +313,8 @@ def test_followup_sql_generation_reasoning_prompt_omits_sample_and_history_sql()
 
     assert "show orders" in built_prompt
     assert "show orders from Taiwan" in built_prompt
-    assert "SELECT * FROM orders" not in built_prompt
-    assert "WHERE country" not in built_prompt
+    assert "SELECT * FROM orders" in built_prompt
+    assert "WHERE country" in built_prompt
     assert "dbo_xStageNewOrders" in built_prompt
     assert "ShipCountry" in built_prompt
 
@@ -341,8 +341,8 @@ def test_followup_sql_generation_prompt_uses_retrieved_schema_context():
     assert "CREATE TABLE dbo_xStageNewOrders" in built_prompt
     assert "RETRIEVED EXECUTABLE SCHEMA" in built_prompt
     assert '- model/table: "dbo_xStageNewOrders"' in built_prompt
-    assert "SELECT * FROM orders" not in built_prompt
-    assert "WHERE country" not in built_prompt
+    assert "SELECT * FROM orders" in built_prompt
+    assert "WHERE country" in built_prompt
     assert "confirmed question examples for this project deployment" in built_prompt
     assert "Return only the final JSON SQL response" in built_prompt
     assert "Let's think step by step" not in built_prompt
@@ -438,7 +438,7 @@ def test_sql_correction_prompt_omits_rejected_sql_for_schema_grounding():
     assert "regenerate the SQL from the user's question and retrieved schema" in built_prompt
 
 
-def test_sql_regeneration_prompt_omits_sample_sql_body():
+def test_sql_regeneration_prompt_includes_sample_sql_body():
     result = build_sql_regeneration_prompt(
         query="summarize model records",
         documents=["CREATE TABLE model_1 (attribute_1 VARCHAR)"],
@@ -459,8 +459,8 @@ def test_sql_regeneration_prompt_omits_sample_sql_body():
     assert "CREATE TABLE model_1" in built_prompt
     assert "User's Question: summarize model records" in built_prompt
     assert "Original SQL query: SELECT 1" in built_prompt
-    assert "SELECT * FROM orders" not in built_prompt
-    assert "WHERE country" not in built_prompt
+    assert "SELECT * FROM orders" in built_prompt
+    assert "WHERE country" in built_prompt
     assert "confirmed question examples for this project deployment" in built_prompt
     assert "Configured data source: trino" in built_prompt
     assert "dry-plans and dry-runs successfully" in built_prompt

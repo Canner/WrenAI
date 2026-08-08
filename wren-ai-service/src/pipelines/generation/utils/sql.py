@@ -1590,4 +1590,12 @@ def construct_instructions(
 def construct_ask_history_messages(
     histories: list[AskHistory] | list[dict],
 ) -> list[ChatMessage]:
-    return []
+    messages = []
+    for history in histories:
+        question = (
+            history.question if hasattr(history, "question") else history["question"]
+        )
+        sql = history.sql if hasattr(history, "sql") else history["sql"]
+        messages.append(ChatMessage.from_user(question))
+        messages.append(ChatMessage.from_assistant(sql))
+    return messages

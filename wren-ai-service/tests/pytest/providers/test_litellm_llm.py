@@ -181,6 +181,59 @@ async def test_local_openai_compatible_endpoint_preserves_sql_generation_json_sc
 
 
 @pytest.mark.asyncio
+async def test_sql_generation_json_schema_overrides_loose_model_response_format(
+    mocker,
+):
+    captured_kwargs = {}
+
+    async def fake_acompletion(**kwargs):
+        captured_kwargs.update(kwargs)
+        return SimpleNamespace(
+            model="openai/local-model",
+            choices=[
+                SimpleNamespace(
+                    index=0,
+                    finish_reason="stop",
+                    message=SimpleNamespace(content='{"sql": "SELECT 1"}'),
+                )
+            ],
+        )
+
+    mocker.patch("src.providers.llm.litellm.acompletion", side_effect=fake_acompletion)
+
+    provider = LitellmLLMProvider(
+        model="openai/local-model",
+        api_base="http://localhost/v1",
+        kwargs={"response_format": {"type": "json_object"}},
+    )
+
+    generator = provider.get_generator(
+        generation_kwargs={
+            "preserve_json_schema": True,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "sql_generation_result",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {"sql": {"type": "string"}},
+                        "required": ["sql"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+        }
+    )
+
+    await generator(prompt="Return SQL")
+
+    assert captured_kwargs["response_format"]["type"] == "json_schema"
+    assert captured_kwargs["response_format"]["json_schema"]["strict"] is True
+    assert "preserve_json_schema" not in captured_kwargs
+
+
+@pytest.mark.asyncio
 async def test_litellm_provider_uses_configured_model_name_without_rewriting(mocker):
     captured_kwargs = {}
 

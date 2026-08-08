@@ -142,12 +142,27 @@ class LitellmLLMProvider(LLMProvider):
                 or "response_format" in model_generation_kwargs
                 or "response_format" in runtime_generation_kwargs
             )
+            merged_generation_kwargs = {
+                **component_generation_kwargs,
+                **model_generation_kwargs,
+                **runtime_generation_kwargs,
+            }
+            if (
+                component_generation_kwargs.get("preserve_json_schema")
+                and isinstance(
+                    component_generation_kwargs.get("response_format"), dict
+                )
+                and component_generation_kwargs["response_format"].get("type")
+                == "json_schema"
+                and "response_format" not in runtime_generation_kwargs
+            ):
+                merged_generation_kwargs["response_format"] = (
+                    component_generation_kwargs["response_format"]
+                )
+                merged_generation_kwargs["preserve_json_schema"] = True
+
             generation_kwargs = _normalize_generation_kwargs(
-                {
-                    **component_generation_kwargs,
-                    **model_generation_kwargs,
-                    **runtime_generation_kwargs,
-                },
+                merged_generation_kwargs,
                 explicit_response_format=explicit_response_format,
             )
             completion_timeout = generation_kwargs.pop("timeout", self._timeout)
