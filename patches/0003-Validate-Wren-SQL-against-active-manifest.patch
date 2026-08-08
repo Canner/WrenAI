@@ -1,0 +1,459 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 8 Aug 2026 11:00:00 +0530
+Subject: [PATCH] Validate Wren SQL against active manifest before execution
+
+---
+ ibis-server/app/mdl/rewriter.py             |   2 +
+ ibis-server/app/mdl/sql_validator.py        | 210 ++++++++++++++++++++
+ ibis-server/app/routers/v2/connector.py     |   2 +
+ ibis-server/app/routers/v3/connector.py     |   2 +
+ ibis-server/tests/mdl/test_sql_validator.py | 135 +++++++++++++
+ 5 files changed, 351 insertions(+)
+ create mode 100644 ibis-server/app/mdl/sql_validator.py
+ create mode 100644 ibis-server/tests/mdl/test_sql_validator.py
+
+diff --git a/ibis-server/app/mdl/rewriter.py b/ibis-server/app/mdl/rewriter.py
+index 7398a72e..bb402d11 100644
+--- a/ibis-server/app/mdl/rewriter.py
++++ b/ibis-server/app/mdl/rewriter.py
+@@ -17,6 +17,7 @@ from app.mdl.core import (
+     to_json_base64,
+ )
+ from app.mdl.java_engine import JavaEngineConnector
++from app.mdl.sql_validator import validate_wren_sql_against_manifest
+ from app.model.data_source import DataSource
+ from app.model.error import PLANNED_SQL, ErrorCode, ErrorPhase, WrenError
+ from app.util import base64_to_dict
+@@ -180,6 +181,7 @@ class Rewriter:
+ 
+     @tracer.start_as_current_span("rewrite", kind=trace.SpanKind.INTERNAL)
+     async def rewrite(self, sql: str) -> str:
++        validate_wren_sql_against_manifest(self.manifest_str, sql)
+         manifest_str = (
+             self._extract_manifest(self.manifest_str, sql) or self.manifest_str
+         )
+diff --git a/ibis-server/app/mdl/sql_validator.py b/ibis-server/app/mdl/sql_validator.py
+new file mode 100644
+index 00000000..1e60e3c2
+--- /dev/null
++++ b/ibis-server/app/mdl/sql_validator.py
+@@ -0,0 +1,210 @@
++from __future__ import annotations
++
++from dataclasses import dataclass
++
++import sqlglot
++from sqlglot import exp
++from sqlglot.optimizer.scope import build_scope
++
++from app.custom_sqlglot.dialects.wren import Wren
++from app.model.error import ErrorCode, ErrorPhase, WrenError
++from app.util import base64_to_dict
++
++
++_INVALID_IDENTIFIER_MESSAGE = (
++    "SQL references identifiers that are not present in the active manifest. "
++    "Regenerate the SQL using only deployed model and column metadata."
++)
++
++
++@dataclass(frozen=True)
++class ManifestIdentifierIndex:
++    relation_keys: frozenset[str]
++    columns_by_relation: dict[str, frozenset[str]]
++
++    @property
++    def all_columns(self) -> frozenset[str]:
++        return frozenset(
++            column
++            for relation_columns in self.columns_by_relation.values()
++            for column in relation_columns
++        )
++
++
++def validate_wren_sql_against_manifest(manifest_str: str, sql: str) -> None:
++    manifest = base64_to_dict(manifest_str)
++    index = _build_manifest_identifier_index(manifest)
++
++    try:
++        ast = sqlglot.parse_one(sql, dialect=Wren)
++    except sqlglot.errors.SqlglotError as e:
++        raise WrenError(
++            ErrorCode.INVALID_SQL,
++            "SQL could not be parsed for manifest validation.",
++            phase=ErrorPhase.SQL_PARSING,
++        ) from e
++
++    _validate_relation_identifiers(ast, index)
++    _validate_column_identifiers(ast, index)
++
++
++def _build_manifest_identifier_index(manifest: dict) -> ManifestIdentifierIndex:
++    catalog = _normalize_identifier(manifest.get("catalog"))
++    schema = _normalize_identifier(manifest.get("schema"))
++    relation_keys: set[str] = set()
++    columns_by_relation: dict[str, frozenset[str]] = {}
++
++    for item in _iter_queryable_manifest_items(manifest):
++        name = _normalize_identifier(item.get("name"))
++        if not name:
++            continue
++
++        relation_keys.update(_relation_key_variants(name, catalog, schema))
++        columns_by_relation[name] = frozenset(_iter_item_column_names(item))
++
++    return ManifestIdentifierIndex(
++        relation_keys=frozenset(relation_keys),
++        columns_by_relation=columns_by_relation,
++    )
++
++
++def _iter_queryable_manifest_items(manifest: dict):
++    yield from manifest.get("models", [])
++    yield from manifest.get("views", [])
++    yield from manifest.get("metrics", [])
++
++
++def _iter_item_column_names(item: dict):
++    for column in item.get("columns", []):
++        name = _normalize_identifier(column.get("name"))
++        if name:
++            yield name
++
++    for key in ("measure", "measures", "dimension", "dimensions"):
++        for column in item.get(key, []):
++            name = _normalize_identifier(column.get("name"))
++            if name:
++                yield name
++
++
++def _relation_key_variants(name: str, catalog: str | None, schema: str | None):
++    yield name
++    if schema:
++        yield f"{schema}.{name}"
++    if catalog and schema:
++        yield f"{catalog}.{schema}.{name}"
++
++
++def _validate_relation_identifiers(
++    ast: exp.Expression, index: ManifestIdentifierIndex
++) -> None:
++    cte_names = _cte_names(ast)
++    for table in ast.find_all(exp.Table):
++        name = _normalize_identifier(table.name)
++        if not name or name in cte_names:
++            continue
++
++        if _table_key(table) not in index.relation_keys:
++            raise WrenError(
++                ErrorCode.INVALID_SQL,
++                _INVALID_IDENTIFIER_MESSAGE,
++                phase=ErrorPhase.VALIDATION,
++            )
++
++
++def _validate_column_identifiers(
++    ast: exp.Expression, index: ManifestIdentifierIndex
++) -> None:
++    root = build_scope(ast)
++    if root is None:
++        return
++
++    select_aliases = _select_aliases(ast)
++    cte_names = _cte_names(ast)
++    all_columns = index.all_columns
++
++    for scope in root.traverse():
++        source_relations, has_derived_source = _scope_source_relations(scope, cte_names)
++        for column in scope.columns:
++            column_name = _normalize_identifier(column.name)
++            if (
++                not column_name
++                or column_name == "*"
++                or column_name in select_aliases
++            ):
++                continue
++
++            qualifier = _normalize_identifier(column.table)
++            if qualifier:
++                relation_name = source_relations.get(qualifier) or qualifier
++                if relation_name in cte_names or qualifier in cte_names:
++                    continue
++
++                relation_columns = index.columns_by_relation.get(relation_name)
++                if relation_columns and column_name not in relation_columns:
++                    _raise_invalid_identifier()
++                continue
++
++            if not source_relations or has_derived_source:
++                continue
++
++            if len(source_relations) == 1:
++                relation_columns = index.columns_by_relation.get(
++                    next(iter(source_relations.values()))
++                )
++                if relation_columns and column_name not in relation_columns:
++                    _raise_invalid_identifier()
++                continue
++
++            if all_columns and column_name not in all_columns:
++                _raise_invalid_identifier()
++
++
++def _scope_source_relations(scope, cte_names: set[str]) -> tuple[dict[str, str], bool]:
++    source_relations: dict[str, str] = {}
++    has_derived_source = False
++
++    for alias, (_node, source) in scope.selected_sources.items():
++        alias_name = _normalize_identifier(alias)
++        if not alias_name:
++            continue
++
++        if isinstance(source, exp.Table):
++            source_name = _normalize_identifier(source.name)
++            if not source_name or source_name in cte_names:
++                has_derived_source = True
++                continue
++
++            source_relations[alias_name] = source_name
++            source_relations[source_name] = source_name
++        else:
++            has_derived_source = True
++
++    return source_relations, has_derived_source
++
++
++def _table_key(table: exp.Table) -> str:
++    parts = [
++        _normalize_identifier(part)
++        for part in (table.catalog, table.db, table.name)
++        if _normalize_identifier(part)
++    ]
++    return ".".join(parts)
++
++
++def _cte_names(ast: exp.Expression) -> set[str]:
++    return {
++        name
++        for cte in ast.find_all(exp.CTE)
++        if (name := _normalize_identifier(cte.alias_or_name))
++    }
++
++
++def _select_aliases(ast: exp.Expression) -> set[str]:
++    return {
++        alias
++        for expression in ast.find_all(exp.Alias)
++        if (alias := _normalize_identifier(expression.alias))
++    }
++
++
++def _normalize_identifier(value) -> str | None:
++    if value is None:
++        return None
++    text = str(value).strip()
++    return text.lower() if text else None
++
++
++def _raise_invalid_identifier() -> None:
++    raise WrenError(
++        ErrorCode.INVALID_SQL,
++        _INVALID_IDENTIFIER_MESSAGE,
++        phase=ErrorPhase.VALIDATION,
++    )
+diff --git a/ibis-server/app/routers/v2/connector.py b/ibis-server/app/routers/v2/connector.py
+index c68f08de..1b1fb95e 100644
+--- a/ibis-server/app/routers/v2/connector.py
++++ b/ibis-server/app/routers/v2/connector.py
+@@ -16,6 +16,7 @@ from app.dependencies import (
+ )
+ from app.mdl.java_engine import JavaEngineConnector
+ from app.mdl.rewriter import Rewriter
++from app.mdl.sql_validator import validate_wren_sql_against_manifest
+ from app.mdl.substitute import ModelSubstitute
+ from app.model import (
+     BigQueryProjectConnectionInfo,
+@@ -103,6 +104,7 @@ async def query(
+         name=span_name, kind=trace.SpanKind.SERVER, context=build_context(headers)
+     ) as span:
+         set_attribute(headers, span)
++        validate_wren_sql_against_manifest(dto.manifest_str, dto.sql)
+         try:
+             sql = pushdown_limit(dto.sql, limit)
+         except Exception as e:
+diff --git a/ibis-server/app/routers/v3/connector.py b/ibis-server/app/routers/v3/connector.py
+index f8d857bf..e8686f92 100644
+--- a/ibis-server/app/routers/v3/connector.py
++++ b/ibis-server/app/routers/v3/connector.py
+@@ -22,6 +22,7 @@ from app.mdl import knowledge
+ from app.mdl.core import get_session_context
+ from app.mdl.java_engine import JavaEngineConnector
+ from app.mdl.rewriter import Rewriter
++from app.mdl.sql_validator import validate_wren_sql_against_manifest
+ from app.mdl.substitute import ModelSubstitute
+ from app.model import (
+     DryPlanDTO,
+@@ -100,6 +101,7 @@ async def query(
+         name=span_name, kind=trace.SpanKind.SERVER, context=build_context(headers)
+     ) as span:
+         set_attribute(headers, span)
++        validate_wren_sql_against_manifest(dto.manifest_str, dto.sql)
+         connection_info = data_source.get_connection_info(
+             resolve_connection_info(dto), dict(headers)
+         )
+diff --git a/ibis-server/tests/mdl/test_sql_validator.py b/ibis-server/tests/mdl/test_sql_validator.py
+new file mode 100644
+index 00000000..8229706a
+--- /dev/null
++++ b/ibis-server/tests/mdl/test_sql_validator.py
+@@ -0,0 +1,135 @@
++import base64
++
++import orjson
++import pytest
++
++from app.mdl.sql_validator import validate_wren_sql_against_manifest
++from app.model.error import ErrorCode, ErrorPhase, WrenError
++
++
++def _manifest_str(manifest: dict) -> str:
++    return base64.b64encode(orjson.dumps(manifest)).decode("utf-8")
++
++
++@pytest.fixture
++def manifest_str():
++    return _manifest_str(
++        {
++            "catalog": "semantic_catalog",
++            "schema": "semantic_schema",
++            "models": [
++                {
++                    "name": "model_alpha",
++                    "columns": [
++                        {"name": "entity_id", "type": "integer"},
++                        {"name": "metric_value", "type": "integer"},
++                        {"name": "event_date", "type": "date"},
++                    ],
++                },
++                {
++                    "name": "model_beta",
++                    "columns": [
++                        {"name": "entity_id", "type": "integer"},
++                        {"name": "category_name", "type": "varchar"},
++                    ],
++                },
++            ],
++            "relationships": [
++                {
++                    "name": "relationship_alpha_beta",
++                    "models": ["model_alpha", "model_beta"],
++                    "condition": "model_alpha.entity_id = model_beta.entity_id",
++                    "joinType": "MANY_TO_ONE",
++                }
++            ],
++            "views": [
++                {
++                    "name": "view_alpha",
++                    "columns": [
++                        {"name": "category_name", "type": "varchar"},
++                        {"name": "metric_value", "type": "integer"},
++                    ],
++                }
++            ],
++            "metrics": [
++                {
++                    "name": "metric_alpha",
++                    "measure": [
++                        {"name": "total_value", "type": "integer"},
++                    ],
++                    "dimension": [
++                        {"name": "category_name", "type": "varchar"},
++                    ],
++                }
++            ],
++        }
++    )
++
++
++def test_validate_wren_sql_accepts_manifest_models_columns_and_aliases(manifest_str):
++    validate_wren_sql_against_manifest(
++        manifest_str,
++        """
++        SELECT
++            a.entity_id,
++            b.category_name,
++            SUM(a.metric_value) AS total_value
++        FROM semantic_catalog.semantic_schema.model_alpha AS a
++        JOIN model_beta AS b ON a.entity_id = b.entity_id
++        WHERE a.event_date >= DATE '2026-01-01'
++        GROUP BY a.entity_id, b.category_name
++        ORDER BY total_value DESC
++        """,
++    )
++
++
++def test_validate_wren_sql_accepts_views_and_metrics(manifest_str):
++    validate_wren_sql_against_manifest(
++        manifest_str,
++        "SELECT category_name, metric_value FROM view_alpha",
++    )
++    validate_wren_sql_against_manifest(
++        manifest_str,
++        "SELECT category_name, total_value FROM metric_alpha",
++    )
++
++
++def test_validate_wren_sql_rejects_unknown_relation_before_execution(manifest_str):
++    with pytest.raises(WrenError) as error:
++        validate_wren_sql_against_manifest(
++            manifest_str,
++            "SELECT entity_id FROM missing_model",
++        )
++
++    assert error.value.error_code == ErrorCode.INVALID_SQL
++    assert error.value.phase == ErrorPhase.VALIDATION
++    assert "missing_model" not in error.value.message
++
++
++def test_validate_wren_sql_rejects_unknown_column_before_execution(manifest_str):
++    with pytest.raises(WrenError) as error:
++        validate_wren_sql_against_manifest(
++            manifest_str,
++            "SELECT missing_column FROM model_alpha",
++        )
++
++    assert error.value.error_code == ErrorCode.INVALID_SQL
++    assert error.value.phase == ErrorPhase.VALIDATION
++    assert "missing_column" not in error.value.message
++
++
++def test_validate_wren_sql_does_not_reject_derived_cte_columns(manifest_str):
++    validate_wren_sql_against_manifest(
++        manifest_str,
++        """
++        WITH scoped AS (
++            SELECT category_name, SUM(metric_value) AS scoped_total
++            FROM model_alpha
++            JOIN model_beta ON model_alpha.entity_id = model_beta.entity_id
++            GROUP BY category_name
++        )
++        SELECT category_name, scoped_total FROM scoped
++        """,
++    )
++
++
++def test_validate_wren_sql_rejects_invalid_column_inside_cte(manifest_str):
++    with pytest.raises(WrenError):
++        validate_wren_sql_against_manifest(
++            manifest_str,
++            """
++            WITH scoped AS (
++                SELECT invalid_metric AS scoped_total
++                FROM model_alpha
++            )
++            SELECT scoped_total FROM scoped
++            """,
++        )
+-- 
+2.53.0.windows.2
