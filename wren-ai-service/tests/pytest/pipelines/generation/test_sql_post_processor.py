@@ -219,6 +219,56 @@ async def test_post_processor_rejects_unretrieved_column_before_engine_validatio
 
 
 @pytest.mark.asyncio
+async def test_post_processor_validates_qualified_column_against_its_relation():
+    processor = SQLGenPostProcessor(engine=_NoopEngine())
+
+    result = await processor.run(
+        [
+            (
+                '{"sql": "SELECT \\"customer\\".\\"order_date\\" '
+                'FROM \\"customer\\""}'
+            )
+        ],
+        schema_grounding=(
+            '- model/table: "order_model"\n'
+            "  columns:\n"
+            '    - "order_date"\n'
+            '- model/table: "customer"\n'
+            "  columns:\n"
+            '    - "customer_name"'
+        ),
+    )
+
+    invalid = result["invalid_generation_result"]
+    assert invalid["type"] == "SCHEMA_GROUNDING"
+    assert '"customer.order_date"' in invalid["error"]
+    assert '"customer_name"' in invalid["error"]
+
+
+@pytest.mark.asyncio
+async def test_post_processor_allows_qualified_column_on_grounded_alias():
+    engine = _CapturingEngine()
+    processor = SQLGenPostProcessor(engine=engine)
+
+    result = await processor.run(
+        [
+            (
+                '{"sql": "SELECT o.\\"order_date\\" '
+                'FROM \\"order_model\\" AS o"}'
+            )
+        ],
+        schema_grounding=(
+            '- model/table: "order_model"\n'
+            "  columns:\n"
+            '    - "order_date"'
+        ),
+    )
+
+    assert result["invalid_generation_result"] == {}
+    assert engine.execute_kwargs is not None
+
+
+@pytest.mark.asyncio
 async def test_post_processor_allows_output_aliases_in_order_by():
     engine = _CapturingEngine()
     processor = SQLGenPostProcessor(engine=engine)

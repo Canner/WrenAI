@@ -5,8 +5,8 @@ from typing import Any
 from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack.components.builders.prompt_builder import PromptBuilder
-from langfuse.decorators import observe
 
+from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
@@ -49,6 +49,7 @@ You are a great Wren SQL expert. Now you are given database schema, SQL generati
 please carefully review the request and then generate a new SQL query grounded in the database schema.
 Use the original SQL query only as intent context. Do not preserve table or column names from it unless they appear in the database schema.
 While generating the new SQL query, make sure to use the database schema to generate the SQL query.
+When the original SQL was rejected for schema grounding, ignore it completely and regenerate from the user question, retrieved metadata, and configured datasource dialect only.
 
 {text_to_sql_rules}
 
@@ -126,6 +127,7 @@ The reasoning text is non-executable intent context only. Do not copy table name
 Original SQL query: {{ sql }}
 
 Use DATABASE SCHEMA and RETRIEVED EXECUTABLE SCHEMA as the only sources for executable table and column identifiers. The original SQL and reasoning plan can explain intent, but they must not introduce identifiers that are absent from DATABASE SCHEMA.
+Choose the FROM model/table from the retrieved schema only. Add WHERE only for requested filters or time ranges that map to retrieved columns. Add GROUP BY only for requested totals, counts, distributions, comparisons, or trends. Add ORDER BY only for ranking, sorting, recent/latest, or deterministic LIMIT requests. Use JOIN only when multiple retrieved models are required and the retrieved schema declares the relationship; otherwise answer from one model when possible.
 Think through the request silently. Return only the final JSON SQL response.
 """
 

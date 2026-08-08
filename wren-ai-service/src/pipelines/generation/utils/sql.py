@@ -1,5 +1,6 @@
 import logging
 import re
+from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 import aiohttp
@@ -24,6 +25,24 @@ _SCHEMA_GROUNDING_TABLE_RE = re.compile(r'-\s*model/table:\s*"([^"]+)"')
 _SCHEMA_GROUNDING_COLUMN_RE = re.compile(r'^\s*-\s*"([^"]+)"\s*$', re.MULTILINE)
 _RELATION_KEYWORDS = {"FROM", "JOIN"}
 _IGNORED_RELATION_FUNCTIONS = {"UNNEST"}
+
+
+@dataclass(frozen=True)
+class _SchemaGroundingContract:
+    relation_columns: dict[str, set[str]] = field(default_factory=dict)
+    relationship_constraints: tuple[str, ...] = ()
+
+    @property
+    def relation_names(self) -> set[str]:
+        return set(self.relation_columns)
+
+    @property
+    def column_names(self) -> set[str]:
+        return {
+            column_name
+            for column_names in self.relation_columns.values()
+            for column_name in column_names
+        }
 
 
 def _strip_identifier_quotes(identifier: str) -> str:
@@ -397,24 +416,311 @@ def _extract_column_names(sql: str) -> set[str]:
     return column_names
 
 
-def _allowed_relation_names(schema_grounding: str | None) -> set[str]:
+def _parse_schema_grounding_contract(
+    schema_grounding: str | None,
+) -> _SchemaGroundingContract:
     if not schema_grounding:
-        return set()
+        return _SchemaGroundingContract()
 
-    return {
-        _strip_identifier_quotes(match.group(1))
-        for match in _SCHEMA_GROUNDING_TABLE_RE.finditer(schema_grounding)
-    }
+    relation_columns: dict[str, set[str]] = {}
+    relationship_constraints: list[str] = []
+    current_relation = ""
+    current_section = ""
+
+    for raw_line in schema_grounding.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        table_match = _SCHEMA_GROUNDING_TABLE_RE.match(line)
+        if table_match:
+            current_relation = _strip_identifier_quotes(table_match.group(1))
+            relation_columns.setdefault(current_relation, set())
+            current_section = ""
+            continue
+
+        if line == "columns:":
+            current_section = "columns"
+            continue
+
+        if line == "relationships:":
+            current_section = "relationships"
+            continue
+
+        if current_section == "columns" and current_relation:
+            column_match = _SCHEMA_GROUNDING_COLUMN_RE.match(raw_line)
+            if column_match:
+                relation_columns[current_relation].add(
+                    _strip_identifier_quotes(column_match.group(1))
+                )
+            continue
+
+        if current_section == "relationships" and line.startswith("- "):
+            relationship_constraints.append(line[2:].strip())
+
+    return _SchemaGroundingContract(
+        relation_columns=relation_columns,
+        relationship_constraints=tuple(relationship_constraints),
+    )
+
+
+def _allowed_relation_names(schema_grounding: str | None) -> set[str]:
+    return _parse_schema_grounding_contract(schema_grounding).relation_names
 
 
 def _allowed_column_names(schema_grounding: str | None) -> set[str]:
-    if not schema_grounding:
+    return _parse_schema_grounding_contract(schema_grounding).column_names
+
+
+def _add_relation_aliases_from_identifier(
+    relation_aliases: dict[str, str],
+    identifier: Identifier,
+    cte_names: set[str],
+) -> None:
+    child_tokens = [token for token in identifier.tokens if not _is_ignored_token(token)]
+    if child_tokens and isinstance(child_tokens[0], Parenthesis):
+        if _contains_select(child_tokens[0]):
+            relation_aliases.update(
+                _extract_relation_aliases_from_tokens(child_tokens[0], cte_names)
+            )
+        return
+
+    relation_name = identifier.get_real_name()
+    if not relation_name:
+        return
+
+    relation_name = _strip_identifier_quotes(relation_name)
+    if not relation_name or relation_name in cte_names:
+        return
+
+    relation_aliases[relation_name] = relation_name
+    alias = identifier.get_alias()
+    if alias:
+        relation_aliases[_strip_identifier_quotes(alias)] = relation_name
+
+
+def _extract_relation_aliases_from_tokens(
+    token_list: TokenList,
+    cte_names: set[str],
+) -> dict[str, str]:
+    relation_aliases: dict[str, str] = {}
+    expect_relation = False
+
+    for token in token_list.tokens:
+        if _is_ignored_token(token):
+            continue
+
+        if isinstance(token, Parenthesis):
+            if _contains_select(token):
+                relation_aliases.update(
+                    _extract_relation_aliases_from_tokens(token, cte_names)
+                )
+            if expect_relation:
+                expect_relation = False
+            continue
+
+        if _is_relation_keyword(token):
+            expect_relation = True
+            continue
+
+        if expect_relation:
+            if isinstance(token, IdentifierList):
+                for identifier in token.get_identifiers():
+                    if isinstance(identifier, Identifier):
+                        _add_relation_aliases_from_identifier(
+                            relation_aliases, identifier, cte_names
+                        )
+                expect_relation = False
+                continue
+
+            if isinstance(token, Identifier):
+                _add_relation_aliases_from_identifier(
+                    relation_aliases, token, cte_names
+                )
+                expect_relation = False
+                continue
+
+            if token.ttype in Name:
+                relation_name = _strip_identifier_quotes(token.value)
+                if relation_name not in cte_names:
+                    relation_aliases[relation_name] = relation_name
+                expect_relation = False
+                continue
+
+            expect_relation = False
+
+        if isinstance(token, Identifier):
+            for child in token.tokens:
+                if isinstance(child, Parenthesis) and _contains_select(child):
+                    relation_aliases.update(
+                        _extract_relation_aliases_from_tokens(child, cte_names)
+                    )
+            continue
+
+        if isinstance(token, IdentifierList):
+            for identifier in token.get_identifiers():
+                if not isinstance(identifier, Identifier):
+                    continue
+                for child in identifier.tokens:
+                    if isinstance(child, Parenthesis) and _contains_select(child):
+                        relation_aliases.update(
+                            _extract_relation_aliases_from_tokens(child, cte_names)
+                        )
+
+    return relation_aliases
+
+
+def _extract_relation_aliases(sql: str) -> dict[str, str]:
+    relation_aliases: dict[str, str] = {}
+
+    for statement in sqlparse.parse(sql):
+        cte_names = _collect_cte_names(statement)
+        relation_aliases.update(
+            _extract_relation_aliases_from_tokens(statement, cte_names)
+        )
+
+    return relation_aliases
+
+
+def _extract_qualified_column_references_from_tokens(
+    token_list: TokenList,
+    cte_names: set[str],
+    select_aliases: set[str],
+) -> set[tuple[str, str]]:
+    qualified_columns: set[tuple[str, str]] = set()
+    expect_relation = False
+
+    for token in token_list.tokens:
+        if _is_ignored_token(token):
+            continue
+
+        if _is_relation_keyword(token):
+            expect_relation = True
+            continue
+
+        if expect_relation:
+            expect_relation = False
+            if isinstance(token, Identifier):
+                for child in token.tokens:
+                    if isinstance(child, Parenthesis) and _contains_select(child):
+                        qualified_columns.update(
+                            _extract_qualified_column_references_from_tokens(
+                                child,
+                                cte_names,
+                                select_aliases,
+                            )
+                        )
+            elif isinstance(token, Parenthesis) and _contains_select(token):
+                qualified_columns.update(
+                    _extract_qualified_column_references_from_tokens(
+                        token,
+                        cte_names,
+                        select_aliases,
+                    )
+                )
+            continue
+
+        if isinstance(token, IdentifierList):
+            for identifier in token.get_identifiers():
+                if isinstance(identifier, Identifier):
+                    qualified_columns.update(
+                        _extract_qualified_column_references_from_identifier(
+                            identifier,
+                            cte_names,
+                            select_aliases,
+                        )
+                    )
+            continue
+
+        if isinstance(token, Identifier):
+            qualified_columns.update(
+                _extract_qualified_column_references_from_identifier(
+                    token,
+                    cte_names,
+                    select_aliases,
+                )
+            )
+            continue
+
+        if isinstance(token, Function):
+            for child in token.tokens:
+                if isinstance(child, Parenthesis):
+                    qualified_columns.update(
+                        _extract_qualified_column_references_from_tokens(
+                            child,
+                            cte_names,
+                            select_aliases,
+                        )
+                    )
+            continue
+
+        if isinstance(token, Parenthesis) and _contains_select(token):
+            qualified_columns.update(
+                _extract_qualified_column_references_from_tokens(
+                    token,
+                    cte_names,
+                    select_aliases,
+                )
+            )
+
+    return qualified_columns
+
+
+def _extract_qualified_column_references_from_identifier(
+    identifier: Identifier,
+    cte_names: set[str],
+    select_aliases: set[str],
+) -> set[tuple[str, str]]:
+    child_tokens = [token for token in identifier.tokens if not _is_ignored_token(token)]
+    if child_tokens and isinstance(child_tokens[0], Parenthesis):
+        if _contains_select(child_tokens[0]):
+            return _extract_qualified_column_references_from_tokens(
+                child_tokens[0],
+                cte_names,
+                select_aliases,
+            )
         return set()
 
-    return {
-        _strip_identifier_quotes(match.group(1))
-        for match in _SCHEMA_GROUNDING_COLUMN_RE.finditer(schema_grounding)
-    }
+    for token in child_tokens:
+        if isinstance(token, Function):
+            return _extract_qualified_column_references_from_tokens(
+                token,
+                cte_names,
+                select_aliases,
+            )
+
+    parent_name = identifier.get_parent_name()
+    column_name = identifier.get_real_name()
+    if not parent_name or not column_name:
+        return set()
+
+    parent_name = _strip_identifier_quotes(parent_name)
+    column_name = _strip_identifier_quotes(column_name)
+    if (
+        column_name in select_aliases
+        or parent_name in cte_names
+        or column_name in cte_names
+    ):
+        return set()
+
+    return {(parent_name, column_name)}
+
+
+def _extract_qualified_column_references(sql: str) -> set[tuple[str, str]]:
+    qualified_columns: set[tuple[str, str]] = set()
+
+    for statement in sqlparse.parse(sql):
+        cte_names = _collect_cte_names(statement)
+        select_aliases = _collect_select_aliases(statement)
+        qualified_columns.update(
+            _extract_qualified_column_references_from_tokens(
+                statement,
+                cte_names,
+                select_aliases,
+            )
+        )
+
+    return qualified_columns
 
 
 def _schema_grounding_failure(
@@ -422,7 +728,8 @@ def _schema_grounding_failure(
     schema_grounding: str | None,
     data_source: str,
 ) -> Dict[str, Any] | None:
-    allowed_relation_names = _allowed_relation_names(schema_grounding)
+    contract = _parse_schema_grounding_contract(schema_grounding)
+    allowed_relation_names = contract.relation_names
     if not allowed_relation_names:
         return None
 
@@ -433,20 +740,54 @@ def _schema_grounding_failure(
         if relation_name not in allowed_relation_names
     )
     if not ungrounded_relation_names:
-        allowed_column_names = _allowed_column_names(schema_grounding)
+        allowed_column_names = contract.column_names
         if not allowed_column_names:
             return None
 
         referenced_column_names = _extract_column_names(sql)
+        relation_aliases = _extract_relation_aliases(sql)
+        qualified_column_references = _extract_qualified_column_references(sql)
+        ungrounded_qualified_columns = []
+        for qualifier, column_name in sorted(qualified_column_references):
+            relation_name = relation_aliases.get(qualifier, qualifier)
+            if relation_name not in contract.relation_columns:
+                ungrounded_qualified_columns.append(f"{qualifier}.{column_name}")
+                continue
+            if column_name not in contract.relation_columns[relation_name]:
+                ungrounded_qualified_columns.append(f"{qualifier}.{column_name}")
+
+        referenced_query_relations = [
+            relation_name
+            for relation_name in referenced_relation_names
+            if relation_name in contract.relation_columns
+        ]
+        if len(referenced_query_relations) == 1:
+            allowed_query_column_names = contract.relation_columns[
+                referenced_query_relations[0]
+            ]
+        elif referenced_query_relations:
+            allowed_query_column_names = {
+                column_name
+                for relation_name in referenced_query_relations
+                for column_name in contract.relation_columns[relation_name]
+            }
+        else:
+            allowed_query_column_names = allowed_column_names
+
         ungrounded_column_names = sorted(
             column_name
             for column_name in referenced_column_names
-            if column_name not in allowed_column_names
+            if column_name not in allowed_query_column_names
+        )
+        ungrounded_column_names = sorted(
+            set(ungrounded_column_names + ungrounded_qualified_columns)
         )
         if not ungrounded_column_names:
             return None
 
-        allowed_columns = ", ".join(f'"{name}"' for name in sorted(allowed_column_names))
+        allowed_columns = ", ".join(
+            f'"{name}"' for name in sorted(allowed_query_column_names)
+        )
         ungrounded_columns = ", ".join(
             f'"{name}"' for name in ungrounded_column_names
         )
@@ -1045,7 +1386,14 @@ Given the user's question and retrieved database schema, generate one grounded W
 4. YOU MUST treat the reasoning plan as non-executable intent context only if the section of REASONING PLAN is available in user's input. Do not copy identifiers, functions, literal values, SQL fragments, template markers, or placeholders from the reasoning plan. Choose every executable identifier only from DATABASE SCHEMA or RETRIEVED EXECUTABLE SCHEMA, and every function only from SQL FUNCTIONS.
 5. For date/time filters, use normal comparisons or exact function/date syntax from SQL KNOWLEDGE or SQL FUNCTIONS. Do not invent date arithmetic, INTERVAL expressions, type-cast functions, or connector-specific date functions that are not shown in SQL KNOWLEDGE or SQL FUNCTIONS.
 6. If the question, SQL SAMPLES, USER INSTRUCTIONS, or REASONING PLAN mention a table or column name that is not declared in DATABASE SCHEMA or RETRIEVED EXECUTABLE SCHEMA, treat that text as business context only and choose the exact matching identifier from the retrieved schema.
-7. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
+7. Select the FROM model/table only from the currently retrieved DATABASE SCHEMA or RETRIEVED EXECUTABLE SCHEMA. Never create a generic table name from the user's words.
+8. Add WHERE only when the question asks for filters, search values, date/time ranges, or constraints that map to an exact retrieved column.
+9. Add GROUP BY only when the question asks for totals, counts, distributions, breakdowns, trends, comparisons, or any aggregate by one or more dimensions.
+10. Add ORDER BY only when the question asks for ranking, top/bottom, sorting, first/last, recent/latest, or when ordering is needed to make a requested LIMIT deterministic.
+11. Use JOIN only when the answer needs columns from multiple retrieved models and DATABASE SCHEMA declares the exact relationship path. Do not join on guessed key names or similar-looking fields.
+12. If the request can be answered from one retrieved model/table, do not force a join.
+13. If the retrieved metadata does not contain a valid model, column, measure, relationship, function, or date/time field needed to answer the question, do not invent it.
+14. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {text_to_sql_rules}
 
@@ -1075,6 +1423,8 @@ def add_schema_grounding_to_system_prompt(
 ### RETRIEVED SCHEMA CONTRACT ###
 The following model/table and column identifiers are the only executable identifiers retrieved for the current user question.
 Use them exactly as written. Do not use any table or column name from the user question, history, examples, invalid SQL, error messages, comments, or physical source metadata unless it appears in this contract.
+Each column belongs only to the model/table it is listed under. If multiple model/tables are needed, use only the listed relationship constraints to connect them. If no listed relationship supports a requested multi-model query, do not invent a join predicate.
+Build clauses from this contract: FROM must use a listed model/table; WHERE must use listed columns required by the question; GROUP BY must use listed dimensions required by aggregates or distributions; ORDER BY must use listed columns or output aggregate aliases; JOIN must use listed relationships only.
 {schema_grounding.strip()}
 """
 

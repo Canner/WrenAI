@@ -1,42 +1,54 @@
 import pytest
 from haystack.components.builders.prompt_builder import PromptBuilder
 
+from src.pipelines.generation.followup_sql_generation import (
+    generate_sql_in_followup,
+    text_to_sql_with_followup_user_prompt_template,
+)
+from src.pipelines.generation.followup_sql_generation import (
+    prompt as build_followup_sql_generation_prompt,
+)
+from src.pipelines.generation.followup_sql_generation_reasoning import (
+    prompt as build_followup_sql_generation_reasoning_prompt,
+)
+from src.pipelines.generation.followup_sql_generation_reasoning import (
+    sql_generation_reasoning_user_prompt_template as followup_reasoning_prompt_template,
+)
 from src.pipelines.generation.sql_correction import (
     generate_sql_correction,
     get_sql_correction_system_prompt,
-    prompt as build_sql_correction_prompt,
     sql_correction_user_prompt_template,
 )
-from src.pipelines.generation.followup_sql_generation import (
-    generate_sql_in_followup,
-    prompt as build_followup_sql_generation_prompt,
-    text_to_sql_with_followup_user_prompt_template,
+from src.pipelines.generation.sql_correction import (
+    prompt as build_sql_correction_prompt,
 )
 from src.pipelines.generation.sql_generation import (
     generate_sql,
     get_sql_generation_system_prompt,
-    prompt as build_sql_generation_prompt,
     sql_generation_user_prompt_template,
+)
+from src.pipelines.generation.sql_generation import (
+    prompt as build_sql_generation_prompt,
 )
 from src.pipelines.generation.sql_generation_reasoning import (
     prompt as build_sql_generation_reasoning_prompt,
+)
+from src.pipelines.generation.sql_generation_reasoning import (
     sql_generation_reasoning_user_prompt_template,
 )
-from src.pipelines.generation.followup_sql_generation_reasoning import (
-    prompt as build_followup_sql_generation_reasoning_prompt,
-    sql_generation_reasoning_user_prompt_template as followup_reasoning_prompt_template,
+from src.pipelines.generation.sql_regeneration import (
+    get_sql_regeneration_system_prompt,
+    regenerate_sql,
+    sql_regeneration_user_prompt_template,
 )
 from src.pipelines.generation.sql_regeneration import (
-    regenerate_sql,
-    get_sql_regeneration_system_prompt,
     prompt as build_sql_regeneration_prompt,
-    sql_regeneration_user_prompt_template,
 )
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     add_schema_grounding_to_system_prompt,
+    sql_generation_reasoning_system_prompt,
 )
-from src.pipelines.generation.utils.sql import sql_generation_reasoning_system_prompt
 from src.pipelines.retrieval.sql_functions import SqlFunction
 from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 
@@ -56,6 +68,8 @@ def test_sql_generation_system_prompt_uses_schema_without_extra_catalog_layer():
     assert '"query"' in prompt
     assert "DON'T USE INTERVAL" not in prompt
     assert "Never invent unquoted interval forms such as INTERVAL 7 DAY" in prompt
+    assert "Select the FROM model/table only from the currently retrieved" in prompt
+    assert "Use JOIN only when the answer needs columns from multiple retrieved models" in prompt
 
 
 def test_sql_generation_system_prompt_includes_engine_date_time_knowledge():
@@ -93,6 +107,8 @@ def test_schema_grounding_can_be_added_to_system_prompt():
     assert '- model/table: "model_1"' in prompt
     assert '- "attribute_1"' in prompt
     assert "only executable identifiers retrieved" in prompt
+    assert "Each column belongs only to the model/table it is listed under" in prompt
+    assert "JOIN must use listed relationships only" in prompt
 
 
 def test_sql_correction_system_prompt_uses_current_schema_for_repair():
@@ -199,6 +215,8 @@ def test_sql_generation_prompt_omits_sample_sql_body():
     assert '- model/table: "dbo_xStageNewOrders"' in built_prompt
     assert '- "ShipCountry"' in built_prompt
     assert "Use DATABASE SCHEMA and RETRIEVED EXECUTABLE SCHEMA" in built_prompt
+    assert "Choose the FROM model/table from the retrieved schema only" in built_prompt
+    assert "Use JOIN only when multiple retrieved models are required" in built_prompt
     assert "Return only the final JSON SQL response" in built_prompt
     assert "Let's think step by step" not in built_prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in built_prompt
@@ -352,6 +370,7 @@ def test_sql_correction_prompt_uses_failed_sql_with_user_question():
     assert "RETRIEVED EXECUTABLE SCHEMA" in built_prompt
     assert '- model/table: "model_1"' in built_prompt
     assert "Use DATABASE SCHEMA and RETRIEVED EXECUTABLE SCHEMA" in built_prompt
+    assert "Choose the FROM model/table from the retrieved schema only" in built_prompt
     assert "Return only the final JSON SQL response" in built_prompt
     assert "Let's think step by step" not in built_prompt
     assert "DIAGNOSTIC CONTEXT" not in built_prompt

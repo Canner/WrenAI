@@ -6,8 +6,8 @@ from hamilton import base
 from hamilton.async_driver import AsyncDriver
 from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
-from langfuse.decorators import observe
 
+from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, LLMProvider
@@ -114,6 +114,7 @@ Error Message: {{ invalid_generation_result.error }}
 Use DATABASE SCHEMA and RETRIEVED EXECUTABLE SCHEMA as the only sources for executable table and column identifiers. The invalid SQL and error message explain what failed, but they must not introduce identifiers that are absent from the retrieved schema.
 If Validation Type is SCHEMA_GROUNDING, regenerate the SQL from the user's question and retrieved schema. Do not reuse table names, column names, aliases, or SQL fragments from the rejected SQL.
 If the invalid SQL contains a table or column name that is not listed as a retrieved model/table or column identifier, replace it using the retrieved schema rather than preserving it.
+Choose the FROM model/table from the retrieved schema only. Add WHERE only for requested filters or time ranges that map to retrieved columns. Add GROUP BY only for requested totals, counts, distributions, comparisons, or trends. Add ORDER BY only for ranking, sorting, recent/latest, or deterministic LIMIT requests. Use JOIN only when multiple retrieved models are required and the retrieved schema declares the relationship; otherwise answer from one model when possible.
 Think through the error silently. Return only the final JSON SQL response.
 """
 
