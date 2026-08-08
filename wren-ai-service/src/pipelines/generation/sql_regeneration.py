@@ -15,6 +15,7 @@ from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
     construct_instructions,
+    get_additional_sql_instructions,
     get_calculated_field_instructions,
     get_json_field_instructions,
     get_metric_instructions,
@@ -31,15 +32,26 @@ def get_sql_regeneration_system_prompt(
     sql_knowledge: SqlKnowledge | None = None,
 ) -> str:
     text_to_sql_rules = get_text_to_sql_rules(sql_knowledge)
+    additional_sql_instructions = get_additional_sql_instructions(sql_knowledge)
+    additional_sql_instructions_section = (
+        f"""
+### SQL KNOWLEDGE ###
+{additional_sql_instructions}
+"""
+        if additional_sql_instructions
+        else ""
+    )
 
     return f"""
 ### TASK ###
-You are a great ANSI SQL expert. Now you are given database schema, SQL generation reasoning and an original SQL query,
+You are a great Wren SQL expert. Now you are given database schema, SQL generation reasoning and an original SQL query,
 please carefully review the request and then generate a new SQL query grounded in the database schema.
 Use the original SQL query only as intent context. Do not preserve table or column names from it unless they appear in the database schema.
 While generating the new SQL query, make sure to use the database schema to generate the SQL query.
 
 {text_to_sql_rules}
+
+{additional_sql_instructions_section}
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be one JSON object and nothing else. Do not return markdown, explanations, reasoning, or a query plan object.

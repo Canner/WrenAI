@@ -34,6 +34,8 @@ from src.pipelines.generation.sql_regeneration import (
 )
 from src.pipelines.generation.utils.sql import SQL_GENERATION_MODEL_KWARGS
 from src.pipelines.generation.utils.sql import sql_generation_reasoning_system_prompt
+from src.pipelines.retrieval.sql_functions import SqlFunction
+from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 
 
 def test_sql_generation_system_prompt_uses_schema_without_extra_catalog_layer():
@@ -49,6 +51,33 @@ def test_sql_generation_system_prompt_uses_schema_without_extra_catalog_layer():
     assert 'ONLY USE "*" if the user query asks' in prompt
     assert 'exactly one key named "sql"' in prompt
     assert '"query"' in prompt
+    assert "DON'T USE INTERVAL" not in prompt
+    assert "Never invent unquoted interval forms such as INTERVAL 7 DAY" in prompt
+
+
+def test_sql_generation_system_prompt_includes_engine_date_time_knowledge():
+    sql_knowledge = SqlKnowledge(
+        {
+            "text_to_sql_rule": "Use Wren SQL from the engine.",
+            "instructions": {
+                "date_and_time_functionality": (
+                    "Use `CURRENT_DATE` to get the current date.\n"
+                    "Use `DATE_TRUNC('<part>', <timestamp>)` to truncate a timestamp.\n"
+                    "Use `<date_column> + INTERVAL '7' days` for intervals."
+                ),
+                "calculated_field_instructions": "calculated field text",
+            },
+        }
+    )
+
+    prompt = get_sql_generation_system_prompt(sql_knowledge)
+
+    assert "### SQL KNOWLEDGE ###" in prompt
+    assert "Date And Time Functionality" in prompt
+    assert "CURRENT_DATE" in prompt
+    assert "DATE_TRUNC" in prompt
+    assert "INTERVAL '7' days" in prompt
+    assert "calculated field text" not in prompt
 
 
 def test_sql_correction_system_prompt_uses_current_schema_for_repair():
@@ -62,6 +91,22 @@ def test_sql_correction_system_prompt_uses_current_schema_for_repair():
     assert "return null for sql" not in prompt
     assert 'exactly one key named "sql"' in prompt
     assert '"sql_function"' in prompt
+
+
+def test_sql_correction_system_prompt_includes_engine_date_time_knowledge():
+    sql_knowledge = SqlKnowledge(
+        {
+            "text_to_sql_rule": "Use Wren SQL from the engine.",
+            "instructions": {
+                "date_and_time_functionality": "Use CAST(<expr> AS DATE) for date casts.",
+            },
+        }
+    )
+
+    prompt = get_sql_correction_system_prompt(sql_knowledge)
+
+    assert "### SQL KNOWLEDGE ###" in prompt
+    assert "CAST(<expr> AS DATE)" in prompt
 
 
 def test_sql_regeneration_system_prompt_allows_standard_aggregates_without_sql_functions():
@@ -143,6 +188,44 @@ def test_sql_generation_prompt_omits_sample_sql_body():
     assert "Let's think step by step" not in built_prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in built_prompt
     assert "WREN SQL IDENTIFIER CONTRACT" not in built_prompt
+
+
+def test_sql_generation_prompt_includes_configured_dialect_and_functions():
+    result = build_sql_generation_prompt(
+        query="show orders from last week",
+        documents=['CREATE TABLE dbo_xStageNewOrders (OrderDate TIMESTAMP)'],
+        schema_grounding=(
+            '- model/table: "dbo_xStageNewOrders"\n'
+            "  columns:\n"
+            '    - "OrderDate"'
+        ),
+        prompt_builder=PromptBuilder(template=sql_generation_user_prompt_template),
+        sql_functions=[
+            SqlFunction(
+                {
+                    "name": "date_trunc",
+                    "param_types": ["varchar", "timestamp"],
+                    "return_type": "timestamp",
+                }
+            ),
+            SqlFunction(
+                {
+                    "name": "current_date",
+                    "param_types": [],
+                    "return_type": "date",
+                }
+            ),
+        ],
+        data_source="trino",
+    )
+
+    built_prompt = result["prompt"]
+
+    assert "### SQL DIALECT ###" in built_prompt
+    assert "Configured data source: trino" in built_prompt
+    assert "date_trunc($0: varchar, $1: timestamp) -> timestamp" in built_prompt
+    assert "current_date(any) -> date" in built_prompt
+    assert "Do not use a function, cast style, interval literal" in built_prompt
 
 
 def test_sql_generation_reasoning_prompt_omits_sample_sql_body():
@@ -259,6 +342,42 @@ def test_sql_correction_prompt_uses_failed_sql_with_user_question():
     assert "DIAGNOSTIC CONTEXT" not in built_prompt
     assert "EXECUTABLE WREN IDENTIFIER CATALOG" not in built_prompt
     assert "WREN SQL IDENTIFIER CONTRACT" not in built_prompt
+
+
+def test_sql_correction_prompt_includes_configured_dialect_for_date_repair():
+    result = build_sql_correction_prompt(
+        documents=["CREATE TABLE dbo_xStageNewOrders (OrderDate TIMESTAMP)"],
+        schema_grounding=(
+            '- model/table: "dbo_xStageNewOrders"\n'
+            "  columns:\n"
+            '    - "OrderDate"'
+        ),
+        invalid_generation_result={
+            "sql": (
+                'SELECT * FROM "dbo_xStageNewOrders" '
+                'WHERE "OrderDate" >= DATE(NOW()) - INTERVAL 7 DAY'
+            ),
+            "error": "mismatched input '7'",
+        },
+        query="show orders from last week",
+        prompt_builder=PromptBuilder(template=sql_correction_user_prompt_template),
+        sql_functions=[
+            SqlFunction(
+                {
+                    "name": "date_trunc",
+                    "param_types": ["varchar", "timestamp"],
+                    "return_type": "timestamp",
+                }
+            )
+        ],
+        data_source="trino",
+    )
+
+    built_prompt = result["prompt"]
+
+    assert "Configured data source: trino" in built_prompt
+    assert "DATE(NOW()) - INTERVAL 7 DAY" in built_prompt
+    assert "Do not preserve unsupported functions" in built_prompt
 
 
 def test_sql_regeneration_prompt_omits_sample_sql_body():

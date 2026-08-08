@@ -57,6 +57,13 @@ The following identifiers come from Ask Retrieval for this question. Use these e
 {% endfor %}
 {% endif %}
 
+{% if data_source %}
+### SQL DIALECT ###
+Configured data source: {{ data_source }}.
+Generate Wren SQL that dry-plans and dry-runs successfully for this configured data source through Wren Engine/IBIS.
+Follow SQL KNOWLEDGE and SQL FUNCTIONS for this data source. Do not use a function, cast style, interval literal, or date/time expression merely because it exists in another database dialect.
+{% endif %}
+
 {% if sql_samples %}
 ### SQL SAMPLES ###
 These samples are confirmed question examples for this project deployment. Use them for intent and style only. They are not a source of executable SQL identifiers.
@@ -98,6 +105,7 @@ def prompt(
     has_json_field: bool = False,
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
+    data_source: str | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
@@ -120,6 +128,7 @@ def prompt(
         ),
         sql_samples=sql_samples,
         sql_functions=sql_functions,
+        data_source=data_source,
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 

@@ -16,6 +16,7 @@ from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
     construct_instructions,
+    get_additional_sql_instructions,
     get_text_to_sql_rules,
 )
 from src.pipelines.retrieval.sql_functions import SqlFunction
@@ -27,10 +28,19 @@ logger = logging.getLogger("wren-ai-service")
 
 def get_sql_correction_system_prompt(sql_knowledge: SqlKnowledge | None = None) -> str:
     text_to_sql_rules = get_text_to_sql_rules(sql_knowledge)
+    additional_sql_instructions = get_additional_sql_instructions(sql_knowledge)
+    additional_sql_instructions_section = (
+        f"""
+### SQL KNOWLEDGE ###
+{additional_sql_instructions}
+"""
+        if additional_sql_instructions
+        else ""
+    )
 
     return f"""
 ### TASK ###
-You are an ANSI SQL expert with exceptional logical thinking skills and debugging skills, you need to fix the syntactically incorrect Wren SQL query.
+You are a Wren SQL expert with exceptional logical thinking skills and debugging skills, you need to fix the syntactically incorrect Wren SQL query for the configured data source.
 
 ### SQL CORRECTION INSTRUCTIONS ###
 
@@ -41,6 +51,8 @@ You are an ANSI SQL expert with exceptional logical thinking skills and debuggin
 Make sure you follow the SQL Rules strictly.
 
 {text_to_sql_rules}
+
+{additional_sql_instructions_section}
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be one JSON object and nothing else. Do not return markdown, explanations, reasoning, or a query plan object.
@@ -74,6 +86,13 @@ The following identifiers come from Ask Retrieval for this question. Use these e
 {% endfor %}
 {% endif %}
 
+{% if data_source %}
+### SQL DIALECT ###
+Configured data source: {{ data_source }}.
+Correct the SQL so it dry-plans and dry-runs successfully for this configured data source through Wren Engine/IBIS.
+Follow SQL KNOWLEDGE and SQL FUNCTIONS for this data source. Do not preserve unsupported functions, cast styles, interval literals, or date/time expressions from the failed SQL.
+{% endif %}
+
 {% if instructions %}
 ### USER INSTRUCTIONS ###
 {% for instruction in instructions %}
@@ -102,6 +121,7 @@ def prompt(
     schema_grounding: str | None = None,
     instructions: list[dict] | None = None,
     sql_functions: list[SqlFunction] | None = None,
+    data_source: str | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         documents=documents,
@@ -112,6 +132,7 @@ def prompt(
             instructions=instructions,
         ),
         sql_functions=sql_functions,
+        data_source=data_source,
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 

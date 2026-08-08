@@ -204,6 +204,7 @@ class SQLGenPostProcessor:
                             "type": "DRY_PLAN",
                             "error": error_message,
                             "correlation_id": "",
+                            "data_source": data_source,
                         }
                         return valid_generation_result, invalid_generation_result
 
@@ -213,6 +214,7 @@ class SQLGenPostProcessor:
                         "type": "DRY_PLAN",
                         "error": error_message,
                         "correlation_id": "",
+                        "data_source": data_source,
                     }
                     return valid_generation_result, invalid_generation_result
 
@@ -247,6 +249,7 @@ class SQLGenPostProcessor:
                         "type": "DRY_RUN",
                         "error": error_message,
                         "correlation_id": addition.get("correlation_id", ""),
+                        "data_source": data_source,
                     }
             elif use_dry_run:
                 success, _, addition = await self._engine.execute_sql(
@@ -280,6 +283,7 @@ class SQLGenPostProcessor:
                         "type": "DRY_RUN",
                         "error": error_message,
                         "correlation_id": addition.get("correlation_id", ""),
+                        "data_source": data_source,
                     }
             else:
                 has_data, _, addition = await self._engine.execute_sql(
@@ -318,6 +322,7 @@ class SQLGenPostProcessor:
                         "type": preview_data_status,
                         "error": error_message,
                         "correlation_id": addition.get("correlation_id", ""),
+                        "data_source": data_source,
                     }
 
         return valid_generation_result, invalid_generation_result
@@ -342,8 +347,8 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - Preserve every deployed table and column identifier exactly as it appears in DATABASE SCHEMA, including spaces, digits, underscores, case, and punctuation, then wrap that exact identifier in double quotes in SQL.
 - Do not convert deployed identifiers into display-friendly variants by replacing spaces with underscores, removing prefixes, changing case, shortening names, or expanding abbreviations.
 - For case-insensitive comparisons, use only functions or operators that are supported by SQL FUNCTIONS for this request. If SQL FUNCTIONS does not provide a safe case-insensitive function, use a normal equality or LIKE comparison on an exact schema column.
-- For date/time questions, first choose an exact schema column whose type or metadata clearly represents the requested time concept. Use only date/time functions and casts whose exact syntax is provided in SQL FUNCTIONS for this request.
-- If the question asks for a specific or relative date, generate a bounded date/time filter only when the exact date/time schema column is available and the predicate can be expressed with normal SQL comparison syntax or exact SQL FUNCTIONS syntax. If either the column or required operation is missing, do not invent a field or function.
+- For date/time questions, first choose an exact schema column whose type or metadata clearly represents the requested time concept. Use only date/time functions, casts, literals, and interval syntax whose exact syntax is provided in SQL KNOWLEDGE or SQL FUNCTIONS for this request.
+- If the question asks for a specific or relative date, generate a bounded date/time filter only when the exact date/time schema column is available and the predicate can be expressed with normal SQL comparison syntax, SQL KNOWLEDGE syntax, or exact SQL FUNCTIONS syntax. If either the column or required operation is missing, do not invent a field or function.
 - For explicit calendar month and year requests, use an inclusive lower bound and exclusive upper bound on the exact date/time column, rather than formatting the column into text.
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
@@ -359,7 +364,7 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - DON'T USE "FILTER(WHERE <expression>)" clause in the generated SQL query.
 - DON'T USE "EXTRACT(EPOCH FROM <expression>)" clause in the generated SQL query.
 - DON'T USE "EXTRACT()" function with INTERVAL data types as arguments
-- DON'T USE INTERVAL or generate INTERVAL-like expression in the generated SQL query.
+- Use INTERVAL only when SQL KNOWLEDGE or SQL FUNCTIONS provides the exact active-dialect syntax. Never invent unquoted interval forms such as INTERVAL 7 DAY.
 - DON'T USE "TO_CHAR" function in the generated SQL query.
 - DON'T USE unsupported non-standard statistical, date/time, or formatting functions.
 - Aggregate functions are not allowed in the WHERE clause. Instead, they belong in the HAVING clause, which is used to filter after aggregation.
@@ -525,8 +530,32 @@ def get_json_field_instructions(sql_knowledge: SqlKnowledge | None = None) -> st
     return _DEFAULT_JSON_FIELD_INSTRUCTIONS
 
 
+def get_additional_sql_instructions(sql_knowledge: SqlKnowledge | None = None) -> str:
+    if sql_knowledge is None:
+        return ""
+
+    instructions = getattr(sql_knowledge, "additional_instructions", {}) or {}
+    sections = []
+    for name, value in instructions.items():
+        if not isinstance(value, str) or not value.strip():
+            continue
+        title = name.replace("_", " ").title()
+        sections.append(f"#### {title} ####\n{value.strip()}")
+
+    return "\n\n".join(sections)
+
+
 def get_sql_generation_system_prompt(sql_knowledge: SqlKnowledge | None = None) -> str:
     text_to_sql_rules = get_text_to_sql_rules(sql_knowledge)
+    additional_sql_instructions = get_additional_sql_instructions(sql_knowledge)
+    additional_sql_instructions_section = (
+        f"""
+### SQL KNOWLEDGE ###
+{additional_sql_instructions}
+"""
+        if additional_sql_instructions
+        else ""
+    )
 
     return f"""
 You are a helpful assistant that converts natural language queries into Wren SQL queries.
@@ -539,11 +568,13 @@ Given the user's question and retrieved database schema, generate one grounded W
 2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
 3. YOU MUST REFER to the sql samples for intent and style only if the section of SQL SAMPLES is available in user's input. SQL samples are not a source of executable identifiers for the current query.
 4. YOU MUST treat the reasoning plan as non-executable intent context only if the section of REASONING PLAN is available in user's input. Do not copy identifiers, functions, literal values, SQL fragments, template markers, or placeholders from the reasoning plan. Choose every executable identifier only from DATABASE SCHEMA or RETRIEVED EXECUTABLE SCHEMA, and every function only from SQL FUNCTIONS.
-5. For date/time filters, use normal comparisons or exact function syntax from SQL FUNCTIONS. Do not invent date arithmetic, INTERVAL expressions, or connector-specific date functions that are not shown in SQL FUNCTIONS.
+5. For date/time filters, use normal comparisons or exact function/date syntax from SQL KNOWLEDGE or SQL FUNCTIONS. Do not invent date arithmetic, INTERVAL expressions, type-cast functions, or connector-specific date functions that are not shown in SQL KNOWLEDGE or SQL FUNCTIONS.
 6. If the question, SQL SAMPLES, USER INSTRUCTIONS, or REASONING PLAN mention a table or column name that is not declared in DATABASE SCHEMA or RETRIEVED EXECUTABLE SCHEMA, treat that text as business context only and choose the exact matching identifier from the retrieved schema.
 7. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {text_to_sql_rules}
+
+{additional_sql_instructions_section}
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be one JSON object and nothing else. Do not return markdown, explanations, reasoning, or a query plan object.

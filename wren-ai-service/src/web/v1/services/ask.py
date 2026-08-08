@@ -434,7 +434,7 @@ class AskService:
                 schema_grounding = build_schema_grounding_context(documents)
 
                 if not documents:
-                    logger.exception(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
+                    logger.warning(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
                     if not self._is_stopped(query_id, self._ask_results):
                         self._ask_results[query_id] = AskResultResponse(
                             status="failed",
@@ -643,6 +643,9 @@ class AskService:
                                     error_message=error_message,
                                     language=ask_request.configurations.language,
                                     schema_grounding=schema_grounding,
+                                    data_source=failed_dry_run_result.get(
+                                        "data_source"
+                                    ),
                                 ),
                                 get_pipeline_timeout_seconds(
                                     sql_diagnosis_pipeline,
@@ -717,7 +720,7 @@ class AskService:
                 results["ask_result"] = api_results
                 results["metadata"]["type"] = "TEXT_TO_SQL"
             else:
-                logger.exception(f"ask pipeline - NO_RELEVANT_SQL: {user_query}")
+                logger.warning(f"ask pipeline - NO_RELEVANT_SQL: {user_query}")
                 if not self._is_stopped(query_id, self._ask_results):
                     self._ask_results[query_id] = AskResultResponse(
                         status="failed",
