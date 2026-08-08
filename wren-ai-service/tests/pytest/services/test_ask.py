@@ -627,13 +627,9 @@ class _CapturingCorrectionPipeline:
         }
 
 
-class _FailingCorrectionPipeline:
-    def __init__(self):
-        self.calls = []
-
-    async def run(self, **kwargs):
-        self.calls.append(kwargs)
-        raise AssertionError("sql_correction should not run after regeneration succeeds")
+class _UnexpectedCorrectionPipeline:
+    async def run(self, **_):
+        raise AssertionError("sql_correction should not run after successful generation")
 
 
 class _CapturingRegenerationPipeline:
@@ -839,9 +835,9 @@ async def test_ask_schema_grounding_recovery_omits_hallucinated_sql():
 
 
 @pytest.mark.asyncio
-async def test_ask_regenerates_schema_grounding_failures_before_correction():
+async def test_ask_corrects_schema_grounding_failures_without_regeneration():
     regeneration = _CapturingRegenerationPipeline()
-    correction = _FailingCorrectionPipeline()
+    correction = _CapturingCorrectionPipeline()
     diagnosis = _FailingDiagnosisPipeline()
     generation = _SchemaGroundingSqlGenerationPipeline()
     ask_service = AskService(
@@ -873,9 +869,12 @@ async def test_ask_regenerates_schema_grounding_failures_before_correction():
     assert ask_result_response.status == "finished"
     assert ask_result_response.response[0].sql == MODEL_ALPHA_COUNT_SQL
     assert diagnosis.calls == []
-    assert correction.calls == []
-    assert regeneration.calls[0]["sql"] == ""
-    assert regeneration.calls[0]["schema_grounding"] == MODEL_ALPHA_ENTITY_GROUNDING
+    assert regeneration.calls == []
+    assert correction.calls[0]["schema_grounding"] == MODEL_ALPHA_ENTITY_GROUNDING
+    assert correction.calls[0]["invalid_generation_result"]["type"] == (
+        "SCHEMA_GROUNDING"
+    )
+    assert correction.calls[0]["invalid_generation_result"]["sql"] == ""
 
 
 @pytest.mark.asyncio
@@ -888,7 +887,7 @@ async def test_ask_uses_exact_retrieved_metadata_for_generation_context():
             "instructions_retrieval": _EmptyRetrievalPipeline(),
             "db_schema_retrieval": _PrunedSchemaRetrievalPipeline(),
             "sql_generation": generation,
-            "sql_correction": _FailingCorrectionPipeline(),
+            "sql_correction": _UnexpectedCorrectionPipeline(),
             "sql_diagnosis": _FailingDiagnosisPipeline(),
         },
         allow_intent_classification=False,
@@ -918,10 +917,10 @@ async def test_ask_uses_exact_retrieved_metadata_for_generation_context():
 
 
 @pytest.mark.asyncio
-async def test_ask_regenerates_no_relevant_sql_with_exact_retrieved_metadata():
+async def test_ask_corrects_no_relevant_sql_with_exact_retrieved_metadata():
     generation = _NoRelevantSqlGenerationPipeline()
     regeneration = _CapturingRegenerationPipeline()
-    correction = _FailingCorrectionPipeline()
+    correction = _CapturingCorrectionPipeline()
     ask_service = AskService(
         {
             "historical_question": _EmptyRetrievalPipeline(),
@@ -949,9 +948,11 @@ async def test_ask_regenerates_no_relevant_sql_with_exact_retrieved_metadata():
         AskResultRequest(query_id=query_id)
     )
     assert ask_result_response.status == "finished"
-    assert correction.calls == []
-    assert regeneration.calls[0]["contexts"] == [MODEL_ALPHA_PRUNED_DDL]
-    assert regeneration.calls[0]["sql"] == ""
+    assert regeneration.calls == []
+    assert correction.calls[0]["contexts"] == [MODEL_ALPHA_PRUNED_DDL]
+    assert correction.calls[0]["invalid_generation_result"]["type"] == (
+        "NO_RELEVANT_SQL"
+    )
 
 
 @pytest.mark.asyncio
@@ -964,7 +965,7 @@ async def test_ask_historical_sql_does_not_bypass_current_metadata_validation():
             "instructions_retrieval": _EmptyRetrievalPipeline(),
             "db_schema_retrieval": _SchemaRetrievalPipeline(),
             "sql_generation": generation,
-            "sql_correction": _FailingCorrectionPipeline(),
+            "sql_correction": _UnexpectedCorrectionPipeline(),
             "sql_diagnosis": _FailingDiagnosisPipeline(),
         },
         allow_intent_classification=False,
@@ -994,7 +995,7 @@ async def test_ask_historical_sql_does_not_bypass_current_metadata_validation():
 
 
 @pytest.mark.asyncio
-async def test_ask_retries_schema_regeneration_without_exposing_invalid_sql():
+async def test_ask_retries_schema_correction_without_exposing_invalid_sql():
     regeneration = _SchemaGroundingRegenerationPipeline()
     correction = _SchemaGroundingCorrectionPipeline()
     diagnosis = _FailingDiagnosisPipeline()
@@ -1039,12 +1040,7 @@ async def test_ask_retries_schema_regeneration_without_exposing_invalid_sql():
         "hallucinated_table" not in call["invalid_generation_result"]["error"]
         for call in correction.calls
     )
-    assert len(regeneration.calls) == 2
-    assert all(call["sql"] == "" for call in regeneration.calls)
-    assert all(
-        "hallucinated_table" not in call["sql_generation_reasoning"]
-        for call in regeneration.calls
-    )
+    assert regeneration.calls == []
 
 
 @pytest.mark.asyncio

@@ -59,6 +59,14 @@ def is_schema_grounding_error(failed_generation_result: dict[str, Any]) -> bool:
     return failed_generation_result.get("type") == "SCHEMA_GROUNDING"
 
 
+def is_local_generation_error(failed_generation_result: dict[str, Any]) -> bool:
+    return failed_generation_result.get("type") in {
+        "NO_RELEVANT_SQL",
+        "SCHEMA_GROUNDING",
+        "SQL_GENERATION",
+    }
+
+
 def should_regenerate_sql(failed_generation_result: dict[str, Any]) -> bool:
     return failed_generation_result.get("type") in {
         "SCHEMA_GROUNDING",
@@ -741,71 +749,7 @@ class AskService:
                         )
 
                         sql_diagnosis_reasoning = None
-                        if should_regenerate_sql(
-                            failed_dry_run_result
-                        ) and self._pipelines.get("sql_regeneration"):
-                            sql_regeneration_pipeline = self._pipelines[
-                                "sql_regeneration"
-                            ]
-                            sql_regeneration_results = (
-                                await run_pipeline_with_timeout(
-                                    sql_regeneration_pipeline.run(
-                                        contexts=schema_context.sql_generation_contexts,
-                                        query=user_query,
-                                        sql_generation_reasoning=build_sql_regeneration_reasoning_text(
-                                            failed_dry_run_result,
-                                            sql_generation_reasoning
-                                        ),
-                                        sql=build_sql_regeneration_source_sql(
-                                            failed_dry_run_result
-                                        ),
-                                        schema_grounding=schema_context.grounding,
-                                        sql_samples=build_sql_regeneration_samples(
-                                            failed_dry_run_result,
-                                            sql_samples,
-                                        ),
-                                        instructions=instructions,
-                                        project_id=ask_request.project_id,
-                                        mdl_hash=ask_request.mdl_hash,
-                                        has_calculated_field=has_calculated_field,
-                                        has_metric=has_metric,
-                                        has_json_field=has_json_field,
-                                        sql_functions=sql_functions,
-                                        sql_knowledge=sql_knowledge,
-                                        use_dry_plan=use_dry_plan,
-                                        allow_dry_plan_fallback=allow_dry_plan_fallback,
-                                    ),
-                                    get_pipeline_timeout_seconds(
-                                        sql_regeneration_pipeline,
-                                        self._sql_generation_timeout_seconds,
-                                    ),
-                                    "SQL regeneration",
-                                )
-                            )
-
-                            if valid_generation_result := sql_regeneration_results[
-                                "post_process"
-                            ]["valid_generation_result"]:
-                                api_results = [
-                                    AskResult(
-                                        **{
-                                            "sql": valid_generation_result.get("sql"),
-                                            "type": "llm",
-                                        }
-                                    )
-                                ]
-                                break
-
-                            if next_failed_result := sql_regeneration_results[
-                                "post_process"
-                            ]["invalid_generation_result"]:
-                                failed_dry_run_result = next_failed_result
-                                if failed_dry_run_result["type"] == "TIME_OUT":
-                                    break
-                                original_sql = failed_dry_run_result["original_sql"]
-                                invalid_sql = failed_dry_run_result["sql"]
-                                error_message = failed_dry_run_result["error"]
-                        if allow_sql_diagnosis and not is_schema_grounding_error(
+                        if allow_sql_diagnosis and not is_local_generation_error(
                             failed_dry_run_result
                         ):
                             sql_diagnosis_pipeline = self._pipelines[
