@@ -13,17 +13,7 @@ from src.web.v1.services.ask import (
     AskRequest,
     AskResultRequest,
     AskService,
-    build_safe_invalid_sql,
-    build_schema_grounding_recovery_message,
-    build_sql_correction_error_message,
-    build_sql_correction_input,
-    build_user_facing_error_message,
     get_pipeline_timeout_seconds,
-    is_schema_grounding_error,
-)
-from src.web.v1.services.schema_context import (
-    build_retrieved_schema_context,
-    build_schema_grounding_context,
 )
 from src.web.v1.services.semantics_preparation import (
     SemanticsPreparationRequest,
@@ -40,21 +30,10 @@ DEPLOYED_UNPRUNED_DDL = (
     f"CREATE TABLE {DEPLOYED_ORDER_MODEL} "
     f"({DEPLOYED_SHIP_COUNTRY} VARCHAR, {DEPLOYED_ORDER_DATE} TIMESTAMP)"
 )
-DEPLOYED_SELECTED_GROUNDING = (
-    f'- model/table: "{DEPLOYED_ORDER_MODEL}"\n'
-    "  columns:\n"
-    f'    - "{DEPLOYED_SHIP_COUNTRY}"'
-)
-
 MODEL_ALPHA = "model_alpha"
 MODEL_ALPHA_ENTITY_ID = "entity_id"
 MODEL_ALPHA_ENTITY_DDL = (
     f"CREATE TABLE {MODEL_ALPHA} ({MODEL_ALPHA_ENTITY_ID} INTEGER)"
-)
-MODEL_ALPHA_ENTITY_GROUNDING = (
-    f'- model/table: "{MODEL_ALPHA}"\n'
-    "  columns:\n"
-    f'    - "{MODEL_ALPHA_ENTITY_ID}"'
 )
 MODEL_ALPHA_SELECT_SQL = f"SELECT * FROM {MODEL_ALPHA}"
 MODEL_ALPHA_ENTITY_SQL = f"SELECT {MODEL_ALPHA_ENTITY_ID} FROM {MODEL_ALPHA}"
@@ -69,11 +48,6 @@ MODEL_ALPHA_UNPRUNED_DDL = (
     f"CREATE TABLE {MODEL_ALPHA} "
     f"({MODEL_ALPHA_SELECTED_MEASURE} INTEGER, "
     f"{MODEL_ALPHA_RECOVERED_DIMENSION} VARCHAR)"
-)
-MODEL_ALPHA_SELECTED_GROUNDING = (
-    f'- model/table: "{MODEL_ALPHA}"\n'
-    "  columns:\n"
-    f'    - "{MODEL_ALPHA_SELECTED_MEASURE}"'
 )
 
 
@@ -212,11 +186,11 @@ def test_ask_service_runs_sql_generation_reasoning_by_default():
     assert ask_service._allow_sql_generation_reasoning is True
 
 
-def test_ask_request_uses_dry_plan_validation_by_default():
+def test_ask_request_uses_legacy_validation_defaults():
     ask_request = AskRequest(query="question", mdl_hash="deploy")
 
-    assert ask_request.use_dry_plan is True
-    assert ask_request.allow_dry_plan_fallback is False
+    assert ask_request.use_dry_plan is False
+    assert ask_request.allow_dry_plan_fallback is True
 
 
 def test_ask_service_uses_legacy_sql_correction_retries_by_default():
@@ -238,154 +212,6 @@ def test_pipeline_timeout_keeps_default_when_provider_timeout_is_shorter_or_miss
 
     assert get_pipeline_timeout_seconds(short_timeout_pipeline, 120) == 120
     assert get_pipeline_timeout_seconds(object(), 120) == 120
-
-
-def test_schema_grounding_context_uses_retrieved_identifiers():
-    context = build_schema_grounding_context(
-        [
-            {
-                "table_name": DEPLOYED_ORDER_MODEL,
-                "column_names": ["ship_country", "order_date"],
-                "manifest_column_names": ["id", "ship_country", "order_date"],
-                "relationship_constraints": [
-                    "FOREIGN KEY (customer_id) REFERENCES customer(id)"
-                ],
-            }
-        ]
-    )
-
-    assert f'- model/table: "{DEPLOYED_ORDER_MODEL}"' in context
-    assert '- "ship_country"' in context
-    assert '- "order_date"' in context
-    assert "FOREIGN KEY" in context
-    assert '"id"' not in context
-    assert '"orders"' not in context
-
-
-def test_retrieved_schema_context_is_derived_from_retrieval_results():
-    retrieval_result = {
-        "construct_retrieval_results": {
-            "retrieval_results": [
-                {
-                    "table_name": DEPLOYED_ORDER_MODEL,
-                    "table_ddl": DEPLOYED_SELECTED_DDL,
-                    "unpruned_table_ddl": DEPLOYED_UNPRUNED_DDL,
-                    "column_names": [DEPLOYED_SHIP_COUNTRY],
-                    "manifest_column_names": [
-                        DEPLOYED_SHIP_COUNTRY,
-                        DEPLOYED_ORDER_DATE,
-                    ],
-                    "relationship_constraints": [],
-                }
-            ],
-            "has_calculated_field": False,
-            "has_metric": False,
-            "has_json_field": False,
-        }
-    }
-
-    schema_context = build_retrieved_schema_context(retrieval_result)
-
-    assert schema_context.table_names == [DEPLOYED_ORDER_MODEL]
-    assert schema_context.contexts == [DEPLOYED_SELECTED_DDL]
-    assert schema_context.sql_generation_contexts == [DEPLOYED_SELECTED_DDL]
-    assert schema_context.grounding == DEPLOYED_SELECTED_GROUNDING
-
-
-def test_schema_grounding_error_detection_uses_validation_type():
-    assert is_schema_grounding_error({"type": "SCHEMA_GROUNDING"})
-    assert not is_schema_grounding_error({"type": "DRY_RUN"})
-
-
-def test_sql_correction_error_keeps_validation_error_and_adds_diagnosis():
-    error = build_sql_correction_error_message(
-        "Invalid object name.",
-        "The table is not in the retrieved schema.",
-    )
-
-    assert "Invalid object name." in error
-    assert "Diagnostic reasoning: The table is not in the retrieved schema." in error
-
-
-def test_schema_grounding_correction_input_omits_rejected_sql():
-    correction_input = build_sql_correction_input(
-        {
-            "sql": "SELECT * FROM hallucinated_table",
-            "original_sql": "SELECT * FROM hallucinated_table",
-            "type": "SCHEMA_GROUNDING",
-        },
-        "Use only retrieved identifiers.",
-    )
-
-    assert correction_input == {
-        "sql": "",
-        "type": "SCHEMA_GROUNDING",
-        "error": (
-            "The previous SQL used executable table or column identifiers that are "
-            "absent from the retrieved Wren schema. Regenerate the SQL from the "
-            "user question using only DATABASE SCHEMA, RETRIEVED EXECUTABLE SCHEMA, "
-            "SQL FUNCTIONS, USER INSTRUCTIONS, and the configured datasource dialect."
-        ),
-    }
-
-
-def test_schema_grounding_recovery_message_omits_hallucinated_identifier():
-    message = build_schema_grounding_recovery_message(
-        {
-            "sql": "SELECT * FROM hallucinated_table",
-            "original_sql": "SELECT * FROM hallucinated_table",
-            "type": "SCHEMA_GROUNDING",
-            "error": "Generated SQL references hallucinated_table.",
-        }
-    )
-
-    assert "hallucinated_table" not in message
-    assert "retrieved Wren schema" in message
-
-
-def test_user_facing_schema_grounding_error_is_sanitized():
-    message = build_user_facing_error_message(
-        {
-            "sql": "SELECT * FROM hallucinated_table",
-            "original_sql": "SELECT * FROM hallucinated_table",
-            "type": "SCHEMA_GROUNDING",
-            "error": "Generated SQL references hallucinated_table.",
-        },
-        "Generated SQL references hallucinated_table.",
-    )
-
-    assert "hallucinated_table" not in message
-    assert "retrieved metadata was not sufficient" in message
-    assert (
-        build_user_facing_error_message(
-            {"type": "DRY_RUN"},
-            "Syntax error near FROM.",
-        )
-        == "Syntax error near FROM."
-    )
-
-
-def test_safe_invalid_sql_omits_schema_grounding_sql():
-    assert (
-        build_safe_invalid_sql(
-            {
-                "type": "SCHEMA_GROUNDING",
-                "sql": "SELECT * FROM hallucinated_table",
-            },
-            "SELECT * FROM hallucinated_table",
-        )
-        is None
-    )
-    assert (
-        build_safe_invalid_sql(
-            {
-                "type": "DRY_RUN",
-                "sql": MODEL_ALPHA_SELECT_SQL,
-            },
-            MODEL_ALPHA_SELECT_SQL,
-        )
-        == MODEL_ALPHA_SELECT_SQL
-    )
 
 
 class _EmptyRetrievalPipeline:
@@ -501,31 +327,6 @@ class _ValidSqlGenerationPipeline:
         }
 
 
-class _SchemaGroundingSqlGenerationPipeline:
-    def __init__(self):
-        self.calls = []
-
-    async def run(self, **_):
-        self.calls.append(_)
-        return {
-            "post_process": {
-                "valid_generation_result": {},
-                "invalid_generation_result": {
-                    "sql": "SELECT * FROM hallucinated_table",
-                    "original_sql": "SELECT * FROM hallucinated_table",
-                    "type": "SCHEMA_GROUNDING",
-                    "error": (
-                        "Generated SQL references model/table identifiers that are "
-                        "not in the retrieved Wren schema: \"hallucinated_table\". "
-                        "Use only these retrieved model/table identifiers: "
-                        f'"{MODEL_ALPHA}".'
-                    ),
-                    "correlation_id": "",
-                },
-            }
-        }
-
-
 class _SlowSqlGenerationPipeline:
     async def run(self, **_):
         await asyncio.sleep(60)
@@ -586,56 +387,6 @@ class _CapturingRegenerationPipeline:
         }
 
 
-class _SchemaGroundingRegenerationPipeline:
-    def __init__(self):
-        self.calls = []
-
-    async def run(self, **kwargs):
-        self.calls.append(kwargs)
-        return {
-            "post_process": {
-                "valid_generation_result": {},
-                "invalid_generation_result": {
-                    "sql": "SELECT * FROM hallucinated_table",
-                    "original_sql": "SELECT * FROM hallucinated_table",
-                    "type": "SCHEMA_GROUNDING",
-                    "error": (
-                        "Generated SQL references model/table identifiers that are "
-                        "not in the retrieved Wren schema: \"hallucinated_table\". "
-                        "Use only these retrieved model/table identifiers: "
-                        f'"{MODEL_ALPHA}".'
-                    ),
-                    "correlation_id": "",
-                },
-            }
-        }
-
-
-class _SchemaGroundingCorrectionPipeline:
-    def __init__(self):
-        self.calls = []
-
-    async def run(self, **kwargs):
-        self.calls.append(kwargs)
-        return {
-            "post_process": {
-                "valid_generation_result": {},
-                "invalid_generation_result": {
-                    "sql": "SELECT * FROM hallucinated_table",
-                    "original_sql": "SELECT * FROM hallucinated_table",
-                    "type": "SCHEMA_GROUNDING",
-                    "error": (
-                        "Generated SQL references model/table identifiers that are "
-                        "not in the retrieved Wren schema: \"hallucinated_table\". "
-                        "Use only these retrieved model/table identifiers: "
-                        f'"{MODEL_ALPHA}".'
-                    ),
-                    "correlation_id": "",
-                },
-            }
-        }
-
-
 class _FailingDiagnosisPipeline:
     def __init__(self):
         self.calls = []
@@ -643,6 +394,15 @@ class _FailingDiagnosisPipeline:
     async def run(self, **kwargs):
         self.calls.append(kwargs)
         raise AssertionError("sql_diagnosis should not run for local validation errors")
+
+
+class _CapturingDiagnosisPipeline:
+    def __init__(self):
+        self.calls = []
+
+    async def run(self, **kwargs):
+        self.calls.append(kwargs)
+        return {"post_process": {"reasoning": "Use the retrieved schema."}}
 
 
 @pytest.mark.asyncio
@@ -678,7 +438,6 @@ async def test_ask_runs_sql_correction_for_validation_error():
     assert diagnosis.calls == []
     assert correction.calls[0]["invalid_generation_result"] == {
         "sql": MODEL_ALPHA_ENTITY_SQL,
-        "type": "SQL_SHAPE",
         "error": "Generated SQL is a table preview.",
     }
 
@@ -716,102 +475,11 @@ async def test_ask_correction_recovers_no_relevant_sql_with_schema_context():
     assert ask_result_response.status == "finished"
     assert ask_result_response.response[0].sql == MODEL_ALPHA_COUNT_SQL
     assert diagnosis.calls == []
-    assert correction.calls[0]["query"] == "count records by model"
     assert correction.calls[0]["contexts"] == [MODEL_ALPHA_ENTITY_DDL]
-    assert generation.calls[0]["schema_grounding"] == MODEL_ALPHA_ENTITY_GROUNDING
-    assert correction.calls[0]["schema_grounding"] == MODEL_ALPHA_ENTITY_GROUNDING
     assert correction.calls[0]["invalid_generation_result"] == {
         "sql": "",
-        "type": "NO_RELEVANT_SQL",
         "error": "No grounded SQL was generated from the current schema.",
     }
-
-
-@pytest.mark.asyncio
-async def test_ask_schema_grounding_recovery_omits_hallucinated_sql():
-    correction = _CapturingCorrectionPipeline()
-    diagnosis = _FailingDiagnosisPipeline()
-    generation = _SchemaGroundingSqlGenerationPipeline()
-    ask_service = AskService(
-        {
-            "historical_question": _EmptyRetrievalPipeline(),
-            "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
-            "instructions_retrieval": _EmptyRetrievalPipeline(),
-            "db_schema_retrieval": _SchemaRetrievalPipeline(),
-            "sql_generation": generation,
-            "sql_correction": correction,
-            "sql_diagnosis": diagnosis,
-        },
-        allow_intent_classification=False,
-        allow_sql_generation_reasoning=False,
-        allow_sql_functions_retrieval=False,
-        allow_sql_knowledge_retrieval=False,
-        allow_sql_diagnosis=True,
-    )
-    query_id = str(uuid.uuid4())
-    ask_request = AskRequest(query="show hallucinated records", mdl_hash=None)
-    ask_request.query_id = query_id
-
-    await ask_service.ask(ask_request)
-
-    ask_result_response = ask_service.get_ask_result(
-        AskResultRequest(query_id=query_id)
-    )
-    assert ask_result_response.status == "finished"
-    assert diagnosis.calls == []
-    assert correction.calls[0]["invalid_generation_result"]["type"] == (
-        "SCHEMA_GROUNDING"
-    )
-    assert correction.calls[0]["invalid_generation_result"]["sql"] == ""
-    assert "hallucinated_table" not in correction.calls[0]["invalid_generation_result"][
-        "error"
-    ]
-    assert "SELECT * FROM hallucinated_table" not in correction.calls[0][
-        "invalid_generation_result"
-    ]["error"]
-
-
-@pytest.mark.asyncio
-async def test_ask_corrects_schema_grounding_failures_without_regeneration():
-    regeneration = _CapturingRegenerationPipeline()
-    correction = _CapturingCorrectionPipeline()
-    diagnosis = _FailingDiagnosisPipeline()
-    generation = _SchemaGroundingSqlGenerationPipeline()
-    ask_service = AskService(
-        {
-            "historical_question": _EmptyRetrievalPipeline(),
-            "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
-            "instructions_retrieval": _EmptyRetrievalPipeline(),
-            "db_schema_retrieval": _SchemaRetrievalPipeline(),
-            "sql_generation": generation,
-            "sql_regeneration": regeneration,
-            "sql_correction": correction,
-            "sql_diagnosis": diagnosis,
-        },
-        allow_intent_classification=False,
-        allow_sql_generation_reasoning=False,
-        allow_sql_functions_retrieval=False,
-        allow_sql_knowledge_retrieval=False,
-        allow_sql_diagnosis=True,
-    )
-    query_id = str(uuid.uuid4())
-    ask_request = AskRequest(query="show hallucinated records", mdl_hash=None)
-    ask_request.query_id = query_id
-
-    await ask_service.ask(ask_request)
-
-    ask_result_response = ask_service.get_ask_result(
-        AskResultRequest(query_id=query_id)
-    )
-    assert ask_result_response.status == "finished"
-    assert ask_result_response.response[0].sql == MODEL_ALPHA_COUNT_SQL
-    assert diagnosis.calls == []
-    assert regeneration.calls == []
-    assert correction.calls[0]["schema_grounding"] == MODEL_ALPHA_ENTITY_GROUNDING
-    assert correction.calls[0]["invalid_generation_result"]["type"] == (
-        "SCHEMA_GROUNDING"
-    )
-    assert correction.calls[0]["invalid_generation_result"]["sql"] == ""
 
 
 @pytest.mark.asyncio
@@ -844,13 +512,6 @@ async def test_ask_uses_exact_retrieved_metadata_for_generation_context():
     )
     assert ask_result_response.status == "finished"
     assert generation.calls[0]["contexts"] == [MODEL_ALPHA_PRUNED_DDL]
-    assert generation.calls[0]["schema_grounding"] == MODEL_ALPHA_SELECTED_GROUNDING
-    assert ask_result_response.retrieved_schema_context.sql_generation_contexts == (
-        generation.calls[0]["contexts"]
-    )
-    assert ask_result_response.retrieved_schema_context.grounding == (
-        generation.calls[0]["schema_grounding"]
-    )
 
 
 @pytest.mark.asyncio
@@ -858,6 +519,7 @@ async def test_ask_corrects_no_relevant_sql_with_exact_retrieved_metadata():
     generation = _NoRelevantSqlGenerationPipeline()
     regeneration = _CapturingRegenerationPipeline()
     correction = _CapturingCorrectionPipeline()
+    diagnosis = _CapturingDiagnosisPipeline()
     ask_service = AskService(
         {
             "historical_question": _EmptyRetrievalPipeline(),
@@ -867,7 +529,7 @@ async def test_ask_corrects_no_relevant_sql_with_exact_retrieved_metadata():
             "sql_generation": generation,
             "sql_regeneration": regeneration,
             "sql_correction": correction,
-            "sql_diagnosis": _FailingDiagnosisPipeline(),
+            "sql_diagnosis": diagnosis,
         },
         allow_intent_classification=False,
         allow_sql_generation_reasoning=False,
@@ -886,14 +548,16 @@ async def test_ask_corrects_no_relevant_sql_with_exact_retrieved_metadata():
     )
     assert ask_result_response.status == "finished"
     assert regeneration.calls == []
+    assert diagnosis.calls[0]["contexts"] == [MODEL_ALPHA_PRUNED_DDL]
     assert correction.calls[0]["contexts"] == [MODEL_ALPHA_PRUNED_DDL]
-    assert correction.calls[0]["invalid_generation_result"]["type"] == (
-        "NO_RELEVANT_SQL"
-    )
+    assert correction.calls[0]["invalid_generation_result"] == {
+        "sql": "",
+        "error": "Use the retrieved schema.",
+    }
 
 
 @pytest.mark.asyncio
-async def test_ask_historical_sql_does_not_bypass_current_metadata_validation():
+async def test_ask_returns_historical_sql_like_legacy():
     generation = _ValidSqlGenerationPipeline()
     ask_service = AskService(
         {
@@ -921,63 +585,8 @@ async def test_ask_historical_sql_does_not_bypass_current_metadata_validation():
         AskResultRequest(query_id=query_id)
     )
     assert ask_result_response.status == "finished"
-    assert ask_result_response.response[0].sql == MODEL_ALPHA_COUNT_SQL
-    assert generation.calls
-    assert generation.calls[0]["sql_samples"] == [
-        {
-            "question": "previous analytical request",
-            "sql": "SELECT * FROM stale_model",
-        }
-    ]
-
-
-@pytest.mark.asyncio
-async def test_ask_retries_schema_correction_without_exposing_invalid_sql():
-    regeneration = _SchemaGroundingRegenerationPipeline()
-    correction = _SchemaGroundingCorrectionPipeline()
-    diagnosis = _FailingDiagnosisPipeline()
-    generation = _SchemaGroundingSqlGenerationPipeline()
-    ask_service = AskService(
-        {
-            "historical_question": _EmptyRetrievalPipeline(),
-            "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
-            "instructions_retrieval": _EmptyRetrievalPipeline(),
-            "db_schema_retrieval": _SchemaRetrievalPipeline(),
-            "sql_generation": generation,
-            "sql_regeneration": regeneration,
-            "sql_correction": correction,
-            "sql_diagnosis": diagnosis,
-        },
-        allow_intent_classification=False,
-        allow_sql_generation_reasoning=False,
-        allow_sql_functions_retrieval=False,
-        allow_sql_knowledge_retrieval=False,
-        allow_sql_diagnosis=True,
-        max_sql_correction_retries=2,
-    )
-    query_id = str(uuid.uuid4())
-    ask_request = AskRequest(query="show hallucinated records", mdl_hash=None)
-    ask_request.query_id = query_id
-
-    await ask_service.ask(ask_request)
-
-    ask_result_response = ask_service.get_ask_result(
-        AskResultRequest(query_id=query_id)
-    )
-    assert ask_result_response.status == "failed"
-    assert ask_result_response.invalid_sql is None
-    assert "hallucinated_table" not in ask_result_response.error.message
-    assert "retrieved metadata was not sufficient" in ask_result_response.error.message
-    assert diagnosis.calls == []
-    assert len(correction.calls) == 2
-    assert all(
-        call["invalid_generation_result"]["sql"] == "" for call in correction.calls
-    )
-    assert all(
-        "hallucinated_table" not in call["invalid_generation_result"]["error"]
-        for call in correction.calls
-    )
-    assert regeneration.calls == []
+    assert ask_result_response.response[0].sql == "SELECT * FROM stale_model"
+    assert generation.calls == []
 
 
 @pytest.mark.asyncio

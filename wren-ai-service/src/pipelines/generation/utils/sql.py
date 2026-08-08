@@ -17,60 +17,6 @@ from src.web.v1.services.ask import AskHistory
 logger = logging.getLogger("wren-ai-service")
 
 
-def _is_timeout_error(error_message: str) -> bool:
-    if not error_message:
-        return False
-
-    normalized_error = error_message.lower()
-    return "timeout" in normalized_error or "timed out" in normalized_error
-
-
-def _normalize_engine_addition(addition: Any) -> dict:
-    if isinstance(addition, dict):
-        return addition
-
-    if addition:
-        return {"error_message": str(addition), "correlation_id": ""}
-
-    return {}
-
-
-def _generation_output_failure(
-    raw_reply: Any,
-    error: str | None = None,
-) -> Dict[str, Any]:
-    raw_sql = raw_reply if isinstance(raw_reply, str) else ""
-    message = error or "SQL generation did not return a valid JSON SQL response."
-
-    return {
-        "sql": raw_sql,
-        "original_sql": raw_sql,
-        "type": "SQL_GENERATION",
-        "error": message,
-        "correlation_id": "",
-    }
-
-
-def _empty_sql_generation_failure(error: str) -> Dict[str, Any]:
-    return {
-        "sql": "",
-        "original_sql": "",
-        "type": "SQL_GENERATION",
-        "error": error,
-        "correlation_id": "",
-    }
-
-
-def _non_text_sql_generation_failure(error: str) -> Dict[str, Any]:
-    return {
-        "sql": "",
-        "original_sql": "",
-        "type": "SQL_GENERATION",
-        "error": error,
-        "correlation_id": "",
-    }
-
-
 @component
 class SQLGenPostProcessor:
     def __init__(self, engine: Engine):
@@ -86,76 +32,19 @@ class SQLGenPostProcessor:
         project_id: str | None = None,
         mdl_hash: str | None = None,
         use_dry_plan: bool = False,
-        allow_dry_plan_fallback: bool = False,
+        allow_dry_plan_fallback: bool = True,
         data_source: str = "",
         allow_data_preview: bool = False,
-        schema_grounding: str | None = None,
         meta: List[Dict[str, Any]] | None = None,
     ) -> dict:
-        raw_reply = ""
         try:
-            if not replies:
-                return {
-                    "valid_generation_result": {},
-                    "invalid_generation_result": _generation_output_failure(
-                        raw_reply,
-                        "SQL generation returned no response.",
-                    ),
-                }
-
-            raw_reply = replies[0]
-            cleaned_generation_result = clean_generation_result(raw_reply)
+            cleaned_generation_result = clean_generation_result(replies[0])
 
             # test if cleaned_generation_result in string format is actually a dictionary with key 'sql'
-            if isinstance(
-                cleaned_generation_result, str
-            ) and cleaned_generation_result.startswith("{"):
-                try:
-                    parsed_generation_result = orjson.loads(cleaned_generation_result)
-                except orjson.JSONDecodeError:
-                    return {
-                        "valid_generation_result": {},
-                        "invalid_generation_result": _generation_output_failure(
-                            raw_reply,
-                        ),
-                    }
-
-                if not isinstance(parsed_generation_result, dict):
-                    return {
-                        "valid_generation_result": {},
-                        "invalid_generation_result": _generation_output_failure(
-                            raw_reply,
-                        ),
-                    }
-
-                if "sql" not in parsed_generation_result:
-                    return {
-                        "valid_generation_result": {},
-                        "invalid_generation_result": _generation_output_failure(
-                            raw_reply,
-                        ),
-                    }
-
-                sql = parsed_generation_result.get("sql")
-                cleaned_generation_result = (
-                    clean_generation_result(sql) if isinstance(sql, str) else sql
-                )
-
-            if not cleaned_generation_result:
-                return {
-                    "valid_generation_result": {},
-                    "invalid_generation_result": _empty_sql_generation_failure(
-                        "SQL generation returned an empty SQL response.",
-                    ),
-                }
-
-            if not isinstance(cleaned_generation_result, str):
-                return {
-                    "valid_generation_result": {},
-                    "invalid_generation_result": _non_text_sql_generation_failure(
-                        "SQL generation did not return a text SQL response.",
-                    ),
-                }
+            if cleaned_generation_result.startswith("{"):
+                cleaned_generation_result = orjson.loads(cleaned_generation_result)[
+                    "sql"
+                ]
 
             (
                 valid_generation_result,
@@ -179,19 +68,16 @@ class SQLGenPostProcessor:
 
             return {
                 "valid_generation_result": {},
-                "invalid_generation_result": _generation_output_failure(
-                    raw_reply,
-                    f"SQL generation post-processing failed: {e}",
-                ),
+                "invalid_generation_result": {},
             }
 
     async def _classify_generation_result(
         self,
-        generation_result: str | None,
+        generation_result: str,
         project_id: str | None = None,
         mdl_hash: str | None = None,
         use_dry_plan: bool = False,
-        allow_dry_plan_fallback: bool = False,
+        allow_dry_plan_fallback: bool = True,
         data_source: str = "",
         allow_data_preview: bool = False,
     ) -> Dict[str, str]:
@@ -210,66 +96,19 @@ class SQLGenPostProcessor:
                     allow_fallback=allow_dry_plan_fallback,
                 )
 
-                if not dry_plan_result:
-                    if _is_timeout_error(error_message):
-                        if allow_dry_plan_fallback:
-                            valid_generation_result = {
-                                "sql": generation_result,
-                                "correlation_id": "",
-                            }
-                            return valid_generation_result, invalid_generation_result
-
-                        invalid_generation_result = {
-                            "sql": generation_result,
-                            "original_sql": generation_result,
-                            "type": "DRY_PLAN",
-                            "error": error_message,
-                            "correlation_id": "",
-                            "data_source": data_source,
-                        }
-                        return valid_generation_result, invalid_generation_result
-
-                    invalid_generation_result = {
-                        "sql": generation_result,
-                        "original_sql": generation_result,
-                        "type": "DRY_PLAN",
-                        "error": error_message,
-                        "correlation_id": "",
-                        "data_source": data_source,
-                    }
-                    return valid_generation_result, invalid_generation_result
-
-                success, _, addition = await self._engine.execute_sql(
-                    generation_result,
-                    session,
-                    project_id=project_id,
-                    mdl_hash=mdl_hash,
-                    limit=1,
-                    dry_run=True,
-                )
-                addition = _normalize_engine_addition(addition)
-
-                if success:
+                if dry_plan_result:
                     valid_generation_result = {
                         "sql": generation_result,
-                        "correlation_id": addition.get("correlation_id", ""),
+                        "correlation_id": "",
                     }
                 else:
-                    error_message = addition.get("error_message", "")
-                    if _is_timeout_error(error_message):
-                        valid_generation_result = {
-                            "sql": generation_result,
-                            "correlation_id": addition.get("correlation_id", ""),
-                        }
-                        return valid_generation_result, invalid_generation_result
-
                     invalid_generation_result = {
                         "sql": generation_result,
-                        "original_sql": generation_result,
-                        "engine_sql": addition.get("error_sql", ""),
-                        "type": "DRY_RUN",
+                        "type": "TIME_OUT"
+                        if error_message.startswith("Request timed out")
+                        else "DRY_PLAN",
                         "error": error_message,
-                        "correlation_id": addition.get("correlation_id", ""),
+                        "correlation_id": "",
                         "data_source": data_source,
                     }
             elif use_dry_run:
@@ -281,7 +120,6 @@ class SQLGenPostProcessor:
                     limit=1,
                     dry_run=True,
                 )
-                addition = _normalize_engine_addition(addition)
 
                 if success:
                     valid_generation_result = {
@@ -290,18 +128,12 @@ class SQLGenPostProcessor:
                     }
                 else:
                     error_message = addition.get("error_message", "")
-                    if _is_timeout_error(error_message):
-                        valid_generation_result = {
-                            "sql": generation_result,
-                            "correlation_id": addition.get("correlation_id", ""),
-                        }
-                        return valid_generation_result, invalid_generation_result
-
                     invalid_generation_result = {
-                        "sql": generation_result,
+                        "sql": addition.get("error_sql", generation_result),
                         "original_sql": generation_result,
-                        "engine_sql": addition.get("error_sql", ""),
-                        "type": "DRY_RUN",
+                        "type": "TIME_OUT"
+                        if error_message.startswith("Request timed out")
+                        else "DRY_RUN",
                         "error": error_message,
                         "correlation_id": addition.get("correlation_id", ""),
                         "data_source": data_source,
@@ -315,7 +147,6 @@ class SQLGenPostProcessor:
                     limit=1,
                     dry_run=False,
                 )
-                addition = _normalize_engine_addition(addition)
 
                 if has_data:
                     valid_generation_result = {
@@ -324,23 +155,17 @@ class SQLGenPostProcessor:
                     }
                 else:
                     error_message = addition.get("error_message", "")
-                    if _is_timeout_error(error_message):
-                        valid_generation_result = {
-                            "sql": generation_result,
-                            "correlation_id": addition.get("correlation_id", ""),
-                        }
-                        return valid_generation_result, invalid_generation_result
-
                     preview_data_status = (
                         "PREVIEW_EMPTY_DATA"
                         if error_message == ""
                         else "PREVIEW_FAILED"
                     )
                     invalid_generation_result = {
-                        "sql": generation_result,
+                        "sql": addition.get("error_sql", generation_result),
                         "original_sql": generation_result,
-                        "engine_sql": addition.get("error_sql", ""),
-                        "type": preview_data_status,
+                        "type": "TIME_OUT"
+                        if error_message.startswith("Request timed out")
+                        else preview_data_status,
                         "error": error_message,
                         "correlation_id": addition.get("correlation_id", ""),
                         "data_source": data_source,
@@ -353,44 +178,59 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 ### SQL RULES ###
 - ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
 - ONLY USE the tables and columns mentioned in the database schema.
-- ONLY USE "*" if the user query asks for all the columns of a table or a broad entity list without specific requested output columns.
+- ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - DON'T INCLUDE comments in the generated SQL query.
-- Use JOIN only when selected columns come from multiple tables and DATABASE SCHEMA declares the exact FOREIGN KEY relationship needed for the join. Do not invent join predicates from similar-looking column names.
+- YOU MUST USE "JOIN" if you choose columns from multiple tables!
 - PREFER USING CTEs over subqueries.
 - When generating SQL query, always:
     - Put double quotes around column and table names.
-    - Use Wren SQL identifier quoting with double quotes only; the engine rewrite step converts grounded Wren SQL to the active connector dialect.
     - Put single quotes around string literals.
     - Never quote numeric literals.
-- Generate Wren SQL syntax only, not connector-specific SQL syntax.
-- Never use SELECT TOP, TOP(...), FETCH FIRST, square-bracket identifiers, or backtick identifiers. For top or limit requests, sort with ORDER BY and put LIMIT at the end of the query.
-- Preserve every deployed table and column identifier exactly as it appears in DATABASE SCHEMA, including spaces, digits, underscores, case, and punctuation, then wrap that exact identifier in double quotes in SQL.
-- Do not convert deployed identifiers into display-friendly variants by replacing spaces with underscores, removing prefixes, changing case, shortening names, or expanding abbreviations.
-- For case-insensitive comparisons, use only functions or operators that are supported by SQL FUNCTIONS for this request. If SQL FUNCTIONS does not provide a safe case-insensitive function, use a normal equality or LIKE comparison on an exact schema column.
-- For date/time questions, first choose an exact schema column whose type or metadata clearly represents the requested time concept. Use only date/time functions, casts, literals, and interval syntax whose exact syntax is provided in SQL KNOWLEDGE or SQL FUNCTIONS for this request.
-- If the question asks for a specific or relative date, generate a bounded date/time filter only when the exact date/time schema column is available and the predicate can be expressed with normal SQL comparison syntax, SQL KNOWLEDGE syntax, or exact SQL FUNCTIONS syntax. If either the column or required operation is missing, do not invent a field or function.
-- For explicit calendar month and year requests, use an inclusive lower bound and exclusive upper bound on the exact date/time column, rather than formatting the column into text.
+    For example: SELECT "customers"."customer_name" FROM "customers" WHERE "customers"."city" = 'Taipei' and "customers"."year" = 1992;
+- YOU MUST USE "lower(<table_name>.<column_name>) like lower(<value>)" function or "lower(<table_name>.<column_name>) = lower(<value>)" function for case-insensitive comparison!
+    - Use "lower(<table_name>.<column_name>) LIKE lower(<value>)" when:
+        - The user requests a pattern or partial match.
+        - The value is not specific enough to be a single, exact value.
+        - Wildcards (%) are needed to capture the pattern.
+    - Use "lower(<table_name>.<column_name>) = lower(<value>)" when:
+        - The user requests an exact, specific value.
+        - There is no ambiguity or pattern in the value.
+- If the column is date/time related field, and it is a INT/BIGINT/DOUBLE/FLOAT type, please use the appropriate function mentioned in the SQL FUNCTIONS section to cast the column to "TIMESTAMP" type first before using it in the query
+    - example: TO_TIMESTAMP_MILLIS("<timestamp_column>")  # if the timestamp_column is in milliseconds
+    - example: TO_TIMESTAMP_SECONDS("<timestamp_column>")  # if the timestamp_column is in seconds
+    - example: TO_TIMESTAMP_MICROS("<timestamp_column>")  # if the timestamp_column is in microseconds
+- ALWAYS CAST the date/time related field to "TIMESTAMP WITH TIME ZONE" type when using them in the query
+    - example 1: CAST(properties_closedate AS TIMESTAMP WITH TIME ZONE)
+    - example 2: CAST('2024-11-09 00:00:00' AS TIMESTAMP WITH TIME ZONE)
+    - example 3: CAST(DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') AS TIMESTAMP WITH TIME ZONE)
+- If the user asks for a specific date, please give the date range in SQL query
+    - example: "What is the total revenue for the month of 2024-11-01?"
+    - answer: "SELECT SUM(r.PriceSum) FROM Revenue r WHERE CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) >= CAST('2024-11-01 00:00:00' AS TIMESTAMP WITH TIME ZONE) AND CAST(r.PurchaseTimestamp AS TIMESTAMP WITH TIME ZONE) < CAST('2024-11-02 00:00:00' AS TIMESTAMP WITH TIME ZONE)"
 - USE THE VIEW TO SIMPLIFY THE QUERY.
 - DON'T MISUSE THE VIEW NAME. THE ACTUAL NAME IS FOLLOWING THE CREATE VIEW STATEMENT.
-- Output aliases may be used only to name expressions in the final SELECT list. Output aliases are labels for result columns only; they are not source identifiers.
-- For metric-style requests, the final SELECT list must expose the requested dimension columns and measure expressions or metric fields.
-- For aggregate, ranking, or "by" requests, do not add unrelated string filters to make the SQL look specific. If the user did not provide a filter value, leave it out.
-- For total, count, average, minimum, maximum, per, by, trend, top, bottom, highest, lowest, or ranking requests, the final SQL must include the requested aggregate expression or metric field, GROUP BY required dimensions, ORDER BY required ranking expression, and LIMIT only when requested. A raw row list is not a valid answer.
-- Standard Wren SQL aggregate functions COUNT, SUM, AVG, MIN, and MAX are allowed for aggregate requests even when no SQL FUNCTIONS section is provided, as long as every table and column identifier used by the aggregate is declared in DATABASE SCHEMA.
-- For record-list requests with a filter or timeframe, the final SQL must include the requested WHERE predicate and only the columns needed to identify and describe the matching records.
-- Comments, aliases, display labels, and descriptions from DATABASE SCHEMA may guide which exact source column to select, but they must not be copied into FROM, JOIN, WHERE, GROUP BY, HAVING, or ORDER BY as table or column names.
-- Physical/source/lineage names from metadata may guide meaning, but generated SQL must use only the declared Wren model, view, metric, and column identifiers from DATABASE SCHEMA.
-- DON'T USE '.' in output aliases, replace '.' with '_' in output aliases.
+- ONLY USE table/column alias in the final SELECT clause; don't use table/columnalias in the other clauses.
+- Refer to the value of alias from the comment section of the corresponding table or column in the DATABASE SCHEMA section for reference when using alias in the final SELECT clause.
+  - EXAMPLE
+    DATABASE SCHEMA
+    /* {"alias":"_orders","description":"A model representing the orders data."} */
+    CREATE TABLE orders (
+      -- {"description":"A column that represents the timestamp when the order was approved.","alias":"_timestamp"}
+      ApprovedTimestamp TIMESTAMP
+    }
+
+    SQL
+    SELECT "_orders"."ApprovedTimestamp" AS "_timestamp" FROM "orders" AS "_orders";
+- DON'T USE '.' in column/table alias, replace '.' with '_' in column/table alias.
 - DON'T USE "FILTER(WHERE <expression>)" clause in the generated SQL query.
 - DON'T USE "EXTRACT(EPOCH FROM <expression>)" clause in the generated SQL query.
 - DON'T USE "EXTRACT()" function with INTERVAL data types as arguments
-- Use INTERVAL only when SQL KNOWLEDGE or SQL FUNCTIONS provides the exact active-dialect syntax. Never invent unquoted interval forms such as INTERVAL 7 DAY.
+- DON'T USE INTERVAL or generate INTERVAL-like expression in the generated SQL query.
 - DON'T USE "TO_CHAR" function in the generated SQL query.
-- DON'T USE unsupported non-standard statistical, date/time, or formatting functions.
 - Aggregate functions are not allowed in the WHERE clause. Instead, they belong in the HAVING clause, which is used to filter after aggregation.
 - You can only add "ORDER BY" and "LIMIT" to the final "UNION" result.
-- For top, bottom, highest, lowest, first, or last requests, sort by an exact selected column or aggregate alias and use LIMIT unless the user explicitly asks for rank values.
+- For the ranking problem, you must use the ranking function, `DENSE_RANK()` to rank the results and then use `WHERE` clause to filter the results.
+- For the ranking problem, you must add the ranking column to the final SELECT clause.
 """
 
 
@@ -398,9 +238,47 @@ _DEFAULT_CALCULATED_FIELD_INSTRUCTIONS = """
 #### Instructions for Calculated Field ####
 
 The first structure is the special column marked as "Calculated Field". You need to interpret the purpose and calculation basis for these columns, then utilize them in the following text-to-sql generation tasks.
-First, interpret each calculated field from its expression, data type, comments, aliases, descriptions, and relationship context in the provided DATABASE SCHEMA.
-Then, if the user query matches a concept already represented by a calculated field, use that exact calculated field name from DATABASE SCHEMA instead of recreating or inventing the calculation.
-Calculated field expressions are semantic definitions; do not copy identifiers from an expression unless they also appear as executable identifiers in the current DATABASE SCHEMA.
+First, provide a brief explanation of what each field represents in the context of the schema, including how each field is computed using the relationships between models.
+Then, during the following tasks, if the user queries pertain to any calculated fields defined in the database schema, ensure to utilize those calculated fields appropriately in the output SQL queries.
+The goal is to accurately reflect the intent of the question in the SQL syntax, leveraging the pre-computed logic embedded within the calculated fields.
+
+EXAMPLES:
+The given schema is created by the SQL command:
+
+CREATE TABLE orders (
+  OrderId VARCHAR PRIMARY KEY,
+  CustomerId VARCHAR,
+  -- This column is a Calculated Field
+  -- column expression: avg(reviews.Score)
+  Rating DOUBLE,
+  -- This column is a Calculated Field
+  -- column expression: count(reviews.Id)
+  ReviewCount BIGINT,
+  -- This column is a Calculated Field
+  -- column expression: count(order_items.ItemNumber)
+  Size BIGINT,
+  -- This column is a Calculated Field
+  -- column expression: count(order_items.ItemNumber) > 1
+  Large BOOLEAN,
+  FOREIGN KEY (CustomerId) REFERENCES customers(Id)
+);
+
+Interpret the columns that are marked as Calculated Fields in the schema:
+Rating (DOUBLE) - Calculated as the average score (avg) of the Score field from the reviews table where the reviews are associated with the order. This field represents the overall customer satisfaction rating for the order based on review scores.
+ReviewCount (BIGINT) - Calculated by counting (count) the number of entries in the reviews table associated with this order. It measures the volume of customer feedback received for the order.
+Size (BIGINT) - Represents the total number of items in the order, calculated by counting the number of item entries (ItemNumber) in the order_items table linked to this order. This field is useful for understanding the scale or size of an order.
+Large (BOOLEAN) - A boolean value calculated to check if the number of items in the order exceeds one (count(order_items.ItemNumber) > 1). It indicates whether the order is considered large in terms of item quantity.
+
+And if the user input queries like these:
+1. "How many large orders have been placed by customer with ID 'C1234'?"
+2. "What is the average customer rating for orders that were rated by more than 10 reviewers?"
+
+For the first query:
+First try to intepret the user query, the user wants to know the average rating for orders which have attracted significant review activity, specifically those with more than 10 reviews.
+Then, according to the above intepretation about the given schema, the term 'Rating' is predefined in the Calculated Field of the 'orders' model. And, the number of reviews is also predefined in the 'ReviewCount' Calculated Field.
+So utilize those Calculated Fields in the SQL generation process to give an answer like this:
+
+SQL Query: SELECT AVG(Rating) FROM orders WHERE ReviewCount > 10
 """
 
 _DEFAULT_METRIC_INSTRUCTIONS = """
@@ -430,8 +308,68 @@ Time Grain specifies the granularity of time-based data aggregation, such as dai
 If the given schema contains the structures marked as 'metric', you should first interpret the metric schema based on the above definition.
 Then, during the following tasks, if the user queries pertain to any metrics defined in the database schema, ensure to utilize those metrics appropriately in the output SQL queries.
 The target is making complex data analysis more accessible and manageable by pre-aggregating data and structuring it using the metric structure, and supporting direct querying for business insights.
-Use metric columns exactly as declared in DATABASE SCHEMA. Treat dimensions as grouping/filtering fields and measures as pre-defined numeric outputs. Metric base objects and measure expressions are semantic context only; do not copy identifiers from them unless those identifiers also appear in the current DATABASE SCHEMA.
-When a question asks for a measure by one or more dimensions, produce a metric-shaped result: select the dimension columns, select the requested measure or grounded expression, group by the dimensions when aggregation is needed, and order or limit only when requested or needed by the question. Do not answer a metric question by selecting every column from a base model.
+
+EXAMPLES:
+The given schema is created by the SQL command:
+
+/* This table is a metric */
+/* Metric Base Object: orders */
+CREATE TABLE Revenue (
+  -- This column is a dimension
+  PurchaseTimestamp TIMESTAMP,
+  -- This column is a dimension
+  CustomerId VARCHAR,
+  -- This column is a dimension
+  Status VARCHAR,
+  -- This column is a measure
+  -- expression: sum(order_items.Price)
+  PriceSum DOUBLE,
+  -- This column is a measure
+  -- expression: count(OrderId)
+  NumberOfOrders BIGINT
+);
+
+Interpret the metric with the understanding of the metric structure:
+1. Base Object: orders
+This is the primary data source for the metric.
+The orders table provides the underlying data from which dimensions and measures are derived.
+It is the foundation upon which the metric is built, though it itself is not directly used in queries against the Revenue table.
+It shows the reference between the 'Revenue' metric and the 'orders' model. For the user queries pretain to the 'Revenue' of 'orders', the metric should be utilize in the sql generation process.
+2. Dimensions
+The metric contains the columns marked as 'dimension'. They can be interpreted as below:
+- PurchaseTimestamp (TIMESTAMP)
+  Acts as a temporal dimension, allowing analysis of revenue over time. This can be used to observe trends, seasonal variations, or performance over specific periods.
+- CustomerId (VARCHAR)
+  A key dimension for customer segmentation, it enables the analysis of revenue generated from individual customers or customer groups.
+- Status (VARCHAR)
+  Reflects the current state of an order (e.g., pending, completed, cancelled). This dimension is crucial for analyses that differentiate performance based on order status.
+3. Measures
+The metric contains the columns marked as 'measure'. They can be interpreted as below:
+- PriceSum (DOUBLE)
+  A financial measure calculated as sum(order_items.Price), representing the total revenue generated from orders. This measure is vital for tracking overall sales performance and is the primary output of interest in many financial and business analyses.
+- NumberOfOrders (BIGINT)
+  A count measure that provides the total number of orders. This is essential for operational metrics, such as assessing the volume of business activity and evaluating the efficiency of sales processes.
+
+Now, if the user input queries like this:
+Question: "What was the total revenue from each customer last month?"
+
+First try to intepret the user query, the user asks for a breakdown of the total revenue generated by each customer in the previous calendar month.
+The user is specifically interested in understanding how much each customer contributed to the total sales during this period.
+To answer this question, it is suitable to use the following components from the metric:
+1. CustomerId (Dimension): This will be used to group the revenue data by each unique customer, allowing us to segment the total revenue by customer.
+2. PurchaseTimestamp (Dimension): This timestamp field will be used to filter the data to only include orders from the last month.
+3. PriceSum (Measure): Since PriceSum is a pre-aggregated measure of total revenue (sum of order_items.Price), it can be directly used to sum up the revenue without needing further aggregation in the SQL query.
+So utilize those metric components in the SQL generation process to give an answer like this:
+
+SQL Query:
+SELECT
+  CustomerId,
+  PriceSum AS TotalRevenue
+FROM
+  Revenue
+WHERE
+  PurchaseTimestamp >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month') AND
+  PurchaseTimestamp < DATE_TRUNC('month', CURRENT_DATE)
 """
 
 _DEFAULT_JSON_FIELD_INSTRUCTIONS = """
@@ -442,13 +380,31 @@ _DEFAULT_JSON_FIELD_INSTRUCTIONS = """
       - LAX_FLOAT64 for double and float fields
       - LAX_INT64 for bigint fields
       - LAX_STRING for varchar fields
-    - JSON paths and nested field names must come from the json_fields metadata attached to the exact JSON column in DATABASE SCHEMA.
+    - For Example:
+      DATA SCHEMA:
+        `/* {"alias":"users","description":"A model representing the users data."} */
+        CREATE TABLE users (
+            -- {"alias":"address","description":"A JSON object that represents address information of this user.","json_type":"JSON","json_fields":{"json_type":"JSON","address.json.city":{"name":"city","type":"varchar","path":"$.city","properties":{"alias":"city","description":"City Name."}},"address.json.state":{"name":"state","type":"varchar","path":"$.state","properties":{"alias":"state","description":"ISO code or name of the state, province or district."}},"address.json.postcode":{"name":"postcode","type":"varchar","path":"$.postcode","properties":{"alias":"postcode","description":"Postal code."}},"address.json.country":{"name":"country","type":"varchar","path":"$.country","properties":{"alias":"country","description":"ISO code of the country."}}}}
+            address JSON
+        )`
+      To get the city of address in user table use SQL:
+      `SELECT LAX_STRING(JSON_QUERY(u.address, '$.city')) FROM user as u`
 - ONLY USE JSON_QUERY_ARRAY for querying "json_type":"JSON_ARRAY" is identified in the comment of the column, NOT the deprecated JSON_EXTRACT_ARRAY.
     - USE UNNEST to analysis each item individually in the ARRAY. YOU MUST SELECT FROM the parent table ahead of the UNNEST ARRAY.
     - The alias of the UNNEST(ARRAY) should be in the format `unnest_table_alias(individual_item_alias)`
+      - For Example: `SELECT item FROM UNNEST(ARRAY[1,2,3]) as my_unnested_table(item)`
     - If the items in the ARRAY are JSON objects, use JSON_QUERY to query the fields inside each JSON item.
+      - For Example:
+      DATA SCHEMA
+        `/* {"alias":"my_table","description":"A test my_table"} */
+        CREATE TABLE my_table (
+            -- {"alias":"elements","description":"elements column","json_type":"JSON_ARRAY","json_fields":{"json_type":"JSON_ARRAY","elements.json_array.id":{"name":"id","type":"bigint","path":"$.id","properties":{"alias":"id","description":"data ID."}},"elements.json_array.key":{"name":"key","type":"varchar","path":"$.key","properties":{"alias":"key","description":"data Key."}},"elements.json_array.value":{"name":"value","type":"varchar","path":"$.value","properties":{"alias":"value","description":"data Value."}}}}
+            elements JSON
+        )`
+        To get the number of elements in my_table table use SQL:
+        `SELECT LAX_INT64(JSON_QUERY(element, '$.number')) FROM my_table as t, UNNEST(JSON_QUERY_ARRAY(elements)) AS my_unnested_table(element) WHERE LAX_FLOAT64(JSON_QUERY(element, '$.value')) > 3.5`
     - To JOIN ON the fields inside UNNEST(ARRAY), YOU MUST SELECT FROM the parent table ahead of the UNNEST syntax, and the alias of the UNNEST(ARRAY) SHOULD BE IN THE FORMAT unnest_table_alias(individual_item_alias)
-    - Do not copy JSON examples, placeholder aliases, or nested paths from prior context. Use only the current table name, JSON column name, and json_fields metadata in DATABASE SCHEMA.
+      - For Example: `SELECT p.column_1, j.column_2 FROM parent_table AS p, join_table AS j JOIN UNNEST(p.array_column) AS unnested(array_item) ON j.id = array_item.id`
 - DON'T USE JSON_QUERY and JSON_QUERY_ARRAY when "json_type":"".
 - DON'T USE LAX_BOOL, LAX_FLOAT64, LAX_INT64, LAX_STRING when "json_type":"".
 """
@@ -456,22 +412,26 @@ _DEFAULT_JSON_FIELD_INSTRUCTIONS = """
 sql_samples_instructions = """
 #### Instructions for SQL Samples ####
 
-Finally, you will learn from the sample questions provided in the input. These samples demonstrate intent and response style for this specific database.
+Finally, you will learn from the sample SQL queries provided in the input. These samples demonstrate best practices and common patterns for querying this specific database.
 
 For each sample, you should:
 1. Study the question that explains what the query aims to accomplish
-2. Use these samples as intent and style context only, but treat the DATABASE SCHEMA as the only valid source of executable table and column names
-3. Adapt the intent patterns to match new query requirements while maintaining consistent style and approach
-4. Never copy table names, column names, aliases, literal values, placeholders, or functions from samples unless the same identifier or function is present in the current DATABASE SCHEMA or SQL FUNCTIONS
+2. Analyze the SQL implementation to understand:
+   - Table structures and relationships used
+   - Specific functions and operators employed
+   - Query patterns and techniques demonstrated
+3. Use these samples as reference patterns when generating similar queries
+4. Adapt the techniques shown in the samples to match new query requirements while maintaining consistent style and approach
 
 The samples will help you understand:
-- Common analytical intents
-- Common aggregation requests
-- Preferred answer style
+- Preferred table join patterns
+- Common aggregation methods
+- Specific function usage
+- Query structure and formatting conventions
 
-When generating new queries, follow similar intent patterns when applicable, while adapting them to the specific requirements of each new query.
+When generating new queries, try to follow similar patterns when applicable, while adapting them to the specific requirements of each new query.
 
-Learn about the user's intent from the samples and generate SQL from the current DATABASE SCHEMA and SQL FUNCTIONS only.
+Learn about the usage of the schema structures and generate SQL based on them.
 """
 
 
@@ -481,21 +441,21 @@ You are a helpful data analyst who is great at thinking deeply and reasoning abo
 
 ### INSTRUCTIONS ###
 1. Think deeply and reason about the user's question, the database schema, and the user's query history if provided.
-2. Explicitly state the requested timeframe in the reasoning plan. Keep it in natural language unless DATABASE SCHEMA and SQL FUNCTIONS provide the exact date/time column and function syntax needed to express it.
+2. Explicitly state the following information in the reasoning plan: 
+if the user puts any specific timeframe(e.g. YYYY-MM-DD) in the user's question(excluding the value of the current time), you will put the absolute time frame in the SQL query; 
+otherwise, you will put the relative timeframe in the SQL query.
 3. For the ranking problem(e.g. "top x", "bottom x", "first x", "last x"), you must use the ranking function, `DENSE_RANK()` to rank the results and then use `WHERE` clause to filter the results.
 4. For the ranking problem(e.g. "top x", "bottom x", "first x", "last x"), you must add the ranking column to the final SELECT clause.
 5. If USER INSTRUCTIONS section is provided, make sure to consider them in the reasoning plan.
-6. If SQL SAMPLES section is provided, consider only their intent and style. Do not use sample table names, column names, aliases, literal values, placeholders, or functions unless the same identifier or function is present in the current DATABASE SCHEMA or SQL FUNCTIONS.
-7. When naming any table or column in the reasoning plan, copy the exact identifier from the CREATE TABLE or CREATE VIEW statements in DATABASE SCHEMA. Do not convert business terms from the user's wording into table or column identifiers.
-8. If a business term in the user question maps to a differently named model or column, explicitly map it to the exact DATABASE SCHEMA identifier in the reasoning plan.
-9. Give a step by step reasoning plan in order to answer user's question.
-10. The reasoning plan should be in the language same as the language user provided in the input.
-11. Don't include SQL in the reasoning plan.
-12. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
-13. Do not include ```markdown or ``` in the answer.
-14. A table name in the reasoning plan must be in this format: `table: <table_name>`.
-15. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
-16. ONLY SHOWING the reasoning plan in bullet points.
+6. If SQL SAMPLES section is provided, make sure to consider them in the reasoning plan.
+7. Give a step by step reasoning plan in order to answer user's question.
+8. The reasoning plan should be in the language same as the language user provided in the input.
+9. Don't include SQL in the reasoning plan.
+10. Each step in the reasoning plan must start with a number, a title(in bold format in markdown), and a reasoning for the step.
+11. Do not include ```markdown or ``` in the answer.
+12. A table name in the reasoning plan must be in this format: `table: <table_name>`.
+13. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
+14. ONLY SHOWING the reasoning plan in bullet points.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format
@@ -513,13 +473,12 @@ def _extract_from_sql_knowledge(
 
 
 def get_text_to_sql_rules(sql_knowledge: SqlKnowledge | None = None) -> str:
-    rules = _DEFAULT_TEXT_TO_SQL_RULES
     if sql_knowledge is not None:
-        rules = _extract_from_sql_knowledge(
+        return _extract_from_sql_knowledge(
             sql_knowledge, "text_to_sql_rule", _DEFAULT_TEXT_TO_SQL_RULES
         )
 
-    return rules
+    return _DEFAULT_TEXT_TO_SQL_RULES
 
 
 def get_calculated_field_instructions(sql_knowledge: SqlKnowledge | None = None) -> str:
@@ -551,86 +510,30 @@ def get_json_field_instructions(sql_knowledge: SqlKnowledge | None = None) -> st
     return _DEFAULT_JSON_FIELD_INSTRUCTIONS
 
 
-def get_additional_sql_instructions(sql_knowledge: SqlKnowledge | None = None) -> str:
-    if sql_knowledge is None:
-        return ""
-
-    instructions = getattr(sql_knowledge, "additional_instructions", {}) or {}
-    sections = []
-    for name, value in instructions.items():
-        if not isinstance(value, str) or not value.strip():
-            continue
-        title = name.replace("_", " ").title()
-        sections.append(f"#### {title} ####\n{value.strip()}")
-
-    return "\n\n".join(sections)
-
-
 def get_sql_generation_system_prompt(sql_knowledge: SqlKnowledge | None = None) -> str:
     text_to_sql_rules = get_text_to_sql_rules(sql_knowledge)
-    additional_sql_instructions = get_additional_sql_instructions(sql_knowledge)
-    additional_sql_instructions_section = (
-        f"""
-### SQL KNOWLEDGE ###
-{additional_sql_instructions}
-"""
-        if additional_sql_instructions
-        else ""
-    )
 
     return f"""
-You are a helpful assistant that converts natural language queries into Wren SQL queries.
+You are a helpful assistant that converts natural language queries into ANSI SQL queries.
 
-Given the user's question and retrieved database schema, generate one grounded Wren SQL query. The DATABASE SCHEMA is the authoritative source of executable identifiers.
+Given user's question, database schema, etc., you should think deeply and carefully and generate the SQL query based on the given reasoning plan step by step.
 
 ### GENERAL RULES ###
 
 1. YOU MUST FOLLOW the instructions strictly to generate the SQL query if the section of USER INSTRUCTIONS is available in user's input.
 2. YOU MUST ONLY CHOOSE the appropriate functions from the sql functions list and use them in the SQL query if the section of SQL FUNCTIONS is available in user's input.
-3. YOU MUST REFER to the sql samples for intent and style only if the section of SQL SAMPLES is available in user's input. SQL samples are not a source of executable identifiers for the current query.
-4. YOU MUST treat the reasoning plan as non-executable intent context only if the section of REASONING PLAN is available in user's input. Do not copy identifiers, functions, literal values, SQL fragments, template markers, or placeholders from the reasoning plan. Choose every executable identifier only from DATABASE SCHEMA or RETRIEVED EXECUTABLE SCHEMA, and every function only from SQL FUNCTIONS.
-5. For date/time filters, use normal comparisons or exact function/date syntax from SQL KNOWLEDGE or SQL FUNCTIONS. Do not invent date arithmetic, INTERVAL expressions, type-cast functions, or connector-specific date functions that are not shown in SQL KNOWLEDGE or SQL FUNCTIONS.
-6. If the question, SQL SAMPLES, USER INSTRUCTIONS, or REASONING PLAN mention a table or column name that is not declared in DATABASE SCHEMA or RETRIEVED EXECUTABLE SCHEMA, treat that text as business context only and choose the exact matching identifier from the retrieved schema.
-7. Select the FROM model/table only from the currently retrieved DATABASE SCHEMA or RETRIEVED EXECUTABLE SCHEMA. Never create a generic table name from the user's words.
-8. Add WHERE only when the question asks for filters, search values, date/time ranges, or constraints that map to an exact retrieved column.
-9. Add GROUP BY only when the question asks for totals, counts, distributions, breakdowns, trends, comparisons, or any aggregate by one or more dimensions.
-10. Add ORDER BY only when the question asks for ranking, top/bottom, sorting, first/last, recent/latest, or when ordering is needed to make a requested LIMIT deterministic.
-11. Use JOIN only when the answer needs columns from multiple retrieved models and DATABASE SCHEMA declares the exact relationship path. Do not join on guessed key names or similar-looking fields.
-12. If the request can be answered from one retrieved model/table, do not force a join.
-13. If the retrieved metadata does not contain a valid model, column, measure, relationship, function, or date/time field needed to answer the question, do not invent it.
-14. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
+3. YOU MUST REFER to the sql samples and learn the usage of the schema structures and how SQL is written based on them if the section of SQL SAMPLES is available in user's input.
+4. YOU MUST FOLLOW the reasoning plan step by step strictly to generate the SQL query if the section of REASONING PLAN is available in user's input.
+5. YOU MUST FOLLOW SQL Rules if they are not contradicted with instructions.
 
 {text_to_sql_rules}
 
-{additional_sql_instructions_section}
-
 ### FINAL ANSWER FORMAT ###
-The final answer must be one JSON object and nothing else. Do not return markdown, explanations, reasoning, or a query plan object.
-The JSON object must have exactly one key named "sql". Do not use keys such as "query", "sql_function", "arguments", "columns", "table", or "where".
-The value of "sql" must be one Wren SQL SELECT statement string.
+The final answer must be a ANSI SQL query in JSON format:
 
 {{
-    "sql": "SELECT ..."
+    "sql": <SQL_QUERY_STRING>
 }}
-"""
-
-
-def add_schema_grounding_to_system_prompt(
-    system_prompt: str,
-    schema_grounding: str | None = None,
-) -> str:
-    if not schema_grounding or not schema_grounding.strip():
-        return system_prompt
-
-    return f"""
-{system_prompt}
-
-### RETRIEVED SCHEMA CONTRACT ###
-The following model/table and column identifiers are the only executable identifiers retrieved for the current user question.
-Use them exactly as written. Do not use any table or column name from the user question, history, examples, invalid SQL, error messages, comments, or physical source metadata unless it appears in this contract.
-Each column belongs only to the model/table it is listed under. If multiple model/tables are needed, use only the listed relationship constraints to connect them. If no listed relationship supports a requested multi-model query, do not invent a join predicate.
-Build clauses from this contract: FROM must use a listed model/table; WHERE must use listed columns required by the question; GROUP BY must use listed dimensions required by aggregates or distributions; ORDER BY must use listed columns or output aggregate aliases; JOIN must use listed relationships only.
-{schema_grounding.strip()}
 """
 
 

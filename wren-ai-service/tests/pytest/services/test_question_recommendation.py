@@ -35,7 +35,7 @@ class CapturingSqlGenerationPipeline:
             "post_process": {
                 "valid_generation_result": {},
                 "invalid_generation_result": {
-                    "type": "SCHEMA_GROUNDING",
+                    "type": "DRY_RUN",
                     "sql": "",
                     "original_sql": "",
                     "error": "invalid",
@@ -45,7 +45,7 @@ class CapturingSqlGenerationPipeline:
 
 
 @pytest.mark.asyncio
-async def test_question_recommendation_passes_schema_context_to_sql_generation():
+async def test_question_recommendation_passes_ddl_context_to_sql_generation():
     sql_generation = CapturingSqlGenerationPipeline()
     service = QuestionRecommendation(
         pipelines={

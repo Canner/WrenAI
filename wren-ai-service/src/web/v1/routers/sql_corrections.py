@@ -12,7 +12,6 @@ from src.globals import (
     get_service_metadata,
 )
 from src.web.v1.services import BaseRequest, SqlCorrectionService
-from src.web.v1.services.schema_context import RetrievedSchemaContext
 
 router = APIRouter()
 
@@ -21,9 +20,8 @@ class PostRequest(BaseRequest):
     sql: str
     error: str
     retrieved_tables: Optional[List[str]] = None
-    retrieved_schema_context: Optional[RetrievedSchemaContext] = None
-    use_dry_plan: bool = True
-    allow_dry_plan_fallback: bool = False
+    use_dry_plan: bool = False
+    allow_dry_plan_fallback: bool = True
 
 
 class PostResponse(BaseModel):

@@ -39,7 +39,7 @@ class _FailingEngine:
 
 
 @pytest.mark.asyncio
-async def test_post_processor_returns_generation_failure_for_truncated_json():
+async def test_post_processor_returns_empty_invalid_result_for_truncated_json():
     processor = SQLGenPostProcessor(engine=_NoopEngine())
 
     result = await processor.run(
@@ -48,14 +48,11 @@ async def test_post_processor_returns_generation_failure_for_truncated_json():
     )
 
     assert result["valid_generation_result"] == {}
-    invalid = result["invalid_generation_result"]
-    assert invalid["type"] == "SQL_GENERATION"
-    assert invalid["sql"] == '{"sql": "SELECT'
-    assert "valid JSON SQL response" in invalid["error"]
+    assert result["invalid_generation_result"] == {}
 
 
 @pytest.mark.asyncio
-async def test_post_processor_keeps_null_sql_as_generation_failure_for_correction():
+async def test_post_processor_returns_empty_invalid_result_for_null_sql():
     processor = SQLGenPostProcessor(engine=_NoopEngine())
 
     result = await processor.run(
@@ -64,54 +61,39 @@ async def test_post_processor_keeps_null_sql_as_generation_failure_for_correctio
     )
 
     assert result["valid_generation_result"] == {}
-    invalid = result["invalid_generation_result"]
-    assert invalid["type"] == "SQL_GENERATION"
-    assert invalid["sql"] == ""
-    assert invalid["original_sql"] == ""
-    assert "empty SQL response" in invalid["error"]
+    assert result["invalid_generation_result"] == {}
 
 
 @pytest.mark.asyncio
-async def test_post_processor_keeps_null_sql_without_finish_reason_as_generation_failure():
+async def test_post_processor_returns_empty_invalid_result_for_null_sql_without_meta():
     processor = SQLGenPostProcessor(engine=_NoopEngine())
 
     result = await processor.run(['{"sql": null}'])
 
     assert result["valid_generation_result"] == {}
-    invalid = result["invalid_generation_result"]
-    assert invalid["type"] == "SQL_GENERATION"
-    assert invalid["sql"] == ""
-    assert invalid["original_sql"] == ""
-    assert "empty SQL response" in invalid["error"]
+    assert result["invalid_generation_result"] == {}
 
 
 @pytest.mark.asyncio
-async def test_post_processor_returns_generation_failure_for_missing_sql_key():
+async def test_post_processor_returns_empty_invalid_result_for_missing_sql_key():
     processor = SQLGenPostProcessor(engine=_NoopEngine())
 
     result = await processor.run(['{"message": "done"}'])
 
     assert result["valid_generation_result"] == {}
-    invalid = result["invalid_generation_result"]
-    assert invalid["type"] == "SQL_GENERATION"
-    assert "valid JSON SQL response" in invalid["error"]
+    assert result["invalid_generation_result"] == {}
 
 
 @pytest.mark.asyncio
-async def test_post_processor_rejects_structured_sql_object_before_grounding():
+async def test_post_processor_returns_empty_invalid_result_for_structured_sql_object():
     processor = SQLGenPostProcessor(engine=_NoopEngine())
 
     result = await processor.run(
         ['{"sql": {"select": ["purchase_order"], "from": "orders"}}'],
-        schema_grounding='- model/table: "orders"',
     )
 
     assert result["valid_generation_result"] == {}
-    invalid = result["invalid_generation_result"]
-    assert invalid["type"] == "SQL_GENERATION"
-    assert invalid["sql"] == ""
-    assert invalid["original_sql"] == ""
-    assert "text SQL response" in invalid["error"]
+    assert result["invalid_generation_result"] == {}
 
 
 @pytest.mark.asyncio
@@ -159,11 +141,6 @@ async def test_post_processor_allows_cte_alias_when_underlying_table_is_grounded
                 'SELECT * FROM recent"}'
             )
         ],
-        schema_grounding=(
-            '- model/table: "dbo_xStageNewOrders"\n'
-            "  columns:\n"
-            '    - "OrderDate"'
-        ),
     )
 
     assert result["invalid_generation_result"] == {}
@@ -182,11 +159,6 @@ async def test_post_processor_allows_qualified_column_on_grounded_alias():
                 'FROM \\"order_model\\" AS o"}'
             )
         ],
-        schema_grounding=(
-            '- model/table: "order_model"\n'
-            "  columns:\n"
-            '    - "order_date"'
-        ),
     )
 
     assert result["invalid_generation_result"] == {}
@@ -206,17 +178,6 @@ async def test_post_processor_allows_join_with_retrieved_relationship():
                 'ON a.\\"entity_id\\" = b.\\"entity_id\\""}'
             )
         ],
-        schema_grounding=(
-            '- model/table: "model_alpha"\n'
-            "  columns:\n"
-            '    - "entity_id"\n'
-            "  relationships:\n"
-            "    - FOREIGN KEY (entity_id) REFERENCES model_beta(entity_id)\n"
-            '- model/table: "model_beta"\n'
-            "  columns:\n"
-            '    - "entity_id"\n'
-            '    - "attribute_value"'
-        ),
     )
 
     assert result["invalid_generation_result"] == {}
@@ -235,11 +196,6 @@ async def test_post_processor_allows_output_aliases_in_order_by():
                 'FROM \\"dbo_xStageNewOrders\\" ORDER BY \\"order_count\\" DESC"}'
             )
         ],
-        schema_grounding=(
-            '- model/table: "dbo_xStageNewOrders"\n'
-            "  columns:\n"
-            '    - "OrderDate"'
-        ),
     )
 
     assert result["invalid_generation_result"] == {}
@@ -259,11 +215,6 @@ async def test_post_processor_allows_string_literals_in_filters():
                 "'India'\"}"
             )
         ],
-        schema_grounding=(
-            '- model/table: "dbo_xStageNewOrders"\n'
-            "  columns:\n"
-            '    - "ShipCountry"'
-        ),
     )
 
     assert result["invalid_generation_result"] == {}
@@ -271,7 +222,7 @@ async def test_post_processor_allows_string_literals_in_filters():
 
 
 @pytest.mark.asyncio
-async def test_post_processor_keeps_raw_wren_sql_when_engine_returns_planned_sql():
+async def test_post_processor_uses_engine_error_sql_for_correction_like_legacy():
     processor = SQLGenPostProcessor(engine=_FailingEngine())
 
     result = await processor.run(
@@ -279,9 +230,8 @@ async def test_post_processor_keeps_raw_wren_sql_when_engine_returns_planned_sql
     )
 
     invalid = result["invalid_generation_result"]
-    assert invalid["sql"] == "SELECT * FROM dbo_xStageNewOrders"
+    assert invalid["sql"] == "SELECT * FROM orders"
     assert invalid["original_sql"] == "SELECT * FROM dbo_xStageNewOrders"
-    assert invalid["engine_sql"] == "SELECT * FROM orders"
     assert invalid["error"] == "Invalid object name 'orders'."
 
 
@@ -292,11 +242,6 @@ async def test_post_processor_allows_raw_sql_when_grounded():
 
     result = await processor.run(
         ['SELECT "created_at" FROM "model_alpha"'],
-        schema_grounding=(
-            '- model/table: "model_alpha"\n'
-            "  columns:\n"
-            '    - "created_at"'
-        ),
     )
 
     assert result["invalid_generation_result"] == {}

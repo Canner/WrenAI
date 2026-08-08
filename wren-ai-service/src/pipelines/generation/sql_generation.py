@@ -13,7 +13,6 @@ from src.core.provider import DocumentStoreProvider, LLMProvider
 from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQLGenPostProcessor,
-    add_schema_grounding_to_system_prompt,
     construct_instructions,
     get_calculated_field_instructions,
     get_json_field_instructions,
@@ -33,12 +32,6 @@ sql_generation_user_prompt_template = """
 {% for document in documents %}
     {{ document }}
 {% endfor %}
-
-{% if schema_grounding %}
-### RETRIEVED EXECUTABLE SCHEMA ###
-The following identifiers come from Ask Retrieval for this question. Use these exact model/table and column names when writing SQL.
-{{ schema_grounding }}
-{% endif %}
 
 {% if calculated_field_instructions %}
 {{ calculated_field_instructions }}
@@ -68,7 +61,6 @@ Follow SQL KNOWLEDGE and SQL FUNCTIONS for this data source. Do not use a functi
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
-These samples are confirmed question examples for this project deployment. Use them for intent and style only. They are not a source of executable SQL identifiers.
 {% for sample in sql_samples %}
 Question:
 {{sample.question}}
@@ -92,12 +84,7 @@ User's Question: {{ query }}
 {{ sql_generation_reasoning }}
 {% endif %}
 
-Treat the user's question as business intent only. Do not copy words from the question into SQL identifiers unless the same identifier appears exactly in DATABASE SCHEMA or RETRIEVED EXECUTABLE SCHEMA.
-
-Use DATABASE SCHEMA and RETRIEVED EXECUTABLE SCHEMA as the only sources for executable table and column identifiers. The question and SQL sample questions can explain intent, but they must not introduce identifiers that are absent from the retrieved schema.
-If a word from the user's question is not listed as a retrieved model/table or column identifier, do not use that word as an SQL identifier.
-Choose the FROM model/table from the retrieved schema only. Add WHERE only for requested filters or time ranges that map to retrieved columns. Add GROUP BY only for requested totals, counts, distributions, comparisons, or trends. Add ORDER BY only for ranking, sorting, recent/latest, or deterministic LIMIT requests. Use JOIN only when multiple retrieved models are required and the retrieved schema declares the relationship; otherwise answer from one model when possible.
-Think through the request silently. Return only the final JSON SQL response.
+Let's think step by step.
 """
 
 
@@ -108,7 +95,6 @@ def prompt(
     documents: list[str],
     prompt_builder: PromptBuilder,
     sql_generation_reasoning: str | None = None,
-    schema_grounding: str | None = None,
     sql_samples: list[dict] | None = None,
     instructions: list[dict] | None = None,
     has_calculated_field: bool = False,
@@ -121,7 +107,6 @@ def prompt(
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
-        schema_grounding=schema_grounding,
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
@@ -151,12 +136,8 @@ async def generate_sql(
     generator: Any,
     generator_name: str,
     sql_knowledge: SqlKnowledge | None = None,
-    schema_grounding: str | None = None,
 ) -> dict:
-    current_system_prompt = add_schema_grounding_to_system_prompt(
-        get_sql_generation_system_prompt(sql_knowledge),
-        schema_grounding,
-    )
+    current_system_prompt = get_sql_generation_system_prompt(sql_knowledge)
     return await generator(
         prompt=prompt.get("prompt"),
         current_system_prompt=current_system_prompt,
@@ -168,11 +149,10 @@ async def post_process(
     generate_sql: dict,
     post_processor: SQLGenPostProcessor,
     data_source: str,
-    schema_grounding: str | None = None,
     project_id: str | None = None,
     mdl_hash: str | None = None,
     use_dry_plan: bool = False,
-    allow_dry_plan_fallback: bool = False,
+    allow_dry_plan_fallback: bool = True,
     allow_data_preview: bool = False,
 ) -> dict:
     return await post_processor.run(
@@ -183,7 +163,6 @@ async def post_process(
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
         allow_data_preview=allow_data_preview,
-        schema_grounding=schema_grounding,
         meta=generate_sql.get("meta"),
     )
 
@@ -226,7 +205,6 @@ class SQLGeneration(BasicPipeline):
         query: str,
         contexts: list[str],
         sql_generation_reasoning: str | None = None,
-        schema_grounding: str | None = None,
         sql_samples: list[dict] | None = None,
         instructions: list[dict] | None = None,
         project_id: str | None = None,
@@ -236,7 +214,7 @@ class SQLGeneration(BasicPipeline):
         has_json_field: bool = False,
         sql_functions: list[SqlFunction] | None = None,
         use_dry_plan: bool = False,
-        allow_dry_plan_fallback: bool = False,
+        allow_dry_plan_fallback: bool = True,
         allow_data_preview: bool = False,
         sql_knowledge: SqlKnowledge | None = None,
     ):
@@ -257,7 +235,6 @@ class SQLGeneration(BasicPipeline):
                 "query": query,
                 "documents": contexts,
                 "sql_generation_reasoning": sql_generation_reasoning,
-                "schema_grounding": schema_grounding,
                 "sql_samples": sql_samples,
                 "instructions": instructions,
                 "project_id": project_id,

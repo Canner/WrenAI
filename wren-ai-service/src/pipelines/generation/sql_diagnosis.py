@@ -20,17 +20,15 @@ logger = logging.getLogger("wren-ai-service")
 
 sql_diagnosis_system_prompt = """
 ### TASK ###
-You are a Wren SQL expert with exceptional logical thinking skills and debugging skills, you need to diagnose the issue with the given SQL query, error message, database schema, and configured data source.
+You are an ANSI SQL expert with exceptional logical thinking skills and debugging skills, you need to diagnose the issue with the given SQL query, error message and database schema.
 
 ### SQL DIAGNOSIS INSTRUCTIONS ###
 
 1. First, think hard about the error message, and analyze the invalid SQL query to figure out the root cause and which part is incorrect.
 2. Then, map the incorrect part of the invalid SQL query to the corresponding part of the original SQL query.
 3. Then, return the reasoning behind the diagnosis.(You should give me the part of the original SQL query that is incorrect and the reason why it is incorrect)
-4. Treat DATABASE SCHEMA as the only source of valid executable table and column identifiers. If the invalid SQL uses a table or column absent from DATABASE SCHEMA, diagnose that identifier as ungrounded rather than assuming it is a real physical database object.
-5. Treat the configured data source as the SQL dialect used by Wren Engine/IBIS validation. If the error is caused by a function, cast style, date/time expression, interval literal, or operator from another dialect, diagnose it as an unsupported dialect expression.
-6. Reasoning should be in the language same as the language user provided in the INPUTS section.
-7. Reasoning should be concise and to the point and within 50 words.
+4. Reasoning should be in the language same as the language user provided in the INPUTS section.
+5. Reasoning should be concise and to the point and within 50 words.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be in JSON format:
@@ -45,12 +43,6 @@ sql_diagnosis_user_prompt_template = """
 {% for document in documents %}
     {{ document }}
 {% endfor %}
-
-{% if schema_grounding %}
-### RETRIEVED EXECUTABLE SCHEMA ###
-The following identifiers come from Ask Retrieval for this question. Use these exact model/table and column names when diagnosing SQL.
-{{ schema_grounding }}
-{% endif %}
 
 ### INPUTS ###
 Original SQL:
@@ -79,7 +71,6 @@ def prompt(
     error_message: str,
     language: str,
     prompt_builder: PromptBuilder,
-    schema_grounding: str | None = None,
     data_source: str | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
@@ -88,7 +79,6 @@ def prompt(
         invalid_sql=invalid_sql,
         error_message=error_message,
         language=language,
-        schema_grounding=schema_grounding,
         data_source=data_source or "unknown",
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
@@ -174,7 +164,6 @@ class SQLDiagnosis(BasicPipeline):
         invalid_sql: str,
         error_message: str,
         language: str,
-        schema_grounding: str | None = None,
         data_source: str | None = None,
     ):
         logger.info("SQLDiagnosis pipeline is running...")
@@ -187,7 +176,6 @@ class SQLDiagnosis(BasicPipeline):
                 "invalid_sql": invalid_sql,
                 "error_message": error_message,
                 "language": language,
-                "schema_grounding": schema_grounding,
                 "data_source": data_source,
                 **self._components,
             },

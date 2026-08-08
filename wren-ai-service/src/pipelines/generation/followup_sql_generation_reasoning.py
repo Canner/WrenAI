@@ -28,15 +28,8 @@ sql_generation_reasoning_user_prompt_template = """
     {{ document }}
 {% endfor %}
 
-{% if schema_grounding %}
-### RETRIEVED EXECUTABLE SCHEMA ###
-The following identifiers come from Ask Retrieval for this question. Use these exact model/table and column names when planning SQL.
-{{ schema_grounding }}
-{% endif %}
-
 {% if sql_samples %}
 ### SQL SAMPLES ###
-These samples are confirmed question examples for this project deployment. Use them to understand intent and style only.
 {% for sql_sample in sql_samples %}
 Question:
 {{sql_sample.question}}
@@ -66,8 +59,6 @@ Language: {{ language }}
 Current Time: {{ current_time }}
 
 Let's think step by step.
-When the user uses a business term, map it only to an identifier listed in DATABASE SCHEMA or RETRIEVED EXECUTABLE SCHEMA. Do not turn a user word into a table or column name unless it is listed there.
-Use SQL sample questions and query history questions only as intent examples. Do not copy from the user's wording as an identifier unless it is listed in DATABASE SCHEMA or RETRIEVED EXECUTABLE SCHEMA.
 """
 
 
@@ -80,13 +71,11 @@ def prompt(
     sql_samples: list[dict],
     instructions: list[dict],
     prompt_builder: PromptBuilder,
-    schema_grounding: str | None = None,
     configuration: Configuration | None = Configuration(),
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
         documents=documents,
-        schema_grounding=schema_grounding,
         histories=histories,
         sql_samples=sql_samples,
         instructions=construct_instructions(
@@ -185,7 +174,6 @@ class FollowUpSQLGenerationReasoning(BasicPipeline):
         histories: list[AskHistory],
         sql_samples: Optional[list[dict]] = None,
         instructions: Optional[list[dict]] = None,
-        schema_grounding: str | None = None,
         configuration: Configuration = Configuration(),
         query_id: Optional[str] = None,
     ):
@@ -195,7 +183,6 @@ class FollowUpSQLGenerationReasoning(BasicPipeline):
             inputs={
                 "query": query,
                 "documents": contexts,
-                "schema_grounding": schema_grounding,
                 "histories": histories,
                 "sql_samples": sql_samples or [],
                 "instructions": instructions or [],
