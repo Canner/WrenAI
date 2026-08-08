@@ -386,3 +386,45 @@ async def test_post_processor_keeps_raw_wren_sql_when_engine_returns_planned_sql
     assert invalid["original_sql"] == "SELECT * FROM dbo_xStageNewOrders"
     assert invalid["engine_sql"] == "SELECT * FROM orders"
     assert invalid["error"] == "Invalid object name 'orders'."
+
+
+@pytest.mark.asyncio
+async def test_post_processor_schema_validates_raw_sql_before_engine_validation():
+    processor = SQLGenPostProcessor(engine=_NoopEngine())
+
+    result = await processor.run(
+        ["SELECT * FROM orders"],
+        schema_grounding=(
+            '- model/table: "model_alpha"\n'
+            "  columns:\n"
+            '    - "created_at"'
+        ),
+        data_source="mssql",
+    )
+
+    assert result["valid_generation_result"] == {}
+    invalid = result["invalid_generation_result"]
+    assert invalid["type"] == "SCHEMA_GROUNDING"
+    assert invalid["sql"] == "SELECT * FROM orders"
+    assert '"orders"' in invalid["error"]
+    assert '"model_alpha"' in invalid["error"]
+    assert invalid["data_source"] == "mssql"
+
+
+@pytest.mark.asyncio
+async def test_post_processor_allows_raw_sql_when_grounded():
+    engine = _CapturingEngine()
+    processor = SQLGenPostProcessor(engine=engine)
+
+    result = await processor.run(
+        ['SELECT "created_at" FROM "model_alpha"'],
+        schema_grounding=(
+            '- model/table: "model_alpha"\n'
+            "  columns:\n"
+            '    - "created_at"'
+        ),
+    )
+
+    assert result["invalid_generation_result"] == {}
+    assert result["valid_generation_result"] != {}
+    assert engine.execute_kwargs is not None
