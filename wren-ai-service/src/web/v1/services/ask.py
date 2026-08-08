@@ -771,8 +771,8 @@ class AskService:
         ask_result_request: AskResultRequest,
     ) -> AskResultResponse:
         if (result := self._ask_results.get(ask_result_request.query_id)) is None:
-            logger.exception(
-                f"ask pipeline - OTHERS: {ask_result_request.query_id} is not found"
+            logger.warning(
+                f"ask pipeline - ASK_RESULT_NOT_FOUND: {ask_result_request.query_id} is not found"
             )
             return AskResultResponse(
                 status="failed",
