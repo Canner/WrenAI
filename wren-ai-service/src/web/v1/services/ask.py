@@ -112,7 +112,9 @@ def build_sql_correction_input(
         return {
             "sql": "",
             "type": failed_generation_result.get("type", ""),
-            "error": correction_error_message,
+            "error": build_schema_grounding_recovery_message(
+                failed_generation_result
+            ),
         }
 
     return {
@@ -121,6 +123,20 @@ def build_sql_correction_input(
         "type": failed_generation_result.get("type", ""),
         "error": correction_error_message,
     }
+
+
+def build_schema_grounding_recovery_message(
+    failed_generation_result: dict[str, Any],
+) -> str:
+    if not is_schema_grounding_error(failed_generation_result):
+        return failed_generation_result.get("error", "")
+
+    return (
+        "The previous SQL used executable table or column identifiers that are "
+        "absent from the retrieved Wren schema. Regenerate the SQL from the "
+        "user question using only DATABASE SCHEMA, RETRIEVED EXECUTABLE SCHEMA, "
+        "SQL FUNCTIONS, USER INSTRUCTIONS, and the configured datasource dialect."
+    )
 
 
 def build_sql_regeneration_source_sql(
@@ -141,6 +157,36 @@ def build_sql_generation_reasoning_text(
         return sql_generation_reasoning.get("reasoning", "") or ""
 
     return sql_generation_reasoning or ""
+
+
+def build_sql_regeneration_reasoning_text(
+    failed_generation_result: dict[str, Any],
+    sql_generation_reasoning: Any,
+) -> str:
+    if is_schema_grounding_error(failed_generation_result):
+        return ""
+
+    return build_sql_generation_reasoning_text(sql_generation_reasoning)
+
+
+def build_sql_regeneration_samples(
+    failed_generation_result: dict[str, Any],
+    sql_samples: list[dict] | None,
+) -> list[dict]:
+    if is_schema_grounding_error(failed_generation_result):
+        return []
+
+    return sql_samples or []
+
+
+def build_safe_invalid_sql(
+    failed_generation_result: dict[str, Any] | None,
+    invalid_sql: str | None,
+) -> str | None:
+    if failed_generation_result and is_schema_grounding_error(failed_generation_result):
+        return None
+
+    return invalid_sql
 
 
 # POST /v1/asks
@@ -701,14 +747,18 @@ class AskService:
                                     sql_regeneration_pipeline.run(
                                         contexts=table_ddls,
                                         query=user_query,
-                                        sql_generation_reasoning=build_sql_generation_reasoning_text(
+                                        sql_generation_reasoning=build_sql_regeneration_reasoning_text(
+                                            failed_dry_run_result,
                                             sql_generation_reasoning
                                         ),
                                         sql=build_sql_regeneration_source_sql(
                                             failed_dry_run_result
                                         ),
                                         schema_grounding=schema_grounding,
-                                        sql_samples=sql_samples,
+                                        sql_samples=build_sql_regeneration_samples(
+                                            failed_dry_run_result,
+                                            sql_samples,
+                                        ),
                                         instructions=instructions,
                                         project_id=ask_request.project_id,
                                         mdl_hash=ask_request.mdl_hash,
@@ -750,6 +800,8 @@ class AskService:
                                 original_sql = failed_dry_run_result["original_sql"]
                                 invalid_sql = failed_dry_run_result["sql"]
                                 error_message = failed_dry_run_result["error"]
+                                if is_schema_grounding_error(failed_dry_run_result):
+                                    continue
 
                         if allow_sql_diagnosis and not is_schema_grounding_error(
                             failed_dry_run_result
@@ -856,7 +908,10 @@ class AskService:
                         intent_reasoning=intent_reasoning,
                         retrieved_tables=table_names,
                         sql_generation_reasoning=sql_generation_reasoning,
-                        invalid_sql=invalid_sql,
+                        invalid_sql=build_safe_invalid_sql(
+                            failed_dry_run_result,
+                            invalid_sql,
+                        ),
                         trace_id=trace_id,
                         is_followup=True if histories else False,
                     )
