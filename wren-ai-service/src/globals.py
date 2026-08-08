@@ -150,6 +150,9 @@ def create_service_container(
                     **pipe_components["followup_sql_generation_reasoning"],
                 ),
                 "sql_correction": _sql_correction_pipeline,
+                "sql_regeneration": generation.SQLRegeneration(
+                    **pipe_components["sql_regeneration"],
+                ),
                 "followup_sql_generation": generation.FollowUpSQLGeneration(
                     **pipe_components["followup_sql_generation"],
                 ),

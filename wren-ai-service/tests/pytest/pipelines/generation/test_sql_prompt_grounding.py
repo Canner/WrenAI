@@ -431,6 +431,7 @@ def test_sql_regeneration_prompt_omits_sample_sql_body():
                 "sql": "SELECT * FROM orders WHERE country = 'Taiwan'",
             }
         ],
+        data_source="trino",
         prompt_builder=PromptBuilder(template=sql_regeneration_user_prompt_template),
     )
 
@@ -442,6 +443,8 @@ def test_sql_regeneration_prompt_omits_sample_sql_body():
     assert "SELECT * FROM orders" not in built_prompt
     assert "WHERE country" not in built_prompt
     assert "confirmed question examples for this project deployment" in built_prompt
+    assert "Configured data source: trino" in built_prompt
+    assert "dry-plans and dry-runs successfully" in built_prompt
     assert "Use DATABASE SCHEMA and RETRIEVED EXECUTABLE SCHEMA" in built_prompt
     assert "Return only the final JSON SQL response" in built_prompt
     assert "Let's think step by step" not in built_prompt

@@ -9,8 +9,8 @@ from langfuse.decorators import observe
 
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
-from src.core.provider import LLMProvider
-from src.pipelines.common import clean_up_new_lines
+from src.core.provider import DocumentStoreProvider, LLMProvider
+from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
@@ -96,6 +96,13 @@ The following identifiers come from Ask Retrieval for this question. Use these e
 {% endfor %}
 {% endif %}
 
+{% if data_source %}
+### SQL DIALECT ###
+Configured data source: {{ data_source }}.
+Generate Wren SQL that dry-plans and dry-runs successfully for this configured data source through Wren Engine/IBIS.
+Follow SQL KNOWLEDGE and SQL FUNCTIONS for this data source. Do not use a function, cast style, interval literal, or date/time expression merely because it exists in another database dialect.
+{% endif %}
+
 {% if sql_samples %}
 ### SQL SAMPLES ###
 These samples are confirmed question examples for this project deployment. Use them for intent and style only. They are not a source of executable SQL identifiers.
@@ -139,6 +146,7 @@ def prompt(
     has_json_field: bool = False,
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
+    data_source: str | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
@@ -162,6 +170,7 @@ def prompt(
         ),
         sql_samples=sql_samples,
         sql_functions=sql_functions,
+        data_source=data_source,
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
@@ -192,11 +201,19 @@ async def post_process(
     schema_grounding: str | None = None,
     project_id: str | None = None,
     mdl_hash: str | None = None,
+    use_dry_plan: bool = False,
+    allow_dry_plan_fallback: bool = False,
+    data_source: str = "",
+    allow_data_preview: bool = False,
 ) -> dict:
     return await post_processor.run(
         regenerate_sql.get("replies"),
         project_id=project_id,
         mdl_hash=mdl_hash,
+        use_dry_plan=use_dry_plan,
+        data_source=data_source,
+        allow_dry_plan_fallback=allow_dry_plan_fallback,
+        allow_data_preview=allow_data_preview,
         schema_grounding=schema_grounding,
         meta=regenerate_sql.get("meta"),
     )
@@ -210,9 +227,17 @@ class SQLRegeneration(BasicPipeline):
         self,
         llm_provider: LLMProvider,
         engine: Engine,
+        document_store_provider: DocumentStoreProvider | None = None,
         **kwargs,
     ):
         self.generation_timeout_seconds = llm_provider.get_timeout()
+        self._retriever = (
+            document_store_provider.get_retriever(
+                document_store_provider.get_store("project_meta")
+            )
+            if document_store_provider
+            else None
+        )
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=get_sql_regeneration_system_prompt(None),
@@ -246,8 +271,20 @@ class SQLRegeneration(BasicPipeline):
         has_json_field: bool = False,
         sql_functions: list[SqlFunction] | None = None,
         sql_knowledge: SqlKnowledge | None = None,
+        use_dry_plan: bool = False,
+        allow_dry_plan_fallback: bool = False,
+        allow_data_preview: bool = False,
     ):
         logger.info("SQL Regeneration pipeline is running...")
+
+        if use_dry_plan and self._retriever:
+            metadata = await retrieve_metadata(
+                project_id or "",
+                self._retriever,
+                mdl_hash=mdl_hash,
+            )
+        else:
+            metadata = {}
 
         return await self._pipe.execute(
             ["post_process"],
@@ -266,6 +303,10 @@ class SQLRegeneration(BasicPipeline):
                 "has_json_field": has_json_field,
                 "sql_functions": sql_functions,
                 "sql_knowledge": sql_knowledge,
+                "use_dry_plan": use_dry_plan,
+                "allow_dry_plan_fallback": allow_dry_plan_fallback,
+                "allow_data_preview": allow_data_preview,
+                "data_source": metadata.get("data_source", "local_file"),
                 **self._components,
             },
         )

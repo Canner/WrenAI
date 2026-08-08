@@ -15,6 +15,8 @@ from src.web.v1.services.ask import (
     AskService,
     build_sql_correction_error_message,
     build_sql_correction_input,
+    build_sql_generation_reasoning_text,
+    build_sql_regeneration_source_sql,
     build_schema_grounding_context,
     get_pipeline_timeout_seconds,
     is_schema_grounding_error,
@@ -241,6 +243,38 @@ def test_schema_grounding_correction_input_omits_rejected_sql():
     }
 
 
+def test_schema_grounding_regeneration_source_omits_rejected_sql():
+    assert (
+        build_sql_regeneration_source_sql(
+            {
+                "sql": "SELECT * FROM hallucinated_table",
+                "original_sql": "SELECT * FROM hallucinated_table",
+                "type": "SCHEMA_GROUNDING",
+            }
+        )
+        == ""
+    )
+    assert (
+        build_sql_regeneration_source_sql(
+            {
+                "sql": "SELECT * FROM model_alpha",
+                "original_sql": "SELECT * FROM model_alpha",
+                "type": "DRY_RUN",
+            }
+        )
+        == "SELECT * FROM model_alpha"
+    )
+
+
+def test_sql_generation_reasoning_text_extracts_reasoning():
+    assert (
+        build_sql_generation_reasoning_text({"reasoning": "use modeled tables"})
+        == "use modeled tables"
+    )
+    assert build_sql_generation_reasoning_text("plain reasoning") == "plain reasoning"
+    assert build_sql_generation_reasoning_text(None) == ""
+
+
 class _EmptyRetrievalPipeline:
     async def run(self, **_):
         return {"formatted_output": {"documents": []}}
@@ -347,6 +381,32 @@ class _SlowButProviderAllowedSqlGenerationPipeline:
 
 
 class _CapturingCorrectionPipeline:
+    def __init__(self):
+        self.calls = []
+
+    async def run(self, **kwargs):
+        self.calls.append(kwargs)
+        return {
+            "post_process": {
+                "valid_generation_result": {
+                    "sql": "SELECT COUNT(*) AS record_count FROM model_alpha",
+                    "correlation_id": "",
+                },
+                "invalid_generation_result": {},
+            }
+        }
+
+
+class _FailingCorrectionPipeline:
+    def __init__(self):
+        self.calls = []
+
+    async def run(self, **kwargs):
+        self.calls.append(kwargs)
+        raise AssertionError("sql_correction should not run after regeneration succeeds")
+
+
+class _CapturingRegenerationPipeline:
     def __init__(self):
         self.calls = []
 
@@ -508,6 +568,52 @@ async def test_ask_schema_grounding_recovery_omits_hallucinated_sql():
     assert "SELECT * FROM hallucinated_table" not in correction.calls[0][
         "invalid_generation_result"
     ]["error"]
+
+
+@pytest.mark.asyncio
+async def test_ask_regenerates_schema_grounding_failures_before_correction():
+    regeneration = _CapturingRegenerationPipeline()
+    correction = _FailingCorrectionPipeline()
+    diagnosis = _FailingDiagnosisPipeline()
+    generation = _SchemaGroundingSqlGenerationPipeline()
+    ask_service = AskService(
+        {
+            "historical_question": _EmptyRetrievalPipeline(),
+            "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
+            "instructions_retrieval": _EmptyRetrievalPipeline(),
+            "db_schema_retrieval": _SchemaRetrievalPipeline(),
+            "sql_generation": generation,
+            "sql_regeneration": regeneration,
+            "sql_correction": correction,
+            "sql_diagnosis": diagnosis,
+        },
+        allow_intent_classification=False,
+        allow_sql_generation_reasoning=False,
+        allow_sql_functions_retrieval=False,
+        allow_sql_knowledge_retrieval=False,
+        allow_sql_diagnosis=True,
+    )
+    query_id = str(uuid.uuid4())
+    ask_request = AskRequest(query="show hallucinated records", mdl_hash=None)
+    ask_request.query_id = query_id
+
+    await ask_service.ask(ask_request)
+
+    ask_result_response = ask_service.get_ask_result(
+        AskResultRequest(query_id=query_id)
+    )
+    assert ask_result_response.status == "finished"
+    assert ask_result_response.response[0].sql == (
+        "SELECT COUNT(*) AS record_count FROM model_alpha"
+    )
+    assert diagnosis.calls == []
+    assert correction.calls == []
+    assert regeneration.calls[0]["sql"] == ""
+    assert regeneration.calls[0]["schema_grounding"] == (
+        '- model/table: "model_alpha"\n'
+        "  columns:\n"
+        '    - "entity_id"'
+    )
 
 
 @pytest.mark.asyncio
