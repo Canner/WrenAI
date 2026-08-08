@@ -84,6 +84,12 @@ Question:
 
 ### QUESTION ###
 User's Question: {{ query }}
+
+{% if sql_generation_reasoning %}
+### REASONING PLAN ###
+{{ sql_generation_reasoning }}
+{% endif %}
+
 Treat the user's question as business intent only. Do not copy words from the question into SQL identifiers unless the same identifier appears exactly in DATABASE SCHEMA or RETRIEVED EXECUTABLE SCHEMA.
 
 Use DATABASE SCHEMA and RETRIEVED EXECUTABLE SCHEMA as the only sources for executable table and column identifiers. The question and SQL sample questions can explain intent, but they must not introduce identifiers that are absent from the retrieved schema.

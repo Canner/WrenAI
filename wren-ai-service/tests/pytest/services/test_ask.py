@@ -14,6 +14,7 @@ from src.web.v1.services.ask import (
     AskResultRequest,
     AskService,
     build_safe_invalid_sql,
+    build_retrieved_schema_context,
     build_schema_grounding_context,
     build_schema_grounding_recovery_message,
     build_sql_correction_error_message,
@@ -29,6 +30,52 @@ from src.web.v1.services.ask import (
 from src.web.v1.services.semantics_preparation import (
     SemanticsPreparationRequest,
     SemanticsPreparationService,
+)
+
+DEPLOYED_ORDER_MODEL = "deployed_order_model"
+DEPLOYED_SHIP_COUNTRY = "ShipCountry"
+DEPLOYED_ORDER_DATE = "OrderDate"
+DEPLOYED_SELECTED_DDL = (
+    f"CREATE TABLE {DEPLOYED_ORDER_MODEL} ({DEPLOYED_SHIP_COUNTRY} VARCHAR)"
+)
+DEPLOYED_UNPRUNED_DDL = (
+    f"CREATE TABLE {DEPLOYED_ORDER_MODEL} "
+    f"({DEPLOYED_SHIP_COUNTRY} VARCHAR, {DEPLOYED_ORDER_DATE} TIMESTAMP)"
+)
+DEPLOYED_SELECTED_GROUNDING = (
+    f'- model/table: "{DEPLOYED_ORDER_MODEL}"\n'
+    "  columns:\n"
+    f'    - "{DEPLOYED_SHIP_COUNTRY}"'
+)
+
+MODEL_ALPHA = "model_alpha"
+MODEL_ALPHA_ENTITY_ID = "entity_id"
+MODEL_ALPHA_ENTITY_DDL = (
+    f"CREATE TABLE {MODEL_ALPHA} ({MODEL_ALPHA_ENTITY_ID} INTEGER)"
+)
+MODEL_ALPHA_ENTITY_GROUNDING = (
+    f'- model/table: "{MODEL_ALPHA}"\n'
+    "  columns:\n"
+    f'    - "{MODEL_ALPHA_ENTITY_ID}"'
+)
+MODEL_ALPHA_SELECT_SQL = f"SELECT * FROM {MODEL_ALPHA}"
+MODEL_ALPHA_ENTITY_SQL = f"SELECT {MODEL_ALPHA_ENTITY_ID} FROM {MODEL_ALPHA}"
+MODEL_ALPHA_COUNT_SQL = f"SELECT COUNT(*) AS record_count FROM {MODEL_ALPHA}"
+
+MODEL_ALPHA_SELECTED_MEASURE = "selected_measure"
+MODEL_ALPHA_RECOVERED_DIMENSION = "recovered_dimension"
+MODEL_ALPHA_PRUNED_DDL = (
+    f"CREATE TABLE {MODEL_ALPHA} ({MODEL_ALPHA_SELECTED_MEASURE} INTEGER)"
+)
+MODEL_ALPHA_UNPRUNED_DDL = (
+    f"CREATE TABLE {MODEL_ALPHA} "
+    f"({MODEL_ALPHA_SELECTED_MEASURE} INTEGER, "
+    f"{MODEL_ALPHA_RECOVERED_DIMENSION} VARCHAR)"
+)
+MODEL_ALPHA_SELECTED_GROUNDING = (
+    f'- model/table: "{MODEL_ALPHA}"\n'
+    "  columns:\n"
+    f'    - "{MODEL_ALPHA_SELECTED_MEASURE}"'
 )
 
 
@@ -155,16 +202,16 @@ def mdl_str():
         return orjson.dumps(json.load(f)).decode("utf-8")
 
 
-def test_ask_request_skips_sql_generation_reasoning_by_default():
+def test_ask_request_runs_sql_generation_reasoning_by_default():
     ask_request = AskRequest(query="question", mdl_hash="deploy")
 
-    assert ask_request.ignore_sql_generation_reasoning is True
+    assert ask_request.ignore_sql_generation_reasoning is False
 
 
-def test_ask_service_skips_sql_generation_reasoning_by_default():
+def test_ask_service_runs_sql_generation_reasoning_by_default():
     ask_service = AskService({})
 
-    assert ask_service._allow_sql_generation_reasoning is False
+    assert ask_service._allow_sql_generation_reasoning is True
 
 
 def test_ask_request_uses_dry_plan_validation_by_default():
@@ -199,7 +246,7 @@ def test_schema_grounding_context_uses_retrieved_identifiers():
     context = build_schema_grounding_context(
         [
             {
-                "table_name": "deployed_order_model",
+                "table_name": DEPLOYED_ORDER_MODEL,
                 "column_names": ["ship_country", "order_date"],
                 "manifest_column_names": ["id", "ship_country", "order_date"],
                 "relationship_constraints": [
@@ -209,12 +256,42 @@ def test_schema_grounding_context_uses_retrieved_identifiers():
         ]
     )
 
-    assert '- model/table: "deployed_order_model"' in context
-    assert '- "id"' in context
+    assert f'- model/table: "{DEPLOYED_ORDER_MODEL}"' in context
     assert '- "ship_country"' in context
     assert '- "order_date"' in context
     assert "FOREIGN KEY" in context
+    assert '"id"' not in context
     assert '"orders"' not in context
+
+
+def test_retrieved_schema_context_is_derived_from_retrieval_results():
+    retrieval_result = {
+        "construct_retrieval_results": {
+            "retrieval_results": [
+                {
+                    "table_name": DEPLOYED_ORDER_MODEL,
+                    "table_ddl": DEPLOYED_SELECTED_DDL,
+                    "unpruned_table_ddl": DEPLOYED_UNPRUNED_DDL,
+                    "column_names": [DEPLOYED_SHIP_COUNTRY],
+                    "manifest_column_names": [
+                        DEPLOYED_SHIP_COUNTRY,
+                        DEPLOYED_ORDER_DATE,
+                    ],
+                    "relationship_constraints": [],
+                }
+            ],
+            "has_calculated_field": False,
+            "has_metric": False,
+            "has_json_field": False,
+        }
+    }
+
+    schema_context = build_retrieved_schema_context(retrieval_result)
+
+    assert schema_context.table_names == [DEPLOYED_ORDER_MODEL]
+    assert schema_context.contexts == [DEPLOYED_SELECTED_DDL]
+    assert schema_context.sql_generation_contexts == [DEPLOYED_SELECTED_DDL]
+    assert schema_context.grounding == DEPLOYED_SELECTED_GROUNDING
 
 
 def test_schema_grounding_error_detection_uses_validation_type():
@@ -304,12 +381,12 @@ def test_schema_grounding_regeneration_source_omits_rejected_sql():
     assert (
         build_sql_regeneration_source_sql(
             {
-                "sql": "SELECT * FROM model_alpha",
-                "original_sql": "SELECT * FROM model_alpha",
+                "sql": MODEL_ALPHA_SELECT_SQL,
+                "original_sql": MODEL_ALPHA_SELECT_SQL,
                 "type": "DRY_RUN",
             }
         )
-        == "SELECT * FROM model_alpha"
+        == MODEL_ALPHA_SELECT_SQL
     )
 
 
@@ -325,7 +402,7 @@ def test_sql_generation_reasoning_text_extracts_reasoning():
 def test_schema_grounding_regeneration_omits_bad_context_and_uses_recovery_feedback():
     failed_schema_result = {"type": "SCHEMA_GROUNDING"}
     failed_dry_run_result = {"type": "DRY_RUN"}
-    sql_samples = [{"question": "show records", "sql": "SELECT * FROM model_alpha"}]
+    sql_samples = [{"question": "show records", "sql": MODEL_ALPHA_SELECT_SQL}]
 
     assert (
         build_sql_regeneration_reasoning_text(
@@ -342,9 +419,9 @@ def test_schema_grounding_regeneration_omits_bad_context_and_uses_recovery_feedb
     assert (
         build_sql_regeneration_reasoning_text(
             failed_dry_run_result,
-            {"reasoning": "use model_alpha"},
+            {"reasoning": f"use {MODEL_ALPHA}"},
         )
-        == "use model_alpha"
+        == f"use {MODEL_ALPHA}"
     )
     assert build_sql_regeneration_samples(failed_dry_run_result, sql_samples) == (
         sql_samples
@@ -366,11 +443,11 @@ def test_safe_invalid_sql_omits_schema_grounding_sql():
         build_safe_invalid_sql(
             {
                 "type": "DRY_RUN",
-                "sql": "SELECT * FROM model_alpha",
+                "sql": MODEL_ALPHA_SELECT_SQL,
             },
-            "SELECT * FROM model_alpha",
+            MODEL_ALPHA_SELECT_SQL,
         )
-        == "SELECT * FROM model_alpha"
+        == MODEL_ALPHA_SELECT_SQL
     )
 
 
@@ -385,9 +462,9 @@ class _SchemaRetrievalPipeline:
             "construct_retrieval_results": {
                 "retrieval_results": [
                     {
-                        "table_name": "model_alpha",
-                        "table_ddl": "CREATE TABLE model_alpha (entity_id INTEGER)",
-                        "manifest_column_names": ["entity_id"],
+                        "table_name": MODEL_ALPHA,
+                        "table_ddl": MODEL_ALPHA_ENTITY_DDL,
+                        "manifest_column_names": [MODEL_ALPHA_ENTITY_ID],
                     }
                 ],
                 "has_calculated_field": False,
@@ -403,18 +480,13 @@ class _PrunedSchemaRetrievalPipeline:
             "construct_retrieval_results": {
                 "retrieval_results": [
                     {
-                        "table_name": "model_alpha",
-                        "table_ddl": (
-                            "CREATE TABLE model_alpha (selected_measure INTEGER)"
-                        ),
-                        "unpruned_table_ddl": (
-                            "CREATE TABLE model_alpha ("
-                            "selected_measure INTEGER, recovered_dimension VARCHAR)"
-                        ),
-                        "column_names": ["selected_measure"],
+                        "table_name": MODEL_ALPHA,
+                        "table_ddl": MODEL_ALPHA_PRUNED_DDL,
+                        "unpruned_table_ddl": MODEL_ALPHA_UNPRUNED_DDL,
+                        "column_names": [MODEL_ALPHA_SELECTED_MEASURE],
                         "manifest_column_names": [
-                            "selected_measure",
-                            "recovered_dimension",
+                            MODEL_ALPHA_SELECTED_MEASURE,
+                            MODEL_ALPHA_RECOVERED_DIMENSION,
                         ],
                     }
                 ],
@@ -445,8 +517,8 @@ class _ShapeInvalidSqlGenerationPipeline:
             "post_process": {
                 "valid_generation_result": {},
                 "invalid_generation_result": {
-                    "sql": "SELECT entity_id FROM model_alpha",
-                    "original_sql": "SELECT entity_id FROM model_alpha",
+                    "sql": MODEL_ALPHA_ENTITY_SQL,
+                    "original_sql": MODEL_ALPHA_ENTITY_SQL,
                     "type": "SQL_SHAPE",
                     "error": "Generated SQL is a table preview.",
                     "correlation_id": "",
@@ -484,7 +556,7 @@ class _ValidSqlGenerationPipeline:
         return {
             "post_process": {
                 "valid_generation_result": {
-                    "sql": "SELECT COUNT(*) AS record_count FROM model_alpha",
+                    "sql": MODEL_ALPHA_COUNT_SQL,
                     "correlation_id": "",
                 },
                 "invalid_generation_result": {},
@@ -509,7 +581,7 @@ class _SchemaGroundingSqlGenerationPipeline:
                         "Generated SQL references model/table identifiers that are "
                         "not in the retrieved Wren schema: \"hallucinated_table\". "
                         "Use only these retrieved model/table identifiers: "
-                        "\"model_alpha\"."
+                        f'"{MODEL_ALPHA}".'
                     ),
                     "correlation_id": "",
                 },
@@ -530,7 +602,7 @@ class _SlowButProviderAllowedSqlGenerationPipeline:
         return {
             "post_process": {
                 "valid_generation_result": {
-                    "sql": "SELECT COUNT(*) AS record_count FROM model_alpha",
+                    "sql": MODEL_ALPHA_COUNT_SQL,
                     "correlation_id": "",
                 },
                 "invalid_generation_result": {},
@@ -547,7 +619,7 @@ class _CapturingCorrectionPipeline:
         return {
             "post_process": {
                 "valid_generation_result": {
-                    "sql": "SELECT COUNT(*) AS record_count FROM model_alpha",
+                    "sql": MODEL_ALPHA_COUNT_SQL,
                     "correlation_id": "",
                 },
                 "invalid_generation_result": {},
@@ -573,7 +645,7 @@ class _CapturingRegenerationPipeline:
         return {
             "post_process": {
                 "valid_generation_result": {
-                    "sql": "SELECT COUNT(*) AS record_count FROM model_alpha",
+                    "sql": MODEL_ALPHA_COUNT_SQL,
                     "correlation_id": "",
                 },
                 "invalid_generation_result": {},
@@ -598,7 +670,7 @@ class _SchemaGroundingRegenerationPipeline:
                         "Generated SQL references model/table identifiers that are "
                         "not in the retrieved Wren schema: \"hallucinated_table\". "
                         "Use only these retrieved model/table identifiers: "
-                        "\"model_alpha\"."
+                        f'"{MODEL_ALPHA}".'
                     ),
                     "correlation_id": "",
                 },
@@ -623,7 +695,7 @@ class _SchemaGroundingCorrectionPipeline:
                         "Generated SQL references model/table identifiers that are "
                         "not in the retrieved Wren schema: \"hallucinated_table\". "
                         "Use only these retrieved model/table identifiers: "
-                        "\"model_alpha\"."
+                        f'"{MODEL_ALPHA}".'
                     ),
                     "correlation_id": "",
                 },
@@ -672,7 +744,7 @@ async def test_ask_runs_sql_correction_for_validation_error():
     assert ask_result_response.status == "finished"
     assert diagnosis.calls == []
     assert correction.calls[0]["invalid_generation_result"] == {
-        "sql": "SELECT entity_id FROM model_alpha",
+        "sql": MODEL_ALPHA_ENTITY_SQL,
         "type": "SQL_SHAPE",
         "error": "Generated SQL is a table preview.",
     }
@@ -709,24 +781,12 @@ async def test_ask_correction_recovers_no_relevant_sql_with_schema_context():
         AskResultRequest(query_id=query_id)
     )
     assert ask_result_response.status == "finished"
-    assert ask_result_response.response[0].sql == (
-        "SELECT COUNT(*) AS record_count FROM model_alpha"
-    )
+    assert ask_result_response.response[0].sql == MODEL_ALPHA_COUNT_SQL
     assert diagnosis.calls == []
     assert correction.calls[0]["query"] == "count records by model"
-    assert correction.calls[0]["contexts"] == [
-        "CREATE TABLE model_alpha (entity_id INTEGER)"
-    ]
-    assert generation.calls[0]["schema_grounding"] == (
-        '- model/table: "model_alpha"\n'
-        "  columns:\n"
-        '    - "entity_id"'
-    )
-    assert correction.calls[0]["schema_grounding"] == (
-        '- model/table: "model_alpha"\n'
-        "  columns:\n"
-        '    - "entity_id"'
-    )
+    assert correction.calls[0]["contexts"] == [MODEL_ALPHA_ENTITY_DDL]
+    assert generation.calls[0]["schema_grounding"] == MODEL_ALPHA_ENTITY_GROUNDING
+    assert correction.calls[0]["schema_grounding"] == MODEL_ALPHA_ENTITY_GROUNDING
     assert correction.calls[0]["invalid_generation_result"] == {
         "sql": "",
         "type": "NO_RELEVANT_SQL",
@@ -811,21 +871,15 @@ async def test_ask_regenerates_schema_grounding_failures_before_correction():
         AskResultRequest(query_id=query_id)
     )
     assert ask_result_response.status == "finished"
-    assert ask_result_response.response[0].sql == (
-        "SELECT COUNT(*) AS record_count FROM model_alpha"
-    )
+    assert ask_result_response.response[0].sql == MODEL_ALPHA_COUNT_SQL
     assert diagnosis.calls == []
     assert correction.calls == []
     assert regeneration.calls[0]["sql"] == ""
-    assert regeneration.calls[0]["schema_grounding"] == (
-        '- model/table: "model_alpha"\n'
-        "  columns:\n"
-        '    - "entity_id"'
-    )
+    assert regeneration.calls[0]["schema_grounding"] == MODEL_ALPHA_ENTITY_GROUNDING
 
 
 @pytest.mark.asyncio
-async def test_ask_uses_unpruned_deployed_metadata_for_generation_context():
+async def test_ask_uses_exact_retrieved_metadata_for_generation_context():
     generation = _ValidSqlGenerationPipeline()
     ask_service = AskService(
         {
@@ -853,17 +907,18 @@ async def test_ask_uses_unpruned_deployed_metadata_for_generation_context():
         AskResultRequest(query_id=query_id)
     )
     assert ask_result_response.status == "finished"
-    assert "recovered_dimension" in generation.calls[0]["contexts"][0]
-    assert generation.calls[0]["schema_grounding"] == (
-        '- model/table: "model_alpha"\n'
-        "  columns:\n"
-        '    - "selected_measure"\n'
-        '    - "recovered_dimension"'
+    assert generation.calls[0]["contexts"] == [MODEL_ALPHA_PRUNED_DDL]
+    assert generation.calls[0]["schema_grounding"] == MODEL_ALPHA_SELECTED_GROUNDING
+    assert ask_result_response.retrieved_schema_context.sql_generation_contexts == (
+        generation.calls[0]["contexts"]
+    )
+    assert ask_result_response.retrieved_schema_context.grounding == (
+        generation.calls[0]["schema_grounding"]
     )
 
 
 @pytest.mark.asyncio
-async def test_ask_regenerates_no_relevant_sql_with_unpruned_metadata():
+async def test_ask_regenerates_no_relevant_sql_with_exact_retrieved_metadata():
     generation = _NoRelevantSqlGenerationPipeline()
     regeneration = _CapturingRegenerationPipeline()
     correction = _FailingCorrectionPipeline()
@@ -895,7 +950,7 @@ async def test_ask_regenerates_no_relevant_sql_with_unpruned_metadata():
     )
     assert ask_result_response.status == "finished"
     assert correction.calls == []
-    assert "recovered_dimension" in regeneration.calls[0]["contexts"][0]
+    assert regeneration.calls[0]["contexts"] == [MODEL_ALPHA_PRUNED_DDL]
     assert regeneration.calls[0]["sql"] == ""
 
 
@@ -928,9 +983,7 @@ async def test_ask_historical_sql_does_not_bypass_current_metadata_validation():
         AskResultRequest(query_id=query_id)
     )
     assert ask_result_response.status == "finished"
-    assert ask_result_response.response[0].sql == (
-        "SELECT COUNT(*) AS record_count FROM model_alpha"
-    )
+    assert ask_result_response.response[0].sql == MODEL_ALPHA_COUNT_SQL
     assert generation.calls
     assert generation.calls[0]["sql_samples"] == [
         {
@@ -1052,9 +1105,7 @@ async def test_ask_uses_provider_timeout_for_slow_local_sql_generation():
         AskResultRequest(query_id=query_id)
     )
     assert ask_result_response.status == "finished"
-    assert ask_result_response.response[0].sql == (
-        "SELECT COUNT(*) AS record_count FROM model_alpha"
-    )
+    assert ask_result_response.response[0].sql == MODEL_ALPHA_COUNT_SQL
 
 
 @pytest.mark.asyncio

@@ -8,7 +8,10 @@ from langfuse.decorators import observe
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest, MetadataTraceable
-from src.web.v1.services.ask import build_schema_grounding_context, build_sql_contexts
+from src.web.v1.services.schema_context import (
+    RetrievedSchemaContext,
+    build_retrieved_schema_context,
+)
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -65,6 +68,7 @@ class SqlCorrectionService:
             default=None, validation_alias=AliasChoices("mdl_hash", "id")
         )
         retrieved_tables: Optional[List[str]] = None
+        retrieved_schema_context: Optional[RetrievedSchemaContext] = None
         use_dry_plan: bool = True
         allow_dry_plan_fallback: bool = False
 
@@ -82,6 +86,7 @@ class SqlCorrectionService:
         error = request.error
         project_id = request.project_id
         retrieved_tables = request.retrieved_tables
+        schema_context = request.retrieved_schema_context or RetrievedSchemaContext()
         use_dry_plan = request.use_dry_plan
         allow_dry_plan_fallback = request.allow_dry_plan_fallback
         sql_knowledge = None
@@ -92,10 +97,10 @@ class SqlCorrectionService:
                 "error": error,
             }
 
-            if not retrieved_tables:
+            if schema_context.is_empty and not retrieved_tables:
                 self._handle_exception(
                     event_id,
-                    "SQL correction requires retrieved table context from the original ask result.",
+                    "SQL correction requires retrieved schema context from the original ask result.",
                     trace_id=trace_id,
                     request_from=request.request_from,
                 )
@@ -107,24 +112,18 @@ class SqlCorrectionService:
                     mdl_hash=request.mdl_hash,
                 )
 
-            documents = (
-                (
+            if schema_context.is_empty:
+                schema_context = build_retrieved_schema_context(
                     await self._pipelines["db_schema_retrieval"].run(
                         project_id=project_id,
                         mdl_hash=request.mdl_hash,
                         tables=retrieved_tables,
                     )
                 )
-                .get("construct_retrieval_results", {})
-                .get("retrieval_results", [])
-            )
-            table_ddls = [document.get("table_ddl") for document in documents]
-            unpruned_table_ddls = build_sql_contexts(documents, use_unpruned=True)
-            schema_grounding = build_schema_grounding_context(documents)
 
             res = await self._pipelines["sql_correction"].run(
-                contexts=unpruned_table_ddls or table_ddls,
-                schema_grounding=schema_grounding,
+                contexts=schema_context.sql_generation_contexts,
+                schema_grounding=schema_context.grounding,
                 invalid_generation_result=_invalid,
                 project_id=project_id,
                 mdl_hash=request.mdl_hash,

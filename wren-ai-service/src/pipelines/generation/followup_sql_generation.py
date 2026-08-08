@@ -91,6 +91,9 @@ Summary:
 ### QUESTION ###
 User's Follow-up Question: {{ query }}
 
+### REASONING PLAN ###
+{{ sql_generation_reasoning }}
+
 Use DATABASE SCHEMA and RETRIEVED EXECUTABLE SCHEMA as the only sources for executable table and column identifiers. The follow-up question, SQL sample questions, and query history can explain intent, but they must not introduce identifiers that are absent from the retrieved schema.
 If a word from the user's question or query history is not listed as a retrieved model/table or column identifier, do not use that word as an SQL identifier.
 Choose the FROM model/table from the retrieved schema only. Add WHERE only for requested filters or time ranges that map to retrieved columns. Add GROUP BY only for requested totals, counts, distributions, comparisons, or trends. Add ORDER BY only for ranking, sorting, recent/latest, or deterministic LIMIT requests. Use JOIN only when multiple retrieved models are required and the retrieved schema declares the relationship; otherwise answer from one model when possible.

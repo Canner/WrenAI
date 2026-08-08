@@ -9,6 +9,12 @@ from langfuse.decorators import observe
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest, SSEEvent
+from src.web.v1.services.schema_context import (
+    RetrievedSchemaContext,
+    build_retrieved_schema_context,
+    build_schema_grounding_context,
+    build_sql_contexts,
+)
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -47,54 +53,6 @@ def get_pipeline_timeout_seconds(
 class AskHistory(BaseModel):
     sql: str
     question: str
-
-
-def build_schema_grounding_context(documents: list[dict[str, Any]]) -> str:
-    lines: list[str] = []
-
-    for document in documents:
-        table_name = document.get("table_name")
-        if not table_name:
-            continue
-
-        lines.append(f'- model/table: "{table_name}"')
-
-        selected_columns = [
-            column for column in document.get("column_names", []) if column
-        ]
-        manifest_columns = [
-            column for column in document.get("manifest_column_names", []) if column
-        ]
-        columns = list(dict.fromkeys([*selected_columns, *manifest_columns]))
-        if columns:
-            lines.append("  columns:")
-            lines.extend(f'    - "{column}"' for column in columns)
-
-        relationship_constraints = [
-            constraint
-            for constraint in document.get("relationship_constraints", [])
-            if constraint
-        ]
-        if relationship_constraints:
-            lines.append("  relationships:")
-            lines.extend(
-                f"    - {constraint}" for constraint in relationship_constraints
-            )
-
-    return "\n".join(lines)
-
-
-def build_sql_contexts(
-    documents: list[dict[str, Any]],
-    *,
-    use_unpruned: bool = False,
-) -> list[str]:
-    ddl_key = "unpruned_table_ddl" if use_unpruned else "table_ddl"
-    return [
-        ddl
-        for document in documents
-        if (ddl := document.get(ddl_key) or document.get("table_ddl"))
-    ]
 
 
 def is_schema_grounding_error(failed_generation_result: dict[str, Any]) -> bool:
@@ -243,7 +201,7 @@ class AskRequest(BaseRequest):
     # so we need to support as a choice, and will remove it in the future
     mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
     histories: Optional[list[AskHistory]] = Field(default_factory=list)
-    ignore_sql_generation_reasoning: bool = True
+    ignore_sql_generation_reasoning: bool = False
     enable_column_pruning: bool = False
     use_dry_plan: bool = True
     allow_dry_plan_fallback: bool = False
@@ -297,6 +255,7 @@ class _AskResultResponse(BaseModel):
     sql_generation_reasoning: Optional[str] = None
     type: Optional[Literal["GENERAL", "TEXT_TO_SQL"]] = None
     retrieved_tables: Optional[List[str]] = None
+    retrieved_schema_context: Optional[RetrievedSchemaContext] = None
     response: Optional[List[AskResult]] = None
     invalid_sql: Optional[str] = None
     error: Optional[AskError] = None
@@ -319,7 +278,7 @@ class AskService:
         self,
         pipelines: Dict[str, BasicPipeline],
         allow_intent_classification: bool = True,
-        allow_sql_generation_reasoning: bool = False,
+        allow_sql_generation_reasoning: bool = True,
         allow_sql_functions_retrieval: bool = True,
         allow_sql_diagnosis: bool = True,
         allow_sql_knowledge_retrieval: bool = True,
@@ -381,8 +340,7 @@ class AskService:
         instructions = []
         api_results = []
         table_names = []
-        schema_grounding = ""
-        unpruned_table_ddls = []
+        schema_context = RetrievedSchemaContext()
         error_message = None
         invalid_sql = None
         allow_sql_generation_reasoning = (
@@ -580,13 +538,8 @@ class AskService:
                     "construct_retrieval_results", {}
                 )
                 documents = _retrieval_result.get("retrieval_results", [])
-                table_names = [document.get("table_name") for document in documents]
-                table_ddls = build_sql_contexts(documents)
-                unpruned_table_ddls = build_sql_contexts(
-                    documents,
-                    use_unpruned=True,
-                )
-                schema_grounding = build_schema_grounding_context(documents)
+                schema_context = build_retrieved_schema_context(retrieval_result)
+                table_names = schema_context.table_names
 
                 if not documents:
                     logger.warning(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
@@ -618,6 +571,7 @@ class AskService:
                     rephrased_question=rephrased_question,
                     intent_reasoning=intent_reasoning,
                     retrieved_tables=table_names,
+                    retrieved_schema_context=schema_context,
                     trace_id=trace_id,
                     is_followup=True if histories else False,
                 )
@@ -626,8 +580,8 @@ class AskService:
                     sql_generation_reasoning = (
                         await self._pipelines["followup_sql_generation_reasoning"].run(
                             query=user_query,
-                            contexts=unpruned_table_ddls or table_ddls,
-                            schema_grounding=schema_grounding,
+                            contexts=schema_context.sql_generation_contexts,
+                            schema_grounding=schema_context.grounding,
                             histories=histories,
                             sql_samples=sql_samples,
                             instructions=instructions,
@@ -639,8 +593,8 @@ class AskService:
                     sql_generation_reasoning = (
                         await self._pipelines["sql_generation_reasoning"].run(
                             query=user_query,
-                            contexts=unpruned_table_ddls or table_ddls,
-                            schema_grounding=schema_grounding,
+                            contexts=schema_context.sql_generation_contexts,
+                            schema_grounding=schema_context.grounding,
                             sql_samples=sql_samples,
                             instructions=instructions,
                             configuration=ask_request.configurations,
@@ -654,6 +608,7 @@ class AskService:
                     rephrased_question=rephrased_question,
                     intent_reasoning=intent_reasoning,
                     retrieved_tables=table_names,
+                    retrieved_schema_context=schema_context,
                     sql_generation_reasoning=sql_generation_reasoning,
                     trace_id=trace_id,
                     is_followup=True if histories else False,
@@ -666,6 +621,7 @@ class AskService:
                     rephrased_question=rephrased_question,
                     intent_reasoning=intent_reasoning,
                     retrieved_tables=table_names,
+                    retrieved_schema_context=schema_context,
                     sql_generation_reasoning=sql_generation_reasoning,
                     trace_id=trace_id,
                     is_followup=True if histories else False,
@@ -689,11 +645,9 @@ class AskService:
                         mdl_hash=ask_request.mdl_hash,
                     )
 
-                has_calculated_field = _retrieval_result.get(
-                    "has_calculated_field", False
-                )
-                has_metric = _retrieval_result.get("has_metric", False)
-                has_json_field = _retrieval_result.get("has_json_field", False)
+                has_calculated_field = schema_context.has_calculated_field
+                has_metric = schema_context.has_metric
+                has_json_field = schema_context.has_json_field
 
                 if histories:
                     sql_generation_pipeline = self._pipelines[
@@ -702,8 +656,8 @@ class AskService:
                     text_to_sql_generation_results = await run_pipeline_with_timeout(
                         sql_generation_pipeline.run(
                             query=user_query,
-                            contexts=unpruned_table_ddls or table_ddls,
-                            schema_grounding=schema_grounding,
+                            contexts=schema_context.sql_generation_contexts,
+                            schema_grounding=schema_context.grounding,
                             sql_generation_reasoning=sql_generation_reasoning,
                             histories=histories,
                             project_id=ask_request.project_id,
@@ -729,8 +683,8 @@ class AskService:
                     text_to_sql_generation_results = await run_pipeline_with_timeout(
                         sql_generation_pipeline.run(
                             query=user_query,
-                            contexts=unpruned_table_ddls or table_ddls,
-                            schema_grounding=schema_grounding,
+                            contexts=schema_context.sql_generation_contexts,
+                            schema_grounding=schema_context.grounding,
                             sql_generation_reasoning=sql_generation_reasoning,
                             project_id=ask_request.project_id,
                             mdl_hash=ask_request.mdl_hash,
@@ -780,6 +734,7 @@ class AskService:
                             rephrased_question=rephrased_question,
                             intent_reasoning=intent_reasoning,
                             retrieved_tables=table_names,
+                            retrieved_schema_context=schema_context,
                             sql_generation_reasoning=sql_generation_reasoning,
                             trace_id=trace_id,
                             is_followup=True if histories else False,
@@ -795,7 +750,7 @@ class AskService:
                             sql_regeneration_results = (
                                 await run_pipeline_with_timeout(
                                     sql_regeneration_pipeline.run(
-                                        contexts=unpruned_table_ddls or table_ddls,
+                                        contexts=schema_context.sql_generation_contexts,
                                         query=user_query,
                                         sql_generation_reasoning=build_sql_regeneration_reasoning_text(
                                             failed_dry_run_result,
@@ -804,7 +759,7 @@ class AskService:
                                         sql=build_sql_regeneration_source_sql(
                                             failed_dry_run_result
                                         ),
-                                        schema_grounding=schema_grounding,
+                                        schema_grounding=schema_context.grounding,
                                         sql_samples=build_sql_regeneration_samples(
                                             failed_dry_run_result,
                                             sql_samples,
@@ -858,12 +813,12 @@ class AskService:
                             ]
                             sql_diagnosis_results = await run_pipeline_with_timeout(
                                 sql_diagnosis_pipeline.run(
-                                    contexts=unpruned_table_ddls or table_ddls,
+                                    contexts=schema_context.sql_generation_contexts,
                                     original_sql=original_sql,
                                     invalid_sql=invalid_sql,
                                     error_message=error_message,
                                     language=ask_request.configurations.language,
-                                    schema_grounding=schema_grounding,
+                                    schema_grounding=schema_context.grounding,
                                     data_source=failed_dry_run_result.get(
                                         "data_source"
                                     ),
@@ -886,8 +841,8 @@ class AskService:
                         sql_correction_pipeline = self._pipelines["sql_correction"]
                         sql_correction_results = await run_pipeline_with_timeout(
                             sql_correction_pipeline.run(
-                                contexts=unpruned_table_ddls or table_ddls,
-                                schema_grounding=schema_grounding,
+                                contexts=schema_context.sql_generation_contexts,
+                                schema_grounding=schema_context.grounding,
                                 query=user_query,
                                 instructions=instructions,
                                 invalid_generation_result=build_sql_correction_input(
@@ -935,6 +890,7 @@ class AskService:
                         rephrased_question=rephrased_question,
                         intent_reasoning=intent_reasoning,
                         retrieved_tables=table_names,
+                        retrieved_schema_context=schema_context,
                         sql_generation_reasoning=sql_generation_reasoning,
                         trace_id=trace_id,
                         is_followup=True if histories else False,
@@ -957,6 +913,7 @@ class AskService:
                         rephrased_question=rephrased_question,
                         intent_reasoning=intent_reasoning,
                         retrieved_tables=table_names,
+                        retrieved_schema_context=schema_context,
                         sql_generation_reasoning=sql_generation_reasoning,
                         invalid_sql=build_safe_invalid_sql(
                             failed_dry_run_result,

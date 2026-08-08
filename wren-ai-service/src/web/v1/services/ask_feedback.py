@@ -15,6 +15,7 @@ from src.web.v1.services.ask import (
     get_pipeline_timeout_seconds,
     run_pipeline_with_timeout,
 )
+from src.web.v1.services.schema_context import build_retrieved_schema_context
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -164,16 +165,10 @@ class AskFeedbackService:
                     )
 
                 # Extract results from completed tasks
-                _retrieval_result = retrieval_task.get(
-                    "construct_retrieval_results", {}
-                )
-                has_calculated_field = _retrieval_result.get(
-                    "has_calculated_field", False
-                )
-                has_metric = _retrieval_result.get("has_metric", False)
-                has_json_field = _retrieval_result.get("has_json_field", False)
-                documents = _retrieval_result.get("retrieval_results", [])
-                table_ddls = [document.get("table_ddl") for document in documents]
+                schema_context = build_retrieved_schema_context(retrieval_task)
+                has_calculated_field = schema_context.has_calculated_field
+                has_metric = schema_context.has_metric
+                has_json_field = schema_context.has_json_field
                 sql_samples = sql_samples_task["formatted_output"].get("documents", [])
                 instructions = instructions_task["formatted_output"].get(
                     "documents", []
@@ -188,10 +183,11 @@ class AskFeedbackService:
                 sql_regeneration_pipeline = self._pipelines["sql_regeneration"]
                 text_to_sql_generation_results = await run_pipeline_with_timeout(
                     sql_regeneration_pipeline.run(
-                        contexts=table_ddls,
+                        contexts=schema_context.sql_generation_contexts,
                         query=ask_feedback_request.question,
                         sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
                         sql=ask_feedback_request.sql,
+                        schema_grounding=schema_context.grounding,
                         project_id=ask_feedback_request.project_id,
                         mdl_hash=ask_feedback_request.mdl_hash,
                         sql_samples=sql_samples,
@@ -242,11 +238,12 @@ class AskFeedbackService:
                             ]
                             sql_diagnosis_results = await run_pipeline_with_timeout(
                                 sql_diagnosis_pipeline.run(
-                                    contexts=table_ddls,
+                                    contexts=schema_context.sql_generation_contexts,
                                     original_sql=original_sql,
                                     invalid_sql=invalid_sql,
                                     error_message=error_message,
                                     language=ask_feedback_request.configurations.language,
+                                    schema_grounding=schema_context.grounding,
                                 ),
                                 get_pipeline_timeout_seconds(
                                     sql_diagnosis_pipeline,
@@ -267,7 +264,8 @@ class AskFeedbackService:
                         sql_correction_pipeline = self._pipelines["sql_correction"]
                         sql_correction_results = await run_pipeline_with_timeout(
                             sql_correction_pipeline.run(
-                                contexts=table_ddls,
+                                contexts=schema_context.sql_generation_contexts,
+                                schema_grounding=schema_context.grounding,
                                 query=ask_feedback_request.question,
                                 sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
                                 instructions=instructions,
