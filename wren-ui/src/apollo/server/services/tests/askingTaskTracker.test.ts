@@ -112,6 +112,67 @@ describe('AskingTaskTracker', () => {
     expect(result.status).toBe(AskResultStatus.GENERATING);
   });
 
+  test('finalizes unfinished tasks with invalid timestamps during initialization', async () => {
+    const taskWithInvalidTimestamp = {
+      id: 10,
+      queryId: 'invalid-timestamp-query-id',
+      question: 'expired question',
+      detail: {
+        type: AskResultType.TEXT_TO_SQL,
+        status: AskResultStatus.GENERATING,
+        response: null,
+        error: null,
+      },
+      createdAt: 'not-a-date',
+      updatedAt: 'not-a-date',
+    };
+    const { tracker, askingTaskRepository, wrenAIAdaptor } = createTracker({
+      taskRecords: [taskWithInvalidTimestamp],
+      memoryRetentionTime: 1000,
+    });
+
+    await tracker.initialize();
+
+    expect(wrenAIAdaptor.getAskResult).not.toHaveBeenCalled();
+    expect(askingTaskRepository.updateOne).toHaveBeenCalledWith(10, {
+      detail: {
+        type: AskResultType.TEXT_TO_SQL,
+        status: AskResultStatus.FAILED,
+        response: null,
+        error: {
+          code: Errors.GeneralErrorCodes.POLLING_TIMEOUT,
+          message:
+            'The previous asking task expired after the service restarted. Please ask again.',
+        },
+      },
+    });
+  });
+
+  test('treats numeric second timestamps as valid freshness timestamps', async () => {
+    const recentSeconds = Math.floor(Date.now() / 1000);
+    const recentTask = {
+      id: 11,
+      queryId: 'recent-seconds-query-id',
+      question: 'recent question',
+      detail: {
+        type: AskResultType.TEXT_TO_SQL,
+        status: AskResultStatus.GENERATING,
+        response: null,
+        error: null,
+      },
+      createdAt: recentSeconds,
+      updatedAt: recentSeconds,
+    };
+    const { tracker, askingTaskRepository } = createTracker({
+      taskRecords: [recentTask],
+      memoryRetentionTime: 60_000,
+    });
+
+    await tracker.initialize();
+
+    expect(askingTaskRepository.updateOne).not.toHaveBeenCalled();
+  });
+
   test('finalizes restored tasks when AI service no longer has the query id', async () => {
     const recentDate = new Date();
     const recentTask = {

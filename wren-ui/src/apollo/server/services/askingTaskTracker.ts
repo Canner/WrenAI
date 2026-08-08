@@ -561,10 +561,52 @@ export class AskingTaskTracker implements IAskingTaskTracker {
   }
 
   private isStaleUnfinishedTask(taskRecord: AskingTask): boolean {
-    const updatedAt = taskRecord.updatedAt
-      ? new Date(taskRecord.updatedAt).getTime()
-      : 0;
-    return Date.now() - updatedAt > this.memoryRetentionTime;
+    const updatedAt = this.toTimestamp(taskRecord.updatedAt);
+    const createdAt = this.toTimestamp(taskRecord.createdAt);
+    const lastKnownUpdate = updatedAt ?? createdAt;
+
+    if (!lastKnownUpdate) {
+      logger.warn(
+        `Treating unfinished task ${taskRecord.queryId} as stale because it has no valid timestamp`,
+      );
+      return true;
+    }
+
+    return Date.now() - lastKnownUpdate > this.memoryRetentionTime;
+  }
+
+  private toTimestamp(value?: Date | string | number): number | null {
+    if (!value) {
+      return null;
+    }
+
+    if (value instanceof Date) {
+      const timestamp = value.getTime();
+      return Number.isFinite(timestamp) ? timestamp : null;
+    }
+
+    if (typeof value === 'number') {
+      const timestamp = value < 10_000_000_000 ? value * 1000 : value;
+      return Number.isFinite(timestamp) ? timestamp : null;
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const numericValue = Number(trimmed);
+    if (Number.isFinite(numericValue)) {
+      return this.toTimestamp(numericValue);
+    }
+
+    const timestamp = Date.parse(trimmed);
+    if (Number.isFinite(timestamp)) {
+      return timestamp;
+    }
+
+    const normalizedTimestamp = Date.parse(trimmed.replace(' ', 'T'));
+    return Number.isFinite(normalizedTimestamp) ? normalizedTimestamp : null;
   }
 
   private async finalizeStaleTask(taskRecord: AskingTask): Promise<void> {
