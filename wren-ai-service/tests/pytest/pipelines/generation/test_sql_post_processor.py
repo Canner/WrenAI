@@ -262,3 +262,50 @@ async def test_post_processor_removes_semicolon_inside_json_sql_like_legacy():
 
     assert result["invalid_generation_result"] == {}
     assert engine.executed_sql == "SELECT COUNT(*) AS total FROM dbo_PO_Invoices"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "sql",
+    [
+        'SELECT "id" FROM "orders" WHERE "status" = \'open\'',
+        (
+            'SELECT o."id", c."name" FROM "orders" o '
+            'JOIN "customers" c ON o."customer_id" = c."id"'
+        ),
+        'SELECT "supplier_id", COUNT(*) AS "invoice_count" FROM "invoices" GROUP BY "supplier_id"',
+        (
+            'SELECT "supplier_id", COUNT(*) AS "invoice_count" FROM "invoices" '
+            'GROUP BY "supplier_id" HAVING COUNT(*) > 1'
+        ),
+        'SELECT "id", "created_at" FROM "orders" ORDER BY "created_at" DESC',
+        (
+            'SELECT "supplier_id", SUM("amount") AS "total_amount", '
+            'DENSE_RANK() OVER (ORDER BY SUM("amount") DESC) AS "rank" '
+            'FROM "invoices" GROUP BY "supplier_id"'
+        ),
+        'WITH totals AS (SELECT "supplier_id", SUM("amount") AS "amount" FROM "invoices" GROUP BY "supplier_id") SELECT * FROM totals',
+        'SELECT DISTINCT "supplier_id" FROM "invoices"',
+        (
+            'SELECT CASE WHEN "amount" > 0 THEN \'paid\' ELSE \'empty\' END AS "status" '
+            'FROM "invoices"'
+        ),
+        (
+            'SELECT "id" FROM "orders" WHERE "created_at" >= '
+            "CAST('2026-01-01 00:00:00' AS TIMESTAMP WITH TIME ZONE)"
+        ),
+        (
+            'SELECT "id" FROM "orders" WHERE "customer_id" IN '
+            '(SELECT "id" FROM "customers" WHERE "region" = \'west\')'
+        ),
+    ],
+)
+async def test_post_processor_sends_common_sql_patterns_to_engine_validation(sql):
+    engine = _CapturingEngine()
+    processor = SQLGenPostProcessor(engine=engine)
+
+    result = await processor.run([sql])
+
+    assert result["invalid_generation_result"] == {}
+    assert result["valid_generation_result"]["sql"] == sql
+    assert engine.executed_sql == sql

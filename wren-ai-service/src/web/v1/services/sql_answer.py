@@ -53,29 +53,6 @@ class SqlAnswerService:
             maxsize=maxsize, ttl=ttl
         )
 
-    async def _load_active_schema_contexts(
-        self,
-        project_id: str | None,
-        query: str,
-    ) -> list[str]:
-        if not query or "db_schema_retrieval" not in self._pipelines:
-            return []
-
-        retrieval_result = await self._pipelines["db_schema_retrieval"].run(
-            query=query,
-            histories=[],
-            project_id=project_id,
-            enable_column_pruning=False,
-        )
-        documents = retrieval_result.get("construct_retrieval_results", {}).get(
-            "retrieval_results", []
-        )
-        return [
-            document.get("table_ddl", "")
-            for document in documents
-            if document.get("table_ddl")
-        ]
-
     @observe(name="SQL Answer")
     @trace_metadata
     async def sql_answer(

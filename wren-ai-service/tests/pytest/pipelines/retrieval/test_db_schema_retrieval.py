@@ -9,27 +9,43 @@ from src.pipelines.retrieval.db_schema_retrieval import (
     construct_retrieval_results,
     dbschema_retrieval,
     embedding,
-    table_columns_selection_system_prompt,
     table_columns_selection_user_prompt_template,
     table_retrieval,
 )
 from src.pipelines.retrieval.db_schema_retrieval import (
     prompt as build_column_selection_prompt,
 )
+from src.web.v1.services.ask import AskHistory
 
 
-class StoreCounter:
-    def __init__(self, count):
-        self.count = count
-        self.filters = []
+class Encoding:
+    def encode(self, value):
+        return value.split()
 
-    async def count_documents(self, filters=None):
-        self.filters.append(filters)
-        return self.count
+
+def table_schema(name, columns):
+    return {
+        "type": "TABLE",
+        "name": name,
+        "comment": "",
+        "columns": columns,
+        "properties": {},
+        "primaryKey": "",
+    }
+
+
+def column(name, data_type="VARCHAR", is_primary_key=False, comment=""):
+    return {
+        "type": "COLUMN",
+        "name": name,
+        "data_type": data_type,
+        "comment": comment,
+        "is_primary_key": is_primary_key,
+    }
 
 
 @pytest.mark.asyncio
-async def test_embedding_uses_current_query_without_history_text():
+async def test_embedding_uses_legacy_history_context():
     class Embedder:
         def __init__(self):
             self.query = None
@@ -43,144 +59,39 @@ async def test_embedding_uses_current_query_without_history_text():
     result = await embedding(
         query="current request",
         embedder=embedder,
-        histories=[{"question": "previous request"}],
+        histories=[AskHistory(question="previous request", sql="SELECT 1")],
     )
 
     assert result == {"embedding": [1.0]}
-    assert embedder.query == "current request"
+    assert embedder.query == "previous request\ncurrent request"
 
 
-def test_column_pruning_prompt_uses_current_query_without_history_text():
+def test_column_pruning_prompt_uses_legacy_history_context():
     result = build_column_selection_prompt(
         query="current request",
         construct_db_schemas=[
-            {
-                "type": "TABLE",
-                "name": "modeled_dataset",
-                "comment": "",
-                "columns": [
-                    {
-                        "type": "COLUMN",
-                        "name": "stored_attribute",
-                        "data_type": "VARCHAR",
-                        "comment": "",
-                        "is_primary_key": False,
-                    }
-                ],
-                "properties": {},
-                "primaryKey": "",
-            }
+            table_schema("modeled_dataset", [column("stored_attribute")])
         ],
         prompt_builder=PromptBuilder(
             template=table_columns_selection_user_prompt_template
         ),
         check_using_db_schemas_without_pruning={"db_schemas": []},
-        histories=[{"question": "previous request"}],
+        histories=[AskHistory(question="previous request", sql="SELECT 1")],
     )
 
+    assert "previous request" in result["prompt"]
     assert "current request" in result["prompt"]
-    assert "previous request" not in result["prompt"]
-
-
-def test_table_selection_prompt_keeps_multiple_relevant_datasets():
-    assert "same business concept is represented by multiple modeled datasets" in (
-        table_columns_selection_system_prompt
-    )
-    assert "compatible fields for the same requested result shape" in (
-        table_columns_selection_system_prompt
-    )
-
-
-def test_view_schema_context_uses_declared_view_columns_not_view_definition():
-    result = _build_view_ddl(
-        {
-            "type": "VIEW",
-            "comment": "Semantic description.",
-            "name": "retrieved_view",
-            "statement": "NON_EXECUTABLE_DEFINITION_TOKEN",
-            "columns": [
-                {
-                    "name": "visible_attribute",
-                    "data_type": "VARCHAR",
-                    "comment": "Semantic field.",
-                }
-            ],
-        }
-    )
-
-    assert "CREATE TABLE retrieved_view" in result
-    assert "visible_attribute VARCHAR" in result
-    assert "sql_column_names_use_exactly" not in result
-    assert "definition_omitted_from_executable_schema" not in result
-    assert "NON_EXECUTABLE_DEFINITION_TOKEN" not in result
+    assert "CREATE TABLE modeled_dataset" in result["prompt"]
 
 
 @pytest.mark.asyncio
-async def test_table_retrieval_fetches_explicit_table_descriptions():
-    class Retriever:
-        def __init__(self):
-            self.filters = None
-
-        async def run(self, query_embedding, filters):
-            self.filters = filters
-            return {"documents": []}
-
-    retriever = Retriever()
-
-    await table_retrieval(
-        embedding={},
-        project_id="project-1",
-        tables=["orders"],
-        table_retriever=retriever,
-    )
-
-    assert retriever.filters == {
-        "operator": "AND",
-        "conditions": [
-            {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
-            {"field": "project_id", "operator": "==", "value": "project-1"},
-            {"field": "name", "operator": "in", "value": ["orders"]},
-        ],
-    }
-
-
-@pytest.mark.asyncio
-async def test_table_retrieval_skips_candidate_search_without_embedding_or_tables():
-    class Retriever:
-        def __init__(self):
-            self.called = False
-
-        async def run(self, query_embedding, filters):
-            self.called = True
-            return {"documents": []}
-
-    retriever = Retriever()
-
-    result = await table_retrieval(
-        embedding={},
-        project_id="project-1",
-        tables=[],
-        table_retriever=retriever,
-        mdl_hash="deploy-1",
-    )
-
-    assert result == {"documents": []}
-    assert retriever.called is False
-
-
-@pytest.mark.asyncio
-async def test_table_retrieval_keeps_deploy_scope_when_no_documents_match():
+async def test_table_retrieval_keeps_project_and_deploy_scope():
     class Retriever:
         def __init__(self):
             self.calls = []
 
         async def run(self, query_embedding, filters):
-            self.calls.append(
-                {
-                    "query_embedding": query_embedding,
-                    "filters": filters,
-                }
-            )
+            self.calls.append({"query_embedding": query_embedding, "filters": filters})
             return {"documents": []}
 
     retriever = Retriever()
@@ -209,47 +120,7 @@ async def test_table_retrieval_keeps_deploy_scope_when_no_documents_match():
 
 
 @pytest.mark.asyncio
-async def test_table_retrieval_falls_back_to_request_hash_when_active_hash_is_absent():
-    class Retriever:
-        def __init__(self):
-            self.calls = []
-
-        async def run(self, query_embedding, filters):
-            self.calls.append(
-                {
-                    "query_embedding": query_embedding,
-                    "filters": filters,
-                }
-            )
-            return {"documents": []}
-
-    retriever = Retriever()
-
-    await table_retrieval(
-        embedding={"embedding": [0.25]},
-        project_id="project-1",
-        mdl_hash="deploy-1",
-        tables=[],
-        table_retriever=retriever,
-    )
-
-    assert retriever.calls == [
-        {
-            "query_embedding": [0.25],
-            "filters": {
-                "operator": "AND",
-                "conditions": [
-                    {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
-                    {"field": "project_id", "operator": "==", "value": "project-1"},
-                    {"field": "mdl_hash", "operator": "==", "value": "deploy-1"},
-                ],
-            },
-        }
-    ]
-
-
-@pytest.mark.asyncio
-async def test_dbschema_retrieval_loads_selected_active_project_schema():
+async def test_dbschema_retrieval_resolves_only_retrieved_table_names_with_deploy_scope():
     class Retriever:
         def __init__(self):
             self.filters = None
@@ -259,25 +130,9 @@ async def test_dbschema_retrieval_loads_selected_active_project_schema():
             return {
                 "documents": [
                     Document(
-                        content=str(
-                            {
-                                "type": "TABLE",
-                                "name": "orders",
-                                "columns": [],
-                            }
-                        ),
+                        content=str(table_schema("orders", [column("order_id")])),
                         meta={"type": "TABLE_SCHEMA", "name": "orders"},
-                    ),
-                    Document(
-                        content=str(
-                            {
-                                "type": "TABLE",
-                                "name": "customers",
-                                "columns": [],
-                            }
-                        ),
-                        meta={"type": "TABLE_SCHEMA", "name": "customers"},
-                    ),
+                    )
                 ]
             }
 
@@ -293,11 +148,11 @@ async def test_dbschema_retrieval_loads_selected_active_project_schema():
             ]
         },
         project_id="project-1",
+        mdl_hash="deploy-1",
         dbschema_retriever=retriever,
-        embedding={},
     )
 
-    assert [document.meta["name"] for document in documents] == ["orders", "customers"]
+    assert [document.meta["name"] for document in documents] == ["orders"]
     assert retriever.filters == {
         "operator": "AND",
         "conditions": [
@@ -309,23 +164,19 @@ async def test_dbschema_retrieval_loads_selected_active_project_schema():
                 ],
             },
             {"field": "project_id", "operator": "==", "value": "project-1"},
+            {"field": "mdl_hash", "operator": "==", "value": "deploy-1"},
         ],
     }
 
 
 @pytest.mark.asyncio
-async def test_dbschema_retrieval_keeps_deploy_scope_when_no_documents_match():
+async def test_dbschema_retrieval_does_not_use_non_legacy_semantic_fallback():
     class Retriever:
         def __init__(self):
-            self.calls = []
+            self.called = False
 
         async def run(self, query_embedding, filters):
-            self.calls.append(
-                {
-                    "query_embedding": query_embedding,
-                    "filters": filters,
-                }
-            )
+            self.called = True
             return {"documents": []}
 
     retriever = Retriever()
@@ -335,637 +186,57 @@ async def test_dbschema_retrieval_keeps_deploy_scope_when_no_documents_match():
         project_id="project-1",
         mdl_hash="deploy-1",
         dbschema_retriever=retriever,
-        embedding={"embedding": [0.25]},
     )
 
     assert documents == []
-    assert retriever.calls == [
+    assert retriever.called is False
+
+
+def test_view_schema_context_uses_legacy_view_definition():
+    result = _build_view_ddl(
         {
-            "query_embedding": [0.25],
-            "filters": {
-                "operator": "AND",
-                "conditions": [
-                    {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-                    {"field": "project_id", "operator": "==", "value": "project-1"},
-                    {"field": "mdl_hash", "operator": "==", "value": "deploy-1"},
-                ],
-            },
-        }
-    ]
-
-
-@pytest.mark.asyncio
-async def test_dbschema_retrieval_loads_exact_deployed_schema_without_candidates():
-    class Retriever:
-        def __init__(self):
-            self.calls = []
-
-        async def run(self, query_embedding, filters):
-            self.calls.append(
+            "type": "VIEW",
+            "comment": "",
+            "name": "retrieved_view",
+            "statement": "SELECT visible_attribute FROM source_model",
+            "columns": [
                 {
-                    "query_embedding": query_embedding,
-                    "filters": filters,
+                    "name": "visible_attribute",
+                    "data_type": "VARCHAR",
+                    "comment": "",
                 }
-            )
-            return {
-                "documents": [
-                    Document(
-                        content=str(
-                            {
-                                "type": "TABLE",
-                                "name": "orders",
-                                "comment": "",
-                                "columns": [],
-                                "properties": {},
-                                "primaryKey": "",
-                            }
-                        ),
-                        meta={"type": "TABLE_SCHEMA", "name": "orders"},
-                    ),
-                    Document(
-                        content=str(
-                            {
-                                "type": "TABLE_COLUMNS",
-                                "columns": [
-                                    {
-                                        "type": "COLUMN",
-                                        "name": "order_id",
-                                        "data_type": "VARCHAR",
-                                        "comment": "",
-                                        "is_primary_key": True,
-                                    }
-                                ],
-                            }
-                        ),
-                        meta={"type": "TABLE_SCHEMA", "name": "orders"},
-                    ),
-                ]
-            }
-
-    retriever = Retriever()
-
-    documents = await dbschema_retrieval(
-        table_retrieval={"documents": []},
-        project_id="project-1",
-        mdl_hash="deploy-1",
-        dbschema_retriever=retriever,
-        embedding={},
-    )
-
-    assert [document.meta["name"] for document in documents] == ["orders", "orders"]
-    assert retriever.calls == [
-        {
-            "query_embedding": [],
-            "filters": {
-                "operator": "AND",
-                "conditions": [
-                    {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-                    {"field": "project_id", "operator": "==", "value": "project-1"},
-                    {"field": "mdl_hash", "operator": "==", "value": "deploy-1"},
-                ],
-            },
-        }
-    ]
-
-
-@pytest.mark.asyncio
-async def test_dbschema_retrieval_expands_direct_declared_relationships():
-    selected_model = "model_a"
-    related_model = "model_b"
-    downstream_model = "model_c"
-
-    class Retriever:
-        def __init__(self):
-            self.calls = []
-
-        async def run(self, query_embedding, filters):
-            names = [
-                condition["value"]
-                for condition in filters["conditions"][1]["conditions"]
-            ]
-            self.calls.append(names)
-
-            if names == [selected_model]:
-                return {
-                    "documents": [
-                        Document(
-                            content=str(
-                                {
-                                    "type": "TABLE",
-                                    "name": selected_model,
-                                }
-                            ),
-                            meta={"type": "TABLE_SCHEMA", "name": selected_model},
-                        ),
-                        Document(
-                            content=str(
-                                {
-                                    "type": "TABLE_COLUMNS",
-                                    "columns": [
-                                        {
-                                            "type": "FOREIGN_KEY",
-                                            "tables": [
-                                                selected_model,
-                                                related_model,
-                                            ],
-                                            "column": "model_b_id",
-                                            "referenced_table": related_model,
-                                            "referenced_column": "id",
-                                        }
-                                    ],
-                                }
-                            ),
-                            meta={"type": "TABLE_SCHEMA", "name": selected_model},
-                        ),
-                    ]
-                }
-
-            if names == [related_model]:
-                return {
-                    "documents": [
-                        Document(
-                            content=str(
-                                {
-                                    "type": "TABLE",
-                                    "name": related_model,
-                                }
-                            ),
-                            meta={"type": "TABLE_SCHEMA", "name": related_model},
-                        ),
-                        Document(
-                            content=str(
-                                {
-                                    "type": "TABLE_COLUMNS",
-                                    "columns": [
-                                        {
-                                            "type": "FOREIGN_KEY",
-                                            "tables": [
-                                                related_model,
-                                                downstream_model,
-                                            ],
-                                            "column": "model_c_id",
-                                            "referenced_table": downstream_model,
-                                            "referenced_column": "id",
-                                        }
-                                    ],
-                                }
-                            ),
-                            meta={"type": "TABLE_SCHEMA", "name": related_model},
-                        ),
-                    ]
-                }
-
-            if names == [downstream_model]:
-                return {
-                    "documents": [
-                        Document(
-                            content=str(
-                                {
-                                    "type": "TABLE",
-                                    "name": downstream_model,
-                                }
-                            ),
-                            meta={"type": "TABLE_SCHEMA", "name": downstream_model},
-                        )
-                    ]
-                }
-
-            return {"documents": []}
-
-    retriever = Retriever()
-
-    documents = await dbschema_retrieval(
-        table_retrieval={
-            "documents": [
-                Document(
-                    content=str({"name": selected_model}),
-                    meta={"type": "TABLE_DESCRIPTION", "name": selected_model},
-                )
-            ]
-        },
-        project_id="project-1",
-        dbschema_retriever=retriever,
-        embedding={},
-    )
-
-    assert retriever.calls == [[selected_model], [related_model]]
-    assert [document.meta["name"] for document in documents] == [
-        selected_model,
-        selected_model,
-        related_model,
-        related_model,
-    ]
-
-
-@pytest.mark.asyncio
-async def test_dbschema_retrieval_does_not_recursively_expand_relationships():
-    selected_model = "model_alpha"
-    related_model = "model_beta"
-    downstream_model = "model_gamma"
-
-    class Retriever:
-        def __init__(self):
-            self.calls = []
-
-        async def run(self, query_embedding, filters):
-            names = [
-                condition["value"]
-                for condition in filters["conditions"][1]["conditions"]
-            ]
-            self.calls.append(names)
-
-            if names == [selected_model]:
-                return {
-                    "documents": [
-                        Document(
-                            content=str({"type": "TABLE", "name": selected_model}),
-                            meta={"type": "TABLE_SCHEMA", "name": selected_model},
-                        ),
-                        Document(
-                            content=str(
-                                {
-                                    "type": "TABLE_COLUMNS",
-                                    "columns": [
-                                        {
-                                            "type": "FOREIGN_KEY",
-                                            "tables": [
-                                                selected_model,
-                                                related_model,
-                                            ],
-                                            "column": "model_beta_id",
-                                            "referenced_table": related_model,
-                                            "referenced_column": "id",
-                                        }
-                                    ],
-                                }
-                            ),
-                            meta={"type": "TABLE_SCHEMA", "name": selected_model},
-                        ),
-                    ]
-                }
-
-            if names == [related_model]:
-                return {
-                    "documents": [
-                        Document(
-                            content=str({"type": "TABLE", "name": related_model}),
-                            meta={"type": "TABLE_SCHEMA", "name": related_model},
-                        ),
-                        Document(
-                            content=str(
-                                {
-                                    "type": "TABLE_COLUMNS",
-                                    "columns": [
-                                        {
-                                            "type": "FOREIGN_KEY",
-                                            "tables": [
-                                                related_model,
-                                                downstream_model,
-                                            ],
-                                            "column": "model_gamma_id",
-                                            "referenced_table": downstream_model,
-                                            "referenced_column": "id",
-                                        }
-                                    ],
-                                }
-                            ),
-                            meta={"type": "TABLE_SCHEMA", "name": related_model},
-                        ),
-                    ]
-                }
-
-            if names == [downstream_model]:
-                return {
-                    "documents": [
-                        Document(
-                            content=str({"type": "TABLE", "name": downstream_model}),
-                            meta={"type": "TABLE_SCHEMA", "name": downstream_model},
-                        )
-                    ]
-                }
-
-            return {"documents": []}
-
-    retriever = Retriever()
-
-    documents = await dbschema_retrieval(
-        table_retrieval={
-            "documents": [
-                Document(
-                    content=str({"name": selected_model}),
-                    meta={"type": "TABLE_DESCRIPTION", "name": selected_model},
-                )
-            ]
-        },
-        project_id="project-1",
-        dbschema_retriever=retriever,
-        embedding={},
-        query="show model alpha records linked to model gamma records",
-    )
-
-    assert retriever.calls == [[selected_model], [related_model]]
-    assert [document.meta["name"] for document in documents] == [
-        selected_model,
-        selected_model,
-        related_model,
-        related_model,
-    ]
-
-
-@pytest.mark.asyncio
-async def test_dbschema_retrieval_uses_semantic_schema_hits_when_table_retrieval_misses():
-    semantic_model = "semantic_dataset"
-
-    class Retriever:
-        def __init__(self):
-            self.calls = []
-
-        async def run(self, query_embedding, filters):
-            self.calls.append(
-                {
-                    "query_embedding": query_embedding,
-                    "filters": filters,
-                }
-            )
-
-            if query_embedding:
-                return {
-                    "documents": [
-                        Document(
-                            content=str(
-                                {
-                                    "type": "TABLE_COLUMNS",
-                                    "columns": [
-                                        {
-                                            "type": "COLUMN",
-                                            "name": "semantic_measure",
-                                            "data_type": "DOUBLE",
-                                            "comment": "",
-                                            "is_primary_key": False,
-                                        }
-                                    ],
-                                }
-                            ),
-                            meta={"type": "TABLE_SCHEMA", "name": semantic_model},
-                        )
-                    ]
-                }
-
-            return {
-                "documents": [
-                    Document(
-                        content=str(
-                            {
-                                "type": "TABLE",
-                                "name": semantic_model,
-                                "comment": "",
-                                "columns": [],
-                                "properties": {},
-                                "primaryKey": "",
-                            }
-                        ),
-                        meta={"type": "TABLE_SCHEMA", "name": semantic_model},
-                    )
-                ]
-            }
-
-    retriever = Retriever()
-
-    documents = await dbschema_retrieval(
-        table_retrieval={"documents": []},
-        project_id="project-1",
-        dbschema_retriever=retriever,
-        embedding={"embedding": [0.25]},
-    )
-
-    assert retriever.calls[0] == {
-        "query_embedding": [0.25],
-        "filters": {
-            "operator": "AND",
-            "conditions": [
-                {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-                {"field": "project_id", "operator": "==", "value": "project-1"},
             ],
-        },
-    }
-    assert retriever.calls[1]["query_embedding"] == []
-    assert retriever.calls[1]["filters"] == {
-        "operator": "AND",
-        "conditions": [
-            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-            {
-                "operator": "OR",
-                "conditions": [
-                    {"field": "name", "operator": "==", "value": semantic_model},
-                ],
-            },
-            {"field": "project_id", "operator": "==", "value": "project-1"},
-        ],
-    }
-    assert [document.meta["name"] for document in documents] == [
-        semantic_model,
-        semantic_model,
-    ]
-
-
-@pytest.mark.asyncio
-async def test_relationship_semantic_schema_rescue_keeps_deploy_scope():
-    semantic_model = "scoped_model_alpha"
-
-    class Retriever:
-        def __init__(self):
-            self.calls = []
-
-        async def run(self, query_embedding, filters):
-            self.calls.append(
-                {
-                    "query_embedding": query_embedding,
-                    "filters": filters,
-                }
-            )
-
-            if query_embedding:
-                return {
-                    "documents": [
-                        Document(
-                            content=str(
-                                {
-                                    "type": "TABLE_COLUMNS",
-                                    "columns": [
-                                        {
-                                            "type": "FOREIGN_KEY",
-                                            "tables": [
-                                                semantic_model,
-                                                "scoped_model_beta",
-                                            ],
-                                            "column": "model_beta_id",
-                                            "referenced_table": "scoped_model_beta",
-                                            "referenced_column": "id",
-                                        }
-                                    ],
-                                }
-                            ),
-                            meta={"type": "TABLE_SCHEMA", "name": semantic_model},
-                        )
-                    ]
-                }
-
-            names = [
-                condition["value"]
-                for condition in filters["conditions"][1]["conditions"]
-            ]
-            return {
-                "documents": [
-                    Document(
-                        content=str({"type": "TABLE", "name": name}),
-                        meta={"type": "TABLE_SCHEMA", "name": name},
-                    )
-                    for name in names
-                ]
-            }
-
-    retriever = Retriever()
-
-    await dbschema_retrieval(
-        table_retrieval={"documents": []},
-        project_id="project-1",
-        mdl_hash="deploy-1",
-        dbschema_retriever=retriever,
-        embedding={"embedding": [0.25]},
-        query="show scoped model alpha linked to scoped model beta",
+        }
     )
 
-    for call in retriever.calls:
-        assert {"field": "project_id", "operator": "==", "value": "project-1"} in call[
-            "filters"
-        ]["conditions"]
-        assert {"field": "mdl_hash", "operator": "==", "value": "deploy-1"} in call[
-            "filters"
-        ]["conditions"]
+    assert result == "CREATE VIEW retrieved_view\nAS SELECT visible_attribute FROM source_model"
 
 
-@pytest.mark.asyncio
-async def test_dbschema_retrieval_does_not_merge_semantic_hits_when_descriptions_match():
-    described_model = "described_dataset"
-    semantic_model = "semantic_dataset"
-
-    class Retriever:
-        def __init__(self):
-            self.calls = []
-
-        async def run(self, query_embedding, filters):
-            self.calls.append(
-                {
-                    "query_embedding": query_embedding,
-                    "filters": filters,
-                }
-            )
-
-            if query_embedding:
-                return {
-                    "documents": [
-                        Document(
-                            content=str(
-                                {
-                                    "type": "TABLE_COLUMNS",
-                                    "columns": [
-                                        {
-                                            "type": "COLUMN",
-                                            "name": "semantic_value",
-                                            "data_type": "DOUBLE",
-                                            "comment": "",
-                                            "is_primary_key": False,
-                                        }
-                                    ],
-                                }
-                            ),
-                            meta={"type": "TABLE_SCHEMA", "name": semantic_model},
-                        )
-                    ]
-                }
-
-            names = [
-                condition["value"]
-                for condition in filters["conditions"][1]["conditions"]
-            ]
-            documents = [
-                Document(
-                    content=str(
-                        {
-                            "type": "TABLE",
-                            "name": name,
-                            "comment": "",
-                            "columns": [],
-                            "properties": {},
-                            "primaryKey": "",
-                        }
-                    ),
-                    meta={"type": "TABLE_SCHEMA", "name": name},
-                )
-                for name in names
-            ]
-            return {
-                "documents": documents
-            }
-
-    retriever = Retriever()
-
-    documents = await dbschema_retrieval(
-        table_retrieval={
-            "documents": [
-                Document(
-                    content=str({"name": described_model}),
-                    meta={"type": "TABLE_DESCRIPTION", "name": described_model},
-                )
-            ]
-        },
-        project_id="project-1",
-        dbschema_retriever=retriever,
-        embedding={"embedding": [0.25]},
+def test_check_using_db_schemas_without_pruning_returns_legacy_result_shape():
+    result = check_using_db_schemas_without_pruning(
+        construct_db_schemas=[
+            table_schema("activity", [column("id", "INTEGER")]),
+            table_schema("account", [column("name")]),
+        ],
+        dbschema_retrieval=[],
+        encoding=Encoding(),
+        enable_column_pruning=False,
+        context_window_size=1000,
     )
 
-    assert [call["query_embedding"] for call in retriever.calls] == [[]]
-    assert retriever.calls[0]["filters"] == {
-        "operator": "AND",
-        "conditions": [
-            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-            {
-                "operator": "OR",
-                "conditions": [
-                    {"field": "name", "operator": "==", "value": described_model},
-                ],
-            },
-            {"field": "project_id", "operator": "==", "value": "project-1"},
-        ],
-    }
-    assert [document.meta["name"] for document in documents] == [
-        described_model,
+    assert [schema["table_name"] for schema in result["db_schemas"]] == [
+        "activity",
+        "account",
     ]
+    assert "CREATE TABLE activity" in result["db_schemas"][0]["table_ddl"]
+    assert "column_names" not in result["db_schemas"][0]
+    assert "unpruned_table_ddl" not in result["db_schemas"][0]
 
 
 def test_check_using_db_schemas_without_pruning_triggers_legacy_column_pruning():
-    class Encoding:
-        def encode(self, value):
-            return value.split()
-
     result = check_using_db_schemas_without_pruning(
         construct_db_schemas=[
-            {
-                "type": "TABLE",
-                "name": "orders",
-                "comment": "",
-                "columns": [
-                    {
-                        "type": "COLUMN",
-                        "name": "amount",
-                        "data_type": "DOUBLE",
-                        "comment": "",
-                        "is_primary_key": False,
-                    }
-                ],
-                "properties": {},
-                "primaryKey": "",
-            }
+            table_schema("orders", [column("amount", "DOUBLE")])
         ],
         dbschema_retrieval=[],
         encoding=Encoding(),
@@ -977,7 +248,7 @@ def test_check_using_db_schemas_without_pruning_triggers_legacy_column_pruning()
     assert result["tokens"] > 0
 
 
-def test_construct_retrieval_results_preserves_retrieved_metric_when_pruning():
+def test_construct_retrieval_results_uses_selected_columns_for_sql_generation():
     result = construct_retrieval_results(
         check_using_db_schemas_without_pruning={},
         filter_columns_in_tables={
@@ -987,10 +258,10 @@ def test_construct_retrieval_results_preserves_retrieved_metric_when_pruning():
                     "results": [
                         {
                             "table_name": "modeled_dataset",
-                            "table_selection_reason": "Selected for the current request.",
+                            "table_selection_reason": "Selected.",
                             "table_contents": {
                                 "chain_of_thought_reasoning": ["Needed field."],
-                                "columns": ["stored_attribute"]
+                                "columns": ["stored_measure"]
                             }
                         }
                     ]
@@ -999,23 +270,47 @@ def test_construct_retrieval_results_preserves_retrieved_metric_when_pruning():
             ]
         },
         construct_db_schemas=[
-            {
-                "type": "TABLE",
-                "name": "modeled_dataset",
-                "comment": "",
-                "columns": [
-                    {
-                        "type": "COLUMN",
-                        "name": "stored_attribute",
-                        "data_type": "VARCHAR",
-                        "comment": "",
-                        "is_primary_key": False,
-                    }
+            table_schema(
+                "modeled_dataset",
+                [
+                    column("stored_dimension"),
+                    column("stored_measure", "DOUBLE"),
                 ],
-                "properties": {},
-                "primaryKey": "",
-            }
+            )
         ],
+        dbschema_retrieval=[],
+    )
+
+    retrieved = result["retrieval_results"][0]
+
+    assert retrieved["table_name"] == "modeled_dataset"
+    assert "stored_dimension VARCHAR" not in retrieved["table_ddl"]
+    assert "stored_measure DOUBLE" in retrieved["table_ddl"]
+    assert "column_names" not in retrieved
+
+
+def test_construct_retrieval_results_keeps_only_selected_metrics_and_views():
+    result = construct_retrieval_results(
+        check_using_db_schemas_without_pruning={},
+        filter_columns_in_tables={
+            "replies": [
+                """
+                {
+                    "results": [
+                        {
+                            "table_name": "semantic_metric",
+                            "table_selection_reason": "Selected.",
+                            "table_contents": {
+                                "chain_of_thought_reasoning": ["Needed metric."],
+                                "columns": ["metric_value"]
+                            }
+                        }
+                    ]
+                }
+                """
+            ]
+        },
+        construct_db_schemas=[],
         dbschema_retrieval=[
             Document(
                 content=str(
@@ -1034,308 +329,25 @@ def test_construct_retrieval_results_preserves_retrieved_metric_when_pruning():
                     }
                 ),
                 meta={"type": "TABLE_SCHEMA", "name": "semantic_metric"},
-            )
-        ],
-    )
-
-    assert [item["table_name"] for item in result["retrieval_results"]] == [
-        "modeled_dataset",
-        "semantic_metric",
-    ]
-    assert result["retrieval_results"][1]["column_names"] == ["metric_value"]
-    assert result["retrieval_results"][1]["manifest_column_names"] == ["metric_value"]
-    assert result["has_metric"] is True
-
-
-def test_construct_retrieval_results_falls_back_when_pruner_omits_results():
-    result = construct_retrieval_results(
-        check_using_db_schemas_without_pruning={},
-        filter_columns_in_tables={
-            "replies": [
-                """
-                {
-                    "tables": [
-                        {
-                            "table_name": "modeled_dataset",
-                            "table_contents": {
-                                "columns": ["stored_attribute"]
-                            }
-                        }
-                    ]
-                }
-                """
-            ]
-        },
-        construct_db_schemas=[
-            {
-                "type": "TABLE",
-                "name": "modeled_dataset",
-                "comment": "",
-                "columns": [
-                    {
-                        "type": "COLUMN",
-                        "name": "stored_attribute",
-                        "data_type": "VARCHAR",
-                        "comment": "",
-                        "is_primary_key": False,
-                    }
-                ],
-                "properties": {},
-                "primaryKey": "",
-            }
-        ],
-        dbschema_retrieval=[],
-    )
-
-    assert result["retrieval_results"][0]["table_name"] == "modeled_dataset"
-    assert result["retrieval_results"][0]["column_names"] == ["stored_attribute"]
-
-
-def test_construct_retrieval_results_preserves_retrieved_view_columns_when_pruning():
-    result = construct_retrieval_results(
-        check_using_db_schemas_without_pruning={},
-        filter_columns_in_tables={
-            "replies": [
-                """
-                {
-                    "results": [
-                        {
-                            "table_name": "modeled_dataset",
-                            "table_selection_reason": "Selected for the current request.",
-                            "table_contents": {
-                                "chain_of_thought_reasoning": ["Needed field."],
-                                "columns": ["stored_attribute"]
-                            }
-                        }
-                    ]
-                }
-                """
-            ]
-        },
-        construct_db_schemas=[
-            {
-                "type": "TABLE",
-                "name": "modeled_dataset",
-                "comment": "",
-                "columns": [
-                    {
-                        "type": "COLUMN",
-                        "name": "stored_attribute",
-                        "data_type": "VARCHAR",
-                        "comment": "",
-                        "is_primary_key": False,
-                    }
-                ],
-                "properties": {},
-                "primaryKey": "",
-            }
-        ],
-        dbschema_retrieval=[
+            ),
             Document(
                 content=str(
                     {
                         "type": "VIEW",
                         "comment": "",
-                        "name": "semantic_view",
-                        "columns": [
-                            {
-                                "name": "view_attribute",
-                                "data_type": "VARCHAR",
-                                "comment": "",
-                            }
-                        ],
+                        "name": "unselected_view",
+                        "statement": "SELECT id FROM source_model",
                     }
                 ),
-                meta={"type": "TABLE_SCHEMA", "name": "semantic_view"},
-            )
+                meta={"type": "TABLE_SCHEMA", "name": "unselected_view"},
+            ),
         ],
     )
 
-    assert result["retrieval_results"][1]["table_name"] == "semantic_view"
-    assert result["retrieval_results"][1]["column_names"] == ["view_attribute"]
-    assert result["retrieval_results"][1]["manifest_column_names"] == [
-        "view_attribute"
+    assert [item["table_name"] for item in result["retrieval_results"]] == [
+        "semantic_metric"
     ]
-
-
-def test_construct_retrieval_results_keeps_schema_when_pruner_returns_unknown_columns():
-    result = construct_retrieval_results(
-        check_using_db_schemas_without_pruning={},
-        filter_columns_in_tables={
-            "replies": [
-                """
-                {
-                    "results": [
-                        {
-                            "table_name": "modeled_dataset",
-                            "table_selection_reason": "Selected for the current request.",
-                            "table_contents": {
-                                "chain_of_thought_reasoning": ["Needed field."],
-                                "columns": ["semantic_label"]
-                            }
-                        }
-                    ]
-                }
-                """
-            ]
-        },
-        construct_db_schemas=[
-            {
-                "type": "TABLE",
-                "name": "modeled_dataset",
-                "comment": "",
-                "columns": [
-                    {
-                        "type": "COLUMN",
-                        "name": "stored_dimension",
-                        "data_type": "VARCHAR",
-                        "comment": "Semantic dimension label.",
-                        "is_primary_key": False,
-                    },
-                    {
-                        "type": "COLUMN",
-                        "name": "stored_measure",
-                        "data_type": "DOUBLE",
-                        "comment": "Semantic measure label.",
-                        "is_primary_key": False,
-                    },
-                ],
-                "properties": {},
-                "primaryKey": "",
-            }
-        ],
-        dbschema_retrieval=[],
-    )
-
-    table_ddl = result["retrieval_results"][0]["table_ddl"]
-
-    assert "semantic_label" not in table_ddl
-    assert "stored_dimension VARCHAR" in table_ddl
-    assert "stored_measure DOUBLE" in table_ddl
-    assert "sql_column_names_use_exactly" not in table_ddl
-
-
-def test_construct_retrieval_results_keeps_schema_when_pruner_mixes_known_and_unknown_columns():
-    result = construct_retrieval_results(
-        check_using_db_schemas_without_pruning={},
-        filter_columns_in_tables={
-            "replies": [
-                """
-                {
-                    "results": [
-                        {
-                            "table_name": "modeled_dataset",
-                            "table_selection_reason": "Selected for the current request.",
-                            "table_contents": {
-                                "chain_of_thought_reasoning": ["Needed fields."],
-                                "columns": ["stored_measure", "semantic_label"]
-                            }
-                        }
-                    ]
-                }
-                """
-            ]
-        },
-        construct_db_schemas=[
-            {
-                "type": "TABLE",
-                "name": "modeled_dataset",
-                "comment": "",
-                "columns": [
-                    {
-                        "type": "COLUMN",
-                        "name": "stored_dimension",
-                        "data_type": "VARCHAR",
-                        "comment": "Semantic dimension label.",
-                        "is_primary_key": False,
-                    },
-                    {
-                        "type": "COLUMN",
-                        "name": "stored_measure",
-                        "data_type": "DOUBLE",
-                        "comment": "Semantic measure label.",
-                        "is_primary_key": False,
-                    },
-                ],
-                "properties": {},
-                "primaryKey": "",
-            }
-        ],
-        dbschema_retrieval=[],
-    )
-
-    table_ddl = result["retrieval_results"][0]["table_ddl"]
-
-    assert "semantic_label" not in table_ddl
-    assert "stored_dimension VARCHAR" in table_ddl
-    assert "stored_measure DOUBLE" in table_ddl
-    assert "sql_column_names_use_exactly" not in table_ddl
-
-
-def test_construct_retrieval_results_uses_selected_columns_for_sql_generation():
-    result = construct_retrieval_results(
-        check_using_db_schemas_without_pruning={},
-        filter_columns_in_tables={
-            "replies": [
-                """
-                {
-                    "results": [
-                        {
-                            "table_name": "modeled_dataset",
-                            "table_selection_reason": "Selected for the current request.",
-                            "table_contents": {
-                                "chain_of_thought_reasoning": ["Needed field."],
-                                "columns": ["stored_measure"]
-                            }
-                        }
-                    ]
-                }
-                """
-            ]
-        },
-        construct_db_schemas=[
-            {
-                "type": "TABLE",
-                "name": "modeled_dataset",
-                "comment": "",
-                "columns": [
-                    {
-                        "type": "COLUMN",
-                        "name": "stored_dimension",
-                        "data_type": "VARCHAR",
-                        "comment": "Semantic dimension label.",
-                        "is_primary_key": False,
-                    },
-                    {
-                        "type": "COLUMN",
-                        "name": "stored_measure",
-                        "data_type": "DOUBLE",
-                        "comment": "Semantic measure label.",
-                        "is_primary_key": False,
-                    },
-                ],
-                "properties": {},
-                "primaryKey": "",
-            }
-        ],
-        dbschema_retrieval=[],
-    )
-
-    retrieved = result["retrieval_results"][0]
-
-    assert "stored_dimension VARCHAR" not in retrieved["table_ddl"]
-    assert "stored_measure DOUBLE" in retrieved["table_ddl"]
-    assert "stored_dimension VARCHAR" in retrieved["unpruned_table_ddl"]
-    assert "stored_measure DOUBLE" in retrieved["unpruned_table_ddl"]
-    assert "WREN RETRIEVED SEMANTIC CONTEXT" not in retrieved["table_ddl"]
-    assert "sql_column_name_use_exactly" not in retrieved["table_ddl"]
-    assert retrieved["column_names"] == [
-        "stored_measure",
-    ]
-    assert retrieved["manifest_column_names"] == [
-        "stored_dimension",
-        "stored_measure",
-    ]
+    assert result["has_metric"] is True
 
 
 def test_construct_retrieval_results_does_not_add_column_only_term_matches():
@@ -1348,7 +360,7 @@ def test_construct_retrieval_results_does_not_add_column_only_term_matches():
                     "results": [
                         {
                             "table_name": "regional_orders",
-                            "table_selection_reason": "Selected for the current request.",
+                            "table_selection_reason": "Selected.",
                             "table_contents": {
                                 "chain_of_thought_reasoning": ["Needed field."],
                                 "columns": ["order_id"]
@@ -1360,41 +372,10 @@ def test_construct_retrieval_results_does_not_add_column_only_term_matches():
             ]
         },
         construct_db_schemas=[
-            {
-                "type": "TABLE",
-                "name": "regional_orders",
-                "comment": "",
-                "columns": [
-                    {
-                        "type": "COLUMN",
-                        "name": "order_id",
-                        "data_type": "VARCHAR",
-                        "comment": "",
-                        "is_primary_key": False,
-                    }
-                ],
-                "properties": {},
-                "primaryKey": "",
-            },
-            {
-                "type": "TABLE",
-                "name": "fact_sales",
-                "comment": "",
-                "columns": [
-                    {
-                        "type": "COLUMN",
-                        "name": "country",
-                        "data_type": "VARCHAR",
-                        "comment": "",
-                        "is_primary_key": False,
-                    }
-                ],
-                "properties": {},
-                "primaryKey": "",
-            },
+            table_schema("regional_orders", [column("order_id")]),
+            table_schema("fact_sales", [column("country")]),
         ],
         dbschema_retrieval=[],
-        query="show orders from country france",
     )
 
     assert [item["table_name"] for item in result["retrieval_results"]] == [
@@ -1402,405 +383,21 @@ def test_construct_retrieval_results_does_not_add_column_only_term_matches():
     ]
 
 
-def test_check_using_db_schemas_without_pruning_keeps_context_when_within_window():
-    class Encoding:
-        def encode(self, value):
-            return value.split()
-
-    def table_schema(name):
-        return {
-            "type": "TABLE",
-            "name": name,
-            "comment": "",
-            "columns": [
-                {
-                    "type": "COLUMN",
-                    "name": "id",
-                    "data_type": "INTEGER",
-                    "comment": "",
-                    "is_primary_key": False,
-                }
-            ],
-            "properties": {},
-            "primaryKey": "",
-        }
-
-    result = check_using_db_schemas_without_pruning(
-        construct_db_schemas=[
-            table_schema("activity"),
-            table_schema("account"),
-        ],
-        dbschema_retrieval=[],
-        encoding=Encoding(),
-        enable_column_pruning=False,
-        context_window_size=1000,
-    )
-
-    assert [schema["table_name"] for schema in result["db_schemas"]] == [
-        "activity",
-        "account",
-    ]
-    assert all(
-        "WREN SQL IDENTIFIER CONTRACT" not in schema["table_ddl"]
-        for schema in result["db_schemas"]
-    )
-    assert all(
-        "CREATE TABLE" in schema["table_ddl"]
-        for schema in result["db_schemas"]
-    )
-    assert all(
-        "WREN RETRIEVED SEMANTIC CONTEXT" not in schema["table_ddl"]
-        for schema in result["db_schemas"]
-    )
-    assert result["tokens"] > 0
-
-
-def test_check_using_db_schemas_without_pruning_keeps_wide_tables_by_query():
-    class Encoding:
-        def encode(self, value):
-            return value.split()
-
-    columns = [
-        {
-            "type": "COLUMN",
-            "name": "OrderDate",
-            "data_type": "DATE",
-            "comment": "Order date",
-            "is_primary_key": False,
-        },
-        {
-            "type": "COLUMN",
-            "name": "OrderNo",
-            "data_type": "VARCHAR",
-            "comment": "Order number",
-            "is_primary_key": False,
-        },
-        {
-            "type": "COLUMN",
-            "name": "SalesAmount",
-            "data_type": "DECIMAL",
-            "comment": "Sales amount",
-            "is_primary_key": False,
-        },
-    ]
-    columns.extend(
-        {
-            "type": "COLUMN",
-            "name": f"Filler{index}",
-            "data_type": "VARCHAR",
-            "comment": "",
-            "is_primary_key": False,
-        }
-        for index in range(25)
-    )
-
-    result = check_using_db_schemas_without_pruning(
-        construct_db_schemas=[
-            {
-                "type": "TABLE",
-                "name": "wide_orders",
-                "comment": "",
-                "columns": columns,
-                "properties": {},
-                "primaryKey": "",
-            }
-        ],
-        dbschema_retrieval=[],
-        encoding=Encoding(),
-        enable_column_pruning=False,
-        context_window_size=10000,
-        query="show orders from last week",
-    )
-
-    column_names = result["db_schemas"][0]["column_names"]
-    assert len(column_names) == 28
-    assert "OrderDate" in column_names
-    assert "OrderNo" in column_names
-    assert "Filler24" in column_names
-
-
-def test_retrieved_schema_separates_exact_sql_names_from_semantic_context():
-    class Encoding:
-        def encode(self, value):
-            return value.split()
-
-    result = check_using_db_schemas_without_pruning(
-        construct_db_schemas=[
-            {
-                "type": "TABLE",
-                "name": "modeled_dataset",
-                "comment": "Business-facing dataset description.",
-                "columns": [
-                    {
-                        "type": "COLUMN",
-                        "name": "stored_attribute",
-                        "data_type": "VARCHAR",
-                        "comment": "Business-facing attribute label.",
-                        "is_primary_key": False,
-                    }
-                ],
-                "properties": {},
-                "primaryKey": "",
-            }
-        ],
-        dbschema_retrieval=[],
-        encoding=Encoding(),
-        enable_column_pruning=False,
-        context_window_size=1000,
-    )
-
-    table_ddl = result["db_schemas"][0]["table_ddl"]
-    assert "WREN SQL IDENTIFIER CONTRACT" not in table_ddl
-    assert "Business-facing attribute label." in table_ddl
-    assert "Business-facing dataset description." in table_ddl
-    assert "WREN RETRIEVED SEMANTIC CONTEXT" not in table_ddl
-    assert "CREATE TABLE modeled_dataset" in table_ddl
-    assert "stored_attribute VARCHAR" in table_ddl
-    assert "Business-facing attribute label.CREATE TABLE" not in table_ddl
-    assert "Business-facing dataset description.CREATE TABLE" not in table_ddl
-
-
-def test_retrieved_schema_keeps_physical_metadata_out_of_executable_ddl():
-    class Encoding:
-        def encode(self, value):
-            return value.split()
-
-    result = check_using_db_schemas_without_pruning(
-        construct_db_schemas=[
-            {
-                "type": "TABLE",
-                "name": "modeled_dataset",
-                "comment": "Business-facing dataset description.",
-                "columns": [
-                    {
-                        "type": "COLUMN",
-                        "name": "stored_attribute",
-                        "data_type": "VARCHAR",
-                        "comment": "Business-facing attribute label.",
-                        "is_primary_key": False,
-                    }
-                ],
-                "properties": {
-                    "tableReference": {
-                        "catalog": "physical_catalog",
-                        "schema": "physical_schema",
-                        "table": "physical_table",
-                    }
-                },
-                "primaryKey": "",
-            }
-        ],
-        dbschema_retrieval=[],
-        encoding=Encoding(),
-        enable_column_pruning=False,
-        context_window_size=1000,
-    )
-
-    table_ddl = result["db_schemas"][0]["table_ddl"]
-    assert "CREATE TABLE modeled_dataset" in table_ddl
-    assert "physical_catalog" not in table_ddl
-    assert "physical_schema" not in table_ddl
-    assert "physical_table" not in table_ddl
-    assert "Business-facing attribute label." in table_ddl
-
-
-def test_metric_schema_keeps_measure_semantics_outside_executable_ddl():
-    class Encoding:
-        def encode(self, value):
-            return value.split()
-
-    result = check_using_db_schemas_without_pruning(
-        construct_db_schemas=[],
-        dbschema_retrieval=[
-            Document(
-                content=str(
-                    {
-                        "type": "METRIC",
-                        "name": "modeled_metric",
-                        "comment": "Metric semantic description.",
-                        "columns": [
-                            {
-                                "type": "COLUMN",
-                                "comment": "-- This column is a dimension\n  ",
-                                "name": "grouping_dimension",
-                                "data_type": "VARCHAR",
-                            },
-                            {
-                                "type": "COLUMN",
-                                "comment": (
-                                    "-- This column is a measure\n  "
-                                    "-- expression: SUM(metric_value)\n  "
-                                ),
-                                "name": "defined_measure",
-                                "data_type": "DOUBLE",
-                            },
-                        ],
-                    }
-                ),
-                meta={"name": "modeled_metric"},
-            )
-        ],
-        encoding=Encoding(),
-        enable_column_pruning=False,
-        context_window_size=1000,
-    )
-
-    table_ddl = result["db_schemas"][0]["table_ddl"]
-    executable_ddl = table_ddl.split("CREATE TABLE", maxsplit=1)[1]
-
-    assert "object_type: metric" not in table_ddl
-    assert "stable analytical aggregation interface" not in table_ddl
-    assert "SUM(metric_value)" in table_ddl
-    assert "CREATE TABLE modeled_metric" in table_ddl
-    assert "grouping_dimension VARCHAR" in executable_ddl
-    assert "defined_measure DOUBLE" in executable_ddl
-    assert "-- This column is a measure" in executable_ddl
-
-
-def test_build_table_ddl_can_render_executable_schema_without_semantic_comments():
-    ddl, has_calculated_field, has_json_field = build_table_ddl(
-        {
-            "comment": "/* semantic table context */\n",
-            "name": "modeled_dataset",
-            "columns": [
-                {
-                    "type": "COLUMN",
-                    "comment": "-- semantic field context\n  ",
-                    "name": "stored_attribute",
-                    "data_type": "VARCHAR",
-                    "is_primary_key": False,
-                }
-            ],
-        },
-        include_semantic_comments=False,
-    )
-
-    assert ddl == "CREATE TABLE modeled_dataset (\n  stored_attribute VARCHAR\n);"
-    assert not has_calculated_field
-    assert not has_json_field
-
-
-def test_build_table_ddl_deduplicates_repeated_columns_and_relationships():
-    ddl, _, _ = build_table_ddl(
-        {
-            "type": "TABLE",
-            "name": "modeled_dataset",
-            "comment": "",
-            "columns": [
-                {
-                    "type": "COLUMN",
-                    "name": "stored_attribute",
-                    "data_type": "VARCHAR",
-                    "comment": "",
-                    "is_primary_key": False,
-                },
-                {
-                    "type": "COLUMN",
-                    "name": "stored_attribute",
-                    "data_type": "VARCHAR",
-                    "comment": "",
-                    "is_primary_key": False,
-                },
-                {
-                    "type": "FOREIGN_KEY",
-                    "comment": "",
-                    "constraint": "FOREIGN KEY (stored_attribute) REFERENCES related_dataset(stored_attribute)",
-                    "tables": ["modeled_dataset", "related_dataset"],
-                    "column": "stored_attribute",
-                    "referenced_table": "related_dataset",
-                    "referenced_column": "stored_attribute",
-                },
-                {
-                    "type": "FOREIGN_KEY",
-                    "comment": "",
-                    "constraint": "FOREIGN KEY (stored_attribute) REFERENCES related_dataset(stored_attribute)",
-                    "tables": ["modeled_dataset", "related_dataset"],
-                    "column": "stored_attribute",
-                    "referenced_table": "related_dataset",
-                    "referenced_column": "stored_attribute",
-                },
-            ],
-        }
-    )
-
-    assert ddl.count("stored_attribute VARCHAR") == 1
-    assert (
-        ddl.count(
-            "FOREIGN KEY (stored_attribute) REFERENCES related_dataset(stored_attribute)"
-        )
-        == 1
-    )
-
-
-def test_check_using_db_schemas_without_pruning_keeps_explicit_table_fast_path():
-    class Encoding:
-        def encode(self, value):
-            return value.split()
-
-    result = check_using_db_schemas_without_pruning(
-        construct_db_schemas=[
-            {
-                "type": "TABLE",
-                "name": "activity",
-                "comment": "",
-                "columns": [
-                    {
-                        "type": "COLUMN",
-                        "name": "id",
-                        "data_type": "INTEGER",
-                        "comment": "",
-                        "is_primary_key": False,
-                    }
-                ],
-                "properties": {},
-                "primaryKey": "",
-            }
-        ],
-        dbschema_retrieval=[],
-        encoding=Encoding(),
-        enable_column_pruning=False,
-        context_window_size=1000,
-    )
-
-    assert [schema["table_name"] for schema in result["db_schemas"]] == ["activity"]
-
-
-def test_build_table_ddl_preserves_join_columns_when_pruned():
+def test_build_table_ddl_keeps_legacy_pruned_relationship_behavior():
     ddl, _, _ = build_table_ddl(
         {
             "type": "TABLE",
             "name": "detail",
             "comment": "",
             "columns": [
-                {
-                    "type": "COLUMN",
-                    "name": "detail_id",
-                    "data_type": "INTEGER",
-                    "comment": "",
-                    "is_primary_key": True,
-                },
-                {
-                    "type": "COLUMN",
-                    "name": "parent_id",
-                    "data_type": "INTEGER",
-                    "comment": "",
-                    "is_primary_key": False,
-                },
-                {
-                    "type": "COLUMN",
-                    "name": "amount",
-                    "data_type": "DOUBLE",
-                    "comment": "",
-                    "is_primary_key": False,
-                },
+                column("detail_id", "INTEGER", is_primary_key=True),
+                column("parent_id", "INTEGER"),
+                column("amount", "DOUBLE"),
                 {
                     "type": "FOREIGN_KEY",
                     "comment": "",
                     "constraint": "FOREIGN KEY (parent_id) REFERENCES parent(parent_id)",
                     "tables": ["parent", "detail"],
-                    "column": "parent_id",
-                    "referenced_table": "parent",
-                    "referenced_column": "parent_id",
                 },
             ],
         },
@@ -1808,7 +405,7 @@ def test_build_table_ddl_preserves_join_columns_when_pruned():
         tables={"parent", "detail"},
     )
 
-    assert "detail_id INTEGER PRIMARY KEY" in ddl
-    assert "parent_id INTEGER" in ddl
+    assert "detail_id INTEGER PRIMARY KEY" not in ddl
+    assert "parent_id INTEGER" not in ddl
     assert "amount DOUBLE" in ddl
     assert "FOREIGN KEY (parent_id) REFERENCES parent(parent_id)" in ddl

@@ -18,7 +18,6 @@ from src.pipelines.common import (
     build_project_deploy_filter,
     build_table_ddl,
     clean_up_new_lines,
-    format_schema_comment,
     get_engine_supported_data_type,
 )
 from src.utils import trace_cost
@@ -31,13 +30,7 @@ table_columns_selection_system_prompt = """
 ### TASK ###
 You are a highly skilled data analyst. Your goal is to examine the provided database schema, interpret the posed question, and identify the specific columns from the relevant tables required to construct an accurate SQL query.
 
-The database schema includes structural, semantic, and business modeling metadata:
-- Models are logical datasets backed by physical tables or SQL definitions.
-- Columns are exposed fields, including renamed fields, expressions, primary keys, and calculated fields.
-- Relationships are reusable join logic between models.
-- Calculated fields are business logic defined once and reused across queries.
-- Views are named SQL statements that behave like stable virtual tables.
-- Metrics are structured aggregation objects with measures and dimensions.
+The database schema includes tables, columns, primary keys, foreign keys, relationships, and any relevant constraints.
 
 ### INSTRUCTIONS ###
 1. Carefully analyze the schema and identify the essential tables and columns needed to answer the question.
@@ -47,15 +40,6 @@ The database schema includes structural, semantic, and business modeling metadat
 5. The number of columns chosen must match the number of reasoning.
 6. Final chosen columns must be only column names, don't prefix it with table names.
 7. If the chosen column is a child column of a STRUCT type column, choose the parent column instead of the child column.
-8. Map the business question to the modeled datasets whose descriptions, aliases, columns, calculated fields, views, metrics, and relationships support the intent.
-9. Prefer modeled analytical interfaces such as views and metrics when they expose the fields needed to answer the question.
-10. If the answer needs fields, filters, time dimensions, ordering, aggregations, or relationship keys from multiple related datasets, include every required related dataset and the columns needed from each one.
-11. Reuse calculated fields and metric measures or dimensions when they already represent the requested business concept.
-12. Follow only the relationships shown in the provided schema when selecting columns across datasets.
-13. Do not stop at a single top candidate when the question needs multiple related datasets.
-14. If the same business concept is represented by multiple modeled datasets, select each relevant dataset and the fields needed to answer the shared intent.
-15. If multiple modeled datasets expose compatible fields for the same requested result shape, keep each relevant dataset available so SQL generation can combine them as separate result rows instead of discarding all but one.
-16. Use semantic comments only to understand meaning. Do not return descriptions, labels, source metadata, or rewritten variants as table or column names.
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:
@@ -128,139 +112,23 @@ def _deploy_filter_conditions(
 
 
 def _build_metric_ddl(content: dict) -> str:
-    columns = [
-        column
-        for column in content["columns"]
-        if column["data_type"].lower() != "unknown"
-    ]
     columns_ddl = [
-        f"{format_schema_comment(column['comment'], '  ')}{column['name']} {get_engine_supported_data_type(column['data_type'])}"
-        for column in columns
+        f"{column['comment']}{column['name']} {get_engine_supported_data_type(column['data_type'])}"
+        for column in content["columns"]
+        if column["data_type"].lower()
+        != "unknown"  # quick fix: filtering out UNKNOWN column type
     ]
 
     return (
-        f"{format_schema_comment(content['comment'])}CREATE TABLE {content['name']} (\n  "
+        f"{content['comment']}CREATE TABLE {content['name']} (\n  "
         + ",\n  ".join(columns_ddl)
         + "\n);"
     )
 
 
 def _build_view_ddl(content: dict) -> str:
-    columns = [
-        column
-        for column in content.get("columns", [])
-        if column.get("name") and column.get("data_type", "").lower() != "unknown"
-    ]
-    columns_ddl = [
-        f"{format_schema_comment(column.get('comment', ''), '  ')}{column['name']} {get_engine_supported_data_type(column.get('data_type'))}"
-        for column in columns
-    ]
-
     return (
-        f"{format_schema_comment(content['comment'])}CREATE TABLE {content['name']} (\n  "
-        + ",\n  ".join(columns_ddl)
-        + "\n);"
-    )
-
-
-def _included_relationship_columns(content: dict, tables: Optional[set[str]]) -> set:
-    relationship_columns = {
-        column.get("column")
-        for column in content["columns"]
-        if column.get("type") == "FOREIGN_KEY"
-        and (not tables or set(column.get("tables", [])).issubset(tables))
-    }
-    relationship_columns.discard(None)
-    return relationship_columns
-
-
-def _content_column_names(
-    content: dict,
-    columns: Optional[set[str]] = None,
-    tables: Optional[set[str]] = None,
-) -> list[str]:
-    column_names = []
-    seen_columns = set()
-    relationship_columns = _included_relationship_columns(content, tables)
-    for column in content.get("columns", []):
-        column_name = column.get("name", "")
-        if column_name in seen_columns:
-            continue
-        if (
-            column.get("type", "COLUMN") == "COLUMN"
-            and column_name
-            and (
-                columns is None
-                or column_name in columns
-                or column_name in relationship_columns
-                or column.get("is_primary_key")
-            )
-            and (
-                column.get("data_type") is None
-                or get_engine_supported_data_type(column.get("data_type")).lower()
-                != "unknown"
-            )
-        ):
-            column_names.append(column_name)
-            seen_columns.add(column_name)
-    return column_names
-
-
-def _relationship_constraints(content: dict) -> list[str]:
-    constraints = []
-    seen_relationships = set()
-    for column in content.get("columns", []):
-        constraint = column.get("constraint", "")
-        if constraint in seen_relationships:
-            continue
-        if column.get("type") == "FOREIGN_KEY" and constraint:
-            constraints.append(constraint)
-            seen_relationships.add(constraint)
-    return constraints
-
-
-def _valid_selected_columns(
-    content: dict, columns: Optional[set[str]]
-) -> Optional[set[str]]:
-    if not columns:
-        return None
-
-    known_columns = set(_content_column_names(content))
-    if not columns.issubset(known_columns):
-        return None
-
-    return columns
-
-
-def _retrieval_result(
-    table_name: str,
-    table_ddl: str,
-    content: dict,
-    include_relationships: bool = True,
-    columns: Optional[set[str]] = None,
-    tables: Optional[set[str]] = None,
-    unpruned_table_ddl: str | None = None,
-) -> dict:
-    return {
-        "table_name": table_name,
-        "table_ddl": table_ddl,
-        "unpruned_table_ddl": unpruned_table_ddl or table_ddl,
-        "column_names": _content_column_names(content, columns=columns, tables=tables),
-        "manifest_column_names": _content_column_names(content),
-        "relationship_constraints": _relationship_constraints(content)
-        if include_relationships
-        else [],
-    }
-
-
-def _build_table_retrieval_context(
-    content: dict, columns: Optional[set[str]] = None, tables: Optional[set[str]] = None
-) -> tuple[str, bool, bool]:
-    return build_table_ddl(
-        content,
-        columns=columns,
-        tables=tables,
-        include_semantic_comments=True,
+        f"{content['comment']}CREATE VIEW {content['name']}\nAS {content['statement']}"
     )
 
 
@@ -268,6 +136,13 @@ def _build_table_retrieval_context(
 @observe(capture_input=False, capture_output=False)
 async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> dict:
     if query:
+        if histories:
+            previous_query_summaries = [history.question for history in histories]
+        else:
+            previous_query_summaries = []
+
+        query = "\n".join(previous_query_summaries) + "\n" + query
+
         return await embedder.run(query)
     else:
         return {}
@@ -280,16 +155,15 @@ async def table_retrieval(
     tables: list[str],
     table_retriever: Any,
     mdl_hash: str | None = None,
-    query: str = "",
 ) -> dict:
-    _ = query
     filters = {
         "operator": "AND",
         "conditions": [
             {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
-            *_deploy_filter_conditions(project_id, mdl_hash),
         ],
     }
+
+    filters["conditions"].extend(_deploy_filter_conditions(project_id, mdl_hash))
 
     if embedding:
         return await table_retriever.run(
@@ -297,9 +171,6 @@ async def table_retrieval(
             filters=filters,
         )
     else:
-        if not tables:
-            return {"documents": []}
-
         filters["conditions"].append(
             {"field": "name", "operator": "in", "value": tables}
         )
@@ -315,168 +186,34 @@ async def dbschema_retrieval(
     table_retrieval: dict,
     project_id: str,
     dbschema_retriever: Any,
-    embedding: dict,
     mdl_hash: str | None = None,
-    query: str = "",
 ) -> list[Document]:
-    _ = query
-    table_names = _table_names_from_description_documents(
-        table_retrieval.get("documents", [])
-    )
-    documents = []
-    if embedding and not table_names:
-        semantic_documents = await _retrieve_semantic_schema_documents(
-            embedding, project_id, mdl_hash, dbschema_retriever
-        )
-        documents = _dedupe_documents(documents + semantic_documents)
-        table_names = _table_names_from_schema_documents(semantic_documents)
-
-    if table_names:
-        selected_documents = await _retrieve_schema_documents(
-            table_names, project_id, mdl_hash, dbschema_retriever
-        )
-        documents = _dedupe_documents(documents + selected_documents)
-        selected_table_names = set(table_names)
-        related_table_names = [
-            table_name
-            for table_name in _related_table_names(selected_documents)
-            if table_name not in selected_table_names
-        ]
-        if related_table_names:
-            related_documents = await _retrieve_schema_documents(
-                related_table_names, project_id, mdl_hash, dbschema_retriever
-            )
-            documents = _dedupe_documents(documents + related_documents)
-
-        return documents
-
-    if embedding:
-        return []
-
-    return await _retrieve_semantic_schema_documents(
-        {"embedding": []},
-        project_id,
-        mdl_hash,
-        dbschema_retriever,
-    )
-
-
-async def _retrieve_semantic_schema_documents(
-    embedding: dict,
-    project_id: str,
-    mdl_hash: str | None,
-    dbschema_retriever: Any,
-) -> list[Document]:
-    filters = {
-        "operator": "AND",
-        "conditions": [
-            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-            *_deploy_filter_conditions(project_id, mdl_hash),
-        ],
-    }
-
-    results = await dbschema_retriever.run(
-        query_embedding=embedding.get("embedding"),
-        filters=filters,
-    )
-    return results["documents"]
-
-
-def _table_names_from_schema_documents(documents: list[Document]) -> list[str]:
+    tables = table_retrieval.get("documents", [])
     table_names = []
-    seen = set()
+    for table in tables:
+        content = ast.literal_eval(table.content)
+        table_names.append(content["name"])
 
-    for document in documents:
-        table_name = document.meta.get("name")
-        if not table_name:
-            content = ast.literal_eval(document.content)
-            table_name = content.get("name")
-
-        if table_name and table_name not in seen:
-            table_names.append(table_name)
-            seen.add(table_name)
-
-    return table_names
-
-
-def _table_names_from_description_documents(documents: list[Document]) -> list[str]:
-    table_names = []
-    seen = set()
-
-    for document in documents:
-        content = ast.literal_eval(document.content)
-        table_name = content["name"]
-        if table_name not in seen:
-            table_names.append(table_name)
-            seen.add(table_name)
-
-    return table_names
-
-
-async def _retrieve_schema_documents(
-    table_names: list[str],
-    project_id: str,
-    mdl_hash: str | None,
-    dbschema_retriever: Any,
-) -> list[Document]:
     table_name_conditions = [
         {"field": "name", "operator": "==", "value": table_name}
         for table_name in table_names
     ]
 
-    if not table_name_conditions:
-        return []
+    if table_name_conditions:
+        filters = {
+            "operator": "AND",
+            "conditions": [
+                {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
+                {"operator": "OR", "conditions": table_name_conditions},
+            ],
+        }
 
-    filters = {
-        "operator": "AND",
-        "conditions": [
-            {"field": "type", "operator": "==", "value": "TABLE_SCHEMA"},
-            {"operator": "OR", "conditions": table_name_conditions},
-            *_deploy_filter_conditions(project_id, mdl_hash),
-        ],
-    }
+        filters["conditions"].extend(_deploy_filter_conditions(project_id, mdl_hash))
 
-    results = await dbschema_retriever.run(query_embedding=[], filters=filters)
-    return results["documents"]
+        results = await dbschema_retriever.run(query_embedding=[], filters=filters)
+        return results["documents"]
 
-
-def _related_table_names(documents: list[Document]) -> list[str]:
-    related_table_names = []
-    seen = set()
-
-    for document in documents:
-        content = ast.literal_eval(document.content)
-        if content.get("type") != "TABLE_COLUMNS":
-            continue
-
-        for column in content.get("columns", []):
-            if column.get("type") != "FOREIGN_KEY":
-                continue
-
-            for table_name in column.get("tables", []):
-                if table_name not in seen:
-                    related_table_names.append(table_name)
-                    seen.add(table_name)
-
-    return related_table_names
-
-
-def _dedupe_documents(documents: list[Document]) -> list[Document]:
-    deduped = []
-    seen = set()
-
-    for document in documents:
-        identity = (
-            document.meta.get("type"),
-            document.meta.get("name"),
-            document.content,
-        )
-        if identity in seen:
-            continue
-        deduped.append(document)
-        seen.add(identity)
-
-    return deduped
+    return []
 
 
 @observe()
@@ -514,9 +251,7 @@ def check_using_db_schemas_without_pruning(
     encoding: tiktoken.Encoding,
     enable_column_pruning: bool,
     context_window_size: int,
-    query: str = "",
 ) -> dict:
-    _ = query
     retrieval_results = []
     has_calculated_field = False
     has_metric = False
@@ -524,11 +259,12 @@ def check_using_db_schemas_without_pruning(
 
     for table_schema in construct_db_schemas:
         if table_schema["type"] == "TABLE":
-            ddl, _has_calculated_field, _has_json_field = (
-                _build_table_retrieval_context(table_schema)
-            )
+            ddl, _has_calculated_field, _has_json_field = build_table_ddl(table_schema)
             retrieval_results.append(
-                _retrieval_result(table_schema["name"], ddl, table_schema)
+                {
+                    "table_name": table_schema["name"],
+                    "table_ddl": ddl,
+                }
             )
             if _has_calculated_field:
                 has_calculated_field = True
@@ -540,22 +276,18 @@ def check_using_db_schemas_without_pruning(
 
         if content["type"] == "METRIC":
             retrieval_results.append(
-                _retrieval_result(
-                    content["name"],
-                    _build_metric_ddl(content),
-                    content,
-                    include_relationships=False,
-                )
+                {
+                    "table_name": content["name"],
+                    "table_ddl": _build_metric_ddl(content),
+                }
             )
             has_metric = True
         elif content["type"] == "VIEW":
             retrieval_results.append(
-                _retrieval_result(
-                    content["name"],
-                    _build_view_ddl(content),
-                    content,
-                    include_relationships=False,
-                )
+                {
+                    "table_name": content["name"],
+                    "table_ddl": _build_view_ddl(content),
+                }
             )
 
     table_ddls = [
@@ -590,9 +322,15 @@ def prompt(
 ) -> dict:
     if not check_using_db_schemas_without_pruning["db_schemas"]:
         db_schemas = [
-            _build_table_retrieval_context(construct_db_schema)[0]
+            build_table_ddl(construct_db_schema)[0]
             for construct_db_schema in construct_db_schemas
         ]
+
+        previous_query_summaries = (
+            [history.question for history in histories] if histories else []
+        )
+
+        query = "\n".join(previous_query_summaries) + "\n" + query
 
         _prompt = prompt_builder.run(question=query, db_schemas=db_schemas)
         return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
@@ -606,15 +344,9 @@ async def filter_columns_in_tables(
     prompt: dict, table_columns_selection_generator: Any, generator_name: str
 ) -> dict:
     if prompt:
-        try:
-            return await table_columns_selection_generator(
-                prompt=prompt.get("prompt")
-            ), generator_name
-        except Exception:
-            logger.exception(
-                "Column-selection generation failed; falling back to schema retrieval without LLM pruning."
-            )
-            return {}, generator_name
+        return await table_columns_selection_generator(
+            prompt=prompt.get("prompt")
+        ), generator_name
     else:
         return {}, generator_name
 
@@ -625,91 +357,16 @@ def construct_retrieval_results(
     filter_columns_in_tables: dict,
     construct_db_schemas: list[dict],
     dbschema_retrieval: list[Document],
-    query: str = "",
 ) -> dict[str, Any]:
-    _ = query
-    def _schema_results_without_pruning() -> dict[str, Any]:
-        retrieval_results = []
-        has_calculated_field = False
-        has_metric = False
-        has_json_field = False
-
-        for table_schema in construct_db_schemas:
-            if table_schema["type"] == "TABLE":
-                ddl, _has_calculated_field, _has_json_field = (
-                    _build_table_retrieval_context(table_schema)
-                )
-                retrieval_results.append(
-                    _retrieval_result(table_schema["name"], ddl, table_schema)
-                )
-                if _has_calculated_field:
-                    has_calculated_field = True
-                if _has_json_field:
-                    has_json_field = True
-
-        for document in dbschema_retrieval:
-            content = ast.literal_eval(document.content)
-
-            if content["type"] == "METRIC":
-                retrieval_results.append(
-                    _retrieval_result(
-                        content["name"],
-                        _build_metric_ddl(content),
-                        content,
-                        include_relationships=False,
-                    )
-                )
-                has_metric = True
-            elif content["type"] == "VIEW":
-                retrieval_results.append(
-                    _retrieval_result(
-                        content["name"],
-                        _build_view_ddl(content),
-                        content,
-                        include_relationships=False,
-                    )
-                )
-
-        return {
-            "retrieval_results": retrieval_results,
-            "has_calculated_field": has_calculated_field,
-            "has_metric": has_metric,
-            "has_json_field": has_json_field,
-        }
-
     if filter_columns_in_tables:
-        try:
-            column_selection = orjson.loads(filter_columns_in_tables["replies"][0])
-        except Exception:
-            logger.exception(
-                "Column-selection response was invalid; falling back to schema retrieval without LLM pruning."
-            )
-            return _schema_results_without_pruning()
-
-        columns_and_tables_needed = (
-            column_selection.get("results")
-            if isinstance(column_selection, dict)
-            else column_selection
-        )
-        if not isinstance(columns_and_tables_needed, list):
-            logger.warning(
-                "Column-selection response did not include a results list; falling back to schema retrieval without LLM pruning."
-            )
-            return _schema_results_without_pruning()
+        columns_and_tables_needed = orjson.loads(
+            filter_columns_in_tables["replies"][0]
+        )["results"]
 
         # we need to change the below code to match the new schema of structured output
         # the objective of this loop is to change the structure of JSON to match the needed format
         reformated_json = {}
         for table in columns_and_tables_needed:
-            if (
-                not isinstance(table, dict)
-                or not isinstance(table.get("table_name"), str)
-                or not isinstance(table.get("table_contents"), dict)
-            ):
-                logger.warning(
-                    "Column-selection response contained an invalid table item; falling back to schema retrieval without LLM pruning."
-                )
-                return _schema_results_without_pruning()
             reformated_json[table["table_name"]] = table["table_contents"]
         columns_and_tables_needed = reformated_json
         tables = set(columns_and_tables_needed.keys())
@@ -720,59 +377,44 @@ def construct_retrieval_results(
 
         for table_schema in construct_db_schemas:
             if table_schema["type"] == "TABLE" and table_schema["name"] in tables:
-                selected_columns = set(
-                    columns_and_tables_needed[table_schema["name"]].get("columns")
-                    or []
+                ddl, _has_calculated_field, _has_json_field = build_table_ddl(
+                    table_schema,
+                    columns=set(
+                        columns_and_tables_needed[table_schema["name"]]["columns"]
+                    ),
+                    tables=tables,
                 )
-                selected_columns = _valid_selected_columns(
-                    table_schema, selected_columns
-                )
-                ddl, _has_calculated_field, _has_json_field = (
-                    _build_table_retrieval_context(
-                        table_schema,
-                        columns=selected_columns,
-                        tables=tables,
-                    )
-                )
-                unpruned_ddl = _build_table_retrieval_context(table_schema)[0]
                 if _has_calculated_field:
                     has_calculated_field = True
                 if _has_json_field:
                     has_json_field = True
 
                 retrieval_results.append(
-                    _retrieval_result(
-                        table_schema["name"],
-                        ddl,
-                        table_schema,
-                        columns=selected_columns,
-                        tables=tables,
-                        unpruned_table_ddl=unpruned_ddl,
-                    )
+                    {
+                        "table_name": table_schema["name"],
+                        "table_ddl": ddl,
+                    }
                 )
 
         for document in dbschema_retrieval:
-            content = ast.literal_eval(document.content)
+            if document.meta["name"] in columns_and_tables_needed:
+                content = ast.literal_eval(document.content)
 
-            if content["type"] == "METRIC":
-                retrieval_results.append(
-                    _retrieval_result(
-                        content["name"],
-                        _build_metric_ddl(content),
-                        content,
-                        include_relationships=False,
+                if content["type"] == "METRIC":
+                    retrieval_results.append(
+                        {
+                            "table_name": content["name"],
+                            "table_ddl": _build_metric_ddl(content),
+                        }
                     )
-                )
-                has_metric = True
-            elif content["type"] == "VIEW":
-                retrieval_results.append(
-                    _retrieval_result(
-                        content["name"],
-                        _build_view_ddl(content),
-                        content,
-                        include_relationships=False,
+                    has_metric = True
+                elif content["type"] == "VIEW":
+                    retrieval_results.append(
+                        {
+                            "table_name": content["name"],
+                            "table_ddl": _build_view_ddl(content),
+                        }
                     )
-                )
 
         return {
             "retrieval_results": retrieval_results,
