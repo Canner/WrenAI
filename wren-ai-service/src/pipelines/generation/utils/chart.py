@@ -396,6 +396,9 @@ def build_fallback_chart_result(query: str, data: Dict[str, Any]) -> Dict[str, A
     category_candidates = categorical_columns or [
         column for column in columns if column != y_field
     ]
+    if not category_candidates:
+        return {}
+
     x_field = _best_named_column(query, category_candidates) or category_candidates[0]
 
     secondary_categories = [

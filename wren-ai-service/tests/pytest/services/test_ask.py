@@ -14,6 +14,7 @@ from src.web.v1.services.ask import (
     AskResultRequest,
     AskService,
     build_safe_invalid_sql,
+    build_schema_grounding_context,
     build_schema_grounding_recovery_message,
     build_sql_correction_error_message,
     build_sql_correction_input,
@@ -21,7 +22,6 @@ from src.web.v1.services.ask import (
     build_sql_regeneration_reasoning_text,
     build_sql_regeneration_samples,
     build_sql_regeneration_source_sql,
-    build_schema_grounding_context,
     build_user_facing_error_message,
     get_pipeline_timeout_seconds,
     is_schema_grounding_error,
@@ -210,6 +210,7 @@ def test_schema_grounding_context_uses_retrieved_identifiers():
     )
 
     assert '- model/table: "deployed_order_model"' in context
+    assert '- "id"' in context
     assert '- "ship_country"' in context
     assert '- "order_date"' in context
     assert "FOREIGN KEY" in context

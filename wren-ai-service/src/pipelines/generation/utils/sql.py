@@ -23,6 +23,10 @@ logger = logging.getLogger("wren-ai-service")
 
 _SCHEMA_GROUNDING_TABLE_RE = re.compile(r'-\s*model/table:\s*"([^"]+)"')
 _SCHEMA_GROUNDING_COLUMN_RE = re.compile(r'^\s*-\s*"([^"]+)"\s*$', re.MULTILINE)
+_SCHEMA_GROUNDING_REFERENCE_RE = re.compile(
+    r"\bREFERENCES\s+(`[^`]+`|\"[^\"]+\"|\[[^\]]+\]|[^\s(]+)\s*\(",
+    re.IGNORECASE,
+)
 _RELATION_KEYWORDS = {"FROM", "JOIN"}
 _IGNORED_RELATION_FUNCTIONS = {"UNNEST"}
 
@@ -31,6 +35,7 @@ _IGNORED_RELATION_FUNCTIONS = {"UNNEST"}
 class _SchemaGroundingContract:
     relation_columns: dict[str, set[str]] = field(default_factory=dict)
     relationship_constraints: tuple[str, ...] = ()
+    relationship_edges: frozenset[frozenset[str]] = frozenset()
 
     @property
     def relation_names(self) -> set[str]:
@@ -68,6 +73,14 @@ def _is_relation_keyword(token: Any) -> bool:
 
     normalized = " ".join((token.normalized or token.value).upper().split())
     return normalized in _RELATION_KEYWORDS or normalized.endswith(" JOIN")
+
+
+def _is_join_keyword(token: Any) -> bool:
+    if token.ttype not in Keyword:
+        return False
+
+    normalized = " ".join((token.normalized or token.value).upper().split())
+    return normalized == "JOIN" or normalized.endswith(" JOIN")
 
 
 def _contains_select(token: TokenList) -> bool:
@@ -241,6 +254,10 @@ def _extract_relation_names(sql: str) -> set[str]:
         relation_names.update(_extract_relation_names_from_tokens(statement, cte_names))
 
     return relation_names
+
+
+def _has_join(sql: str) -> bool:
+    return any(_is_join_keyword(token) for statement in sqlparse.parse(sql) for token in statement.flatten())
 
 
 def _is_literal_token(token: Any) -> bool:
@@ -424,6 +441,7 @@ def _parse_schema_grounding_contract(
 
     relation_columns: dict[str, set[str]] = {}
     relationship_constraints: list[str] = []
+    candidate_relationship_edges: list[tuple[str, str]] = []
     current_relation = ""
     current_section = ""
 
@@ -456,11 +474,27 @@ def _parse_schema_grounding_contract(
             continue
 
         if current_section == "relationships" and line.startswith("- "):
-            relationship_constraints.append(line[2:].strip())
+            constraint = line[2:].strip()
+            relationship_constraints.append(constraint)
+            reference_match = _SCHEMA_GROUNDING_REFERENCE_RE.search(constraint)
+            if reference_match and current_relation:
+                referenced_relation = _strip_identifier_quotes(
+                    reference_match.group(1)
+                )
+                candidate_relationship_edges.append(
+                    (current_relation, referenced_relation)
+                )
+
+    relationship_edges = frozenset(
+        frozenset({source_relation, referenced_relation})
+        for source_relation, referenced_relation in candidate_relationship_edges
+        if source_relation in relation_columns and referenced_relation in relation_columns
+    )
 
     return _SchemaGroundingContract(
         relation_columns=relation_columns,
         relationship_constraints=tuple(relationship_constraints),
+        relationship_edges=relationship_edges,
     )
 
 
@@ -470,6 +504,36 @@ def _allowed_relation_names(schema_grounding: str | None) -> set[str]:
 
 def _allowed_column_names(schema_grounding: str | None) -> set[str]:
     return _parse_schema_grounding_contract(schema_grounding).column_names
+
+
+def _has_relationship_path(
+    relation_names: set[str],
+    relationship_edges: frozenset[frozenset[str]],
+) -> bool:
+    if len(relation_names) <= 1:
+        return True
+
+    graph: dict[str, set[str]] = {relation_name: set() for relation_name in relation_names}
+    for edge in relationship_edges:
+        if len(edge) != 2:
+            continue
+        left, right = tuple(edge)
+        if left in graph and right in graph:
+            graph[left].add(right)
+            graph[right].add(left)
+
+    start = next(iter(relation_names))
+    visited = {start}
+    pending = [start]
+    while pending:
+        current = pending.pop()
+        for related in graph[current]:
+            if related in visited:
+                continue
+            visited.add(related)
+            pending.append(related)
+
+    return relation_names.issubset(visited)
 
 
 def _add_relation_aliases_from_identifier(
@@ -740,6 +804,36 @@ def _schema_grounding_failure(
         if relation_name not in allowed_relation_names
     )
     if not ungrounded_relation_names:
+        referenced_query_relations = {
+            relation_name
+            for relation_name in referenced_relation_names
+            if relation_name in contract.relation_columns
+        }
+        if (
+            len(referenced_query_relations) > 1
+            and _has_join(sql)
+            and not _has_relationship_path(
+                referenced_query_relations,
+                contract.relationship_edges,
+            )
+        ):
+            joined_relations = ", ".join(
+                f'"{name}"' for name in sorted(referenced_query_relations)
+            )
+            return {
+                "sql": sql,
+                "original_sql": sql,
+                "type": "SCHEMA_GROUNDING",
+                "error": (
+                    "Generated SQL joins retrieved model/table identifiers without "
+                    "a retrieved relationship path in the Wren schema: "
+                    f"{joined_relations}. Use only joins supported by retrieved "
+                    "relationship constraints."
+                ),
+                "correlation_id": "",
+                "data_source": data_source,
+            }
+
         allowed_column_names = contract.column_names
         if not allowed_column_names:
             return None
@@ -1442,6 +1536,19 @@ SQL_GENERATION_MODEL_KWARGS = {
         },
     }
 }
+
+
+def get_sql_generation_model_kwargs(llm_provider: Any | None = None) -> dict:
+    provider_model_kwargs = (
+        llm_provider.get_model_kwargs()
+        if llm_provider and hasattr(llm_provider, "get_model_kwargs")
+        else {}
+    )
+    response_format = provider_model_kwargs.get("response_format")
+    if isinstance(response_format, dict) and response_format.get("type") == "text":
+        return {}
+
+    return SQL_GENERATION_MODEL_KWARGS
 
 
 def construct_instructions(

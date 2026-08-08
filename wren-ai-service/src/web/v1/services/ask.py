@@ -3,9 +3,9 @@ import logging
 from typing import Any, Dict, List, Literal, Optional
 
 from cachetools import TTLCache
-from langfuse.decorators import observe
 from pydantic import AliasChoices, BaseModel, Field
 
+from langfuse.decorators import observe
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest, SSEEvent
@@ -65,7 +65,7 @@ def build_schema_grounding_context(documents: list[dict[str, Any]]) -> str:
         manifest_columns = [
             column for column in document.get("manifest_column_names", []) if column
         ]
-        columns = selected_columns or manifest_columns
+        columns = list(dict.fromkeys([*selected_columns, *manifest_columns]))
         if columns:
             lines.append("  columns:")
             lines.extend(f'    - "{column}"' for column in columns)

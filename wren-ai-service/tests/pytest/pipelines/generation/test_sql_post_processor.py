@@ -269,6 +269,64 @@ async def test_post_processor_allows_qualified_column_on_grounded_alias():
 
 
 @pytest.mark.asyncio
+async def test_post_processor_rejects_join_without_retrieved_relationship():
+    processor = SQLGenPostProcessor(engine=_NoopEngine())
+
+    result = await processor.run(
+        [
+            (
+                '{"sql": "SELECT a.\\"entity_id\\", b.\\"attribute_value\\" '
+                'FROM \\"model_alpha\\" a JOIN \\"model_beta\\" b '
+                'ON a.\\"entity_id\\" = b.\\"entity_id\\""}'
+            )
+        ],
+        schema_grounding=(
+            '- model/table: "model_alpha"\n'
+            "  columns:\n"
+            '    - "entity_id"\n'
+            '- model/table: "model_beta"\n'
+            "  columns:\n"
+            '    - "entity_id"\n'
+            '    - "attribute_value"'
+        ),
+    )
+
+    invalid = result["invalid_generation_result"]
+    assert invalid["type"] == "SCHEMA_GROUNDING"
+    assert "relationship path" in invalid["error"]
+
+
+@pytest.mark.asyncio
+async def test_post_processor_allows_join_with_retrieved_relationship():
+    engine = _CapturingEngine()
+    processor = SQLGenPostProcessor(engine=engine)
+
+    result = await processor.run(
+        [
+            (
+                '{"sql": "SELECT a.\\"entity_id\\", b.\\"attribute_value\\" '
+                'FROM \\"model_alpha\\" a JOIN \\"model_beta\\" b '
+                'ON a.\\"entity_id\\" = b.\\"entity_id\\""}'
+            )
+        ],
+        schema_grounding=(
+            '- model/table: "model_alpha"\n'
+            "  columns:\n"
+            '    - "entity_id"\n'
+            "  relationships:\n"
+            "    - FOREIGN KEY (entity_id) REFERENCES model_beta(entity_id)\n"
+            '- model/table: "model_beta"\n'
+            "  columns:\n"
+            '    - "entity_id"\n'
+            '    - "attribute_value"'
+        ),
+    )
+
+    assert result["invalid_generation_result"] == {}
+    assert engine.execute_kwargs is not None
+
+
+@pytest.mark.asyncio
 async def test_post_processor_allows_output_aliases_in_order_by():
     engine = _CapturingEngine()
     processor = SQLGenPostProcessor(engine=engine)

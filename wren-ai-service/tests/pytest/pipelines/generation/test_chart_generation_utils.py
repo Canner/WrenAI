@@ -119,6 +119,19 @@ def test_fallback_chart_never_uses_same_numeric_field_for_x_and_y():
     )
 
 
+def test_fallback_chart_defers_numeric_only_results_to_llm_chart_generation():
+    assert (
+        build_fallback_chart_result(
+            "Show total metric value.",
+            {
+                "columns": [{"name": "metric_value"}],
+                "data": [[100], [200]],
+            },
+        )
+        == {}
+    )
+
+
 def test_line_chart_uses_count_y_when_no_numeric_metric_exists():
     result = build_fallback_chart_result(
         "Generate a line chart showing monthly repair volume.",
