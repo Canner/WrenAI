@@ -139,6 +139,21 @@ def build_schema_grounding_recovery_message(
     )
 
 
+def build_user_facing_error_message(
+    failed_generation_result: dict[str, Any] | None,
+    error_message: str | None,
+) -> str:
+    if failed_generation_result and is_schema_grounding_error(failed_generation_result):
+        return (
+            "The retrieved metadata was not sufficient to generate a valid SQL "
+            "statement for this question. Please clarify the requested business "
+            "entity, measure, filter, or time range, or update the deployed model "
+            "metadata."
+        )
+
+    return error_message or "No relevant SQL"
+
+
 def build_sql_regeneration_source_sql(
     failed_generation_result: dict[str, Any],
 ) -> str:
@@ -902,7 +917,10 @@ class AskService:
                         type="TEXT_TO_SQL",
                         error=AskError(
                             code="NO_RELEVANT_SQL",
-                            message=error_message or "No relevant SQL",
+                            message=build_user_facing_error_message(
+                                failed_dry_run_result,
+                                error_message,
+                            ),
                         ),
                         rephrased_question=rephrased_question,
                         intent_reasoning=intent_reasoning,
@@ -916,7 +934,10 @@ class AskService:
                         is_followup=True if histories else False,
                     )
                 results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
-                results["metadata"]["error_message"] = error_message
+                results["metadata"]["error_message"] = build_user_facing_error_message(
+                    failed_dry_run_result,
+                    error_message,
+                )
                 results["metadata"]["type"] = "TEXT_TO_SQL"
 
             return results

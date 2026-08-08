@@ -22,6 +22,7 @@ from src.web.v1.services.ask import (
     build_sql_regeneration_samples,
     build_sql_regeneration_source_sql,
     build_schema_grounding_context,
+    build_user_facing_error_message,
     get_pipeline_timeout_seconds,
     is_schema_grounding_error,
 )
@@ -264,6 +265,28 @@ def test_schema_grounding_recovery_message_omits_hallucinated_identifier():
 
     assert "hallucinated_table" not in message
     assert "retrieved Wren schema" in message
+
+
+def test_user_facing_schema_grounding_error_is_sanitized():
+    message = build_user_facing_error_message(
+        {
+            "sql": "SELECT * FROM hallucinated_table",
+            "original_sql": "SELECT * FROM hallucinated_table",
+            "type": "SCHEMA_GROUNDING",
+            "error": "Generated SQL references hallucinated_table.",
+        },
+        "Generated SQL references hallucinated_table.",
+    )
+
+    assert "hallucinated_table" not in message
+    assert "retrieved metadata was not sufficient" in message
+    assert (
+        build_user_facing_error_message(
+            {"type": "DRY_RUN"},
+            "Syntax error near FROM.",
+        )
+        == "Syntax error near FROM."
+    )
 
 
 def test_schema_grounding_regeneration_source_omits_rejected_sql():
@@ -747,6 +770,8 @@ async def test_ask_retries_schema_regeneration_without_exposing_invalid_sql():
     )
     assert ask_result_response.status == "failed"
     assert ask_result_response.invalid_sql is None
+    assert "hallucinated_table" not in ask_result_response.error.message
+    assert "retrieved metadata was not sufficient" in ask_result_response.error.message
     assert diagnosis.calls == []
     assert correction.calls == []
     assert len(regeneration.calls) == 2
