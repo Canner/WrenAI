@@ -6,12 +6,12 @@ from src.pipelines.generation.utils.sql import (
 )
 
 
-def test_sql_generation_model_kwargs_uses_text_mode_when_configured():
+def test_sql_generation_model_kwargs_preserves_schema_mode_when_text_configured():
     provider = SimpleNamespace(
         get_model_kwargs=lambda: {"response_format": {"type": "text"}}
     )
 
-    assert get_sql_generation_model_kwargs(provider) == {}
+    assert get_sql_generation_model_kwargs(provider) == SQL_GENERATION_MODEL_KWARGS
 
 
 def test_sql_generation_model_kwargs_keeps_schema_mode_by_default():
