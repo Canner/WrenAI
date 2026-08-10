@@ -82,9 +82,7 @@ async def test_embedding_uses_legacy_history_context():
 def test_column_pruning_prompt_uses_legacy_history_context():
     result = build_column_selection_prompt(
         query=CURRENT_QUERY,
-        construct_db_schemas=[
-            table_schema(MODEL_A, [column(COLUMN_TEXT)])
-        ],
+        construct_db_schemas=[table_schema(MODEL_A, [column(COLUMN_TEXT)])],
         prompt_builder=PromptBuilder(
             template=table_columns_selection_user_prompt_template
         ),
@@ -248,9 +246,7 @@ def test_check_using_db_schemas_without_pruning_returns_legacy_result_shape():
 
 def test_check_using_db_schemas_without_pruning_triggers_legacy_column_pruning():
     result = check_using_db_schemas_without_pruning(
-        construct_db_schemas=[
-            table_schema(MODEL_A, [column(COLUMN_MEASURE, "DOUBLE")])
-        ],
+        construct_db_schemas=[table_schema(MODEL_A, [column(COLUMN_MEASURE, "DOUBLE")])],
         dbschema_retrieval=[],
         encoding=Encoding(),
         enable_column_pruning=True,
@@ -261,72 +257,48 @@ def test_check_using_db_schemas_without_pruning_triggers_legacy_column_pruning()
     assert result["tokens"] > 0
 
 
-def test_question_queries_are_schema_selected_before_sql_generation():
+def test_question_queries_keep_unpruned_schema_context_like_legacy():
     result = check_using_db_schemas_without_pruning(
-        construct_db_schemas=[
-            table_schema(MODEL_A, [column(COLUMN_MEASURE, "DOUBLE")])
-        ],
+        construct_db_schemas=[table_schema(MODEL_A, [column(COLUMN_MEASURE, "DOUBLE")])],
         dbschema_retrieval=[],
         encoding=Encoding(),
         enable_column_pruning=False,
         context_window_size=1000,
-        query="show journal entries by month",
     )
 
-    assert result["db_schemas"] == []
+    assert [schema["table_name"] for schema in result["db_schemas"]] == [MODEL_A]
+    assert f"{COLUMN_MEASURE} DOUBLE" in result["db_schemas"][0]["table_ddl"]
     assert result["tokens"] > 0
 
 
-def test_column_selection_prompt_is_empty_without_schema_context():
-    result = build_column_selection_prompt(
-        query=CURRENT_QUERY,
-        construct_db_schemas=[],
+def test_retrieved_schema_context_is_not_pruned_by_question_wording():
+    schemas = [
+        table_schema(MODEL_A, [column(COLUMN_ID), column(COLUMN_TEXT)]),
+        table_schema(MODEL_B, [column(COLUMN_ID), column(COLUMN_MEASURE)]),
+    ]
+
+    result = check_using_db_schemas_without_pruning(
+        construct_db_schemas=schemas,
         dbschema_retrieval=[],
-        prompt_builder=PromptBuilder(
-            template=table_columns_selection_user_prompt_template
-        ),
-        check_using_db_schemas_without_pruning={"db_schemas": []},
-        histories=[],
+        encoding=Encoding(),
+        enable_column_pruning=False,
+        context_window_size=1000,
     )
 
-    assert result == {}
+    expected_ddls = [build_table_ddl(schema)[0] for schema in schemas]
+
+    assert [schema["table_name"] for schema in result["db_schemas"]] == [
+        MODEL_A,
+        MODEL_B,
+    ]
+    assert [schema["table_ddl"] for schema in result["db_schemas"]] == expected_ddls
+    assert result["tokens"] > 0
 
 
-def test_column_selection_prompt_includes_metric_and_view_context():
+def test_column_selection_prompt_uses_legacy_empty_schema_context():
     result = build_column_selection_prompt(
         query=CURRENT_QUERY,
         construct_db_schemas=[],
-        dbschema_retrieval=[
-            Document(
-                content=str(
-                    {
-                        "type": "METRIC",
-                        "comment": "",
-                        "name": METRIC_MODEL,
-                        "columns": [
-                            {
-                                "type": "COLUMN",
-                                "name": COLUMN_MEASURE,
-                                "data_type": "DOUBLE",
-                                "comment": "",
-                            }
-                        ],
-                    }
-                ),
-                meta={"type": "TABLE_SCHEMA", "name": METRIC_MODEL},
-            ),
-            Document(
-                content=str(
-                    {
-                        "type": "VIEW",
-                        "comment": "",
-                        "name": VIEW_MODEL,
-                        "statement": f"SELECT {COLUMN_ID} FROM {SOURCE_MODEL}",
-                    }
-                ),
-                meta={"type": "TABLE_SCHEMA", "name": VIEW_MODEL},
-            ),
-        ],
         prompt_builder=PromptBuilder(
             template=table_columns_selection_user_prompt_template
         ),
@@ -334,8 +306,24 @@ def test_column_selection_prompt_includes_metric_and_view_context():
         histories=[],
     )
 
-    assert f"CREATE TABLE {METRIC_MODEL}" in result["prompt"]
-    assert f"CREATE VIEW {VIEW_MODEL}" in result["prompt"]
+    assert "### Database Schema ###" in result["prompt"]
+    assert CURRENT_QUERY in result["prompt"]
+
+
+def test_column_selection_prompt_uses_legacy_table_schema_context_only():
+    result = build_column_selection_prompt(
+        query=CURRENT_QUERY,
+        construct_db_schemas=[table_schema(MODEL_A, [column(COLUMN_ID)])],
+        prompt_builder=PromptBuilder(
+            template=table_columns_selection_user_prompt_template
+        ),
+        check_using_db_schemas_without_pruning={"db_schemas": []},
+        histories=[],
+    )
+
+    assert f"CREATE TABLE {MODEL_A}" in result["prompt"]
+    assert f"CREATE TABLE {METRIC_MODEL}" not in result["prompt"]
+    assert f"CREATE VIEW {VIEW_MODEL}" not in result["prompt"]
 
 
 def test_construct_retrieval_results_uses_selected_columns_for_sql_generation():
