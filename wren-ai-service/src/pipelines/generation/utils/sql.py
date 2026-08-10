@@ -179,6 +179,8 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - ONLY USE the tables and columns mentioned in the database schema.
 - ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
+- NEVER invent, infer, rename, or approximate table/column names from the user's wording.
+- If the selected database schema does not contain the tables, columns, metrics, views, or relationships needed to answer the question, do not create placeholder SQL using names from the question.
 - DON'T INCLUDE comments in the generated SQL query.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
 - PREFER USING CTEs over subqueries.
