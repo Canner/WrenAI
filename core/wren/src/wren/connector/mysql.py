@@ -369,7 +369,10 @@ def _mysql_decimal_type_for_values(
     target_integer_digits = max(precision - scale, integer_digits)
     target_precision = target_integer_digits + target_scale
     if target_precision > _ARROW_DECIMAL256_MAX_PRECISION:
-        return pa.string()
+        target_scale = _ARROW_DECIMAL256_MAX_PRECISION - target_integer_digits
+        if target_scale < value_scale:
+            return pa.string()
+        return pa.decimal256(_ARROW_DECIMAL256_MAX_PRECISION, target_scale)
     return _arrow_decimal_type(target_precision, target_scale)
 
 
