@@ -133,12 +133,10 @@ def create_connector(data_source: DataSource, connection_info) -> MySqlConnector
 # Arrow conversion helpers
 # ---------------------------------------------------------------------------
 
-# MySQL ``DECIMAL(M, D)`` allows ``M`` up to 65 and ``D`` up to 30, while
-# PyArrow's ``decimal128`` only supports precision up to 38. We clamp the
-# precision derived from ``cursor.description`` to ``38`` and the scale to
-# ``min(precision, 30)`` so PyArrow can still represent the value. A future
-# change could switch to ``decimal256`` when MySQL exceeds 38 digits.
+# MySQL ``DECIMAL(M, D)`` allows ``M`` up to 65 and ``D`` up to 30. Use
+# ``decimal128`` through precision 38 and ``decimal256`` above that boundary.
 _ARROW_DECIMAL128_MAX_PRECISION = 38
+_MYSQL_DECIMAL_MAX_PRECISION = 65
 _MYSQL_DECIMAL_MAX_SCALE = 30
 # Fallback used when ``cursor.description`` does not carry precision/scale
 # (e.g. for the legacy ``FIELD_TYPE.DECIMAL`` code or non-MySQLdb cursors).
@@ -268,7 +266,7 @@ def _arrow_decimal_from_mysql_field(
     scale: int | None,
     is_unsigned: bool = False,
 ) -> pa.DataType:
-    """Derive a ``pa.decimal128`` type from a MySQLdb ``cursor.description`` entry.
+    """Derive an Arrow decimal type from a MySQLdb cursor description entry.
 
     MySQLdb populates ``description[4]`` (PEP 249 ``precision``) with the
     ``MYSQL_FIELD.length`` — i.e. the *display length*, which includes one
@@ -278,11 +276,10 @@ def _arrow_decimal_from_mysql_field(
 
         M = length - (1 if unsigned else 0) - (1 if D > 0 else 0)
 
-    MySQL allows precision up to 65 and scale up to 30, but Arrow
-    ``decimal128`` caps precision at 38. We clamp precision to 38 and clamp
-    scale to ``min(scale, precision, 30)`` so any value MySQL accepts (within
-    the 38-digit Arrow ceiling) round-trips correctly. The previous
-    hard-coded ``decimal128(38, 9)`` would silently lose digits when ``D > 9``.
+    MySQL allows precision up to 65 and scale up to 30. Arrow ``decimal128``
+    covers precision up to 38, while ``decimal256`` covers every wider MySQL
+    decimal. The previous hard-coded ``decimal128(38, 9)`` would silently lose
+    digits when ``D > 9``.
     """
     if display_length is None or display_length <= 0:
         precision = _MYSQL_DECIMAL_FALLBACK_PRECISION
@@ -295,9 +292,11 @@ def _arrow_decimal_from_mysql_field(
             precision = _MYSQL_DECIMAL_FALLBACK_PRECISION
     if scale is None or scale < 0:
         scale = _MYSQL_DECIMAL_FALLBACK_SCALE
-    precision = min(int(precision), _ARROW_DECIMAL128_MAX_PRECISION)
+    precision = min(int(precision), _MYSQL_DECIMAL_MAX_PRECISION)
     scale = min(int(scale), _MYSQL_DECIMAL_MAX_SCALE, precision)
-    return pa.decimal128(precision, scale)
+    if precision <= _ARROW_DECIMAL128_MAX_PRECISION:
+        return pa.decimal128(precision, scale)
+    return pa.decimal256(precision, scale)
 
 
 def _mysql_field_arrow_type(

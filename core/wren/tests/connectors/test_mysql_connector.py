@@ -118,6 +118,22 @@ def test_decimal_large_scale(connector: MySqlConnector) -> None:
     assert tbl.column("a").to_pylist()[0] == Decimal("12345.123456789012345")
 
 
+def test_decimal_above_decimal128_uses_decimal256(connector: MySqlConnector) -> None:
+    value = Decimal(
+        "12345678901234567890123456789012345.123456789012345678901234567890"
+    )
+
+    _exec(connector, "DROP TABLE IF EXISTS t_dec_wide")
+    _exec(connector, "CREATE TABLE t_dec_wide (a DECIMAL(65, 30))")
+    with closing(connector.connection.cursor()) as cursor:
+        cursor.execute("INSERT INTO t_dec_wide VALUES (%s)", (value,))
+
+    tbl = connector.query("SELECT a FROM t_dec_wide")
+
+    assert tbl.schema.field("a").type == pa.decimal256(65, 30)
+    assert tbl.column("a").to_pylist() == [value]
+
+
 def test_float_and_double(connector: MySqlConnector) -> None:
     _exec(connector, "DROP TABLE IF EXISTS t_real")
     _exec(connector, "CREATE TABLE t_real (a FLOAT, b DOUBLE)")

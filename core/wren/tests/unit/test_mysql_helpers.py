@@ -180,9 +180,7 @@ def test_decimal_type_passthrough() -> None:
     # DECIMAL(12, 4) signed → MySQLdb description length = 12 + 1 (sign) + 1
     # (decimal point) = 14.
     t = _arrow_decimal_from_mysql_field(14, 4, is_unsigned=False)
-    assert pa.types.is_decimal(t)
-    assert t.precision == 12
-    assert t.scale == 4
+    assert t == pa.decimal128(12, 4)
 
 
 def test_decimal_type_unsigned_recovers_precision() -> None:
@@ -204,16 +202,13 @@ def test_decimal_type_high_scale() -> None:
     precision >= 30."""
     # DECIMAL(38, 30) signed → length = 38 + 1 + 1 = 40.
     t = _arrow_decimal_from_mysql_field(40, 30, is_unsigned=False)
-    assert t.precision == 38
-    assert t.scale == 30
+    assert t == pa.decimal128(38, 30)
 
 
-def test_decimal_type_clamps_above_arrow_max_precision() -> None:
-    """MySQL precision tops at 65; Arrow decimal128 tops at 38. We clamp."""
+def test_decimal_type_above_decimal128_uses_decimal256() -> None:
     # DECIMAL(65, 30) signed → length = 65 + 1 + 1 = 67.
     t = _arrow_decimal_from_mysql_field(67, 30, is_unsigned=False)
-    assert t.precision == 38
-    assert t.scale == 30
+    assert t == pa.decimal256(65, 30)
 
 
 def test_decimal_type_none_uses_fallback() -> None:
