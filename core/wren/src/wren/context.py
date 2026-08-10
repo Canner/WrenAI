@@ -1150,10 +1150,24 @@ def validate_project(project_path: Path) -> list[ValidationError]:
     # load_relationships() silently drops those (matching the other loaders),
     # but validate_project reports hand-edited mistakes rather than letting
     # them vanish quietly — re-check the raw entries here.
+    # Also remember the raw list so the field checks below can keep file indices.
+    raw_relationships_list: list | None = None
     rel_file = project_path / "relationships.yml"
     if rel_file.exists():
         raw = yaml.safe_load(rel_file.read_text(encoding="utf-8")) or {}
+        if raw and not isinstance(raw, dict):
+            # Most likely hand-edit: bare list / scalar root (omitted `relationships:` key).
+            errors.append(
+                ValidationError(
+                    "error",
+                    "relationships.yml",
+                    "relationships.yml must be a mapping with a 'relationships' key, "
+                    f"got {type(raw).__name__}",
+                )
+            )
         raw_rels = raw.get("relationships") if isinstance(raw, dict) else None
+        if isinstance(raw_rels, list):
+            raw_relationships_list = raw_rels
         if raw_rels is not None and not isinstance(raw_rels, list):
             errors.append(
                 ValidationError(
@@ -1218,17 +1232,17 @@ def validate_project(project_path: Path) -> list[ValidationError]:
                     )
                 )
 
-    # Check relationships
+    # Check relationships — walk the raw list when available so indices match
+    # the file (filtered loader positions would renumber past dropped junk).
     all_entity_names = model_names | view_names
-    for i, rel in enumerate(relationships):
+    rel_entries = (
+        list(enumerate(raw_relationships_list))
+        if raw_relationships_list is not None
+        else list(enumerate(relationships))
+    )
+    for i, rel in rel_entries:
         if not isinstance(rel, dict):
-            errors.append(
-                ValidationError(
-                    "error",
-                    f"relationships[{i}]",
-                    "relationship entry must be an object",
-                )
-            )
+            # Non-mappings already reported from the raw pass above.
             continue
         rel_name = rel.get("name", f"relationships[{i}]")
         ref_models = rel.get("models") or []

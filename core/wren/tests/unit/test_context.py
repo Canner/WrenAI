@@ -8,8 +8,6 @@ from pathlib import Path
 import pytest
 
 from wren.context import (
-    load_relationships,
-    validate_project,
     UpgradeError,
     _convert_keys,
     _snake_to_camel,
@@ -1765,4 +1763,37 @@ def test_validate_project_reports_relationships_not_list(tmp_path: Path) -> None
     (tmp_path / "relationships.yml").write_text("relationships: nope\n", encoding="utf-8")
     errors = validate_project(tmp_path)
     msgs = [e.message for e in errors]
-    assert any("'relationships' must be a list" in m for m in msgs)
+    assert any("'relationships' must be a list, got str" in m for m in msgs)
+
+
+def test_validate_project_reports_relationships_bare_root(tmp_path: Path) -> None:
+    (tmp_path / "wren_project.yml").write_text("schema_version: 1\n", encoding="utf-8")
+    (tmp_path / "relationships.yml").write_text(
+        "- name: ok\n  models: [a, b]\n  join_type: MANY_TO_ONE\n  condition: a.id = b.id\n",
+        encoding="utf-8",
+    )
+    errors = validate_project(tmp_path)
+    msgs = [e.message for e in errors]
+    assert any(
+        "relationships.yml must be a mapping with a 'relationships' key, got list" in m
+        for m in msgs
+    )
+
+
+def test_validate_project_relationship_indices_match_file(tmp_path: Path) -> None:
+    """Junk at [0] must not renumber a later unnamed relationship's warnings."""
+    (tmp_path / "wren_project.yml").write_text("schema_version: 1\n", encoding="utf-8")
+    (tmp_path / "relationships.yml").write_text(
+        "relationships:\n"
+        "  - 42\n"
+        "  - models: [a, b]\n"
+        "    condition: a.id = b.id\n",
+        encoding="utf-8",
+    )
+    errors = validate_project(tmp_path)
+    msgs = [f"{e.path}: {e.message}" if hasattr(e, "path") else e.message for e in errors]
+    # path may be on .location or formatted in message — check both message and str
+    blob = " | ".join(f"{getattr(e, 'path', '')} {e.message}" for e in errors)
+    assert "got int" in blob
+    assert "relationships[1]" in blob  # unnamed entry keeps file index 1
+    assert "missing join_type" in blob or "join_type" in blob
