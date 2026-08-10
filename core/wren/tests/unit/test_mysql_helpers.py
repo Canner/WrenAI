@@ -14,11 +14,11 @@ from wren.connector.base import coerce_limit
 from wren.connector.mysql import (
     _apply_limit,
     _arrow_decimal_from_mysql_field,
-    _build_mysql_arrow_table,
     _build_mysql_column,
     _build_mysql_connect_kwargs,
     _mysql_blob_codes,
     _mysql_decimal_codes,
+    _mysql_decimal_type_for_values,
     _mysql_field_type_map,
     _mysql_string_codes,
     _mysql_unsigned_variant_map,
@@ -40,33 +40,6 @@ class _FakeConnInfoFromUrl:
     def __init__(self, url: str, kwargs: dict[str, str] | None = None) -> None:
         self.connection_url = _FakeConnUrl(url)
         self.kwargs = kwargs
-
-
-class _FakeDecimalCursor:
-    def __init__(
-        self,
-        rows: list[tuple],
-        display_length: int,
-        scale: int = 0,
-    ) -> None:
-        from MySQLdb.constants import FIELD_TYPE  # noqa: PLC0415
-
-        self.description = (
-            (
-                "value",
-                FIELD_TYPE.NEWDECIMAL,
-                None,
-                None,
-                display_length,
-                scale,
-                True,
-            ),
-        )
-        self.description_flags = (0,)
-        self._rows = rows
-
-    def fetchall(self) -> list[tuple]:
-        return self._rows
 
 
 # ── coerce_limit (shared base helper; mysql private removed) ─────────────
@@ -274,12 +247,11 @@ def test_decimal_column_widens_for_concrete_integer_digits() -> None:
     from decimal import Decimal  # noqa: PLC0415
 
     value = Decimal("1" + "0" * 65)
-    cursor = _FakeDecimalCursor([(value,)], display_length=66)
+    arrow_type = _mysql_decimal_type_for_values(66, 0, False, [value])
+    column = _build_mysql_column([value], arrow_type)
 
-    table = _build_mysql_arrow_table(cursor)
-
-    assert table.schema.field("value").type == pa.decimal256(66, 0)
-    assert table.column("value").to_pylist() == [value]
+    assert arrow_type == pa.decimal256(66, 0)
+    assert column.to_pylist() == [value]
 
 
 def test_decimal_column_widens_scale_without_losing_integer_capacity() -> None:
@@ -287,24 +259,22 @@ def test_decimal_column_widens_scale_without_losing_integer_capacity() -> None:
 
     value = Decimal("12345678.1234")
     # Signed DECIMAL(10, 2): 10 digits + sign + decimal point.
-    cursor = _FakeDecimalCursor([(value,)], display_length=12, scale=2)
+    arrow_type = _mysql_decimal_type_for_values(12, 2, False, [value])
+    column = _build_mysql_column([value], arrow_type)
 
-    table = _build_mysql_arrow_table(cursor)
-
-    assert table.schema.field("value").type == pa.decimal128(12, 4)
-    assert table.column("value").to_pylist() == [value]
+    assert arrow_type == pa.decimal128(12, 4)
+    assert column.to_pylist() == [value]
 
 
 def test_decimal_column_above_arrow_limit_uses_exact_strings() -> None:
     from decimal import Decimal  # noqa: PLC0415
 
     values = [Decimal("9" * 77), None, Decimal("9" * 80)]
-    cursor = _FakeDecimalCursor([(value,) for value in values], display_length=66)
+    arrow_type = _mysql_decimal_type_for_values(66, 0, False, values)
+    column = _build_mysql_column(values, arrow_type)
 
-    table = _build_mysql_arrow_table(cursor)
-
-    assert table.schema.field("value").type == pa.string()
-    assert table.column("value").to_pylist() == [
+    assert arrow_type == pa.string()
+    assert column.to_pylist() == [
         "9" * 77,
         None,
         "9" * 80,
@@ -316,12 +286,11 @@ def test_decimal_metadata_above_arrow_limit_with_fitting_value_stays_numeric() -
 
     value = Decimal("9" * 65)
     # Signed precision 89 is not representable in Arrow Decimal256.
-    cursor = _FakeDecimalCursor([(value,)], display_length=90)
+    arrow_type = _mysql_decimal_type_for_values(90, 0, False, [value])
+    column = _build_mysql_column([value], arrow_type)
 
-    table = _build_mysql_arrow_table(cursor)
-
-    assert table.schema.field("value").type == pa.decimal256(76, 0)
-    assert table.column("value").to_pylist() == [value]
+    assert arrow_type == pa.decimal256(76, 0)
+    assert column.to_pylist() == [value]
 
 
 @pytest.mark.parametrize("rows", [[], [(None,)]], ids=["empty", "all_null"])
@@ -330,12 +299,12 @@ def test_decimal_metadata_above_arrow_limit_without_values_uses_string(
 ) -> None:
     # Signed precision 89 is not representable in Arrow Decimal256, and no
     # concrete value proves that a narrower numeric schema would be safe.
-    cursor = _FakeDecimalCursor(rows, display_length=90)
+    values = [row[0] for row in rows]
+    arrow_type = _mysql_decimal_type_for_values(90, 0, False, values)
+    column = _build_mysql_column(values, arrow_type)
 
-    table = _build_mysql_arrow_table(cursor)
-
-    assert table.schema.field("value").type == pa.string()
-    assert table.column("value").to_pylist() == [row[0] for row in rows]
+    assert arrow_type == pa.string()
+    assert column.to_pylist() == values
 
 
 # ── TIME → duration round-trip ────────────────────────────────────────────
