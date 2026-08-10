@@ -266,6 +266,19 @@ def test_decimal_column_widens_scale_without_losing_integer_capacity() -> None:
     assert column.to_pylist() == [value]
 
 
+def test_decimal_column_rebalances_metadata_scale_for_observed_integer_digits() -> None:
+    from decimal import Decimal  # noqa: PLC0415
+
+    value = Decimal("12")
+    # Signed DECIMAL(76, 75) reserves one integer digit. The observed value
+    # needs two, so retain the maximum scale that still fits Decimal256.
+    arrow_type = _mysql_decimal_type_for_values(78, 75, False, [value])
+    column = _build_mysql_column([value], arrow_type)
+
+    assert arrow_type == pa.decimal256(76, 74)
+    assert column.to_pylist() == [value]
+
+
 def test_decimal_column_above_arrow_limit_uses_exact_strings() -> None:
     from decimal import Decimal  # noqa: PLC0415
 
