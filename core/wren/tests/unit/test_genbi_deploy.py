@@ -98,6 +98,8 @@ def test_deploy_tolerates_scalar_deploy_block(tmp_path: Path, monkeypatch) -> No
     goldmedal mutation-check: reverting link=deploy_state(entry) or None back to
     entry.get("deploy") must fail this test.
     """
+    import wren.genbi.providers as providers  # noqa: PLC0415
+
     project = _make_deployable_project(tmp_path)
     apps_yml = project / ".wren" / "apps.yml"
     index = yaml.safe_load(apps_yml.read_text())
@@ -110,15 +112,30 @@ def test_deploy_tolerates_scalar_deploy_block(tmp_path: Path, monkeypatch) -> No
     )
     monkeypatch.setattr(vercel, "_request", fake)
 
+    link_args: list[object] = []
+    real_get_provider = providers.get_provider
+
+    def _spy_get_provider(name: str):
+        adapter = real_get_provider(name)
+        real_deploy = adapter.deploy
+
+        def _deploy(*args, **kwargs):
+            link_args.append(kwargs.get("link", args[3] if len(args) > 3 else None))
+            return real_deploy(*args, **kwargs)
+
+        adapter.deploy = _deploy  # type: ignore[method-assign]
+        return adapter
+
+    monkeypatch.setattr(providers, "get_provider", _spy_get_provider)
+
     result = runner.invoke(
         app, ["genbi", "deploy", "myapp", "--provider", "vercel", "-p", str(project)]
     )
 
     assert not isinstance(result.exception, AttributeError), result.exception
     assert result.exit_code == 0, (result.exception, result.output)
-    # provider must have been called with link=None (normalized), not a str
     assert fake.calls, "provider was not invoked"
-    # _request path does not include link; success without AttributeError is the guard.
+    assert link_args == [None], f"provider link must be None for scalar deploy, got {link_args!r}"
     index_after = yaml.safe_load(apps_yml.read_text())
     assert isinstance(index_after["apps"]["myapp"]["deploy"], dict)
 
