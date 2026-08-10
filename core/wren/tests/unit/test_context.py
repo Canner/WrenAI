@@ -1791,9 +1791,11 @@ def test_validate_project_relationship_indices_match_file(tmp_path: Path) -> Non
         encoding="utf-8",
     )
     errors = validate_project(tmp_path)
-    msgs = [f"{e.path}: {e.message}" if hasattr(e, "path") else e.message for e in errors]
-    # path may be on .location or formatted in message — check both message and str
-    blob = " | ".join(f"{getattr(e, 'path', '')} {e.message}" for e in errors)
-    assert "got int" in blob
-    assert "relationships[1]" in blob  # unnamed entry keeps file index 1
-    assert "missing join_type" in blob or "join_type" in blob
+    diagnostics = [
+        f"{getattr(e, 'path', '')} {e.message}" for e in errors
+    ]
+    assert any("got int" in diagnostic for diagnostic in diagnostics)
+    assert any(
+        "relationships[1]" in diagnostic and "join_type" in diagnostic
+        for diagnostic in diagnostics
+    )
