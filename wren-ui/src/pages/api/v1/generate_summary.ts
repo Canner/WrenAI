@@ -21,7 +21,7 @@ import { getLogger } from '@server/utils';
 const logger = getLogger('API_GENERATE_SUMMARY');
 logger.level = 'debug';
 
-const { projectService, wrenAIAdaptor, deployService, queryService } =
+const { projectService, wrenAIAdaptor, deployService, queryService, mdlService } =
   components;
 
 interface GenerateSummaryRequest {
@@ -67,6 +67,7 @@ export default async function handler(
         Errors.GeneralErrorCodes.NO_DEPLOYMENT_FOUND,
       );
     }
+    const { manifest } = await mdlService.makeModelMDL(project);
 
     // Create a new thread if it's a new question
     const newThreadId = threadId || uuidv4();
@@ -77,7 +78,7 @@ export default async function handler(
       const queryResult = await queryService.preview(sql, {
         project,
         limit: sampleSize || 500,
-        manifest: lastDeploy.manifest,
+        manifest,
         modelingOnly: false,
       });
       sqlData = queryResult;

@@ -41,7 +41,6 @@ def test_single_table_description():
     assert document.content == str(
         {
             "name": "entity",
-            "resource_type": "MODEL",
             "description": "A generic entity resource.",
             "columns": "",
         }
@@ -77,7 +76,6 @@ def test_multiple_table_descriptions():
     assert document_1.content == str(
         {
             "name": "entity",
-            "resource_type": "MODEL",
             "description": "A generic entity resource.",
             "columns": "",
         }
@@ -88,7 +86,6 @@ def test_multiple_table_descriptions():
     assert document_2.content == str(
         {
             "name": "activity",
-            "resource_type": "MODEL",
             "description": "A generic activity resource.",
             "columns": "",
         }
@@ -127,7 +124,7 @@ def test_table_description_missing_description():
     document: Document = actual["documents"][0]
     assert document.meta == {"type": "TABLE_DESCRIPTION", "name": "entity"}
     assert document.content == str(
-        {"name": "entity", "resource_type": "MODEL", "description": "", "columns": ""}
+        {"name": "entity", "description": "", "columns": ""}
     )
 
 
@@ -138,7 +135,7 @@ def test_table_description_null_description():
             {
                 "name": "entity",
                 "properties": {"description": None, "displayName": None},
-                "columns": [{"name": "id"}, {"name": None}],
+                "columns": [{"name": "id"}],
             }
         ],
         "views": [],
@@ -154,14 +151,13 @@ def test_table_description_null_description():
     assert document.content == str(
         {
             "name": "entity",
-            "resource_type": "MODEL",
-            "description": "",
-            "columns": "id, ",
+            "description": None,
+            "columns": "id",
         }
     )
 
 
-def test_table_description_includes_column_semantic_context():
+def test_table_description_uses_legacy_column_list_without_semantic_context():
     chunker = TableDescriptionChunker()
     mdl = {
         "models": [
@@ -200,14 +196,8 @@ def test_table_description_includes_column_semantic_context():
     assert document.content == str(
         {
             "name": "resource",
-            "resource_type": "MODEL",
             "description": "A generic described resource.",
             "columns": "AttributeOne, MeasureOne",
-            "displayName": "Resource",
-            "column_context": (
-                "AttributeOne varchar Generic generated attribute description.; "
-                "MeasureOne float Generic generated measure description."
-            ),
         }
     )
 
@@ -248,7 +238,7 @@ def test_table_description_excludes_physical_source_metadata():
     document: Document = actual["documents"][0]
     assert "orders_model" in document.content
     assert "refund_date" in document.content
-    assert "Date when a refund was issued." in document.content
+    assert "Date when a refund was issued." not in document.content
     assert "warehouse" not in document.content
     assert "raw" not in document.content
     assert "refunds" not in document.content
@@ -257,7 +247,7 @@ def test_table_description_excludes_physical_source_metadata():
     assert "'expression':" not in document.content
 
 
-def test_table_description_includes_relationship_context():
+def test_table_description_does_not_include_relationship_context():
     chunker = TableDescriptionChunker()
     mdl = {
         "models": [
@@ -283,7 +273,7 @@ def test_table_description_includes_relationship_context():
         assert document.meta["type"] == "TABLE_DESCRIPTION"
         assert (
             "source_to_target ONE_TO_MANY source.source_id = target.source_id"
-            in document.content
+            not in document.content
         )
 
 
@@ -309,7 +299,6 @@ def test_table_description_keeps_complete_column_lists():
     assert document.content == str(
         {
             "name": "entity",
-            "resource_type": "MODEL",
             "description": "",
             "columns": ", ".join(column["name"] for column in columns),
         }

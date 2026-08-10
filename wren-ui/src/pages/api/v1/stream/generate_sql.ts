@@ -29,8 +29,13 @@ import {
 const logger = getLogger('API_STREAM_GENERATE_SQL');
 logger.level = 'debug';
 
-const { apiHistoryRepository, projectService, deployService, wrenAIAdaptor } =
-  components;
+const {
+  apiHistoryRepository,
+  projectService,
+  mdlService,
+  deployService,
+  wrenAIAdaptor,
+} = components;
 
 export default async function handler(
   req: NextApiRequest,
@@ -74,7 +79,11 @@ export default async function handler(
         Errors.GeneralErrorCodes.NO_DEPLOYMENT_FOUND,
       );
     }
-    const deployId = await deployService.ensureDeploymentPrepared(project.id);
+    const { manifest } = await mdlService.makeModelMDL(project);
+    const deployId = await deployService.ensureDeploymentPrepared(
+      project.id,
+      manifest,
+    );
 
     // Get conversation history if threadId is provided
     const histories = threadId

@@ -6,7 +6,6 @@ from haystack import Document
 from pytest_mock import MockFixture
 
 from src.pipelines.indexing.db_schema import (
-    MAX_DB_SCHEMA_DOCUMENT_LENGTH,
     DBSchema,
     DDLChunker,
 )
@@ -233,7 +232,7 @@ async def test_null_metadata_properties_are_indexed_as_empty_text():
             "columns": [
                 {
                     "type": "COLUMN",
-                    "comment": '-- {"alias":"","description":""}\n  ',
+                    "comment": '-- {"alias":null,"description":null}\n  ',
                     "name": "id",
                     "data_type": "INTEGER",
                     "is_primary_key": False,
@@ -244,7 +243,7 @@ async def test_null_metadata_properties_are_indexed_as_empty_text():
     assert actual["documents"][1].content == str(
         {
             "type": "TABLE",
-            "comment": "\n/* {'alias': '', 'description': ''} */\n",
+            "comment": "\n/* {'alias': None, 'description': None} */\n",
             "name": "user",
         }
     )
@@ -384,7 +383,7 @@ async def test_column_with_relationship():
     }
 
     actual = await chunker.run(mdl, column_batch_size=1)
-    assert len(actual["documents"]) == 5
+    assert len(actual["documents"]) == 6
 
     document_0: Document = actual["documents"][0]
     assert document_0.meta == {"type": "TABLE_SCHEMA", "name": "user"}
@@ -403,20 +402,17 @@ async def test_column_with_relationship():
         }
     )
 
-    document_3: Document = actual["documents"][3]
-    assert document_3.meta == {"type": "TABLE_SCHEMA", "name": "order"}
-    assert document_3.content == str(
+    document_4: Document = actual["documents"][4]
+    assert document_4.meta == {"type": "TABLE_SCHEMA", "name": "order"}
+    assert document_4.content == str(
         {
             "type": "TABLE_COLUMNS",
             "columns": [
                 {
                     "type": "FOREIGN_KEY",
-                    "comment": "-- {'name': 'relationship_1', 'condition': 'user.id = order.user_id', 'joinType': 'ONE_TO_MANY', 'description': '', 'from': 'order.user_id', 'to': 'user.id'}\n  ",
+                    "comment": '-- {"condition": user.id = order.user_id, "joinType": ONE_TO_MANY}\n  ',
                     "constraint": "FOREIGN KEY (user_id) REFERENCES user(id)",
                     "tables": ["user", "order"],
-                    "column": "user_id",
-                    "referenced_table": "user",
-                    "referenced_column": "id",
                 }
             ],
         }
@@ -487,7 +483,7 @@ async def test_column_batch_size():
 
 
 @pytest.mark.asyncio
-async def test_long_model_description_is_truncated():
+async def test_long_model_description_keeps_legacy_payload():
     chunker = DDLChunker()
     mdl = {
         "models": [
@@ -508,12 +504,12 @@ async def test_long_model_description_is_truncated():
 
     assert len(actual["documents"]) == 1
     document: Document = actual["documents"][0]
-    assert len(document.content) < 5000
-    assert "..." in document.content
+    assert "x" * 5000 in document.content
+    assert "..." not in document.content
 
 
 @pytest.mark.asyncio
-async def test_table_columns_are_bounded_to_document_length():
+async def test_table_columns_keep_legacy_comment_payload():
     chunker = DDLChunker()
     mdl = {
         "models": [
@@ -539,16 +535,11 @@ async def test_table_columns_are_bounded_to_document_length():
 
     actual = await chunker.run(mdl, column_batch_size=50)
     table_column_documents = [
-        document
-        for document in actual["documents"]
-        if "TABLE_COLUMNS" in document.content
+        document for document in actual["documents"] if "TABLE_COLUMNS" in document.content
     ]
 
-    assert len(table_column_documents) >= 1
-    assert all(
-        len(document.content) <= MAX_DB_SCHEMA_DOCUMENT_LENGTH
-        for document in table_column_documents
-    )
+    assert len(table_column_documents) == 1
+    assert "x" * 6000 in table_column_documents[0].content
 
 
 @pytest.mark.asyncio
@@ -571,7 +562,6 @@ async def test_view():
             "comment": "",
             "name": "view_1",
             "statement": "SELECT * FROM user",
-            "columns": [],
         }
     )
 
@@ -602,7 +592,6 @@ async def test_view_with_properties():
             "comment": "/* {'description': 'A view containing user information.'} */\n",
             "name": "view_1",
             "statement": "SELECT * FROM user",
-            "columns": [],
         }
     )
 

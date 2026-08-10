@@ -14,7 +14,6 @@ from pydantic import BaseModel
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.common import (
-    build_project_deploy_filter,
     build_table_ddl,
     clean_up_new_lines,
 )
@@ -40,9 +39,6 @@ You are an expert detective specializing in intent classification. Combine the u
 - **Vague Queries:** If the question is vague or does not related to a table or property from the schema, classify it as `MISLEADING_QUERY`.
 - **Incomplete Queries:** If the question is related to the database schema but references unspecified values (e.g., "the following", "these", "those") without providing them, classify as `GENERAL`.
 - **Time-related Queries:** Don't rephrase time-related information in the user's question.
-- **Business Semantics:** Treat table and column descriptions, display names, aliases, source metadata, metrics, views, and relationship descriptions as semantic evidence that a natural-language business term is related to the schema.
-- **Analytical Queries:** Classify complete business questions that ask for totals, counts, averages, rankings, trends, breakdowns, filters, or entity lists as `TEXT_TO_SQL` when the schema semantically contains the requested business concepts, even if the user does not use exact table or column names.
-- **Modeled Resources First:** Prefer modeled resources, metrics, and views when their deployed metadata describes them as the curated or intended analytical interface.
 
 ### Intent Definitions ###
 
@@ -60,9 +56,9 @@ You are an expert detective specializing in intent classification. Combine the u
 - Reference phrases from the user's inputs that clearly relate to the schema.
 
 **Examples:**  
-- "What is the total metric for last quarter?"
-- "Show me all entities that match condition X."
-- "List the top 10 categories by metric."
+- "What is the total sales for last quarter?"
+- "Show me all customers who purchased product X."
+- "List the top 10 products by revenue."
 </TEXT_TO_SQL>
 
 <GENERAL>
@@ -79,8 +75,8 @@ You are an expert detective specializing in intent classification. Combine the u
 **Examples:**
 - "What is the dataset about?"
 - "Tell me more about the database."
-- "How can I analyze entity behavior with this data?"
-- "Show me records for these categories" (without specifying which categories)
+- "How can I analyze customer behavior with this data?"
+- "Show me orders for these products" (without specifying which products)
 - "Filter by the criteria I mentioned" (without previous context defining criteria)
 </GENERAL>
 
@@ -128,14 +124,13 @@ intent_classification_user_prompt_template = """
     {{ db_schema }}
 {% endfor %}
 
-Use this schema semantically: comments, display labels, descriptions, and relationship metadata explain business meaning; executable SQL identifiers are not needed for intent classification.
-
 {% if sql_samples %}
 ### SQL SAMPLES ###
-These samples are confirmed question examples for this project deployment. Use them to understand user intent only.
 {% for sql_sample in sql_samples %}
 Question:
 {{sql_sample.question}}
+SQL:
+{{sql_sample.sql}}
 {% endfor %}
 {% endif %}
 
@@ -157,6 +152,8 @@ User's previous questions:
 {% for history in histories %}
 Question:
 {{ history.question }}
+SQL:
+{{ history.sql }}
 {% endfor %}
 {% endif %}
 
@@ -190,12 +187,10 @@ async def table_retrieval(
         ],
     }
 
-    project_deploy_filter = build_project_deploy_filter(
-        project_id=project_id,
-        mdl_hash=mdl_hash,
-    )
-    if project_deploy_filter:
-        filters["conditions"] += project_deploy_filter["conditions"]
+    if project_id:
+        filters["conditions"].append(
+            {"field": "project_id", "operator": "==", "value": project_id}
+        )
 
     return await table_retriever.run(
         query_embedding=embedding.get("embedding"),
@@ -232,12 +227,10 @@ async def dbschema_retrieval(
         ],
     }
 
-    project_deploy_filter = build_project_deploy_filter(
-        project_id=project_id,
-        mdl_hash=mdl_hash,
-    )
-    if project_deploy_filter:
-        filters["conditions"] += project_deploy_filter["conditions"]
+    if project_id:
+        filters["conditions"].append(
+            {"field": "project_id", "operator": "==", "value": project_id}
+        )
 
     results = await dbschema_retriever.run(
         query_embedding=embedding.get("embedding"), filters=filters

@@ -153,6 +153,42 @@ describe('DeployService', () => {
     });
   });
 
+  it('should prepare the supplied current manifest instead of reusing a stale saved manifest', async () => {
+    const staleManifest = { models: [{ name: 'stale_model' }] };
+    const currentManifest = {
+      models: [
+        {
+          name: 'current_model',
+          tableReference: { schema: 'dbo', table: 'current_model' },
+        },
+      ],
+    };
+    const activeHash = deployService.createMDLHash(currentManifest, 1);
+
+    mockDeployLogRepository.findLastProjectDeployLog
+      .mockResolvedValueOnce({
+        id: 123,
+        hash: deployService.createMDLHash(staleManifest, 1),
+        manifest: staleManifest,
+      })
+      .mockResolvedValueOnce(null);
+    mockWrenAIAdaptor.getDeployStatus.mockRejectedValue(new Error('not found'));
+    mockWrenAIAdaptor.deploy.mockResolvedValue({ status: 'SUCCESS' });
+    mockDeployLogRepository.createOne.mockResolvedValue({ id: 456 });
+
+    const preparedHash = await deployService.ensureDeploymentPrepared(
+      1,
+      currentManifest,
+    );
+
+    expect(preparedHash).toEqual(activeHash);
+    expect(mockWrenAIAdaptor.deploy).toHaveBeenCalledWith({
+      manifest: currentManifest,
+      hash: activeHash,
+      projectId: 1,
+    });
+  });
+
   it('should return the current manifest hash after redeploying a stale saved hash', async () => {
     const manifest = { key: 'value' };
     const activeHash = deployService.createMDLHash(manifest, 1);

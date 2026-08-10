@@ -22,6 +22,7 @@ logger.level = 'debug';
 const {
   apiHistoryRepository,
   projectService,
+  mdlService,
   deployService,
   wrenAIAdaptor,
   wrenEngineAdaptor,
@@ -69,7 +70,11 @@ export default async function handler(
         Errors.GeneralErrorCodes.NO_DEPLOYMENT_FOUND,
       );
     }
-    const deployId = await deployService.ensureDeploymentPrepared(project.id);
+    const { manifest } = await mdlService.makeModelMDL(project);
+    const deployId = await deployService.ensureDeploymentPrepared(
+      project.id,
+      manifest,
+    );
 
     // ask AI service to generate SQL
     const histories = threadId
@@ -120,14 +125,14 @@ export default async function handler(
       let nativeSql: string;
       if (project.type === DataSourceName.DUCKDB) {
         nativeSql = await wrenEngineAdaptor.getNativeSQL(sql, {
-          manifest: lastDeploy.manifest,
+          manifest,
           modelingOnly: false,
         });
       } else {
         nativeSql = await ibisAdaptor.getNativeSql({
           dataSource: project.type,
           sql,
-          mdl: lastDeploy.manifest,
+          mdl: manifest,
         });
       }
 

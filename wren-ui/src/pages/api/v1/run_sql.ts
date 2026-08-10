@@ -15,7 +15,7 @@ import { transformToObjects } from '@server/utils/dataUtils';
 const logger = getLogger('API_RUN_SQL');
 logger.level = 'debug';
 
-const { projectService, queryService, deployService } = components;
+const { projectService, queryService, deployService, mdlService } = components;
 
 /**
  * Validates the SQL result and ensures it has the expected format
@@ -69,7 +69,7 @@ export default async function handler(
       );
     }
 
-    const manifest = deployment.manifest;
+    const { manifest } = await mdlService.makeModelMDL(project);
 
     // Execute the SQL query
     try {

@@ -17,7 +17,10 @@ import {
 import { getLogger } from '@server/utils';
 import { getConfig } from '@server/config';
 import { DataSourceName } from '../types';
-import { getUniqueReferenceName } from '../utils/model';
+import {
+  getUniqueReferenceName,
+  replaceInvalidReferenceName,
+} from '../utils/model';
 
 const logger = getLogger('MDLBuilder');
 
@@ -157,11 +160,7 @@ export class MDLBuilder implements IMDLBuilder {
         columns: [],
         tableReference,
         // can only have one of refSql or tableReference
-        refSql: this.useRustWrenEngine()
-          ? null
-          : tableReference
-            ? null
-            : model.refSql,
+        refSql: tableReference ? null : model.refSql,
         cached: model.cached ? true : false,
         refreshTime: model.refreshTime,
         properties: {
@@ -539,13 +538,63 @@ export class MDLBuilder implements IMDLBuilder {
       model.properties && typeof model.properties === 'string'
         ? JSON.parse(model.properties)
         : {};
-    if (!modelProps.table) {
+
+    if (model.refSql) {
       return null;
     }
+
+    if (modelProps.table) {
+      return this.parseTableReference(
+        modelProps.table,
+        modelProps.schema || null,
+        modelProps.catalog || null,
+      );
+    }
+
+    if (model.sourceTableName) {
+      const sourceTableReference = this.parseTableReference(
+        model.sourceTableName,
+      );
+      if (
+        sourceTableReference &&
+        (sourceTableReference.schema ||
+          sourceTableReference.catalog ||
+          model.sourceTableName !== model.referenceName)
+      ) {
+        return sourceTableReference;
+      }
+    }
+
+    if (
+      model.displayName &&
+      model.displayName.includes('.') &&
+      replaceInvalidReferenceName(model.displayName) === model.referenceName
+    ) {
+      return this.parseTableReference(model.displayName);
+    }
+
+    return model.sourceTableName
+      ? this.parseTableReference(model.sourceTableName)
+      : null;
+  }
+
+  private parseTableReference(
+    qualifiedTableName: string,
+    schema: string | null = null,
+    catalog: string | null = null,
+  ): TableReference | null {
+    const tableParts = qualifiedTableName.split('.').filter(Boolean);
+    const table = tableParts.pop();
+    if (!table) {
+      return null;
+    }
+
     return {
-      catalog: modelProps.catalog || null,
-      schema: modelProps.schema || null,
-      table: modelProps.table,
+      catalog:
+        catalog ||
+        (tableParts.length > 1 ? tableParts.slice(0, -1).join('.') : null),
+      schema: schema || tableParts.pop() || null,
+      table,
     };
   }
 

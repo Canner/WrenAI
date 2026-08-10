@@ -400,7 +400,7 @@ describe('IbisAdaptor', () => {
 
     expect(result).toEqual({ valid: true, message: null });
     expect(mockedAxios.post).toHaveBeenCalledWith(
-      `${ibisServerEndpoint}/v3/connector/postgres/validate/column_is_valid`,
+      `${ibisServerEndpoint}/v2/connector/postgres/validate/column_is_valid`,
       {
         connectionInfo: { connectionUrl: postgresConnectionUrl },
         manifestStr: Buffer.from(JSON.stringify(mockManifest)).toString(
@@ -432,7 +432,7 @@ describe('IbisAdaptor', () => {
 
     expect(result).toEqual({ valid: false, message: 'Error' });
     expect(mockedAxios.post).toHaveBeenCalledWith(
-      `${ibisServerEndpoint}/v3/connector/postgres/validate/column_is_valid`,
+      `${ibisServerEndpoint}/v2/connector/postgres/validate/column_is_valid`,
       {
         connectionInfo: { connectionUrl: postgresConnectionUrl },
         manifestStr: Buffer.from(JSON.stringify(mockManifest)).toString(
@@ -512,7 +512,7 @@ describe('IbisAdaptor', () => {
     expect(res.override).toEqual(false);
     expect(new Date(res.cacheOverrodeAt).getTime()).toBeGreaterThan(0);
     expect(mockedAxios.post).toHaveBeenCalledWith(
-      `${ibisServerEndpoint}/v3/connector/postgres/query?cacheEnable=true`,
+      `${ibisServerEndpoint}/v2/connector/postgres/query?cacheEnable=true`,
       expect.any(Object),
       expect.any(Object),
     );
@@ -547,7 +547,7 @@ describe('IbisAdaptor', () => {
 
     expect(res.data).toEqual([[1]]);
     expect(mockedAxios.post).toHaveBeenCalledWith(
-      `${ibisServerEndpoint}/v3/connector/postgres/query?cacheEnable=true&overrideCache=true`,
+      `${ibisServerEndpoint}/v2/connector/postgres/query?cacheEnable=true&overrideCache=true`,
       expect.any(Object),
       expect.any(Object),
     );
@@ -728,7 +728,7 @@ describe('IbisAdaptor', () => {
 
     expect(result).toEqual('SELECT * FROM substituted_table');
     expect(mockedAxios.post).toHaveBeenCalledWith(
-      `${ibisServerEndpoint}/v3/connector/postgres/model-substitute`,
+      `${ibisServerEndpoint}/v2/connector/postgres/model-substitute`,
       {
         sql: 'SELECT * FROM test_table',
         connectionInfo: { connectionUrl: postgresConnectionUrl },
@@ -974,7 +974,7 @@ describe('IbisAdaptor', () => {
 
     expect(result).toEqual('SELECT * FROM substituted_table');
     expect(mockedAxios.post).toHaveBeenCalledWith(
-      `${ibisServerEndpoint}/v3/connector/postgres/model-substitute`,
+      `${ibisServerEndpoint}/v2/connector/postgres/model-substitute`,
       {
         sql: 'SELECT * FROM test_table',
         connectionInfo: { connectionUrl: postgresConnectionUrl },

@@ -982,11 +982,15 @@ export class AskingService implements IAskingService {
 
     const project = await this.getProjectForThreadResponse(threadResponse);
     const deployment = await this.deployService.getLastDeployment(project.id);
+    if (!deployment) {
+      throw new Error(`No deployment found for project ${project.id}`);
+    }
+    const { manifest } = await this.mdlService.makeModelMDL(project);
     let chartData: PreviewDataResponse;
     try {
       chartData = (await this.queryService.preview(threadResponse.sql, {
         project,
-        manifest: deployment.manifest,
+        manifest,
         modelingOnly: false,
         limit: 100,
         cacheEnabled: false,
@@ -1050,11 +1054,15 @@ export class AskingService implements IAskingService {
 
     const project = await this.getProjectForThreadResponse(threadResponse);
     const deployment = await this.deployService.getLastDeployment(project.id);
+    if (!deployment) {
+      throw new Error(`No deployment found for project ${project.id}`);
+    }
+    const { manifest } = await this.mdlService.makeModelMDL(project);
     let chartData: PreviewDataResponse;
     try {
       chartData = (await this.queryService.preview(threadResponse.sql, {
         project,
-        manifest: deployment.manifest,
+        manifest,
         modelingOnly: false,
         limit: 500,
         cacheEnabled: false,
@@ -1119,12 +1127,15 @@ export class AskingService implements IAskingService {
     }
     const project = await this.getProjectForThreadResponse(response);
     const deployment = await this.deployService.getLastDeployment(project.id);
-    const mdl = deployment.manifest;
+    if (!deployment) {
+      throw new Error(`No deployment found for project ${project.id}`);
+    }
+    const { manifest } = await this.mdlService.makeModelMDL(project);
     const eventName = TelemetryEvent.HOME_PREVIEW_ANSWER;
     try {
       const data = (await this.queryService.preview(response.sql, {
         project,
-        manifest: mdl,
+        manifest,
         limit,
         cacheEnabled: false,
       })) as PreviewDataResponse;
@@ -1160,14 +1171,17 @@ export class AskingService implements IAskingService {
     }
     const project = await this.getProjectForThreadResponse(response);
     const deployment = await this.deployService.getLastDeployment(project.id);
-    const mdl = deployment.manifest;
+    if (!deployment) {
+      throw new Error(`No deployment found for project ${project.id}`);
+    }
+    const { manifest } = await this.mdlService.makeModelMDL(project);
     const steps = response?.breakdownDetail?.steps;
     const sql = safeFormatSQL(constructCteSql(steps, stepIndex));
     const eventName = TelemetryEvent.HOME_PREVIEW_ANSWER;
     try {
       const data = (await this.queryService.preview(sql, {
         project,
-        manifest: mdl,
+        manifest,
         limit,
         cacheEnabled: false,
       })) as PreviewDataResponse;
@@ -1213,9 +1227,13 @@ export class AskingService implements IAskingService {
   ): Promise<Task> {
     const currentProject =
       project ?? (await this.projectService.getCurrentProject());
-    const { manifest } = await this.deployService.getLastDeployment(
+    const deployment = await this.deployService.getLastDeployment(
       currentProject.id,
     );
+    if (!deployment) {
+      throw new Error(`No deployment found for project ${currentProject.id}`);
+    }
+    const { manifest } = await this.mdlService.makeModelMDL(currentProject);
 
     const response = await this.wrenAIAdaptor.generateRecommendationQuestions({
       manifest,
@@ -1273,8 +1291,10 @@ export class AskingService implements IAskingService {
   }
 
   private async getDeployId(projectId?: number) {
-    const id = projectId ?? (await this.projectService.getCurrentProject()).id;
-    return this.deployService.ensureDeploymentPrepared(id);
+    const project = projectId
+      ? await this.projectService.getProjectById(projectId)
+      : await this.projectService.getCurrentProject();
+    return this.deployService.ensureDeploymentPrepared(project.id);
   }
 
   private async getProjectForThreadResponse(threadResponse: ThreadResponse) {
@@ -1324,9 +1344,13 @@ export class AskingService implements IAskingService {
 
     const project = await this.getProjectForThreadResponse(response);
     const deployment = await this.deployService.getLastDeployment(project.id);
+    if (!deployment) {
+      throw new Error(`No deployment found for project ${project.id}`);
+    }
+    const { manifest } = await this.mdlService.makeModelMDL(project);
     await this.queryService.preview(input.sql, {
       project,
-      manifest: deployment.manifest,
+      manifest,
       modelingOnly: false,
       limit: 1,
       cacheEnabled: false,

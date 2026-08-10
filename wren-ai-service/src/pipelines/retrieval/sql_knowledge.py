@@ -18,12 +18,6 @@ logger = logging.getLogger("wren-ai-service")
 
 
 class SqlKnowledge:
-    _STRUCTURED_INSTRUCTION_KEYS = {
-        "calculated_field_instructions",
-        "metric_instructions",
-        "json_field_instructions",
-    }
-
     def __init__(self, sql_knowledge: dict):
         self._data: Dict = sql_knowledge
 
@@ -54,14 +48,6 @@ class SqlKnowledge:
     @property
     def json_field_instructions(self) -> str:
         return self.instructions.get("json_field_instructions", "")
-
-    @property
-    def additional_instructions(self) -> dict:
-        return {
-            key: value
-            for key, value in self.instructions.items()
-            if key not in self._STRUCTURED_INSTRUCTION_KEYS and value
-        }
 
     def __str__(self):
         return f"text_to_sql_rule: {self.text_to_sql_rule}, instructions: {self.instructions}"

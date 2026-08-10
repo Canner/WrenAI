@@ -35,7 +35,6 @@ async def test_wren_ui_dry_plan_calls_graphql_planner():
             "data": {
                 "sql": "SELECT 1",
                 "projectId": "project-id",
-                "hash": "deploy-hash",
                 "allowFallback": False,
             }
         },
@@ -43,7 +42,7 @@ async def test_wren_ui_dry_plan_calls_graphql_planner():
 
 
 @pytest.mark.asyncio
-async def test_wren_ui_execute_sql_sends_deployment_hash_to_preview():
+async def test_wren_ui_execute_sql_uses_project_preview_manifest():
     endpoint = "http://engine-host"
     captured_request = {}
 
@@ -68,7 +67,6 @@ async def test_wren_ui_execute_sql_sends_deployment_hash_to_preview():
     assert captured_request["json"]["variables"]["data"] == {
         "sql": "SELECT 1",
         "projectId": "project-id",
-        "hash": "deploy-hash",
         "dryRun": True,
         "limit": 1,
     }

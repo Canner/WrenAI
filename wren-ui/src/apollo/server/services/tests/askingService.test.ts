@@ -145,6 +145,9 @@ describe('AskingService', () => {
           .fn()
           .mockResolvedValue('latest-deploy-hash'),
       };
+      service.mdlService = {
+        makeModelMDL: jest.fn(),
+      };
       service.threadRepository = {
         createOne: jest.fn().mockResolvedValue({ id: 7, projectId: 1 }),
         findOneBy: jest.fn().mockResolvedValue({ id: 7, projectId: 1 }),
@@ -172,6 +175,7 @@ describe('AskingService', () => {
       });
 
       expect(service.deployService.ensureDeploymentPrepared).toHaveBeenCalledWith(1);
+      expect(service.mdlService.makeModelMDL).not.toHaveBeenCalled();
       expect(service.askingTaskTracker.createAskingTask).toHaveBeenCalledWith({
         query: trackedAskingResult.question,
         histories: null,

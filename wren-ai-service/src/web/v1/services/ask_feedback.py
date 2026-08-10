@@ -183,7 +183,7 @@ class AskFeedbackService:
                     "sql_regeneration"
                 ].run(
                     contexts=table_ddls,
-                    sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
+                    sql_generation_reasoning=None,
                     sql=ask_feedback_request.sql,
                     project_id=ask_feedback_request.project_id,
                     mdl_hash=ask_feedback_request.mdl_hash,

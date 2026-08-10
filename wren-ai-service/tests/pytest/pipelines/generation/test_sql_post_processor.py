@@ -2,6 +2,23 @@ import pytest
 
 from src.pipelines.generation.utils.sql import SQLGenPostProcessor
 
+PROJECT_ID = "project-id"
+MDL_HASH = "deployment-hash"
+TABLE_A = "model_a"
+TABLE_B = "model_b"
+COLUMN_ID = "id"
+COLUMN_TEXT = "text_value"
+COLUMN_STATUS = "status_value"
+COLUMN_DATE = "date_value"
+COLUMN_AMOUNT = "amount_value"
+COLUMN_RANK = "rank_value"
+AGGREGATE_ALIAS = "aggregate_value"
+DATE_LITERAL = "2026-01-01 00:00:00"
+STRING_LITERAL = "literal_value"
+INVALID_ENGINE_SQL = f"SELECT * FROM {TABLE_A}"
+ORIGINAL_SQL = f"SELECT * FROM {TABLE_B}"
+INVALID_OBJECT_ERROR = f"Invalid object name '{TABLE_A}'."
+
 
 class _NoopEngine:
     async def execute_sql(self, *_, **__):
@@ -32,8 +49,8 @@ class _FailingEngine:
             False,
             {},
             {
-                "error_message": "Invalid object name 'orders'.",
-                "error_sql": "SELECT * FROM orders",
+                "error_message": INVALID_OBJECT_ERROR,
+                "error_sql": INVALID_ENGINE_SQL,
                 "correlation_id": "cid",
             },
         )
@@ -91,7 +108,7 @@ async def test_post_processor_returns_empty_invalid_result_for_structured_sql_ob
     processor = SQLGenPostProcessor(engine=_NoopEngine())
 
     result = await processor.run(
-        ['{"sql": {"select": ["purchase_order"], "from": "orders"}}'],
+        [f'{{"sql": {{"select": ["{COLUMN_TEXT}"], "from": "{TABLE_A}"}}}}'],
     )
 
     assert result["valid_generation_result"] == {}
@@ -105,13 +122,13 @@ async def test_post_processor_passes_deployment_hash_to_dry_run_validation():
 
     result = await processor.run(
         ['{"sql": "SELECT 1"}'],
-        project_id="project-id",
-        mdl_hash="deploy-hash",
+        project_id=PROJECT_ID,
+        mdl_hash=MDL_HASH,
     )
 
     assert result["invalid_generation_result"] == {}
-    assert engine.execute_kwargs["project_id"] == "project-id"
-    assert engine.execute_kwargs["mdl_hash"] == "deploy-hash"
+    assert engine.execute_kwargs["project_id"] == PROJECT_ID
+    assert engine.execute_kwargs["mdl_hash"] == MDL_HASH
 
 
 @pytest.mark.asyncio
@@ -121,14 +138,14 @@ async def test_post_processor_passes_deployment_hash_to_dry_plan_validation():
 
     result = await processor.run(
         ['{"sql": "SELECT 1"}'],
-        project_id="project-id",
-        mdl_hash="deploy-hash",
+        project_id=PROJECT_ID,
+        mdl_hash=MDL_HASH,
         use_dry_plan=True,
     )
 
     assert result["invalid_generation_result"] == {}
-    assert engine.dry_plan_kwargs["project_id"] == "project-id"
-    assert engine.dry_plan_kwargs["mdl_hash"] == "deploy-hash"
+    assert engine.dry_plan_kwargs["project_id"] == PROJECT_ID
+    assert engine.dry_plan_kwargs["mdl_hash"] == MDL_HASH
 
 
 @pytest.mark.asyncio
@@ -139,7 +156,7 @@ async def test_post_processor_allows_cte_alias_when_underlying_table_is_grounded
     result = await processor.run(
         [
             (
-                '{"sql": "WITH recent AS (SELECT * FROM \\"dbo_xStageNewOrders\\") '
+                f'{{"sql": "WITH recent AS (SELECT * FROM \\"{TABLE_A}\\") '
                 'SELECT * FROM recent"}'
             )
         ],
@@ -157,8 +174,8 @@ async def test_post_processor_allows_qualified_column_on_grounded_alias():
     result = await processor.run(
         [
             (
-                '{"sql": "SELECT o.\\"order_date\\" '
-                'FROM \\"order_model\\" AS o"}'
+                f'{{"sql": "SELECT o.\\"{COLUMN_DATE}\\" '
+                f'FROM \\"{TABLE_A}\\" AS o"}}'
             )
         ],
     )
@@ -175,9 +192,9 @@ async def test_post_processor_allows_join_with_retrieved_relationship():
     result = await processor.run(
         [
             (
-                '{"sql": "SELECT a.\\"entity_id\\", b.\\"attribute_value\\" '
-                'FROM \\"model_alpha\\" a JOIN \\"model_beta\\" b '
-                'ON a.\\"entity_id\\" = b.\\"entity_id\\""}'
+                f'{{"sql": "SELECT a.\\"{COLUMN_ID}\\", b.\\"{COLUMN_TEXT}\\" '
+                f'FROM \\"{TABLE_A}\\" a JOIN \\"{TABLE_B}\\" b '
+                f'ON a.\\"{COLUMN_ID}\\" = b.\\"{COLUMN_ID}\\""}}'
             )
         ],
     )
@@ -194,8 +211,8 @@ async def test_post_processor_allows_output_aliases_in_order_by():
     result = await processor.run(
         [
             (
-                '{"sql": "SELECT COUNT(*) AS \\"order_count\\" '
-                'FROM \\"dbo_xStageNewOrders\\" ORDER BY \\"order_count\\" DESC"}'
+                f'{{"sql": "SELECT COUNT(*) AS \\"{AGGREGATE_ALIAS}\\" '
+                f'FROM \\"{TABLE_A}\\" ORDER BY \\"{AGGREGATE_ALIAS}\\" DESC"}}'
             )
         ],
     )
@@ -212,9 +229,9 @@ async def test_post_processor_allows_string_literals_in_filters():
     result = await processor.run(
         [
             (
-                '{"sql": "SELECT \\"ShipCountry\\" FROM \\"dbo_xStageNewOrders\\" '
-                'WHERE \\"ShipCountry\\" = '
-                "'India'\"}"
+                f'{{"sql": "SELECT \\"{COLUMN_TEXT}\\" FROM \\"{TABLE_A}\\" '
+                f'WHERE \\"{COLUMN_TEXT}\\" = '
+                f"'{STRING_LITERAL}'\"}}"
             )
         ],
     )
@@ -228,13 +245,13 @@ async def test_post_processor_uses_engine_error_sql_for_correction_like_legacy()
     processor = SQLGenPostProcessor(engine=_FailingEngine())
 
     result = await processor.run(
-        ['{"sql": "SELECT * FROM dbo_xStageNewOrders"}'],
+        [f'{{"sql": "{ORIGINAL_SQL}"}}'],
     )
 
     invalid = result["invalid_generation_result"]
-    assert invalid["sql"] == "SELECT * FROM orders"
-    assert invalid["original_sql"] == "SELECT * FROM dbo_xStageNewOrders"
-    assert invalid["error"] == "Invalid object name 'orders'."
+    assert invalid["sql"] == INVALID_ENGINE_SQL
+    assert invalid["original_sql"] == ORIGINAL_SQL
+    assert invalid["error"] == INVALID_OBJECT_ERROR
 
 
 @pytest.mark.asyncio
@@ -243,7 +260,7 @@ async def test_post_processor_allows_raw_sql_when_grounded():
     processor = SQLGenPostProcessor(engine=engine)
 
     result = await processor.run(
-        ['SELECT "created_at" FROM "model_alpha"'],
+        [f'SELECT "{COLUMN_DATE}" FROM "{TABLE_A}"'],
     )
 
     assert result["invalid_generation_result"] == {}
@@ -257,46 +274,49 @@ async def test_post_processor_removes_semicolon_inside_json_sql_like_legacy():
     processor = SQLGenPostProcessor(engine=engine)
 
     result = await processor.run(
-        ['{"sql": "SELECT COUNT(*) AS total FROM dbo_PO_Invoices;"}'],
+        [f'{{"sql": "SELECT COUNT(*) AS {AGGREGATE_ALIAS} FROM {TABLE_A};"}}'],
     )
 
     assert result["invalid_generation_result"] == {}
-    assert engine.executed_sql == "SELECT COUNT(*) AS total FROM dbo_PO_Invoices"
+    assert engine.executed_sql == f"SELECT COUNT(*) AS {AGGREGATE_ALIAS} FROM {TABLE_A}"
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "sql",
     [
-        'SELECT "id" FROM "orders" WHERE "status" = \'open\'',
+        f'SELECT "{COLUMN_ID}" FROM "{TABLE_A}" WHERE "{COLUMN_STATUS}" = \'{STRING_LITERAL}\'',
         (
-            'SELECT o."id", c."name" FROM "orders" o '
-            'JOIN "customers" c ON o."customer_id" = c."id"'
+            f'SELECT a."{COLUMN_ID}", b."{COLUMN_TEXT}" FROM "{TABLE_A}" a '
+            f'JOIN "{TABLE_B}" b ON a."{COLUMN_ID}" = b."{COLUMN_ID}"'
         ),
-        'SELECT "supplier_id", COUNT(*) AS "invoice_count" FROM "invoices" GROUP BY "supplier_id"',
+        f'SELECT "{COLUMN_ID}", COUNT(*) AS "{AGGREGATE_ALIAS}" FROM "{TABLE_A}" GROUP BY "{COLUMN_ID}"',
         (
-            'SELECT "supplier_id", COUNT(*) AS "invoice_count" FROM "invoices" '
-            'GROUP BY "supplier_id" HAVING COUNT(*) > 1'
+            f'SELECT "{COLUMN_ID}", COUNT(*) AS "{AGGREGATE_ALIAS}" FROM "{TABLE_A}" '
+            f'GROUP BY "{COLUMN_ID}" HAVING COUNT(*) > 1'
         ),
-        'SELECT "id", "created_at" FROM "orders" ORDER BY "created_at" DESC',
+        f'SELECT "{COLUMN_ID}", "{COLUMN_DATE}" FROM "{TABLE_A}" ORDER BY "{COLUMN_DATE}" DESC',
         (
-            'SELECT "supplier_id", SUM("amount") AS "total_amount", '
-            'DENSE_RANK() OVER (ORDER BY SUM("amount") DESC) AS "rank" '
-            'FROM "invoices" GROUP BY "supplier_id"'
-        ),
-        'WITH totals AS (SELECT "supplier_id", SUM("amount") AS "amount" FROM "invoices" GROUP BY "supplier_id") SELECT * FROM totals',
-        'SELECT DISTINCT "supplier_id" FROM "invoices"',
-        (
-            'SELECT CASE WHEN "amount" > 0 THEN \'paid\' ELSE \'empty\' END AS "status" '
-            'FROM "invoices"'
+            f'SELECT "{COLUMN_ID}", SUM("{COLUMN_AMOUNT}") AS "{AGGREGATE_ALIAS}", '
+            f'DENSE_RANK() OVER (ORDER BY SUM("{COLUMN_AMOUNT}") DESC) AS "{COLUMN_RANK}" '
+            f'FROM "{TABLE_A}" GROUP BY "{COLUMN_ID}"'
         ),
         (
-            'SELECT "id" FROM "orders" WHERE "created_at" >= '
-            "CAST('2026-01-01 00:00:00' AS TIMESTAMP WITH TIME ZONE)"
+            f'WITH totals AS (SELECT "{COLUMN_ID}", SUM("{COLUMN_AMOUNT}") AS "{COLUMN_AMOUNT}" '
+            f'FROM "{TABLE_A}" GROUP BY "{COLUMN_ID}") SELECT * FROM totals'
+        ),
+        f'SELECT DISTINCT "{COLUMN_ID}" FROM "{TABLE_A}"',
+        (
+            f'SELECT CASE WHEN "{COLUMN_AMOUNT}" > 0 THEN \'{STRING_LITERAL}\' '
+            f'ELSE \'empty_value\' END AS "{COLUMN_STATUS}" FROM "{TABLE_A}"'
         ),
         (
-            'SELECT "id" FROM "orders" WHERE "customer_id" IN '
-            '(SELECT "id" FROM "customers" WHERE "region" = \'west\')'
+            f'SELECT "{COLUMN_ID}" FROM "{TABLE_A}" WHERE "{COLUMN_DATE}" >= '
+            f"CAST('{DATE_LITERAL}' AS TIMESTAMP WITH TIME ZONE)"
+        ),
+        (
+            f'SELECT "{COLUMN_ID}" FROM "{TABLE_A}" WHERE "{COLUMN_ID}" IN '
+            f'(SELECT "{COLUMN_ID}" FROM "{TABLE_B}" WHERE "{COLUMN_TEXT}" = \'{STRING_LITERAL}\')'
         ),
     ],
 )

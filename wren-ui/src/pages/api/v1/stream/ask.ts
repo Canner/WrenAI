@@ -43,6 +43,7 @@ logger.level = 'debug';
 const {
   apiHistoryRepository,
   projectService,
+  mdlService,
   deployService,
   wrenAIAdaptor,
   queryService,
@@ -131,7 +132,11 @@ export default async function handler(
         Errors.GeneralErrorCodes.NO_DEPLOYMENT_FOUND,
       );
     }
-    const deployId = await deployService.ensureDeploymentPrepared(project.id);
+    const { manifest } = await mdlService.makeModelMDL(project);
+    const deployId = await deployService.ensureDeploymentPrepared(
+      project.id,
+      manifest,
+    );
 
     // Create a new thread if it's a new question
     const newThreadId = threadId || uuidv4();
@@ -310,7 +315,7 @@ export default async function handler(
       const queryResult = await queryService.preview(sql, {
         project,
         limit: sampleSize || 500,
-        manifest: lastDeploy.manifest,
+        manifest,
         modelingOnly: false,
       });
       sqlData = queryResult;

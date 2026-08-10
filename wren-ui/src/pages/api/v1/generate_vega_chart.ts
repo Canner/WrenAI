@@ -17,7 +17,7 @@ import { PreviewDataResponse } from '@server/services/queryService';
 import { transformToObjects } from '@server/utils/dataUtils';
 import { enhanceVegaSpec } from '@/utils/vegaSpecUtils';
 
-const { projectService, wrenAIAdaptor, deployService, queryService } =
+const { projectService, wrenAIAdaptor, deployService, queryService, mdlService } =
   components;
 
 const MAX_WAIT_TIME = 1000 * 60 * 3; // 3 minutes
@@ -97,6 +97,7 @@ export default async function handler(
         Errors.GeneralErrorCodes.NO_DEPLOYMENT_FOUND,
       );
     }
+    const { manifest } = await mdlService.makeModelMDL(project);
 
     // Execute the SQL query to get the data
     let queryResult: PreviewDataResponse;
@@ -104,7 +105,7 @@ export default async function handler(
       queryResult = (await queryService.preview(sql, {
         project,
         limit: sampleSize,
-        manifest: lastDeploy.manifest,
+        manifest,
         modelingOnly: false,
       })) as PreviewDataResponse;
     } catch (queryError) {

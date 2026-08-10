@@ -14,6 +14,11 @@ from src.web.v1.services.ask import (
     AskResultRequest,
     AskService,
 )
+from src.web.v1.services.ask_feedback import (
+    AskFeedbackRequest,
+    AskFeedbackResultRequest,
+    AskFeedbackService,
+)
 from src.web.v1.services.semantics_preparation import (
     SemanticsPreparationRequest,
     SemanticsPreparationService,
@@ -37,6 +42,8 @@ MODEL_ALPHA_ENTITY_DDL = (
 MODEL_ALPHA_SELECT_SQL = f"SELECT * FROM {MODEL_ALPHA}"
 MODEL_ALPHA_ENTITY_SQL = f"SELECT {MODEL_ALPHA_ENTITY_ID} FROM {MODEL_ALPHA}"
 MODEL_ALPHA_COUNT_SQL = f"SELECT COUNT(*) AS record_count FROM {MODEL_ALPHA}"
+NON_SCHEMA_REASONING_TABLE = f"not_{MODEL_ALPHA}"
+NON_SCHEMA_REASONING_COLUMN = f"not_{MODEL_ALPHA_ENTITY_ID}"
 
 MODEL_ALPHA_SELECTED_MEASURE = "selected_measure"
 MODEL_ALPHA_RECOVERED_DIMENSION = "recovered_dimension"
@@ -368,6 +375,16 @@ class _CapturingDiagnosisPipeline:
         return {"post_process": {"reasoning": "Use the retrieved schema."}}
 
 
+class _InventedIdentifierReasoningPipeline:
+    async def run(self, **_):
+        return {
+            "post_process": (
+                f"Use this SQL: SELECT * FROM {NON_SCHEMA_REASONING_TABLE} "
+                f"WHERE {NON_SCHEMA_REASONING_COLUMN} = 1"
+            )
+        }
+
+
 @pytest.mark.asyncio
 async def test_ask_runs_sql_correction_for_validation_error():
     correction = _CapturingCorrectionPipeline()
@@ -475,6 +492,131 @@ async def test_ask_uses_exact_retrieved_metadata_for_generation_context():
     )
     assert ask_result_response.status == "finished"
     assert generation.calls[0]["contexts"] == [MODEL_ALPHA_PRUNED_DDL]
+
+
+@pytest.mark.asyncio
+async def test_ask_passes_reasoning_text_to_sql_generation_like_legacy():
+    generation = _ValidSqlGenerationPipeline()
+    ask_service = AskService(
+        {
+            "historical_question": _EmptyRetrievalPipeline(),
+            "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
+            "instructions_retrieval": _EmptyRetrievalPipeline(),
+            "db_schema_retrieval": _SchemaRetrievalPipeline(),
+            "sql_generation_reasoning": _InventedIdentifierReasoningPipeline(),
+            "sql_generation": generation,
+            "sql_correction": _UnexpectedCorrectionPipeline(),
+            "sql_diagnosis": _FailingDiagnosisPipeline(),
+        },
+        allow_intent_classification=False,
+        allow_sql_generation_reasoning=True,
+        allow_sql_functions_retrieval=False,
+        allow_sql_knowledge_retrieval=False,
+        allow_sql_diagnosis=True,
+    )
+    query_id = str(uuid.uuid4())
+    ask_request = AskRequest(query="count records by model", mdl_hash=None)
+    ask_request.query_id = query_id
+
+    await ask_service.ask(ask_request)
+
+    ask_result_response = ask_service.get_ask_result(
+        AskResultRequest(query_id=query_id)
+    )
+    assert ask_result_response.status == "finished"
+    assert NON_SCHEMA_REASONING_TABLE in ask_result_response.sql_generation_reasoning
+    assert generation.calls[0]["contexts"] == [MODEL_ALPHA_ENTITY_DDL]
+    assert (
+        generation.calls[0]["sql_generation_reasoning"]
+        == ask_result_response.sql_generation_reasoning
+    )
+
+
+@pytest.mark.asyncio
+async def test_followup_ask_passes_reasoning_text_to_sql_generation_like_legacy():
+    generation = _ValidSqlGenerationPipeline()
+    ask_service = AskService(
+        {
+            "historical_question": _EmptyRetrievalPipeline(),
+            "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
+            "instructions_retrieval": _EmptyRetrievalPipeline(),
+            "db_schema_retrieval": _SchemaRetrievalPipeline(),
+            "followup_sql_generation_reasoning": _InventedIdentifierReasoningPipeline(),
+            "followup_sql_generation": generation,
+            "sql_correction": _UnexpectedCorrectionPipeline(),
+            "sql_diagnosis": _FailingDiagnosisPipeline(),
+        },
+        allow_intent_classification=False,
+        allow_sql_generation_reasoning=True,
+        allow_sql_functions_retrieval=False,
+        allow_sql_knowledge_retrieval=False,
+        allow_sql_diagnosis=True,
+    )
+    query_id = str(uuid.uuid4())
+    ask_request = AskRequest(
+        query="now count those records",
+        mdl_hash=None,
+        histories=[
+            {
+                "question": "show model records",
+                "sql": MODEL_ALPHA_SELECT_SQL,
+            }
+        ],
+    )
+    ask_request.query_id = query_id
+
+    await ask_service.ask(ask_request)
+
+    ask_result_response = ask_service.get_ask_result(
+        AskResultRequest(query_id=query_id)
+    )
+    assert ask_result_response.status == "finished"
+    assert NON_SCHEMA_REASONING_TABLE in ask_result_response.sql_generation_reasoning
+    assert generation.calls[0]["contexts"] == [MODEL_ALPHA_ENTITY_DDL]
+    assert (
+        generation.calls[0]["sql_generation_reasoning"]
+        == ask_result_response.sql_generation_reasoning
+    )
+
+
+@pytest.mark.asyncio
+async def test_ask_feedback_does_not_pass_reasoning_text_to_sql_regeneration():
+    regeneration = _CapturingRegenerationPipeline()
+    ask_feedback_service = AskFeedbackService(
+        {
+            "db_schema_retrieval": _SchemaRetrievalPipeline(),
+            "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
+            "instructions_retrieval": _EmptyRetrievalPipeline(),
+            "sql_regeneration": regeneration,
+            "sql_correction": _UnexpectedCorrectionPipeline(),
+            "sql_diagnosis": _FailingDiagnosisPipeline(),
+        },
+        allow_sql_functions_retrieval=False,
+        allow_sql_knowledge_retrieval=False,
+        allow_sql_diagnosis=True,
+    )
+    query_id = str(uuid.uuid4())
+    ask_feedback_request = AskFeedbackRequest(
+        question="retry model records",
+        tables=[MODEL_ALPHA],
+        sql_generation_reasoning=(
+            f"Use this SQL: SELECT * FROM {NON_SCHEMA_REASONING_TABLE}"
+        ),
+        sql=MODEL_ALPHA_SELECT_SQL,
+        mdl_hash="deployment-hash",
+    )
+    ask_feedback_request.query_id = query_id
+
+    await ask_feedback_service.ask_feedback(ask_feedback_request)
+
+    ask_feedback_response = ask_feedback_service.get_ask_feedback_result(
+        AskFeedbackResultRequest(query_id=query_id)
+    )
+    assert ask_feedback_response.status == "finished"
+    assert regeneration.calls[0]["contexts"] == [MODEL_ALPHA_ENTITY_DDL]
+    assert regeneration.calls[0]["sql_generation_reasoning"] is None
+    assert regeneration.calls[0]["project_id"] == ask_feedback_request.project_id
+    assert regeneration.calls[0]["mdl_hash"] == ask_feedback_request.mdl_hash
 
 
 @pytest.mark.asyncio

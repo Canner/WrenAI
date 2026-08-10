@@ -83,11 +83,6 @@ def create_service_container(
         **pipe_components["sql_diagnosis"],
     )
 
-    sql_generation_timeout_seconds = (
-        settings.pipeline_timeout_seconds
-        or settings.sql_generation_timeout_seconds
-    )
-
     return ServiceContainer(
         semantics_description=services.SemanticsDescription(
             pipelines={
@@ -150,9 +145,6 @@ def create_service_container(
                     **pipe_components["followup_sql_generation_reasoning"],
                 ),
                 "sql_correction": _sql_correction_pipeline,
-                "sql_regeneration": generation.SQLRegeneration(
-                    **pipe_components["sql_regeneration"],
-                ),
                 "followup_sql_generation": generation.FollowUpSQLGeneration(
                     **pipe_components["followup_sql_generation"],
                 ),

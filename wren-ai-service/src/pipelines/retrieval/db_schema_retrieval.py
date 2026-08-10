@@ -15,7 +15,6 @@ from langfuse.decorators import observe
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.common import (
-    build_project_deploy_filter,
     build_table_ddl,
     clean_up_new_lines,
     get_engine_supported_data_type,
@@ -100,15 +99,14 @@ table_columns_selection_user_prompt_template = """
 """
 
 
-def _deploy_filter_conditions(
+def _project_filter_conditions(
     project_id: str | None,
-    mdl_hash: str | None,
 ) -> list[dict[str, Any]]:
-    deploy_filter = build_project_deploy_filter(
-        project_id=project_id,
-        mdl_hash=mdl_hash,
+    return (
+        [{"field": "project_id", "operator": "==", "value": project_id}]
+        if project_id
+        else []
     )
-    return deploy_filter["conditions"] if deploy_filter else []
 
 
 def _build_metric_ddl(content: dict) -> str:
@@ -163,7 +161,7 @@ async def table_retrieval(
         ],
     }
 
-    filters["conditions"].extend(_deploy_filter_conditions(project_id, mdl_hash))
+    filters["conditions"].extend(_project_filter_conditions(project_id))
 
     if embedding:
         return await table_retriever.run(
@@ -208,7 +206,7 @@ async def dbschema_retrieval(
             ],
         }
 
-        filters["conditions"].extend(_deploy_filter_conditions(project_id, mdl_hash))
+        filters["conditions"].extend(_project_filter_conditions(project_id))
 
         results = await dbschema_retriever.run(query_embedding=[], filters=filters)
         return results["documents"]

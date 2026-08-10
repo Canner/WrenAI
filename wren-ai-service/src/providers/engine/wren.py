@@ -38,8 +38,6 @@ class WrenUI(Engine):
             "sql": remove_limit_statement(sql),
             "projectId": project_id,
         }
-        if mdl_hash:
-            data["hash"] = mdl_hash
         if dry_run:
             data["dryRun"] = True
             data["limit"] = 1
@@ -157,8 +155,6 @@ class WrenUI(Engine):
             "projectId": project_id,
             "allowFallback": allow_fallback,
         }
-        if mdl_hash:
-            data["hash"] = mdl_hash
 
         try:
             async with session.post(

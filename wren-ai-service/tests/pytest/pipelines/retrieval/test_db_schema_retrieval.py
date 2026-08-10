@@ -17,6 +17,19 @@ from src.pipelines.retrieval.db_schema_retrieval import (
 )
 from src.web.v1.services.ask import AskHistory
 
+PROJECT_ID = "project-id"
+MDL_HASH = "deployment-hash"
+CURRENT_QUERY = "current request"
+PREVIOUS_QUERY = "previous request"
+MODEL_A = "model_a"
+MODEL_B = "model_b"
+COLUMN_ID = "id"
+COLUMN_TEXT = "text_value"
+COLUMN_MEASURE = "measure_value"
+METRIC_MODEL = "metric_model"
+VIEW_MODEL = "view_model"
+SOURCE_MODEL = "source_model"
+
 
 class Encoding:
     def encode(self, value):
@@ -57,35 +70,35 @@ async def test_embedding_uses_legacy_history_context():
     embedder = Embedder()
 
     result = await embedding(
-        query="current request",
+        query=CURRENT_QUERY,
         embedder=embedder,
-        histories=[AskHistory(question="previous request", sql="SELECT 1")],
+        histories=[AskHistory(question=PREVIOUS_QUERY, sql="SELECT 1")],
     )
 
     assert result == {"embedding": [1.0]}
-    assert embedder.query == "previous request\ncurrent request"
+    assert embedder.query == f"{PREVIOUS_QUERY}\n{CURRENT_QUERY}"
 
 
 def test_column_pruning_prompt_uses_legacy_history_context():
     result = build_column_selection_prompt(
-        query="current request",
+        query=CURRENT_QUERY,
         construct_db_schemas=[
-            table_schema("modeled_dataset", [column("stored_attribute")])
+            table_schema(MODEL_A, [column(COLUMN_TEXT)])
         ],
         prompt_builder=PromptBuilder(
             template=table_columns_selection_user_prompt_template
         ),
         check_using_db_schemas_without_pruning={"db_schemas": []},
-        histories=[AskHistory(question="previous request", sql="SELECT 1")],
+        histories=[AskHistory(question=PREVIOUS_QUERY, sql="SELECT 1")],
     )
 
-    assert "previous request" in result["prompt"]
-    assert "current request" in result["prompt"]
-    assert "CREATE TABLE modeled_dataset" in result["prompt"]
+    assert PREVIOUS_QUERY in result["prompt"]
+    assert CURRENT_QUERY in result["prompt"]
+    assert f"CREATE TABLE {MODEL_A}" in result["prompt"]
 
 
 @pytest.mark.asyncio
-async def test_table_retrieval_keeps_project_and_deploy_scope():
+async def test_table_retrieval_uses_legacy_project_scope_when_mdl_hash_is_present():
     class Retriever:
         def __init__(self):
             self.calls = []
@@ -98,8 +111,8 @@ async def test_table_retrieval_keeps_project_and_deploy_scope():
 
     await table_retrieval(
         embedding={"embedding": [0.25]},
-        project_id="project-1",
-        mdl_hash="deploy-1",
+        project_id=PROJECT_ID,
+        mdl_hash=MDL_HASH,
         tables=[],
         table_retriever=retriever,
     )
@@ -111,8 +124,7 @@ async def test_table_retrieval_keeps_project_and_deploy_scope():
                 "operator": "AND",
                 "conditions": [
                     {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
-                    {"field": "project_id", "operator": "==", "value": "project-1"},
-                    {"field": "mdl_hash", "operator": "==", "value": "deploy-1"},
+                    {"field": "project_id", "operator": "==", "value": PROJECT_ID},
                 ],
             },
         }
@@ -120,7 +132,7 @@ async def test_table_retrieval_keeps_project_and_deploy_scope():
 
 
 @pytest.mark.asyncio
-async def test_dbschema_retrieval_resolves_only_retrieved_table_names_with_deploy_scope():
+async def test_dbschema_retrieval_resolves_retrieved_tables_with_legacy_project_scope():
     class Retriever:
         def __init__(self):
             self.filters = None
@@ -130,8 +142,8 @@ async def test_dbschema_retrieval_resolves_only_retrieved_table_names_with_deplo
             return {
                 "documents": [
                     Document(
-                        content=str(table_schema("orders", [column("order_id")])),
-                        meta={"type": "TABLE_SCHEMA", "name": "orders"},
+                        content=str(table_schema(MODEL_A, [column(COLUMN_ID)])),
+                        meta={"type": "TABLE_SCHEMA", "name": MODEL_A},
                     )
                 ]
             }
@@ -142,17 +154,17 @@ async def test_dbschema_retrieval_resolves_only_retrieved_table_names_with_deplo
         table_retrieval={
             "documents": [
                 Document(
-                    content=str({"name": "orders"}),
-                    meta={"type": "TABLE_DESCRIPTION", "name": "orders"},
+                    content=str({"name": MODEL_A}),
+                    meta={"type": "TABLE_DESCRIPTION", "name": MODEL_A},
                 )
             ]
         },
-        project_id="project-1",
-        mdl_hash="deploy-1",
+        project_id=PROJECT_ID,
+        mdl_hash=MDL_HASH,
         dbschema_retriever=retriever,
     )
 
-    assert [document.meta["name"] for document in documents] == ["orders"]
+    assert [document.meta["name"] for document in documents] == [MODEL_A]
     assert retriever.filters == {
         "operator": "AND",
         "conditions": [
@@ -160,17 +172,16 @@ async def test_dbschema_retrieval_resolves_only_retrieved_table_names_with_deplo
             {
                 "operator": "OR",
                 "conditions": [
-                    {"field": "name", "operator": "==", "value": "orders"},
+                    {"field": "name", "operator": "==", "value": MODEL_A},
                 ],
             },
-            {"field": "project_id", "operator": "==", "value": "project-1"},
-            {"field": "mdl_hash", "operator": "==", "value": "deploy-1"},
+            {"field": "project_id", "operator": "==", "value": PROJECT_ID},
         ],
     }
 
 
 @pytest.mark.asyncio
-async def test_dbschema_retrieval_does_not_use_non_legacy_semantic_fallback():
+async def test_dbschema_retrieval_does_not_use_non_legacy_empty_result_fallback():
     class Retriever:
         def __init__(self):
             self.called = False
@@ -183,8 +194,8 @@ async def test_dbschema_retrieval_does_not_use_non_legacy_semantic_fallback():
 
     documents = await dbschema_retrieval(
         table_retrieval={"documents": []},
-        project_id="project-1",
-        mdl_hash="deploy-1",
+        project_id=PROJECT_ID,
+        mdl_hash=MDL_HASH,
         dbschema_retriever=retriever,
     )
 
@@ -197,11 +208,11 @@ def test_view_schema_context_uses_legacy_view_definition():
         {
             "type": "VIEW",
             "comment": "",
-            "name": "retrieved_view",
-            "statement": "SELECT visible_attribute FROM source_model",
+            "name": VIEW_MODEL,
+            "statement": f"SELECT {COLUMN_TEXT} FROM {SOURCE_MODEL}",
             "columns": [
                 {
-                    "name": "visible_attribute",
+                    "name": COLUMN_TEXT,
                     "data_type": "VARCHAR",
                     "comment": "",
                 }
@@ -209,14 +220,14 @@ def test_view_schema_context_uses_legacy_view_definition():
         }
     )
 
-    assert result == "CREATE VIEW retrieved_view\nAS SELECT visible_attribute FROM source_model"
+    assert result == f"CREATE VIEW {VIEW_MODEL}\nAS SELECT {COLUMN_TEXT} FROM {SOURCE_MODEL}"
 
 
 def test_check_using_db_schemas_without_pruning_returns_legacy_result_shape():
     result = check_using_db_schemas_without_pruning(
         construct_db_schemas=[
-            table_schema("activity", [column("id", "INTEGER")]),
-            table_schema("account", [column("name")]),
+            table_schema(MODEL_A, [column(COLUMN_ID, "INTEGER")]),
+            table_schema(MODEL_B, [column(COLUMN_TEXT)]),
         ],
         dbschema_retrieval=[],
         encoding=Encoding(),
@@ -225,10 +236,10 @@ def test_check_using_db_schemas_without_pruning_returns_legacy_result_shape():
     )
 
     assert [schema["table_name"] for schema in result["db_schemas"]] == [
-        "activity",
-        "account",
+        MODEL_A,
+        MODEL_B,
     ]
-    assert "CREATE TABLE activity" in result["db_schemas"][0]["table_ddl"]
+    assert f"CREATE TABLE {MODEL_A}" in result["db_schemas"][0]["table_ddl"]
     assert "column_names" not in result["db_schemas"][0]
     assert "unpruned_table_ddl" not in result["db_schemas"][0]
 
@@ -236,7 +247,7 @@ def test_check_using_db_schemas_without_pruning_returns_legacy_result_shape():
 def test_check_using_db_schemas_without_pruning_triggers_legacy_column_pruning():
     result = check_using_db_schemas_without_pruning(
         construct_db_schemas=[
-            table_schema("orders", [column("amount", "DOUBLE")])
+            table_schema(MODEL_A, [column(COLUMN_MEASURE, "DOUBLE")])
         ],
         dbschema_retrieval=[],
         encoding=Encoding(),
@@ -257,11 +268,11 @@ def test_construct_retrieval_results_uses_selected_columns_for_sql_generation():
                 {
                     "results": [
                         {
-                            "table_name": "modeled_dataset",
+                            "table_name": "model_a",
                             "table_selection_reason": "Selected.",
                             "table_contents": {
                                 "chain_of_thought_reasoning": ["Needed field."],
-                                "columns": ["stored_measure"]
+                                "columns": ["measure_value"]
                             }
                         }
                     ]
@@ -271,10 +282,10 @@ def test_construct_retrieval_results_uses_selected_columns_for_sql_generation():
         },
         construct_db_schemas=[
             table_schema(
-                "modeled_dataset",
+                MODEL_A,
                 [
-                    column("stored_dimension"),
-                    column("stored_measure", "DOUBLE"),
+                    column(COLUMN_TEXT),
+                    column(COLUMN_MEASURE, "DOUBLE"),
                 ],
             )
         ],
@@ -283,9 +294,9 @@ def test_construct_retrieval_results_uses_selected_columns_for_sql_generation():
 
     retrieved = result["retrieval_results"][0]
 
-    assert retrieved["table_name"] == "modeled_dataset"
-    assert "stored_dimension VARCHAR" not in retrieved["table_ddl"]
-    assert "stored_measure DOUBLE" in retrieved["table_ddl"]
+    assert retrieved["table_name"] == MODEL_A
+    assert f"{COLUMN_TEXT} VARCHAR" not in retrieved["table_ddl"]
+    assert f"{COLUMN_MEASURE} DOUBLE" in retrieved["table_ddl"]
     assert "column_names" not in retrieved
 
 
@@ -298,11 +309,11 @@ def test_construct_retrieval_results_keeps_only_selected_metrics_and_views():
                 {
                     "results": [
                         {
-                            "table_name": "semantic_metric",
+                            "table_name": "metric_model",
                             "table_selection_reason": "Selected.",
                             "table_contents": {
                                 "chain_of_thought_reasoning": ["Needed metric."],
-                                "columns": ["metric_value"]
+                                "columns": ["measure_value"]
                             }
                         }
                     ]
@@ -317,35 +328,35 @@ def test_construct_retrieval_results_keeps_only_selected_metrics_and_views():
                     {
                         "type": "METRIC",
                         "comment": "",
-                        "name": "semantic_metric",
+                        "name": METRIC_MODEL,
                         "columns": [
                             {
                                 "type": "COLUMN",
-                                "name": "metric_value",
+                                "name": COLUMN_MEASURE,
                                 "data_type": "DOUBLE",
                                 "comment": "",
                             }
                         ],
                     }
                 ),
-                meta={"type": "TABLE_SCHEMA", "name": "semantic_metric"},
+                meta={"type": "TABLE_SCHEMA", "name": METRIC_MODEL},
             ),
             Document(
                 content=str(
                     {
                         "type": "VIEW",
                         "comment": "",
-                        "name": "unselected_view",
-                        "statement": "SELECT id FROM source_model",
+                        "name": VIEW_MODEL,
+                        "statement": f"SELECT {COLUMN_ID} FROM {SOURCE_MODEL}",
                     }
                 ),
-                meta={"type": "TABLE_SCHEMA", "name": "unselected_view"},
+                meta={"type": "TABLE_SCHEMA", "name": VIEW_MODEL},
             ),
         ],
     )
 
     assert [item["table_name"] for item in result["retrieval_results"]] == [
-        "semantic_metric"
+        METRIC_MODEL
     ]
     assert result["has_metric"] is True
 
@@ -359,11 +370,11 @@ def test_construct_retrieval_results_does_not_add_column_only_term_matches():
                 {
                     "results": [
                         {
-                            "table_name": "regional_orders",
+                            "table_name": "model_a",
                             "table_selection_reason": "Selected.",
                             "table_contents": {
                                 "chain_of_thought_reasoning": ["Needed field."],
-                                "columns": ["order_id"]
+                                "columns": ["id"]
                             }
                         }
                     ]
@@ -372,14 +383,14 @@ def test_construct_retrieval_results_does_not_add_column_only_term_matches():
             ]
         },
         construct_db_schemas=[
-            table_schema("regional_orders", [column("order_id")]),
-            table_schema("fact_sales", [column("country")]),
+            table_schema(MODEL_A, [column(COLUMN_ID)]),
+            table_schema(MODEL_B, [column(COLUMN_TEXT)]),
         ],
         dbschema_retrieval=[],
     )
 
     assert [item["table_name"] for item in result["retrieval_results"]] == [
-        "regional_orders"
+        MODEL_A
     ]
 
 
@@ -387,25 +398,25 @@ def test_build_table_ddl_keeps_legacy_pruned_relationship_behavior():
     ddl, _, _ = build_table_ddl(
         {
             "type": "TABLE",
-            "name": "detail",
+            "name": MODEL_A,
             "comment": "",
             "columns": [
-                column("detail_id", "INTEGER", is_primary_key=True),
-                column("parent_id", "INTEGER"),
-                column("amount", "DOUBLE"),
+                column(COLUMN_ID, "INTEGER", is_primary_key=True),
+                column(f"{MODEL_B}_id", "INTEGER"),
+                column(COLUMN_MEASURE, "DOUBLE"),
                 {
                     "type": "FOREIGN_KEY",
                     "comment": "",
-                    "constraint": "FOREIGN KEY (parent_id) REFERENCES parent(parent_id)",
-                    "tables": ["parent", "detail"],
+                    "constraint": f"FOREIGN KEY ({MODEL_B}_id) REFERENCES {MODEL_B}({COLUMN_ID})",
+                    "tables": [MODEL_B, MODEL_A],
                 },
             ],
         },
-        columns={"amount"},
-        tables={"parent", "detail"},
+        columns={COLUMN_MEASURE},
+        tables={MODEL_B, MODEL_A},
     )
 
-    assert "detail_id INTEGER PRIMARY KEY" not in ddl
-    assert "parent_id INTEGER" not in ddl
-    assert "amount DOUBLE" in ddl
-    assert "FOREIGN KEY (parent_id) REFERENCES parent(parent_id)" in ddl
+    assert f"{COLUMN_ID} INTEGER PRIMARY KEY" not in ddl
+    assert f"{MODEL_B}_id INTEGER" not in ddl
+    assert f"{COLUMN_MEASURE} DOUBLE" in ddl
+    assert f"FOREIGN KEY ({MODEL_B}_id) REFERENCES {MODEL_B}({COLUMN_ID})" in ddl

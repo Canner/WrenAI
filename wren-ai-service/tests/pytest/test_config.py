@@ -23,8 +23,9 @@ def test_settings_default_values():
 
         assert settings.logging_level == "INFO"
         assert settings.development is False
-        assert settings.allow_sql_generation_reasoning is False
-        assert settings.max_sql_correction_retries == 1
+        assert settings.enable_column_pruning is False
+        assert settings.allow_sql_generation_reasoning is True
+        assert settings.max_sql_correction_retries == 3
 
         assert settings.config_path == "config.yaml"
 

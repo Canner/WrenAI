@@ -747,6 +747,136 @@ describe('MDLBuilder', () => {
     expect(manifest.models[0].refSql).toBeFalsy();
   });
 
+  it('should build tableReference from sourceTableName for imported models without stored table metadata.', () => {
+    const project = {
+      id: 1,
+      type: DataSourceName.MSSQL,
+      displayName: 'wren ai project',
+      connectionInfo: {},
+      sampleDataset: null,
+    } as Project;
+    const models = [
+      {
+        id: 1,
+        projectId: 1,
+        displayName: 'dbo.PBI_View_Apex_Invoice',
+        sourceTableName: 'dbo.PBI_View_Apex_Invoice',
+        referenceName: 'dbo_PBI_View_Apex_Invoice',
+        refSql: null,
+        cached: false,
+        refreshTime: null,
+        properties: null,
+      },
+    ] as Model[];
+    const builderOptions = {
+      project,
+      models,
+      columns: [],
+      nestedColumns: [],
+      relations: [],
+      views: [],
+      relatedModels: [],
+      relatedColumns: [],
+      relatedRelations: [],
+    } as MDLBuilderBuildFromOptions;
+    mdlBuilder = new MDLBuilder(builderOptions);
+
+    const manifest = mdlBuilder.build();
+
+    expect(manifest.models[0].tableReference).toEqual({
+      catalog: null,
+      schema: 'dbo',
+      table: 'PBI_View_Apex_Invoice',
+    });
+    expect(manifest.models[0].refSql).toBeFalsy();
+  });
+
+  it('should split qualified table names stored in model properties.', () => {
+    const project = {
+      id: 1,
+      type: DataSourceName.MSSQL,
+      displayName: 'wren ai project',
+      connectionInfo: {},
+      sampleDataset: null,
+    } as Project;
+    const models = [
+      {
+        id: 1,
+        projectId: 1,
+        displayName: 'dbo.orders',
+        sourceTableName: 'dbo.orders',
+        referenceName: 'dbo_orders',
+        refSql: null,
+        cached: false,
+        refreshTime: null,
+        properties: JSON.stringify({ table: 'dbo.orders' }),
+      },
+    ] as Model[];
+    const builderOptions = {
+      project,
+      models,
+      columns: [],
+      nestedColumns: [],
+      relations: [],
+      views: [],
+      relatedModels: [],
+      relatedColumns: [],
+      relatedRelations: [],
+    } as MDLBuilderBuildFromOptions;
+    mdlBuilder = new MDLBuilder(builderOptions);
+
+    const manifest = mdlBuilder.build();
+
+    expect(manifest.models[0].tableReference).toEqual({
+      catalog: null,
+      schema: 'dbo',
+      table: 'orders',
+    });
+  });
+
+  it('should recover tableReference from displayName for legacy sanitized models.', () => {
+    const project = {
+      id: 1,
+      type: DataSourceName.MSSQL,
+      displayName: 'wren ai project',
+      connectionInfo: {},
+      sampleDataset: null,
+    } as Project;
+    const models = [
+      {
+        id: 1,
+        projectId: 1,
+        displayName: 'dbo.vw_HL_Invoice_Details',
+        sourceTableName: 'dbo_vw_HL_Invoice_Details',
+        referenceName: 'dbo_vw_HL_Invoice_Details',
+        refSql: null,
+        cached: false,
+        refreshTime: null,
+        properties: null,
+      },
+    ] as Model[];
+    const builderOptions = {
+      project,
+      models,
+      columns: [],
+      nestedColumns: [],
+      relations: [],
+      views: [],
+      relatedModels: [],
+      relatedColumns: [],
+      relatedRelations: [],
+    } as MDLBuilderBuildFromOptions;
+    mdlBuilder = new MDLBuilder(builderOptions);
+
+    const manifest = mdlBuilder.build();
+
+    expect(manifest.models[0].tableReference).toEqual({
+      catalog: null,
+      schema: 'dbo',
+      table: 'vw_HL_Invoice_Details',
+    });
+  });
+
   it('should prefer refSql over tableReference when both are present.', () => {
     const project = {
       id: 1,

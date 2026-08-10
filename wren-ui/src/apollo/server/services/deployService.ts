@@ -39,7 +39,7 @@ export interface IDeployService {
     force?: boolean,
   ): Promise<DeployResponse>;
   getLastDeployment(projectId: number): Promise<Deploy>;
-  ensureDeploymentPrepared(projectId: number): Promise<string>;
+  ensureDeploymentPrepared(projectId: number, manifest?: Manifest): Promise<string>;
   getInProgressDeployment(projectId: number): Promise<Deploy>;
   createMDLHash(manifest: Manifest, projectId: number): string;
   isSameDeployment(
@@ -80,13 +80,17 @@ export class DeployService implements IDeployService {
     return lastDeploy;
   }
 
-  public async ensureDeploymentPrepared(projectId: number): Promise<string> {
+  public async ensureDeploymentPrepared(
+    projectId: number,
+    manifest?: Manifest,
+  ): Promise<string> {
     const lastDeploy =
       await this.deployLogRepository.findLastProjectDeployLog(projectId);
     if (!lastDeploy) {
       throw new Error(`No deployment found for project ${projectId}`);
     }
-    const activeHash = this.createMDLHash(lastDeploy.manifest, projectId);
+    const activeManifest = manifest || lastDeploy.manifest;
+    const activeHash = this.createMDLHash(activeManifest, projectId);
 
     if (lastDeploy.hash === activeHash) {
       try {
@@ -116,7 +120,7 @@ export class DeployService implements IDeployService {
         );
         if (status === WrenAISystemStatus.FINISHED) {
           await this.deployLogRepository.updateOne(lastDeploy.id, {
-            manifest: normalizeManifest(lastDeploy.manifest),
+            manifest: normalizeManifest(activeManifest),
             hash: activeHash,
             status: DeployStatusEnum.SUCCESS,
             error: undefined,
@@ -133,7 +137,7 @@ export class DeployService implements IDeployService {
       }
     }
 
-    const result = await this.deploy(lastDeploy.manifest, projectId);
+    const result = await this.deploy(activeManifest, projectId);
     if (result.status !== DeployStatusEnum.SUCCESS) {
       throw new Error(
         result.error ||

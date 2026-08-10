@@ -7,13 +7,22 @@ from src.pipelines.retrieval.sql_functions import SqlFunction, SqlFunctions
 
 MOCK_FUNCTION_DEFINITION = {
     "name": "test_func",
-    "param_types": "int,text",
-    "return_type": "boolean",
+    "function_type": "scalar",
+    "description": "Returns a test value.",
 }
 
 MOCK_FUNCTION_LIST = [
-    {"name": "func1", "param_types": "int", "return_type": "text"},
-    {"name": "func2", "param_types": "text,text", "return_type": "boolean"},
+    {
+        "name": "func1",
+        "function_type": "scalar",
+        "description": "Returns the first value.",
+    },
+    {
+        "name": "func2",
+        "function_type": "aggregate",
+        "description": "Aggregates values.",
+    },
+    {"name": "func_without_description", "function_type": "scalar"},
 ]
 
 
@@ -43,14 +52,18 @@ def sql_functions_pipeline(mock_engine):
 
 def test_sql_function_init():
     func = SqlFunction(MOCK_FUNCTION_DEFINITION)
-    expected = "test_func($0: int, $1: text) -> boolean"
+    expected = "type: scalar, name: TEST_FUNC, description: Returns a test value."
     assert str(func) == expected
     assert repr(func) == expected
 
 
-def test_sql_function_empty_params():
-    func = SqlFunction({"name": "test_func", "return_type": "text"})
-    assert str(func) == "test_func(any) -> text"
+def test_sql_function_empty_requires_legacy_fields():
+    assert SqlFunction.empty({"name": "test_func", "function_type": "scalar"})
+    assert SqlFunction.empty({"name": "test_func", "description": "Returns a value."})
+    assert SqlFunction.empty(
+        {"function_type": "scalar", "description": "Returns a value."}
+    )
+    assert not SqlFunction.empty(MOCK_FUNCTION_DEFINITION)
 
 
 @pytest.mark.asyncio
@@ -58,8 +71,12 @@ async def test_sql_functions_pipeline_run(sql_functions_pipeline):
     result = await sql_functions_pipeline.run("postgres")
 
     assert len(result) == 2
-    assert str(result[0]) == "func1($0: int) -> text"
-    assert str(result[1]) == "func2($0: text, $1: text) -> boolean"
+    assert str(result[0]) == (
+        "type: scalar, name: FUNC1, description: Returns the first value."
+    )
+    assert str(result[1]) == (
+        "type: aggregate, name: FUNC2, description: Aggregates values."
+    )
 
     cached_result = await sql_functions_pipeline.run("postgres")
     assert result == cached_result
@@ -94,35 +111,11 @@ async def test_sql_functions_pipeline_case_insensitive(sql_functions_pipeline):
     assert result1 == result2
 
 
-def test_sql_function_param_type_none():
-    func = SqlFunction(
-        {"name": "test_func", "param_types": None, "return_type": "text"}
-    )
-    assert str(func) == "test_func(any) -> text"
-
-
-def test_sql_function_return_type_none():
-    func = SqlFunction(
-        {"name": "test_func", "param_types": "int,text", "return_type": None}
-    )
-    assert str(func) == "test_func($0: int, $1: text) -> any"
-
-
-def test_sql_function_return_type_same_as_args():
-    func = SqlFunction(
-        {
-            "name": "test_func",
-            "param_types": "int,text",
-            "return_type": "same as arg types",
-        }
-    )
-    assert str(func) == "test_func($0: int, $1: text) -> ['int', 'text']"
-
-
-def test_sql_function_includes_description_when_available():
+def test_sql_function_ignores_signature_metadata():
     func = SqlFunction(
         {
             "name": "dateadd",
+            "function_type": "scalar",
             "param_types": ["varchar", "int", "datetime"],
             "return_type": "Datetime",
             "description": "Adds a signed number of dateparts to a date.",
@@ -130,5 +123,5 @@ def test_sql_function_includes_description_when_available():
     )
     assert (
         str(func)
-        == "dateadd($0: varchar, $1: int, $2: datetime) -> Datetime: Adds a signed number of dateparts to a date."
+        == "type: scalar, name: DATEADD, description: Adds a signed number of dateparts to a date."
     )

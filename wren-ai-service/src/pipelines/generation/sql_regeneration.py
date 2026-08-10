@@ -9,8 +9,8 @@ from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
 from src.core.engine import Engine
 from src.core.pipeline import BasicPipeline
-from src.core.provider import DocumentStoreProvider, LLMProvider
-from src.pipelines.common import clean_up_new_lines, retrieve_metadata
+from src.core.provider import LLMProvider
+from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
@@ -160,19 +160,11 @@ async def post_process(
     post_processor: SQLGenPostProcessor,
     project_id: str | None = None,
     mdl_hash: str | None = None,
-    use_dry_plan: bool = False,
-    allow_dry_plan_fallback: bool = True,
-    data_source: str = "",
-    allow_data_preview: bool = False,
 ) -> dict:
     return await post_processor.run(
         regenerate_sql.get("replies"),
         project_id=project_id,
         mdl_hash=mdl_hash,
-        use_dry_plan=use_dry_plan,
-        data_source=data_source,
-        allow_dry_plan_fallback=allow_dry_plan_fallback,
-        allow_data_preview=allow_data_preview,
     )
 
 
@@ -184,16 +176,8 @@ class SQLRegeneration(BasicPipeline):
         self,
         llm_provider: LLMProvider,
         engine: Engine,
-        document_store_provider: DocumentStoreProvider | None = None,
         **kwargs,
     ):
-        self._retriever = (
-            document_store_provider.get_retriever(
-                document_store_provider.get_store("project_meta")
-            )
-            if document_store_provider
-            else None
-        )
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=get_sql_regeneration_system_prompt(None),
@@ -225,20 +209,8 @@ class SQLRegeneration(BasicPipeline):
         has_json_field: bool = False,
         sql_functions: list[SqlFunction] | None = None,
         sql_knowledge: SqlKnowledge | None = None,
-        use_dry_plan: bool = False,
-        allow_dry_plan_fallback: bool = True,
-        allow_data_preview: bool = False,
     ):
         logger.info("SQL Regeneration pipeline is running...")
-
-        if use_dry_plan and self._retriever:
-            metadata = await retrieve_metadata(
-                project_id or "",
-                self._retriever,
-                mdl_hash=mdl_hash,
-            )
-        else:
-            metadata = {}
 
         return await self._pipe.execute(
             ["post_process"],
@@ -255,10 +227,6 @@ class SQLRegeneration(BasicPipeline):
                 "has_json_field": has_json_field,
                 "sql_functions": sql_functions,
                 "sql_knowledge": sql_knowledge,
-                "use_dry_plan": use_dry_plan,
-                "allow_dry_plan_fallback": allow_dry_plan_fallback,
-                "allow_data_preview": allow_data_preview,
-                "data_source": metadata.get("data_source", "local_file"),
                 **self._components,
             },
         )

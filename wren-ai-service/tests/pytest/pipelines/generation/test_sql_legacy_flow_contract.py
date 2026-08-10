@@ -44,6 +44,9 @@ from src.pipelines.generation.sql_regeneration import (
 from src.pipelines.generation.sql_regeneration import (
     prompt as build_sql_regeneration_prompt,
 )
+from src.pipelines.generation.sql_regeneration import (
+    post_process as sql_regeneration_post_process,
+)
 from src.pipelines.generation.utils.sql import SQL_GENERATION_MODEL_KWARGS
 from src.pipelines.retrieval.sql_functions import SqlFunction
 from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
@@ -97,8 +100,8 @@ def test_sql_generation_prompt_does_not_inject_datasource_dialect_section():
             SqlFunction(
                 {
                     "name": "date_trunc",
-                    "param_types": ["varchar", "timestamp"],
-                    "return_type": "timestamp",
+                    "function_type": "scalar",
+                    "description": "Truncates a timestamp to the specified precision.",
                 }
             )
         ],
@@ -108,7 +111,10 @@ def test_sql_generation_prompt_does_not_inject_datasource_dialect_section():
 
     assert "### SQL DIALECT ###" not in built_prompt
     assert "Configured data source: trino" not in built_prompt
-    assert "date_trunc($0: varchar, $1: timestamp) -> timestamp" in built_prompt
+    assert (
+        "type: scalar, name: DATE_TRUNC, description: Truncates a timestamp to the specified precision."
+        in built_prompt
+    )
 
 
 def test_reasoning_prompt_uses_schema_documents_only():
@@ -227,6 +233,31 @@ def test_sql_regeneration_system_prompt_uses_json_sql_contract():
 
     assert "<SQL_QUERY_STRING>" in prompt
     assert "The final answer must be a ANSI SQL query in JSON format" in prompt
+
+
+@pytest.mark.asyncio
+async def test_sql_regeneration_post_process_preserves_deployment_hash():
+    captured = {}
+
+    class CapturingPostProcessor:
+        async def run(self, replies, **kwargs):
+            captured["replies"] = replies
+            captured.update(kwargs)
+            return {
+                "valid_generation_result": {"sql": "SELECT 1"},
+                "invalid_generation_result": {},
+            }
+
+    await sql_regeneration_post_process(
+        regenerate_sql={"replies": ['{"sql": "SELECT 1"}']},
+        post_processor=CapturingPostProcessor(),
+        project_id="project-id",
+        mdl_hash="deployment-hash",
+    )
+
+    assert captured["replies"] == ['{"sql": "SELECT 1"}']
+    assert captured["project_id"] == "project-id"
+    assert captured["mdl_hash"] == "deployment-hash"
 
 
 @pytest.mark.asyncio

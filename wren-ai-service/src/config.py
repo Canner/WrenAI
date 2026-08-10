@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     column_indexing_batch_size: int = Field(default=50)
     table_retrieval_size: int = Field(default=10)
     table_column_retrieval_size: int = Field(default=100)
-    enable_column_pruning: bool = Field(default=True)
+    enable_column_pruning: bool = Field(default=False)
     historical_question_retrieval_similarity_threshold: float = Field(default=0.9)
     sql_pairs_similarity_threshold: float = Field(default=0.7)
     sql_pairs_retrieval_max_size: int = Field(default=10)
