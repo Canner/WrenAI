@@ -117,6 +117,12 @@ def get_app(project_path: Path, name: str) -> dict | None:
     return entry
 
 
+def deploy_state(entry: dict) -> dict:
+    """The entry's deploy block, or {} when hand-edited to a non-mapping."""
+    d = entry.get("deploy")
+    return d if isinstance(d, dict) else {}
+
+
 def update_app(project_path: Path, name: str, **fields) -> dict:
     """Merge ``fields`` into the entry for ``name`` and persist.
 
