@@ -133,11 +133,12 @@ def create_connector(data_source: DataSource, connection_info) -> MySqlConnector
 # Arrow conversion helpers
 # ---------------------------------------------------------------------------
 
-# MySQL ``DECIMAL(M, D)`` allows ``M`` up to 65 and ``D`` up to 30. Use
-# ``decimal128`` through precision 38 and ``decimal256`` above that boundary.
+# MySQL ``DECIMAL(M, D)`` allows ``M`` up to 65 and ``D`` up to 30. Doris uses
+# the same protocol and supports precision and scale up to 76 when Decimal256 is
+# enabled. Use Arrow's full Decimal256 range so the shared conversion preserves
+# both data sources.
 _ARROW_DECIMAL128_MAX_PRECISION = 38
-_MYSQL_DECIMAL_MAX_PRECISION = 65
-_MYSQL_DECIMAL_MAX_SCALE = 30
+_ARROW_DECIMAL256_MAX_PRECISION = 76
 # Fallback used when ``cursor.description`` does not carry precision/scale
 # (e.g. for the legacy ``FIELD_TYPE.DECIMAL`` code or non-MySQLdb cursors).
 _MYSQL_DECIMAL_FALLBACK_PRECISION = 38
@@ -276,10 +277,11 @@ def _arrow_decimal_from_mysql_field(
 
         M = length - (1 if unsigned else 0) - (1 if D > 0 else 0)
 
-    MySQL allows precision up to 65 and scale up to 30. Arrow ``decimal128``
-    covers precision up to 38, while ``decimal256`` covers every wider MySQL
-    decimal. The previous hard-coded ``decimal128(38, 9)`` would silently lose
-    digits when ``D > 9``.
+    MySQL allows precision up to 65 and scale up to 30. Doris uses the same
+    protocol and supports precision and scale up to 76 when Decimal256 is
+    enabled. Arrow ``decimal128`` covers precision up to 38, while
+    ``decimal256`` covers both data sources' wider decimals. The previous
+    hard-coded ``decimal128(38, 9)`` would silently lose digits when ``D > 9``.
     """
     if display_length is None or display_length <= 0:
         precision = _MYSQL_DECIMAL_FALLBACK_PRECISION
@@ -292,8 +294,8 @@ def _arrow_decimal_from_mysql_field(
             precision = _MYSQL_DECIMAL_FALLBACK_PRECISION
     if scale is None or scale < 0:
         scale = _MYSQL_DECIMAL_FALLBACK_SCALE
-    precision = min(int(precision), _MYSQL_DECIMAL_MAX_PRECISION)
-    scale = min(int(scale), _MYSQL_DECIMAL_MAX_SCALE, precision)
+    precision = min(int(precision), _ARROW_DECIMAL256_MAX_PRECISION)
+    scale = min(int(scale), precision)
     if precision <= _ARROW_DECIMAL128_MAX_PRECISION:
         return pa.decimal128(precision, scale)
     return pa.decimal256(precision, scale)
