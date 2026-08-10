@@ -35,6 +35,7 @@ async def test_wren_ui_dry_plan_calls_graphql_planner():
             "data": {
                 "sql": "SELECT 1",
                 "projectId": "project-id",
+                "hash": "deploy-hash",
                 "allowFallback": False,
             }
         },
@@ -67,6 +68,7 @@ async def test_wren_ui_execute_sql_uses_project_preview_manifest():
     assert captured_request["json"]["variables"]["data"] == {
         "sql": "SELECT 1",
         "projectId": "project-id",
+        "hash": "deploy-hash",
         "dryRun": True,
         "limit": 1,
     }

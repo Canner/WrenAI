@@ -98,7 +98,7 @@ def test_column_pruning_prompt_uses_legacy_history_context():
 
 
 @pytest.mark.asyncio
-async def test_table_retrieval_uses_legacy_project_scope_when_mdl_hash_is_present():
+async def test_table_retrieval_uses_deployment_scope_when_mdl_hash_is_present():
     class Retriever:
         def __init__(self):
             self.calls = []
@@ -125,6 +125,7 @@ async def test_table_retrieval_uses_legacy_project_scope_when_mdl_hash_is_presen
                 "conditions": [
                     {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
                     {"field": "project_id", "operator": "==", "value": PROJECT_ID},
+                    {"field": "mdl_hash", "operator": "==", "value": MDL_HASH},
                 ],
             },
         }
@@ -132,7 +133,7 @@ async def test_table_retrieval_uses_legacy_project_scope_when_mdl_hash_is_presen
 
 
 @pytest.mark.asyncio
-async def test_dbschema_retrieval_resolves_retrieved_tables_with_legacy_project_scope():
+async def test_dbschema_retrieval_resolves_retrieved_tables_with_deployment_scope():
     class Retriever:
         def __init__(self):
             self.filters = None
@@ -176,6 +177,7 @@ async def test_dbschema_retrieval_resolves_retrieved_tables_with_legacy_project_
                 ],
             },
             {"field": "project_id", "operator": "==", "value": PROJECT_ID},
+            {"field": "mdl_hash", "operator": "==", "value": MDL_HASH},
         ],
     }
 
@@ -257,6 +259,83 @@ def test_check_using_db_schemas_without_pruning_triggers_legacy_column_pruning()
 
     assert result["db_schemas"] == []
     assert result["tokens"] > 0
+
+
+def test_question_queries_are_schema_selected_before_sql_generation():
+    result = check_using_db_schemas_without_pruning(
+        construct_db_schemas=[
+            table_schema(MODEL_A, [column(COLUMN_MEASURE, "DOUBLE")])
+        ],
+        dbschema_retrieval=[],
+        encoding=Encoding(),
+        enable_column_pruning=False,
+        context_window_size=1000,
+        query="show journal entries by month",
+    )
+
+    assert result["db_schemas"] == []
+    assert result["tokens"] > 0
+
+
+def test_column_selection_prompt_is_empty_without_schema_context():
+    result = build_column_selection_prompt(
+        query=CURRENT_QUERY,
+        construct_db_schemas=[],
+        dbschema_retrieval=[],
+        prompt_builder=PromptBuilder(
+            template=table_columns_selection_user_prompt_template
+        ),
+        check_using_db_schemas_without_pruning={"db_schemas": []},
+        histories=[],
+    )
+
+    assert result == {}
+
+
+def test_column_selection_prompt_includes_metric_and_view_context():
+    result = build_column_selection_prompt(
+        query=CURRENT_QUERY,
+        construct_db_schemas=[],
+        dbschema_retrieval=[
+            Document(
+                content=str(
+                    {
+                        "type": "METRIC",
+                        "comment": "",
+                        "name": METRIC_MODEL,
+                        "columns": [
+                            {
+                                "type": "COLUMN",
+                                "name": COLUMN_MEASURE,
+                                "data_type": "DOUBLE",
+                                "comment": "",
+                            }
+                        ],
+                    }
+                ),
+                meta={"type": "TABLE_SCHEMA", "name": METRIC_MODEL},
+            ),
+            Document(
+                content=str(
+                    {
+                        "type": "VIEW",
+                        "comment": "",
+                        "name": VIEW_MODEL,
+                        "statement": f"SELECT {COLUMN_ID} FROM {SOURCE_MODEL}",
+                    }
+                ),
+                meta={"type": "TABLE_SCHEMA", "name": VIEW_MODEL},
+            ),
+        ],
+        prompt_builder=PromptBuilder(
+            template=table_columns_selection_user_prompt_template
+        ),
+        check_using_db_schemas_without_pruning={"db_schemas": []},
+        histories=[],
+    )
+
+    assert f"CREATE TABLE {METRIC_MODEL}" in result["prompt"]
+    assert f"CREATE VIEW {VIEW_MODEL}" in result["prompt"]
 
 
 def test_construct_retrieval_results_uses_selected_columns_for_sql_generation():

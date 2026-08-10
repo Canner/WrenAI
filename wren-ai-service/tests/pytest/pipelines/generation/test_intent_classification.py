@@ -18,7 +18,7 @@ class CapturingRetriever:
 
 
 @pytest.mark.asyncio
-async def test_intent_table_retrieval_uses_legacy_project_scope_with_mdl_hash():
+async def test_intent_table_retrieval_uses_deployment_scope_with_mdl_hash():
     retriever = CapturingRetriever()
 
     await table_retrieval(
@@ -33,12 +33,13 @@ async def test_intent_table_retrieval_uses_legacy_project_scope_with_mdl_hash():
         "conditions": [
             {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
             {"field": "project_id", "operator": "==", "value": "project-1"},
+            {"field": "mdl_hash", "operator": "==", "value": "deploy-1"},
         ],
     }
 
 
 @pytest.mark.asyncio
-async def test_intent_dbschema_retrieval_uses_legacy_project_scope_with_mdl_hash():
+async def test_intent_dbschema_retrieval_uses_deployment_scope_with_mdl_hash():
     retriever = CapturingRetriever()
 
     await dbschema_retrieval(
@@ -64,5 +65,6 @@ async def test_intent_dbschema_retrieval_uses_legacy_project_scope_with_mdl_hash
                 ],
             },
             {"field": "project_id", "operator": "==", "value": "project-1"},
+            {"field": "mdl_hash", "operator": "==", "value": "deploy-1"},
         ],
     }

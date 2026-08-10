@@ -15,6 +15,7 @@ from langfuse.decorators import observe
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
 from src.pipelines.common import (
+    build_project_deploy_filter,
     build_table_ddl,
     clean_up_new_lines,
     get_engine_supported_data_type,
@@ -39,6 +40,9 @@ The database schema includes tables, columns, primary keys, foreign keys, relati
 5. The number of columns chosen must match the number of reasoning.
 6. Final chosen columns must be only column names, don't prefix it with table names.
 7. If the chosen column is a child column of a STRUCT type column, choose the parent column instead of the child column.
+8. Select only tables and columns that are explicitly present in the provided database schema.
+9. Do not infer, invent, rename, or approximate table names from the user's wording.
+10. If the provided schema cannot fully support the user's question, return an empty `results` list.
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:
@@ -82,6 +86,7 @@ Please provide your response as a JSON object, structured as follows:
 - Use table name used in the "Create Table" statement, don't use "alias".
 - Match Column names with the definition in the "Create Table" statement.
 - Match Table names with the definition in the "Create Table" statement.
+- If no listed table can answer the question with its listed columns and relationships, return `"results": []`.
 
 Good luck!
 
@@ -101,12 +106,13 @@ table_columns_selection_user_prompt_template = """
 
 def _project_filter_conditions(
     project_id: str | None,
+    mdl_hash: str | None = None,
 ) -> list[dict[str, Any]]:
-    return (
-        [{"field": "project_id", "operator": "==", "value": project_id}]
-        if project_id
-        else []
+    project_deploy_filter = build_project_deploy_filter(
+        project_id=project_id,
+        mdl_hash=mdl_hash,
     )
+    return project_deploy_filter["conditions"] if project_deploy_filter else []
 
 
 def _build_metric_ddl(content: dict) -> str:
@@ -161,7 +167,7 @@ async def table_retrieval(
         ],
     }
 
-    filters["conditions"].extend(_project_filter_conditions(project_id))
+    filters["conditions"].extend(_project_filter_conditions(project_id, mdl_hash))
 
     if embedding:
         return await table_retriever.run(
@@ -206,7 +212,7 @@ async def dbschema_retrieval(
             ],
         }
 
-        filters["conditions"].extend(_project_filter_conditions(project_id))
+        filters["conditions"].extend(_project_filter_conditions(project_id, mdl_hash))
 
         results = await dbschema_retriever.run(query_embedding=[], filters=filters)
         return results["documents"]
@@ -242,6 +248,25 @@ def construct_db_schemas(dbschema_retrieval: list[Document]) -> list[dict]:
     return list(db_schemas.values())
 
 
+def _all_schema_ddls(
+    construct_db_schemas: list[dict],
+    dbschema_retrieval: list[Document] | None,
+) -> list[str]:
+    db_schemas = [
+        build_table_ddl(construct_db_schema)[0]
+        for construct_db_schema in construct_db_schemas
+    ]
+
+    for document in dbschema_retrieval or []:
+        content = ast.literal_eval(document.content)
+        if content["type"] == "METRIC":
+            db_schemas.append(_build_metric_ddl(content))
+        elif content["type"] == "VIEW":
+            db_schemas.append(_build_view_ddl(content))
+
+    return db_schemas
+
+
 @observe(capture_input=False)
 def check_using_db_schemas_without_pruning(
     construct_db_schemas: list[dict],
@@ -249,6 +274,7 @@ def check_using_db_schemas_without_pruning(
     encoding: tiktoken.Encoding,
     enable_column_pruning: bool,
     context_window_size: int,
+    query: str = "",
 ) -> dict:
     retrieval_results = []
     has_calculated_field = False
@@ -292,7 +318,7 @@ def check_using_db_schemas_without_pruning(
         retrieval_result["table_ddl"] for retrieval_result in retrieval_results
     ]
     _token_count = len(encoding.encode(" ".join(table_ddls)))
-    if _token_count > context_window_size or enable_column_pruning:
+    if _token_count > context_window_size or enable_column_pruning or query.strip():
         return {
             "db_schemas": [],
             "tokens": _token_count,
@@ -317,12 +343,12 @@ def prompt(
     prompt_builder: PromptBuilder,
     check_using_db_schemas_without_pruning: dict,
     histories: list[AskHistory],
+    dbschema_retrieval: list[Document] | None = None,
 ) -> dict:
     if not check_using_db_schemas_without_pruning["db_schemas"]:
-        db_schemas = [
-            build_table_ddl(construct_db_schema)[0]
-            for construct_db_schema in construct_db_schemas
-        ]
+        db_schemas = _all_schema_ddls(construct_db_schemas, dbschema_retrieval)
+        if not db_schemas:
+            return {}
 
         previous_query_summaries = (
             [history.question for history in histories] if histories else []
