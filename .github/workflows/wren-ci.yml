@@ -89,7 +89,9 @@ jobs:
             marker: postgres
           - datasource: mysql
             extra: mysql
-            test_file: tests/connectors/test_mysql.py
+            test_file: >-
+              tests/connectors/test_mysql.py
+              tests/connectors/test_mysql_connector.py
             marker: mysql
     defaults:
       run:

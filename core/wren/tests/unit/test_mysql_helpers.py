@@ -205,10 +205,25 @@ def test_decimal_type_high_scale() -> None:
     assert t == pa.decimal128(38, 30)
 
 
+def test_decimal_type_precision_39_starts_decimal256() -> None:
+    # DECIMAL(39, 30) signed → length = 39 + 1 + 1 = 41.
+    t = _arrow_decimal_from_mysql_field(41, 30, is_unsigned=False)
+    assert t == pa.decimal256(39, 30)
+
+
 def test_decimal_type_above_decimal128_uses_decimal256() -> None:
     # DECIMAL(65, 30) signed → length = 65 + 1 + 1 = 67.
     t = _arrow_decimal_from_mysql_field(67, 30, is_unsigned=False)
     assert t == pa.decimal256(65, 30)
+
+
+def test_decimal_type_preserves_doris_decimal256_maximum() -> None:
+    # Doris DECIMAL(76, 76) signed → length = 76 + 1 + 1 = 78.
+    t = _arrow_decimal_from_mysql_field(78, 76, is_unsigned=False)
+    value_decimal = "0." + "9" * 76
+
+    assert t == pa.decimal256(76, 76)
+    assert str(_build_mysql_column([value_decimal], t)[0].as_py()) == value_decimal
 
 
 def test_decimal_type_none_uses_fallback() -> None:
