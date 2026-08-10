@@ -129,6 +129,7 @@ describe('AskingService', () => {
     };
 
     const createService = () => {
+      const manifest = { models: [{ name: 'current_model' }] };
       const service = Object.create(AskingService.prototype) as any;
       service.projectService = {
         getCurrentProject: jest.fn().mockResolvedValue({
@@ -146,7 +147,7 @@ describe('AskingService', () => {
           .mockResolvedValue('latest-deploy-hash'),
       };
       service.mdlService = {
-        makeModelMDL: jest.fn(),
+        makeModelMDL: jest.fn().mockResolvedValue({ manifest }),
       };
       service.threadRepository = {
         createOne: jest.fn().mockResolvedValue({ id: 7, projectId: 1 }),
@@ -163,6 +164,7 @@ describe('AskingService', () => {
         getAskingResult: jest.fn().mockResolvedValue(trackedAskingResult),
         bindThreadResponse: jest.fn().mockResolvedValue(undefined),
       };
+      service.currentManifest = manifest;
       return service;
     };
 
@@ -174,8 +176,14 @@ describe('AskingService', () => {
         sql: 'SELECT stale_recommendation_sql',
       });
 
-      expect(service.deployService.ensureDeploymentPrepared).toHaveBeenCalledWith(1);
-      expect(service.mdlService.makeModelMDL).not.toHaveBeenCalled();
+      expect(service.mdlService.makeModelMDL).toHaveBeenCalledWith({
+        id: 1,
+        language: 'EN',
+      });
+      expect(service.deployService.ensureDeploymentPrepared).toHaveBeenCalledWith(
+        1,
+        service.currentManifest,
+      );
       expect(service.askingTaskTracker.createAskingTask).toHaveBeenCalledWith({
         query: trackedAskingResult.question,
         histories: null,
