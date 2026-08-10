@@ -877,29 +877,26 @@ describe('MDLBuilder', () => {
     });
   });
 
-  it('should prefer refSql over tableReference when both are present.', () => {
+  it('should prefer physical tableReference over stale sanitized refSql.', () => {
     const project = {
       id: 1,
-      type: DataSourceName.POSTGRES,
+      type: DataSourceName.MSSQL,
       displayName: 'wren ai project',
       connectionInfo: {},
-      catalog: 'wrenai',
-      schema: 'public',
       sampleDataset: null,
     } as Project;
     const models = [
       {
         id: 1,
         projectId: 1,
-        displayName: 'Semantic Model',
-        sourceTableName: 'physical_table',
-        referenceName: 'semantic_model',
-        refSql: 'SELECT * FROM physical_schema.physical_table',
+        displayName: 'source.Actual_Table',
+        sourceTableName: 'source.Actual_Table',
+        referenceName: 'source_Actual_Table',
+        refSql: 'SELECT * FROM source_Actual_Table',
         cached: false,
         refreshTime: null,
         properties: JSON.stringify({
-          schema: 'public',
-          table: 'semantic_model',
+          table: 'source.Actual_Table',
         }),
       },
     ] as Model[];
@@ -918,10 +915,12 @@ describe('MDLBuilder', () => {
 
     const manifest = mdlBuilder.build();
 
-    expect(manifest.models[0].tableReference).toBeFalsy();
-    expect(manifest.models[0].refSql).toEqual(
-      'SELECT * FROM physical_schema.physical_table',
-    );
+    expect(manifest.models[0].tableReference).toEqual({
+      catalog: null,
+      schema: 'source',
+      table: 'Actual_Table',
+    });
+    expect(manifest.models[0].refSql).toBeFalsy();
   });
 
   it('should build refSql from tableReference metadata when a model has columns but no refSql.', () => {

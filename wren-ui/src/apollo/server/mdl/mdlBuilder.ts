@@ -539,10 +539,6 @@ export class MDLBuilder implements IMDLBuilder {
         ? JSON.parse(model.properties)
         : {};
 
-    if (model.refSql) {
-      return null;
-    }
-
     if (modelProps.table) {
       return this.parseTableReference(
         modelProps.table,
