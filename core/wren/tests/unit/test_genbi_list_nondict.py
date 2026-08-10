@@ -5,7 +5,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from wren.genbi.cli import genbi_app
-from wren.genbi.index import deploy_state, save_index
+from wren.genbi.index import save_index
 
 
 def test_list_reports_non_dict_entry(tmp_path: Path) -> None:
@@ -47,10 +47,3 @@ def test_list_tolerates_non_dict_deploy_block(tmp_path: Path) -> None:
     assert "good" in result.stdout
     assert "https://x" not in result.stdout
 
-
-def test_deploy_state_normalizes_non_dict() -> None:
-    assert deploy_state({"deploy": "https://x"}) == {}
-    assert deploy_state({"deploy": {"last_url": "https://ok"}}) == {
-        "last_url": "https://ok"
-    }
-    assert deploy_state({}) == {}

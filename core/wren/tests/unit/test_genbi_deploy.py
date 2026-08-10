@@ -92,6 +92,37 @@ class _FakeTransport:
         return self.response
 
 
+def test_deploy_tolerates_scalar_deploy_block(tmp_path: Path, monkeypatch) -> None:
+    """Regression: non-dict entry['deploy'] must not AttributeError in providers.
+
+    goldmedal mutation-check: reverting link=deploy_state(entry) or None back to
+    entry.get("deploy") must fail this test.
+    """
+    project = _make_deployable_project(tmp_path)
+    apps_yml = project / ".wren" / "apps.yml"
+    index = yaml.safe_load(apps_yml.read_text())
+    index["apps"]["myapp"]["deploy"] = "https://x"
+    apps_yml.write_text(yaml.safe_dump(index))
+
+    monkeypatch.setenv("VERCEL_TOKEN", "tok-123")
+    fake = _FakeTransport(
+        {"id": "dpl_1", "url": "myapp-abc.vercel.app", "projectId": "prj_9"}
+    )
+    monkeypatch.setattr(vercel, "_request", fake)
+
+    result = runner.invoke(
+        app, ["genbi", "deploy", "myapp", "--provider", "vercel", "-p", str(project)]
+    )
+
+    assert not isinstance(result.exception, AttributeError), result.exception
+    assert result.exit_code == 0, (result.exception, result.output)
+    # provider must have been called with link=None (normalized), not a str
+    assert fake.calls, "provider was not invoked"
+    # _request path does not include link; success without AttributeError is the guard.
+    index_after = yaml.safe_load(apps_yml.read_text())
+    assert isinstance(index_after["apps"]["myapp"]["deploy"], dict)
+
+
 def test_deploy_vercel_uploads_and_persists_state(tmp_path: Path, monkeypatch) -> None:
     project = _make_deployable_project(tmp_path)
     monkeypatch.setenv("VERCEL_TOKEN", "tok-123")

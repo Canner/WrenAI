@@ -224,3 +224,14 @@ def test_update_app_rejects_non_dict_entry(tmp_path: Path) -> None:
     save_index(tmp_path, {"schema_version": 1, "apps": {"bad": "not-a-map"}})
     with pytest.raises(KeyError):
         update_app(tmp_path, "bad", status="deployed")
+
+
+def test_deploy_state_normalizes_non_dict() -> None:
+    from wren.genbi.index import deploy_state
+
+    assert deploy_state({"deploy": "https://x"}) == {}
+    assert deploy_state({"deploy": {"last_url": "https://ok"}}) == {
+        "last_url": "https://ok"
+    }
+    assert deploy_state({}) == {}
+

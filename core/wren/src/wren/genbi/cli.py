@@ -364,7 +364,7 @@ def deploy(
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
 
-    deploy_state = {
+    deploy_record = {
         "provider": adapter.name,
         "project_id": deployment.project_id,
         "org_id": deployment.org_id,
@@ -373,5 +373,5 @@ def deploy(
         "last_deployed_at": date.today().isoformat(),
         "environment": deployment.environment,
     }
-    update_app(project_path, name, status="deployed", deploy=deploy_state)
+    update_app(project_path, name, status="deployed", deploy=deploy_record)
     typer.echo(f"Deployed {name} ({deployment.environment}): {deployment.url}")
