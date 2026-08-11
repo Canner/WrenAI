@@ -108,6 +108,11 @@
           "jsonpath": "$.workspace.dependencies.wren-core-base.version"
         },
         {
+          "path": "/core/wren-core-py/Cargo.toml",
+          "type": "toml",
+          "jsonpath": "$.dependencies.wren-core.version"
+        },
+        {
           "path": "/core/wren-core-py/Cargo.lock",
           "type": "toml",
           "jsonpath": "$.package[?(@.name.value=='wren-semantic-core')].version"
