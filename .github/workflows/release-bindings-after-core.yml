@@ -1,0 +1,171 @@
+name: Release bindings after a core release
+
+# wren-core-py and wren-core-wasm depend on the Rust core by path alone, and
+# release-please attributes commits to packages by file path. An engine change
+# under core/wren-core is therefore attributed to wren-semantic-core and never
+# to the bindings, so no release PR is ever opened for them — and the release
+# commit that bumps the core crates is a chore commit release-please skips by
+# design, so it cannot serve as the trigger either.
+#
+# This workflow closes that gap. After the core crates release, it refreshes the
+# two binding lockfiles against the new core version and opens a PR whose commit
+# touches both binding directories. Merging that PR is what gives the bindings a
+# release line of their own.
+#
+# The lockfile refresh used to happen inside the release commit (release-please
+# extra-files). It was moved here deliberately: anything the release commit
+# writes cannot trigger the next release. No workflow builds the bindings with
+# `cargo --locked`, so the lag between the release commit and this PR breaks
+# nothing, and the bindings' release tags are cut after this PR merges, so a
+# published wheel still ships a synced lockfile.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Released wren-core version (e.g. 0.3.1)"
+        required: true
+        type: string
+  # Manual fallback: re-run if the automatic run failed or was skipped.
+  # Leave version blank to use the release tracked in the repo.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "wren-core version to sync to; blank = .release-please-manifest.json"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# Serialize runs so two can't push the same branch at once. Constant key (not
+# per-version) because a blank-dispatch version is only known at run time.
+concurrency:
+  group: release-bindings-after-core
+  cancel-in-progress: false
+
+jobs:
+  sync-and-open-pr:
+    if: ${{ github.repository == 'Canner/WrenAI' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          # The release job takes minutes; main may have moved. Base the PR on
+          # main tip.
+          ref: main
+          # Keep the write token out of .git/config; the push re-authenticates.
+          persist-credentials: false
+
+      - name: Resolve and validate version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          # workflow_call always passes the released version; manual runs may
+          # omit it and fall back to the release tracked in the repo.
+          version="${INPUT_VERSION:-$(jq -r '."core/wren-core"' .release-please-manifest.json)}"
+          # Guard a malformed version out of the assertion, branch name, and PR.
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Unsupported version: ${version}. Expected X.Y.Z."
+            exit 1
+          fi
+          echo "Syncing bindings to wren-core ${version}"
+          echo "VERSION=${version}" >> "$GITHUB_ENV"
+
+      - name: Refresh binding lockfiles
+        run: |
+          for dir in core/wren-core-py core/wren-core-wasm; do
+            # Re-resolve against the bumped path crates. cargo rewrites only
+            # what must change, so registry dependencies keep their locked
+            # versions and the diff stays limited to the core crates.
+            cargo metadata --manifest-path "${dir}/Cargo.toml" --format-version 1 >/dev/null
+          done
+
+      - name: Assert the lockfiles record the released version
+        env:
+          RELEASED_VERSION: ${{ env.VERSION }}
+        shell: python
+        run: |
+          import os, sys, tomllib
+
+          released = os.environ["RELEASED_VERSION"]
+          # The three crates are linked to a single version by release-please,
+          # so every one of them must read as the version just released.
+          tracked = {"wren-semantic-core", "wren-core-base", "wren-manifest-macro"}
+          failed = False
+          for path in ("core/wren-core-py/Cargo.lock", "core/wren-core-wasm/Cargo.lock"):
+              with open(path, "rb") as handle:
+                  packages = tomllib.load(handle)["package"]
+              found = {p["name"]: p["version"] for p in packages if p["name"] in tracked}
+              missing = tracked - found.keys()
+              if missing:
+                  print(f"::error::{path} is missing {', '.join(sorted(missing))}")
+                  failed = True
+              for name, version in sorted(found.items()):
+                  if version != released:
+                      print(f"::error::{path}: {name} is {version}, expected {released}")
+                      failed = True
+          sys.exit(1 if failed else 0)
+
+      - name: Detect changes
+        id: diff
+        run: |
+          if git diff --quiet -- core/wren-core-py/Cargo.lock core/wren-core-wasm/Cargo.lock; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Report a no-op
+        if: steps.diff.outputs.changed == 'false'
+        run: |
+          echo "::warning::Binding lockfiles already record wren-core ${VERSION};" \
+            "no commit to open, so no binding release will be triggered."
+
+      # Opened with GITHUB_TOKEN, like sync-wren-core-py-lock.yml. GitHub puts
+      # the pull_request runs of a token-created PR in an approval-required
+      # state, so whoever reviews it also clicks "Approve and run workflows"
+      # once. A PAT or App installation token would remove that click at the
+      # cost of a long-lived credential in the repo; the click is cheaper.
+      - name: Open the binding release PR
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="fix/release-bindings-wren-core-${VERSION}"
+          TITLE="fix(bindings): build against wren-core ${VERSION}"
+          # If a PR is already open for this bump, leave it untouched.
+          if [ "$(gh pr list --repo "${GITHUB_REPOSITORY}" --state open --head "${BRANCH}" --json number --jq 'length')" != "0" ]; then
+            echo "Open PR for ${BRANCH} already exists; leaving it untouched."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "${BRANCH}"
+          git add core/wren-core-py/Cargo.lock core/wren-core-wasm/Cargo.lock
+          git commit -m "${TITLE}"
+          # No open PR: --force only overwrites a leftover branch from a closed
+          # PR. Auth the push explicitly since credentials aren't persisted.
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@${GITHUB_SERVER_URL#https://}/${GITHUB_REPOSITORY}.git" \
+            "${BRANCH}"
+          cat > "${RUNNER_TEMP}/pr-body.md" <<EOF
+          Automated follow-up to the wren-core ${VERSION} release. Relocks
+          core/wren-core-py and core/wren-core-wasm against the released core crates.
+
+          Merging this PR is what gives the bindings a release: it is a fix commit under
+          both binding directories, so release-please will open a release PR for
+          wren-core-py and wren-core-wasm. Without it the bindings have no commit of their
+          own, and the engine change never reaches PyPI or npm.
+
+          **Keep the title as-is when squashing** — release-please reads it as the commit
+          subject.
+          EOF
+          gh pr create \
+            --repo "${GITHUB_REPOSITORY}" \
+            --base main \
+            --head "${BRANCH}" \
+            --title "${TITLE}" \
+            --body-file "${RUNNER_TEMP}/pr-body.md"

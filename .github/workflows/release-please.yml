@@ -126,3 +126,19 @@ jobs:
     permissions:
       contents: read
       id-token: write
+
+  # wren-core-py and wren-core-wasm depend on the core crates by path, so
+  # release-please never attributes an engine change to them and they would
+  # otherwise never release. Relock them against the new core version and open a
+  # PR whose fix commit gives them a release line. Deliberately not gated on
+  # publish-wren-crates: a crates.io publish failure should not also keep the
+  # engine change out of PyPI and npm.
+  release-bindings-after-core:
+    needs: release-please
+    if: needs.release-please.outputs['wren-semantic-core--release_created'] == 'true'
+    uses: ./.github/workflows/release-bindings-after-core.yml
+    with:
+      version: ${{ needs.release-please.outputs['wren-semantic-core--version'] }}
+    permissions:
+      contents: write
+      pull-requests: write
