@@ -195,7 +195,7 @@ def register(
 @genbi_app.command(name="list")
 def list_apps(path: ProjectPathOpt = None) -> None:
     """List registered apps with data mode, status, and deploy state."""
-    from wren.genbi.index import load_index  # noqa: PLC0415
+    from wren.genbi.index import deploy_state, load_index  # noqa: PLC0415
 
     project_path = _discover(path)
     apps = load_index(project_path)["apps"]
@@ -204,8 +204,11 @@ def list_apps(path: ProjectPathOpt = None) -> None:
         return
 
     for name, entry in apps.items():
-        deploy = entry.get("deploy") or {}
-        suffix = f" → {deploy['last_url']}" if deploy.get("last_url") else ""
+        if not isinstance(entry, dict):
+            typer.echo(f"{name}  [invalid entry: {type(entry).__name__}]", err=True)
+            continue
+        last_url = deploy_state(entry).get("last_url")
+        suffix = f" → {last_url}" if last_url else ""
         typer.echo(
             f"{name}  [{entry.get('data_mode', '?')}, {entry.get('status', '?')}]"
             f"{suffix}"
@@ -311,7 +314,7 @@ def deploy(
     """Verify, then ship a registered app to the user's provider account."""
     from datetime import date  # noqa: PLC0415
 
-    from wren.genbi.index import update_app  # noqa: PLC0415
+    from wren.genbi.index import deploy_state, update_app  # noqa: PLC0415
     from wren.genbi.providers import get_provider  # noqa: PLC0415
     from wren.genbi.providers.base import DeployError  # noqa: PLC0415
     from wren.genbi.tokens import resolve_token  # noqa: PLC0415
@@ -355,13 +358,13 @@ def deploy(
             app_name=name,
             token=token,
             prod=prod,
-            link=entry.get("deploy"),
+            link=deploy_state(entry) or None,
         )
     except DeployError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
 
-    deploy_state = {
+    deploy_record = {
         "provider": adapter.name,
         "project_id": deployment.project_id,
         "org_id": deployment.org_id,
@@ -370,5 +373,5 @@ def deploy(
         "last_deployed_at": date.today().isoformat(),
         "environment": deployment.environment,
     }
-    update_app(project_path, name, status="deployed", deploy=deploy_state)
+    update_app(project_path, name, status="deployed", deploy=deploy_record)
     typer.echo(f"Deployed {name} ({deployment.environment}): {deployment.url}")

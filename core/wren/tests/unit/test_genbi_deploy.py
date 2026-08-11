@@ -92,6 +92,54 @@ class _FakeTransport:
         return self.response
 
 
+def test_deploy_tolerates_scalar_deploy_block(tmp_path: Path, monkeypatch) -> None:
+    """Regression: non-dict entry['deploy'] must not AttributeError in providers.
+
+    goldmedal mutation-check: reverting link=deploy_state(entry) or None back to
+    entry.get("deploy") must fail this test.
+    """
+    import wren.genbi.providers as providers  # noqa: PLC0415
+
+    project = _make_deployable_project(tmp_path)
+    apps_yml = project / ".wren" / "apps.yml"
+    index = yaml.safe_load(apps_yml.read_text())
+    index["apps"]["myapp"]["deploy"] = "https://x"
+    apps_yml.write_text(yaml.safe_dump(index))
+
+    monkeypatch.setenv("VERCEL_TOKEN", "tok-123")
+    fake = _FakeTransport(
+        {"id": "dpl_1", "url": "myapp-abc.vercel.app", "projectId": "prj_9"}
+    )
+    monkeypatch.setattr(vercel, "_request", fake)
+
+    link_args: list[object] = []
+    real_get_provider = providers.get_provider
+
+    def _spy_get_provider(name: str):
+        adapter = real_get_provider(name)
+        real_deploy = adapter.deploy
+
+        def _deploy(*args, **kwargs):
+            link_args.append(kwargs.get("link", args[3] if len(args) > 3 else None))
+            return real_deploy(*args, **kwargs)
+
+        adapter.deploy = _deploy  # type: ignore[method-assign]
+        return adapter
+
+    monkeypatch.setattr(providers, "get_provider", _spy_get_provider)
+
+    result = runner.invoke(
+        app, ["genbi", "deploy", "myapp", "--provider", "vercel", "-p", str(project)]
+    )
+
+    assert not isinstance(result.exception, AttributeError), result.exception
+    assert result.exit_code == 0, (result.exception, result.output)
+    assert fake.calls, "provider was not invoked"
+    assert link_args == [None], f"provider link must be None for scalar deploy, got {link_args!r}"
+    index_after = yaml.safe_load(apps_yml.read_text())
+    assert isinstance(index_after["apps"]["myapp"]["deploy"], dict)
+
+
 def test_deploy_vercel_uploads_and_persists_state(tmp_path: Path, monkeypatch) -> None:
     project = _make_deployable_project(tmp_path)
     monkeypatch.setenv("VERCEL_TOKEN", "tok-123")
