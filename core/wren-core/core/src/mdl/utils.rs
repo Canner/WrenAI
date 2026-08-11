@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use crate::logical_plan::utils::{from_qualified_name, try_map_data_type};
 use crate::mdl::manifest::Model;
-use crate::mdl::{AnalyzedWrenMDL, ColumnReference, Dataset, SessionStateRef};
+use crate::mdl::{AnalyzedWrenMDL, ColumnReference, Dataset, SessionStateRef, WrenMDL};
 
 pub fn to_expr_queue(column: Column) -> VecDeque<String> {
     column.name.split('.').map(String::from).collect()
@@ -188,15 +188,22 @@ pub fn create_wren_calculated_field_expr(
         .collect::<Vec<String>>();
     // Remove all relationship fields from the expression. Only keep the target expression and its source table.
     let expr = column_rf.column.expression.clone().unwrap();
+    let base_model = column_rf.dataset.name();
     let session_state = session_state.read();
     let mut expr = session_state
         .sql_to_expr(&expr, &session_state.config_options().sql_parser.dialect)?;
     let _ = visit_expressions_mut(&mut expr, |e| {
         if let CompoundIdentifier(ids) = e {
-            let name_size = ids.len();
-            if name_size > 2 {
-                let slice = &ids[name_size - 2..name_size];
-                *e = CompoundIdentifier(slice.to_vec());
+            if let Some(resolved) =
+                resolve_relationship_path(&analyzed_wren_mdl.wren_mdl, base_model, ids)
+            {
+                *e = CompoundIdentifier(resolved);
+            } else {
+                let name_size = ids.len();
+                if name_size > 2 {
+                    let slice = &ids[name_size - 2..name_size];
+                    *e = CompoundIdentifier(slice.to_vec());
+                }
             }
         }
         ControlFlow::<()>::Continue(())
@@ -214,6 +221,49 @@ pub fn create_wren_calculated_field_expr(
         return plan_err!("Error for creating schemas: {}", qualified_col);
     };
     session_state.create_logical_expr(&expr.to_string(), &schema)
+}
+
+/// Rewrite a relationship path so that it is qualified by the model the path lands on.
+///
+/// A relationship column is a handle whose name is local to the model declaring it, so a
+/// handle `customer` on `orders` may point at the model `customers`. The schema the
+/// expression is planned against is built from the lineage's required fields and is
+/// therefore qualified by model name, so each handle has to be translated to the model it
+/// resolves to. A handle named after its own model translates to itself, which is why only
+/// a differing name fails.
+///
+/// On `orders`, both `customer.name` and `orders.customer.name` become `customers.name`.
+/// Returns `None` when the path traverses no relationship, leaving the identifier alone.
+fn resolve_relationship_path(
+    wren_mdl: &WrenMDL,
+    base_model: &str,
+    ids: &[Ident],
+) -> Option<Vec<Ident>> {
+    let (column, path) = ids.split_last()?;
+    let mut relation = base_model.to_string();
+    let mut traversed = false;
+    for ident in path {
+        // the path may be written starting from the model owning the calculated field
+        if ident.value == relation {
+            continue;
+        }
+        let column_ref = wren_mdl.get_column_reference(&from_qualified_name(
+            wren_mdl,
+            &relation,
+            &ident.value,
+        ))?;
+        let relationship =
+            wren_mdl.get_relationship(column_ref.column.relationship.as_ref()?)?;
+        // Resolve the related model the way [`crate::mdl::lineage`] does, so the qualifier
+        // matches the schema built from the required fields it collected.
+        relation = relationship
+            .models
+            .iter()
+            .find(|model| *model != &relation)?
+            .clone();
+        traversed = true;
+    }
+    traversed.then(|| vec![quoted_ident(&relation), column.clone()])
 }
 
 /// Create the Logical Expr for the remote column.
@@ -350,8 +400,12 @@ mod tests {
 
     use datafusion::error::Result;
     use datafusion::prelude::SessionContext;
+    use wren_core_base::mdl::JoinType;
 
     use crate::logical_plan::utils::from_qualified_name;
+    use crate::mdl::builder::{
+        ColumnBuilder, ManifestBuilder, ModelBuilder, RelationshipBuilder,
+    };
     use crate::mdl::context::Mode;
     use crate::mdl::manifest::Manifest;
     use crate::mdl::AnalyzedWrenMDL;
@@ -385,6 +439,76 @@ mod tests {
             ctx.state_ref(),
         )?;
         assert_eq!(expr.to_string(), "customer.c_name");
+        Ok(())
+    }
+
+    /// A relationship handle is a local alias, so its name need not match the model it
+    /// points at. Here the handle `customer` on `orders` resolves to the model `customers`.
+    #[test]
+    fn test_create_wren_expr_handle_name_differs_from_model() -> Result<()> {
+        let manifest = ManifestBuilder::new()
+            .catalog("wren")
+            .schema("test")
+            .model(
+                ModelBuilder::new("orders")
+                    .table_reference("orders")
+                    .column(ColumnBuilder::new("order_id", "integer").build())
+                    .column(ColumnBuilder::new("customer_id", "integer").build())
+                    .column(
+                        ColumnBuilder::new_relationship(
+                            "customer",
+                            "customers",
+                            "orders_customers",
+                        )
+                        .build(),
+                    )
+                    .column(
+                        ColumnBuilder::new_calculated("customer_name", "varchar")
+                            .expression("customer.name")
+                            .build(),
+                    )
+                    .primary_key("order_id")
+                    .build(),
+            )
+            .model(
+                ModelBuilder::new("customers")
+                    .table_reference("customers")
+                    .column(ColumnBuilder::new("customer_id", "integer").build())
+                    .column(ColumnBuilder::new("name", "varchar").build())
+                    .primary_key("customer_id")
+                    .build(),
+            )
+            .relationship(
+                RelationshipBuilder::new("orders_customers")
+                    .model("orders")
+                    .model("customers")
+                    .join_type(JoinType::ManyToOne)
+                    .condition("orders.customer_id = customers.customer_id")
+                    .build(),
+            )
+            .build();
+        let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+            manifest,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        )?);
+        let ctx = SessionContext::new();
+        let column_rf = analyzed_mdl
+            .wren_mdl
+            .qualified_references
+            .get(&from_qualified_name(
+                &analyzed_mdl.wren_mdl,
+                "orders",
+                "customer_name",
+            ))
+            .unwrap();
+        let expr = super::create_wren_calculated_field_expr(
+            column_rf.clone(),
+            Arc::clone(&analyzed_mdl),
+            ctx.state_ref(),
+        )?;
+        // qualified by the related model, not by the handle that reached it
+        assert_eq!(expr.to_string(), "customers.name");
         Ok(())
     }
 

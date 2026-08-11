@@ -2122,6 +2122,66 @@ mod test {
         Ok(())
     }
 
+    /// A relationship handle names the join locally, so it may differ from the model it
+    /// points at. Here the handle `customer` on `orders` resolves to the model `customers`.
+    #[tokio::test]
+    async fn test_calculated_column_with_aliased_relationship_handle() -> Result<()> {
+        let ctx = create_wren_ctx(None, None);
+        let manifest = ManifestBuilder::new()
+            .catalog("wren")
+            .schema("test")
+            .model(
+                ModelBuilder::new("orders")
+                    .table_reference("orders")
+                    .column(ColumnBuilder::new("order_id", "int").build())
+                    .column(ColumnBuilder::new("customer_id", "int").build())
+                    .column(
+                        ColumnBuilder::new_relationship(
+                            "customer",
+                            "customers",
+                            "orders_customers",
+                        )
+                        .build(),
+                    )
+                    .column(
+                        ColumnBuilder::new_calculated("customer_name", "string")
+                            .expression("customer.name")
+                            .build(),
+                    )
+                    .primary_key("order_id")
+                    .build(),
+            )
+            .model(
+                ModelBuilder::new("customers")
+                    .table_reference("customers")
+                    .column(ColumnBuilder::new("customer_id", "int").build())
+                    .column(ColumnBuilder::new("name", "string").build())
+                    .primary_key("customer_id")
+                    .build(),
+            )
+            .relationship(
+                RelationshipBuilder::new("orders_customers")
+                    .model("orders")
+                    .model("customers")
+                    .join_type(JoinType::ManyToOne)
+                    .condition("orders.customer_id = customers.customer_id")
+                    .build(),
+            )
+            .build();
+        let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+            manifest,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        )?);
+
+        let sql = "SELECT order_id, customer_name FROM orders";
+        assert_snapshot!(
+            transform_sql_with_ctx(&ctx, Arc::clone(&analyzed_mdl), &[], Arc::new(HashMap::new()), sql).await?,
+            @r#"SELECT orders.order_id, orders.customer_name FROM (SELECT __relation__1."name" AS customer_name, __relation__1.order_id FROM (SELECT orders.customer_id, customers."name", orders.order_id FROM (SELECT customers.customer_id, customers."name" FROM (SELECT customers.customer_id, customers."name" FROM (SELECT __source.customer_id AS customer_id, __source."name" AS "name" FROM customers AS __source) AS customers) AS customers) AS customers RIGHT OUTER JOIN (SELECT __source.customer_id AS customer_id, __source.order_id AS order_id FROM orders AS __source) AS orders ON customers.customer_id = orders.customer_id) AS __relation__1) AS orders"#
+        );
+        Ok(())
+    }
+
     #[tokio::test]
     async fn test_rlac_with_requried_properties() -> Result<()> {
         let ctx = create_wren_ctx(None, None);
