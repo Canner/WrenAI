@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/Canner/WrenAI/compare/wren-semantic-core-v0.3.0...wren-semantic-core-v0.3.1) (2026-08-10)
+
+
+### Bug Fixes
+
+* **core:** keep RLAC cycle-detection state per analyzer invocation ([#2619](https://github.com/Canner/WrenAI/issues/2619)) ([d754985](https://github.com/Canner/WrenAI/commit/d754985ffe9040d7eaed9d079fbe6bae2e4d69b4))
+
 ## [0.3.0](https://github.com/Canner/WrenAI/compare/wren-semantic-core-v0.2.0...wren-semantic-core-v0.3.0) (2026-07-20)
 
 
