@@ -337,7 +337,6 @@ class IntentClassificationResult(BaseModel):
 
 
 INTENT_CLASSIFICAION_MODEL_KWARGS = {
-    "preserve_json_schema": True,
     "response_format": {
         "type": "json_schema",
         "json_schema": {
