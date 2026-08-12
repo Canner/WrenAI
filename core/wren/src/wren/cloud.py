@@ -253,28 +253,56 @@ def _git_config_set_global(key: str, value: str) -> None:
     run_git(["config", "--global", "--replace-all", key, value])
 
 
+def _git_config_add_global(key: str, value: str) -> None:
+    run_git(["config", "--global", "--add", key, value])
+
+
 def configure_git_credential_helper(git_host: str) -> None:
     """Write a URL-scoped credential-helper entry into the global git config.
 
-    Both settings are required, for different reasons:
+    Three settings are written into the `credential.<git_host>` section, and
+    the order matters:
 
-    - The section is scoped to exactly `git_host` — this helper must never
-      apply to a git host the user did not explicitly log in to.
-    - `useHttpPath` makes git additionally hand the helper the request path
-      (`git/org/{org}/{project}/name.git`); without it git only passes
-      `protocol` + `host`, and the helper has no way to know which
-      project's token to mint. This is why `login` needs no separate
-      per-directory state — the binding lives in the git remote, which git
-      already manages.
+    1. An **empty** `helper =` value, written first.
+    2. Our own helper, `!wren cloud git-credential`.
+    3. `useHttpPath = true`.
 
-    The helper value must be `!`-prefixed: git only runs a helper string
+    The empty entry (1) exists because of a helper the user did not put
+    there: macOS's git ships `credential.helper = osxkeychain` in the
+    Command Line Tools' own gitconfig file (visible via `git config
+    --show-origin --get-all credential.helper`, but invisible to `git config
+    --system` — it is a *different* file git still reads before global
+    config). Because system config is consulted before global config, that
+    helper would otherwise answer `get` before ours does, handing git a
+    stale cached credential instead of a freshly minted one. Worse, because
+    this design deliberately never caches a token, git's `store` call fires
+    on every single operation, and *that* helper caches the ephemeral token
+    into the keychain anyway — the exact thing not-caching exists to avoid.
+    An empty `helper` value resets the helper chain accumulated so far,
+    scoped to this section, so it clears only the chain for this specific
+    host; a clone of some other host is unaffected and still gets its
+    keychain helper.
+
+    `useHttpPath` (3) makes git additionally hand the helper the request
+    path (`git/org/{org}/{project}/name.git`); without it git only passes
+    `protocol` + `host`, and the helper has no way to know which project's
+    token to mint. This is why `login` needs no separate per-directory
+    state — the binding lives in the git remote, which git already manages.
+
+    Our helper value (2) must be `!`-prefixed: git only runs a helper string
     through a shell (and appends the `get`/`store`/`erase` argument
     correctly) when it starts with `!`. A bare multi-word value like
     `wren cloud git-credential` would instead have `git-credential-`
     prepended to just its first word, which is not what we want.
+
+    Re-running this (e.g. a second `wren cloud login`) stays idempotent:
+    `--replace-all` first collapses the `helper` key back down to the single
+    empty value before `--add` appends our helper again, so the section
+    never accumulates duplicate entries across repeated logins.
     """
     section = f"credential.{git_host}"
-    _git_config_set_global(f"{section}.helper", "!wren cloud git-credential")
+    _git_config_set_global(f"{section}.helper", "")
+    _git_config_add_global(f"{section}.helper", "!wren cloud git-credential")
     _git_config_set_global(f"{section}.useHttpPath", "true")
 
 
@@ -492,6 +520,23 @@ def pull(
 
     if not is_repo_here:
         run_git(["init"], cwd=target)
+
+    # Whether the existing files still need a local commit is decided by
+    # asking git directly ("does HEAD resolve to a real commit?"), not by
+    # whether `.git` exists. `.git` existing only tells us *some* previous
+    # attempt got as far as `init` — if that attempt then failed inside
+    # `commit` (e.g. missing git identity) and the caller retries, `.git`
+    # is already there but HEAD is still unborn. Keying off `.git` alone
+    # would skip straight to the remote merge below against that unborn
+    # HEAD, silently turning the unrelated-history merge this command
+    # exists to do safely into a trivial fast-forward instead.
+    head_is_born = (
+        run_git(
+            ["rev-parse", "--verify", "-q", "HEAD"], cwd=target, check=False
+        ).returncode
+        == 0
+    )
+    if not head_is_born:
         # Give the existing files a local commit so the merge below has an
         # actual history to reconcile against — otherwise an unborn HEAD
         # would just fast-forward onto the remote instead of exercising the
