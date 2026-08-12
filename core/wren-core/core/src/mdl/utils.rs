@@ -229,10 +229,14 @@ pub fn create_wren_calculated_field_expr(
 /// handle `customer` on `orders` may point at the model `customers`. The schema the
 /// expression is planned against is built from the lineage's required fields and is
 /// therefore qualified by model name, so each handle has to be translated to the model it
-/// resolves to. A handle named after its own model translates to itself, which is why only
-/// a differing name fails.
+/// resolves to. On `orders`, `customer.name` becomes `customers.name`.
 ///
-/// On `orders`, both `customer.name` and `orders.customer.name` become `customers.name`.
+/// Every component before the column is a handle on the model reached so far, the first
+/// one included: [`crate::mdl::lineage`] walks the path the same way and rejects a leading
+/// component that is not a column of the base model, so a path cannot arrive here carrying
+/// its own model as a qualifier. A handle that shares a name with the model declaring it
+/// is therefore still a handle.
+///
 /// Returns `None` when the path traverses no relationship, leaving the identifier alone.
 fn resolve_relationship_path(
     wren_mdl: &WrenMDL,
@@ -240,13 +244,11 @@ fn resolve_relationship_path(
     ids: &[Ident],
 ) -> Option<Vec<Ident>> {
     let (column, path) = ids.split_last()?;
+    if path.is_empty() {
+        return None;
+    }
     let mut relation = base_model.to_string();
-    let mut traversed = false;
     for ident in path {
-        // the path may be written starting from the model owning the calculated field
-        if ident.value == relation {
-            continue;
-        }
         let column_ref = wren_mdl.get_column_reference(&from_qualified_name(
             wren_mdl,
             &relation,
@@ -261,9 +263,8 @@ fn resolve_relationship_path(
             .iter()
             .find(|model| *model != &relation)?
             .clone();
-        traversed = true;
     }
-    traversed.then(|| vec![quoted_ident(&relation), column.clone()])
+    Some(vec![quoted_ident(&relation), column.clone()])
 }
 
 /// Create the Logical Expr for the remote column.
@@ -509,6 +510,114 @@ mod tests {
         )?;
         // qualified by the related model, not by the handle that reached it
         assert_eq!(expr.to_string(), "customers.name");
+        Ok(())
+    }
+
+    /// A handle may share a name with the model that declares it. It is still a handle:
+    /// every component before the column names a relationship on the model reached so
+    /// far, the first one included.
+    #[test]
+    fn test_create_wren_expr_handle_named_after_its_own_model() -> Result<()> {
+        let manifest = ManifestBuilder::new()
+            .catalog("wren")
+            .schema("test")
+            .model(
+                ModelBuilder::new("orders")
+                    .table_reference("orders")
+                    .column(ColumnBuilder::new("order_id", "integer").build())
+                    .column(ColumnBuilder::new("customer_id", "integer").build())
+                    .column(
+                        ColumnBuilder::new_relationship(
+                            "orders",
+                            "customers",
+                            "orders_customers",
+                        )
+                        .build(),
+                    )
+                    .column(
+                        ColumnBuilder::new_calculated("customer_name", "varchar")
+                            .expression("orders.name")
+                            .build(),
+                    )
+                    .column(
+                        ColumnBuilder::new_calculated("customer_city", "varchar")
+                            .expression("orders.customers.name")
+                            .build(),
+                    )
+                    .primary_key("order_id")
+                    .build(),
+            )
+            .model(
+                ModelBuilder::new("customers")
+                    .table_reference("customers")
+                    .column(ColumnBuilder::new("customer_id", "integer").build())
+                    .column(ColumnBuilder::new("city_id", "integer").build())
+                    .column(ColumnBuilder::new("name", "varchar").build())
+                    .column(
+                        ColumnBuilder::new_relationship(
+                            "customers",
+                            "cities",
+                            "customers_cities",
+                        )
+                        .build(),
+                    )
+                    .primary_key("customer_id")
+                    .build(),
+            )
+            .model(
+                ModelBuilder::new("cities")
+                    .table_reference("cities")
+                    .column(ColumnBuilder::new("city_id", "integer").build())
+                    .column(ColumnBuilder::new("name", "varchar").build())
+                    .primary_key("city_id")
+                    .build(),
+            )
+            .relationship(
+                RelationshipBuilder::new("orders_customers")
+                    .model("orders")
+                    .model("customers")
+                    .join_type(JoinType::ManyToOne)
+                    .condition("orders.customer_id = customers.customer_id")
+                    .build(),
+            )
+            .relationship(
+                RelationshipBuilder::new("customers_cities")
+                    .model("customers")
+                    .model("cities")
+                    .join_type(JoinType::ManyToOne)
+                    .condition("customers.city_id = cities.city_id")
+                    .build(),
+            )
+            .build();
+        let analyzed_mdl = Arc::new(AnalyzedWrenMDL::analyze(
+            manifest,
+            Arc::new(HashMap::default()),
+            Mode::Unparse,
+        )?);
+        let ctx = SessionContext::new();
+        let ctx_state = ctx.state_ref();
+        let resolve = |calculated: &str| -> Result<String> {
+            let column_rf = analyzed_mdl
+                .wren_mdl
+                .qualified_references
+                .get(&from_qualified_name(
+                    &analyzed_mdl.wren_mdl,
+                    "orders",
+                    calculated,
+                ))
+                .unwrap();
+            Ok(super::create_wren_calculated_field_expr(
+                column_rf.clone(),
+                Arc::clone(&analyzed_mdl),
+                Arc::clone(&ctx_state),
+            )?
+            .to_string())
+        };
+        // the leading `orders` is the handle declared on `orders`, not the model itself
+        assert_eq!(resolve("customer_name")?, "customers.name");
+        // `customers` has a `name` of its own, so stopping a hop short would plan against
+        // a real but wrong column rather than fail
+        assert_eq!(resolve("customer_city")?, "cities.name");
         Ok(())
     }
 
