@@ -626,6 +626,10 @@ from wren.serve_cli import serve_app  # noqa: PLC0415, E402
 
 app.add_typer(serve_app)
 
+from wren.cloud_cli import cloud_app  # noqa: PLC0415, E402
+
+app.add_typer(cloud_app)
+
 
 if __name__ == "__main__":
     app()
