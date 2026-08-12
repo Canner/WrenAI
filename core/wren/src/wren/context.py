@@ -6,7 +6,7 @@ import json
 import os
 import re
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 import yaml
@@ -1387,6 +1387,15 @@ def _resolve_upgrade_directory(
         raise UpgradeError(
             f"Cannot upgrade: {entity} name must be a non-empty string, got {name!r}"
         )
+    if (
+        name in {".", ".."}
+        or PurePosixPath(name).parts != (name,)
+        or PureWindowsPath(name).parts != (name,)
+    ):
+        raise UpgradeError(
+            f"Cannot upgrade: {entity} name {name!r} must be a single portable "
+            "path component"
+        )
 
     project_root = project_path.resolve()
     collection_root = (project_root / collection).resolve()
@@ -1409,6 +1418,25 @@ def _resolve_upgrade_directory(
             f"Cannot upgrade: {entity} name {name!r} does not identify a directory"
         )
     return target_directory
+
+
+def _resolve_upgrade_file(target_directory: Path, filename: str) -> Path:
+    """Resolve one concrete migration file and reject existing symlinks."""
+    target_file = target_directory / filename
+    if target_file.is_symlink():
+        raise UpgradeError(
+            f"Cannot upgrade: destination file '{target_file}' is a symbolic link"
+        )
+
+    resolved_file = target_file.resolve()
+    try:
+        resolved_file.relative_to(target_directory)
+    except ValueError as exc:
+        raise UpgradeError(
+            f"Cannot upgrade: destination file '{target_file}' resolves outside "
+            "its entity directory"
+        ) from exc
+    return resolved_file
 
 
 def _knowledge_skeleton_targets() -> list[str]:
@@ -1505,13 +1533,14 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
         source_dir = model.pop("_source_dir", None)
         name = model.get("name", source_dir or "unknown")
         model_dir = _resolve_upgrade_directory(project_path, "models", "model", name)
-        dir_path = model_dir.relative_to(project_root).as_posix()
 
         ref_sql = model.get("ref_sql")
         if ref_sql:
-            created.append(f"{dir_path}/ref_sql.sql")
+            ref_sql_file = _resolve_upgrade_file(model_dir, "ref_sql.sql")
+            created.append(ref_sql_file.relative_to(project_root).as_posix())
 
-        created.append(f"{dir_path}/metadata.yml")
+        metadata_file = _resolve_upgrade_file(model_dir, "metadata.yml")
+        created.append(metadata_file.relative_to(project_root).as_posix())
 
         if source_dir:
             deleted.append(f"models/{source_dir}.yml")
@@ -1523,13 +1552,14 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
         if not name:
             continue
         view_dir = _resolve_upgrade_directory(project_path, "views", "view", name)
-        dir_path = view_dir.relative_to(project_root).as_posix()
 
         statement = view.get("statement")
         if statement and "\n" in statement.strip():
-            created.append(f"{dir_path}/sql.yml")
+            sql_file = _resolve_upgrade_file(view_dir, "sql.yml")
+            created.append(sql_file.relative_to(project_root).as_posix())
 
-        created.append(f"{dir_path}/metadata.yml")
+        metadata_file = _resolve_upgrade_file(view_dir, "metadata.yml")
+        created.append(metadata_file.relative_to(project_root).as_posix())
 
     views_file = project_path / "views.yml"
     if views_file.exists():
@@ -1542,7 +1572,8 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
         source_file = cube.pop("_source_file", None)
         name, _ = _cube_migration_target(cube, source_file)
         cube_dir = _resolve_upgrade_directory(project_path, "cubes", "cube", name)
-        target = (cube_dir / "metadata.yml").relative_to(project_root).as_posix()
+        metadata_file = _resolve_upgrade_file(cube_dir, "metadata.yml")
+        target = metadata_file.relative_to(project_root).as_posix()
         if target in seen_cube_targets:
             raise UpgradeError(
                 f"Cannot upgrade: multiple legacy cube files map to '{target}'"
@@ -1604,9 +1635,11 @@ def _apply_v1_to_v2(project_path: Path) -> None:
 
         ref_sql = model.pop("ref_sql", None)
         if ref_sql:
-            (model_dir / "ref_sql.sql").write_text(ref_sql.strip() + "\n")
+            _resolve_upgrade_file(model_dir, "ref_sql.sql").write_text(
+                ref_sql.strip() + "\n"
+            )
 
-        (model_dir / "metadata.yml").write_text(
+        _resolve_upgrade_file(model_dir, "metadata.yml").write_text(
             yaml.dump(
                 model, default_flow_style=False, sort_keys=False, allow_unicode=True
             )
@@ -1629,7 +1662,7 @@ def _apply_v1_to_v2(project_path: Path) -> None:
 
         statement = view.pop("statement", None)
         if statement and "\n" in statement.strip():
-            (view_dir / "sql.yml").write_text(
+            _resolve_upgrade_file(view_dir, "sql.yml").write_text(
                 yaml.dump(
                     {"statement": statement},
                     default_flow_style=False,
@@ -1640,7 +1673,7 @@ def _apply_v1_to_v2(project_path: Path) -> None:
         elif statement:
             view["statement"] = statement
 
-        (view_dir / "metadata.yml").write_text(
+        _resolve_upgrade_file(view_dir, "metadata.yml").write_text(
             yaml.dump(
                 view, default_flow_style=False, sort_keys=False, allow_unicode=True
             )
@@ -1666,7 +1699,7 @@ def _apply_v1_to_v2(project_path: Path) -> None:
         cube_dir = _resolve_upgrade_directory(project_path, "cubes", "cube", name)
         cube_dir.mkdir(parents=True, exist_ok=True)
 
-        (cube_dir / "metadata.yml").write_text(
+        _resolve_upgrade_file(cube_dir, "metadata.yml").write_text(
             yaml.dump(cube, default_flow_style=False, sort_keys=False)
         )
 

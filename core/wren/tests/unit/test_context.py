@@ -1289,6 +1289,38 @@ def _set_v1_entity_name(project_path: Path, entity: str, name: str) -> None:
     )
 
 
+_V1_UPGRADE_FILE_TARGETS = [
+    "models/orders/metadata.yml",
+    "models/revenue/ref_sql.sql",
+    "views/summary/metadata.yml",
+    "views/monthly/sql.yml",
+    "cubes/order_metrics/metadata.yml",
+]
+
+
+def _snapshot_v1_sources(project_path: Path) -> dict[str, str]:
+    relative_paths = [
+        "models/orders.yml",
+        "models/revenue.yml",
+        "views.yml",
+        "cubes/order_metrics.yml",
+    ]
+    return {
+        relative_path: (project_path / relative_path).read_text(encoding="utf-8")
+        for relative_path in relative_paths
+    }
+
+
+def _assert_v1_sources_unchanged(
+    project_path: Path, source_contents: dict[str, str]
+) -> None:
+    for relative_path, expected_content in source_contents.items():
+        assert (project_path / relative_path).read_text(
+            encoding="utf-8"
+        ) == expected_content
+    assert get_schema_version(project_path) == 1
+
+
 def test_plan_upgrade_v1_to_v2(tmp_path):
     _make_v1_project(tmp_path)
     result = plan_upgrade(tmp_path, target_version=2)
@@ -1310,11 +1342,45 @@ def test_plan_upgrade_v1_to_v2_rejects_traversal_names(tmp_path, entity):
 
     from wren.context import UpgradeError as _UE  # noqa: PLC0415
 
-    with pytest.raises(_UE, match="resolves outside"):
+    with pytest.raises(_UE, match="single portable path component"):
         plan_upgrade(tmp_path, target_version=2)
 
     assert not outside_dir.exists()
     assert get_schema_version(tmp_path) == 1
+
+
+@pytest.mark.parametrize("entity", ["model", "view", "cube"])
+@pytest.mark.parametrize("name", ["sub/child", r"sub\child", ".", ".."])
+def test_plan_upgrade_v1_to_v2_requires_portable_path_component(tmp_path, entity, name):
+    _make_v1_project(tmp_path)
+    _set_v1_entity_name(tmp_path, entity, name)
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="single portable path component"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+
+
+@pytest.mark.parametrize("relative_target", _V1_UPGRADE_FILE_TARGETS)
+def test_plan_upgrade_v1_to_v2_rejects_symlink_file_targets(tmp_path, relative_target):
+    _make_v1_project(tmp_path)
+    source_contents = _snapshot_v1_sources(tmp_path)
+    victim = tmp_path.parent / f"{tmp_path.name}-victim"
+    victim.write_text("unchanged\n", encoding="utf-8")
+    target = tmp_path / relative_target
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.symlink_to(victim)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="symbolic link"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    assert victim.read_text(encoding="utf-8") == "unchanged\n"
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
 
 
 def test_plan_upgrade_v1_to_v3(tmp_path):
@@ -1524,17 +1590,37 @@ def test_apply_upgrade_v1_to_v2_rejects_traversal_names_before_writing(
     result = plan_upgrade(tmp_path, target_version=2)
     outside_dir = tmp_path.parent / f"{tmp_path.name}-{entity}-outside"
     _set_v1_entity_name(tmp_path, entity, f"../../{outside_dir.name}")
+    source_contents = _snapshot_v1_sources(tmp_path)
 
     from wren.context import UpgradeError as _UE  # noqa: PLC0415
 
-    with pytest.raises(_UE, match="resolves outside"):
+    with pytest.raises(_UE, match="single portable path component"):
         apply_upgrade(tmp_path, result)
 
     assert not outside_dir.exists()
-    assert (tmp_path / "models" / "orders.yml").exists()
-    assert (tmp_path / "views.yml").exists()
-    assert (tmp_path / "cubes" / "order_metrics.yml").exists()
-    assert get_schema_version(tmp_path) == 1
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+
+
+@pytest.mark.parametrize("relative_target", _V1_UPGRADE_FILE_TARGETS)
+def test_apply_upgrade_v1_to_v2_rejects_late_symlink_file_targets(
+    tmp_path, relative_target
+):
+    _make_v1_project(tmp_path)
+    result = plan_upgrade(tmp_path, target_version=2)
+    source_contents = _snapshot_v1_sources(tmp_path)
+    victim = tmp_path.parent / f"{tmp_path.name}-victim"
+    victim.write_text("unchanged\n", encoding="utf-8")
+    target = tmp_path / relative_target
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.symlink_to(victim)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="symbolic link"):
+        apply_upgrade(tmp_path, result)
+
+    assert victim.read_text(encoding="utf-8") == "unchanged\n"
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
 
 
 def test_apply_upgrade_v2_to_v3(tmp_path):
