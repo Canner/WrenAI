@@ -639,6 +639,11 @@ class AskService:
                     code="OTHERS",
                     message=str(e),
                 ),
+                rephrased_question=rephrased_question,
+                intent_reasoning=intent_reasoning,
+                retrieved_tables=table_names,
+                sql_generation_reasoning=sql_generation_reasoning,
+                invalid_sql=invalid_sql,
                 trace_id=trace_id,
                 is_followup=True if histories else False,
             )

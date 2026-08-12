@@ -252,14 +252,39 @@ class AsyncTextEmbedder:
             self._max_input_chars,
         )
 
-        response = await _create_embedding(
-            model=self._model,
-            input_text=text_to_embed,
-            api_key=self._api_key,
-            api_base_url=self._api_base_url,
-            timeout=self._timeout,
-            **self._kwargs,
-        )
+        candidate_text = text_to_embed
+        while True:
+            try:
+                response = await _create_embedding(
+                    model=self._model,
+                    input_text=candidate_text,
+                    api_key=self._api_key,
+                    api_base_url=self._api_base_url,
+                    timeout=self._timeout,
+                    **self._kwargs,
+                )
+                break
+            except (
+                aiohttp.ClientError,
+                asyncio.TimeoutError,
+                EmbeddingRequestError,
+                openai.APIError,
+            ) as error:
+                if (
+                    not _is_input_too_large_error(error)
+                    or len(candidate_text) <= MIN_EMBED_INPUT_CHARS
+                ):
+                    raise
+
+                next_max_chars = max(len(candidate_text) // 2, MIN_EMBED_INPUT_CHARS)
+                logger.warning(
+                    "Embedding input exceeded provider limits; retrying with %s characters",
+                    next_max_chars,
+                )
+                candidate_text = _truncate_text_for_embedding(
+                    candidate_text,
+                    next_max_chars,
+                )
 
         meta = _build_embedding_meta(response)
 

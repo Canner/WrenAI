@@ -43,7 +43,6 @@ logger.level = 'debug';
 const {
   apiHistoryRepository,
   projectService,
-  mdlService,
   deployService,
   wrenAIAdaptor,
   queryService,
@@ -132,11 +131,8 @@ export default async function handler(
         Errors.GeneralErrorCodes.NO_DEPLOYMENT_FOUND,
       );
     }
-    const { manifest } = await mdlService.makeModelMDL(project);
-    const deployId = await deployService.ensureDeploymentPrepared(
-      project.id,
-      manifest,
-    );
+    const manifest = lastDeploy.manifest;
+    const deployId = lastDeploy.hash;
 
     // Create a new thread if it's a new question
     const newThreadId = threadId || uuidv4();

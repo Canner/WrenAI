@@ -32,7 +32,6 @@ logger.level = 'debug';
 const {
   apiHistoryRepository,
   projectService,
-  mdlService,
   deployService,
   wrenAIAdaptor,
 } = components;
@@ -79,11 +78,7 @@ export default async function handler(
         Errors.GeneralErrorCodes.NO_DEPLOYMENT_FOUND,
       );
     }
-    const { manifest } = await mdlService.makeModelMDL(project);
-    const deployId = await deployService.ensureDeploymentPrepared(
-      project.id,
-      manifest,
-    );
+    const deployId = lastDeploy.hash;
 
     // Get conversation history if threadId is provided
     const histories = threadId

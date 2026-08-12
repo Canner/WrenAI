@@ -22,7 +22,6 @@ logger.level = 'debug';
 const {
   apiHistoryRepository,
   projectService,
-  mdlService,
   deployService,
   wrenAIAdaptor,
   wrenEngineAdaptor,
@@ -70,11 +69,8 @@ export default async function handler(
         Errors.GeneralErrorCodes.NO_DEPLOYMENT_FOUND,
       );
     }
-    const { manifest } = await mdlService.makeModelMDL(project);
-    const deployId = await deployService.ensureDeploymentPrepared(
-      project.id,
-      manifest,
-    );
+    const manifest = lastDeploy.manifest;
+    const deployId = lastDeploy.hash;
 
     // ask AI service to generate SQL
     const histories = threadId

@@ -257,7 +257,6 @@ export const initComponents = () => {
     threadRepository,
     threadResponseRepository,
     queryService,
-    mdlService,
     askingTaskTracker,
     askingTaskRepository,
     chartBackgroundTracker,
