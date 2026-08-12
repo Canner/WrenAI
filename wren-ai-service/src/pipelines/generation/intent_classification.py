@@ -142,10 +142,12 @@ SQL:
 {% endfor %}
 {% endif %}
 
+{% if docs %}
 ### USER GUIDE ###
 {% for doc in docs %}
 - {{doc.path}}: {{doc.content}}
 {% endfor %}
+{% endif %}
 
 ### INPUT ###
 {% if histories %}
@@ -295,7 +297,7 @@ def prompt(
         instructions=construct_instructions(
             instructions=instructions,
         ),
-        docs=wren_ai_docs,
+        docs=[] if construct_db_schemas else wren_ai_docs,
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
@@ -335,7 +337,6 @@ class IntentClassificationResult(BaseModel):
 
 
 INTENT_CLASSIFICAION_MODEL_KWARGS = {
-    "preserve_json_schema": True,
     "response_format": {
         "type": "json_schema",
         "json_schema": {
