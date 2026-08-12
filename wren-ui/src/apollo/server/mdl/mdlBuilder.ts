@@ -17,7 +17,10 @@ import {
 import { getLogger } from '@server/utils';
 import { getConfig } from '@server/config';
 import { DataSourceName } from '../types';
-import { getUniqueReferenceName } from '../utils/model';
+import {
+  getUniqueReferenceName,
+  replaceInvalidReferenceName,
+} from '../utils/model';
 
 const logger = getLogger('MDLBuilder');
 
@@ -536,15 +539,39 @@ export class MDLBuilder implements IMDLBuilder {
         ? JSON.parse(model.properties)
         : {};
 
-    if (!modelProps.table) {
-      return null;
+    if (modelProps.table) {
+      return this.parseTableReference(
+        modelProps.table,
+        modelProps.schema || null,
+        modelProps.catalog || null,
+      );
     }
 
-    return this.parseTableReference(
-      modelProps.table,
-      modelProps.schema || null,
-      modelProps.catalog || null,
-    );
+    if (model.sourceTableName) {
+      const sourceTableReference = this.parseTableReference(
+        model.sourceTableName,
+      );
+      if (
+        sourceTableReference &&
+        (sourceTableReference.schema ||
+          sourceTableReference.catalog ||
+          model.sourceTableName !== model.referenceName)
+      ) {
+        return sourceTableReference;
+      }
+    }
+
+    if (
+      model.displayName &&
+      model.displayName.includes('.') &&
+      replaceInvalidReferenceName(model.displayName) === model.referenceName
+    ) {
+      return this.parseTableReference(model.displayName);
+    }
+
+    return model.sourceTableName
+      ? this.parseTableReference(model.sourceTableName)
+      : null;
   }
 
   private parseTableReference(
