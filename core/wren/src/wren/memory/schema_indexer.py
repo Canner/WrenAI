@@ -230,12 +230,25 @@ def _describe_relationship(rel: dict, lines: list[str]) -> None:
 def _describe_cube(cube: dict, lines: list[str]) -> None:
     name = cube.get("name", "")
     base = cube.get("baseObject", "?")
-    lines.append(f"### Cube: {name} (base: {base})")
+    # Type-validate children via _as_list before the unnamed-cube skip below.
     measures = [
         m
         for m in (_as_list(cube.get("measures"), "cube", name, "measures"))
-        if isinstance(m, dict)
+        if isinstance(m, dict) and m.get("name")
     ]
+    dims = [
+        d
+        for d in (_as_list(cube.get("dimensions"), "cube", name, "dimensions"))
+        if isinstance(d, dict) and d.get("name")
+    ]
+    tdims = [
+        td
+        for td in (_as_list(cube.get("timeDimensions"), "cube", name, "timeDimensions"))
+        if isinstance(td, dict) and td.get("name")
+    ]
+    if not name:
+        return
+    lines.append(f"### Cube: {name} (base: {base})")
     if measures:
         lines.append("  Measures:")
         for m in measures:
@@ -248,11 +261,6 @@ def _describe_cube(cube: dict, lines: list[str]) -> None:
             if expr:
                 line += f": {expr}"
             lines.append(line)
-    dims = [
-        d
-        for d in (_as_list(cube.get("dimensions"), "cube", name, "dimensions"))
-        if isinstance(d, dict)
-    ]
     if dims:
         lines.append("  Dimensions:")
         for d in dims:
@@ -265,11 +273,6 @@ def _describe_cube(cube: dict, lines: list[str]) -> None:
             if expr and expr != dname:
                 line += f": {expr}"
             lines.append(line)
-    tdims = [
-        td
-        for td in (_as_list(cube.get("timeDimensions"), "cube", name, "timeDimensions"))
-        if isinstance(td, dict)
-    ]
     if tdims:
         lines.append("  Time dimensions:")
         for td in tdims:
@@ -334,18 +337,24 @@ def extract_schema_items(manifest: dict) -> list[dict]:
     for cube in _iter_section(manifest, "cubes"):
         if not isinstance(cube, dict):
             continue
-        items.append(_cube_record(cube, mdl_h, now))
         cube_name = cube.get("name", "")
-        for measure in _as_list(cube.get("measures"), "cube", cube_name, "measures"):
-            if isinstance(measure, dict):
-                items.append(_measure_record(measure, cube_name, mdl_h, now))
-        for dim in _as_list(cube.get("dimensions"), "cube", cube_name, "dimensions"):
-            if isinstance(dim, dict):
-                items.append(_cube_dimension_record(dim, cube_name, mdl_h, now))
-        for tdim in _as_list(
+        # Type-validate children via _as_list before the unnamed-cube skip below.
+        measures = _as_list(cube.get("measures"), "cube", cube_name, "measures")
+        dims = _as_list(cube.get("dimensions"), "cube", cube_name, "dimensions")
+        tdims = _as_list(
             cube.get("timeDimensions"), "cube", cube_name, "timeDimensions"
-        ):
-            if isinstance(tdim, dict):
+        )
+        if not cube_name:
+            continue
+        items.append(_cube_record(cube, mdl_h, now))
+        for measure in measures:
+            if isinstance(measure, dict) and measure.get("name"):
+                items.append(_measure_record(measure, cube_name, mdl_h, now))
+        for dim in dims:
+            if isinstance(dim, dict) and dim.get("name"):
+                items.append(_cube_dimension_record(dim, cube_name, mdl_h, now))
+        for tdim in tdims:
+            if isinstance(tdim, dict) and tdim.get("name"):
                 items.append(_time_dimension_record(tdim, cube_name, mdl_h, now))
 
     return items
