@@ -32,7 +32,13 @@ from wren.connector.factory import get_connector
 from wren.mdl import get_manifest_extractor, get_session_context, to_json_base64
 from wren.mdl.cte_rewriter import CTERewriter, get_sqlglot_dialect
 from wren.model.data_source import DataSource
-from wren.model.error import DIALECT_SQL, ErrorCode, ErrorPhase, WrenError
+from wren.model.error import (
+    DIALECT_SQL,
+    DatabaseTimeoutError,
+    ErrorCode,
+    ErrorPhase,
+    WrenError,
+)
 from wren.policy import resolve_model_name, validate_sql_policy
 
 
@@ -117,6 +123,8 @@ class WrenEngine:
             return connector.query(dialect_sql, limit)
         except WrenError:
             raise
+        except TimeoutError as e:
+            raise DatabaseTimeoutError(str(e)) from e
         except Exception as e:
             raise WrenError(
                 ErrorCode.GENERIC_USER_ERROR,
@@ -133,6 +141,8 @@ class WrenEngine:
             connector.dry_run(dialect_sql)
         except WrenError:
             raise
+        except TimeoutError as e:
+            raise DatabaseTimeoutError(str(e)) from e
         except Exception as e:
             raise WrenError(
                 ErrorCode.GENERIC_USER_ERROR,
