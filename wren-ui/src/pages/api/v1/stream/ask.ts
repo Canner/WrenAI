@@ -132,7 +132,10 @@ export default async function handler(
       );
     }
     const manifest = lastDeploy.manifest;
-    const deployId = lastDeploy.hash;
+    const deployId = await deployService.ensureDeploymentPrepared(
+      project.id,
+      manifest,
+    );
 
     // Create a new thread if it's a new question
     const newThreadId = threadId || uuidv4();

@@ -70,7 +70,10 @@ export default async function handler(
       );
     }
     const manifest = lastDeploy.manifest;
-    const deployId = lastDeploy.hash;
+    const deployId = await deployService.ensureDeploymentPrepared(
+      project.id,
+      manifest,
+    );
 
     // ask AI service to generate SQL
     const histories = threadId

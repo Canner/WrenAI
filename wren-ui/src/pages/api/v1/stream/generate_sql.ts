@@ -78,7 +78,10 @@ export default async function handler(
         Errors.GeneralErrorCodes.NO_DEPLOYMENT_FOUND,
       );
     }
-    const deployId = lastDeploy.hash;
+    const deployId = await deployService.ensureDeploymentPrepared(
+      project.id,
+      lastDeploy.manifest,
+    );
 
     // Get conversation history if threadId is provided
     const histories = threadId

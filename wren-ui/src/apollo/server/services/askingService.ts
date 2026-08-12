@@ -1293,11 +1293,7 @@ export class AskingService implements IAskingService {
     const project = projectId
       ? await this.projectService.getProjectById(projectId)
       : await this.projectService.getCurrentProject();
-    const deployment = await this.deployService.getLastDeployment(project.id);
-    if (!deployment) {
-      throw new Error(`No deployment found for project ${project.id}`);
-    }
-    return deployment.hash;
+    return this.deployService.ensureDeploymentPrepared(project.id);
   }
 
   private async getProjectForThreadResponse(threadResponse: ThreadResponse) {
