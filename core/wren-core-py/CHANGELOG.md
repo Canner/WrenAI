@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.4](https://github.com/Canner/WrenAI/compare/wren-core-py-v0.7.3...wren-core-py-v0.7.4) (2026-08-11)
+
+
+### Bug Fixes
+
+* **core-py:** declare the engine version the bindings build against ([#2659](https://github.com/Canner/WrenAI/issues/2659)) ([92cdf43](https://github.com/Canner/WrenAI/commit/92cdf4395225bc043ca0b4c26fe675b0de8a63ba))
+
 ## [0.7.3](https://github.com/Canner/WrenAI/compare/wren-core-py-v0.7.2...wren-core-py-v0.7.3) (2026-07-28)
 
 
