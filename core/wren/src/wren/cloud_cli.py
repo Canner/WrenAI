@@ -125,7 +125,13 @@ def pull(
     if project is not None:
         logins = [entry for entry in logins if entry[1] == str(project)]
     if host is not None:
-        logins = [entry for entry in logins if entry[0] == host]
+        # Filtered on the same field the help text promises and the
+        # disambiguation candidates below print: `api_host` — the host the
+        # user passed to `login --host`, not the (possibly different)
+        # `--git-host`. Filtering on `git_host` here while displaying
+        # `api_host` would silently reject the exact value a user would
+        # naturally reach for: the host they logged in with.
+        logins = [entry for entry in logins if entry[2]["api_host"] == host]
 
     if not logins:
         typer.echo(

@@ -127,6 +127,69 @@ def test_pull_disambiguates_multiple_stored_logins(monkeypatch, tmp_path):
     assert "disambiguate" in result.output.lower()
 
 
+def test_pull_host_filters_on_api_host_not_git_host(monkeypatch, tmp_path):
+    """`--host` must match what `login --host` was given and what the
+    disambiguation candidates print (`api_host`), not the internal storage
+    key (`git_host`) — a login stored under a differing `--git-host` must
+    still be reachable by the host the user actually typed at login."""
+    entry = {
+        "api_host": "https://cloud.getwren.ai",
+        "org_id": "2",
+        "repo": "org/2/16/shared-data.git",
+        "api_key": "sk-x",
+    }
+    monkeypatch.setattr(
+        cloud,
+        "list_logins",
+        lambda: [("https://internal-git.example.com", "16", entry)],
+    )
+
+    captured = {}
+
+    def fake_pull(directory, *, git_host, api_host, project_id, org_id, repo):
+        captured.update(git_host=git_host, api_host=api_host)
+
+    monkeypatch.setattr(cloud, "pull", fake_pull)
+
+    result = runner.invoke(
+        app,
+        ["cloud", "pull", str(tmp_path), "--host", "https://cloud.getwren.ai"],
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["git_host"] == "https://internal-git.example.com"
+    assert captured["api_host"] == "https://cloud.getwren.ai"
+
+
+def test_pull_host_still_disambiguates_when_api_hosts_collide(monkeypatch, tmp_path):
+    """Two logins that share an `api_host` but differ only by `--git-host`
+    (e.g. a corrected re-login after a wrong `--git-host`) must not be
+    silently missed — `--host <api_host>` still leaves both candidates and
+    the command must ask the user to disambiguate, not report either a
+    false "not found" or pick one arbitrarily."""
+    monkeypatch.setattr(
+        cloud,
+        "list_logins",
+        lambda: [
+            (
+                "https://wrong-git.example.com",
+                "16",
+                {"api_host": "https://cloud.getwren.ai"},
+            ),
+            (
+                "https://right-git.example.com",
+                "16",
+                {"api_host": "https://cloud.getwren.ai"},
+            ),
+        ],
+    )
+    result = runner.invoke(
+        app,
+        ["cloud", "pull", str(tmp_path), "--host", "https://cloud.getwren.ai"],
+    )
+    assert result.exit_code != 0
+    assert "disambiguate" in result.output.lower()
+
+
 def test_pull_invokes_cloud_pull_with_the_single_stored_login(monkeypatch, tmp_path):
     entry = {
         "api_host": "https://cloud.getwren.ai",
