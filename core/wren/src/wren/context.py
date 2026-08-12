@@ -1439,6 +1439,16 @@ def _resolve_upgrade_file(target_directory: Path, filename: str) -> Path:
     return resolved_file
 
 
+def _validate_upgrade_view_statement(name: str, statement: Any) -> str | None:
+    """Reject malformed legacy view statements before migration."""
+    if statement is not None and not isinstance(statement, str):
+        raise UpgradeError(
+            f"Cannot upgrade: view {name!r} statement must be a string, "
+            f"got {statement!r}"
+        )
+    return statement
+
+
 def _knowledge_skeleton_targets() -> list[str]:
     """Canonical relative paths of a fresh knowledge/ skeleton.
 
@@ -1553,7 +1563,7 @@ def _plan_v1_to_v2(project_path: Path) -> tuple[list[str], list[str]]:
             continue
         view_dir = _resolve_upgrade_directory(project_path, "views", "view", name)
 
-        statement = view.get("statement")
+        statement = _validate_upgrade_view_statement(name, view.get("statement"))
         if statement and "\n" in statement.strip():
             sql_file = _resolve_upgrade_file(view_dir, "sql.yml")
             created.append(sql_file.relative_to(project_root).as_posix())
@@ -1660,7 +1670,7 @@ def _apply_v1_to_v2(project_path: Path) -> None:
         view_dir = _resolve_upgrade_directory(project_path, "views", "view", name)
         view_dir.mkdir(parents=True, exist_ok=True)
 
-        statement = view.pop("statement", None)
+        statement = _validate_upgrade_view_statement(name, view.pop("statement", None))
         if statement and "\n" in statement.strip():
             _resolve_upgrade_file(view_dir, "sql.yml").write_text(
                 yaml.dump(

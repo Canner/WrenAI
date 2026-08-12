@@ -1289,6 +1289,19 @@ def _set_v1_entity_name(project_path: Path, entity: str, name: str) -> None:
     )
 
 
+def _set_v1_view_statement(project_path: Path, statement: int) -> None:
+    views_file = project_path / "views.yml"
+    content = views_file.read_text(encoding="utf-8")
+    views_file.write_text(
+        content.replace(
+            "    statement: SELECT 1\n",
+            f"    statement: {statement}\n",
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+
 _V1_UPGRADE_FILE_TARGETS = [
     "models/orders/metadata.yml",
     "models/revenue/ref_sql.sql",
@@ -1359,6 +1372,22 @@ def test_plan_upgrade_v1_to_v2_requires_portable_path_component(tmp_path, entity
     from wren.context import UpgradeError as _UE  # noqa: PLC0415
 
     with pytest.raises(_UE, match="single portable path component"):
+        plan_upgrade(tmp_path, target_version=2)
+
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+
+
+@pytest.mark.parametrize("statement", [42, 0])
+def test_plan_upgrade_v1_to_v2_rejects_non_string_view_statement(
+    tmp_path, statement
+):
+    _make_v1_project(tmp_path)
+    _set_v1_view_statement(tmp_path, statement)
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="view 'summary' statement must be a string"):
         plan_upgrade(tmp_path, target_version=2)
 
     _assert_v1_sources_unchanged(tmp_path, source_contents)
@@ -1598,6 +1627,23 @@ def test_apply_upgrade_v1_to_v2_rejects_traversal_names_before_writing(
         apply_upgrade(tmp_path, result)
 
     assert not outside_dir.exists()
+    _assert_v1_sources_unchanged(tmp_path, source_contents)
+
+
+@pytest.mark.parametrize("statement", [42, 0])
+def test_apply_upgrade_v1_to_v2_rejects_non_string_view_statement_before_writing(
+    tmp_path, statement
+):
+    _make_v1_project(tmp_path)
+    result = plan_upgrade(tmp_path, target_version=2)
+    _set_v1_view_statement(tmp_path, statement)
+    source_contents = _snapshot_v1_sources(tmp_path)
+
+    from wren.context import UpgradeError as _UE  # noqa: PLC0415
+
+    with pytest.raises(_UE, match="view 'summary' statement must be a string"):
+        apply_upgrade(tmp_path, result)
+
     _assert_v1_sources_unchanged(tmp_path, source_contents)
 
 
