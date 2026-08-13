@@ -92,28 +92,6 @@ _SQL_RESERVED_WORDS = {
     "WINDOW",
     "WITH",
 }
-_SQL_FUNCTION_NAMES = {
-    "ABS",
-    "AVG",
-    "CAST",
-    "COALESCE",
-    "COUNT",
-    "DATE_TRUNC",
-    "DENSE_RANK",
-    "LOWER",
-    "MAX",
-    "MIN",
-    "NULLIF",
-    "ROUND",
-    "ROW_NUMBER",
-    "SUM",
-    "TO_TIMESTAMP_MICROS",
-    "TO_TIMESTAMP_MILLIS",
-    "TO_TIMESTAMP_SECONDS",
-    "UPPER",
-}
-
-
 def _unquote_identifier(identifier: str) -> str:
     if len(identifier) >= 2 and identifier[0] == "[" and identifier[-1] == "]":
         return identifier[1:-1].replace("]]", "]")
@@ -492,9 +470,7 @@ def _extract_unqualified_columns(sql: str) -> tuple[set[str], set[str]]:
         real_name = identifier.get_real_name()
         if not real_name:
             return
-        real_name = _unquote_identifier(real_name)
-        if real_name and real_name.upper() not in _SQL_FUNCTION_NAMES:
-            candidates.add(real_name)
+        candidates.add(_unquote_identifier(real_name))
 
     def visit(token) -> None:
         if isinstance(token, IdentifierList):
@@ -588,7 +564,6 @@ def validate_sql_against_contexts(
             | relation_aliases
             | output_aliases
             | _SQL_RESERVED_WORDS
-            | _SQL_FUNCTION_NAMES
         )
         invalid_columns = sorted(
             column
