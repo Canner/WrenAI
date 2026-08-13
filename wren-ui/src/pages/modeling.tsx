@@ -275,7 +275,7 @@ const renderIcon = (IconComponent) => React.createElement(IconComponent as any);
 const ASSISTANT_CANCELLED = 'ASSISTANT_CANCELLED';
 const ASSISTANT_SAVE_MESSAGE_KEY = 'modeling-ai-assistant-save';
 const ASSISTANT_POLL_INTERVAL_MS = 1000;
-const ASSISTANT_MAX_POLL_ATTEMPTS = 240;
+const ASSISTANT_MAX_POLL_ATTEMPTS = 1800;
 
 export default function Modeling() {
   const router = useRouter();

@@ -35,7 +35,7 @@ class SemanticsDescription:
         ttl: int = 120,
         generation_timeout_seconds: float = 120.0,
         max_models_per_batch: int = 1,
-        max_columns_per_batch: int = 5,
+        max_columns_per_batch: int = 10,
         max_concurrent_tasks: int = 4,
     ):
         self._pipelines = pipelines

@@ -200,7 +200,7 @@ def test_semantics_description_uses_configured_batch_and_concurrency_limits():
     )
 
     assert service._max_models_per_batch == 2
-    assert service._max_columns_per_batch == 5
+    assert service._max_columns_per_batch == 10
     assert service._max_concurrent_tasks == 3
 
 
@@ -333,13 +333,13 @@ def test_default_batch_splits_large_column_groups_by_model(
 
     chunks = service._chunking(orjson.loads(request.mdl), request)
 
-    assert len(chunks) == 180
+    assert len(chunks) == 90
     assert chunks[0]["selected_models"] == ["model1"]
-    assert chunks[99]["selected_models"] == ["model1"]
-    assert chunks[100]["selected_models"] == ["model2"]
-    assert len(chunks[0]["mdl"]["models"][0]["columns"]) == 5
-    assert len(chunks[99]["mdl"]["models"][0]["columns"]) == 5
-    assert len(chunks[100]["mdl"]["models"][0]["columns"]) == 5
+    assert chunks[49]["selected_models"] == ["model1"]
+    assert chunks[50]["selected_models"] == ["model2"]
+    assert len(chunks[0]["mdl"]["models"][0]["columns"]) == 10
+    assert len(chunks[49]["mdl"]["models"][0]["columns"]) == 10
+    assert len(chunks[50]["mdl"]["models"][0]["columns"]) == 10
 
 
 @pytest.mark.asyncio
@@ -395,7 +395,7 @@ async def test_column_chunk_outputs_merge_into_single_model(
         "Customer order transactions."
     )
     assert len(response.response["orders"]["columns"]) == 41
-    assert service._pipelines["semantics_description"].run.call_count == 9
+    assert service._pipelines["semantics_description"].run.call_count == 5
 
 
 @pytest.mark.asyncio

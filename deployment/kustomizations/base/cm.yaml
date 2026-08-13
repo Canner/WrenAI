@@ -230,7 +230,7 @@ data:
       query_cache_maxsize: 1000
       query_cache_ttl: 3600
       semantics_description_max_models_per_batch: 1
-      semantics_description_max_columns_per_batch: 5
+      semantics_description_max_columns_per_batch: 10
       semantics_description_max_concurrent_tasks: 4
       semantics_description_generation_timeout_seconds: 120
       langfuse_host: https://cloud.langfuse.com
