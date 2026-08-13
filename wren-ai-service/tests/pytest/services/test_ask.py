@@ -483,10 +483,13 @@ async def test_ask_runs_sql_correction_for_validation_error():
     )
     assert ask_result_response.status == "finished"
     assert diagnosis.calls == []
-    assert correction.calls[0]["invalid_generation_result"] == {
+    invalid_generation_result = correction.calls[0]["invalid_generation_result"]
+    assert invalid_generation_result | {
         "sql": MODEL_ALPHA_ENTITY_SQL,
         "error": "Generated SQL is a table preview.",
-    }
+    } == invalid_generation_result
+    assert invalid_generation_result["question"] == ask_request.query
+    assert invalid_generation_result["execution_error"] == "Generated SQL is a table preview."
 
 
 @pytest.mark.asyncio
@@ -529,10 +532,12 @@ async def test_ask_expands_correction_context_from_failed_sql_like_legacy():
         MODEL_ALPHA_ENTITY_DDL,
         MODEL_BETA_ENTITY_DDL,
     ]
-    assert correction.calls[0]["invalid_generation_result"] == {
+    invalid_generation_result = correction.calls[0]["invalid_generation_result"]
+    assert invalid_generation_result | {
         "sql": MODEL_BETA_ENTITY_SQL,
         "error": f"Generated SQL references tables that were not retrieved from the current schema: {MODEL_BETA}.",
-    }
+    } == invalid_generation_result
+    assert invalid_generation_result["question"] == ask_request.query
 
 
 @pytest.mark.asyncio
@@ -569,10 +574,12 @@ async def test_ask_correction_recovers_no_relevant_sql_with_schema_context():
     assert ask_result_response.response[0].sql == MODEL_ALPHA_COUNT_SQL
     assert diagnosis.calls == []
     assert correction.calls[0]["contexts"] == [MODEL_ALPHA_ENTITY_DDL]
-    assert correction.calls[0]["invalid_generation_result"] == {
+    invalid_generation_result = correction.calls[0]["invalid_generation_result"]
+    assert invalid_generation_result | {
         "sql": "",
         "error": "No grounded SQL was generated from the current schema.",
-    }
+    } == invalid_generation_result
+    assert invalid_generation_result["question"] == ask_request.query
 
 
 @pytest.mark.asyncio
@@ -768,10 +775,15 @@ async def test_ask_corrects_no_relevant_sql_with_exact_retrieved_metadata():
     assert regeneration.calls == []
     assert diagnosis.calls[0]["contexts"] == [MODEL_ALPHA_PRUNED_DDL]
     assert correction.calls[0]["contexts"] == [MODEL_ALPHA_PRUNED_DDL]
-    assert correction.calls[0]["invalid_generation_result"] == {
+    invalid_generation_result = correction.calls[0]["invalid_generation_result"]
+    assert invalid_generation_result | {
         "sql": "",
         "error": "Use the retrieved schema.",
-    }
+    } == invalid_generation_result
+    assert invalid_generation_result["execution_error"] == (
+        "No grounded SQL was generated from the current schema."
+    )
+    assert invalid_generation_result["question"] == ask_request.query
 
 
 @pytest.mark.asyncio

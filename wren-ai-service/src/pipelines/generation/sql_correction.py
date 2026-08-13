@@ -59,6 +59,16 @@ sql_correction_user_prompt_template = """
 {% endfor %}
 {% endif %}
 
+{% if invalid_generation_result.question %}
+### USER QUESTION ###
+{{ invalid_generation_result.question }}
+{% endif %}
+
+{% if invalid_generation_result.reasoning_plan %}
+### REASONING PLAN ###
+{{ invalid_generation_result.reasoning_plan }}
+{% endif %}
+
 {% if sql_functions %}
 ### SQL FUNCTIONS ###
 {% for function in sql_functions %}
@@ -75,6 +85,9 @@ sql_correction_user_prompt_template = """
 
 ### QUESTION ###
 SQL: {{ invalid_generation_result.sql }}
+{% if invalid_generation_result.execution_error %}
+Execution Error: {{ invalid_generation_result.execution_error }}
+{% endif %}
 Error Message: {{ invalid_generation_result.error }}
 
 Let's think step by step.
@@ -121,6 +134,7 @@ async def post_process(
     generate_sql_correction: dict,
     post_processor: SQLGenPostProcessor,
     data_source: str,
+    documents: List[Document] | None = None,
     project_id: str | None = None,
     mdl_hash: str | None = None,
     use_dry_plan: bool = False,
@@ -130,6 +144,7 @@ async def post_process(
         generate_sql_correction.get("replies"),
         project_id=project_id,
         mdl_hash=mdl_hash,
+        contexts=documents,
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,

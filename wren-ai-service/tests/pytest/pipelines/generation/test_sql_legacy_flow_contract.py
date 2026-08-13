@@ -42,10 +42,10 @@ from src.pipelines.generation.sql_regeneration import (
     sql_regeneration_user_prompt_template,
 )
 from src.pipelines.generation.sql_regeneration import (
-    prompt as build_sql_regeneration_prompt,
+    post_process as sql_regeneration_post_process,
 )
 from src.pipelines.generation.sql_regeneration import (
-    post_process as sql_regeneration_post_process,
+    prompt as build_sql_regeneration_prompt,
 )
 from src.pipelines.generation.utils.sql import SQL_GENERATION_MODEL_KWARGS
 from src.pipelines.retrieval.sql_functions import SqlFunction
@@ -194,6 +194,28 @@ def test_sql_correction_prompt_uses_failed_sql_and_error():
     assert "SQL: SELECT 1" in built_prompt
     assert "Error Message: dry run failed" in built_prompt
     assert "RETRIEVED EXECUTABLE SCHEMA" not in built_prompt
+
+
+def test_sql_correction_prompt_can_include_active_question_and_reasoning():
+    result = build_sql_correction_prompt(
+        documents=["CREATE TABLE model_1 (attribute_1 VARCHAR)"],
+        invalid_generation_result={
+            "sql": "SELECT attribute_1 FROM model_1",
+            "error": "diagnosed schema issue",
+            "execution_error": "dry run failed",
+            "question": "show the current request",
+            "reasoning_plan": "1. Use table: model_1 and column: model_1.attribute_1",
+        },
+        prompt_builder=PromptBuilder(template=sql_correction_user_prompt_template),
+    )
+
+    built_prompt = result["prompt"]
+
+    assert "### USER QUESTION ###" in built_prompt
+    assert "show the current request" in built_prompt
+    assert "### REASONING PLAN ###" in built_prompt
+    assert "Execution Error: dry run failed" in built_prompt
+    assert "Error Message: diagnosed schema issue" in built_prompt
 
 
 def test_sql_correction_system_prompt_preserves_datasource_knowledge():

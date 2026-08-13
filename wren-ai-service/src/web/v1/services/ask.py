@@ -665,6 +665,9 @@ class AskService:
                                 "error": sql_diagnosis_reasoning
                                 if allow_sql_diagnosis
                                 else error_message,
+                                "execution_error": error_message,
+                                "question": user_query,
+                                "reasoning_plan": sql_generation_reasoning,
                             },
                             project_id=ask_request.project_id,
                             mdl_hash=ask_request.mdl_hash,

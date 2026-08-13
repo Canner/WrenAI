@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Any, Dict, List
 
 import aiohttp
@@ -17,6 +18,243 @@ from src.web.v1.services.ask import AskHistory
 logger = logging.getLogger("wren-ai-service")
 
 
+_SIMPLE_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
+_DDL_RELATION = re.compile(
+    r"\bCREATE\s+(?:TABLE|VIEW)\s+(?P<name>\"[^\"]+\"|[^\s(]+)",
+    re.IGNORECASE,
+)
+_SQL_RESERVED_WORDS = {
+    "ALL",
+    "ALTER",
+    "AND",
+    "AS",
+    "BY",
+    "CASE",
+    "CAST",
+    "COUNT",
+    "CREATE",
+    "CROSS",
+    "DELETE",
+    "DESC",
+    "DISTINCT",
+    "ELSE",
+    "END",
+    "EXCEPT",
+    "FALSE",
+    "FETCH",
+    "FOR",
+    "FROM",
+    "FULL",
+    "GROUP",
+    "HAVING",
+    "IN",
+    "INNER",
+    "INSERT",
+    "INTERSECT",
+    "IS",
+    "JOIN",
+    "LEFT",
+    "LIKE",
+    "LIMIT",
+    "NATURAL",
+    "NOT",
+    "NULL",
+    "OFFSET",
+    "ON",
+    "OR",
+    "ORDER",
+    "OUTER",
+    "RIGHT",
+    "SELECT",
+    "TABLE",
+    "TABLESAMPLE",
+    "THEN",
+    "TRUE",
+    "UNION",
+    "UPDATE",
+    "WHEN",
+    "WHERE",
+    "WINDOW",
+    "WITH",
+}
+
+
+def _unquote_identifier(identifier: str) -> str:
+    if len(identifier) >= 2 and identifier[0] == '"' and identifier[-1] == '"':
+        return identifier[1:-1].replace('""', '"')
+    return identifier
+
+
+def _quote_identifier(identifier: str) -> str:
+    return f'"{identifier.replace(chr(34), chr(34) * 2)}"'
+
+
+def _identifier_needs_quotes(identifier: str) -> bool:
+    return (
+        not _SIMPLE_IDENTIFIER.fullmatch(identifier)
+        or identifier.upper() in _SQL_RESERVED_WORDS
+    )
+
+
+def _extract_schema_identifiers(contexts: list[str] | None) -> list[str]:
+    if not contexts:
+        return []
+
+    identifiers: list[str] = []
+    seen = set()
+
+    def add(identifier: str) -> None:
+        identifier = _unquote_identifier(identifier.strip().rstrip(","))
+        if not identifier or identifier.upper() in {"FOREIGN", "PRIMARY", "KEY"}:
+            return
+        if identifier not in seen:
+            seen.add(identifier)
+            identifiers.append(identifier)
+
+    for context in contexts:
+        for match in _DDL_RELATION.finditer(context):
+            add(match.group("name"))
+
+        in_table = False
+        for raw_line in context.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("--") or line.startswith("/*"):
+                continue
+            if re.search(r"\bCREATE\s+TABLE\b", line, re.IGNORECASE):
+                in_table = True
+                remainder = line.split("(", 1)
+                if len(remainder) == 1:
+                    continue
+                line = remainder[1].strip()
+            if not in_table:
+                continue
+            if line.startswith(");") or line == ")":
+                in_table = False
+                continue
+            line = line.split("--", 1)[0].strip().rstrip(",")
+            if not line or line.upper().startswith(("FOREIGN KEY", "PRIMARY KEY")):
+                continue
+            if line.startswith('"'):
+                end = line.find('"', 1)
+                while end != -1 and end + 1 < len(line) and line[end + 1] == '"':
+                    end = line.find('"', end + 2)
+                if end > 0:
+                    add(line[: end + 1])
+            else:
+                add(line.split(None, 1)[0])
+
+    return identifiers
+
+
+def _is_identifier_boundary(char: str | None) -> bool:
+    return char is None or not (char.isalnum() or char in {"_", "$", '"'})
+
+
+def _replace_identifier_outside_literals(sql: str, identifier: str) -> str:
+    quoted = _quote_identifier(identifier)
+    result = []
+    index = 0
+    in_single_quote = False
+    in_double_quote = False
+    in_line_comment = False
+    in_block_comment = False
+    length = len(sql)
+    identifier_length = len(identifier)
+
+    while index < length:
+        current = sql[index]
+        nxt = sql[index + 1] if index + 1 < length else None
+
+        if in_line_comment:
+            result.append(current)
+            if current == "\n":
+                in_line_comment = False
+            index += 1
+            continue
+        if in_block_comment:
+            result.append(current)
+            if current == "*" and nxt == "/":
+                result.append(nxt)
+                index += 2
+                in_block_comment = False
+            else:
+                index += 1
+            continue
+        if in_single_quote:
+            result.append(current)
+            if current == "'" and nxt == "'":
+                result.append(nxt)
+                index += 2
+            elif current == "'":
+                in_single_quote = False
+                index += 1
+            else:
+                index += 1
+            continue
+        if in_double_quote:
+            result.append(current)
+            if current == '"' and nxt == '"':
+                result.append(nxt)
+                index += 2
+            elif current == '"':
+                in_double_quote = False
+                index += 1
+            else:
+                index += 1
+            continue
+
+        if current == "-" and nxt == "-":
+            result.append(current)
+            result.append(nxt)
+            index += 2
+            in_line_comment = True
+            continue
+        if current == "/" and nxt == "*":
+            result.append(current)
+            result.append(nxt)
+            index += 2
+            in_block_comment = True
+            continue
+        if current == "'":
+            result.append(current)
+            index += 1
+            in_single_quote = True
+            continue
+        if current == '"':
+            result.append(current)
+            index += 1
+            in_double_quote = True
+            continue
+
+        if sql.startswith(identifier, index):
+            before = sql[index - 1] if index > 0 else None
+            after_index = index + identifier_length
+            after = sql[after_index] if after_index < length else None
+            if _is_identifier_boundary(before) and _is_identifier_boundary(after):
+                result.append(quoted)
+                index = after_index
+                continue
+
+        result.append(current)
+        index += 1
+
+    return "".join(result)
+
+
+def normalize_sql_with_schema_identifiers(
+    sql: str,
+    contexts: list[str] | None = None,
+) -> str:
+    identifiers = [
+        identifier
+        for identifier in _extract_schema_identifiers(contexts)
+        if _identifier_needs_quotes(identifier)
+    ]
+    for identifier in sorted(identifiers, key=len, reverse=True):
+        sql = _replace_identifier_outside_literals(sql, identifier)
+    return sql
+
+
 @component
 class SQLGenPostProcessor:
     def __init__(self, engine: Engine):
@@ -31,6 +269,7 @@ class SQLGenPostProcessor:
         replies: List[str] | List[List[str]],
         project_id: str | None = None,
         mdl_hash: str | None = None,
+        contexts: list[str] | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
         data_source: str = "",
@@ -44,6 +283,10 @@ class SQLGenPostProcessor:
                 cleaned_generation_result = orjson.loads(cleaned_generation_result)[
                     "sql"
                 ]
+            cleaned_generation_result = normalize_sql_with_schema_identifiers(
+                cleaned_generation_result,
+                contexts=contexts,
+            )
 
             (
                 valid_generation_result,
@@ -180,12 +423,16 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - NEVER invent, infer, rename, or approximate table/column names from the user's wording.
+- NEVER sanitize schema identifiers. Use the exact table and column spelling from CREATE TABLE or CREATE VIEW, including case, spaces, punctuation, and symbols.
 - If the selected database schema does not contain the tables, columns, metrics, views, or relationships needed to answer the question, do not create placeholder SQL using names from the question.
 - DON'T INCLUDE comments in the generated SQL query.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
+- Before using a JOIN, verify the relationship or key columns from the DATABASE SCHEMA. Prefer declared FOREIGN KEY relationships. Do not invent relationships only from similar column names.
+- Do not JOIN when all selected, filtered, grouped, and ordered fields are available in one verified table or view.
 - PREFER USING CTEs over subqueries.
 - When generating SQL query, always:
     - Put double quotes around column and table names.
+    - Double quote every identifier that contains punctuation, spaces, symbols, mixed-case names that must be preserved, or SQL reserved words.
     - Put single quotes around string literals.
     - Never quote numeric literals.
     For example: SELECT "customers"."customer_name" FROM "customers" WHERE "customers"."city" = 'Taipei' and "customers"."year" = 1992;
@@ -229,6 +476,8 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - DON'T USE INTERVAL or generate INTERVAL-like expression in the generated SQL query.
 - DON'T USE "TO_CHAR" function in the generated SQL query.
 - Aggregate functions are not allowed in the WHERE clause. Instead, they belong in the HAVING clause, which is used to filter after aggregation.
+- Every non-aggregated SELECT expression must be included in GROUP BY when aggregate functions are used.
+- ORDER BY must reference a selected column, a selected output alias, or a valid aggregate expression from the same query scope.
 - You can only add "ORDER BY" and "LIMIT" to the final "UNION" result.
 - For the ranking problem, you must use the ranking function, `DENSE_RANK()` to rank the results and then use `WHERE` clause to filter the results.
 - For the ranking problem, you must add the ranking column to the final SELECT clause.

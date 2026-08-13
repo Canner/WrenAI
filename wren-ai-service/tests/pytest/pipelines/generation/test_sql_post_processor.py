@@ -6,12 +6,15 @@ PROJECT_ID = "project-id"
 MDL_HASH = "deployment-hash"
 TABLE_A = "model_a"
 TABLE_B = "model_b"
+TABLE_SPECIAL = "model-with-special-name"
 COLUMN_ID = "id"
 COLUMN_TEXT = "text_value"
 COLUMN_STATUS = "status_value"
 COLUMN_DATE = "date_value"
 COLUMN_AMOUNT = "amount_value"
 COLUMN_RANK = "rank_value"
+COLUMN_RESERVED = "order"
+COLUMN_SPECIAL = "line-item"
 AGGREGATE_ALIAS = "aggregate_value"
 DATE_LITERAL = "2026-01-01 00:00:00"
 STRING_LITERAL = "literal_value"
@@ -279,6 +282,69 @@ async def test_post_processor_removes_semicolon_inside_json_sql_like_legacy():
 
     assert result["invalid_generation_result"] == {}
     assert engine.executed_sql == f"SELECT COUNT(*) AS {AGGREGATE_ALIAS} FROM {TABLE_A}"
+
+
+@pytest.mark.asyncio
+async def test_post_processor_quotes_schema_identifiers_before_validation():
+    engine = _CapturingEngine()
+    processor = SQLGenPostProcessor(engine=engine)
+    contexts = [
+        (
+            f"CREATE TABLE {TABLE_SPECIAL} (\n"
+            f"  {COLUMN_RESERVED} INTEGER,\n"
+            f"  {COLUMN_SPECIAL} VARCHAR\n"
+            ");"
+        )
+    ]
+
+    result = await processor.run(
+        [
+            (
+                f'{{"sql": "SELECT {COLUMN_SPECIAL}, COUNT(t.{COLUMN_RESERVED}) '
+                f'FROM {TABLE_SPECIAL} AS t GROUP BY {COLUMN_SPECIAL}"}}'
+            )
+        ],
+        contexts=contexts,
+    )
+
+    expected_sql = (
+        f'SELECT "{COLUMN_SPECIAL}", COUNT(t."{COLUMN_RESERVED}") '
+        f'FROM "{TABLE_SPECIAL}" AS t GROUP BY "{COLUMN_SPECIAL}"'
+    )
+    assert result["invalid_generation_result"] == {}
+    assert result["valid_generation_result"]["sql"] == expected_sql
+    assert engine.executed_sql == expected_sql
+
+
+@pytest.mark.asyncio
+async def test_post_processor_does_not_quote_schema_identifiers_inside_literals():
+    engine = _CapturingEngine()
+    processor = SQLGenPostProcessor(engine=engine)
+    contexts = [
+        (
+            f"CREATE TABLE {TABLE_SPECIAL} (\n"
+            f"  {COLUMN_STATUS} VARCHAR,\n"
+            f"  {COLUMN_SPECIAL} VARCHAR\n"
+            ");"
+        )
+    ]
+
+    result = await processor.run(
+        [
+            (
+                f'{{"sql": "SELECT {COLUMN_SPECIAL} FROM {TABLE_SPECIAL} '
+                f"WHERE {COLUMN_STATUS} = '{TABLE_SPECIAL}'\"}}"
+            )
+        ],
+        contexts=contexts,
+    )
+
+    expected_sql = (
+        f'SELECT "{COLUMN_SPECIAL}" FROM "{TABLE_SPECIAL}" '
+        f"WHERE {COLUMN_STATUS} = '{TABLE_SPECIAL}'"
+    )
+    assert result["invalid_generation_result"] == {}
+    assert engine.executed_sql == expected_sql
 
 
 @pytest.mark.asyncio
