@@ -79,6 +79,23 @@ class GitCommandError(CloudError):
     """A shelled-out `git` command failed unexpectedly."""
 
 
+class CloudApiError(CloudError):
+    """A `CloudError` that also carries the failed response's HTTP status
+    and, when the body had one, the server's machine-readable `code`.
+
+    Lets a caller branch on *why* a call failed without parsing prose out
+    of the message. `code` is `None` whenever the body was missing,
+    unparseable, not a JSON object, or had no string `code` field — a
+    caller checking `exc.code == "..."` degrades safely to "unrecognized"
+    in every one of those cases rather than raising or matching by luck.
+    """
+
+    def __init__(self, message: str, *, status_code: int, code: str | None = None):
+        super().__init__(message)
+        self.status_code = status_code
+        self.code = code
+
+
 @dataclass
 class GitToken:
     repo: str
@@ -97,6 +114,25 @@ def _parse_retry_after(value: str | None, *, default: float = 1.0) -> float:
         return max(float(value), 0.0)
     except ValueError:
         return default
+
+
+def _parse_error_code(resp) -> str | None:
+    """Best-effort extraction of the server's `code` field from an error body.
+
+    Returns `None` on anything other than the expected shape — an
+    unparseable body, a body that isn't a JSON object, or a missing or
+    non-string `code` — rather than raising, so a caller can always fall
+    back to today's generic error instead of crashing on a response it
+    doesn't recognize.
+    """
+    try:
+        data = resp.json()
+    except ValueError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    code = data.get("code")
+    return code if isinstance(code, str) else None
 
 
 def mint_git_token(
@@ -144,9 +180,11 @@ def mint_git_token(
         if resp.status_code == 429 and attempt < max_attempts:
             time.sleep(_parse_retry_after(resp.headers.get("Retry-After")))
             continue
-        raise CloudError(
+        raise CloudApiError(
             f"Wren Cloud API returned {resp.status_code} minting a git token "
-            f"for project {project_id} on {api_host}: {resp.text[:300]}"
+            f"for project {project_id} on {api_host}: {resp.text[:300]}",
+            status_code=resp.status_code,
+            code=_parse_error_code(resp),
         )
 
 
@@ -878,8 +916,7 @@ def create(
             git_host=git_host,
         )
     except CloudError as exc:
-        detail = str(exc)
-        if "PROJECT_NOT_AGENTIC" in detail or "agent-mode projects" in detail:
+        if isinstance(exc, CloudApiError) and exc.code == "PROJECT_NOT_AGENTIC":
             raise CloudError(
                 f"Project {project.id} was created on {api_host}, but it is "
                 "not an agent-mode (AGENTIC) project — `wren cloud create` "

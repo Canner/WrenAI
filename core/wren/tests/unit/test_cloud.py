@@ -346,13 +346,76 @@ def test_link_recovers_when_a_previous_attempt_left_head_unborn(tmp_path):
 
 
 class _FakeResponse:
-    def __init__(self, status_code, json_data=None, text=""):
+    def __init__(self, status_code, json_data=None, text="", raise_on_json=False):
         self.status_code = status_code
         self._json_data = json_data or {}
+        self._raise_on_json = raise_on_json
         self.text = text or str(json_data or "")
 
     def json(self):
+        if self._raise_on_json:
+            raise ValueError("not json")
         return self._json_data
+
+
+# ── mint_git_token: machine-readable failure surfacing ──────────────────────
+#
+# The 200/401/403/429 branches are unchanged and already covered by the
+# credential-helper and `login` tests above (which monkeypatch
+# `mint_git_token` itself). These cover only the new behavior: the
+# generic-error branch now attaches the response's HTTP status and, when
+# the body has one, its machine-readable `code` — so `create` can branch
+# on the failure kind instead of matching prose.
+
+
+def test_mint_git_token_attaches_status_and_code_from_a_realistic_error_body(
+    monkeypatch,
+):
+    def fake_post(url, headers=None, timeout=None):
+        return _FakeResponse(
+            404,
+            {
+                "code": "PROJECT_NOT_AGENTIC",
+                "error": "This endpoint is only available for agent-mode projects.",
+            },
+        )
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    with pytest.raises(cloud.CloudApiError) as excinfo:
+        cloud.mint_git_token("https://cloud.getwren.ai", "16", "sk-test")
+
+    assert excinfo.value.status_code == 404
+    assert excinfo.value.code == "PROJECT_NOT_AGENTIC"
+
+
+def test_mint_git_token_code_is_none_on_a_body_with_no_code_field(monkeypatch):
+    def fake_post(url, headers=None, timeout=None):
+        return _FakeResponse(500, {"error": "server exploded"}, text="server exploded")
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    with pytest.raises(cloud.CloudApiError) as excinfo:
+        cloud.mint_git_token("https://cloud.getwren.ai", "16", "sk-test")
+
+    # No `code` in the body degrades to `None`, not a crash — and the
+    # message is exactly what it was before this change.
+    assert excinfo.value.code is None
+    assert excinfo.value.status_code == 500
+    assert "server exploded" in str(excinfo.value)
+
+
+def test_mint_git_token_code_is_none_on_an_unparseable_body(monkeypatch):
+    def fake_post(url, headers=None, timeout=None):
+        return _FakeResponse(502, text="<html>bad gateway</html>", raise_on_json=True)
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    with pytest.raises(cloud.CloudApiError) as excinfo:
+        cloud.mint_git_token("https://cloud.getwren.ai", "16", "sk-test")
+
+    assert excinfo.value.code is None
+    assert excinfo.value.status_code == 502
 
 
 # ── create_project: POST /api/v1/projects ───────────────────────────────────
@@ -650,17 +713,23 @@ def test_create_failed_project_creation_leaves_nothing_to_clean_up(
 def test_create_reports_not_agentic_actionably_and_includes_the_project_key(
     tmp_path, monkeypatch
 ):
+    # Deliberately does NOT monkeypatch `login` or `mint_git_token` — this
+    # drives the real `login()` -> real `mint_git_token()` path, stubbing
+    # only the network boundary, so the detection is exercised against an
+    # actually-realistic response: HTTP 404 with the server's documented
+    # `{"code": "PROJECT_NOT_AGENTIC", ...}` body.
     _patch_create_http(monkeypatch)
 
-    def fake_login(*, host, project_id, api_key, git_host):
-        raise cloud.CloudError(
-            "Wren Cloud API returned 404 minting a git token for project "
-            f'{project_id} on {host}: {{"code":"PROJECT_NOT_AGENTIC",'
-            '"error":"This endpoint is only available for agent-mode '
-            'projects."}'
+    def fake_post(url, headers=None, timeout=None, **kwargs):
+        return _FakeResponse(
+            404,
+            {
+                "code": "PROJECT_NOT_AGENTIC",
+                "error": "This endpoint is only available for agent-mode projects.",
+            },
         )
 
-    monkeypatch.setattr(cloud, "login", fake_login)
+    monkeypatch.setattr(requests, "post", fake_post)
 
     target = tmp_path / "project"
     target.mkdir()
@@ -679,6 +748,58 @@ def test_create_reports_not_agentic_actionably_and_includes_the_project_key(
     assert "sk-fresh-project-key" in message
     assert "wren cloud login" in message
     # Nothing was touched locally — this is a pure server-side outcome.
+    assert not (target / ".git").exists()
+
+
+@pytest.mark.parametrize(
+    "resp_kwargs",
+    [
+        pytest.param(
+            {"json_data": {"code": "PROJECT_NOT_FOUND"}, "text": "not found"},
+            id="different_code",
+        ),
+        pytest.param(
+            {"json_data": {"error": "nope"}, "text": "nope"},
+            id="no_code_field",
+        ),
+        pytest.param(
+            {"raise_on_json": True, "text": "<html>not json</html>"},
+            id="unparseable_body",
+        ),
+    ],
+)
+def test_create_degrades_to_generic_bind_failure_on_an_unrecognized_git_token_error(
+    tmp_path, monkeypatch, resp_kwargs
+):
+    # Same 404 status as the real PROJECT_NOT_AGENTIC case, but a body that
+    # doesn't say so — a different code, no code at all, or no parseable
+    # body. This must never be silently misdiagnosed as "not agentic": that
+    # would send the user chasing a nonexistent org-admin opt-in instead of
+    # whatever the real 404 means.
+    _patch_create_http(monkeypatch)
+
+    def fake_post(url, headers=None, timeout=None, **kwargs):
+        return _FakeResponse(404, **resp_kwargs)
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    target = tmp_path / "project"
+    target.mkdir()
+
+    with pytest.raises(cloud.CloudError) as excinfo:
+        cloud.create(
+            target,
+            host="https://cloud.getwren.ai",
+            org_id="2",
+            org_key="osk-x",
+            display_name="proj",
+        )
+
+    message = str(excinfo.value)
+    assert "not an agent-mode" not in message
+    assert "binding this directory to it failed" in message
+    assert "sk-fresh-project-key" in message
+    assert "wren cloud login" in message
     assert not (target / ".git").exists()
 
 
