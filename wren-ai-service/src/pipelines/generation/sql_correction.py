@@ -76,6 +76,13 @@ Correct the SQL only against the DATABASE SCHEMA documents retrieved for this de
 {{ schema_grounding_manifest }}
 {% endif %}
 
+### REQUIRED SCHEMA BINDING BEFORE SQL ###
+Before writing corrected SQL, bind every requested business concept to exact identifiers from VERIFIED SCHEMA OBJECTS.
+Use only the bound table.column identifiers in SELECT, CTEs, UNION branches, JOIN, WHERE, GROUP BY, HAVING, ORDER BY, aggregates, and nested queries.
+Do not correct SQL from business meaning alone or from invalid identifiers in the failed SQL. If a concept cannot be bound to a verified table.column, omit that unsupported concept or return no SQL.
+Business wording may appear only as final SELECT output aliases, never as source columns.
+Every source column in the corrected SQL must be copied exactly from VERIFIED SCHEMA OBJECTS under the table/view that provides it.
+
 {% if invalid_generation_result.schema_grounding_failure %}
 ### SCHEMA GROUNDING FAILURE ###
 The failed SQL used unsupported schema objects or columns. Do not reuse invalid table or column names from the failed SQL. Regenerate from the active user question using only DATABASE SCHEMA and VERIFIED SCHEMA OBJECTS.

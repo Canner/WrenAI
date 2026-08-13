@@ -74,6 +74,20 @@ def _assert_deployment_scope(prompt: str) -> None:
     assert f"MDL Hash: {TEST_MDL_HASH}" in prompt
 
 
+def _assert_schema_binding_contract(prompt: str) -> None:
+    assert "### REQUIRED SCHEMA BINDING BEFORE SQL ###" in prompt
+    assert "bind every requested business concept" in prompt
+    assert "Do not write SQL from business meaning alone" in prompt or (
+        "Do not correct SQL from business meaning alone" in prompt
+    ) or (
+        "Do not regenerate SQL from business meaning alone" in prompt
+    ) or (
+        "Do not reason from business meaning alone" in prompt
+    )
+    assert "Business wording may appear only" in prompt
+    assert "copied exactly from VERIFIED SCHEMA OBJECTS" in prompt
+
+
 def _table_ddl(table_name: str, column_name: str, column_type: str = "VARCHAR") -> str:
     return f"CREATE TABLE {table_name} ({column_name} {column_type})"
 
@@ -178,6 +192,7 @@ def test_reasoning_prompt_uses_schema_documents_only():
     assert _select_all_sql(SAMPLE_TABLE_NAME) in built_prompt
     assert "### VERIFIED SCHEMA OBJECTS ###" in built_prompt
     assert f"- {SCHEMA_TABLE_NAME}: {COUNTRY_COLUMN_NAME}" in built_prompt
+    _assert_schema_binding_contract(built_prompt)
 
 
 def test_followup_reasoning_prompt_uses_history_and_schema_documents():
@@ -226,6 +241,7 @@ def test_followup_sql_generation_prompt_uses_database_schema_documents():
     assert _select_all_sql(SAMPLE_TABLE_NAME) in built_prompt
     assert "### VERIFIED SCHEMA OBJECTS ###" in built_prompt
     assert f"- {SCHEMA_TABLE_NAME}: {COUNTRY_COLUMN_NAME}" in built_prompt
+    _assert_schema_binding_contract(built_prompt)
 
 
 def test_sql_correction_prompt_uses_failed_sql_and_error():
@@ -244,6 +260,7 @@ def test_sql_correction_prompt_uses_failed_sql_and_error():
     assert "Error Message: dry run failed" in built_prompt
     assert "### VERIFIED SCHEMA OBJECTS ###" in built_prompt
     assert f"- {MODEL_TABLE_NAME}: {MODEL_COLUMN_NAME}" in built_prompt
+    _assert_schema_binding_contract(built_prompt)
 
 
 def test_sql_correction_prompt_can_include_active_question_and_reasoning():
@@ -299,6 +316,7 @@ def test_sql_regeneration_prompt_uses_legacy_inputs_without_datasource_dialect()
     assert "Configured data source: trino" not in built_prompt
     assert "### VERIFIED SCHEMA OBJECTS ###" in built_prompt
     assert f"- {MODEL_TABLE_NAME}: {MODEL_COLUMN_NAME}" in built_prompt
+    _assert_schema_binding_contract(built_prompt)
 
 
 def test_sql_regeneration_system_prompt_uses_json_sql_contract():

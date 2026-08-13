@@ -38,6 +38,13 @@ If the DATABASE SCHEMA does not explicitly contain the required identifiers, ret
 {{ schema_grounding_manifest }}
 {% endif %}
 
+### REQUIRED SCHEMA BINDING BEFORE SQL ###
+Before planning, bind every requested business concept to exact identifiers from VERIFIED SCHEMA OBJECTS.
+Use only the bound table.column identifiers in the reasoning plan.
+Do not reason from business meaning alone. If a concept cannot be bound to a verified table.column, return the insufficient-metadata bullet from the system instructions.
+Business wording may appear only as display/output labels, never as source columns.
+Every source column in the reasoning plan must be copied exactly from VERIFIED SCHEMA OBJECTS under the table/view that provides it.
+
 {% if sql_samples %}
 ### SQL SAMPLES ###
 {% for sql_sample in sql_samples %}
