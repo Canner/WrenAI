@@ -1,3 +1,4 @@
+import asyncio
 import json
 import uuid
 
@@ -359,6 +360,32 @@ class _NoRelevantSqlGenerationPipeline:
         }
 
 
+class _IntentClassificationPipeline:
+    def __init__(self, intent: str):
+        self.intent = intent
+        self.calls = []
+
+    async def run(self, **kwargs):
+        self.calls.append(kwargs)
+        return {
+            "post_process": {
+                "intent": self.intent,
+                "rephrased_question": kwargs.get("query", ""),
+                "reasoning": f"classified as {self.intent}",
+                "db_schemas": [],
+            }
+        }
+
+
+class _CapturingAssistancePipeline:
+    def __init__(self):
+        self.calls = []
+
+    async def run(self, **kwargs):
+        self.calls.append(kwargs)
+        return {}
+
+
 class _ValidSqlGenerationPipeline:
     def __init__(self):
         self.calls = []
@@ -697,6 +724,87 @@ async def test_followup_ask_passes_reasoning_text_to_sql_generation_like_legacy(
         generation.calls[0]["sql_generation_reasoning"]
         == ask_result_response.sql_generation_reasoning
     )
+
+
+@pytest.mark.asyncio
+async def test_ask_general_intent_continues_to_text_to_sql_when_schema_is_retrieved():
+    intent_classification = _IntentClassificationPipeline("GENERAL")
+    data_assistance = _CapturingAssistancePipeline()
+    generation = _ValidSqlGenerationPipeline()
+    ask_service = AskService(
+        {
+            "intent_classification": intent_classification,
+            "historical_question": _EmptyRetrievalPipeline(),
+            "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
+            "instructions_retrieval": _EmptyRetrievalPipeline(),
+            "data_assistance": data_assistance,
+            "db_schema_retrieval": _SchemaRetrievalPipeline(),
+            "sql_generation": generation,
+            "sql_correction": _UnexpectedCorrectionPipeline(),
+            "sql_diagnosis": _FailingDiagnosisPipeline(),
+        },
+        allow_intent_classification=True,
+        allow_sql_generation_reasoning=False,
+        allow_sql_functions_retrieval=False,
+        allow_sql_knowledge_retrieval=False,
+        allow_sql_diagnosis=True,
+    )
+    query_id = str(uuid.uuid4())
+    ask_request = AskRequest(query="display all records", mdl_hash="deploy-hash")
+    ask_request.query_id = query_id
+
+    result = await ask_service.ask(ask_request)
+
+    ask_result_response = ask_service.get_ask_result(
+        AskResultRequest(query_id=query_id)
+    )
+    assert result["metadata"]["type"] == "TEXT_TO_SQL"
+    assert ask_result_response.status == "finished"
+    assert ask_result_response.type == "TEXT_TO_SQL"
+    assert ask_result_response.response[0].sql == MODEL_ALPHA_COUNT_SQL
+    assert generation.calls
+    assert data_assistance.calls == []
+
+
+@pytest.mark.asyncio
+async def test_ask_general_intent_falls_back_to_data_assistance_without_schema():
+    intent_classification = _IntentClassificationPipeline("GENERAL")
+    data_assistance = _CapturingAssistancePipeline()
+    generation = _ValidSqlGenerationPipeline()
+    ask_service = AskService(
+        {
+            "intent_classification": intent_classification,
+            "historical_question": _EmptyRetrievalPipeline(),
+            "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
+            "instructions_retrieval": _EmptyRetrievalPipeline(),
+            "data_assistance": data_assistance,
+            "db_schema_retrieval": _EmptyRetrievalPipeline(),
+            "sql_generation": generation,
+            "sql_correction": _UnexpectedCorrectionPipeline(),
+            "sql_diagnosis": _FailingDiagnosisPipeline(),
+        },
+        allow_intent_classification=True,
+        allow_sql_generation_reasoning=False,
+        allow_sql_functions_retrieval=False,
+        allow_sql_knowledge_retrieval=False,
+        allow_sql_diagnosis=True,
+    )
+    query_id = str(uuid.uuid4())
+    ask_request = AskRequest(query="display all records", mdl_hash="deploy-hash")
+    ask_request.query_id = query_id
+
+    result = await ask_service.ask(ask_request)
+    await asyncio.sleep(0)
+
+    ask_result_response = ask_service.get_ask_result(
+        AskResultRequest(query_id=query_id)
+    )
+    assert result["metadata"]["type"] == "GENERAL"
+    assert ask_result_response.status == "finished"
+    assert ask_result_response.type == "GENERAL"
+    assert ask_result_response.general_type == "DATA_ASSISTANCE"
+    assert data_assistance.calls
+    assert generation.calls == []
 
 
 @pytest.mark.asyncio

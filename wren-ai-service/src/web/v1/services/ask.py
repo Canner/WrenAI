@@ -256,6 +256,7 @@ class AskService:
         rephrased_question = None
         intent_reasoning = None
         sql_generation_reasoning = None
+        intent_classification_result = {}
         sql_samples = []
         instructions = []
         api_results = []
@@ -281,6 +282,7 @@ class AskService:
 
         try:
             user_query = ask_request.query
+            should_try_text_to_sql_after_general = False
 
             # ask status can be understanding, searching, generating, finished, failed, stopped
             # we will need to handle business logic for each status
@@ -385,30 +387,15 @@ class AskService:
                             results["metadata"]["type"] = "MISLEADING_QUERY"
                             return results
                         elif intent == "GENERAL":
-                            asyncio.create_task(
-                                self._pipelines["data_assistance"].run(
-                                    query=user_query,
-                                    histories=histories,
-                                    db_schemas=intent_classification_result.get(
-                                        "db_schemas"
-                                    ),
-                                    language=ask_request.configurations.language,
-                                    query_id=ask_request.query_id,
-                                    custom_instruction=ask_request.custom_instruction,
-                                )
-                            )
-
+                            should_try_text_to_sql_after_general = True
                             self._ask_results[query_id] = AskResultResponse(
-                                status="finished",
-                                type="GENERAL",
+                                status="understanding",
+                                type="TEXT_TO_SQL",
                                 rephrased_question=rephrased_question,
                                 intent_reasoning=intent_reasoning,
                                 trace_id=trace_id,
                                 is_followup=True if histories else False,
-                                general_type="DATA_ASSISTANCE",
                             )
-                            results["metadata"]["type"] = "GENERAL"
-                            return results
                         elif intent == "USER_GUIDE":
                             asyncio.create_task(
                                 self._pipelines["user_guide_assistance"].run(
@@ -465,6 +452,32 @@ class AskService:
                 schema_contexts = _schema_validation_contexts(documents)
 
                 if not documents:
+                    if should_try_text_to_sql_after_general:
+                        asyncio.create_task(
+                            self._pipelines["data_assistance"].run(
+                                query=user_query,
+                                histories=histories,
+                                db_schemas=intent_classification_result.get(
+                                    "db_schemas"
+                                ),
+                                language=ask_request.configurations.language,
+                                query_id=ask_request.query_id,
+                                custom_instruction=ask_request.custom_instruction,
+                            )
+                        )
+
+                        self._ask_results[query_id] = AskResultResponse(
+                            status="finished",
+                            type="GENERAL",
+                            rephrased_question=rephrased_question,
+                            intent_reasoning=intent_reasoning,
+                            trace_id=trace_id,
+                            is_followup=True if histories else False,
+                            general_type="DATA_ASSISTANCE",
+                        )
+                        results["metadata"]["type"] = "GENERAL"
+                        return results
+
                     logger.exception(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
                     if not self._is_stopped(query_id, self._ask_results):
                         self._ask_results[query_id] = AskResultResponse(
