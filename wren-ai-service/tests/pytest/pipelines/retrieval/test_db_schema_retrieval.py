@@ -370,6 +370,48 @@ def test_construct_retrieval_results_uses_selected_columns_for_sql_generation():
     assert retrieved["manifest_column_names"] == [COLUMN_TEXT, COLUMN_MEASURE]
 
 
+def test_construct_retrieval_results_falls_back_to_full_table_for_ungrounded_pruned_columns():
+    result = construct_retrieval_results(
+        check_using_db_schemas_without_pruning={},
+        filter_columns_in_tables={
+            "replies": [
+                """
+                {
+                    "results": [
+                        {
+                            "table_name": "model_a",
+                            "table_selection_reason": "Selected.",
+                            "table_contents": {
+                                "chain_of_thought_reasoning": ["Needed field."],
+                                "columns": ["question_wording"]
+                            }
+                        }
+                    ]
+                }
+                """
+            ]
+        },
+        construct_db_schemas=[
+            table_schema(
+                MODEL_A,
+                [
+                    column(COLUMN_TEXT),
+                    column(COLUMN_MEASURE, "DOUBLE"),
+                ],
+            )
+        ],
+        dbschema_retrieval=[],
+    )
+
+    retrieved = result["retrieval_results"][0]
+
+    assert "question_wording" not in retrieved["table_ddl"]
+    assert f"{COLUMN_TEXT} VARCHAR" in retrieved["table_ddl"]
+    assert f"{COLUMN_MEASURE} DOUBLE" in retrieved["table_ddl"]
+    assert retrieved["column_names"] == [COLUMN_TEXT, COLUMN_MEASURE]
+    assert retrieved["manifest_column_names"] == [COLUMN_TEXT, COLUMN_MEASURE]
+
+
 def test_construct_retrieval_results_keeps_only_selected_metrics_and_views():
     result = construct_retrieval_results(
         check_using_db_schemas_without_pruning={},

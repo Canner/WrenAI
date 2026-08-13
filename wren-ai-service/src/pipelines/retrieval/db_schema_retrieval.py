@@ -40,6 +40,10 @@ The database schema includes tables, columns, primary keys, foreign keys, relati
 5. The number of columns chosen must match the number of reasoning.
 6. Final chosen columns must be only column names, don't prefix it with table names.
 7. If the chosen column is a child column of a STRUCT type column, choose the parent column instead of the child column.
+8. Choose only exact physical column names that appear in the CREATE TABLE statement for that table.
+9. User-facing business terms are intents, not physical column names. If the question uses a business term, resolve it to exact schema columns using the column name, alias, and comment from the schema. Do not output the business term unless it is an exact column name.
+10. Include every exact physical column needed for SELECT, JOIN, WHERE, GROUP BY, HAVING, ORDER BY, aggregations, ranking, filters, and output aliases.
+11. If multiple exact schema columns could be needed to satisfy a requested business concept, include those exact schema columns instead of inventing a generic column.
 
 ### FINAL ANSWER FORMAT ###
 Please provide your response as a JSON object, structured as follows:
@@ -83,6 +87,7 @@ Please provide your response as a JSON object, structured as follows:
 - Use table name used in the "Create Table" statement, don't use "alias".
 - Match Column names with the definition in the "Create Table" statement.
 - Match Table names with the definition in the "Create Table" statement.
+- Never invent, normalize, singularize, pluralize, abbreviate, or rename columns from the user's wording.
 
 Good luck!
 
@@ -139,6 +144,21 @@ def _manifest_column_names(content: dict) -> list[str]:
         if column.get("type", "COLUMN") == "COLUMN"
         and column.get("data_type", "").lower() != "unknown"
     ]
+
+
+def _schema_grounded_selected_columns(
+    table_schema: dict,
+    selected_columns: list[str],
+) -> tuple[list[str], bool]:
+    valid_column_names = set(_manifest_column_names(table_schema))
+    grounded_columns = [
+        column_name for column_name in selected_columns if column_name in valid_column_names
+    ]
+    has_ungrounded_columns = any(
+        column_name not in valid_column_names for column_name in selected_columns
+    )
+
+    return grounded_columns, has_ungrounded_columns
 
 
 ## Start of Pipeline
@@ -394,14 +414,27 @@ def construct_retrieval_results(
 
         for table_schema in construct_db_schemas:
             if table_schema["type"] == "TABLE" and table_schema["name"] in tables:
+                selected_columns = columns_and_tables_needed[table_schema["name"]][
+                    "columns"
+                ]
+                (
+                    grounded_columns,
+                    has_ungrounded_columns,
+                ) = _schema_grounded_selected_columns(table_schema, selected_columns)
                 unpruned_ddl, _, _ = build_table_ddl(table_schema, tables=tables)
-                ddl, _has_calculated_field, _has_json_field = build_table_ddl(
-                    table_schema,
-                    columns=set(
-                        columns_and_tables_needed[table_schema["name"]]["columns"]
-                    ),
-                    tables=tables,
-                )
+                if has_ungrounded_columns:
+                    ddl, _has_calculated_field, _has_json_field = build_table_ddl(
+                        table_schema,
+                        tables=tables,
+                    )
+                    column_names = _manifest_column_names(table_schema)
+                else:
+                    ddl, _has_calculated_field, _has_json_field = build_table_ddl(
+                        table_schema,
+                        columns=set(grounded_columns),
+                        tables=tables,
+                    )
+                    column_names = grounded_columns
                 if _has_calculated_field:
                     has_calculated_field = True
                 if _has_json_field:
@@ -412,9 +445,7 @@ def construct_retrieval_results(
                         "table_name": table_schema["name"],
                         "table_ddl": ddl,
                         "unpruned_table_ddl": unpruned_ddl,
-                        "column_names": columns_and_tables_needed[table_schema["name"]][
-                            "columns"
-                        ],
+                        "column_names": column_names,
                         "manifest_column_names": _manifest_column_names(table_schema),
                     }
                 )
