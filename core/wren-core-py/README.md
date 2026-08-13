@@ -63,11 +63,31 @@ Visibility contract:
 - Brand-new *top-level* catalogs are the exception — they must exist before
   MDL construction, `load_mdl`, or a transform, each of which snapshots the
   top-level catalog list.
-- `load_mdl` must not overlap other calls on the same context; overlapping
-  calls raise `RuntimeError`.
+- For `load_mdl`'s overlap rule, see the Concurrency section below.
 
 For complete runnable examples (fixture files, matching manifests, decoding
 the returned bytes), see `tests/test_physical_tables.py`.
+
+### Concurrency
+
+Calls on one `SessionContext` run in parallel. Each `transform_sql` works
+on a private top-level catalog snapshot and analyzer state is
+per-invocation, so supported concurrent calls never observe each other's
+intermediate state. The contract:
+
+- Concurrent execution is supported for the read-only inputs accepted by
+  `transform_sql` and `query`, and for the registration APIs. `dry_run` is
+  concurrency-safe for statements that `EXPLAIN` only plans. An
+  `ANALYZE`-prefixed input becomes `EXPLAIN ANALYZE` and executes; like a
+  state-mutating statement accepted by `query()`, it is outside the
+  concurrency contract. Function lookup methods are read-only and
+  concurrency-safe.
+- `register_parquet` / `register_csv` are safe under distinct table names;
+  registering the same name concurrently is unsupported.
+- `list_tables` is a best-effort enumeration: registrations that land
+  mid-call may or may not appear, but the result is always well-formed.
+- `load_mdl` must not overlap other calls on the same context; overlapping
+  calls raise `RuntimeError`.
 
 ## Developer Guide
 
