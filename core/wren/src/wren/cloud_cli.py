@@ -1,11 +1,12 @@
 """Typer sub-app for ``wren cloud`` commands.
 
 ``wren cloud login`` connects a local directory to a Wren Cloud project's
-git remote; ``wren cloud pull`` then acquires (or adopts) that project's
-files via plain git. After that, ordinary ``git push`` / ``git pull`` /
-``git diff`` are the commands — none of the security depends on going
-through this CLI again. ``wren cloud git-credential`` is the helper `login`
-wires into git; it is not meant to be invoked by hand.
+git remote; ``wren cloud link`` then binds (or adopts) that project's files
+into a local directory via plain git, once. After that, ordinary
+``git push`` / ``git pull`` / ``git diff`` are the commands — none of the
+security depends on going through this CLI again, and ``git pull`` (not a
+repeated ``link``) is how you get updates. ``wren cloud git-credential`` is
+the helper `login` wires into git; it is not meant to be invoked by hand.
 """
 
 from __future__ import annotations
@@ -77,15 +78,15 @@ def login(
     typer.echo(f"Remote repo: {token.repo}")
     typer.echo(
         "git is now configured to authenticate to this project automatically. "
-        "Run `wren cloud pull` to fetch it, or `git clone` the remote directly."
+        "Run `wren cloud link` to bind it, or `git clone` the remote directly."
     )
 
 
 @cloud_app.command()
-def pull(
+def link(
     directory: Annotated[
         Path,
-        typer.Argument(help="Local directory to pull the project into."),
+        typer.Argument(help="Local directory to bind the project into."),
     ] = Path("."),
     host: Annotated[
         Optional[str],
@@ -106,7 +107,10 @@ def pull(
         ),
     ] = None,
 ) -> None:
-    """Acquire a Wren Cloud project's files into a local directory via git.
+    """Bind a local directory to a Wren Cloud project's git remote, once.
+
+    This is a one-time bind, not the update command — once linked, use
+    ``git pull`` to fetch further changes.
 
     Into a fresh, empty directory this is a plain clone. Into a directory
     that already contains project files, it initializes git in place,
@@ -116,6 +120,11 @@ def pull(
 
     Refuses if ``directory`` sits inside another git repository, to avoid
     pushing that repository's own files into the project's remote.
+
+    Safe to re-run if a previous attempt failed partway through — that
+    recovers cleanly. If the directory is already fully linked, re-running
+    reports that and does not merge again; use ``git pull`` for updates
+    instead.
 
     Requires having run ``wren cloud login`` for the target project first.
     """
@@ -153,7 +162,7 @@ def pull(
 
     git_host, project_id, entry = logins[0]
     try:
-        cloud.pull(
+        outcome = cloud.link(
             directory,
             git_host=git_host,
             api_host=entry["api_host"],
@@ -165,7 +174,13 @@ def pull(
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1)
 
-    typer.echo(f"Pulled project {project_id} into {directory}.")
+    if outcome is cloud.LinkOutcome.ALREADY_LINKED:
+        typer.echo(
+            f"{directory} is already linked to project {project_id}. "
+            "Run `git pull` to fetch updates."
+        )
+    else:
+        typer.echo(f"Linked project {project_id} into {directory}.")
 
 
 @git_credential_app.command("get")

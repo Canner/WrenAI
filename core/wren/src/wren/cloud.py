@@ -21,7 +21,7 @@ the binding is the git remote itself, which git already tracks.
 
 Do not reuse ``context.convert_mdl_to_project()`` from this module's callers
 — it never reads the manifest's ``cubes``, so anything built on it silently
-drops them. ``pull`` acquires files via git, not via the manifest, so it
+drops them. ``link`` acquires files via git, not via the manifest, so it
 should never need that path at all.
 """
 
@@ -33,6 +33,7 @@ import subprocess
 import tempfile
 import time
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
 _WREN_HOME = Path(os.environ.get("WREN_HOME", Path.home() / ".wren"))
@@ -68,7 +69,7 @@ class NestedRepoError(CloudError):
             "Connecting it to Wren Cloud would push that repository's own "
             "files and history into the project's git repository.\n"
             f"Move the project to its own directory (outside {found_root}) "
-            "and run `wren cloud pull` again."
+            "and run `wren cloud link` again."
         )
 
 
@@ -461,10 +462,10 @@ def check_not_nested(target: Path) -> None:
     """Refuse when `target` sits inside a foreign git repository.
 
     A `.git` found AT `target` itself is fine — an already-tracked local
-    project, or one `pull` is about to create. A `.git` found in an
+    project, or one `link` is about to create. A `.git` found in an
     ANCESTOR is the trap this exists for: continuing would push that
     repository's entire contents and history into the project's git
-    repository. This is the most important error path in `pull` — missed,
+    repository. This is the most important error path in `link` — missed,
     it is silent data leakage, not a failure anyone would notice.
     """
     target = target.resolve()
@@ -473,7 +474,19 @@ def check_not_nested(target: Path) -> None:
         raise NestedRepoError(target, found)
 
 
-# ── pull: acquire the repo correctly, exactly once ──────────────────────────
+# ── link: bind a directory to a cloud project, exactly once ─────────────────
+
+
+class LinkOutcome(Enum):
+    """What `link` actually did, for the CLI to report accurately."""
+
+    LINKED = "linked"
+    """A clone or a reconciling merge was performed."""
+
+    ALREADY_LINKED = "already_linked"
+    """`target` was already bound to this project and had nothing new to
+    bring in. Still a success — the caller should point at `git pull` for
+    updates instead of implying a merge just happened."""
 
 
 def _default_branch(remote_url: str) -> str:
@@ -487,7 +500,7 @@ def _default_branch(remote_url: str) -> str:
     return "main"
 
 
-def pull(
+def link(
     target: Path,
     *,
     git_host: str,
@@ -495,15 +508,24 @@ def pull(
     project_id: str,  # noqa: ARG001
     org_id: str,  # noqa: ARG001
     repo: str,
-) -> None:
-    """Acquire `repo` into `target`, handling both shapes.
+) -> LinkOutcome:
+    """Bind `target` to `repo`, handling both shapes, and do the reconciling
+    merge at most once.
 
     - Fresh directory: a plain `git clone`.
     - Existing local project (the main case): initialise in place — no
       files are moved — add the remote, fetch, and merge with
       `--allow-unrelated-histories`. Never `--force`, no exceptions.
+    - Already-linked directory with nothing new to bring in: reported as
+      `ALREADY_LINKED` rather than merged again — see the ancestor check
+      below. This is a one-time bind, not the update path; `git pull` is.
 
     Refuses up front when `target` sits inside another git repository.
+
+    Re-running this after a previous attempt died mid-way (e.g. inside
+    `commit`, for lack of a git identity) still completes correctly — see
+    the "is HEAD born?" check below — because that failure mode is
+    indistinguishable from a fresh directory unless we ask git directly.
     """
     target = target.resolve()
     check_not_nested(target)
@@ -516,7 +538,7 @@ def pull(
     if not is_repo_here and not has_files:
         target.parent.mkdir(parents=True, exist_ok=True)
         run_git(["clone", remote_url, str(target)])
-        return
+        return LinkOutcome.LINKED
 
     if not is_repo_here:
         run_git(["init"], cwd=target)
@@ -551,6 +573,25 @@ def pull(
     run_git(["fetch", "origin"], cwd=target)
 
     branch = _default_branch(remote_url)
+
+    # If `origin/<branch>` is already an ancestor of HEAD, merging it would
+    # add nothing: either a previous `link` already did the reconciling
+    # merge (HEAD contains it from there), or this directory was a plain
+    # clone to begin with. Either way there is nothing to reconcile, and
+    # re-merging would misrepresent a no-op as a fresh bind. This is the
+    # one case `link` treats as "already done" rather than "do it again" —
+    # the merge below still happens exactly once.
+    already_linked = (
+        run_git(
+            ["merge-base", "--is-ancestor", f"origin/{branch}", "HEAD"],
+            cwd=target,
+            check=False,
+        ).returncode
+        == 0
+    )
+    if already_linked:
+        return LinkOutcome.ALREADY_LINKED
+
     merge = run_git(
         [
             "merge",
@@ -588,3 +629,4 @@ def pull(
         cwd=target,
         check=False,
     )
+    return LinkOutcome.LINKED

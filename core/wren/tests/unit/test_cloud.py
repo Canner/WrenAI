@@ -3,7 +3,7 @@ git credential helper's stdin/stdout protocol.
 
 These cover the pure-logic paths only. The seven live checks against a real
 Wren Cloud stack (login+clone, push, wrong-key messaging, host-scoping,
-fresh-dir pull, existing-dir pull, nested-repo refusal) are exercised
+fresh-dir link, existing-dir link, nested-repo refusal) are exercised
 manually, not here — a mocked HTTP/git layer cannot stand in for them.
 """
 
@@ -276,3 +276,92 @@ def test_run_git_returns_completed_process_on_success(tmp_path):
     result = cloud.run_git(["init"], cwd=tmp_path)
     assert isinstance(result, subprocess.CompletedProcess)
     assert (tmp_path / ".git").exists()
+
+
+# ── link: acquisition, recovery, and the already-linked short-circuit ──────
+#
+# Unlike the sections above, these drive real git — a local filesystem path
+# stands in for the project's remote, so no HTTP/Wren Cloud stack is
+# needed. `link()` builds the remote URL as f"{git_host}/git/{repo}", so
+# the fake remote must live at exactly that path for local-filesystem
+# fetch/clone to reach it.
+
+
+@pytest.fixture(autouse=True)
+def _git_identity(monkeypatch):
+    # `link()` shells out to real `git commit`. Set the identity via env
+    # vars (subprocess inherits the test process's environment) rather
+    # than relying on — or mutating — the machine's global git config.
+    monkeypatch.setenv("GIT_AUTHOR_NAME", "Test")
+    monkeypatch.setenv("GIT_AUTHOR_EMAIL", "test@example.com")
+    monkeypatch.setenv("GIT_COMMITTER_NAME", "Test")
+    monkeypatch.setenv("GIT_COMMITTER_EMAIL", "test@example.com")
+
+
+def _seed_remote(remote_dir):
+    """A real local git repo standing in for the project's remote, with one
+    commit — like a freshly created Wren Cloud project seeding its own
+    `.hooks/deploy-modeling.yaml` before the user ever links to it."""
+    remote_dir.mkdir(parents=True)
+    cloud.run_git(["init"], cwd=remote_dir)
+    (remote_dir / "seed.txt").write_text("seeded by project creation")
+    cloud.run_git(["add", "-A"], cwd=remote_dir)
+    cloud.run_git(["commit", "-m", "seed"], cwd=remote_dir)
+
+
+def _link(target, *, git_host, repo="shared-data.git"):
+    return cloud.link(
+        target,
+        git_host=git_host,
+        api_host="unused",
+        project_id="16",
+        org_id="2",
+        repo=repo,
+    )
+
+
+def test_link_recovers_when_a_previous_attempt_left_head_unborn(tmp_path):
+    git_host = str(tmp_path / "host")
+    _seed_remote(tmp_path / "host" / "git" / "shared-data.git")
+
+    target = tmp_path / "project"
+    target.mkdir()
+    (target / "mine.txt").write_text("my existing file")
+    # Simulate a previous `link` that got as far as `git init` and then
+    # died before committing (e.g. no git identity): `.git` exists but
+    # HEAD is unborn.
+    cloud.run_git(["init"], cwd=target)
+
+    outcome = _link(target, git_host=git_host)
+
+    assert outcome is cloud.LinkOutcome.LINKED
+    # The unrelated-history merge actually ran (not a fast-forward onto an
+    # unborn HEAD): both the pre-existing local file and the remote's
+    # seeded file are present afterward.
+    assert (target / "mine.txt").exists()
+    assert (target / "seed.txt").exists()
+    log = cloud.run_git(["log", "--oneline"], cwd=target).stdout.strip().splitlines()
+    assert len(log) >= 2
+
+
+def test_link_reports_already_linked_on_rerun_with_nothing_new(tmp_path):
+    git_host = str(tmp_path / "host")
+    _seed_remote(tmp_path / "host" / "git" / "shared-data.git")
+
+    target = tmp_path / "project"
+    target.mkdir()
+    (target / "mine.txt").write_text("my existing file")
+
+    first = _link(target, git_host=git_host)
+    assert first is cloud.LinkOutcome.LINKED
+    head_after_first = cloud.run_git(["rev-parse", "HEAD"], cwd=target).stdout
+
+    second = _link(target, git_host=git_host)
+
+    assert second is cloud.LinkOutcome.ALREADY_LINKED
+    # Confirms this was a genuine short-circuit, not a second no-op merge:
+    # HEAD did not move.
+    head_after_second = cloud.run_git(["rev-parse", "HEAD"], cwd=target).stdout
+    assert head_after_second == head_after_first
+    assert (target / "mine.txt").exists()
+    assert (target / "seed.txt").exists()

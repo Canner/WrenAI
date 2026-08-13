@@ -3,7 +3,7 @@ git-credential helper's CLI-level stdin/stdout wrapping.
 
 The seven required live checks (real login against a running Wren Cloud
 stack, real git clone/push, real nested-directory refusal, ...) are
-exercised manually — mocking `wren.cloud.login`/`pull` here only proves the
+exercised manually — mocking `wren.cloud.login`/`link` here only proves the
 CLI passes options through correctly, not that the underlying git/HTTP
 behavior is correct.
 """
@@ -103,17 +103,17 @@ def test_login_reports_cloud_error_without_traceback(monkeypatch):
     assert "not valid for project 16" in result.output
 
 
-# ── pull ─────────────────────────────────────────────────────────────────
+# ── link ─────────────────────────────────────────────────────────────────
 
 
-def test_pull_errors_when_no_login_is_stored(monkeypatch, tmp_path):
+def test_link_errors_when_no_login_is_stored(monkeypatch, tmp_path):
     monkeypatch.setattr(cloud, "list_logins", lambda: [])
-    result = runner.invoke(app, ["cloud", "pull", str(tmp_path)])
+    result = runner.invoke(app, ["cloud", "link", str(tmp_path)])
     assert result.exit_code != 0
     assert "wren cloud login" in result.output
 
 
-def test_pull_disambiguates_multiple_stored_logins(monkeypatch, tmp_path):
+def test_link_disambiguates_multiple_stored_logins(monkeypatch, tmp_path):
     monkeypatch.setattr(
         cloud,
         "list_logins",
@@ -122,12 +122,12 @@ def test_pull_disambiguates_multiple_stored_logins(monkeypatch, tmp_path):
             ("https://b.example.com", "17", {"api_host": "https://b.example.com"}),
         ],
     )
-    result = runner.invoke(app, ["cloud", "pull", str(tmp_path)])
+    result = runner.invoke(app, ["cloud", "link", str(tmp_path)])
     assert result.exit_code != 0
     assert "disambiguate" in result.output.lower()
 
 
-def test_pull_host_filters_on_api_host_not_git_host(monkeypatch, tmp_path):
+def test_link_host_filters_on_api_host_not_git_host(monkeypatch, tmp_path):
     """`--host` must match what `login --host` was given and what the
     disambiguation candidates print (`api_host`), not the internal storage
     key (`git_host`) — a login stored under a differing `--git-host` must
@@ -146,21 +146,22 @@ def test_pull_host_filters_on_api_host_not_git_host(monkeypatch, tmp_path):
 
     captured = {}
 
-    def fake_pull(directory, *, git_host, api_host, project_id, org_id, repo):
+    def fake_link(directory, *, git_host, api_host, project_id, org_id, repo):
         captured.update(git_host=git_host, api_host=api_host)
+        return cloud.LinkOutcome.LINKED
 
-    monkeypatch.setattr(cloud, "pull", fake_pull)
+    monkeypatch.setattr(cloud, "link", fake_link)
 
     result = runner.invoke(
         app,
-        ["cloud", "pull", str(tmp_path), "--host", "https://cloud.getwren.ai"],
+        ["cloud", "link", str(tmp_path), "--host", "https://cloud.getwren.ai"],
     )
     assert result.exit_code == 0, result.output
     assert captured["git_host"] == "https://internal-git.example.com"
     assert captured["api_host"] == "https://cloud.getwren.ai"
 
 
-def test_pull_host_still_disambiguates_when_api_hosts_collide(monkeypatch, tmp_path):
+def test_link_host_still_disambiguates_when_api_hosts_collide(monkeypatch, tmp_path):
     """Two logins that share an `api_host` but differ only by `--git-host`
     (e.g. a corrected re-login after a wrong `--git-host`) must not be
     silently missed — `--host <api_host>` still leaves both candidates and
@@ -184,13 +185,13 @@ def test_pull_host_still_disambiguates_when_api_hosts_collide(monkeypatch, tmp_p
     )
     result = runner.invoke(
         app,
-        ["cloud", "pull", str(tmp_path), "--host", "https://cloud.getwren.ai"],
+        ["cloud", "link", str(tmp_path), "--host", "https://cloud.getwren.ai"],
     )
     assert result.exit_code != 0
     assert "disambiguate" in result.output.lower()
 
 
-def test_pull_invokes_cloud_pull_with_the_single_stored_login(monkeypatch, tmp_path):
+def test_link_invokes_cloud_link_with_the_single_stored_login(monkeypatch, tmp_path):
     entry = {
         "api_host": "https://cloud.getwren.ai",
         "org_id": "2",
@@ -203,7 +204,7 @@ def test_pull_invokes_cloud_pull_with_the_single_stored_login(monkeypatch, tmp_p
 
     captured = {}
 
-    def fake_pull(directory, *, git_host, api_host, project_id, org_id, repo):
+    def fake_link(directory, *, git_host, api_host, project_id, org_id, repo):
         captured.update(
             directory=directory,
             git_host=git_host,
@@ -212,16 +213,41 @@ def test_pull_invokes_cloud_pull_with_the_single_stored_login(monkeypatch, tmp_p
             org_id=org_id,
             repo=repo,
         )
+        return cloud.LinkOutcome.LINKED
 
-    monkeypatch.setattr(cloud, "pull", fake_pull)
-    result = runner.invoke(app, ["cloud", "pull", str(tmp_path)])
+    monkeypatch.setattr(cloud, "link", fake_link)
+    result = runner.invoke(app, ["cloud", "link", str(tmp_path)])
     assert result.exit_code == 0, result.output
     assert captured["git_host"] == "https://cloud.getwren.ai"
     assert captured["project_id"] == "16"
     assert captured["repo"] == "org/2/16/shared-data.git"
+    assert "Linked project 16" in result.output
 
 
-def test_pull_reports_cloud_error_without_traceback(monkeypatch, tmp_path):
+def test_link_reports_already_linked_without_implying_a_fresh_merge(
+    monkeypatch, tmp_path
+):
+    entry = {
+        "api_host": "https://cloud.getwren.ai",
+        "org_id": "2",
+        "repo": "org/2/16/shared-data.git",
+        "api_key": "sk-x",
+    }
+    monkeypatch.setattr(
+        cloud, "list_logins", lambda: [("https://cloud.getwren.ai", "16", entry)]
+    )
+    monkeypatch.setattr(
+        cloud, "link", lambda *args, **kwargs: cloud.LinkOutcome.ALREADY_LINKED
+    )
+
+    result = runner.invoke(app, ["cloud", "link", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    assert "already linked" in result.output.lower()
+    assert "git pull" in result.output
+
+
+def test_link_reports_cloud_error_without_traceback(monkeypatch, tmp_path):
     entry = {
         "api_host": "https://cloud.getwren.ai",
         "org_id": "2",
@@ -232,11 +258,11 @@ def test_pull_reports_cloud_error_without_traceback(monkeypatch, tmp_path):
         cloud, "list_logins", lambda: [("https://cloud.getwren.ai", "16", entry)]
     )
 
-    def fake_pull(*args, **kwargs):
+    def fake_link(*args, **kwargs):
         raise cloud.NestedRepoError(tmp_path, tmp_path.parent)
 
-    monkeypatch.setattr(cloud, "pull", fake_pull)
-    result = runner.invoke(app, ["cloud", "pull", str(tmp_path)])
+    monkeypatch.setattr(cloud, "link", fake_link)
+    result = runner.invoke(app, ["cloud", "link", str(tmp_path)])
     assert result.exit_code != 0
     assert "inside an existing git repository" in result.output
 
