@@ -7,6 +7,7 @@ MDL_HASH = "deployment-hash"
 TABLE_A = "model_a"
 TABLE_B = "model_b"
 TABLE_SPECIAL = "model-with-special-name"
+TABLE_UNKNOWN = "model_unknown"
 COLUMN_ID = "id"
 COLUMN_TEXT = "text_value"
 COLUMN_STATUS = "status_value"
@@ -15,6 +16,7 @@ COLUMN_AMOUNT = "amount_value"
 COLUMN_RANK = "rank_value"
 COLUMN_RESERVED = "order"
 COLUMN_SPECIAL = "line-item"
+COLUMN_UNKNOWN = "missing_value"
 AGGREGATE_ALIAS = "aggregate_value"
 DATE_LITERAL = "2026-01-01 00:00:00"
 STRING_LITERAL = "literal_value"
@@ -60,6 +62,17 @@ class _FailingEngine:
 
     async def dry_plan(self, *_, **__):
         return True, ""
+
+
+def schema_context(table_name=TABLE_A, columns=None):
+    columns = columns or [COLUMN_ID, COLUMN_TEXT, COLUMN_AMOUNT]
+    return [
+        (
+            f"CREATE TABLE {table_name} (\n  "
+            + ",\n  ".join(f"{column} VARCHAR" for column in columns)
+            + "\n);"
+        )
+    ]
 
 
 @pytest.mark.asyncio
@@ -345,6 +358,121 @@ async def test_post_processor_does_not_quote_schema_identifiers_inside_literals(
     )
     assert result["invalid_generation_result"] == {}
     assert engine.executed_sql == expected_sql
+
+
+@pytest.mark.asyncio
+async def test_post_processor_rejects_table_not_in_retrieved_schema():
+    engine = _CapturingEngine()
+    processor = SQLGenPostProcessor(engine=engine)
+
+    result = await processor.run(
+        [f'SELECT "{COLUMN_ID}" FROM "{TABLE_UNKNOWN}"'],
+        contexts=schema_context(TABLE_A),
+    )
+
+    invalid = result["invalid_generation_result"]
+    assert result["valid_generation_result"] == {}
+    assert invalid["type"] == "SCHEMA_GROUNDING"
+    assert TABLE_UNKNOWN in invalid["error"]
+    assert engine.execute_kwargs is None
+
+
+@pytest.mark.asyncio
+async def test_post_processor_rejects_qualified_column_not_in_retrieved_schema():
+    engine = _CapturingEngine()
+    processor = SQLGenPostProcessor(engine=engine)
+
+    result = await processor.run(
+        [f'SELECT t."{COLUMN_UNKNOWN}" FROM "{TABLE_A}" AS t'],
+        contexts=schema_context(TABLE_A, [COLUMN_ID, COLUMN_TEXT]),
+    )
+
+    invalid = result["invalid_generation_result"]
+    assert result["valid_generation_result"] == {}
+    assert invalid["type"] == "SCHEMA_GROUNDING"
+    assert f"t.{COLUMN_UNKNOWN}" in invalid["error"]
+    assert engine.execute_kwargs is None
+
+
+@pytest.mark.asyncio
+async def test_post_processor_validates_columns_after_schema_comments():
+    engine = _CapturingEngine()
+    processor = SQLGenPostProcessor(engine=engine)
+    contexts = [
+        (
+            f"CREATE TABLE {TABLE_A} (\n"
+            f'  -- {{"description":"identifier"}}\n'
+            f"  {COLUMN_ID} VARCHAR,\n"
+            f'  -- {{"description":"text"}}\n'
+            f"  {COLUMN_TEXT} VARCHAR\n"
+            ");"
+        )
+    ]
+
+    result = await processor.run(
+        [f'SELECT t."{COLUMN_ID}" FROM "{TABLE_A}" AS t'],
+        contexts=contexts,
+    )
+
+    assert result["invalid_generation_result"] == {}
+    assert engine.execute_kwargs is not None
+
+
+@pytest.mark.asyncio
+async def test_post_processor_rejects_dummy_cte_for_schema_object():
+    engine = _CapturingEngine()
+    processor = SQLGenPostProcessor(engine=engine)
+
+    result = await processor.run(
+        [
+            (
+                f'WITH "{TABLE_A}" AS (SELECT 1) '
+                f'SELECT "{COLUMN_ID}" FROM "{TABLE_A}"'
+            )
+        ],
+        contexts=schema_context(TABLE_A),
+    )
+
+    invalid = result["invalid_generation_result"]
+    assert result["valid_generation_result"] == {}
+    assert invalid["type"] == "SCHEMA_GROUNDING"
+    assert "dummy CTEs" in invalid["error"]
+    assert engine.execute_kwargs is None
+
+
+@pytest.mark.asyncio
+async def test_post_processor_converts_bracket_quoted_schema_identifiers():
+    engine = _CapturingEngine()
+    processor = SQLGenPostProcessor(engine=engine)
+
+    result = await processor.run(
+        [f"SELECT [{COLUMN_SPECIAL}] FROM [{TABLE_SPECIAL}]"],
+        contexts=schema_context(TABLE_SPECIAL, [COLUMN_SPECIAL]),
+    )
+
+    expected_sql = f'SELECT "{COLUMN_SPECIAL}" FROM "{TABLE_SPECIAL}"'
+    assert result["invalid_generation_result"] == {}
+    assert result["valid_generation_result"]["sql"] == expected_sql
+    assert engine.executed_sql == expected_sql
+
+
+@pytest.mark.asyncio
+async def test_post_processor_allows_non_schema_cte_built_from_verified_table():
+    engine = _CapturingEngine()
+    processor = SQLGenPostProcessor(engine=engine)
+
+    result = await processor.run(
+        [
+            (
+                f'WITH totals AS (SELECT "{COLUMN_ID}" FROM "{TABLE_A}") '
+                f'SELECT "{COLUMN_ID}" FROM totals'
+            )
+        ],
+        contexts=schema_context(TABLE_A),
+    )
+
+    assert result["invalid_generation_result"] == {}
+    assert engine.execute_kwargs is not None
 
 
 @pytest.mark.asyncio

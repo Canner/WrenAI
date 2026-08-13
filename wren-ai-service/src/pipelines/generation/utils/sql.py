@@ -23,6 +23,19 @@ _DDL_RELATION = re.compile(
     r"\bCREATE\s+(?:TABLE|VIEW)\s+(?P<name>\"[^\"]+\"|[^\s(]+)",
     re.IGNORECASE,
 )
+_RELATION_REFERENCE = re.compile(
+    r"\b(?:FROM|JOIN)\s+(?P<name>\"[^\"]+\"|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_$]*)"
+    r"(?:\s+(?:AS\s+)?(?P<alias>\"[^\"]+\"|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_$]*))?",
+    re.IGNORECASE,
+)
+_CTE_REFERENCE = re.compile(
+    r"(?:\bWITH|,)\s+(?P<name>\"[^\"]+\"|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_$]*)\s+AS\s*\(",
+    re.IGNORECASE,
+)
+_QUALIFIED_COLUMN = re.compile(
+    r"(?P<qualifier>\"[^\"]+\"|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_$]*)\s*\.\s*"
+    r"(?P<column>\"[^\"]+\"|\[[^\]]+\]|[A-Za-z_][A-Za-z0-9_$]*)"
+)
 _SQL_RESERVED_WORDS = {
     "ALL",
     "ALTER",
@@ -80,6 +93,8 @@ _SQL_RESERVED_WORDS = {
 
 
 def _unquote_identifier(identifier: str) -> str:
+    if len(identifier) >= 2 and identifier[0] == "[" and identifier[-1] == "]":
+        return identifier[1:-1].replace("]]", "]")
     if len(identifier) >= 2 and identifier[0] == '"' and identifier[-1] == '"':
         return identifier[1:-1].replace('""', '"')
     return identifier
@@ -87,6 +102,30 @@ def _unquote_identifier(identifier: str) -> str:
 
 def _quote_identifier(identifier: str) -> str:
     return f'"{identifier.replace(chr(34), chr(34) * 2)}"'
+
+
+def _split_sql_tokens(sql: str) -> list[str]:
+    tokens = []
+    current = []
+    in_double_quote = False
+
+    for char in sql:
+        if char == '"':
+            current.append(char)
+            in_double_quote = not in_double_quote
+            continue
+        if char == "," and not in_double_quote:
+            token = "".join(current).strip()
+            if token:
+                tokens.append(token)
+            current = []
+            continue
+        current.append(char)
+
+    token = "".join(current).strip()
+    if token:
+        tokens.append(token)
+    return tokens
 
 
 def _identifier_needs_quotes(identifier: str) -> bool:
@@ -144,6 +183,61 @@ def _extract_schema_identifiers(contexts: list[str] | None) -> list[str]:
                 add(line.split(None, 1)[0])
 
     return identifiers
+
+
+def _extract_schema_index(contexts: list[str] | None) -> dict[str, set[str] | None]:
+    if not contexts:
+        return {}
+
+    schema_index: dict[str, set[str] | None] = {}
+
+    for context in contexts:
+        relation_match = _DDL_RELATION.search(context)
+        if not relation_match:
+            continue
+
+        relation_name = _unquote_identifier(relation_match.group("name"))
+        if re.search(r"\bCREATE\s+VIEW\b", context, re.IGNORECASE):
+            schema_index[relation_name] = None
+            continue
+
+        column_block_match = re.search(
+            r"\bCREATE\s+TABLE\b[^(]*\((?P<columns>.*)\)\s*;?",
+            context,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if not column_block_match:
+            schema_index[relation_name] = None
+            continue
+
+        columns = set()
+        for raw_column in _split_sql_tokens(column_block_match.group("columns")):
+            line = "\n".join(
+                line.strip()
+                for line in raw_column.splitlines()
+                if line.strip()
+                and not line.strip().startswith("--")
+                and not line.strip().startswith("/*")
+            ).strip()
+            if not line:
+                continue
+            line = line.split("--", 1)[0].strip()
+            if not line or line.startswith("/*"):
+                continue
+            if line.upper().startswith(("FOREIGN KEY", "PRIMARY KEY")):
+                continue
+            if line.startswith('"'):
+                end = line.find('"', 1)
+                while end != -1 and end + 1 < len(line) and line[end + 1] == '"':
+                    end = line.find('"', end + 2)
+                if end > 0:
+                    columns.add(_unquote_identifier(line[: end + 1]))
+            else:
+                columns.add(_unquote_identifier(line.split(None, 1)[0]))
+
+        schema_index[relation_name] = columns
+
+    return schema_index
 
 
 def _is_identifier_boundary(char: str | None) -> bool:
@@ -241,6 +335,148 @@ def _replace_identifier_outside_literals(sql: str, identifier: str) -> str:
     return "".join(result)
 
 
+def _replace_bracket_identifiers(sql: str, valid_identifiers: set[str]) -> str:
+    result = []
+    index = 0
+    in_single_quote = False
+    in_double_quote = False
+    length = len(sql)
+
+    while index < length:
+        current = sql[index]
+        nxt = sql[index + 1] if index + 1 < length else None
+
+        if in_single_quote:
+            result.append(current)
+            if current == "'" and nxt == "'":
+                result.append(nxt)
+                index += 2
+            elif current == "'":
+                in_single_quote = False
+                index += 1
+            else:
+                index += 1
+            continue
+        if in_double_quote:
+            result.append(current)
+            if current == '"' and nxt == '"':
+                result.append(nxt)
+                index += 2
+            elif current == '"':
+                in_double_quote = False
+                index += 1
+            else:
+                index += 1
+            continue
+        if current == "'":
+            result.append(current)
+            in_single_quote = True
+            index += 1
+            continue
+        if current == '"':
+            result.append(current)
+            in_double_quote = True
+            index += 1
+            continue
+        if current == "[":
+            end = sql.find("]", index + 1)
+            if end > index:
+                identifier = sql[index + 1 : end]
+                if identifier in valid_identifiers:
+                    result.append(_quote_identifier(identifier))
+                    index = end + 1
+                    continue
+        result.append(current)
+        index += 1
+
+    return "".join(result)
+
+
+def _extract_sql_grounding(sql: str) -> dict[str, Any]:
+    cte_names = {
+        _unquote_identifier(match.group("name")) for match in _CTE_REFERENCE.finditer(sql)
+    }
+    relation_references = []
+    alias_to_relation = {}
+
+    for match in _RELATION_REFERENCE.finditer(sql):
+        relation = _unquote_identifier(match.group("name"))
+        if relation.upper() in {"UNNEST", "LATERAL"}:
+            continue
+        alias = match.group("alias")
+        alias = _unquote_identifier(alias) if alias else relation
+        relation_references.append(relation)
+        alias_to_relation[alias] = relation
+
+    qualified_columns = [
+        (
+            _unquote_identifier(match.group("qualifier")),
+            _unquote_identifier(match.group("column")),
+        )
+        for match in _QUALIFIED_COLUMN.finditer(sql)
+    ]
+
+    return {
+        "cte_names": cte_names,
+        "relation_references": relation_references,
+        "alias_to_relation": alias_to_relation,
+        "qualified_columns": qualified_columns,
+    }
+
+
+def validate_sql_against_contexts(
+    sql: str,
+    contexts: list[str] | None = None,
+) -> str | None:
+    schema_index = _extract_schema_index(contexts)
+    if not schema_index:
+        return None
+
+    valid_relations = set(schema_index)
+    grounding = _extract_sql_grounding(sql)
+    cte_names = grounding["cte_names"]
+
+    shadowed_relations = sorted(cte_names & valid_relations)
+    if shadowed_relations:
+        return (
+            "Schema grounding failed. The SQL creates CTEs with names that already "
+            f"belong to verified schema objects: {', '.join(shadowed_relations)}. "
+            "Do not create dummy CTEs for schema objects; use the verified tables or views directly."
+        )
+
+    invalid_relations = sorted(
+        {
+            relation
+            for relation in grounding["relation_references"]
+            if relation not in valid_relations and relation not in cte_names
+        }
+    )
+    if invalid_relations:
+        return (
+            "Schema grounding failed. The SQL references tables or views that are not "
+            f"in the retrieved schema for the active question: {', '.join(invalid_relations)}. "
+            f"Use only verified tables or views: {', '.join(sorted(valid_relations))}."
+        )
+
+    alias_to_relation = grounding["alias_to_relation"]
+    for qualifier, column in grounding["qualified_columns"]:
+        relation = alias_to_relation.get(qualifier)
+        if not relation or relation in cte_names:
+            continue
+        valid_columns = schema_index.get(relation)
+        if valid_columns is None:
+            continue
+        if column not in valid_columns:
+            return (
+                "Schema grounding failed. The SQL references column "
+                f"{qualifier}.{column}, but column {column} is not present in verified "
+                f"table or view {relation}. Use only verified columns: "
+                f"{', '.join(sorted(valid_columns))}."
+            )
+
+    return None
+
+
 def normalize_sql_with_schema_identifiers(
     sql: str,
     contexts: list[str] | None = None,
@@ -250,6 +486,7 @@ def normalize_sql_with_schema_identifiers(
         for identifier in _extract_schema_identifiers(contexts)
         if _identifier_needs_quotes(identifier)
     ]
+    sql = _replace_bracket_identifiers(sql, set(_extract_schema_identifiers(contexts)))
     for identifier in sorted(identifiers, key=len, reverse=True):
         sql = _replace_identifier_outside_literals(sql, identifier)
     return sql
@@ -287,6 +524,22 @@ class SQLGenPostProcessor:
                 cleaned_generation_result,
                 contexts=contexts,
             )
+            grounding_error = validate_sql_against_contexts(
+                cleaned_generation_result,
+                contexts=contexts,
+            )
+            if grounding_error:
+                return {
+                    "valid_generation_result": {},
+                    "invalid_generation_result": {
+                        "sql": cleaned_generation_result,
+                        "original_sql": cleaned_generation_result,
+                        "type": "SCHEMA_GROUNDING",
+                        "error": grounding_error,
+                        "correlation_id": "",
+                        "data_source": data_source,
+                    },
+                }
 
             (
                 valid_generation_result,
