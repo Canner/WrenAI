@@ -75,7 +75,16 @@ async def extract_sql_tables(prompt: dict, generator: Any, generator_name: str) 
 async def post_process(
     extract_sql_tables: dict,
 ) -> list[str]:
-    return orjson.loads(extract_sql_tables.get("replies")[0])["tables"]
+    try:
+        tables = orjson.loads(extract_sql_tables.get("replies")[0]).get("tables", [])
+    except Exception as e:
+        logger.warning("Failed to parse extracted SQL tables: %s", e)
+        return []
+
+    if not isinstance(tables, list):
+        return []
+
+    return [table for table in tables if isinstance(table, str)]
 
 
 ## End of Pipeline

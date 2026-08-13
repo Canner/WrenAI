@@ -4,8 +4,10 @@ from typing import Any, Dict, List
 
 import aiohttp
 import orjson
+import sqlparse
 from haystack import component
 from haystack.dataclasses import ChatMessage
+from sqlparse.sql import Function, Identifier, IdentifierList, Parenthesis
 from pydantic import BaseModel, ConfigDict
 
 from src.core.engine import (
@@ -89,6 +91,26 @@ _SQL_RESERVED_WORDS = {
     "WHERE",
     "WINDOW",
     "WITH",
+}
+_SQL_FUNCTION_NAMES = {
+    "ABS",
+    "AVG",
+    "CAST",
+    "COALESCE",
+    "COUNT",
+    "DATE_TRUNC",
+    "DENSE_RANK",
+    "LOWER",
+    "MAX",
+    "MIN",
+    "NULLIF",
+    "ROUND",
+    "ROW_NUMBER",
+    "SUM",
+    "TO_TIMESTAMP_MICROS",
+    "TO_TIMESTAMP_MILLIS",
+    "TO_TIMESTAMP_SECONDS",
+    "UPPER",
 }
 
 
@@ -448,6 +470,55 @@ def _extract_sql_grounding(sql: str) -> dict[str, Any]:
     }
 
 
+def _extract_unqualified_columns(sql: str) -> tuple[set[str], set[str]]:
+    candidates: set[str] = set()
+    output_aliases: set[str] = set()
+
+    def add_identifier(identifier: Identifier) -> None:
+        alias = identifier.get_alias()
+        if alias:
+            output_aliases.add(_unquote_identifier(alias))
+
+        if identifier.get_parent_name():
+            return
+
+        has_function = any(isinstance(child, Function) for child in identifier.tokens)
+        if has_function:
+            for child in identifier.tokens:
+                if isinstance(child, Function):
+                    visit(child)
+            return
+
+        real_name = identifier.get_real_name()
+        if not real_name:
+            return
+        real_name = _unquote_identifier(real_name)
+        if real_name and real_name.upper() not in _SQL_FUNCTION_NAMES:
+            candidates.add(real_name)
+
+    def visit(token) -> None:
+        if isinstance(token, IdentifierList):
+            for identifier in token.get_identifiers():
+                visit(identifier)
+            return
+        if isinstance(token, Function):
+            for child in token.tokens:
+                if isinstance(child, Parenthesis):
+                    visit(child)
+            return
+        if isinstance(token, Identifier):
+            add_identifier(token)
+            return
+        if hasattr(token, "tokens"):
+            for child in token.tokens:
+                visit(child)
+
+    for statement in sqlparse.parse(sql):
+        visit(statement)
+
+    return candidates, output_aliases
+
+
 def validate_sql_against_contexts(
     sql: str,
     contexts: list[str] | None = None,
@@ -496,6 +567,44 @@ def validate_sql_against_contexts(
                 f"{qualifier}.{column}, but column {column} is not present in verified "
                 f"table or view {relation}. Use only verified columns: "
                 f"{', '.join(sorted(valid_columns))}."
+            )
+
+    referenced_relations = {
+        relation
+        for relation in grounding["relation_references"]
+        if relation in valid_relations and relation not in cte_names
+    }
+    if referenced_relations and all(
+        schema_index.get(relation) is not None for relation in referenced_relations
+    ):
+        valid_columns_for_query = set().union(
+            *(schema_index[relation] or set() for relation in referenced_relations)
+        )
+        unqualified_columns, output_aliases = _extract_unqualified_columns(sql)
+        relation_aliases = set(alias_to_relation)
+        ignored_identifiers = (
+            valid_relations
+            | cte_names
+            | relation_aliases
+            | output_aliases
+            | _SQL_RESERVED_WORDS
+            | _SQL_FUNCTION_NAMES
+        )
+        invalid_columns = sorted(
+            column
+            for column in unqualified_columns
+            if column
+            and column not in valid_columns_for_query
+            and column not in ignored_identifiers
+            and column.upper() not in ignored_identifiers
+        )
+        if invalid_columns:
+            return (
+                "Schema grounding failed. The SQL references unqualified columns "
+                f"that are not present in the verified tables or views used by this query: "
+                f"{', '.join(invalid_columns)}. Use only verified columns from "
+                f"{', '.join(sorted(referenced_relations))}: "
+                f"{', '.join(sorted(valid_columns_for_query))}."
             )
 
     return None

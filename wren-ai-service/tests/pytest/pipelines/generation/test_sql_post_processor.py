@@ -395,6 +395,47 @@ async def test_post_processor_rejects_qualified_column_not_in_retrieved_schema()
 
 
 @pytest.mark.asyncio
+async def test_post_processor_rejects_unqualified_column_not_in_retrieved_schema():
+    engine = _CapturingEngine()
+    processor = SQLGenPostProcessor(engine=engine)
+
+    result = await processor.run(
+        [
+            (
+                f"SELECT {COLUMN_ID}, {COLUMN_UNKNOWN}, COUNT(*) AS {AGGREGATE_ALIAS} "
+                f"FROM {TABLE_A} GROUP BY {COLUMN_ID}, {COLUMN_UNKNOWN}"
+            )
+        ],
+        contexts=schema_context(TABLE_A, [COLUMN_ID, COLUMN_TEXT]),
+    )
+
+    invalid = result["invalid_generation_result"]
+    assert result["valid_generation_result"] == {}
+    assert invalid["type"] == "SCHEMA_GROUNDING"
+    assert COLUMN_UNKNOWN in invalid["error"]
+    assert engine.execute_kwargs is None
+
+
+@pytest.mark.asyncio
+async def test_post_processor_allows_unqualified_columns_in_retrieved_schema():
+    engine = _CapturingEngine()
+    processor = SQLGenPostProcessor(engine=engine)
+
+    result = await processor.run(
+        [
+            (
+                f"SELECT {COLUMN_ID}, COUNT(*) AS {AGGREGATE_ALIAS} "
+                f"FROM {TABLE_A} GROUP BY {COLUMN_ID}"
+            )
+        ],
+        contexts=schema_context(TABLE_A, [COLUMN_ID, COLUMN_TEXT]),
+    )
+
+    assert result["invalid_generation_result"] == {}
+    assert engine.execute_kwargs is not None
+
+
+@pytest.mark.asyncio
 async def test_post_processor_validates_against_unpruned_schema_context():
     engine = _CapturingEngine()
     processor = SQLGenPostProcessor(engine=engine)
