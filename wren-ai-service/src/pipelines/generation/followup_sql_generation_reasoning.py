@@ -27,6 +27,7 @@ sql_generation_reasoning_user_prompt_template = """
 Project ID: {{ project_id }}
 MDL Hash: {{ mdl_hash }}
 Use only the DATABASE SCHEMA documents retrieved for this deployment scope. SQL samples, user instructions, and query history are not schema authority and must not introduce table or column identifiers that are absent from this deployment's DATABASE SCHEMA.
+If the DATABASE SCHEMA does not explicitly contain the required identifiers, return the insufficient-metadata bullet described in the system instructions. Do not write assumptions, placeholder identifiers, or example SQL.
 
 ### DATABASE SCHEMA ###
 {% for document in documents %}
@@ -63,7 +64,7 @@ User's Question: {{ query }}
 Language: {{ language }}
 Current Time: {{ current_time }}
 
-Let's think step by step.
+Create a schema-grounded reasoning plan only.
 """
 
 
