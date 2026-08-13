@@ -9,7 +9,7 @@ from hamilton.async_driver import AsyncDriver
 from haystack import Document
 from haystack.components.builders.prompt_builder import PromptBuilder
 from langfuse.decorators import observe
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider, LLMProvider
@@ -34,7 +34,9 @@ You are an expert detective specializing in intent classification. Combine the u
 - **Follow the user's previous questions:** If there are previous questions, try to understand the user's current question as following the previous questions.
 - **Follow the user's instructions:** If there are instructions, strictly follow the instructions.
 - **Consider Context of Inputs:** Combine the user's current question, their previous questions, and the user's instructions together to identify the user's true intent.
-- **Rephrase Question:** Rewrite follow-up questions into full standalone questions using prior conversation context.
+- **Deployment Scope:** Treat the DATABASE SCHEMA as the schema authority for the provided project and deployment hash. SQL samples and history are context, not schema authority.
+- **Rephrase Question:** Always return a non-empty `rephrased_question`. Rewrite follow-up questions into full standalone questions using prior conversation context. If there is no follow-up context, keep the user's current question as a clear standalone question.
+- **Intent Reasoning:** Always return a non-empty `reasoning` that explains the user's intent and cites the relevant schema concept when available. Do not reveal hidden chain-of-thought.
 - **Concise Reasoning:** The reasoning must be clear, concise, and limited to 20 words.
 - **Language Consistency:** Use the same language as specified in the user's output language for the rephrased question and reasoning.
 - **Vague Queries:** If the question is vague or does not related to a table or property from the schema, classify it as `MISLEADING_QUERY`.
@@ -120,6 +122,10 @@ Return your response as a JSON object with the following structure:
 """
 
 intent_classification_user_prompt_template = """
+### DEPLOYMENT SCOPE ###
+Project ID: {{ project_id }}
+MDL Hash: {{ mdl_hash }}
+
 ### DATABASE SCHEMA ###
 {% for db_schema in db_schemas %}
     {{ db_schema }}
@@ -163,7 +169,7 @@ SQL:
 User's current question: {{query}}
 Output Language: {{ language }}
 
-Let's think step by step
+Return the structured intent classification response.
 """
 
 
@@ -286,10 +292,14 @@ def prompt(
     prompt_builder: PromptBuilder,
     sql_samples: Optional[list[dict]] = None,
     instructions: Optional[list[dict]] = None,
+    project_id: str | None = None,
+    mdl_hash: str | None = None,
     configuration: Configuration | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         query=query,
+        project_id=project_id or "",
+        mdl_hash=mdl_hash or "",
         language=configuration.language,
         db_schemas=construct_db_schemas,
         histories=histories,
@@ -331,16 +341,20 @@ def post_process(classify_intent: dict, construct_db_schemas: list[str]) -> dict
 
 
 class IntentClassificationResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     rephrased_question: str
     results: Literal["MISLEADING_QUERY", "TEXT_TO_SQL", "GENERAL", "USER_GUIDE"]
     reasoning: str
 
 
 INTENT_CLASSIFICAION_MODEL_KWARGS = {
+    "preserve_json_schema": True,
     "response_format": {
         "type": "json_schema",
         "json_schema": {
             "name": "intent_classification",
+            "strict": True,
             "schema": IntentClassificationResult.model_json_schema(),
         },
     }
@@ -407,6 +421,8 @@ class IntentClassification(BasicPipeline):
                 "histories": histories or [],
                 "sql_samples": sql_samples or [],
                 "instructions": instructions or [],
+                "project_id": project_id,
+                "mdl_hash": mdl_hash,
                 "configuration": configuration,
                 **self._components,
                 **self._configs,
