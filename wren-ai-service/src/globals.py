@@ -145,6 +145,9 @@ def create_service_container(
                     **pipe_components["followup_sql_generation_reasoning"],
                 ),
                 "sql_correction": _sql_correction_pipeline,
+                "sql_tables_extraction": generation.SQLTablesExtraction(
+                    **pipe_components["sql_tables_extraction"],
+                ),
                 "followup_sql_generation": generation.FollowUpSQLGeneration(
                     **pipe_components["followup_sql_generation"],
                 ),

@@ -1,4 +1,3 @@
-import asyncio
 import json
 import uuid
 
@@ -55,6 +54,10 @@ MODEL_ALPHA_UNPRUNED_DDL = (
     f"({MODEL_ALPHA_SELECTED_MEASURE} INTEGER, "
     f"{MODEL_ALPHA_RECOVERED_DIMENSION} VARCHAR)"
 )
+MODEL_BETA = "model_beta"
+MODEL_BETA_ENTITY_ID = "beta_id"
+MODEL_BETA_ENTITY_DDL = f"CREATE TABLE {MODEL_BETA} ({MODEL_BETA_ENTITY_ID} INTEGER)"
+MODEL_BETA_ENTITY_SQL = f"SELECT {MODEL_BETA_ENTITY_ID} FROM {MODEL_BETA}"
 
 
 @pytest.fixture
@@ -228,6 +231,45 @@ class _SchemaRetrievalPipeline:
         }
 
 
+class _ExpandableSchemaRetrievalPipeline:
+    def __init__(self):
+        self.calls = []
+
+    async def run(self, **kwargs):
+        self.calls.append(kwargs)
+        tables = kwargs.get("tables")
+        if tables == [MODEL_BETA]:
+            return {
+                "construct_retrieval_results": {
+                    "retrieval_results": [
+                        {
+                            "table_name": MODEL_BETA,
+                            "table_ddl": MODEL_BETA_ENTITY_DDL,
+                            "manifest_column_names": [MODEL_BETA_ENTITY_ID],
+                        }
+                    ],
+                    "has_calculated_field": False,
+                    "has_metric": False,
+                    "has_json_field": False,
+                }
+            }
+
+        return {
+            "construct_retrieval_results": {
+                "retrieval_results": [
+                    {
+                        "table_name": MODEL_ALPHA,
+                        "table_ddl": MODEL_ALPHA_ENTITY_DDL,
+                        "manifest_column_names": [MODEL_ALPHA_ENTITY_ID],
+                    }
+                ],
+                "has_calculated_field": False,
+                "has_metric": False,
+                "has_json_field": False,
+            }
+        }
+
+
 class _PrunedSchemaRetrievalPipeline:
     async def run(self, **_):
         return {
@@ -275,6 +317,22 @@ class _ShapeInvalidSqlGenerationPipeline:
                     "original_sql": MODEL_ALPHA_ENTITY_SQL,
                     "type": "SQL_SHAPE",
                     "error": "Generated SQL is a table preview.",
+                    "correlation_id": "",
+                },
+            }
+        }
+
+
+class _MissingRetrievedTableSqlGenerationPipeline:
+    async def run(self, **_):
+        return {
+            "post_process": {
+                "valid_generation_result": {},
+                "invalid_generation_result": {
+                    "sql": MODEL_BETA_ENTITY_SQL,
+                    "original_sql": MODEL_BETA_ENTITY_SQL,
+                    "type": "SQL_DRY_RUN",
+                    "error": f"Generated SQL references tables that were not retrieved from the current schema: {MODEL_BETA}.",
                     "correlation_id": "",
                 },
             }
@@ -333,6 +391,15 @@ class _CapturingCorrectionPipeline:
                 "invalid_generation_result": {},
             }
         }
+
+
+class _ExtractBetaTablePipeline:
+    def __init__(self):
+        self.calls = []
+
+    async def run(self, **kwargs):
+        self.calls.append(kwargs)
+        return {"post_process": [MODEL_BETA]}
 
 
 class _UnexpectedCorrectionPipeline:
@@ -419,6 +486,52 @@ async def test_ask_runs_sql_correction_for_validation_error():
     assert correction.calls[0]["invalid_generation_result"] == {
         "sql": MODEL_ALPHA_ENTITY_SQL,
         "error": "Generated SQL is a table preview.",
+    }
+
+
+@pytest.mark.asyncio
+async def test_ask_expands_correction_context_from_failed_sql_like_legacy():
+    correction = _CapturingCorrectionPipeline()
+    extraction = _ExtractBetaTablePipeline()
+    retrieval = _ExpandableSchemaRetrievalPipeline()
+    ask_service = AskService(
+        {
+            "historical_question": _EmptyRetrievalPipeline(),
+            "sql_pairs_retrieval": _EmptyRetrievalPipeline(),
+            "instructions_retrieval": _EmptyRetrievalPipeline(),
+            "db_schema_retrieval": retrieval,
+            "sql_generation": _MissingRetrievedTableSqlGenerationPipeline(),
+            "sql_tables_extraction": extraction,
+            "sql_correction": correction,
+            "sql_diagnosis": _FailingDiagnosisPipeline(),
+        },
+        allow_intent_classification=False,
+        allow_sql_generation_reasoning=False,
+        allow_sql_functions_retrieval=False,
+        allow_sql_knowledge_retrieval=False,
+        allow_sql_diagnosis=False,
+    )
+    query_id = str(uuid.uuid4())
+    ask_request = AskRequest(query="count records by model", mdl_hash="deploy-hash")
+    ask_request.query_id = query_id
+
+    await ask_service.ask(ask_request)
+
+    ask_result_response = ask_service.get_ask_result(
+        AskResultRequest(query_id=query_id)
+    )
+    assert ask_result_response.status == "finished"
+    assert ask_result_response.retrieved_tables == [MODEL_ALPHA, MODEL_BETA]
+    assert extraction.calls == [{"sql": MODEL_BETA_ENTITY_SQL}]
+    assert retrieval.calls[1]["tables"] == [MODEL_BETA]
+    assert retrieval.calls[1]["mdl_hash"] == "deploy-hash"
+    assert correction.calls[0]["contexts"] == [
+        MODEL_ALPHA_ENTITY_DDL,
+        MODEL_BETA_ENTITY_DDL,
+    ]
+    assert correction.calls[0]["invalid_generation_result"] == {
+        "sql": MODEL_BETA_ENTITY_SQL,
+        "error": f"Generated SQL references tables that were not retrieved from the current schema: {MODEL_BETA}.",
     }
 
 

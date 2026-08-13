@@ -130,6 +130,95 @@ class AskService:
 
         return False
 
+    async def _extract_table_names_from_sql(self, sql: str) -> List[str]:
+        pipeline = self._pipelines.get("sql_tables_extraction")
+        if not pipeline or not sql:
+            return []
+
+        try:
+            extracted_tables = (await pipeline.run(sql=sql)).get("post_process", [])
+        except Exception as e:
+            logger.warning(
+                "ask pipeline - failed to extract tables from invalid SQL: %s", e
+            )
+            return []
+
+        table_names = []
+        seen = set()
+        for table_name in extracted_tables:
+            if not isinstance(table_name, str) or not table_name:
+                continue
+            if table_name in seen:
+                continue
+            seen.add(table_name)
+            table_names.append(table_name)
+
+        return table_names
+
+    async def _extend_schema_context_from_failed_sql(
+        self,
+        *,
+        original_sql: str,
+        invalid_sql: str,
+        table_names: List[str],
+        table_ddls: List[str],
+        project_id: Optional[str],
+        mdl_hash: Optional[str],
+        enable_column_pruning: bool,
+        attempted_sqls: set,
+    ) -> None:
+        extracted_tables = []
+        for sql in [original_sql, invalid_sql]:
+            if not sql or sql in attempted_sqls:
+                continue
+            attempted_sqls.add(sql)
+            extracted_tables.extend(await self._extract_table_names_from_sql(sql))
+
+        if not extracted_tables:
+            return
+
+        existing_tables = set(table_names)
+        missing_tables = []
+        seen = set()
+        for table_name in extracted_tables:
+            if table_name in existing_tables or table_name in seen:
+                continue
+            seen.add(table_name)
+            missing_tables.append(table_name)
+
+        if not missing_tables:
+            return
+
+        try:
+            retrieval_result = await self._pipelines["db_schema_retrieval"].run(
+                project_id=project_id,
+                mdl_hash=mdl_hash,
+                tables=missing_tables,
+                enable_column_pruning=enable_column_pruning,
+            )
+        except Exception as e:
+            logger.warning(
+                "ask pipeline - failed to retrieve schema for extracted tables %s: %s",
+                missing_tables,
+                e,
+            )
+            return
+
+        documents = (
+            retrieval_result.get("construct_retrieval_results", {}).get(
+                "retrieval_results", []
+            )
+            or []
+        )
+        for document in documents:
+            table_name = document.get("table_name")
+            table_ddl = document.get("table_ddl")
+            if not table_name or not table_ddl or table_name in existing_tables:
+                continue
+            table_names.append(table_name)
+            table_ddls.append(table_ddl)
+            existing_tables.add(table_name)
+
     @observe(name="Ask Question")
     @trace_metadata
     async def ask(
@@ -521,6 +610,7 @@ class AskService:
                 elif failed_dry_run_result := text_to_sql_generation_results[
                     "post_process"
                 ]["invalid_generation_result"]:
+                    schema_expansion_attempted_sqls = set()
                     while current_sql_correction_retries < max_sql_correction_retries:
                         if failed_dry_run_result["type"] == "TIME_OUT":
                             break
@@ -528,6 +618,16 @@ class AskService:
                         original_sql = failed_dry_run_result["original_sql"]
                         invalid_sql = failed_dry_run_result["sql"]
                         error_message = failed_dry_run_result["error"]
+                        await self._extend_schema_context_from_failed_sql(
+                            original_sql=original_sql,
+                            invalid_sql=invalid_sql,
+                            table_names=table_names,
+                            table_ddls=table_ddls,
+                            project_id=ask_request.project_id,
+                            mdl_hash=ask_request.mdl_hash,
+                            enable_column_pruning=enable_column_pruning,
+                            attempted_sqls=schema_expansion_attempted_sqls,
+                        )
                         current_sql_correction_retries += 1
 
                         self._ask_results[query_id] = AskResultResponse(
