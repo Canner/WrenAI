@@ -270,7 +270,9 @@ def build_schema_grounding_manifest(contexts: list[str] | None) -> str:
     lines = [
         "### VERIFIED SCHEMA OBJECTS ###",
         "These are the only table/view identifiers and columns that may be used.",
-        "Business terms from the question are intents, not table or column names.",
+        "Business terms from the question are intents, not physical table or column names.",
+        "When a business term is not listed as a column, map it to a listed deployed column before using it in SQL.",
+        "You may use the business term only as a SELECT output alias after selecting a verified deployed column.",
         "Do not create a table, view, column, alias, or join key unless it is listed here.",
     ]
 
@@ -813,6 +815,9 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - NEVER invent, infer, rename, or approximate table/column names from the user's wording.
+- User-facing business terms from the question are not physical column names unless those exact terms are listed in the DATABASE SCHEMA or VERIFIED SCHEMA OBJECTS.
+- If the user asks for a business term and the schema contains a different deployed column that represents it, select, filter, group, order, and join by the deployed column name, and use the business term only as a final SELECT alias when useful.
+- Never use a SELECT output alias, reasoning label, display label, or user wording as a source column in FROM, JOIN, WHERE, GROUP BY, HAVING, or inner SELECT clauses unless that exact identifier is present as a column in the verified schema.
 - NEVER sanitize schema identifiers. Use the exact table and column spelling from CREATE TABLE or CREATE VIEW, including case, spaces, punctuation, and symbols.
 - If the selected database schema does not contain the tables, columns, metrics, views, or relationships needed to answer the question, do not create placeholder SQL using names from the question.
 - DON'T INCLUDE comments in the generated SQL query.
@@ -1100,8 +1105,10 @@ otherwise, you will put the relative timeframe in the SQL query.
 16. A column name in the reasoning plan must be in this format: `column: <table_name>.<column_name>`.
 17. Table names and column names must exactly match the identifiers in the DATABASE SCHEMA `CREATE TABLE` or `CREATE VIEW` statements.
 18. Do not rename, normalize, or approximate table names from the user's wording, aliases, descriptions, or source-system naming conventions.
-19. Do not write "assuming", "likely", "probably", "not explicitly mentioned", or similar speculative language.
-20. ONLY SHOWING the reasoning plan in bullet points.
+19. Business terms from the user's question are intents, not physical columns. If a requested business term is not an exact schema column, identify the verified schema column that represents it and write only that verified column in the reasoning plan.
+20. Use business terms only as display/output labels; never write them as source columns unless they are exact verified schema columns.
+21. Do not write "assuming", "likely", "probably", "not explicitly mentioned", or similar speculative language.
+22. ONLY SHOWING the reasoning plan in bullet points.
 
 ### FINAL ANSWER FORMAT ###
 The final answer must be a reasoning plan in plain Markdown string format

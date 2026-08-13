@@ -1,6 +1,11 @@
 import pytest
 
-from src.pipelines.generation.utils.sql import SQLGenPostProcessor
+from src.pipelines.generation.utils.sql import (
+    SQLGenPostProcessor,
+    build_schema_grounding_manifest,
+    get_text_to_sql_rules,
+    sql_generation_reasoning_system_prompt,
+)
 
 PROJECT_ID = "project-id"
 MDL_HASH = "deployment-hash"
@@ -73,6 +78,30 @@ def schema_context(table_name=TABLE_A, columns=None):
             + "\n);"
         )
     ]
+
+
+def test_schema_manifest_treats_business_terms_as_output_aliases_only():
+    manifest = build_schema_grounding_manifest(schema_context())
+
+    assert "Business terms from the question are intents" in manifest
+    assert "only as a SELECT output alias" in manifest
+
+
+def test_sql_generation_rules_disallow_business_labels_as_source_columns():
+    rules = get_text_to_sql_rules()
+
+    assert "User-facing business terms from the question are not physical column names" in rules
+    assert "use the business term only as a final SELECT alias" in rules
+    assert "Never use a SELECT output alias" in rules
+
+
+def test_reasoning_prompt_requires_verified_columns_for_business_terms():
+    assert "Business terms from the user's question are intents" in (
+        sql_generation_reasoning_system_prompt
+    )
+    assert "Use business terms only as display/output labels" in (
+        sql_generation_reasoning_system_prompt
+    )
 
 
 @pytest.mark.asyncio
