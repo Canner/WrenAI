@@ -13,6 +13,7 @@ import {
 } from '@server/models/adaptor';
 import { IDeployService } from './deployService';
 import { IProjectService } from './projectService';
+import { IMDLService } from './mdlService';
 import { IThreadRepository, Thread } from '../repositories/threadRepository';
 import {
   IThreadResponseRepository,
@@ -428,6 +429,7 @@ class BreakdownBackgroundTracker {
 export class AskingService implements IAskingService {
   private wrenAIAdaptor: IWrenAIAdaptor;
   private deployService: IDeployService;
+  private mdlService: IMDLService;
   private projectService: IProjectService;
   private viewRepository: IViewRepository;
   private threadRepository: IThreadRepository;
@@ -450,6 +452,7 @@ export class AskingService implements IAskingService {
     telemetry,
     wrenAIAdaptor,
     deployService,
+    mdlService,
     projectService,
     viewRepository,
     threadRepository,
@@ -464,6 +467,7 @@ export class AskingService implements IAskingService {
     telemetry: PostHogTelemetry;
     wrenAIAdaptor: IWrenAIAdaptor;
     deployService: IDeployService;
+    mdlService: IMDLService;
     projectService: IProjectService;
     viewRepository: IViewRepository;
     threadRepository: IThreadRepository;
@@ -477,6 +481,7 @@ export class AskingService implements IAskingService {
   }) {
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.deployService = deployService;
+    this.mdlService = mdlService;
     this.projectService = projectService;
     this.viewRepository = viewRepository;
     this.threadRepository = threadRepository;

@@ -252,6 +252,7 @@ export const initComponents = () => {
     telemetry,
     wrenAIAdaptor,
     deployService,
+    mdlService,
     projectService,
     viewRepository,
     threadRepository,
