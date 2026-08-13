@@ -165,7 +165,7 @@ async def post_process(
     post_processor: SQLGenPostProcessor,
     data_source: str,
     documents: List[Document] | None = None,
-    validation_contexts: List[Document] | None = None,
+    validation_contexts: list[str] | None = None,
     project_id: str | None = None,
     mdl_hash: str | None = None,
     use_dry_plan: bool = False,
