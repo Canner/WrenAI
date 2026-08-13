@@ -269,11 +269,15 @@ def build_schema_grounding_manifest(contexts: list[str] | None) -> str:
 
     lines = [
         "### VERIFIED SCHEMA OBJECTS ###",
-        "These are the only table/view identifiers and columns that may be used.",
+        "This is the complete deployed schema contract for SQL generation.",
+        "These are the only table/view identifiers and source columns that may be used.",
+        "Before writing SQL, choose source columns only from the column list under each selected table/view.",
+        "If a source column is not listed under a selected table/view, it must not appear anywhere in the SQL.",
+        "This applies to SELECT, CTEs, UNION branches, JOIN, WHERE, GROUP BY, HAVING, ORDER BY, and nested queries.",
         "Business terms from the question are intents, not physical table or column names.",
         "When a business term is not listed as a column, map it to a listed deployed column before using it in SQL.",
         "You may use the business term only as a SELECT output alias after selecting a verified deployed column.",
-        "Do not create a table, view, column, alias, or join key unless it is listed here.",
+        "Do not create a table, view, source column, or join key unless it is listed here.",
     ]
 
     for relation in sorted(schema_index):
@@ -812,6 +816,7 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - ONLY USE SELECT statements, NO DELETE, UPDATE OR INSERT etc. statements that might change the data in the database.
 - ONLY USE the tables and columns mentioned in the database schema.
 - Table names are the exact identifiers that appear after CREATE TABLE or CREATE VIEW in the DATABASE SCHEMA section; use those names exactly.
+- VERIFIED SCHEMA OBJECTS is the complete deployed column contract for SQL generation. A column that is not listed there for a table/view must not appear anywhere in SQL for that table/view.
 - ONLY USE "*" if the user query asks for all the columns of a table.
 - ONLY CHOOSE columns belong to the tables mentioned in the database schema.
 - NEVER invent, infer, rename, or approximate table/column names from the user's wording.
@@ -820,6 +825,7 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - Never use a SELECT output alias, reasoning label, display label, or user wording as a source column in FROM, JOIN, WHERE, GROUP BY, HAVING, or inner SELECT clauses unless that exact identifier is present as a column in the verified schema.
 - NEVER sanitize schema identifiers. Use the exact table and column spelling from CREATE TABLE or CREATE VIEW, including case, spaces, punctuation, and symbols.
 - If the selected database schema does not contain the tables, columns, metrics, views, or relationships needed to answer the question, do not create placeholder SQL using names from the question.
+- For CTEs, UNION branches, nested SELECTs, JOIN predicates, GROUP BY, HAVING, ORDER BY, filters, and aggregate arguments, every referenced source column must be listed for the table/view or derived in the same query scope from listed source columns.
 - DON'T INCLUDE comments in the generated SQL query.
 - YOU MUST USE "JOIN" if you choose columns from multiple tables!
 - Before using a JOIN, verify the relationship or key columns from the DATABASE SCHEMA. Prefer declared FOREIGN KEY relationships. Do not invent relationships only from similar column names.

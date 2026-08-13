@@ -83,6 +83,9 @@ def schema_context(table_name=TABLE_A, columns=None):
 def test_schema_manifest_treats_business_terms_as_output_aliases_only():
     manifest = build_schema_grounding_manifest(schema_context())
 
+    assert "complete deployed schema contract" in manifest
+    assert "source column is not listed" in manifest
+    assert "UNION branches" in manifest
     assert "Business terms from the question are intents" in manifest
     assert "only as a SELECT output alias" in manifest
 
@@ -90,6 +93,8 @@ def test_schema_manifest_treats_business_terms_as_output_aliases_only():
 def test_sql_generation_rules_disallow_business_labels_as_source_columns():
     rules = get_text_to_sql_rules()
 
+    assert "VERIFIED SCHEMA OBJECTS is the complete deployed column contract" in rules
+    assert "every referenced source column must be listed" in rules
     assert "User-facing business terms from the question are not physical column names" in rules
     assert "use the business term only as a final SELECT alias" in rules
     assert "Never use a SELECT output alias" in rules
