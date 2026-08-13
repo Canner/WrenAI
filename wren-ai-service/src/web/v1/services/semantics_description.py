@@ -35,7 +35,7 @@ class SemanticsDescription:
         ttl: int = 120,
         generation_timeout_seconds: float = 120.0,
         max_models_per_batch: int = 1,
-        max_columns_per_batch: int = 20,
+        max_columns_per_batch: int = 5,
         max_concurrent_tasks: int = 4,
     ):
         self._pipelines = pipelines
@@ -113,14 +113,63 @@ class SemanticsDescription:
             raise ValueError("Semantics description pipeline returned invalid output")
         return output
 
+    def _chunk_columns(self, chunk: dict) -> list[dict]:
+        models = chunk.get("mdl", {}).get("models", [])
+        if not models:
+            return []
+        return models[0].get("columns", []) or []
+
+    def _split_chunk(self, chunk: dict) -> list[dict]:
+        columns = self._chunk_columns(chunk)
+        if len(columns) <= 1:
+            return []
+
+        split_at = max(1, len(columns) // 2)
+        model = chunk["mdl"]["models"][0]
+        return [
+            {
+                **chunk,
+                "mdl": {"models": [{**model, "columns": column_chunk}]},
+            }
+            for column_chunk in (columns[:split_at], columns[split_at:])
+            if column_chunk
+        ]
+
+    def _is_retryable_chunk_error(self, error: Exception) -> bool:
+        return "malformed JSON" in str(error)
+
+    async def _generate_task_with_retry_splitting(self, chunk: dict) -> list[dict]:
+        try:
+            return [await self._generate_task(chunk)]
+        except ValueError as e:
+            split_chunks = self._split_chunk(chunk)
+            if not split_chunks or not self._is_retryable_chunk_error(e):
+                raise
+
+            model_name = chunk.get("selected_models", [""])[0]
+            logger.warning(
+                "Retrying semantics description for model %s with smaller "
+                "column chunks after malformed JSON response.",
+                model_name,
+            )
+            outputs: list[dict] = []
+            for split_chunk in split_chunks:
+                outputs.extend(
+                    await self._generate_task_with_retry_splitting(split_chunk)
+                )
+            return outputs
+
     async def _generate_chunks(self, chunks: list[dict]) -> list[dict]:
         semaphore = asyncio.Semaphore(self._max_concurrent_tasks)
 
-        async def _bounded_generate(chunk: dict) -> dict:
+        async def _bounded_generate(chunk: dict) -> list[dict]:
             async with semaphore:
-                return await self._generate_task(chunk)
+                return await self._generate_task_with_retry_splitting(chunk)
 
-        return await asyncio.gather(*[_bounded_generate(chunk) for chunk in chunks])
+        output_groups = await asyncio.gather(
+            *[_bounded_generate(chunk) for chunk in chunks]
+        )
+        return [output for group in output_groups for output in group]
 
     def _request_timeout_seconds(self, chunk_count: int) -> int:
         waves = max(1, math.ceil(chunk_count / self._max_concurrent_tasks))

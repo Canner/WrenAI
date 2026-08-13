@@ -200,7 +200,7 @@ def test_semantics_description_uses_configured_batch_and_concurrency_limits():
     )
 
     assert service._max_models_per_batch == 2
-    assert service._max_columns_per_batch == 20
+    assert service._max_columns_per_batch == 5
     assert service._max_concurrent_tasks == 3
 
 
@@ -333,13 +333,13 @@ def test_default_batch_splits_large_column_groups_by_model(
 
     chunks = service._chunking(orjson.loads(request.mdl), request)
 
-    assert len(chunks) == 45
+    assert len(chunks) == 180
     assert chunks[0]["selected_models"] == ["model1"]
-    assert chunks[24]["selected_models"] == ["model1"]
-    assert chunks[25]["selected_models"] == ["model2"]
-    assert len(chunks[0]["mdl"]["models"][0]["columns"]) == 20
-    assert len(chunks[24]["mdl"]["models"][0]["columns"]) == 20
-    assert len(chunks[25]["mdl"]["models"][0]["columns"]) == 20
+    assert chunks[99]["selected_models"] == ["model1"]
+    assert chunks[100]["selected_models"] == ["model2"]
+    assert len(chunks[0]["mdl"]["models"][0]["columns"]) == 5
+    assert len(chunks[99]["mdl"]["models"][0]["columns"]) == 5
+    assert len(chunks[100]["mdl"]["models"][0]["columns"]) == 5
 
 
 @pytest.mark.asyncio
@@ -395,7 +395,63 @@ async def test_column_chunk_outputs_merge_into_single_model(
         "Customer order transactions."
     )
     assert len(response.response["orders"]["columns"]) == 41
-    assert service._pipelines["semantics_description"].run.call_count == 3
+    assert service._pipelines["semantics_description"].run.call_count == 9
+
+
+@pytest.mark.asyncio
+async def test_malformed_chunk_retries_with_smaller_column_groups(
+    service: SemanticsDescription,
+):
+    service["test_id"] = SemanticsDescription.Resource(id="test_id")
+    service._max_columns_per_batch = 3
+    request = SemanticsDescription.GenerateRequest(
+        id="test_id",
+        user_prompt="Describe the model",
+        selected_models=["orders"],
+        mdl=orjson.dumps(
+            {
+                "models": [
+                    {
+                        "name": "orders",
+                        "columns": [
+                            {"name": f"column_{index}", "type": "varchar"}
+                            for index in range(3)
+                        ],
+                    }
+                ]
+            }
+        ).decode(),
+    )
+
+    async def response_for_chunk(**kwargs):
+        model = kwargs["mdl"]["models"][0]
+        if len(model["columns"]) > 1:
+            raise ValueError("Semantics description LLM returned malformed JSON.")
+        column = model["columns"][0]
+        return {
+            "output": {
+                "orders": {
+                    "description": "Customer order transactions.",
+                    "columns": [
+                        {
+                            "name": column["name"],
+                            "properties": {
+                                "description": f"Description for {column['name']}",
+                            },
+                        }
+                    ],
+                }
+            }
+        }
+
+    service._pipelines["semantics_description"].run.side_effect = response_for_chunk
+
+    await service.generate(request)
+    response = service[request.id]
+
+    assert response.status == "finished"
+    assert len(response.response["orders"]["columns"]) == 3
+    assert service._pipelines["semantics_description"].run.call_count == 5
 
 
 @pytest.mark.asyncio
