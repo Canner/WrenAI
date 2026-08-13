@@ -15,6 +15,7 @@ from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
+    build_schema_grounding_manifest,
     construct_instructions,
     get_text_to_sql_rules,
 )
@@ -41,6 +42,8 @@ You are an ANSI SQL expert with exceptional logical thinking skills and debuggin
 5. Do not create dummy CTEs, placeholder tables, or SELECT 1 CTEs to simulate missing schema objects.
 6. Do not rename an invalid table or column to a similar-looking object unless that exact object is present in DATABASE SCHEMA and still satisfies the original user question.
 7. Preserve the active user question and reasoning intent while replacing unsupported objects with a valid schema-grounded plan.
+8. Business terms from the user question are intents, not table names. Never create a logical table name unless that exact identifier appears in DATABASE SCHEMA or VERIFIED SCHEMA OBJECTS.
+9. When the error is a schema-grounding failure, disregard invalid identifiers from the failed SQL and rebuild the SQL from the active question using only verified schema objects.
 
 ### SQL RULES ###
 Make sure you follow the SQL Rules strictly.
@@ -67,6 +70,15 @@ Correct the SQL only against the DATABASE SCHEMA documents retrieved for this de
 {% for document in documents %}
     {{ document }}
 {% endfor %}
+{% endif %}
+
+{% if schema_grounding_manifest %}
+{{ schema_grounding_manifest }}
+{% endif %}
+
+{% if invalid_generation_result.schema_grounding_failure %}
+### SCHEMA GROUNDING FAILURE ###
+The failed SQL used unsupported schema objects or columns. Do not reuse invalid table or column names from the failed SQL. Regenerate from the active user question using only DATABASE SCHEMA and VERIFIED SCHEMA OBJECTS.
 {% endif %}
 
 {% if invalid_generation_result.question %}
@@ -114,12 +126,16 @@ def prompt(
     sql_functions: list[SqlFunction] | None = None,
     project_id: str | None = None,
     mdl_hash: str | None = None,
+    validation_contexts: list[str] | None = None,
 ) -> dict:
     _prompt = prompt_builder.run(
         documents=documents,
         invalid_generation_result=invalid_generation_result,
         project_id=project_id or "",
         mdl_hash=mdl_hash or "",
+        schema_grounding_manifest=build_schema_grounding_manifest(
+            validation_contexts or documents
+        ),
         instructions=construct_instructions(
             instructions=instructions,
         ),
@@ -149,6 +165,7 @@ async def post_process(
     post_processor: SQLGenPostProcessor,
     data_source: str,
     documents: List[Document] | None = None,
+    validation_contexts: List[Document] | None = None,
     project_id: str | None = None,
     mdl_hash: str | None = None,
     use_dry_plan: bool = False,
@@ -158,7 +175,7 @@ async def post_process(
         generate_sql_correction.get("replies"),
         project_id=project_id,
         mdl_hash=mdl_hash,
-        contexts=documents,
+        contexts=validation_contexts or documents,
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
@@ -205,6 +222,7 @@ class SQLCorrection(BasicPipeline):
         sql_functions: list[SqlFunction] | None = None,
         project_id: str | None = None,
         mdl_hash: str | None = None,
+        validation_contexts: list[str] | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
         sql_knowledge: SqlKnowledge | None = None,
@@ -225,6 +243,7 @@ class SQLCorrection(BasicPipeline):
             inputs={
                 "invalid_generation_result": invalid_generation_result,
                 "documents": contexts,
+                "validation_contexts": validation_contexts,
                 "instructions": instructions,
                 "sql_functions": sql_functions,
                 "project_id": project_id,

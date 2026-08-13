@@ -9,7 +9,7 @@ from pydantic import AliasChoices, BaseModel, Field
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest
-from src.web.v1.services.ask import AskError, AskResult
+from src.web.v1.services.ask import AskError, AskResult, _schema_validation_contexts
 
 logger = logging.getLogger("wren-ai-service")
 
@@ -168,6 +168,7 @@ class AskFeedbackService:
                 has_json_field = _retrieval_result.get("has_json_field", False)
                 documents = _retrieval_result.get("retrieval_results", [])
                 table_ddls = [document.get("table_ddl") for document in documents]
+                schema_contexts = _schema_validation_contexts(documents)
                 sql_samples = sql_samples_task["formatted_output"].get("documents", [])
                 instructions = instructions_task["formatted_output"].get(
                     "documents", []
@@ -183,6 +184,7 @@ class AskFeedbackService:
                     "sql_regeneration"
                 ].run(
                     contexts=table_ddls,
+                    validation_contexts=schema_contexts,
                     sql_generation_reasoning=None,
                     sql=ask_feedback_request.sql,
                     project_id=ask_feedback_request.project_id,
@@ -227,7 +229,7 @@ class AskFeedbackService:
                             sql_diagnosis_results = await self._pipelines[
                                 "sql_diagnosis"
                             ].run(
-                                contexts=table_ddls,
+                                contexts=schema_contexts,
                                 original_sql=original_sql,
                                 invalid_sql=invalid_sql,
                                 error_message=error_message,
@@ -241,12 +243,18 @@ class AskFeedbackService:
                             "sql_correction"
                         ].run(
                             contexts=table_ddls,
+                            validation_contexts=schema_contexts,
                             instructions=instructions,
                             invalid_generation_result={
                                 "sql": original_sql,
                                 "error": sql_diagnosis_reasoning
                                 if allow_sql_diagnosis
                                 else error_message,
+                                "execution_error": error_message,
+                                "schema_grounding_failure": failed_dry_run_result[
+                                    "type"
+                                ]
+                                == "SCHEMA_GROUNDING",
                             },
                             project_id=ask_feedback_request.project_id,
                             mdl_hash=ask_feedback_request.mdl_hash,

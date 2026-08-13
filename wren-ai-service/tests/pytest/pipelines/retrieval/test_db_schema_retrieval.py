@@ -240,8 +240,8 @@ def test_check_using_db_schemas_without_pruning_returns_legacy_result_shape():
         MODEL_B,
     ]
     assert f"CREATE TABLE {MODEL_A}" in result["db_schemas"][0]["table_ddl"]
-    assert "column_names" not in result["db_schemas"][0]
-    assert "unpruned_table_ddl" not in result["db_schemas"][0]
+    assert result["db_schemas"][0]["unpruned_table_ddl"] == result["db_schemas"][0]["table_ddl"]
+    assert result["db_schemas"][0]["manifest_column_names"] == [COLUMN_ID]
 
 
 def test_check_using_db_schemas_without_pruning_triggers_legacy_column_pruning():
@@ -364,7 +364,10 @@ def test_construct_retrieval_results_uses_selected_columns_for_sql_generation():
     assert retrieved["table_name"] == MODEL_A
     assert f"{COLUMN_TEXT} VARCHAR" not in retrieved["table_ddl"]
     assert f"{COLUMN_MEASURE} DOUBLE" in retrieved["table_ddl"]
-    assert "column_names" not in retrieved
+    assert retrieved["column_names"] == [COLUMN_MEASURE]
+    assert f"{COLUMN_TEXT} VARCHAR" in retrieved["unpruned_table_ddl"]
+    assert f"{COLUMN_MEASURE} DOUBLE" in retrieved["unpruned_table_ddl"]
+    assert retrieved["manifest_column_names"] == [COLUMN_TEXT, COLUMN_MEASURE]
 
 
 def test_construct_retrieval_results_keeps_only_selected_metrics_and_views():

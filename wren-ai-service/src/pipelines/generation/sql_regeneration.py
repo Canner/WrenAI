@@ -14,6 +14,7 @@ from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
+    build_schema_grounding_manifest,
     construct_instructions,
     get_calculated_field_instructions,
     get_json_field_instructions,
@@ -60,6 +61,10 @@ Regenerate SQL only against the DATABASE SCHEMA documents retrieved for this dep
 {% for document in documents %}
     {{ document }}
 {% endfor %}
+
+{% if schema_grounding_manifest %}
+{{ schema_grounding_manifest }}
+{% endif %}
 
 {% if calculated_field_instructions %}
 {{ calculated_field_instructions }}
@@ -119,6 +124,7 @@ def prompt(
     has_json_field: bool = False,
     project_id: str | None = None,
     mdl_hash: str | None = None,
+    validation_contexts: list[str] | None = None,
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
@@ -128,6 +134,9 @@ def prompt(
         sql_generation_reasoning=sql_generation_reasoning,
         project_id=project_id or "",
         mdl_hash=mdl_hash or "",
+        schema_grounding_manifest=build_schema_grounding_manifest(
+            validation_contexts or documents
+        ),
         instructions=construct_instructions(
             instructions=instructions,
         ),
@@ -168,6 +177,7 @@ async def post_process(
     regenerate_sql: dict,
     post_processor: SQLGenPostProcessor,
     documents: list[str] | None = None,
+    validation_contexts: list[str] | None = None,
     project_id: str | None = None,
     mdl_hash: str | None = None,
 ) -> dict:
@@ -175,7 +185,7 @@ async def post_process(
         regenerate_sql.get("replies"),
         project_id=project_id,
         mdl_hash=mdl_hash,
-        contexts=documents,
+        contexts=validation_contexts or documents,
     )
 
 
@@ -215,6 +225,7 @@ class SQLRegeneration(BasicPipeline):
         instructions: list[dict] | None = None,
         project_id: str | None = None,
         mdl_hash: str | None = None,
+        validation_contexts: list[str] | None = None,
         has_calculated_field: bool = False,
         has_metric: bool = False,
         has_json_field: bool = False,
@@ -227,6 +238,7 @@ class SQLRegeneration(BasicPipeline):
             ["post_process"],
             inputs={
                 "documents": contexts,
+                "validation_contexts": validation_contexts,
                 "sql_generation_reasoning": sql_generation_reasoning,
                 "sql": sql,
                 "sql_samples": sql_samples,

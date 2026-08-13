@@ -132,6 +132,15 @@ def _build_view_ddl(content: dict) -> str:
     )
 
 
+def _manifest_column_names(content: dict) -> list[str]:
+    return [
+        column["name"]
+        for column in content.get("columns", [])
+        if column.get("type", "COLUMN") == "COLUMN"
+        and column.get("data_type", "").lower() != "unknown"
+    ]
+
+
 ## Start of Pipeline
 @observe(capture_input=False, capture_output=False)
 async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> dict:
@@ -264,6 +273,8 @@ def check_using_db_schemas_without_pruning(
                 {
                     "table_name": table_schema["name"],
                     "table_ddl": ddl,
+                    "unpruned_table_ddl": ddl,
+                    "manifest_column_names": _manifest_column_names(table_schema),
                 }
             )
             if _has_calculated_field:
@@ -275,18 +286,24 @@ def check_using_db_schemas_without_pruning(
         content = ast.literal_eval(document.content)
 
         if content["type"] == "METRIC":
+            ddl = _build_metric_ddl(content)
             retrieval_results.append(
                 {
                     "table_name": content["name"],
-                    "table_ddl": _build_metric_ddl(content),
+                    "table_ddl": ddl,
+                    "unpruned_table_ddl": ddl,
+                    "manifest_column_names": _manifest_column_names(content),
                 }
             )
             has_metric = True
         elif content["type"] == "VIEW":
+            ddl = _build_view_ddl(content)
             retrieval_results.append(
                 {
                     "table_name": content["name"],
-                    "table_ddl": _build_view_ddl(content),
+                    "table_ddl": ddl,
+                    "unpruned_table_ddl": ddl,
+                    "manifest_column_names": _manifest_column_names(content),
                 }
             )
 
@@ -377,6 +394,7 @@ def construct_retrieval_results(
 
         for table_schema in construct_db_schemas:
             if table_schema["type"] == "TABLE" and table_schema["name"] in tables:
+                unpruned_ddl, _, _ = build_table_ddl(table_schema, tables=tables)
                 ddl, _has_calculated_field, _has_json_field = build_table_ddl(
                     table_schema,
                     columns=set(
@@ -393,6 +411,11 @@ def construct_retrieval_results(
                     {
                         "table_name": table_schema["name"],
                         "table_ddl": ddl,
+                        "unpruned_table_ddl": unpruned_ddl,
+                        "column_names": columns_and_tables_needed[table_schema["name"]][
+                            "columns"
+                        ],
+                        "manifest_column_names": _manifest_column_names(table_schema),
                     }
                 )
 
@@ -401,18 +424,24 @@ def construct_retrieval_results(
                 content = ast.literal_eval(document.content)
 
                 if content["type"] == "METRIC":
+                    ddl = _build_metric_ddl(content)
                     retrieval_results.append(
                         {
                             "table_name": content["name"],
-                            "table_ddl": _build_metric_ddl(content),
+                            "table_ddl": ddl,
+                            "unpruned_table_ddl": ddl,
+                            "manifest_column_names": _manifest_column_names(content),
                         }
                     )
                     has_metric = True
                 elif content["type"] == "VIEW":
+                    ddl = _build_view_ddl(content)
                     retrieval_results.append(
                         {
                             "table_name": content["name"],
-                            "table_ddl": _build_view_ddl(content),
+                            "table_ddl": ddl,
+                            "unpruned_table_ddl": ddl,
+                            "manifest_column_names": _manifest_column_names(content),
                         }
                     )
 

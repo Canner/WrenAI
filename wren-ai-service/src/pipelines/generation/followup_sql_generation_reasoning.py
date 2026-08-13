@@ -12,6 +12,7 @@ from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
 from src.pipelines.common import clean_up_new_lines
 from src.pipelines.generation.utils.sql import (
+    build_schema_grounding_manifest,
     construct_instructions,
     sql_generation_reasoning_system_prompt,
 )
@@ -33,6 +34,10 @@ If the DATABASE SCHEMA does not explicitly contain the required identifiers, ret
 {% for document in documents %}
     {{ document }}
 {% endfor %}
+
+{% if schema_grounding_manifest %}
+{{ schema_grounding_manifest }}
+{% endif %}
 
 {% if sql_samples %}
 ### SQL SAMPLES ###
@@ -79,6 +84,7 @@ def prompt(
     prompt_builder: PromptBuilder,
     project_id: str | None = None,
     mdl_hash: str | None = None,
+    validation_contexts: list[str] | None = None,
     configuration: Configuration | None = Configuration(),
 ) -> dict:
     _prompt = prompt_builder.run(
@@ -87,6 +93,9 @@ def prompt(
         histories=histories,
         project_id=project_id or "",
         mdl_hash=mdl_hash or "",
+        schema_grounding_manifest=build_schema_grounding_manifest(
+            validation_contexts or documents
+        ),
         sql_samples=sql_samples,
         instructions=construct_instructions(
             instructions=instructions,
@@ -186,6 +195,7 @@ class FollowUpSQLGenerationReasoning(BasicPipeline):
         instructions: Optional[list[dict]] = None,
         project_id: Optional[str] = None,
         mdl_hash: Optional[str] = None,
+        validation_contexts: Optional[list[str]] = None,
         configuration: Configuration = Configuration(),
         query_id: Optional[str] = None,
     ):
@@ -195,6 +205,7 @@ class FollowUpSQLGenerationReasoning(BasicPipeline):
             inputs={
                 "query": query,
                 "documents": contexts,
+                "validation_contexts": validation_contexts,
                 "histories": histories,
                 "sql_samples": sql_samples or [],
                 "instructions": instructions or [],

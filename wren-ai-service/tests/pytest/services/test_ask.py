@@ -773,8 +773,9 @@ async def test_ask_corrects_no_relevant_sql_with_exact_retrieved_metadata():
     )
     assert ask_result_response.status == "finished"
     assert regeneration.calls == []
-    assert diagnosis.calls[0]["contexts"] == [MODEL_ALPHA_PRUNED_DDL]
+    assert diagnosis.calls[0]["contexts"] == [MODEL_ALPHA_UNPRUNED_DDL]
     assert correction.calls[0]["contexts"] == [MODEL_ALPHA_PRUNED_DDL]
+    assert correction.calls[0]["validation_contexts"] == [MODEL_ALPHA_UNPRUNED_DDL]
     invalid_generation_result = correction.calls[0]["invalid_generation_result"]
     assert invalid_generation_result | {
         "sql": "",
@@ -783,6 +784,7 @@ async def test_ask_corrects_no_relevant_sql_with_exact_retrieved_metadata():
     assert invalid_generation_result["execution_error"] == (
         "No grounded SQL was generated from the current schema."
     )
+    assert invalid_generation_result["schema_grounding_failure"] is False
     assert invalid_generation_result["question"] == ask_request.query
 
 

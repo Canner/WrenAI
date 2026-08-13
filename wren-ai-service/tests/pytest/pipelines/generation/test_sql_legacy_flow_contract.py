@@ -124,7 +124,8 @@ def test_sql_generation_prompt_uses_database_schema_documents():
     assert COUNTRY_COLUMN_NAME in built_prompt
     _assert_deployment_scope(built_prompt)
     assert _select_all_sql(SAMPLE_TABLE_NAME) in built_prompt
-    assert "RETRIEVED EXECUTABLE SCHEMA" not in built_prompt
+    assert "### VERIFIED SCHEMA OBJECTS ###" in built_prompt
+    assert f"- {SCHEMA_TABLE_NAME}: {COUNTRY_COLUMN_NAME}" in built_prompt
 
 
 def test_sql_generation_prompt_does_not_inject_datasource_dialect_section():
@@ -175,7 +176,8 @@ def test_reasoning_prompt_uses_schema_documents_only():
     assert f"CREATE TABLE {SCHEMA_TABLE_NAME}" in built_prompt
     _assert_deployment_scope(built_prompt)
     assert _select_all_sql(SAMPLE_TABLE_NAME) in built_prompt
-    assert "RETRIEVED EXECUTABLE SCHEMA" not in built_prompt
+    assert "### VERIFIED SCHEMA OBJECTS ###" in built_prompt
+    assert f"- {SCHEMA_TABLE_NAME}: {COUNTRY_COLUMN_NAME}" in built_prompt
 
 
 def test_followup_reasoning_prompt_uses_history_and_schema_documents():
@@ -198,7 +200,8 @@ def test_followup_reasoning_prompt_uses_history_and_schema_documents():
     assert f"CREATE TABLE {SCHEMA_TABLE_NAME}" in built_prompt
     assert "Question:\nshow orders" in built_prompt
     assert f"SQL:\n{_select_all_sql(SAMPLE_TABLE_NAME)}" in built_prompt
-    assert "RETRIEVED EXECUTABLE SCHEMA" not in built_prompt
+    assert "### VERIFIED SCHEMA OBJECTS ###" in built_prompt
+    assert f"- {SCHEMA_TABLE_NAME}: {COUNTRY_COLUMN_NAME}" in built_prompt
 
 
 def test_followup_sql_generation_prompt_uses_database_schema_documents():
@@ -221,7 +224,8 @@ def test_followup_sql_generation_prompt_uses_database_schema_documents():
 
     assert f"CREATE TABLE {SCHEMA_TABLE_NAME}" in built_prompt
     assert _select_all_sql(SAMPLE_TABLE_NAME) in built_prompt
-    assert "RETRIEVED EXECUTABLE SCHEMA" not in built_prompt
+    assert "### VERIFIED SCHEMA OBJECTS ###" in built_prompt
+    assert f"- {SCHEMA_TABLE_NAME}: {COUNTRY_COLUMN_NAME}" in built_prompt
 
 
 def test_sql_correction_prompt_uses_failed_sql_and_error():
@@ -238,7 +242,8 @@ def test_sql_correction_prompt_uses_failed_sql_and_error():
     _assert_deployment_scope(built_prompt)
     assert "SQL: SELECT 1" in built_prompt
     assert "Error Message: dry run failed" in built_prompt
-    assert "RETRIEVED EXECUTABLE SCHEMA" not in built_prompt
+    assert "### VERIFIED SCHEMA OBJECTS ###" in built_prompt
+    assert f"- {MODEL_TABLE_NAME}: {MODEL_COLUMN_NAME}" in built_prompt
 
 
 def test_sql_correction_prompt_can_include_active_question_and_reasoning():
@@ -292,7 +297,8 @@ def test_sql_regeneration_prompt_uses_legacy_inputs_without_datasource_dialect()
     assert "SQL generation reasoning: reason about the schema" in built_prompt
     assert "Original SQL query: SELECT 1" in built_prompt
     assert "Configured data source: trino" not in built_prompt
-    assert "RETRIEVED EXECUTABLE SCHEMA" not in built_prompt
+    assert "### VERIFIED SCHEMA OBJECTS ###" in built_prompt
+    assert f"- {MODEL_TABLE_NAME}: {MODEL_COLUMN_NAME}" in built_prompt
 
 
 def test_sql_regeneration_system_prompt_uses_json_sql_contract():

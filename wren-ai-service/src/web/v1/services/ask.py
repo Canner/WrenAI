@@ -13,6 +13,14 @@ from src.web.v1.services import BaseRequest, SSEEvent
 logger = logging.getLogger("wren-ai-service")
 
 
+def _schema_validation_contexts(documents: list[dict]) -> list[str]:
+    return [
+        document.get("unpruned_table_ddl") or document.get("table_ddl")
+        for document in documents
+        if document.get("unpruned_table_ddl") or document.get("table_ddl")
+    ]
+
+
 class AskHistory(BaseModel):
     sql: str
     question: str
@@ -162,6 +170,7 @@ class AskService:
         invalid_sql: str,
         table_names: List[str],
         table_ddls: List[str],
+        schema_validation_contexts: List[str],
         project_id: Optional[str],
         mdl_hash: Optional[str],
         enable_column_pruning: bool,
@@ -217,6 +226,9 @@ class AskService:
                 continue
             table_names.append(table_name)
             table_ddls.append(table_ddl)
+            schema_validation_contexts.append(
+                document.get("unpruned_table_ddl") or table_ddl
+            )
             existing_tables.add(table_name)
 
     @observe(name="Ask Question")
@@ -450,6 +462,7 @@ class AskService:
                 documents = _retrieval_result.get("retrieval_results", [])
                 table_names = [document.get("table_name") for document in documents]
                 table_ddls = [document.get("table_ddl") for document in documents]
+                schema_contexts = _schema_validation_contexts(documents)
 
                 if not documents:
                     logger.exception(f"ask pipeline - NO_RELEVANT_DATA: {user_query}")
@@ -490,6 +503,7 @@ class AskService:
                         await self._pipelines["followup_sql_generation_reasoning"].run(
                             query=user_query,
                             contexts=table_ddls,
+                            validation_contexts=schema_contexts,
                             histories=histories,
                             sql_samples=sql_samples,
                             instructions=instructions,
@@ -504,6 +518,7 @@ class AskService:
                         await self._pipelines["sql_generation_reasoning"].run(
                             query=user_query,
                             contexts=table_ddls,
+                            validation_contexts=schema_contexts,
                             sql_samples=sql_samples,
                             instructions=instructions,
                             project_id=ask_request.project_id,
@@ -566,6 +581,7 @@ class AskService:
                     ].run(
                         query=user_query,
                         contexts=table_ddls,
+                        validation_contexts=schema_contexts,
                         sql_generation_reasoning=sql_generation_reasoning,
                         histories=histories,
                         project_id=ask_request.project_id,
@@ -586,6 +602,7 @@ class AskService:
                     ].run(
                         query=user_query,
                         contexts=table_ddls,
+                        validation_contexts=schema_contexts,
                         sql_generation_reasoning=sql_generation_reasoning,
                         project_id=ask_request.project_id,
                         mdl_hash=ask_request.mdl_hash,
@@ -627,6 +644,7 @@ class AskService:
                             invalid_sql=invalid_sql,
                             table_names=table_names,
                             table_ddls=table_ddls,
+                            schema_validation_contexts=schema_contexts,
                             project_id=ask_request.project_id,
                             mdl_hash=ask_request.mdl_hash,
                             enable_column_pruning=enable_column_pruning,
@@ -649,7 +667,7 @@ class AskService:
                             sql_diagnosis_results = await self._pipelines[
                                 "sql_diagnosis"
                             ].run(
-                                contexts=table_ddls,
+                                contexts=schema_contexts,
                                 original_sql=original_sql,
                                 invalid_sql=invalid_sql,
                                 error_message=error_message,
@@ -674,7 +692,12 @@ class AskService:
                                 "execution_error": error_message,
                                 "question": user_query,
                                 "reasoning_plan": sql_generation_reasoning,
+                                "schema_grounding_failure": failed_dry_run_result[
+                                    "type"
+                                ]
+                                == "SCHEMA_GROUNDING",
                             },
+                            validation_contexts=schema_contexts,
                             project_id=ask_request.project_id,
                             mdl_hash=ask_request.mdl_hash,
                             use_dry_plan=use_dry_plan,

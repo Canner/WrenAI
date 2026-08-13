@@ -240,6 +240,30 @@ def _extract_schema_index(contexts: list[str] | None) -> dict[str, set[str] | No
     return schema_index
 
 
+def build_schema_grounding_manifest(contexts: list[str] | None) -> str:
+    schema_index = _extract_schema_index(contexts)
+    if not schema_index:
+        return ""
+
+    lines = [
+        "### VERIFIED SCHEMA OBJECTS ###",
+        "These are the only table/view identifiers and columns that may be used.",
+        "Business terms from the question are intents, not table or column names.",
+        "Do not create a table, view, column, alias, or join key unless it is listed here.",
+    ]
+
+    for relation in sorted(schema_index):
+        columns = schema_index[relation]
+        if columns is None:
+            lines.append(f"- {relation}: <columns defined by verified view statement>")
+        elif columns:
+            lines.append(f"- {relation}: {', '.join(sorted(columns))}")
+        else:
+            lines.append(f"- {relation}: <no usable columns>")
+
+    return "\n".join(lines)
+
+
 def _is_identifier_boundary(char: str | None) -> bool:
     return char is None or not (char.isalnum() or char in {"_", "$", '"'})
 
@@ -623,10 +647,11 @@ class SQLGenPostProcessor:
                     }
                 else:
                     error_message = addition.get("error_message", "")
+                    error_sql = addition.get("error_sql", "")
                     invalid_generation_result = {
-                        "sql": generation_result,
+                        "sql": error_sql or generation_result,
                         "original_sql": generation_result,
-                        "engine_sql": addition.get("error_sql", ""),
+                        "engine_sql": error_sql,
                         "type": "TIME_OUT"
                         if error_message.startswith("Request timed out")
                         else "DRY_RUN",

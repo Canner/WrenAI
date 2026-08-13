@@ -395,6 +395,22 @@ async def test_post_processor_rejects_qualified_column_not_in_retrieved_schema()
 
 
 @pytest.mark.asyncio
+async def test_post_processor_validates_against_unpruned_schema_context():
+    engine = _CapturingEngine()
+    processor = SQLGenPostProcessor(engine=engine)
+    unpruned_context = schema_context(TABLE_A, [COLUMN_TEXT, COLUMN_AMOUNT])
+
+    result = await processor.run(
+        [f'SELECT t."{COLUMN_AMOUNT}" FROM "{TABLE_A}" AS t'],
+        contexts=unpruned_context,
+    )
+
+    assert result["invalid_generation_result"] == {}
+    assert engine.execute_kwargs is not None
+    assert f'"{COLUMN_AMOUNT}"' in engine.executed_sql
+
+
+@pytest.mark.asyncio
 async def test_post_processor_validates_columns_after_schema_comments():
     engine = _CapturingEngine()
     processor = SQLGenPostProcessor(engine=engine)

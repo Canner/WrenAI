@@ -14,6 +14,7 @@ from src.pipelines.common import clean_up_new_lines, retrieve_metadata
 from src.pipelines.generation.utils.sql import (
     SQL_GENERATION_MODEL_KWARGS,
     SQLGenPostProcessor,
+    build_schema_grounding_manifest,
     construct_instructions,
     get_calculated_field_instructions,
     get_json_field_instructions,
@@ -37,6 +38,10 @@ The SQL must be generated only from the DATABASE SCHEMA documents retrieved for 
 {% for document in documents %}
     {{ document }}
 {% endfor %}
+
+{% if schema_grounding_manifest %}
+{{ schema_grounding_manifest }}
+{% endif %}
 
 {% if calculated_field_instructions %}
 {{ calculated_field_instructions }}
@@ -100,6 +105,7 @@ def prompt(
     has_json_field: bool = False,
     project_id: str | None = None,
     mdl_hash: str | None = None,
+    validation_contexts: list[str] | None = None,
     sql_functions: list[SqlFunction] | None = None,
     sql_knowledge: SqlKnowledge | None = None,
 ) -> dict:
@@ -108,6 +114,9 @@ def prompt(
         documents=documents,
         project_id=project_id or "",
         mdl_hash=mdl_hash or "",
+        schema_grounding_manifest=build_schema_grounding_manifest(
+            validation_contexts or documents
+        ),
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
@@ -150,6 +159,7 @@ async def post_process(
     post_processor: SQLGenPostProcessor,
     data_source: str,
     documents: list[str] | None = None,
+    validation_contexts: list[str] | None = None,
     project_id: str | None = None,
     mdl_hash: str | None = None,
     use_dry_plan: bool = False,
@@ -160,7 +170,7 @@ async def post_process(
         generate_sql.get("replies"),
         project_id=project_id,
         mdl_hash=mdl_hash,
-        contexts=documents,
+        contexts=validation_contexts or documents,
         use_dry_plan=use_dry_plan,
         data_source=data_source,
         allow_dry_plan_fallback=allow_dry_plan_fallback,
@@ -213,6 +223,7 @@ class SQLGeneration(BasicPipeline):
         has_metric: bool = False,
         has_json_field: bool = False,
         sql_functions: list[SqlFunction] | None = None,
+        validation_contexts: list[str] | None = None,
         use_dry_plan: bool = False,
         allow_dry_plan_fallback: bool = True,
         allow_data_preview: bool = False,
@@ -234,6 +245,7 @@ class SQLGeneration(BasicPipeline):
             inputs={
                 "query": query,
                 "documents": contexts,
+                "validation_contexts": validation_contexts,
                 "sql_generation_reasoning": sql_generation_reasoning,
                 "sql_samples": sql_samples,
                 "instructions": instructions,
