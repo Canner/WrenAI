@@ -47,6 +47,8 @@ _REPO_PATH_RE = re.compile(
 )
 
 _GIT_TOKEN_PATH_TMPL = "/api/v2/projects/{project_id}/git-token"
+_PROJECTS_PATH = "/api/v1/projects"
+_PROJECT_KEYS_PATH_TMPL = "/api/v1/projects/{project_id}/keys"
 
 
 class CloudError(Exception):
@@ -630,3 +632,277 @@ def link(
         check=False,
     )
     return LinkOutcome.LINKED
+
+
+# ── create: make a new project and bind it, in one step ─────────────────────
+#
+# `create` is the other half of `link`: both bind a directory to a cloud
+# project, differing only in whether the project has to be made first. It
+# ends in exactly the state `login` + `link` leave behind, by calling them —
+# not by reimplementing what they do.
+#
+# The org API key (`osk-...`) this needs is org-wide authority, valid for
+# every project in the org, not just the one being created here. It is used
+# for exactly two calls below — creating the project and minting that
+# project's own key — and is never written to disk. Only the project key
+# (`sk-...`) that comes back from the mint is stored, exactly as `login`
+# would store it.
+
+
+@dataclass
+class CreatedProject:
+    id: str
+    org_id: str
+    display_name: str
+    status: str
+    """`"succeeded"` or `"partial"` — the server's own project-creation
+    status. `"partial"` means the project (and, for AGENTIC projects, its
+    git repository) exists, but something about it — most often the data
+    connection or the initial MDL deploy — did not finish successfully. See
+    `errors` for what failed."""
+    errors: list[dict]
+    """`[{"resource": ..., "message": ...}, ...]` — populated only when
+    `status == "partial"`."""
+
+
+def create_project(
+    api_host: str,
+    org_key: str,
+    *,
+    org_id: str,
+    display_name: str,
+    connection_type: str | None = None,
+    connection_info: dict | None = None,
+    test_connection: bool = False,
+    mdl: dict | None = None,
+    language: str | None = None,
+    timezone: str | None = None,
+    timeout: float = 60.0,
+) -> CreatedProject:
+    """Create a new Wren Cloud project, requesting agent mode.
+
+    Always sends `projectType: "AGENTIC"` — `create` exists specifically to
+    produce agent-mode projects; a CLASSIC project has no git-backed
+    repository at all, so there would be nothing for the caller to bind a
+    directory to. The response never echoes back which project type the
+    server actually granted, so this alone does not confirm the opt-in was
+    honored — that is confirmed later, the same way `login` confirms
+    anything about a project: by successfully minting a git token for it.
+
+    The connection (`connection_type` / `connection_info`) is supplied here,
+    at creation time, in the same request — not via a separate
+    connection-update call afterward.
+
+    `org_key` authenticates this call; the server accepts only an org key
+    here, not a project key, because no project exists yet to scope one to.
+    """
+    import requests  # noqa: PLC0415
+
+    url = f"{api_host.rstrip('/')}{_PROJECTS_PATH}"
+    headers = {"Authorization": f"Bearer {org_key}"}
+    body: dict = {
+        "orgId": int(org_id),
+        "displayName": display_name,
+        "projectType": "AGENTIC",
+    }
+    if connection_type is not None:
+        body["type"] = connection_type
+    if connection_info is not None:
+        body["connectionInfo"] = connection_info
+    if test_connection:
+        body["testConnection"] = True
+    if mdl is not None:
+        body["mdl"] = mdl
+    if language is not None:
+        body["language"] = language
+    if timezone is not None:
+        body["timezone"] = timezone
+
+    try:
+        resp = requests.post(url, json=body, headers=headers, timeout=timeout)
+    except requests.RequestException as exc:
+        raise CloudError(f"Could not reach {api_host}: {exc}") from exc
+
+    if resp.status_code not in (201, 207):
+        if resp.status_code in (401, 403):
+            raise InvalidApiKeyError(
+                f"This org key was rejected creating a project on {api_host}. "
+                "`wren cloud create` needs an org API key (starts with "
+                "`osk-`), not a project key."
+            )
+        raise CloudError(
+            f"Wren Cloud API returned {resp.status_code} creating a project "
+            f"on {api_host}: {resp.text[:300]}"
+        )
+
+    data = resp.json()
+    project = data.get("project") or {}
+    project_id = project.get("id")
+    if project_id is None:
+        raise CloudError(
+            "Wren Cloud API accepted the project-creation request on "
+            f"{api_host} but did not return a project id: {resp.text[:300]}"
+        )
+    return CreatedProject(
+        id=str(project_id),
+        org_id=str(org_id),
+        display_name=project.get("displayName", display_name),
+        status=data.get("status", "succeeded"),
+        errors=list(data.get("errors") or []),
+    )
+
+
+def mint_project_key(
+    api_host: str,
+    project_id: str,
+    org_key: str,
+    *,
+    name: str = "wren-cli",
+    timeout: float = 15.0,
+) -> str:
+    """Mint a durable project API key (`sk-...`) for `project_id`.
+
+    Authenticates with the org key, used here for the only other thing it is
+    needed for: authorizing the mint of the project's own key. The server
+    reveals the secret only in this response, never again — the caller must
+    capture it now.
+    """
+    import requests  # noqa: PLC0415
+
+    url = (
+        f"{api_host.rstrip('/')}{_PROJECT_KEYS_PATH_TMPL.format(project_id=project_id)}"
+    )
+    headers = {"Authorization": f"Bearer {org_key}"}
+    try:
+        resp = requests.post(url, json={"name": name}, headers=headers, timeout=timeout)
+    except requests.RequestException as exc:
+        raise CloudError(f"Could not reach {api_host}: {exc}") from exc
+
+    if resp.status_code not in (200, 201):
+        if resp.status_code in (401, 403):
+            raise InvalidApiKeyError(
+                "This org key was rejected minting a project key for "
+                f"project {project_id} on {api_host}."
+            )
+        raise CloudError(
+            f"Wren Cloud API returned {resp.status_code} minting a project "
+            f"key for project {project_id} on {api_host}: {resp.text[:300]}"
+        )
+
+    secret = resp.json().get("secret")
+    if not secret:
+        raise CloudError(
+            "Wren Cloud API did not return a key secret for project "
+            f"{project_id} on {api_host}: {resp.text[:300]}"
+        )
+    return secret
+
+
+def create(
+    target: Path,
+    *,
+    host: str,
+    org_id: str,
+    org_key: str,
+    display_name: str,
+    git_host: str | None = None,
+    connection_type: str | None = None,
+    connection_info: dict | None = None,
+    test_connection: bool = False,
+    mdl: dict | None = None,
+    language: str | None = None,
+    timezone: str | None = None,
+) -> tuple[CreatedProject, LinkOutcome]:
+    """Create a new agent-mode project on `host` and bind `target` to it.
+
+    Checks `target` is not nested inside a foreign git repository *before*
+    creating anything server-side, so a refusal here (unlike a refusal
+    partway through) never leaves an orphaned project behind.
+
+    Ends in exactly the state `login` + `link` leave a directory in: a
+    stored project key, a configured git credential helper, and a bound
+    working tree with upstream tracking set — because this calls `login`
+    and `link` to get there, rather than reimplementing either.
+
+    If the server did not actually grant the AGENTIC opt-in requested above
+    (so the project has no git repository at all), that surfaces right here
+    as a clear, specific error — not as a bare 404 — while `target` is left
+    untouched: `check_not_nested` already ran, but git has not been touched
+    yet. The freshly minted project key is included in the error so the
+    project is not orphaned key-less; recover with `wren cloud login` using
+    that key once the AGENTIC opt-in issue is resolved (e.g. by deleting the
+    project and re-running `create`).
+
+    If the project is created and confirmed AGENTIC but the local `link`
+    step then fails (e.g. a merge conflict), the same recovery applies:
+    `wren cloud login` followed by `wren cloud link` completes the bind by
+    hand — nothing about the project itself needs to be redone.
+    """
+    target = target.resolve()
+    check_not_nested(target)
+
+    api_host = host.rstrip("/")
+    resolved_git_host = (git_host or host).rstrip("/")
+
+    project = create_project(
+        api_host,
+        org_key,
+        org_id=org_id,
+        display_name=display_name,
+        connection_type=connection_type,
+        connection_info=connection_info,
+        test_connection=test_connection,
+        mdl=mdl,
+        language=language,
+        timezone=timezone,
+    )
+
+    project_key = mint_project_key(api_host, project.id, org_key)
+
+    def _recovery_hint() -> str:
+        hint = f"  wren cloud login --host {host} --project {project.id}"
+        if git_host:
+            hint += f" --git-host {git_host}"
+        return (
+            f"The project's key is: {project_key}\n"
+            "Recover with:\n"
+            f"{hint}\n"
+            "then `wren cloud link` in this directory."
+        )
+
+    try:
+        token = login(
+            host=host,
+            project_id=project.id,
+            api_key=project_key,
+            git_host=git_host,
+        )
+    except CloudError as exc:
+        detail = str(exc)
+        if "PROJECT_NOT_AGENTIC" in detail or "agent-mode projects" in detail:
+            raise CloudError(
+                f"Project {project.id} was created on {api_host}, but it is "
+                "not an agent-mode (AGENTIC) project — `wren cloud create` "
+                "only produces agent-mode projects, which are the only kind "
+                "that get a git repository at all. There is nothing to bind "
+                "to; this project has no git remote.\n"
+                f"{_recovery_hint()}\n"
+                "(`wren cloud link` cannot help here either, until the "
+                "project is actually AGENTIC — delete this project and "
+                "retry `create`, or ask your org admin about the AGENTIC "
+                "opt-in.)"
+            ) from exc
+        raise CloudError(
+            f"Project {project.id} was created on {api_host}, but binding "
+            f"this directory to it failed: {exc}\n{_recovery_hint()}"
+        ) from exc
+
+    outcome = link(
+        target,
+        git_host=resolved_git_host,
+        api_host=api_host,
+        project_id=project.id,
+        org_id=project.org_id,
+        repo=token.repo,
+    )
+    return project, outcome

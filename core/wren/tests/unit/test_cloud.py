@@ -13,6 +13,7 @@ import io
 import subprocess
 
 import pytest
+import requests
 
 from wren import cloud
 
@@ -342,6 +343,370 @@ def test_link_recovers_when_a_previous_attempt_left_head_unborn(tmp_path):
     assert (target / "seed.txt").exists()
     log = cloud.run_git(["log", "--oneline"], cwd=target).stdout.strip().splitlines()
     assert len(log) >= 2
+
+
+class _FakeResponse:
+    def __init__(self, status_code, json_data=None, text=""):
+        self.status_code = status_code
+        self._json_data = json_data or {}
+        self.text = text or str(json_data or "")
+
+    def json(self):
+        return self._json_data
+
+
+# ── create_project: POST /api/v1/projects ───────────────────────────────────
+
+
+def test_create_project_sends_agentic_opt_in_and_org_key_only(monkeypatch):
+    captured = {}
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        captured.update(url=url, json=json, headers=headers)
+        return _FakeResponse(
+            201,
+            {
+                "project": {"id": 16, "displayName": "proj"},
+                "status": "succeeded",
+            },
+        )
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    project = cloud.create_project(
+        "https://cloud.getwren.ai",
+        "osk-org-key",
+        org_id="2",
+        display_name="proj",
+    )
+
+    assert captured["url"] == "https://cloud.getwren.ai/api/v1/projects"
+    assert captured["headers"] == {"Authorization": "Bearer osk-org-key"}
+    assert captured["json"]["orgId"] == 2
+    assert captured["json"]["displayName"] == "proj"
+    assert captured["json"]["projectType"] == "AGENTIC"
+    # Optional fields are omitted entirely when not given, not sent as null.
+    assert "type" not in captured["json"]
+    assert "connectionInfo" not in captured["json"]
+    assert project == cloud.CreatedProject(
+        id="16", org_id="2", display_name="proj", status="succeeded", errors=[]
+    )
+
+
+def test_create_project_includes_connection_when_given(monkeypatch):
+    captured = {}
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        captured.update(json=json)
+        return _FakeResponse(201, {"project": {"id": 16}, "status": "succeeded"})
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    cloud.create_project(
+        "https://cloud.getwren.ai",
+        "osk-org-key",
+        org_id="2",
+        display_name="proj",
+        connection_type="POSTGRES",
+        connection_info={"host": "db"},
+        test_connection=True,
+        mdl={"models": []},
+        language="en",
+        timezone="UTC",
+    )
+
+    assert captured["json"]["type"] == "POSTGRES"
+    assert captured["json"]["connectionInfo"] == {"host": "db"}
+    assert captured["json"]["testConnection"] is True
+    assert captured["json"]["mdl"] == {"models": []}
+    assert captured["json"]["language"] == "en"
+    assert captured["json"]["timezone"] == "UTC"
+
+
+def test_create_project_partial_status_captures_errors(monkeypatch):
+    def fake_post(url, json=None, headers=None, timeout=None):
+        return _FakeResponse(
+            207,
+            {
+                "project": {"id": 16, "displayName": "proj"},
+                "status": "partial",
+                "errors": [{"resource": "mdl", "message": "bad mdl"}],
+            },
+        )
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    project = cloud.create_project(
+        "https://cloud.getwren.ai", "osk-org-key", org_id="2", display_name="proj"
+    )
+    assert project.status == "partial"
+    assert project.errors == [{"resource": "mdl", "message": "bad mdl"}]
+
+
+def test_create_project_rejects_org_or_project_key_on_401(monkeypatch):
+    def fake_post(url, json=None, headers=None, timeout=None):
+        return _FakeResponse(401, {}, text="unauthorized")
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    with pytest.raises(cloud.InvalidApiKeyError):
+        cloud.create_project(
+            "https://cloud.getwren.ai",
+            "sk-not-an-org-key",
+            org_id="2",
+            display_name="p",
+        )
+
+
+def test_create_project_raises_on_missing_project_id(monkeypatch):
+    def fake_post(url, json=None, headers=None, timeout=None):
+        return _FakeResponse(201, {"status": "succeeded"})
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    with pytest.raises(cloud.CloudError):
+        cloud.create_project(
+            "https://cloud.getwren.ai", "osk-org-key", org_id="2", display_name="p"
+        )
+
+
+def test_create_project_raises_generic_cloud_error_on_other_status(monkeypatch):
+    def fake_post(url, json=None, headers=None, timeout=None):
+        return _FakeResponse(500, {}, text="server exploded")
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    with pytest.raises(cloud.CloudError, match="server exploded"):
+        cloud.create_project(
+            "https://cloud.getwren.ai", "osk-org-key", org_id="2", display_name="p"
+        )
+
+
+# ── mint_project_key: POST /api/v1/projects/{id}/keys ───────────────────────
+
+
+def test_mint_project_key_returns_the_secret(monkeypatch):
+    captured = {}
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        captured.update(url=url, json=json, headers=headers)
+        return _FakeResponse(201, {"secret": "sk-fresh"})
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    secret = cloud.mint_project_key(
+        "https://cloud.getwren.ai", "16", "osk-org-key", name="wren-cli"
+    )
+    assert secret == "sk-fresh"
+    assert captured["url"] == "https://cloud.getwren.ai/api/v1/projects/16/keys"
+    assert captured["json"] == {"name": "wren-cli"}
+    assert captured["headers"] == {"Authorization": "Bearer osk-org-key"}
+
+
+def test_mint_project_key_raises_on_missing_secret(monkeypatch):
+    def fake_post(url, json=None, headers=None, timeout=None):
+        return _FakeResponse(201, {})
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    with pytest.raises(cloud.CloudError):
+        cloud.mint_project_key("https://cloud.getwren.ai", "16", "osk-org-key")
+
+
+def test_mint_project_key_raises_invalid_api_key_on_403(monkeypatch):
+    def fake_post(url, json=None, headers=None, timeout=None):
+        return _FakeResponse(403, {}, text="forbidden")
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    with pytest.raises(cloud.InvalidApiKeyError):
+        cloud.mint_project_key("https://cloud.getwren.ai", "16", "osk-not-allowed")
+
+
+# ── create: the full create-and-bind flow ───────────────────────────────────
+#
+# `create_project` / `mint_project_key` / `mint_git_token` are monkeypatched
+# (their own HTTP behavior is covered above); `link`'s real git plumbing
+# runs against a local-filesystem stand-in remote, exactly like the `link`
+# tests above.
+
+
+def _patch_create_http(monkeypatch, *, project_status="succeeded", project_errors=None):
+    created = cloud.CreatedProject(
+        id="16",
+        org_id="2",
+        display_name="proj",
+        status=project_status,
+        errors=project_errors or [],
+    )
+    calls = {"create_project": 0, "mint_project_key": 0}
+
+    def fake_create_project(api_host, org_key, **kwargs):
+        calls["create_project"] += 1
+        calls["create_project_org_key"] = org_key
+        return created
+
+    def fake_mint_project_key(api_host, project_id, org_key, **kwargs):
+        calls["mint_project_key"] += 1
+        calls["mint_project_key_org_key"] = org_key
+        return "sk-fresh-project-key"
+
+    monkeypatch.setattr(cloud, "create_project", fake_create_project)
+    monkeypatch.setattr(cloud, "mint_project_key", fake_mint_project_key)
+    return created, calls
+
+
+def test_create_end_to_end_binds_and_stores_only_the_project_key(tmp_path, monkeypatch):
+    git_host = str(tmp_path / "host")
+    _seed_remote(tmp_path / "host" / "git" / "org" / "2" / "16" / "shared-data.git")
+    created, calls = _patch_create_http(monkeypatch)
+
+    def fake_mint_git_token(api_host, project_id, api_key, **kwargs):
+        calls["mint_git_token_api_key"] = api_key
+        return cloud.GitToken(
+            repo="org/2/16/shared-data.git",
+            token="minted-token",
+            expires_in=600,
+            expires_at="2026-01-01T00:00:00Z",
+        )
+
+    monkeypatch.setattr(cloud, "mint_git_token", fake_mint_git_token)
+
+    target = tmp_path / "project"
+    target.mkdir()
+    (target / "mine.txt").write_text("my existing file")
+
+    project, outcome = cloud.create(
+        target,
+        host=git_host,
+        org_id="2",
+        org_key="osk-should-never-be-stored",
+        display_name="proj",
+        git_host=git_host,
+    )
+
+    assert project is created
+    assert outcome is cloud.LinkOutcome.LINKED
+    # Both the org key and (crucially) the newly-minted project key were
+    # actually used to talk to the server...
+    assert calls["create_project_org_key"] == "osk-should-never-be-stored"
+    assert calls["mint_project_key_org_key"] == "osk-should-never-be-stored"
+    assert calls["mint_git_token_api_key"] == "sk-fresh-project-key"
+    # ...but only the project key ever reaches local storage.
+    stored = cloud.get_login(git_host, "16")
+    assert stored["api_key"] == "sk-fresh-project-key"
+    raw = cloud._CLOUD_FILE.read_text()
+    assert "osk-should-never-be-stored" not in raw
+    # Directory ends up bound exactly like `link` would leave it.
+    assert (target / "mine.txt").exists()
+    assert (target / "seed.txt").exists()
+
+
+def test_create_refuses_nested_directory_before_any_server_call(tmp_path, monkeypatch):
+    outer = tmp_path / "outer"
+    (outer / ".git").mkdir(parents=True)
+    target = outer / "nested" / "proj"
+    target.mkdir(parents=True)
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("create_project must not be called for a nested target")
+
+    monkeypatch.setattr(cloud, "create_project", fail_if_called)
+
+    with pytest.raises(cloud.NestedRepoError):
+        cloud.create(
+            target,
+            host="https://cloud.getwren.ai",
+            org_id="2",
+            org_key="osk-x",
+            display_name="proj",
+        )
+
+
+def test_create_failed_project_creation_leaves_nothing_to_clean_up(
+    tmp_path, monkeypatch
+):
+    def fake_create_project(api_host, org_key, **kwargs):
+        raise cloud.CloudError("boom")
+
+    monkeypatch.setattr(cloud, "create_project", fake_create_project)
+
+    target = tmp_path / "project"
+    target.mkdir()
+
+    with pytest.raises(cloud.CloudError, match="boom"):
+        cloud.create(
+            target,
+            host="https://cloud.getwren.ai",
+            org_id="2",
+            org_key="osk-x",
+            display_name="proj",
+        )
+
+    assert not (target / ".git").exists()
+    assert cloud.list_logins() == []
+
+
+def test_create_reports_not_agentic_actionably_and_includes_the_project_key(
+    tmp_path, monkeypatch
+):
+    _patch_create_http(monkeypatch)
+
+    def fake_login(*, host, project_id, api_key, git_host):
+        raise cloud.CloudError(
+            "Wren Cloud API returned 404 minting a git token for project "
+            f'{project_id} on {host}: {{"code":"PROJECT_NOT_AGENTIC",'
+            '"error":"This endpoint is only available for agent-mode '
+            'projects."}'
+        )
+
+    monkeypatch.setattr(cloud, "login", fake_login)
+
+    target = tmp_path / "project"
+    target.mkdir()
+
+    with pytest.raises(cloud.CloudError) as excinfo:
+        cloud.create(
+            target,
+            host="https://cloud.getwren.ai",
+            org_id="2",
+            org_key="osk-x",
+            display_name="proj",
+        )
+
+    message = str(excinfo.value)
+    assert "not an agent-mode" in message
+    assert "sk-fresh-project-key" in message
+    assert "wren cloud login" in message
+    # Nothing was touched locally — this is a pure server-side outcome.
+    assert not (target / ".git").exists()
+
+
+def test_create_reports_bind_failure_with_recovery_hint(tmp_path, monkeypatch):
+    _patch_create_http(monkeypatch)
+
+    def fake_login(*, host, project_id, api_key, git_host):
+        raise cloud.CloudError("network blip")
+
+    monkeypatch.setattr(cloud, "login", fake_login)
+
+    target = tmp_path / "project"
+    target.mkdir()
+
+    with pytest.raises(cloud.CloudError) as excinfo:
+        cloud.create(
+            target,
+            host="https://cloud.getwren.ai",
+            org_id="2",
+            org_key="osk-x",
+            display_name="proj",
+        )
+
+    message = str(excinfo.value)
+    assert "network blip" in message
+    assert "sk-fresh-project-key" in message
+    assert "wren cloud login" in message
+    assert "wren cloud link" in message
 
 
 def test_link_reports_already_linked_on_rerun_with_nothing_new(tmp_path):

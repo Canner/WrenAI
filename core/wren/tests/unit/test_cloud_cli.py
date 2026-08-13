@@ -267,6 +267,198 @@ def test_link_reports_cloud_error_without_traceback(monkeypatch, tmp_path):
     assert "inside an existing git repository" in result.output
 
 
+# ── create ───────────────────────────────────────────────────────────────
+
+
+def test_create_reads_org_key_from_env_and_passes_options_through(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("WREN_CLOUD_ORG_KEY", "osk-from-env")
+    captured = {}
+
+    def fake_create(directory, **kwargs):
+        captured.update(directory=directory, **kwargs)
+        return (
+            cloud.CreatedProject(
+                id="16", org_id="2", display_name="proj", status="succeeded", errors=[]
+            ),
+            cloud.LinkOutcome.LINKED,
+        )
+
+    monkeypatch.setattr(cloud, "create", fake_create)
+
+    result = runner.invoke(
+        app,
+        [
+            "cloud",
+            "create",
+            str(tmp_path),
+            "--host",
+            "https://cloud.getwren.ai",
+            "--org",
+            "2",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["org_key"] == "osk-from-env"
+    assert captured["org_id"] == "2"
+    assert captured["display_name"] == tmp_path.resolve().name
+    assert "Created project 16" in result.output
+    assert "Linked project 16" in result.output
+
+
+def test_create_prompts_for_org_key_when_not_given(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_create(directory, **kwargs):
+        captured.update(kwargs)
+        return (
+            cloud.CreatedProject(
+                id="16", org_id="2", display_name="proj", status="succeeded", errors=[]
+            ),
+            cloud.LinkOutcome.LINKED,
+        )
+
+    monkeypatch.setattr(cloud, "create", fake_create)
+
+    result = runner.invoke(
+        app,
+        ["cloud", "create", str(tmp_path), "--host", "h", "--org", "2"],
+        input="osk-typed-in\n",
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["org_key"] == "osk-typed-in"
+
+
+def test_create_rejects_a_project_key_instead_of_an_org_key(tmp_path):
+    result = runner.invoke(
+        app,
+        ["cloud", "create", str(tmp_path), "--host", "h", "--org", "2"],
+        input="sk-project-key\n",
+    )
+    assert result.exit_code != 0
+    assert "organization API key" in result.output
+
+
+def test_create_rejects_both_connection_info_flags_together(tmp_path):
+    result = runner.invoke(
+        app,
+        [
+            "cloud",
+            "create",
+            str(tmp_path),
+            "--host",
+            "h",
+            "--org",
+            "2",
+            "--connection-info",
+            "{}",
+            "--connection-info-file",
+            str(tmp_path / "x.json"),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "at most one of" in result.output
+
+
+def test_create_requires_type_when_connection_info_is_given(tmp_path):
+    result = runner.invoke(
+        app,
+        [
+            "cloud",
+            "create",
+            str(tmp_path),
+            "--host",
+            "h",
+            "--org",
+            "2",
+            "--connection-info",
+            '{"host": "db"}',
+        ],
+        input="osk-x\n",
+    )
+    assert result.exit_code != 0
+    assert "--type is required" in result.output
+
+
+def test_create_passes_parsed_connection_info_and_type_through(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_create(directory, **kwargs):
+        captured.update(kwargs)
+        return (
+            cloud.CreatedProject(
+                id="16", org_id="2", display_name="proj", status="succeeded", errors=[]
+            ),
+            cloud.LinkOutcome.LINKED,
+        )
+
+    monkeypatch.setattr(cloud, "create", fake_create)
+
+    result = runner.invoke(
+        app,
+        [
+            "cloud",
+            "create",
+            str(tmp_path),
+            "--host",
+            "h",
+            "--org",
+            "2",
+            "--type",
+            "POSTGRES",
+            "--connection-info",
+            '{"host": "db"}',
+            "--test-connection",
+        ],
+        input="osk-x\n",
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["connection_type"] == "POSTGRES"
+    assert captured["connection_info"] == {"host": "db"}
+    assert captured["test_connection"] is True
+
+
+def test_create_reports_partial_status_errors_but_still_succeeds(monkeypatch, tmp_path):
+    def fake_create(directory, **kwargs):
+        return (
+            cloud.CreatedProject(
+                id="16",
+                org_id="2",
+                display_name="proj",
+                status="partial",
+                errors=[{"resource": "mdl", "message": "bad mdl"}],
+            ),
+            cloud.LinkOutcome.LINKED,
+        )
+
+    monkeypatch.setattr(cloud, "create", fake_create)
+
+    result = runner.invoke(
+        app,
+        ["cloud", "create", str(tmp_path), "--host", "h", "--org", "2"],
+        input="osk-x\n",
+    )
+    assert result.exit_code == 0, result.output
+    assert "mdl" in result.output
+    assert "bad mdl" in result.output
+
+
+def test_create_reports_cloud_error_without_traceback(monkeypatch, tmp_path):
+    def fake_create(directory, **kwargs):
+        raise cloud.CloudError("boom")
+
+    monkeypatch.setattr(cloud, "create", fake_create)
+
+    result = runner.invoke(
+        app,
+        ["cloud", "create", str(tmp_path), "--host", "h", "--org", "2"],
+        input="osk-x\n",
+    )
+    assert result.exit_code != 0
+    assert "boom" in result.output
+
+
 # ── git-credential get/store/erase (CLI-level stdin/stdout wrapping) ───────
 
 
