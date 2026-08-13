@@ -701,7 +701,7 @@ async def test_ask_uses_manifest_columns_for_grounding_when_prompt_ddl_is_pruned
 
 
 @pytest.mark.asyncio
-async def test_ask_passes_reasoning_text_to_sql_generation_like_legacy():
+async def test_ask_does_not_pass_ungrounded_reasoning_to_sql_generation():
     generation = _ValidSqlGenerationPipeline()
     ask_service = AskService(
         {
@@ -732,14 +732,11 @@ async def test_ask_passes_reasoning_text_to_sql_generation_like_legacy():
     assert ask_result_response.status == "finished"
     assert NON_SCHEMA_REASONING_TABLE in ask_result_response.sql_generation_reasoning
     assert generation.calls[0]["contexts"] == [MODEL_ALPHA_ENTITY_DDL]
-    assert (
-        generation.calls[0]["sql_generation_reasoning"]
-        == ask_result_response.sql_generation_reasoning
-    )
+    assert generation.calls[0]["sql_generation_reasoning"] is None
 
 
 @pytest.mark.asyncio
-async def test_followup_ask_passes_reasoning_text_to_sql_generation_like_legacy():
+async def test_followup_ask_does_not_pass_ungrounded_reasoning_to_sql_generation():
     generation = _ValidSqlGenerationPipeline()
     ask_service = AskService(
         {
@@ -779,10 +776,7 @@ async def test_followup_ask_passes_reasoning_text_to_sql_generation_like_legacy(
     assert ask_result_response.status == "finished"
     assert NON_SCHEMA_REASONING_TABLE in ask_result_response.sql_generation_reasoning
     assert generation.calls[0]["contexts"] == [MODEL_ALPHA_ENTITY_DDL]
-    assert (
-        generation.calls[0]["sql_generation_reasoning"]
-        == ask_result_response.sql_generation_reasoning
-    )
+    assert generation.calls[0]["sql_generation_reasoning"] is None
 
 
 @pytest.mark.asyncio

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from typing import Dict, List, Literal, Optional
 
 from cachetools import TTLCache
@@ -55,6 +56,39 @@ def _schema_validation_contexts(documents: list[dict]) -> list[str]:
         for document in documents
         if (context := _schema_validation_context(document))
     ]
+
+
+def _sql_snippets_from_reasoning(reasoning: str | None) -> list[str]:
+    if not reasoning:
+        return []
+
+    snippets = []
+    fenced_sql = re.findall(r"```(?:sql)?\s*(.*?)```", reasoning, re.IGNORECASE | re.DOTALL)
+    snippets.extend(fenced_sql)
+
+    for match in re.finditer(
+        r"\b(?:WITH|SELECT)\b.*?(?:;|$)",
+        reasoning,
+        re.IGNORECASE | re.DOTALL,
+    ):
+        snippet = match.group(0).strip()
+        if snippet:
+            snippets.append(snippet)
+
+    return snippets
+
+
+def _grounded_sql_generation_reasoning(
+    reasoning: str | None,
+    schema_contexts: list[str],
+) -> str | None:
+    from src.pipelines.generation.utils.sql import validate_sql_against_contexts
+
+    for snippet in _sql_snippets_from_reasoning(reasoning):
+        if validate_sql_against_contexts(snippet, schema_contexts):
+            return None
+
+    return reasoning
 
 
 class AskHistory(BaseModel):
@@ -591,6 +625,11 @@ class AskService:
                     is_followup=True if histories else False,
                 )
 
+            grounded_sql_generation_reasoning = _grounded_sql_generation_reasoning(
+                sql_generation_reasoning,
+                schema_contexts,
+            )
+
             if not self._is_stopped(query_id, self._ask_results) and not api_results:
                 self._ask_results[query_id] = AskResultResponse(
                     status="generating",
@@ -634,7 +673,7 @@ class AskService:
                         query=user_query,
                         contexts=table_ddls,
                         validation_contexts=schema_contexts,
-                        sql_generation_reasoning=sql_generation_reasoning,
+                        sql_generation_reasoning=grounded_sql_generation_reasoning,
                         histories=histories,
                         project_id=ask_request.project_id,
                         mdl_hash=ask_request.mdl_hash,
@@ -655,7 +694,7 @@ class AskService:
                         query=user_query,
                         contexts=table_ddls,
                         validation_contexts=schema_contexts,
-                        sql_generation_reasoning=sql_generation_reasoning,
+                        sql_generation_reasoning=grounded_sql_generation_reasoning,
                         project_id=ask_request.project_id,
                         mdl_hash=ask_request.mdl_hash,
                         sql_samples=sql_samples,
@@ -743,7 +782,7 @@ class AskService:
                                 else error_message,
                                 "execution_error": error_message,
                                 "question": user_query,
-                                "reasoning_plan": sql_generation_reasoning,
+                                "reasoning_plan": grounded_sql_generation_reasoning,
                                 "schema_grounding_failure": failed_dry_run_result[
                                     "type"
                                 ]
