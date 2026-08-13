@@ -94,8 +94,26 @@ def test_build_includes_model_inventory(tmp_path: Path) -> None:
     assert "duckdb" in result.output
 
 
+def test_format_inventory_normalizes_non_list_columns() -> None:
+    """Non-list columns render as empty inventory (loader owns normalisation)."""
+    from wren.genbi.composer import _format_model_inventory
+
+    assert (
+        _format_model_inventory([{"name": "orders", "columns": "id, customer_id"}])
+        == "- **orders**: "
+    )
+
+
+def test_format_inventory_keeps_dict_columns_only() -> None:
+    """Bare strings / junk entries are not inferred as column names."""
+    from wren.genbi.composer import _format_model_inventory
+
+    models = [{"name": "customers", "columns": [{"name": "id"}, "bare", 3]}]
+    assert _format_model_inventory(models) == "- **customers**: id"
+
+
 def test_build_inventory_tolerates_non_list_columns(tmp_path: Path) -> None:
-    """YAML may set columns: to a string; inventory formatting must not crash."""
+    """compose_build_instruction still no-crashes on malformed columns."""
     from wren.genbi.composer import compose_build_instruction
 
     models = [
@@ -111,9 +129,8 @@ def test_build_inventory_tolerates_non_list_columns(tmp_path: Path) -> None:
         models=models,
         data_source="duckdb",
     )
-    assert "**orders**" in text
-    assert "**customers**" in text
-    assert "id" in text
+    assert "- **orders**: " in text
+    assert "- **customers**: id" in text
 
 
 

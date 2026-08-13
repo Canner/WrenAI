@@ -52,22 +52,23 @@ def _data_mode_guidance(data_mode: str) -> str:
 
 
 def _format_model_inventory(models: list[dict]) -> str:
-    """One markdown bullet per model with its column names."""
+    """One markdown bullet per model with its column names.
+
+    Callers should pass models from ``load_models`` (columns already
+    normalised to ``list[dict]``). Still tolerate a non-list defensively.
+    """
     if not models:
         return "- (no models found — run `wren context build` first)"
     lines = []
     for model in models:
-        # `columns` is YAML-sourced; only the list container/type is untrusted here.
-        # Models themselves come from load_models (already dict-filtered).
         raw_cols = model.get("columns", [])
         if not isinstance(raw_cols, list):
             raw_cols = []
-        names = []
-        for c in raw_cols:
-            if isinstance(c, dict):
-                names.append(str(c.get("name", "?")))
-            elif isinstance(c, str) and c:
-                names.append(c)
+        names = [
+            str(c.get("name", "?"))
+            for c in raw_cols
+            if isinstance(c, dict)
+        ]
         cols = ", ".join(names)
         lines.append(f"- **{model.get('name', '?')}**: {cols}")
     return "\n".join(lines)

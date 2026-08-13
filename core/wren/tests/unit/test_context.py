@@ -1605,6 +1605,57 @@ def test_validate_project_reports_non_list_v1_views_container(
     assert not (tmp_path / "views").exists()
 
 
+
+
+# ── Regression: model columns non-list / non-dict entries ─────────────────
+
+
+def test_load_models_v2_normalises_non_list_columns(tmp_path):
+    """columns: scalar is dropped to [] by the loader."""
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: orders\n"
+        "table_reference:\n  table: orders\n"
+        "columns: id, customer_id\n"
+    )
+    models = load_models(tmp_path)
+    assert len(models) == 1
+    assert models[0]["columns"] == []
+
+
+def test_load_models_v2_drops_non_dict_column_entries(tmp_path):
+    """Bare string / junk column entries are not coerced to column names."""
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "customers"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: customers\n"
+        "table_reference:\n  table: customers\n"
+        "columns:\n"
+        "  - name: id\n    type: INTEGER\n"
+        "  - bare\n"
+        "  - 3\n"
+    )
+    models = load_models(tmp_path)
+    assert len(models) == 1
+    assert models[0]["columns"] == [{"name": "id", "type": "INTEGER"}]
+
+
+def test_validate_project_reports_non_list_model_columns(tmp_path):
+    """validate_project reports hand-edited non-list columns (loader already empty)."""
+    _make_v2_project(tmp_path)
+    d = tmp_path / "models" / "orders"
+    d.mkdir(parents=True)
+    (d / "metadata.yml").write_text(
+        "name: orders\n"
+        "table_reference:\n  table: orders\n"
+        "columns: id, customer_id\n"
+    )
+    errors = validate_project(tmp_path)
+    msgs = [f"{e.path}: {e.message}" for e in errors]
+    assert any("must be a list, got str" in m for m in msgs), msgs
 def test_build_manifest_drops_v1_views_yml_non_mapping_entries(tmp_path):
     _make_v1_project(tmp_path)
     _corrupt_v1_views_yml(tmp_path)

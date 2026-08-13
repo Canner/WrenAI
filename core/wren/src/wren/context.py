@@ -526,6 +526,22 @@ def require_schema_version(project_path: Path) -> int:
 # ── Loaders (all return snake_case dicts) ─────────────────────────────────
 
 
+
+def _normalize_model_columns(model: dict) -> dict:
+    """Normalise YAML-sourced ``columns`` to ``list[dict]``.
+
+    Hand-edited project YAML can set ``columns:`` to a scalar or mix bare
+    strings into the list. Loaders drop malformed entries (matching views/
+    relationships); ``validate_project`` re-reads the raw file to report them.
+    """
+    raw = model.get("columns", [])
+    if not isinstance(raw, list):
+        model["columns"] = []
+        return model
+    model["columns"] = [c for c in raw if isinstance(c, dict)]
+    return model
+
+
 def load_models(project_path: Path) -> list[dict]:
     """Load models — dispatches on schema_version.
 
@@ -549,7 +565,7 @@ def _load_models_v1(project_path: Path) -> list[dict]:
         data = yaml.safe_load(f.read_text(encoding="utf-8"))
         if isinstance(data, dict):
             data["_source_dir"] = f.stem
-            models.append(data)
+            models.append(_normalize_model_columns(data))
     return models
 
 
@@ -582,7 +598,7 @@ def _load_models_v2(project_path: Path) -> list[dict]:
             if sql_content:
                 model["ref_sql"] = sql_content
 
-        models.append(model)
+        models.append(_normalize_model_columns(model))
     return models
 
 
@@ -960,6 +976,45 @@ def validate_project(project_path: Path) -> list[ValidationError]:
     model_names: set[str] = set()
     view_names: set[str] = set()
 
+    # Hand-edited model YAML may set columns: to a non-list (e.g. a bare
+    # string). load_models() normalises to list[dict], but validate_project
+    # must still report the mistake rather than let it vanish quietly.
+    def _iter_raw_model_files() -> list[tuple[str, dict]]:
+        models_dir = project_path / "models"
+        if not models_dir.is_dir():
+            return []
+        out: list[tuple[str, dict]] = []
+        if sv == 1:
+            for f in sorted(models_dir.glob("*.yml")):
+                data = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+                if isinstance(data, dict):
+                    out.append((f"models/{f.name}", data))
+        else:
+            for d in sorted(models_dir.iterdir()):
+                if not d.is_dir():
+                    continue
+                meta = d / "metadata.yml"
+                if not meta.exists():
+                    continue
+                data = yaml.safe_load(meta.read_text(encoding="utf-8")) or {}
+                if isinstance(data, dict):
+                    out.append((f"models/{d.name}/metadata.yml", data))
+        return out
+
+    for src_path, raw_model in _iter_raw_model_files():
+        if "columns" not in raw_model:
+            continue
+        raw_cols = raw_model.get("columns")
+        mname = raw_model.get("name") or Path(src_path).stem
+        if raw_cols is not None and not isinstance(raw_cols, list):
+            errors.append(
+                ValidationError(
+                    "error",
+                    f"{src_path} > {mname} > columns",
+                    f"must be a list, got {type(raw_cols).__name__}",
+                )
+            )
+
     # Check models
     for i, model in enumerate(models):
         src = model.get("_source_dir", f"models[{i}]")
@@ -1009,7 +1064,9 @@ def validate_project(project_path: Path) -> list[ValidationError]:
         if not isinstance(columns, list):
             errors.append(
                 ValidationError(
-                    "error", f"{src_path} > {name}", "columns must be a list"
+                    "error",
+                    f"{src_path} > {name} > columns",
+                    f"must be a list, got {type(columns).__name__}",
                 )
             )
             columns = []
